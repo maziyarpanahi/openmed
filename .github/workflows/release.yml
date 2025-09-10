@@ -1,0 +1,47 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build hatch
+
+    - name: Build package
+      run: python -m build
+
+    - name: Publish to PyPI
+      env:
+        HATCH_INDEX_USER: __token__
+        HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+      run: hatch publish
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        body: |
+          Automated release of ${{ github.ref }}
+
+          View on PyPI: https://pypi.org/project/openmed/${{ github.ref_name }}/
+        draft: false
+        prerelease: false
