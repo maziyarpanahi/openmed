@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openmed"
+version = "0.1.1"
+description = "Placeholder package to reserve the name. Real library coming soon."
+readme = "README.md"
+requires-python = ">=3.6"
+license = { text = "MIT" }
+authors = [
+  { name = "OpenMed Maintainers" }
+]
+
+[tool.hatch.build]
+include = [
+  "openmed/**",
+  "README.md",
+  "pyproject.toml"
+]
+
+[tool.hatch.publish.index]
+disable = false
+
+[tool.hatch.publish.index.repos]
+pypi = { url = "https://upload.pypi.org/legacy/" }
+
+
