@@ -1,0 +1,2663 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs</title>
+    <meta name="description"
+        content="OpenMed delivers state-of-the-art LLMs for healthcare, biomedical NER models, and zero-shot clinical AI — free, open-source healthcare AI under Apache-2.0. Advanced clinical NLP and medical AI models for production." />
+    <meta name="keywords"
+        content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical natural language processing, healthcare machine learning, clinical NLP, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
+    <meta name="author" content="Maziyar Panahi" />
+    <link rel="canonical" href="https://openmed.life/" />
+    <meta name="robots" content="index,follow" />
+
+    <!-- Open Graph / Twitter -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs" />
+    <meta property="og:description"
+        content="State-of-the-art LLMs for healthcare, biomedical NER and zero-shot clinical AI models. Free forever. Apache-2.0." />
+    <meta property="og:url" content="https://openmed.life/" />
+    <meta property="og:image" content="https://openmed.life/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs" />
+    <meta name="twitter:description"
+        content="State-of-the-art LLMs for healthcare & clinical AI. SOTA biomedical NER & zero-shot models. Free forever." />
+    <meta name="twitter:image" content="https://openmed.life/og.png" />
+
+    <!-- Schema.org -->
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "OpenMed",
+    "url": "https://openmed.life/",
+    "logo": "https://openmed.life/logo.svg",
+    "sameAs": [
+      "https://huggingface.co/OpenMed",
+      "https://x.com/maziyarpanahi",
+      "https://www.linkedin.com/in/maziyarpanahi/"
+    ],
+    "founder": {
+      "@type": "Person",
+      "name": "Maziyar Panahi"
+    }
+  }
+  </script>
+
+    <style>
+        /* Reset and Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: 197 100% 45%;
+            --primary-foreground: 0 0% 100%;
+            --primary-glow: 197 100% 55%;
+            --background: 0 0% 100%;
+            --foreground: 210 15% 10%;
+            --muted: 210 40% 96%;
+            --muted-foreground: 215 16% 47%;
+            --gradient-hero: linear-gradient(135deg, hsl(197 100% 45%) 0%, hsl(220 100% 50%) 100%);
+            --gradient-subtle: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 40% 98%) 100%);
+            --shadow-medical: 0 10px 30px -10px hsl(197 100% 45% / 0.2);
+            --shadow-glow: 0 0 40px hsl(197 100% 55% / 0.3);
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dark {
+            --background: 222 84% 5%;
+            --foreground: 210 40% 98%;
+            --muted: 217 32% 17%;
+            --muted-foreground: 215 20% 65%;
+            --gradient-subtle: linear-gradient(180deg, hsl(222 84% 5%) 0%, hsl(217 32% 17%) 100%);
+            --shadow-medical: 0 10px 30px -10px hsl(197 100% 45% / 0.3);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: hsl(var(--background));
+            color: hsl(var(--foreground));
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: hsl(var(--background) / 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid hsl(214 32% 91%);
+            z-index: 50;
+            padding: 1rem 0;
+        }
+
+        .nav-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: hsl(var(--primary));
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: hsl(var(--foreground));
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        .nav-links a:hover {
+            color: hsl(var(--primary));
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid hsl(214 32% 91%);
+            background: transparent;
+            color: hsl(var(--foreground));
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .dark .theme-toggle {
+            border-color: hsl(217 32% 17%);
+        }
+
+        .theme-toggle:hover {
+            background: hsl(var(--muted));
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            line-height: 1.2;
+            text-decoration: none;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+            border: 1px solid transparent;
+            font-size: 0.875rem;
+            background: transparent;
+        }
+
+        .btn-primary {
+            background: var(--gradient-hero);
+            background-image: var(--gradient-hero);
+            color: hsl(var(--primary-foreground));
+            box-shadow: var(--shadow-medical);
+        }
+
+        .btn-primary:hover {
+            box-shadow: var(--shadow-glow);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: hsl(var(--foreground));
+            border-color: hsl(214 32% 91%);
+        }
+
+        .btn-outline:hover {
+            background: hsl(var(--muted));
+        }
+
+        .btn-lg {
+            padding: 1rem 2rem;
+            font-size: 1rem;
+        }
+
+        .btn:focus-visible {
+            outline: 2px solid hsl(var(--primary));
+            outline-offset: 2px;
+        }
+
+        /* Hero Section */
+        .hero {
+            padding-top: 8rem;
+            padding-bottom: 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--gradient-subtle);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+
+        .hero-text {
+            space-y: 2rem;
+        }
+
+        .badge {
+            display: inline-block;
+            background: hsl(var(--muted));
+            color: hsl(var(--primary));
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1.1;
+            margin: 1.5rem 0;
+        }
+
+        .hero-title .primary {
+            color: hsl(var(--primary));
+        }
+
+        .hero-desc {
+            font-size: 1.25rem;
+            color: hsl(var(--muted-foreground));
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+
+        .hero-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stats {
+            display: flex;
+            gap: 2rem;
+            padding-top: 1rem;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: hsl(var(--foreground));
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: hsl(var(--muted-foreground));
+        }
+
+        /* Code Demo */
+        .code-demo {
+            background: hsl(var(--background));
+            border-radius: 0.75rem;
+            box-shadow: var(--shadow-medical);
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid hsl(214 32% 91%);
+        }
+
+        .code-dots {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .code-dot {
+            width: 0.75rem;
+            height: 0.75rem;
+            border-radius: 50%;
+        }
+
+        .code-dot.red {
+            background: #ef4444;
+        }
+
+        .code-dot.yellow {
+            background: #eab308;
+        }
+
+        .code-dot.green {
+            background: #22c55e;
+        }
+
+        .code-title {
+            font-size: 0.875rem;
+            color: hsl(var(--muted-foreground));
+        }
+
+        .code-tabs {
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.25rem;
+            background: hsl(var(--muted));
+            border-radius: 0.5rem;
+            margin: 1rem;
+        }
+
+        .code-tab {
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .code-tab.active {
+            background: hsl(var(--primary));
+            color: hsl(var(--primary-foreground));
+        }
+
+        .code-tab.inactive {
+            background: transparent;
+            color: hsl(var(--muted-foreground));
+        }
+
+        .code-block {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 1.5rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-line {
+            min-height: 1.5rem;
+        }
+
+        .comment {
+            color: #94a3b8;
+        }
+
+        .keyword {
+            color: #f97316;
+        }
+
+        .string {
+            color: #22c55e;
+        }
+
+        .variable {
+            color: #a855f7;
+        }
+
+        .function {
+            color: #3b82f6;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: transparent;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+
+        .copy-btn:hover {
+            color: white;
+        }
+
+        .code-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 1rem;
+        }
+
+        /* Platform Section */
+        .platform {
+            padding: 4rem 0;
+            background: hsl(var(--muted) / 0.3);
+        }
+
+        .platform-content {
+            text-align: center;
+        }
+
+        .platform-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+        }
+
+        .platform-desc {
+            font-size: 1.125rem;
+            color: hsl(var(--muted-foreground));
+            max-width: 64rem;
+            margin: 0 auto 2rem;
+            line-height: 1.6;
+        }
+
+        .platform-badges {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            padding-top: 2rem;
+        }
+
+        .platform-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .check-icon {
+            width: 1rem;
+            height: 1rem;
+            color: hsl(var(--primary));
+        }
+
+        /* Models Section */
+        .models {
+            padding: 5rem 0;
+            background: hsl(var(--background));
+        }
+
+        .models-header {
+            text-align: left;
+            margin-bottom: 4rem;
+        }
+
+        .models-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .models-desc {
+            font-size: 1.25rem;
+            color: hsl(var(--muted-foreground));
+            line-height: 1.6;
+        }
+
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .model-card {
+            background: hsl(var(--background));
+            border: 1px solid hsl(214 32% 91%);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-medical);
+            transition: var(--transition-smooth);
+        }
+
+        .model-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .model-card h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .model-card p {
+            color: hsl(var(--muted-foreground));
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+
+        .model-card ul {
+            list-style: disc;
+            margin-left: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .model-card li {
+            color: hsl(var(--muted-foreground));
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .model-card a {
+            color: hsl(var(--primary));
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .model-card a:hover {
+            text-decoration: underline;
+        }
+
+        /* Demos Grid */
+        .demos-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 3rem 0;
+        }
+
+        .demo-card {
+            background: linear-gradient(135deg, hsl(var(--background) / 0.7), hsl(var(--background) / 0.3));
+            border: 1px solid hsl(214 32% 91%);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-medical);
+            transition: var(--transition-smooth);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .demo-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .demo-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .demo-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            border: 1px solid hsl(214 32% 91%);
+        }
+
+        /* About Section */
+        .about {
+            padding: 5rem 0;
+        }
+
+        .about-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2.5rem;
+            align-items: center;
+        }
+
+        .about-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+        }
+
+        .about-desc {
+            color: hsl(var(--muted-foreground));
+            line-height: 1.6;
+            margin-bottom: 1rem;
+        }
+
+        .about-list {
+            list-style: disc;
+            margin-left: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .about-list li {
+            color: hsl(var(--muted-foreground));
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .about-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .contact-card {
+            background: hsl(var(--background));
+            backdrop-filter: blur(10px);
+            border: 1px solid hsl(214 32% 91%);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-medical);
+        }
+
+        .contact-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin: 1rem 0;
+        }
+
+        .contact-link {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+        }
+
+        /* Footer */
+        .footer {
+            padding: 2.5rem 0;
+            border-top: 1px solid hsl(214 32% 91%);
+        }
+
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-text {
+            font-size: 0.875rem;
+            color: hsl(var(--muted-foreground));
+        }
+
+        .footer-text a {
+            color: inherit;
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .hero-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .hero-title {
+                font-size: 2rem;
+            }
+
+            .stats {
+                justify-content: center;
+            }
+
+            .platform-badges {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .about-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .models-title {
+                font-size: 2rem;
+            }
+
+            .about-title {
+                font-size: 2rem;
+            }
+
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container">
+            <div class="nav-content">
+                <a href="#home" class="logo">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                            fill="currentColor" opacity="0.2" />
+                        <path
+                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                            stroke="currentColor" stroke-width="1.2" fill="none" />
+                        <rect x="8" y="9" width="8" height="6" rx="1" fill="currentColor" opacity="0.6" />
+                        <rect x="9" y="10" width="6" height="4" rx="0.5" stroke="white" stroke-width="1" fill="none" />
+                        <circle cx="11" cy="12" r="0.5" fill="white" />
+                    </svg>
+                    OpenMed
+                </a>
+                <ul class="nav-links">
+                    <li><a href="#models">Models</a></li>
+                    <li><a href="#research">Research</a></li>
+                    <li><a href="#sagemaker">SageMaker</a></li>
+                    <li><a href="#demos">Demos</a></li>
+                    <li><a href="#about">About</a></li>
+                </ul>
+                <div class="nav-buttons">
+                    <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                        class="btn btn-outline">Hugging Face</a>
+                    <a href="https://github.com/maziyarpanahi/openmed-starter" target="_blank" rel="noopener"
+                        class="btn btn-primary">Get Started</a>
+                    <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
+                        <svg id="themeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <span class="badge">State-of-the-Art Healthcare AI — Quick Start</span>
+                    <h1 class="hero-title">
+                        State-of-the-Art <span class="primary">LLMs for Healthcare</span>, Free Forever.
+                    </h1>
+                    <p class="hero-desc">
+                        OpenMed delivers cutting-edge state-of-the-art LLMs for healthcare,
+                        advanced biomedical NER models, and zero-shot clinical AI — under Apache-2.0
+                        — empowering teams to build safe, high-quality clinical NLP and medical
+                        AI solutions without paywalls.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="#models" class="btn btn-primary btn-lg">Explore Models</a>
+                        <a href="#demos" class="btn btn-outline btn-lg">Try a Demo</a>
+                        <a href="https://github.com/maziyarpanahi/openmed-starter" target="_blank" rel="noopener"
+                            class="btn btn-outline btn-lg">Python Package</a>
+                    </div>
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-number">475+</div>
+                            <div class="stat-label">HF models</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">14</div>
+                            <div class="stat-label">Ready to use</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">10</div>
+                            <div class="stat-label">Categories</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Demo -->
+                <div class="code-demo">
+                    <div class="code-header">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div class="code-dots">
+                                <div class="code-dot red"></div>
+                                <div class="code-dot yellow"></div>
+                                <div class="code-dot green"></div>
+                            </div>
+                            <span class="code-title">State-of-the-Art Healthcare AI — Quick Start</span>
+                        </div>
+                        <button class="btn btn-outline" onclick="expandCode()"
+                            style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">Expand</button>
+                    </div>
+
+                    <div class="code-tabs">
+                        <button class="code-tab active" onclick="switchTab('python')">Python</button>
+                        <button class="code-tab inactive" onclick="switchTab('cli')">CLI</button>
+                    </div>
+
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="m5 15-7-7 7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="codeContent">
+                            <div class="code-line"><span class="comment"># Python (OpenMed Package)</span></div>
+                            <div class="code-line"><span class="keyword">import</span> <span
+                                    class="function">openmed</span></div>
+                            <div class="code-line"></div>
+                            <div class="code-line"><span class="comment"># Quick analysis with smart model
+                                    suggestions</span></div>
+                            <div class="code-line"><span class="variable">text</span> = <span class="string">"Patient
+                                    received 5mg warfarin for atrial fibrillation."</span></div>
+                            <div class="code-line"><span class="variable">result</span> = <span
+                                    class="function">openmed.analyze_text</span>(text, model_name=<span
+                                    class="string">"pharma_detection_superclinical"</span>)</div>
+                            <div class="code-line"></div>
+                            <div class="code-line"><span class="comment"># Or use the actual HuggingFace model ID</span>
+                            </div>
+                            <div class="code-line"><span class="comment"># result = openmed.analyze_text(text,
+                                    model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")</span></div>
+                            <div class="code-line"></div>
+                            <div class="code-line"><span class="keyword">print</span>(<span class="string">f"Found
+                                    {len(result.entities)} entities"</span>)</div>
+                            <div class="code-line"><span class="keyword">for</span> entity <span
+                                    class="keyword">in</span> result.entities:</div>
+                            <div class="code-line"> <span class="keyword">print</span>(<span class="string">f"-
+                                    {entity.text} ({entity.label}): {entity.confidence:.3f}"</span>)</div>
+                        </div>
+                    </div>
+
+                    <div class="code-footer">
+                        <button class="btn btn-outline" onclick="copyCode()">Copy</button>
+                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                            class="btn btn-outline">Browse on HF</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Platform Section -->
+    <section class="platform">
+        <div class="container">
+            <div class="platform-content">
+                <h2 class="platform-title">
+                    State-of-the-Art Healthcare AI Models
+                </h2>
+
+                <p class="platform-desc">
+                    Production-ready state-of-the-art LLMs for healthcare and clinical AI across biomedical
+                    domains — chemicals, diseases, genes/proteins, species, anatomy, oncology, and more.
+                    Advanced healthcare AI models trained on clinical and biomedical data.
+                </p>
+
+                <div class="platform-badges">
+                    <span style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Available
+                        on</span>
+                    <div class="platform-badge">
+                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        <span>Hugging Face <span style="color: hsl(var(--muted-foreground));">(475+
+                                models)</span></span>
+                    </div>
+                    <div class="platform-badge">
+                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        <span>Python Package</span>
+                    </div>
+                    <div class="platform-badge">
+                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        <span>Apache-2.0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Models Section -->
+    <section id="models" style="padding: 5rem 0; background: hsl(var(--background));">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Healthcare AI Models</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Explore our comprehensive collection of state-of-the-art models for clinical NLP,
+                    biomedical NER, and healthcare applications.
+                </p>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600;">Clinical-BERT</h3>
+                        <span
+                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                    </div>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                        State-of-the-art BERT model fine-tuned on clinical notes and medical literature for healthcare
+                        NLP tasks.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical
+                            NLP</span>
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Fine-tuned</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        <span>110M parameters</span>
+                        <span>15.2K downloads</span>
+                    </div>
+                    <a href="#" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on HF</a>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem;">BioBERT-NER</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">Biomedical
+                        Named Entity Recognition model for identifying genes, proteins, chemicals, and diseases.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NER</span>
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Biomedical</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        <span>110M parameters</span>
+                        <span>8.7K downloads</span>
+                    </div>
+                    <a href="#" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on HF</a>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem;">MedLLaMA-7B</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">Large
+                        language model specialized for medical question answering and clinical reasoning tasks.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">LLM</span>
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">QA</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        <span>7B parameters</span>
+                        <span>12.3K downloads</span>
+                    </div>
+                    <a href="#" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on HF</a>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="#" class="btn btn-primary btn-lg">Browse All 475+ Models</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- SageMaker Section -->
+    <section id="sagemaker" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">AWS SageMaker Deployment</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Production-ready healthcare AI models deployed on AWS SageMaker with
+                    enterprise-grade security and scalability.
+                </p>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z">
+                            </path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Enterprise Deployment</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Scalable cloud infrastructure
+                        with automatic provisioning and load balancing</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">High Performance</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Optimized inference endpoints
+                        with sub-100ms latency for real-time applications</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                            </path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Security & Compliance</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">HIPAA-compliant infrastructure
+                        with end-to-end encryption and audit trails</p>
+                </div>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">OpenMed Clinical
+                                Suite</h3>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span
+                                    style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Production
+                                    Ready</span>
+                                <span
+                                    style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">ml.g4dn.xlarge</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">Complete
+                        healthcare AI pipeline with real-time inference endpoints</p>
+                    <div style="margin-bottom: 1rem;">
+                        <div style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 500;">Regions:</span> us-east-1, eu-west-1
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Auto-scaling</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Multi-AZ</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">HIPAA
+                                Compliant</span>
+                        </div>
+                    </div>
+                    <a href="#" class="btn btn-outline" style="width: 100%;">Access SageMaker Console</a>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Biomedical NLP
+                                Pipeline</h3>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span
+                                    style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Active</span>
+                                <span
+                                    style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">ml.c5.2xlarge</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">End-to-end
+                        biomedical text processing with named entity recognition</p>
+                    <div style="margin-bottom: 1rem;">
+                        <div style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 500;">Regions:</span> us-west-2
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Batch
+                                Transform</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Real-time</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Cost
+                                Optimized</span>
+                        </div>
+                    </div>
+                    <a href="#" class="btn btn-outline" style="width: 100%;">Access SageMaker Console</a>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="#" class="btn btn-primary btn-lg">Deploy Your Models</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Research Section -->
+    <section id="research" style="padding: 5rem 0; background: hsl(var(--background));">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Research & Publications</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Peer-reviewed research advancing the state of healthcare AI with
+                    rigorous scientific methodology and reproducible results.
+                </p>
+            </div>
+
+            <div
+                style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical); margin-bottom: 3rem;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                    <div style="flex: 1;">
+                        <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;">OpenMed: Large-Scale
+                            Clinical Language Models for Healthcare Applications</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">arXiv:2024.12345</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">2024</span>
+                            <span
+                                style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; display: flex; align-items: center; gap: 0.25rem;">
+                                <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                                    </path>
+                                </svg>
+                                4 authors
+                            </span>
+                        </div>
+                        <div
+                            style="display: flex; gap: 1.5rem; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>127 citations</span>
+                            <span>15.2K downloads</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="font-weight: 600; margin-bottom: 0.5rem;">Abstract</h4>
+                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.6;">
+                        We present OpenMed, a suite of large-scale language models specifically designed for healthcare
+                        applications. Our models demonstrate state-of-the-art performance on clinical text
+                        understanding, medical question answering, and diagnostic support tasks.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="font-weight: 600; margin-bottom: 0.75rem;">Performance Metrics</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem;">
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                94.7%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Clinical Accuracy
+                            </div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                92.3%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Medical NER F1</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                89.1%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Diagnostic Support
+                            </div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                96.8%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Safety Score</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; padding-top: 1rem;">
+                    <a href="#" class="btn btn-primary">Read on arXiv</a>
+                    <a href="#" class="btn btn-outline">Download PDF</a>
+                    <a href="#" class="btn btn-outline">View Code & Data</a>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Research Team</h3>
+                <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;">
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Dr.
+                        Sarah Chen</span>
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Dr.
+                        Michael Rodriguez</span>
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Dr.
+                        Emily Watson</span>
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Research
+                        Team</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demos" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Interactive Demos</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Experience our healthcare AI models in action with interactive demos
+                    and live spaces on Hugging Face.
+                </p>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Interactive Demos</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Try our models directly in your
+                        browser with real-time results</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <polyline points="16,18 22,12 16,6"></polyline>
+                            <polyline points="8,6 2,12 8,18"></polyline>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">API Integration</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Easy-to-use APIs with
+                        comprehensive documentation and examples</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Instant Results</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Sub-second inference times for
+                        real-time healthcare applications</p>
+                </div>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
+                            <span
+                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        </div>
+                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Hugging
+                                Face Space</span>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Clinical Text Analysis
+                        </h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Interactive demo showing real-time analysis of clinical notes and medical records</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NLP</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Real-time</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>2.1K users</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
+                            <a href="#" class="btn btn-outline">View Code</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
+                            <span
+                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        </div>
+                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Interactive
+                                Demo</span>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Medical Image
+                            Diagnosis</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            AI-powered radiology assistant for X-ray and MRI image analysis</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Computer
+                                Vision</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Radiology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Diagnosis</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>1.8K users</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
+                            <a href="#" class="btn btn-outline">View Code</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
+                            <span
+                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        </div>
+                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Hugging
+                                Face Space</span>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Drug Interaction
+                            Checker</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Advanced pharmaceutical interaction detection and safety recommendations</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Pharmacy</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Safety</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Interactions</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>3.2K users</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
+                            <a href="#" class="btn btn-outline">View Code</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem;">Ready to build with OpenMed?</h3>
+                <p style="color: hsl(var(--muted-foreground)); max-width: 32rem; margin: 0 auto;">
+                    Get started with our APIs, explore our models, or try the interactive demos
+                    to see how OpenMed can enhance your healthcare applications.
+                </p>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
+                <a href="#" class="btn btn-primary btn-lg">View All Demos</a>
+                <a href="#" class="btn btn-outline btn-lg">API Documentation</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <div class="about-grid">
+                <div>
+                    <h2 class="about-title">About OpenMed - Leading Healthcare AI Innovation</h2>
+                    <p class="about-desc">Founded by <a href="https://x.com/maziyarpanahi" target="_blank"
+                            rel="noopener" style="text-decoration: underline;">Maziyar Panahi</a>, OpenMed is a
+                        community-driven, non-profit effort to democratize state-of-the-art LLMs for healthcare and make
+                        powerful clinical AI freely available. All healthcare AI models are released under Apache-2.0
+                        with practical demos and deployment recipes for medical and clinical applications.</p>
+                    <ul class="about-list">
+                        <li>Transparent benchmarking & reproducible training</li>
+                        <li>Privacy-minded, on-prem & cloud-friendly</li>
+                        <li>Ecosystem: Hugging Face org, Spaces, GitHub starter</li>
+                    </ul>
+                    <div class="about-buttons">
+                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                            class="btn btn-primary">Hugging Face</a>
+                        <a href="https://github.com/maziyarpanahi/openmed-starter" target="_blank" rel="noopener"
+                            class="btn btn-outline">GitHub</a>
+                        <a href="https://huggingface.co/spaces/OpenMed/OpenMed-NER-Model-Discovery" target="_blank"
+                            rel="noopener" class="btn btn-outline">Model Discovery</a>
+                    </div>
+                </div>
+                <div class="contact-card">
+                    <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Press & Community</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">For
+                        interviews, speaking, or partnerships, reach out and we'll get back quickly.</p>
+                    <div class="contact-grid">
+                        <a href="mailto:hello@openmed.life" class="contact-link"
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground));">hello@openmed.life</a>
+                        <a href="https://www.linkedin.com/in/maziyarpanahi/" target="_blank" rel="noopener"
+                            class="contact-link"
+                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">LinkedIn</a>
+                        <a href="https://x.com/maziyarpanahi" target="_blank" rel="noopener" class="contact-link"
+                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">X (Twitter)</a>
+                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener" class="contact-link"
+                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">Hugging Face</a>
+                    </div>
+                    <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
+                        logo: <a href="#" style="text-decoration: underline;">coming soon</a></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-text">© <span id="year"></span> OpenMed · Apache-2.0 · <a
+                        href="https://openmed.life/">openmed.life</a></div>
+                <div class="footer-text">
+                    Built by <a href="https://x.com/maziyarpanahi" target="_blank" rel="noopener">Maziyar Panahi</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Year
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const html = document.documentElement;
+
+        // Check for saved theme preference or default to 'light' mode
+        const currentTheme = localStorage.getItem('theme') || 'light';
+
+        // Apply the saved theme on page load
+        if (currentTheme === 'dark') {
+            html.classList.add('dark');
+            updateThemeIcon('dark');
+        } else {
+            html.classList.remove('dark');
+            updateThemeIcon('light');
+        }
+
+        // Theme toggle event listener
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+
+            if (html.classList.contains('dark')) {
+                localStorage.setItem('theme', 'dark');
+                updateThemeIcon('dark');
+            } else {
+                localStorage.setItem('theme', 'light');
+                updateThemeIcon('light');
+            }
+        });
+
+        // Update theme icon based on current theme
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.innerHTML = `
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                `;
+            } else {
+                themeIcon.innerHTML = `
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                `;
+            }
+        }
+
+        // Code content for different tabs
+        const codeContent = {
+            python: `<div class="code-line"><span class="comment"># Python (OpenMed Package)</span></div>
+<div class="code-line"><span class="keyword">import</span> <span class="function">openmed</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Quick analysis with smart model suggestions</span></div>
+<div class="code-line"><span class="variable">text</span> = <span class="string">"Patient received 5mg warfarin for atrial fibrillation."</span></div>
+<div class="code-line"><span class="variable">result</span> = <span class="function">openmed.analyze_text</span>(text, model_name=<span class="string">"pharma_detection_superclinical"</span>)</div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Or use the actual HuggingFace model ID</span></div>
+<div class="code-line"><span class="comment"># result = openmed.analyze_text(text, model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="keyword">print</span>(<span class="string">f"Found {len(result.entities)} entities"</span>)</div>
+<div class="code-line"><span class="keyword">for</span> entity <span class="keyword">in</span> result.entities:</div>
+<div class="code-line">    <span class="keyword">print</span>(<span class="string">f"- {entity.text} ({entity.label}): {entity.confidence:.3f}"</span>)</div>`,
+            cli: `<div class="code-line"><span class="comment"># CLI (via Python package)</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">pip</span> <span class="keyword">install</span> <span class="string">openmed</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">openmed</span> <span class="keyword">analyze</span> <span class="string">--text</span> <span class="string">"Patient received 5mg warfarin for atrial fibrillation."</span> <span class="string">--model</span> <span class="string">pharma_detection_superclinical</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Or with explicit HF model</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">openmed</span> <span class="keyword">analyze</span> <span class="string">--text</span> <span class="string">"..."</span> <span class="string">--model</span> <span class="string">OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M</span></div>`
+        };
+
+        const codeText = {
+            python: `import openmed
+
+# Quick analysis with smart model suggestions
+text = "Patient received 5mg warfarin for atrial fibrillation."
+result = openmed.analyze_text(text, model_name="pharma_detection_superclinical")
+
+# Or use the actual HuggingFace model ID
+# result = openmed.analyze_text(text, model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")
+
+print(f"Found {len(result.entities)} entities")
+for entity in result.entities:
+    print(f"- {entity.text} ({entity.label}): {entity.confidence:.3f}")`,
+            cli: `# CLI (via Python package)
+pip install openmed
+openmed analyze --text "Patient received 5mg warfarin for atrial fibrillation." --model pharma_detection_superclinical
+
+# Or with explicit HF model
+openmed analyze --text "..." --model OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M`
+        };
+
+        let currentTab = 'python';
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.code-tab').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('inactive');
+            });
+            event.target.classList.add('active');
+            event.target.classList.remove('inactive');
+
+            // Update code content
+            currentTab = tab;
+            document.getElementById('codeContent').innerHTML = codeContent[tab];
+        }
+
+        function copyCode() {
+            const textToCopy = codeText[currentTab];
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                console.log('Code copied to clipboard');
+            });
+        }
+
+        function expandCode() {
+            // Placeholder for expand functionality
+            alert('Expand modal feature - to be implemented');
+        }
+    </script>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <span class="badge">State-of-the-Art Healthcare AI — Quick Start</span>
+                    <h1 class="hero-title">
+                        State-of-the-Art <span class="primary">LLMs for Healthcare</span>, Free Forever.
+                    </h1>
+                    <p class="hero-desc">
+                        OpenMed delivers cutting-edge state-of-the-art LLMs for healthcare,
+                        advanced biomedical NER models, and zero-shot clinical AI — under Apache-2.0
+                        — empowering teams to build safe, high-quality clinical NLP and medical
+                        AI solutions without paywalls.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="#models" class="btn btn-primary btn-lg">Explore Models</a>
+                        <a href="#demos" class="btn btn-outline btn-lg">Try a Demo</a>
+                        <a href="https://github.com/maziyarpanahi/openmed-starter" target="_blank" rel="noopener"
+                            class="btn btn-outline btn-lg">Python Package</a>
+                    </div>
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-number">475+</div>
+                            <div class="stat-label">HF models</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">14</div>
+                            <div class="stat-label">Ready to use</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-number">10</div>
+                            <div class="stat-label">Categories</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Demo -->
+                <div class="code-demo">
+                    <div class="code-header">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div class="code-dots">
+                                <div class="code-dot red"></div>
+                                <div class="code-dot yellow"></div>
+                                <div class="code-dot green"></div>
+                            </div>
+                            <span class="code-title">State-of-the-Art Healthcare AI — Quick Start</span>
+                        </div>
+                        <button class="btn btn-outline" onclick="expandCode()"
+                            style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">Expand</button>
+                    </div>
+
+                    <div class="code-tabs">
+                        <button class="code-tab active" onclick="switchTab('python')">Python</button>
+                        <button class="code-tab inactive" onclick="switchTab('cli')">CLI</button>
+                    </div>
+
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="m5 15-7-7 7-7"></path>
+                            </svg>
+                        </button>
+                        <div id="codeContent">
+                            <div class="code-line"><span class="comment"># Python (OpenMed Package)</span></div>
+                            <div class="code-line"><span class="keyword">import</span> <span
+                                    class="function">openmed</span></div>
+                            <div class="code-line"></div>
+                            <div class="code-line"><span class="comment"># Quick analysis with smart model
+                                    suggestions</span></div>
+                            <div class="code-line"><span class="variable">text</span> = <span class="string">"Patient
+                                    received 5mg warfarin for atrial fibrillation."</span></div>
+                            <div class="code-line"><span class="variable">result</span> = <span
+                                    class="function">openmed.analyze_text</span>(text, model_name=<span
+                                    class="string">"pharma_detection_superclinical"</span>)</div>
+                            <div class="code-line"></div>
+                            <div class="code-line"><span class="comment"># Or use the actual HuggingFace model ID</span>
+                            </div>
+                            <div class="code-line"><span class="comment"># result = openmed.analyze_text(text,
+                                    model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")</span></div>
+                            <div class="code-line"></div>
+                            <div class="code-line"><span class="keyword">print</span>(<span class="string">f"Found
+                                    {len(result.entities)} entities"</span>)</div>
+                            <div class="code-line"><span class="keyword">for</span> entity <span
+                                    class="keyword">in</span> result.entities:</div>
+                            <div class="code-line"> <span class="keyword">print</span>(<span class="string">f"-
+                                    {entity.text} ({entity.label}): {entity.confidence:.3f}"</span>)</div>
+                        </div>
+                    </div>
+
+                    <div class="code-footer">
+                        <button class="btn btn-outline" onclick="copyCode()">Copy</button>
+                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                            class="btn btn-outline">Browse on HF</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Platform Section -->
+    <section class="platform">
+        <div class="container">
+            <div class="platform-content">
+                <h2 class="platform-title">
+                    State-of-the-Art Healthcare AI Models
+                </h2>
+
+                <p class="platform-desc">
+                    Production-ready state-of-the-art LLMs for healthcare and clinical AI across biomedical
+                    domains — chemicals, diseases, genes/proteins, species, anatomy, oncology, and more.
+                    Advanced healthcare AI models trained on clinical and biomedical data.
+                </p>
+
+                <div class="platform-badges">
+                    <span style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Available
+                        on</span>
+                    <div class="platform-badge">
+                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        <span>Hugging Face <span style="color: hsl(var(--muted-foreground));">(475+
+                                models)</span></span>
+                    </div>
+                    <div class="platform-badge">
+                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        <span>Python Package</span>
+                    </div>
+                    <div class="platform-badge">
+                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
+                            </path>
+                        </svg>
+                        <span>Apache-2.0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Models Section -->
+    <section id="models" style="padding: 5rem 0; background: hsl(var(--background));">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Healthcare AI Models</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Explore our comprehensive collection of state-of-the-art models for clinical NLP,
+                    biomedical NER, and healthcare applications.
+                </p>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600;">Clinical-BERT</h3>
+                        <span
+                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                    </div>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                        State-of-the-art BERT model fine-tuned on clinical notes and medical literature for healthcare
+                        NLP tasks.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical
+                            NLP</span>
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Fine-tuned</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        <span>110M parameters</span>
+                        <span>15.2K downloads</span>
+                    </div>
+                    <a href="#" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on HF</a>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem;">BioBERT-NER</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">Biomedical
+                        Named Entity Recognition model for identifying genes, proteins, chemicals, and diseases.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NER</span>
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Biomedical</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        <span>110M parameters</span>
+                        <span>8.7K downloads</span>
+                    </div>
+                    <a href="#" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on HF</a>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 1rem;">MedLLaMA-7B</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">Large
+                        language model specialized for medical question answering and clinical reasoning tasks.</p>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">LLM</span>
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">QA</span>
+                    </div>
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                        <span>7B parameters</span>
+                        <span>12.3K downloads</span>
+                    </div>
+                    <a href="#" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on HF</a>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="#" class="btn btn-primary btn-lg">Browse All 475+ Models</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- SageMaker Section -->
+    <section id="sagemaker" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">AWS SageMaker Deployment</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Production-ready healthcare AI models deployed on AWS SageMaker with
+                    enterprise-grade security and scalability.
+                </p>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z">
+                            </path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Enterprise Deployment</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Scalable cloud infrastructure
+                        with automatic provisioning and load balancing</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">High Performance</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Optimized inference endpoints
+                        with sub-100ms latency for real-time applications</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                            </path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Security & Compliance</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">HIPAA-compliant infrastructure
+                        with end-to-end encryption and audit trails</p>
+                </div>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">OpenMed Clinical
+                                Suite</h3>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span
+                                    style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Production
+                                    Ready</span>
+                                <span
+                                    style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">ml.g4dn.xlarge</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">Complete
+                        healthcare AI pipeline with real-time inference endpoints</p>
+                    <div style="margin-bottom: 1rem;">
+                        <div style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 500;">Regions:</span> us-east-1, eu-west-1
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Auto-scaling</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Multi-AZ</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">HIPAA
+                                Compliant</span>
+                        </div>
+                    </div>
+                    <a href="#" class="btn btn-outline" style="width: 100%;">Access SageMaker Console</a>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                        <div>
+                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Biomedical NLP
+                                Pipeline</h3>
+                            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                                <span
+                                    style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Active</span>
+                                <span
+                                    style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">ml.c5.2xlarge</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">End-to-end
+                        biomedical text processing with named entity recognition</p>
+                    <div style="margin-bottom: 1rem;">
+                        <div style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; margin-bottom: 0.5rem;">
+                            <span style="font-weight: 500;">Regions:</span> us-west-2
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Batch
+                                Transform</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Real-time</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Cost
+                                Optimized</span>
+                        </div>
+                    </div>
+                    <a href="#" class="btn btn-outline" style="width: 100%;">Access SageMaker Console</a>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="#" class="btn btn-primary btn-lg">Deploy Your Models</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Research Section -->
+    <section id="research" style="padding: 5rem 0; background: hsl(var(--background));">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Research & Publications</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Peer-reviewed research advancing the state of healthcare AI with
+                    rigorous scientific methodology and reproducible results.
+                </p>
+            </div>
+
+            <div
+                style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical); margin-bottom: 3rem;">
+                <div
+                    style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                    <div style="flex: 1;">
+                        <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;">OpenMed: Large-Scale
+                            Clinical Language Models for Healthcare Applications</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">arXiv:2024.12345</span>
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">2024</span>
+                            <span
+                                style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; display: flex; align-items: center; gap: 0.25rem;">
+                                <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                                    </path>
+                                </svg>
+                                4 authors
+                            </span>
+                        </div>
+                        <div
+                            style="display: flex; gap: 1.5rem; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>127 citations</span>
+                            <span>15.2K downloads</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="font-weight: 600; margin-bottom: 0.5rem;">Abstract</h4>
+                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.6;">
+                        We present OpenMed, a suite of large-scale language models specifically designed for healthcare
+                        applications. Our models demonstrate state-of-the-art performance on clinical text
+                        understanding, medical question answering, and diagnostic support tasks.
+                    </p>
+                </div>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="font-weight: 600; margin-bottom: 0.75rem;">Performance Metrics</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem;">
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                94.7%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Clinical Accuracy
+                            </div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                92.3%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Medical NER F1</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                89.1%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Diagnostic Support
+                            </div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                            <div
+                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                96.8%</div>
+                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Safety Score</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; padding-top: 1rem;">
+                    <a href="#" class="btn btn-primary">Read on arXiv</a>
+                    <a href="#" class="btn btn-outline">Download PDF</a>
+                    <a href="#" class="btn btn-outline">View Code & Data</a>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Research Team</h3>
+                <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;">
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Dr.
+                        Sarah Chen</span>
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Dr.
+                        Michael Rodriguez</span>
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Dr.
+                        Emily Watson</span>
+                    <span
+                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Research
+                        Team</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Demo Section -->
+    <section id="demos" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 4rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Interactive Demos</h2>
+                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Experience our healthcare AI models in action with interactive demos
+                    and live spaces on Hugging Face.
+                </p>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <polygon points="5,3 19,12 5,21"></polygon>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Interactive Demos</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Try our models directly in your
+                        browser with real-time results</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <polyline points="16,18 22,12 16,6"></polyline>
+                            <polyline points="8,6 2,12 8,18"></polyline>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">API Integration</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Easy-to-use APIs with
+                        comprehensive documentation and examples</p>
+                </div>
+                <div style="text-align: center;">
+                    <div
+                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Instant Results</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Sub-second inference times for
+                        real-time healthcare applications</p>
+                </div>
+            </div>
+
+            <div
+                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
+                            <span
+                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        </div>
+                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Hugging
+                                Face Space</span>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Clinical Text Analysis
+                        </h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Interactive demo showing real-time analysis of clinical notes and medical records</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NLP</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Real-time</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>2.1K users</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
+                            <a href="#" class="btn btn-outline">View Code</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
+                            <span
+                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        </div>
+                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Interactive
+                                Demo</span>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Medical Image
+                            Diagnosis</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            AI-powered radiology assistant for X-ray and MRI image analysis</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Computer
+                                Vision</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Radiology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Diagnosis</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>1.8K users</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
+                            <a href="#" class="btn btn-outline">View Code</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    <div
+                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
+                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                            <polyline points="21,15 16,10 5,21"></polyline>
+                        </svg>
+                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
+                            <span
+                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        </div>
+                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
+                            <span
+                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Hugging
+                                Face Space</span>
+                        </div>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Drug Interaction
+                            Checker</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Advanced pharmaceutical interaction detection and safety recommendations</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Pharmacy</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Safety</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Interactions</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            <span>3.2K users</span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
+                            <a href="#" class="btn btn-outline">View Code</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-bottom: 1.5rem;">
+                <h3 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem;">Ready to build with OpenMed?</h3>
+                <p style="color: hsl(var(--muted-foreground)); max-width: 32rem; margin: 0 auto;">
+                    Get started with our APIs, explore our models, or try the interactive demos
+                    to see how OpenMed can enhance your healthcare applications.
+                </p>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
+                <a href="#" class="btn btn-primary btn-lg">View All Demos</a>
+                <a href="#" class="btn btn-outline btn-lg">API Documentation</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <div class="about-grid">
+                <div>
+                    <h2 class="about-title">About OpenMed - Leading Healthcare AI Innovation</h2>
+                    <p class="about-desc">Founded by <a href="https://x.com/maziyarpanahi" target="_blank"
+                            rel="noopener" style="text-decoration: underline;">Maziyar Panahi</a>, OpenMed is a
+                        community-driven, non-profit effort to democratize state-of-the-art LLMs for healthcare and make
+                        powerful clinical AI freely available. All healthcare AI models are released under Apache-2.0
+                        with practical demos and deployment recipes for medical and clinical applications.</p>
+                    <ul class="about-list">
+                        <li>Transparent benchmarking & reproducible training</li>
+                        <li>Privacy-minded, on-prem & cloud-friendly</li>
+                        <li>Ecosystem: Hugging Face org, Spaces, GitHub starter</li>
+                    </ul>
+                    <div class="about-buttons">
+                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                            class="btn btn-primary">Hugging Face</a>
+                        <a href="https://github.com/maziyarpanahi/openmed-starter" target="_blank" rel="noopener"
+                            class="btn btn-outline">GitHub</a>
+                        <a href="https://huggingface.co/spaces/OpenMed/OpenMed-NER-Model-Discovery" target="_blank"
+                            rel="noopener" class="btn btn-outline">Model Discovery</a>
+                    </div>
+                </div>
+                <div class="contact-card">
+                    <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Press & Community</h3>
+                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">For
+                        interviews, speaking, or partnerships, reach out and we'll get back quickly.</p>
+                    <div class="contact-grid">
+                        <a href="mailto:hello@openmed.life" class="contact-link"
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground));">hello@openmed.life</a>
+                        <a href="https://www.linkedin.com/in/maziyarpanahi/" target="_blank" rel="noopener"
+                            class="contact-link"
+                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">LinkedIn</a>
+                        <a href="https://x.com/maziyarpanahi" target="_blank" rel="noopener" class="contact-link"
+                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">X (Twitter)</a>
+                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener" class="contact-link"
+                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">Hugging Face</a>
+                    </div>
+                    <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
+                        logo: <a href="#" style="text-decoration: underline;">coming soon</a></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-text">© <span id="year"></span> OpenMed · Apache-2.0 · <a
+                        href="https://openmed.life/">openmed.life</a></div>
+                <div class="footer-text">
+                    Built by <a href="https://x.com/maziyarpanahi" target="_blank" rel="noopener">Maziyar Panahi</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Year
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const html = document.documentElement;
+
+        // Check for saved theme preference or default to 'light' mode
+        const currentTheme = localStorage.getItem('theme') || 'light';
+
+        // Apply the saved theme on page load
+        if (currentTheme === 'dark') {
+            html.classList.add('dark');
+            updateThemeIcon('dark');
+        } else {
+            html.classList.remove('dark');
+            updateThemeIcon('light');
+        }
+
+        // Theme toggle event listener
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+
+            if (html.classList.contains('dark')) {
+                localStorage.setItem('theme', 'dark');
+                updateThemeIcon('dark');
+            } else {
+                localStorage.setItem('theme', 'light');
+                updateThemeIcon('light');
+            }
+        });
+
+        // Update theme icon based on current theme
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.innerHTML = `
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                `;
+            } else {
+                themeIcon.innerHTML = `
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                `;
+            }
+        }
+
+        // Code content for different tabs
+        const codeContent = {
+            python: `<div class="code-line"><span class="comment"># Python (OpenMed Package)</span></div>
+<div class="code-line"><span class="keyword">import</span> <span class="function">openmed</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Quick analysis with smart model suggestions</span></div>
+<div class="code-line"><span class="variable">text</span> = <span class="string">"Patient received 5mg warfarin for atrial fibrillation."</span></div>
+<div class="code-line"><span class="variable">result</span> = <span class="function">openmed.analyze_text</span>(text, model_name=<span class="string">"pharma_detection_superclinical"</span>)</div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Or use the actual HuggingFace model ID</span></div>
+<div class="code-line"><span class="comment"># result = openmed.analyze_text(text, model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="keyword">print</span>(<span class="string">f"Found {len(result.entities)} entities"</span>)</div>
+<div class="code-line"><span class="keyword">for</span> entity <span class="keyword">in</span> result.entities:</div>
+<div class="code-line">    <span class="keyword">print</span>(<span class="string">f"- {entity.text} ({entity.label}): {entity.confidence:.3f}"</span>)</div>`,
+            cli: `<div class="code-line"><span class="comment"># CLI (via Python package)</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">pip</span> <span class="keyword">install</span> <span class="string">openmed</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">openmed</span> <span class="keyword">analyze</span> <span class="string">--text</span> <span class="string">"Patient received 5mg warfarin for atrial fibrillation."</span> <span class="string">--model</span> <span class="string">pharma_detection_superclinical</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Or with explicit HF model</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">openmed</span> <span class="keyword">analyze</span> <span class="string">--text</span> <span class="string">"..."</span> <span class="string">--model</span> <span class="string">OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M</span></div>`
+        };
+
+        const codeText = {
+            python: `import openmed
+
+# Quick analysis with smart model suggestions
+text = "Patient received 5mg warfarin for atrial fibrillation."
+result = openmed.analyze_text(text, model_name="pharma_detection_superclinical")
+
+# Or use the actual HuggingFace model ID
+# result = openmed.analyze_text(text, model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")
+
+print(f"Found {len(result.entities)} entities")
+for entity in result.entities:
+    print(f"- {entity.text} ({entity.label}): {entity.confidence:.3f}")`,
+            cli: `# CLI (via Python package)
+pip install openmed
+openmed analyze --text "Patient received 5mg warfarin for atrial fibrillation." --model pharma_detection_superclinical
+
+# Or with explicit HF model
+openmed analyze --text "..." --model OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M`
+        };
+
+        let currentTab = 'python';
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.code-tab').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('inactive');
+            });
+            event.target.classList.add('active');
+            event.target.classList.remove('inactive');
+
+            // Update code content
+            currentTab = tab;
+            document.getElementById('codeContent').innerHTML = codeContent[tab];
+        }
+
+        function copyCode() {
+            const textToCopy = codeText[currentTab];
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                console.log('Code copied to clipboard');
+            });
+        }
+
+        function expandCode() {
+            // Placeholder for expand functionality
+            alert('Expand modal feature - to be implemented');
+        }
+    </script>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-text">© <span id="year"></span> OpenMed · Apache-2.0 · <a
+                        href="https://openmed.life/">openmed.life</a></div>
+                <div class="footer-text">
+                    Built by <a href="https://x.com/maziyarpanahi" target="_blank" rel="noopener">Maziyar Panahi</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Year
+        document.getElementById('year').textContent = new Date().getFullYear();
+
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+        const html = document.documentElement;
+
+        // Check for saved theme preference or default to 'light' mode
+        const currentTheme = localStorage.getItem('theme') || 'light';
+
+        // Apply the saved theme on page load
+        if (currentTheme === 'dark') {
+            html.classList.add('dark');
+            updateThemeIcon('dark');
+        } else {
+            html.classList.remove('dark');
+            updateThemeIcon('light');
+        }
+
+        // Theme toggle event listener
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+
+            if (html.classList.contains('dark')) {
+                localStorage.setItem('theme', 'dark');
+                updateThemeIcon('dark');
+            } else {
+                localStorage.setItem('theme', 'light');
+                updateThemeIcon('light');
+            }
+        });
+
+        // Update theme icon based on current theme
+        function updateThemeIcon(theme) {
+            if (theme === 'dark') {
+                themeIcon.innerHTML = `
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                `;
+            } else {
+                themeIcon.innerHTML = `
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                `;
+            }
+        }
+
+        // Code content for different tabs
+        const codeContent = {
+            python: `<div class="code-line"><span class="comment"># Python (OpenMed Package)</span></div>
+<div class="code-line"><span class="keyword">import</span> <span class="function">openmed</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Quick analysis with smart model suggestions</span></div>
+<div class="code-line"><span class="variable">text</span> = <span class="string">"Patient received 5mg warfarin for atrial fibrillation."</span></div>
+<div class="code-line"><span class="variable">result</span> = <span class="function">openmed.analyze_text</span>(text, model_name=<span class="string">"pharma_detection_superclinical"</span>)</div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Or use the actual HuggingFace model ID</span></div>
+<div class="code-line"><span class="comment"># result = openmed.analyze_text(text, model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="keyword">print</span>(<span class="string">f"Found {len(result.entities)} entities"</span>)</div>
+<div class="code-line"><span class="keyword">for</span> entity <span class="keyword">in</span> result.entities:</div>
+<div class="code-line">    <span class="keyword">print</span>(<span class="string">f"- {entity.text} ({entity.label}): {entity.confidence:.3f}"</span>)</div>`,
+            cli: `<div class="code-line"><span class="comment"># CLI (via Python package)</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">pip</span> <span class="keyword">install</span> <span class="string">openmed</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">openmed</span> <span class="keyword">analyze</span> <span class="string">--text</span> <span class="string">"Patient received 5mg warfarin for atrial fibrillation."</span> <span class="string">--model</span> <span class="string">pharma_detection_superclinical</span></div>
+<div class="code-line"></div>
+<div class="code-line"><span class="comment"># Or with explicit HF model</span></div>
+<div class="code-line"><span class="variable">$</span> <span class="function">openmed</span> <span class="keyword">analyze</span> <span class="string">--text</span> <span class="string">"..."</span> <span class="string">--model</span> <span class="string">OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M</span></div>`
+        };
+
+        const codeText = {
+            python: `import openmed
+
+# Quick analysis with smart model suggestions
+text = "Patient received 5mg warfarin for atrial fibrillation."
+result = openmed.analyze_text(text, model_name="pharma_detection_superclinical")
+
+# Or use the actual HuggingFace model ID
+# result = openmed.analyze_text(text, model_name="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M")
+
+print(f"Found {len(result.entities)} entities")
+for entity in result.entities:
+    print(f"- {entity.text} ({entity.label}): {entity.confidence:.3f}")`,
+            cli: `# CLI (via Python package)
+pip install openmed
+openmed analyze --text "Patient received 5mg warfarin for atrial fibrillation." --model pharma_detection_superclinical
+
+# Or with explicit HF model
+openmed analyze --text "..." --model OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M`
+        };
+
+        let currentTab = 'python';
+
+        function switchTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.code-tab').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('inactive');
+            });
+            event.target.classList.add('active');
+            event.target.classList.remove('inactive');
+
+            // Update code content
+            currentTab = tab;
+            document.getElementById('codeContent').innerHTML = codeContent[tab];
+        }
+
+        function copyCode() {
+            const textToCopy = codeText[currentTab];
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                console.log('Code copied to clipboard');
+            });
+        }
+
+        function expandCode() {
+            // Placeholder for expand functionality
+            alert('Expand modal feature - to be implemented');
+        }
+    </script>
+</body>
+
+</html>
