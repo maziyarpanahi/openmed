@@ -119,7 +119,7 @@
                     </p>
                     <div class="hero-buttons">
                         <a href="#models" class="btn btn-primary btn-lg">Explore Models</a>
-                        <a href="https://huggingface.co/spaces/OpenMed/openmed-clinical-ner" target="_blank" rel="noopener" class="btn btn-outline btn-lg">Try a Demo</a>
+                        <button class="btn btn-outline" onclick="copyInstall(this)" style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install openmed</button>
 
                     </div>
                     <div class="stats">
@@ -150,23 +150,23 @@
                     </div>
 
                     <div class="code-tabs">
-                        <button class="code-tab active" onclick="switchTab('python')">Python</button>
-                        <button class="code-tab inactive" onclick="switchTab('cli')" style="display: none;">CLI</button>
+                        <button class="code-tab active" onclick="switchTab('python', this)">Python</button>
+                        <button class="code-tab inactive" onclick="switchTab('cli', this)"
+                            style="display: none;">CLI</button>
                     </div>
 
                     <div class="code-block">
-                        <button class="copy-btn" onclick="copyCode()">
+                        <button class="copy-btn" onclick="copyCode(this)" title="Copy code">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2">
                                 <rect x="5" y="5" width="18" height="18" rx="2" ry="2"></rect>
                             </svg>
                         </button>
-                        <div id="codeContent">
-                        </div>
+                        <div id="codeContent"></div>
                     </div>
 
                     <div class="code-footer">
-                        <button class="btn btn-outline" onclick="copyCode()">Copy</button>
+                        <button class="btn btn-outline" onclick="copyCode(this)">Copy</button>
                         <!-- <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
                             class="btn btn-outline">Browse on HF</a> -->
                     </div>
@@ -997,8 +997,8 @@
                         <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener" class="contact-link"
                             style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">Hugging Face</a>
                     </div>
-                    <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
-                        logo: <a href="#" style="text-decoration: underline;">coming soon</a></p>
+                    <!-- <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
+                        logo: <a href="#" style="text-decoration: underline;">coming soon</a></p> -->
                 </div>
             </div>
         </div>

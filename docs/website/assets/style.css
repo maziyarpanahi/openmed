@@ -329,10 +329,30 @@ body {
     padding: 1.5rem;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 0.875rem;
-    line-height: 1.5;
+    line-height: 1.6;
     overflow-x: auto;
     position: relative;
+    border-radius: 0.5rem;
 }
+
+.code-block pre {
+    margin: 0;
+    white-space: pre;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.code-block code {
+    font-family: inherit;
+}
+
+/* Syntax highlighting styles */
+.code-block .comment { color: #64748b; }
+.code-block .keyword { color: #f97316; font-weight: 600; }
+.code-block .string { color: #22c55e; }
+.code-block .function { color: #3b82f6; }
+.code-block .variable { color: #a855f7; }
 
 .code-line {
     min-height: 1.5rem;
@@ -371,6 +391,20 @@ body {
 
 .copy-btn:hover {
     color: white;
+}
+
+.copy-btn.copied::after {
+    content: "Copied!";
+    position: absolute;
+    top: -0.75rem;
+    right: 0;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    font-size: 0.625rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+    transform: translateY(-100%);
 }
 
 .code-footer {
