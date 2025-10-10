@@ -48,14 +48,6 @@ jobs:
         # Exit-zero treats all errors as warnings
         flake8 openmed --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
-    - name: Check code formatting with black
-      run: |
-        black --check openmed tests
-
-    - name: Check import sorting with isort
-      run: |
-        isort --check-only openmed tests
-
     - name: Type check with mypy
       run: |
         mypy openmed

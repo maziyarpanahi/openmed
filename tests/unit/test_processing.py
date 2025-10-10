@@ -4,12 +4,7 @@ import pytest
 from unittest.mock import Mock, patch
 from openmed.processing.text import TextProcessor, preprocess_text, postprocess_text
 from openmed.processing.tokenization import TokenizationHelper
-from openmed.processing.outputs import (
-    OutputFormatter,
-    EntityPrediction,
-    PredictionResult,
-    format_predictions,
-)
+from openmed.processing.outputs import OutputFormatter, EntityPrediction, PredictionResult, format_predictions
 
 
 class TestTextProcessor:
@@ -29,7 +24,7 @@ class TestTextProcessor:
             lowercase=True,
             remove_punctuation=True,
             remove_numbers=True,
-            normalize_whitespace=False,
+            normalize_whitespace=False
         )
         assert processor.lowercase
         assert processor.remove_punctuation
@@ -139,7 +134,11 @@ class TestEntityPrediction:
     def test_creation(self):
         """Test EntityPrediction creation."""
         entity = EntityPrediction(
-            text="diabetes", label="CONDITION", confidence=0.95, start=10, end=18
+            text="diabetes",
+            label="CONDITION",
+            confidence=0.95,
+            start=10,
+            end=18
         )
         assert entity.text == "diabetes"
         assert entity.label == "CONDITION"
@@ -171,7 +170,9 @@ class TestOutputFormatter:
     def test_init_custom(self):
         """Test OutputFormatter initialization with custom settings."""
         formatter = OutputFormatter(
-            include_confidence=False, confidence_threshold=0.5, group_entities=True
+            include_confidence=False,
+            confidence_threshold=0.5,
+            group_entities=True
         )
         assert not formatter.include_confidence
         assert formatter.confidence_threshold == 0.5
@@ -181,7 +182,9 @@ class TestOutputFormatter:
         """Test prediction formatting."""
         formatter = OutputFormatter()
         result = formatter.format_predictions(
-            sample_predictions, sample_text, model_name="test-model"
+            sample_predictions,
+            sample_text,
+            model_name="test-model"
         )
 
         assert isinstance(result, PredictionResult)
@@ -193,7 +196,9 @@ class TestOutputFormatter:
         """Test prediction formatting with confidence threshold."""
         formatter = OutputFormatter(confidence_threshold=0.9)
         result = formatter.format_predictions(
-            sample_predictions, sample_text, model_name="test-model"
+            sample_predictions,
+            sample_text,
+            model_name="test-model"
         )
 
         # Only predictions with confidence >= 0.9 should be included
@@ -243,7 +248,7 @@ class TestFormatPredictionsFunction:
             sample_predictions,
             sample_text,
             model_name="test-model",
-            output_format="dict",
+            output_format="dict"
         )
         assert isinstance(result, PredictionResult)
 
@@ -253,7 +258,7 @@ class TestFormatPredictionsFunction:
             sample_predictions,
             sample_text,
             model_name="test-model",
-            output_format="json",
+            output_format="json"
         )
         assert isinstance(result, str)
         assert "diabetes" in result
@@ -264,14 +269,12 @@ class TestFormatPredictionsFunction:
             sample_predictions,
             sample_text,
             model_name="test-model",
-            output_format="html",
+            output_format="html"
         )
         assert isinstance(result, str)
         assert "<div" in result
 
-    def test_format_predictions_pass_through_metadata(
-        self, sample_predictions, sample_text
-    ):
+    def test_format_predictions_pass_through_metadata(self, sample_predictions, sample_text):
         """Additional kwargs like processing_time should end up in the result metadata."""
         result = format_predictions(
             sample_predictions,
@@ -291,7 +294,7 @@ class TestFormatPredictionsFunction:
                 sample_predictions,
                 sample_text,
                 model_name="test-model",
-                output_format="invalid",
+                output_format="invalid"
             )
 
 

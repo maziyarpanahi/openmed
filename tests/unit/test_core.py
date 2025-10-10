@@ -19,14 +19,22 @@ class TestOpenMedConfig:
 
     def test_custom_config(self):
         """Test custom configuration values."""
-        config = OpenMedConfig(default_org="TestOrg", log_level="DEBUG", timeout=60)
+        config = OpenMedConfig(
+            default_org="TestOrg",
+            log_level="DEBUG",
+            timeout=60
+        )
         assert config.default_org == "TestOrg"
         assert config.log_level == "DEBUG"
         assert config.timeout == 60
 
     def test_from_dict(self):
         """Test creating config from dictionary."""
-        config_dict = {"default_org": "TestOrg", "log_level": "DEBUG", "timeout": 120}
+        config_dict = {
+            "default_org": "TestOrg",
+            "log_level": "DEBUG",
+            "timeout": 120
+        }
         config = OpenMedConfig.from_dict(config_dict)
         assert config.default_org == "TestOrg"
         assert config.log_level == "DEBUG"
@@ -49,21 +57,21 @@ class TestOpenMedConfig:
 class TestModelLoader:
     """Test cases for ModelLoader."""
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch('openmed.core.models.HF_AVAILABLE', True)
     def test_init_with_config(self, sample_config):
         """Test ModelLoader initialization with config."""
         loader = ModelLoader(sample_config)
         assert loader.config == sample_config
 
-    @patch("openmed.core.models.HF_AVAILABLE", False)
+    @patch('openmed.core.models.HF_AVAILABLE', False)
     def test_init_without_transformers(self):
         """Test ModelLoader initialization without transformers."""
         with pytest.raises(ImportError, match="HuggingFace transformers is required"):
             ModelLoader()
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.get_all_models", return_value={})
-    @patch("openmed.core.models.list_models")
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.get_all_models', return_value={})
+    @patch('openmed.core.models.list_models')
     def test_list_available_models(self, mock_list_models, mock_get_all_models):
         """Test listing available models."""
         # Mock the model info objects
@@ -81,9 +89,9 @@ class TestModelLoader:
         assert "OpenMed/model2" in models
         mock_list_models.assert_called_once()
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.get_all_models", return_value={})
-    @patch("openmed.core.models.list_models")
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.get_all_models', return_value={})
+    @patch('openmed.core.models.list_models')
     def test_list_models_error_handling(self, mock_list_models, mock_get_all_models):
         """Test error handling when listing models fails."""
         mock_list_models.side_effect = Exception("API Error")
@@ -93,13 +101,11 @@ class TestModelLoader:
 
         assert models == []
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.AutoConfig")
-    @patch("openmed.core.models.AutoTokenizer")
-    @patch("openmed.core.models.AutoModelForTokenClassification")
-    def test_load_model_success(
-        self, mock_model_class, mock_tokenizer_class, mock_config_class
-    ):
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.AutoConfig')
+    @patch('openmed.core.models.AutoTokenizer')
+    @patch('openmed.core.models.AutoModelForTokenClassification')
+    def test_load_model_success(self, mock_model_class, mock_tokenizer_class, mock_config_class):
         """Test successful model loading."""
         # Setup mocks
         mock_config = Mock()
@@ -125,8 +131,8 @@ class TestModelLoader:
         assert result["tokenizer"] == mock_tokenizer
         assert result["config"] == mock_config
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.AutoConfig")
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.AutoConfig')
     def test_load_model_failure(self, mock_config_class):
         """Test model loading failure."""
         mock_config_class.from_pretrained.side_effect = Exception("Model not found")
@@ -135,8 +141,8 @@ class TestModelLoader:
         with pytest.raises(ValueError, match="Could not load model"):
             loader.load_model("nonexistent-model")
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.pipeline")
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.pipeline')
     def test_create_pipeline(self, mock_pipeline):
         """Test pipeline creation."""
         mock_pipeline_instance = Mock()
@@ -145,11 +151,11 @@ class TestModelLoader:
         loader = ModelLoader()
 
         # Mock the load_model method
-        with patch.object(loader, "load_model") as mock_load:
+        with patch.object(loader, 'load_model') as mock_load:
             mock_load.return_value = {
                 "model": Mock(),
                 "tokenizer": Mock(),
-                "config": Mock(),
+                "config": Mock()
             }
 
             result = loader.create_pipeline("test-model")
@@ -157,8 +163,8 @@ class TestModelLoader:
             assert result == mock_pipeline_instance
             mock_pipeline.assert_called_once()
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.hf_model_info")
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.hf_model_info')
     def test_get_model_info_success(self, mock_model_info):
         """Test successful model info retrieval."""
         mock_info = Mock()
@@ -170,8 +176,8 @@ class TestModelLoader:
         assert result == mock_info
         mock_model_info.assert_called_once()
 
-    @patch("openmed.core.models.HF_AVAILABLE", True)
-    @patch("openmed.core.models.hf_model_info")
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.hf_model_info')
     def test_get_model_info_failure(self, mock_model_info):
         """Test model info retrieval failure."""
         mock_model_info.side_effect = Exception("Model not found")
@@ -185,7 +191,7 @@ class TestModelLoader:
 class TestLoadModelFunction:
     """Test cases for the load_model convenience function."""
 
-    @patch("openmed.core.models.ModelLoader")
+    @patch('openmed.core.models.ModelLoader')
     def test_load_model_function(self, mock_loader_class):
         """Test the load_model convenience function."""
         mock_loader = Mock()

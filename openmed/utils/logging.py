@@ -8,7 +8,7 @@ from typing import Optional
 def setup_logging(
     level: str = "INFO",
     format_string: Optional[str] = None,
-    include_timestamp: bool = True,
+    include_timestamp: bool = True
 ) -> None:
     """Set up logging for OpenMed.
 
@@ -26,7 +26,9 @@ def setup_logging(
     logging.basicConfig(
         level=getattr(logging, level.upper()),
         format=format_string,
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
     )
 
     # Set specific logger levels
@@ -90,4 +92,6 @@ class OpenMedLogger:
             num_entities: Number of entities predicted.
             model_name: Name of the model used.
         """
-        self.logger.info(f"Model {model_name} predicted {num_entities} entities")
+        self.logger.info(
+            f"Model {model_name} predicted {num_entities} entities"
+        )
