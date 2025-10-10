@@ -1,7 +1,7 @@
 """Model loading functionality for OpenMed."""
 
 import logging
-from typing import Optional, Union, List, Dict, Any, Tuple
+from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
 
 try:
     from transformers import (
@@ -20,6 +20,20 @@ except ImportError as e:
     warnings.warn(
         f"HuggingFace transformers not available: {e}. Install with: pip install transformers"
     )
+
+    AutoTokenizer = None  # type: ignore[assignment]
+    AutoModelForTokenClassification = None  # type: ignore[assignment]
+    AutoConfig = None  # type: ignore[assignment]
+    pipeline = None  # type: ignore[assignment]
+
+    def list_models(*args, **kwargs):  # type: ignore[override]
+        raise RuntimeError("HuggingFace Hub is not available")
+
+    def hf_model_info(*args, **kwargs):  # type: ignore[override]
+        raise RuntimeError("HuggingFace Hub is not available")
+
+if TYPE_CHECKING:
+    from .config import OpenMedConfig
 
 from .config import get_config
 from .model_registry import (
