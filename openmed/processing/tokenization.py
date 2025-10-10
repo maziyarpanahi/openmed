@@ -5,7 +5,6 @@ import logging
 
 try:
     from transformers import PreTrainedTokenizer
-
     HF_AVAILABLE = True
 except ImportError:
     HF_AVAILABLE = False
@@ -25,7 +24,9 @@ class TokenizationHelper:
         self.tokenizer = tokenizer
 
     def tokenize_with_alignment(
-        self, text: str, return_word_ids: bool = True
+        self,
+        text: str,
+        return_word_ids: bool = True
     ) -> Dict[str, Any]:
         """Tokenize text while maintaining word alignment.
 
@@ -47,7 +48,7 @@ class TokenizationHelper:
             padding=True,
             return_offsets_mapping=True,
             return_overflowing_tokens=True,
-            return_special_tokens_mask=True,
+            return_special_tokens_mask=True
         )
 
         result = {
@@ -68,7 +69,7 @@ class TokenizationHelper:
         predictions: List[Any],
         word_ids: List[Optional[int]],
         text: str,
-        aggregation_strategy: str = "first",
+        aggregation_strategy: str = "first"
     ) -> List[Tuple[str, Any]]:
         """Align token-level predictions to word-level predictions.
 
@@ -106,9 +107,7 @@ class TokenizationHelper:
                 if aggregation_strategy == "first":
                     final_pred = preds[0]
                 elif aggregation_strategy == "max":
-                    final_pred = (
-                        max(preds) if isinstance(preds[0], (int, float)) else preds[0]
-                    )
+                    final_pred = max(preds) if isinstance(preds[0], (int, float)) else preds[0]
                 elif aggregation_strategy == "average":
                     if isinstance(preds[0], (int, float)):
                         final_pred = sum(preds) / len(preds)
@@ -122,7 +121,9 @@ class TokenizationHelper:
         return result
 
     def create_attention_masks(
-        self, input_ids: List[List[int]], pad_token_id: int
+        self,
+        input_ids: List[List[int]],
+        pad_token_id: int
     ) -> List[List[int]]:
         """Create attention masks for batched inputs.
 
@@ -143,7 +144,7 @@ class TokenizationHelper:
         self,
         sequences: List[str],
         max_length: int,
-        truncation_strategy: str = "longest_first",
+        truncation_strategy: str = "longest_first"
     ) -> List[str]:
         """Truncate sequences to fit within max_length.
 
@@ -166,9 +167,7 @@ class TokenizationHelper:
             else:
                 if truncation_strategy == "longest_first":
                     truncated_tokens = tokens[:max_length]
-                    truncated_text = self.tokenizer.convert_tokens_to_string(
-                        truncated_tokens
-                    )
+                    truncated_text = self.tokenizer.convert_tokens_to_string(truncated_tokens)
                     truncated.append(truncated_text)
                 else:
                     truncated.append(seq)  # Don't truncate
@@ -180,7 +179,7 @@ class TokenizationHelper:
         texts: List[str],
         max_length: int = 512,
         padding: bool = True,
-        truncation: bool = True,
+        truncation: bool = True
     ) -> Dict[str, Any]:
         """Batch encode multiple texts.
 
@@ -201,5 +200,5 @@ class TokenizationHelper:
             max_length=max_length,
             padding=padding,
             truncation=truncation,
-            return_tensors="pt",
+            return_tensors="pt"
         )

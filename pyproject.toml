@@ -15,9 +15,7 @@ authors = [
 
 [project.optional-dependencies]
 dev = [
-  "black>=23.0",
   "flake8>=7.0",
-  "isort>=5.12",
   "mypy>=1.8",
   "pytest>=7.0",
   "pytest-cov>=4.0"

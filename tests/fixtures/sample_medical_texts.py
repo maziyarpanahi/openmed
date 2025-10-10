@@ -87,14 +87,14 @@ MEDICATION_LIST_1 = [
     "Lisinopril 10mg once daily in morning",
     "Atorvastatin 40mg at bedtime",
     "Aspirin 81mg daily",
-    "Insulin glargine 20 units subcutaneous at bedtime",
+    "Insulin glargine 20 units subcutaneous at bedtime"
 ]
 
 MEDICATION_LIST_2 = [
     "Levothyroxine 75 mcg daily on empty stomach",
     "Sertraline 100mg daily",
     "Omeprazole 20mg daily before breakfast",
-    "Vitamin D3 2000 IU daily",
+    "Vitamin D3 2000 IU daily"
 ]
 
 # Short Medical Texts
@@ -106,7 +106,7 @@ SHORT_TEXTS = [
     "Allergic to penicillin and sulfa drugs.",
     "Underwent coronary artery bypass surgery.",
     "Laboratory results show elevated glucose.",
-    "Patient complains of chest pain and dyspnea.",
+    "Patient complains of chest pain and dyspnea."
 ]
 
 # Procedure Notes
@@ -165,24 +165,24 @@ TEST_CASES = [
         "expected_entities": [
             {"text": "diabetes", "label": "CONDITION", "confidence": 0.95},
             {"text": "metformin", "label": "MEDICATION", "confidence": 0.98},
-            {"text": "500mg", "label": "DOSAGE", "confidence": 0.89},
-        ],
+            {"text": "500mg", "label": "DOSAGE", "confidence": 0.89}
+        ]
     },
     {
         "text": "Blood pressure is 140/90 mmHg, heart rate 85 bpm.",
         "expected_entities": [
             {"text": "140/90 mmHg", "label": "VITAL_SIGN", "confidence": 0.92},
-            {"text": "85 bpm", "label": "VITAL_SIGN", "confidence": 0.88},
-        ],
+            {"text": "85 bpm", "label": "VITAL_SIGN", "confidence": 0.88}
+        ]
     },
     {
         "text": "History of myocardial infarction, currently on aspirin and lisinopril.",
         "expected_entities": [
             {"text": "myocardial infarction", "label": "CONDITION", "confidence": 0.97},
             {"text": "aspirin", "label": "MEDICATION", "confidence": 0.94},
-            {"text": "lisinopril", "label": "MEDICATION", "confidence": 0.96},
-        ],
-    },
+            {"text": "lisinopril", "label": "MEDICATION", "confidence": 0.96}
+        ]
+    }
 ]
 
 # Edge Cases for Testing
@@ -206,5 +206,5 @@ BATCH_TEST_DATA = [
     "Currently taking lisinopril 10mg daily for hypertension.",
     "Laboratory shows elevated HbA1c at 8.2%.",
     "Patient scheduled for cardiology follow-up.",
-    "Medication adherence discussed with patient.",
+    "Medication adherence discussed with patient."
 ]

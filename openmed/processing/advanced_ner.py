@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EntitySpan:
     """Represents a single entity span with position information."""
-
     text: str
     label: str
     start: int
@@ -25,7 +24,7 @@ class EntitySpan:
             "label": self.label,
             "start": self.start,
             "end": self.end,
-            "score": self.score,
+            "score": self.score
         }
 
 
@@ -40,15 +39,13 @@ class AdvancedNERProcessor:
     - Edge case handling
     """
 
-    def __init__(
-        self,
-        min_confidence: float = 0.60,
-        min_length: int = 1,
-        remove_punctuation: bool = True,
-        strip_edges: bool = True,
-        merge_adjacent: bool = True,
-        max_merge_gap: int = 10,
-    ):
+    def __init__(self,
+                 min_confidence: float = 0.60,
+                 min_length: int = 1,
+                 remove_punctuation: bool = True,
+                 strip_edges: bool = True,
+                 merge_adjacent: bool = True,
+                 max_merge_gap: int = 10):
         """
         Initialize the advanced NER processor.
 
@@ -68,9 +65,7 @@ class AdvancedNERProcessor:
         self.max_merge_gap = max_merge_gap
 
         # Regex for content detection
-        self.has_content = (
-            re.compile(r"[A-Za-z0-9]") if remove_punctuation else re.compile(r".")
-        )
+        self.has_content = re.compile(r"[A-Za-z0-9]") if remove_punctuation else re.compile(r".")
 
         # Patterns to exclude (known false positives)
         self.exclude_patterns = [
@@ -79,9 +74,9 @@ class AdvancedNERProcessor:
             r"^[.,!?;:]+$",  # Only punctuation
         ]
 
-    def ner_filtered(
-        self, text: str, pipeline_result: List[Dict[str, Any]]
-    ) -> List[EntitySpan]:
+    def ner_filtered(self,
+                    text: str,
+                    pipeline_result: List[Dict[str, Any]]) -> List[EntitySpan]:
         """
         Apply confidence and punctuation filtering to NER pipeline results.
         This is the proven filtering approach that eliminates spurious predictions.
@@ -122,7 +117,7 @@ class AdvancedNERProcessor:
                 label=entity.get("entity", "").replace("B-", "").replace("I-", ""),
                 start=entity.get("start", 0),
                 end=entity.get("end", 0),
-                score=entity.get("score", 0.0),
+                score=entity.get("score", 0.0)
             )
 
             filtered_entities.append(span)
@@ -130,9 +125,9 @@ class AdvancedNERProcessor:
         logger.debug(f"After filtering: {len(filtered_entities)} entities")
         return filtered_entities
 
-    def smart_group_entities(
-        self, tokens: List[Dict[str, Any]], text: str
-    ) -> List[EntitySpan]:
+    def smart_group_entities(self,
+                           tokens: List[Dict[str, Any]],
+                           text: str) -> List[EntitySpan]:
         """
         Smart entity grouping that properly merges sub-tokens into complete entities.
 
@@ -180,30 +175,26 @@ class AdvancedNERProcessor:
                     label=clean_label,
                     start=start,
                     end=end,
-                    score=score,
+                    score=score
                 )
 
             # Continue current entity (I- tag)
             elif current_entity and clean_label == current_entity.label:
                 # Extend the current entity
                 current_entity.end = end
-                current_entity.text = text[current_entity.start : end]
-                current_entity.score = (
-                    current_entity.score + score
-                ) / 2  # Average scores
+                current_entity.text = text[current_entity.start:end]
+                current_entity.score = (current_entity.score + score) / 2  # Average scores
 
         # Don't forget the last entity
         if current_entity:
             entities.append(current_entity)
 
-        logger.debug(
-            f"Smart grouping created {len(entities)} entities from {len(tokens)} tokens"
-        )
+        logger.debug(f"Smart grouping created {len(entities)} entities from {len(tokens)} tokens")
         return entities
 
-    def advanced_filter(
-        self, entities: List[EntitySpan], text: str
-    ) -> List[EntitySpan]:
+    def advanced_filter(self,
+                       entities: List[EntitySpan],
+                       text: str) -> List[EntitySpan]:
         """
         Advanced filtering with edge stripping and additional quality checks.
 
@@ -249,9 +240,9 @@ class AdvancedNERProcessor:
 
         return filtered
 
-    def merge_adjacent_entities(
-        self, entities: List[EntitySpan], original_text: str
-    ) -> List[EntitySpan]:
+    def merge_adjacent_entities(self,
+                              entities: List[EntitySpan],
+                              original_text: str) -> List[EntitySpan]:
         """
         Merge adjacent entities of the same type that are separated by small gaps.
 
@@ -272,18 +263,16 @@ class AdvancedNERProcessor:
 
         for next_entity in entities[1:]:
             # Check if same entity type and close proximity
-            if (
-                current.label == next_entity.label
-                and next_entity.start - current.end <= self.max_merge_gap
-            ):
+            if (current.label == next_entity.label and
+                next_entity.start - current.end <= self.max_merge_gap):
 
                 # Check what's between them
-                gap_text = original_text[current.end : next_entity.start]
+                gap_text = original_text[current.end:next_entity.start]
 
                 # Merge if gap contains only connecting words/punctuation
                 if re.match(r"^[\s\-,/and]*$", gap_text.lower()):
                     # Extend current entity to include the next one
-                    current.text = original_text[current.start : next_entity.end]
+                    current.text = original_text[current.start:next_entity.end]
                     current.end = next_entity.end
                     current.score = (current.score + next_entity.score) / 2
                     continue
@@ -298,12 +287,10 @@ class AdvancedNERProcessor:
         logger.debug(f"Merge process: {len(entities)} -> {len(merged)} entities")
         return merged
 
-    def process_pipeline_output(
-        self,
-        text: str,
-        pipeline_output: List[Dict[str, Any]],
-        use_smart_grouping: bool = True,
-    ) -> List[EntitySpan]:
+    def process_pipeline_output(self,
+                              text: str,
+                              pipeline_output: List[Dict[str, Any]],
+                              use_smart_grouping: bool = True) -> List[EntitySpan]:
         """
         Complete processing pipeline for NER output.
 
@@ -315,9 +302,7 @@ class AdvancedNERProcessor:
         Returns:
             List of processed EntitySpan objects
         """
-        logger.info(
-            f"Processing pipeline output with {len(pipeline_output)} raw predictions"
-        )
+        logger.info(f"Processing pipeline output with {len(pipeline_output)} raw predictions")
 
         # Step 1: Smart grouping if requested and we have token-level output
         if use_smart_grouping and pipeline_output:
@@ -334,7 +319,7 @@ class AdvancedNERProcessor:
                         label=item.get("entity_group", item.get("entity", "")),
                         start=item.get("start", 0),
                         end=item.get("end", 0),
-                        score=item.get("score", 0.0),
+                        score=item.get("score", 0.0)
                     )
                     entities.append(span)
         else:
@@ -374,7 +359,7 @@ class AdvancedNERProcessor:
                     "count": 0,
                     "examples": [],
                     "avg_confidence": 0.0,
-                    "scores": [],
+                    "scores": []
                 }
 
             by_type[label]["count"] += 1
@@ -382,23 +367,18 @@ class AdvancedNERProcessor:
             scores.append(entity.score)
 
             # Keep unique examples (up to 5)
-            if (
-                entity.text not in by_type[label]["examples"]
-                and len(by_type[label]["examples"]) < 5
-            ):
+            if entity.text not in by_type[label]["examples"] and len(by_type[label]["examples"]) < 5:
                 by_type[label]["examples"].append(entity.text)
 
         # Calculate average confidences
         for label in by_type:
-            by_type[label]["avg_confidence"] = sum(by_type[label]["scores"]) / len(
-                by_type[label]["scores"]
-            )
+            by_type[label]["avg_confidence"] = sum(by_type[label]["scores"]) / len(by_type[label]["scores"])
             del by_type[label]["scores"]  # Remove raw scores from output
 
         confidence_stats = {
             "mean": sum(scores) / len(scores) if scores else 0.0,
             "min": min(scores) if scores else 0.0,
-            "max": max(scores) if scores else 0.0,
+            "max": max(scores) if scores else 0.0
         }
 
         return {
@@ -410,14 +390,13 @@ class AdvancedNERProcessor:
                 "min_length": self.min_length,
                 "remove_punctuation": self.remove_punctuation,
                 "strip_edges": self.strip_edges,
-                "merge_adjacent": self.merge_adjacent,
-            },
+                "merge_adjacent": self.merge_adjacent
+            }
         }
 
 
-def create_advanced_processor(
-    confidence_threshold: float = 0.60, **kwargs
-) -> AdvancedNERProcessor:
+def create_advanced_processor(confidence_threshold: float = 0.60,
+                            **kwargs) -> AdvancedNERProcessor:
     """
     Convenience function to create an AdvancedNERProcessor with recommended settings.
 
@@ -435,5 +414,5 @@ def create_advanced_processor(
         strip_edges=True,
         merge_adjacent=True,
         max_merge_gap=10,
-        **kwargs,
+        **kwargs
     )
