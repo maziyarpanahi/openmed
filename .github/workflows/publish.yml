@@ -1,0 +1,81 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'testpypi'
+        type: choice
+        options:
+        - testpypi
+        - pypi
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment || 'pypi' }}
+      url: ${{
+        github.event.inputs.environment == 'testpypi' && 'https://test.pypi.org/p/openmed' ||
+        'https://pypi.org/p/openmed'
+      }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build hatch
+
+    - name: Verify version matches tag (for releases)
+      if: github.event_name == 'release'
+      run: |
+        VERSION=$(python -c "from openmed import __version__; print(__version__)")
+        TAG=${GITHUB_REF#refs/tags/v}
+        if [ "$VERSION" != "$TAG" ]; then
+          echo "Version mismatch: package version $VERSION != tag version $TAG"
+          exit 1
+        fi
+
+    - name: Build package
+      run: |
+        python -m build
+
+    - name: Check package
+      run: |
+        pip install twine
+        twine check dist/*
+
+    - name: Publish to Test PyPI
+      if: github.event.inputs.environment == 'testpypi' || github.event_name == 'workflow_dispatch'
+      env:
+        HATCH_INDEX_REPO: testpypi
+        HATCH_INDEX_USER: __token__
+        HATCH_INDEX_AUTH: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      run: |
+        hatch publish --repo testpypi
+
+    - name: Publish to PyPI
+      if: github.event_name == 'release' || github.event.inputs.environment == 'pypi'
+      env:
+        HATCH_INDEX_USER: __token__
+        HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+      run: |
+        hatch publish
+
+    - name: Create GitHub Release Assets
+      if: github.event_name == 'release'
+      run: |
+        gh release upload ${{ github.ref_name }} dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
