@@ -1,7 +1,14 @@
 """Model loading functionality for OpenMed."""
 
 import logging
-from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
+from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING, cast, Callable
+
+AutoTokenizer: Any
+AutoModelForTokenClassification: Any
+AutoConfig: Any
+pipeline: Any
+list_models: Callable[..., Any]
+hf_model_info: Callable[..., Any]
 
 try:
     from transformers import (
@@ -9,8 +16,8 @@ try:
         AutoModelForTokenClassification,
         AutoConfig,
         pipeline,
-    )
-    from huggingface_hub import list_models, model_info as hf_model_info
+    )  # type: ignore[import-not-found]
+    from huggingface_hub import list_models, model_info as hf_model_info  # type: ignore[import-not-found]
 
     HF_AVAILABLE = True
 except ImportError as e:
@@ -21,10 +28,10 @@ except ImportError as e:
         f"HuggingFace transformers not available: {e}. Install with: pip install transformers"
     )
 
-    AutoTokenizer = None  # type: ignore[assignment]
-    AutoModelForTokenClassification = None  # type: ignore[assignment]
-    AutoConfig = None  # type: ignore[assignment]
-    pipeline = None  # type: ignore[assignment]
+    AutoTokenizer = cast(Any, None)
+    AutoModelForTokenClassification = cast(Any, None)
+    AutoConfig = cast(Any, None)
+    pipeline = cast(Any, None)
 
     def list_models(*args, **kwargs):  # type: ignore[override]
         raise RuntimeError("HuggingFace Hub is not available")
@@ -65,8 +72,8 @@ class ModelLoader:
             )
 
         self.config = config or get_config()
-        self._models = {}  # Cache for loaded models
-        self._tokenizers = {}  # Cache for loaded tokenizers
+        self._models: Dict[str, Any] = {}  # Cache for loaded models
+        self._tokenizers: Dict[str, Any] = {}  # Cache for loaded tokenizers
 
     def list_available_models(self, include_registry: bool = True) -> List[str]:
         """List all available TokenClassification models from OpenMed org.
@@ -218,7 +225,7 @@ class ModelLoader:
 
         try:
             # Create pipeline directly with model name for better caching
-            pipeline_kwargs = {
+            pipeline_kwargs: Dict[str, Any] = {
                 "model": full_model_name,
                 "aggregation_strategy": aggregation_strategy,
                 "device": self._get_device_id(),
@@ -227,7 +234,8 @@ class ModelLoader:
             pipeline_kwargs.update(self._hub_auth_kwargs())
             pipeline_kwargs.update(kwargs)
 
-            ner_pipeline = pipeline(task, **pipeline_kwargs)
+            pipeline_fn = cast(Callable[..., Any], pipeline)
+            ner_pipeline = pipeline_fn(task, **pipeline_kwargs)
 
             logger.info(f"Created pipeline for {full_model_name}")
             return ner_pipeline
@@ -237,7 +245,8 @@ class ModelLoader:
             # Fall back to loading model components manually
             model_data = self.load_model(model_name)
 
-            return pipeline(
+            pipeline_fn = cast(Callable[..., Any], pipeline)
+            return pipeline_fn(
                 task,
                 model=model_data["model"],
                 tokenizer=model_data["tokenizer"],

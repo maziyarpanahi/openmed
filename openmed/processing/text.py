@@ -126,7 +126,7 @@ class TextProcessor:
         Returns:
             Dictionary of entity types and their matches.
         """
-        entities = {
+        entities: Dict[str, List[str]] = {
             "medications": [],
             "dosages": [],
             "vital_signs": [],
