@@ -16,7 +16,6 @@ authors = [
 [project.optional-dependencies]
 dev = [
   "flake8>=7.0",
-  "mypy>=1.8",
   "pytest>=7.0",
   "pytest-cov>=4.0"
 ]
