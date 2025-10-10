@@ -20,7 +20,10 @@ dev = [
   "isort>=5.12",
   "mypy>=1.8",
   "pytest>=7.0",
-  "pytest-cov>=4.0",
+  "pytest-cov>=4.0"
+]
+
+hf = [
   "transformers>=4.40",
   "huggingface-hub>=0.23"
 ]
