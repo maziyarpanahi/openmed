@@ -11,11 +11,13 @@ logger = logging.getLogger(__name__)
 class TextProcessor:
     """Handles text preprocessing and cleaning for medical text analysis."""
 
-    def __init__(self,
-                 lowercase: bool = False,
-                 remove_punctuation: bool = False,
-                 remove_numbers: bool = False,
-                 normalize_whitespace: bool = True):
+    def __init__(
+        self,
+        lowercase: bool = False,
+        remove_punctuation: bool = False,
+        remove_numbers: bool = False,
+        normalize_whitespace: bool = True,
+    ):
         """Initialize text processor.
 
         Args:
@@ -31,11 +33,43 @@ class TextProcessor:
 
         # Medical abbreviations that should be preserved
         self.medical_abbreviations = {
-            "mg", "ml", "kg", "lb", "oz", "cm", "mm", "hr", "min",
-            "bp", "hr", "rr", "temp", "o2", "co2", "hiv", "aids",
-            "icu", "er", "or", "cbc", "ekg", "ecg", "mri", "ct",
-            "x-ray", "ultrasound", "bmi", "copd", "chf", "mi",
-            "stroke", "tia", "dvt", "pe", "uti", "copd"
+            "mg",
+            "ml",
+            "kg",
+            "lb",
+            "oz",
+            "cm",
+            "mm",
+            "hr",
+            "min",
+            "bp",
+            "hr",
+            "rr",
+            "temp",
+            "o2",
+            "co2",
+            "hiv",
+            "aids",
+            "icu",
+            "er",
+            "or",
+            "cbc",
+            "ekg",
+            "ecg",
+            "mri",
+            "ct",
+            "x-ray",
+            "ultrasound",
+            "bmi",
+            "copd",
+            "chf",
+            "mi",
+            "stroke",
+            "tia",
+            "dvt",
+            "pe",
+            "uti",
+            "copd",
         }
 
     def clean_text(self, text: str) -> str:
@@ -54,7 +88,7 @@ class TextProcessor:
 
         # Normalize whitespace
         if self.normalize_whitespace:
-            text = re.sub(r'\s+', ' ', text.strip())
+            text = re.sub(r"\s+", " ", text.strip())
 
         # Handle medical abbreviations before other processing
         protected_abbrevs = {}
@@ -62,22 +96,19 @@ class TextProcessor:
             for i, abbrev in enumerate(self.medical_abbreviations):
                 placeholder = f"__ABBREV_{i}__"
                 text = re.sub(
-                    rf'\b{re.escape(abbrev)}\b',
-                    placeholder,
-                    text,
-                    flags=re.IGNORECASE
+                    rf"\b{re.escape(abbrev)}\b", placeholder, text, flags=re.IGNORECASE
                 )
                 protected_abbrevs[placeholder] = abbrev
 
         # Remove or clean numbers
         if self.remove_numbers:
             # Preserve medical measurements (e.g., "120/80", "98.6°F")
-            text = re.sub(r'\b\d+(?:[./]\d+)*\b(?![°%])', ' ', text)
+            text = re.sub(r"\b\d+(?:[./]\d+)*\b(?![°%])", " ", text)
 
         # Remove punctuation
         if self.remove_punctuation:
             # Keep hyphens in compound medical terms
-            text = re.sub(r'[^\w\s\-]', ' ', text)
+            text = re.sub(r"[^\w\s\-]", " ", text)
 
         # Convert to lowercase
         if self.lowercase:
@@ -89,7 +120,7 @@ class TextProcessor:
 
         # Final whitespace normalization
         if self.normalize_whitespace:
-            text = re.sub(r'\s+', ' ', text.strip())
+            text = re.sub(r"\s+", " ", text.strip())
 
         logger.debug(f"Text cleaning: '{original_text[:50]}...' -> '{text[:50]}...'")
         return text
@@ -104,16 +135,21 @@ class TextProcessor:
             List of sentences.
         """
         # Medical abbreviations that shouldn't trigger sentence breaks
-        abbrev_pattern = r'\b(?:' + '|'.join(self.medical_abbreviations) + r')\.'
+        abbrev_pattern = r"\b(?:" + "|".join(self.medical_abbreviations) + r")\."
 
         # Temporarily replace medical abbreviations
-        text_modified = re.sub(abbrev_pattern, lambda m: m.group().replace('.', '___DOT___'), text, flags=re.IGNORECASE)
+        text_modified = re.sub(
+            abbrev_pattern,
+            lambda m: m.group().replace(".", "___DOT___"),
+            text,
+            flags=re.IGNORECASE,
+        )
 
         # Simple sentence segmentation
-        sentences = re.split(r'[.!?]+\s+', text_modified)
+        sentences = re.split(r"[.!?]+\s+", text_modified)
 
         # Restore dots in abbreviations
-        sentences = [s.replace('___DOT___', '.') for s in sentences if s.strip()]
+        sentences = [s.replace("___DOT___", ".") for s in sentences if s.strip()]
 
         return sentences
 
@@ -136,8 +172,8 @@ class TextProcessor:
 
         # Dosage patterns
         dosage_patterns = [
-            r'\b\d+\s*(?:mg|ml|g|kg|mcg|units?)\b',
-            r'\b\d+\.\d+\s*(?:mg|ml|g|kg|mcg|units?)\b',
+            r"\b\d+\s*(?:mg|ml|g|kg|mcg|units?)\b",
+            r"\b\d+\.\d+\s*(?:mg|ml|g|kg|mcg|units?)\b",
         ]
 
         for pattern in dosage_patterns:
@@ -146,10 +182,10 @@ class TextProcessor:
 
         # Vital signs patterns
         vital_patterns = [
-            r'\b(?:bp|blood pressure):?\s*\d+/\d+\b',
-            r'\b(?:hr|heart rate):?\s*\d+\b',
-            r'\b(?:temp|temperature):?\s*\d+\.?\d*\s*[°]?[fF]?\b',
-            r'\b(?:rr|respiratory rate):?\s*\d+\b',
+            r"\b(?:bp|blood pressure):?\s*\d+/\d+\b",
+            r"\b(?:hr|heart rate):?\s*\d+\b",
+            r"\b(?:temp|temperature):?\s*\d+\.?\d*\s*[°]?[fF]?\b",
+            r"\b(?:rr|respiratory rate):?\s*\d+\b",
         ]
 
         for pattern in vital_patterns:
@@ -168,7 +204,7 @@ def preprocess_text(
     lowercase: bool = False,
     remove_punctuation: bool = False,
     remove_numbers: bool = False,
-    normalize_whitespace: bool = True
+    normalize_whitespace: bool = True,
 ) -> str:
     """Convenience function for text preprocessing.
 
@@ -186,7 +222,7 @@ def preprocess_text(
         lowercase=lowercase,
         remove_punctuation=remove_punctuation,
         remove_numbers=remove_numbers,
-        normalize_whitespace=normalize_whitespace
+        normalize_whitespace=normalize_whitespace,
     )
     return processor.clean_text(text)
 

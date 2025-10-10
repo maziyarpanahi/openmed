@@ -32,6 +32,7 @@ except ImportError as e:
     def hf_model_info(*args, **kwargs):  # type: ignore[override]
         raise RuntimeError("HuggingFace Hub is not available")
 
+
 if TYPE_CHECKING:
     from .config import OpenMedConfig
 

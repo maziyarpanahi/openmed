@@ -10,18 +10,18 @@ class TestEndToEndAnalysis:
     """Test end-to-end analysis workflows."""
 
     @pytest.mark.integration
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.pipeline')
-    @patch('openmed.core.models.AutoConfig')
-    @patch('openmed.core.models.AutoTokenizer')
-    @patch('openmed.core.models.AutoModelForTokenClassification')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.pipeline")
+    @patch("openmed.core.models.AutoConfig")
+    @patch("openmed.core.models.AutoTokenizer")
+    @patch("openmed.core.models.AutoModelForTokenClassification")
     def test_analyze_text_full_pipeline(
         self,
         mock_model_class,
         mock_tokenizer_class,
         mock_config_class,
         mock_pipeline,
-        sample_text
+        sample_text,
     ):
         """Test full text analysis pipeline."""
         # Setup mocks
@@ -46,15 +46,15 @@ class TestEndToEndAnalysis:
                 "score": 0.95,
                 "word": "diabetes",
                 "start": 17,
-                "end": 25
+                "end": 25,
             },
             {
                 "entity": "B-CONDITION",
                 "score": 0.89,
                 "word": "hypertension",
                 "start": 30,
-                "end": 42
-            }
+                "end": 42,
+            },
         ]
         mock_pipeline.return_value = mock_pipeline_instance
 
@@ -62,17 +62,17 @@ class TestEndToEndAnalysis:
         result = analyze_text(sample_text, model_name="medical-ner")
 
         # Verify result structure
-        assert hasattr(result, 'text')
-        assert hasattr(result, 'entities')
-        assert hasattr(result, 'model_name')
+        assert hasattr(result, "text")
+        assert hasattr(result, "entities")
+        assert hasattr(result, "model_name")
         assert result.text == sample_text
         assert result.model_name == "medical-ner"
         assert len(result.entities) == 2
 
     @pytest.mark.integration
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.get_all_models', return_value={})
-    @patch('openmed.core.models.list_models')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.get_all_models", return_value={})
+    @patch("openmed.core.models.list_models")
     def test_list_models_integration(self, mock_list_models, mock_get_all_models):
         """Test model listing integration."""
         # Mock model info objects
@@ -110,7 +110,7 @@ class TestEndToEndAnalysis:
         assert formatter is not None
 
     @pytest.mark.integration
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_configuration_flow(self):
         """Test configuration management flow."""
         from openmed.core.config import get_config, set_config, OpenMedConfig
@@ -120,10 +120,7 @@ class TestEndToEndAnalysis:
         assert default_config.default_org == "OpenMed"
 
         # Test custom config
-        custom_config = OpenMedConfig(
-            default_org="TestOrg",
-            log_level="DEBUG"
-        )
+        custom_config = OpenMedConfig(default_org="TestOrg", log_level="DEBUG")
         set_config(custom_config)
 
         retrieved_config = get_config()
@@ -136,10 +133,7 @@ class TestEndToEndAnalysis:
         from openmed.processing import preprocess_text, TextProcessor
 
         # Test preprocessing
-        processed_text = preprocess_text(
-            sample_long_text,
-            normalize_whitespace=True
-        )
+        processed_text = preprocess_text(sample_long_text, normalize_whitespace=True)
         assert len(processed_text) <= len(sample_long_text)
 
         # Test advanced processing
@@ -160,24 +154,18 @@ class TestEndToEndAnalysis:
 
         # Test different output formats
         dict_result = format_predictions(
-            sample_predictions,
-            sample_text,
-            output_format="dict"
+            sample_predictions, sample_text, output_format="dict"
         )
-        assert hasattr(dict_result, 'entities')
+        assert hasattr(dict_result, "entities")
 
         json_result = format_predictions(
-            sample_predictions,
-            sample_text,
-            output_format="json"
+            sample_predictions, sample_text, output_format="json"
         )
         assert isinstance(json_result, str)
         assert "diabetes" in json_result
 
         html_result = format_predictions(
-            sample_predictions,
-            sample_text,
-            output_format="html"
+            sample_predictions, sample_text, output_format="html"
         )
         assert isinstance(html_result, str)
         assert "<div" in html_result
@@ -207,22 +195,22 @@ class TestPackageMetadata:
 
     def test_version_available(self):
         """Test that version information is available."""
-        assert hasattr(openmed, '__version__')
+        assert hasattr(openmed, "__version__")
         assert isinstance(openmed.__version__, str)
         assert len(openmed.__version__) > 0
 
     def test_package_structure(self):
         """Test that main package structure is correct."""
         # Test that main modules are accessible
-        assert hasattr(openmed, 'ModelLoader')
-        assert hasattr(openmed, 'TextProcessor')
-        assert hasattr(openmed, 'OutputFormatter')
-        assert hasattr(openmed, 'analyze_text')
-        assert hasattr(openmed, 'list_models')
+        assert hasattr(openmed, "ModelLoader")
+        assert hasattr(openmed, "TextProcessor")
+        assert hasattr(openmed, "OutputFormatter")
+        assert hasattr(openmed, "analyze_text")
+        assert hasattr(openmed, "list_models")
 
     def test_all_exports(self):
         """Test that __all__ exports are accessible."""
-        if hasattr(openmed, '__all__'):
+        if hasattr(openmed, "__all__"):
             for export in openmed.__all__:
                 assert hasattr(openmed, export), f"Export {export} not found"
 
@@ -258,7 +246,7 @@ class TestPerformanceIntegration:
             "Blood pressure is elevated.",
             "Prescribed metformin 500mg.",
             "Follow up in 2 weeks.",
-            "Lab results pending."
+            "Lab results pending.",
         ]
 
         # Process each text

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 @dataclass
 class ModelInfo:
     """Information about an OpenMed model."""
+
     model_id: str
     display_name: str
     category: str
@@ -67,7 +68,7 @@ OPENMED_MODELS = {
         description="Identifies diseases, conditions, and pathologies in clinical text",
         entity_types=["DISEASE", "CONDITION", "PATHOLOGY"],
         size_category="Large",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
     "disease_detection_tiny": ModelInfo(
         model_id="OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M",
@@ -77,9 +78,8 @@ OPENMED_MODELS = {
         description="Fast, lightweight model for disease entity recognition",
         entity_types=["DISEASE", "CONDITION"],
         size_category="Tiny",
-        recommended_confidence=0.60
+        recommended_confidence=0.60,
     ),
-
     # Pharmaceutical Detection Models
     "pharma_detection_superclinical": ModelInfo(
         model_id="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M",
@@ -89,7 +89,7 @@ OPENMED_MODELS = {
         description="Detects drugs, chemicals, and pharmaceutical entities in clinical text",
         entity_types=["CHEM", "DRUG", "MEDICATION"],
         size_category="Large",
-        recommended_confidence=0.70
+        recommended_confidence=0.70,
     ),
     "pharma_detection_supermedical": ModelInfo(
         model_id="OpenMed/OpenMed-NER-PharmaDetect-SuperMedical-125M",
@@ -99,9 +99,8 @@ OPENMED_MODELS = {
         description="Specialized for pharmaceutical entities in medical literature",
         entity_types=["CHEM", "DRUG"],
         size_category="Medium",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
-
     # Oncology Detection Models
     "oncology_detection_superclinical": ModelInfo(
         model_id="OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M",
@@ -111,7 +110,7 @@ OPENMED_MODELS = {
         description="Specialized in cancer, genetics, and oncology entity recognition",
         entity_types=["Cancer", "Cell", "Gene_or_gene_product"],
         size_category="Large",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
     "oncology_detection_tiny": ModelInfo(
         model_id="OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M",
@@ -121,9 +120,8 @@ OPENMED_MODELS = {
         description="Fast model for basic oncology entity recognition",
         entity_types=["Cancer", "Cell"],
         size_category="Tiny",
-        recommended_confidence=0.60
+        recommended_confidence=0.60,
     ),
-
     # Anatomy Detection Models
     "anatomy_detection_electramed": ModelInfo(
         model_id="OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M",
@@ -133,9 +131,8 @@ OPENMED_MODELS = {
         description="Detects anatomical structures, organs, and body parts",
         entity_types=["Organ", "Tissue", "ANATOMY"],
         size_category="Medium",
-        recommended_confidence=0.60
+        recommended_confidence=0.60,
     ),
-
     # Genome/Genetic Detection Models
     "genome_detection_bioclinical": ModelInfo(
         model_id="OpenMed/OpenMed-NER-GenomeDetect-BioClinical-108M",
@@ -145,9 +142,8 @@ OPENMED_MODELS = {
         description="Recognizes genes, proteins, and genomic entities",
         entity_types=["Gene_or_gene_product", "GENE", "PROTEIN"],
         size_category="Medium",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
-
     # Chemical Detection Models
     "chemical_detection_pubmed": ModelInfo(
         model_id="OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M",
@@ -157,9 +153,8 @@ OPENMED_MODELS = {
         description="Detects chemical compounds and substances in biomedical text",
         entity_types=["Simple_chemical", "CHEM"],
         size_category="Large",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
-
     # Species Detection Models
     "species_detection_bioclinical": ModelInfo(
         model_id="OpenMed/OpenMed-NER-SpeciesDetect-BioClinical-108M",
@@ -169,9 +164,8 @@ OPENMED_MODELS = {
         description="Identifies species, organisms, and biological entities",
         entity_types=["Organism", "SPECIES"],
         size_category="Medium",
-        recommended_confidence=0.60
+        recommended_confidence=0.60,
     ),
-
     # Protein Detection Models
     "protein_detection_pubmed": ModelInfo(
         model_id="OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M",
@@ -181,9 +175,8 @@ OPENMED_MODELS = {
         description="Specialized for protein and gene product detection",
         entity_types=["Gene_or_gene_product", "PROTEIN"],
         size_category="Medium",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
-
     # Pathology Detection Models
     "pathology_detection_modern": ModelInfo(
         model_id="OpenMed/OpenMed-NER-PathologyDetect-ModernClinical-395M",
@@ -193,9 +186,8 @@ OPENMED_MODELS = {
         description="Detects pathological conditions and findings",
         entity_types=["DISEASE", "PATHOLOGY"],
         size_category="Large",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
-
     # Blood Cancer Detection Models
     "blood_cancer_detection": ModelInfo(
         model_id="OpenMed/OpenMed-NER-BloodCancerDetect-SuperClinical-434M",
@@ -205,9 +197,8 @@ OPENMED_MODELS = {
         description="Specialized for blood cancers and hematological conditions",
         entity_types=["Cancer", "DISEASE"],
         size_category="Large",
-        recommended_confidence=0.70
+        recommended_confidence=0.70,
     ),
-
     # DNA Detection Models
     "dna_detection_supermedical": ModelInfo(
         model_id="OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M",
@@ -217,14 +208,17 @@ OPENMED_MODELS = {
         description="Detects DNA sequences, genetic variants, and mutations",
         entity_types=["Gene_or_gene_product", "DNA"],
         size_category="Medium",
-        recommended_confidence=0.65
+        recommended_confidence=0.65,
     ),
 }
 
 # Category mappings for easy filtering
 CATEGORIES = {
     "Disease": ["disease_detection_superclinical", "disease_detection_tiny"],
-    "Pharmaceutical": ["pharma_detection_superclinical", "pharma_detection_supermedical"],
+    "Pharmaceutical": [
+        "pharma_detection_superclinical",
+        "pharma_detection_supermedical",
+    ],
     "Oncology": ["oncology_detection_superclinical", "oncology_detection_tiny"],
     "Anatomy": ["anatomy_detection_electramed"],
     "Genomics": ["genome_detection_bioclinical", "dna_detection_supermedical"],
@@ -238,8 +232,16 @@ CATEGORIES = {
 # Size-based recommendations
 SIZE_RECOMMENDATIONS = {
     "fast": ["disease_detection_tiny", "oncology_detection_tiny"],
-    "balanced": ["pharma_detection_supermedical", "genome_detection_bioclinical", "anatomy_detection_electramed"],
-    "accurate": ["disease_detection_superclinical", "pharma_detection_superclinical", "oncology_detection_superclinical"],
+    "balanced": [
+        "pharma_detection_supermedical",
+        "genome_detection_bioclinical",
+        "anatomy_detection_electramed",
+    ],
+    "accurate": [
+        "disease_detection_superclinical",
+        "pharma_detection_superclinical",
+        "oncology_detection_superclinical",
+    ],
 }
 
 
@@ -256,7 +258,11 @@ def get_models_by_category(category: str) -> List[ModelInfo]:
 
 def get_models_by_size(size_category: str) -> List[ModelInfo]:
     """Get models by size category (Tiny, Small, Medium, Large, XLarge)."""
-    return [model for model in OPENMED_MODELS.values() if model.size_category == size_category]
+    return [
+        model
+        for model in OPENMED_MODELS.values()
+        if model.size_category == size_category
+    ]
 
 
 def get_recommended_models(use_case: str = "balanced") -> List[ModelInfo]:
@@ -286,17 +292,33 @@ def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
 
     # Keywords that suggest specific model categories
     keywords = {
-        "cancer|tumor|oncolog|malign|chemotherapy|radiation": ("oncology", "Contains cancer/oncology terms"),
-        "drug|medication|pharma|dose|mg|pill|tablet": ("pharma", "Contains pharmaceutical terms"),
-        "gene|dna|protein|mutation|chromosome": ("genomics", "Contains genomic/genetic terms"),
+        "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
+            "oncology",
+            "Contains cancer/oncology terms",
+        ),
+        "drug|medication|pharma|dose|mg|pill|tablet": (
+            "pharma",
+            "Contains pharmaceutical terms",
+        ),
+        "gene|dna|protein|mutation|chromosome": (
+            "genomics",
+            "Contains genomic/genetic terms",
+        ),
         "heart|lung|brain|liver|kidney|organ": ("anatomy", "Contains anatomical terms"),
-        "bacteria|virus|organism|species": ("species", "Contains organism/species terms"),
-        "disease|condition|disorder|syndrome": ("disease", "Contains disease/condition terms"),
+        "bacteria|virus|organism|species": (
+            "species",
+            "Contains organism/species terms",
+        ),
+        "disease|condition|disorder|syndrome": (
+            "disease",
+            "Contains disease/condition terms",
+        ),
         "pathology|histology|biopsy": ("pathology", "Contains pathological terms"),
         "blood|lymph|leukemia|lymphoma": ("hematology", "Contains hematological terms"),
     }
 
     import re
+
     for pattern, (category, reason) in keywords.items():
         if re.search(pattern, text_lower):
             models = get_models_by_category(category.title())
