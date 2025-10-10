@@ -1,7 +1,7 @@
 """Output formatting utilities for OpenMed."""
 
 import json
-from typing import List, Dict, Any, Optional, Union, Tuple
+from typing import List, Dict, Any, Optional, Union, Tuple, cast
 from dataclasses import dataclass, asdict
 from datetime import datetime
 import logging
@@ -262,14 +262,21 @@ class OutputFormatter:
         offset = 0
 
         # Sort entities by start position
-        sorted_entities = sorted(
-            [e for e in result.entities if e.start is not None and e.end is not None],
-            key=lambda x: x.start
+        valid_entities = [
+            entity
+            for entity in result.entities
+            if entity.start is not None and entity.end is not None
+        ]
+        sorted_entities: List[EntityPrediction] = sorted(
+            valid_entities,
+            key=lambda entity: cast(int, entity.start),
         )
 
         for entity in sorted_entities:
-            start = entity.start + offset
-            end = entity.end + offset
+            start_pos = cast(int, entity.start)
+            end_pos = cast(int, entity.end)
+            start = start_pos + offset
+            end = end_pos + offset
 
             color = self._get_entity_color(entity.label)
 
