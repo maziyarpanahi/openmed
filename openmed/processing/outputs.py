@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class EntityPrediction:
     """Represents a single entity prediction."""
+
     text: str
     label: str
     confidence: float
@@ -26,6 +27,7 @@ class EntityPrediction:
 @dataclass
 class PredictionResult:
     """Represents the complete prediction result."""
+
     text: str
     entities: List[EntityPrediction]
     model_name: str
@@ -43,10 +45,12 @@ class PredictionResult:
 class OutputFormatter:
     """Formats model predictions into various output formats."""
 
-    def __init__(self,
-                 include_confidence: bool = True,
-                 confidence_threshold: float = 0.0,
-                 group_entities: bool = False):
+    def __init__(
+        self,
+        include_confidence: bool = True,
+        confidence_threshold: float = 0.0,
+        group_entities: bool = False,
+    ):
         """Initialize output formatter.
 
         Args:
@@ -64,7 +68,7 @@ class OutputFormatter:
         predictions: List[Dict[str, Any]],
         original_text: str,
         model_name: str = "unknown",
-        **kwargs
+        **kwargs,
     ) -> PredictionResult:
         """Format raw model predictions into structured output.
 
@@ -94,11 +98,7 @@ class OutputFormatter:
                 else raw_word
             )
 
-            raw_label = (
-                pred.get("entity_group")
-                or pred.get("entity")
-                or ""
-            )
+            raw_label = pred.get("entity_group") or pred.get("entity") or ""
             clean_label = raw_label.replace("B-", "").replace("I-", "")
             label = clean_label or raw_label or "UNKNOWN"
 
@@ -107,7 +107,7 @@ class OutputFormatter:
                 label=label,
                 confidence=pred.get("score", 0.0),
                 start=start,
-                end=end
+                end=end,
             )
             entities.append(entity)
 
@@ -120,7 +120,7 @@ class OutputFormatter:
             model_name=model_name,
             timestamp=datetime.now().isoformat(),
             processing_time=kwargs.get("processing_time"),
-            metadata=kwargs.get("metadata", {})
+            metadata=kwargs.get("metadata", {}),
         )
 
         # Reset reference to avoid leaking state across calls
@@ -129,8 +129,7 @@ class OutputFormatter:
         return result
 
     def _group_adjacent_entities(
-        self,
-        entities: List[EntityPrediction]
+        self, entities: List[EntityPrediction]
     ) -> List[EntityPrediction]:
         """Group adjacent entities of the same type.
 
@@ -150,10 +149,12 @@ class OutputFormatter:
             last_entity = current_group[-1]
 
             # Check if entities are adjacent and same label
-            if (entity.label == last_entity.label and
-                entity.start is not None and
-                last_entity.end is not None and
-                entity.start <= last_entity.end + 2):  # Allow small gaps
+            if (
+                entity.label == last_entity.label
+                and entity.start is not None
+                and last_entity.end is not None
+                and entity.start <= last_entity.end + 2
+            ):  # Allow small gaps
                 current_group.append(entity)
             else:
                 # Finalize current group
@@ -174,10 +175,7 @@ class OutputFormatter:
 
         return grouped
 
-    def _merge_entities(
-        self,
-        entities: List[EntityPrediction]
-    ) -> EntityPrediction:
+    def _merge_entities(self, entities: List[EntityPrediction]) -> EntityPrediction:
         """Merge multiple entities into one.
 
         Args:
@@ -223,7 +221,7 @@ class OutputFormatter:
             label=label,
             confidence=avg_confidence,
             start=start,
-            end=end
+            end=end,
         )
 
     def to_json(self, result: PredictionResult, indent: int = 2) -> str:
@@ -248,12 +246,12 @@ class OutputFormatter:
             HTML string.
         """
         html = f'<div class="openmed-result">\n'
-        html += f'<h3>Analysis Results</h3>\n'
-        html += f'<p><strong>Model:</strong> {result.model_name}</p>\n'
-        html += f'<p><strong>Timestamp:</strong> {result.timestamp}</p>\n'
+        html += f"<h3>Analysis Results</h3>\n"
+        html += f"<p><strong>Model:</strong> {result.model_name}</p>\n"
+        html += f"<p><strong>Timestamp:</strong> {result.timestamp}</p>\n"
 
         if result.processing_time:
-            html += f'<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n'
+            html += f"<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n"
 
         html += f'<div class="text-content">\n'
 
@@ -264,7 +262,7 @@ class OutputFormatter:
         # Sort entities by start position
         sorted_entities = sorted(
             [e for e in result.entities if e.start is not None and e.end is not None],
-            key=lambda x: x.start
+            key=lambda x: x.start,
         )
 
         for entity in sorted_entities:
@@ -274,35 +272,39 @@ class OutputFormatter:
             color = self._get_entity_color(entity.label)
 
             highlight_start = f'<span class="entity entity-{entity.label.lower()}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {entity.label}, Confidence: {entity.confidence:.3f}">'
-            highlight_end = '</span>'
+            highlight_end = "</span>"
 
             highlighted_text = (
-                highlighted_text[:start] +
-                highlight_start +
-                highlighted_text[start:end] +
-                highlight_end +
-                highlighted_text[end:]
+                highlighted_text[:start]
+                + highlight_start
+                + highlighted_text[start:end]
+                + highlight_end
+                + highlighted_text[end:]
             )
 
             offset += len(highlight_start) + len(highlight_end)
 
-        html += f'<p>{highlighted_text}</p>\n'
-        html += f'</div>\n'
+        html += f"<p>{highlighted_text}</p>\n"
+        html += f"</div>\n"
 
         # Entity summary
         if result.entities:
             html += f'<div class="entity-summary">\n'
-            html += f'<h4>Detected Entities ({len(result.entities)})</h4>\n'
-            html += f'<ul>\n'
+            html += f"<h4>Detected Entities ({len(result.entities)})</h4>\n"
+            html += f"<ul>\n"
 
             for entity in result.entities:
-                confidence_str = f" (confidence: {entity.confidence:.3f})" if self.include_confidence else ""
-                html += f'<li><strong>{entity.label}:</strong> {entity.text}{confidence_str}</li>\n'
+                confidence_str = (
+                    f" (confidence: {entity.confidence:.3f})"
+                    if self.include_confidence
+                    else ""
+                )
+                html += f"<li><strong>{entity.label}:</strong> {entity.text}{confidence_str}</li>\n"
 
-            html += f'</ul>\n'
-            html += f'</div>\n'
+            html += f"</ul>\n"
+            html += f"</div>\n"
 
-        html += f'</div>\n'
+        html += f"</div>\n"
         return html
 
     def _get_entity_color(self, label: str) -> str:
@@ -324,7 +326,7 @@ class OutputFormatter:
             "medication": "#FFE4F0",
             "condition": "#E4F0FF",
             "procedure": "#F0FFE4",
-            "anatomy": "#F5F5DC"
+            "anatomy": "#F5F5DC",
         }
         return colors.get(label.lower(), "#F0F0F0")
 
@@ -348,7 +350,7 @@ class OutputFormatter:
                 "model_name": result.model_name,
                 "timestamp": result.timestamp,
                 "processing_time": result.processing_time,
-                "original_text": result.text
+                "original_text": result.text,
             }
             rows.append(row)
         return rows
@@ -359,7 +361,7 @@ def format_predictions(
     original_text: str,
     model_name: str = "unknown",
     output_format: str = "dict",
-    **kwargs
+    **kwargs,
 ) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
     """Convenience function to format predictions.
 
