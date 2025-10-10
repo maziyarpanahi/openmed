@@ -97,11 +97,11 @@ def analyze_text(
 
     loader = loader or ModelLoader(config)
 
-    pipeline_args: Dict[str, Any] = {
-        "task": "token-classification",
-        "aggregation_strategy": aggregation_strategy,
-        "use_fast_tokenizer": use_fast_tokenizer,
-    }
+    pipeline_args = dict(
+        task="token-classification",
+        aggregation_strategy=aggregation_strategy,
+        use_fast_tokenizer=use_fast_tokenizer,
+    )
     pipeline_args.update(pipeline_kwargs)
 
     ner_pipeline = loader.create_pipeline(validated_model, **pipeline_args)
@@ -166,3 +166,4 @@ __all__ = [
     "list_models",
     "analyze_text",
 ]
+
