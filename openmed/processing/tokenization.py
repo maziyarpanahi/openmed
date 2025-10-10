@@ -21,10 +21,6 @@ class TokenizationHelper:
         Args:
             tokenizer: HuggingFace tokenizer instance.
         """
-        if tokenizer and not HF_AVAILABLE:
-            raise ImportError(
-                "HuggingFace transformers is required for tokenizer operations"
-            )
         self.tokenizer = tokenizer
 
     def tokenize_with_alignment(
