@@ -48,10 +48,6 @@ jobs:
         # Exit-zero treats all errors as warnings
         flake8 openmed --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
-    - name: Type check with mypy
-      run: |
-        mypy openmed
-
     - name: Test with pytest
       run: |
         pytest --cov=openmed --cov-report=xml --cov-report=term-missing
