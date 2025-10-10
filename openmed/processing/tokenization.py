@@ -1,15 +1,13 @@
 """Tokenization utilities for OpenMed."""
 
-from typing import Any, Dict, List, Optional, Tuple, Union, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, Tuple, Union
 import logging
 
 try:
-    from transformers import PreTrainedTokenizer  # type: ignore[import-not-found]
+    from transformers import PreTrainedTokenizer
     HF_AVAILABLE = True
-except ImportError:  # pragma: no cover
+except ImportError:
     HF_AVAILABLE = False
-    if TYPE_CHECKING:  # pragma: no cover
-        from transformers import PreTrainedTokenizer  # type: ignore[import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +87,7 @@ class TokenizationHelper:
             raise ValueError("Predictions and word_ids must have same length")
 
         words = text.split()
-        word_predictions: Dict[int, List[Any]] = {}
+        word_predictions = {}
 
         for i, (pred, word_id) in enumerate(zip(predictions, word_ids)):
             if word_id is None:  # Special tokens

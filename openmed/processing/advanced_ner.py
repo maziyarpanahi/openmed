@@ -3,7 +3,7 @@
 import re
 import logging
 from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +26,6 @@ class EntitySpan:
             "end": self.end,
             "score": self.score
         }
-
-
-@dataclass
-class LabelSummary:
-    """Aggregate statistics for a specific entity label."""
-
-    count: int = 0
-    examples: List[str] = field(default_factory=list)
-    scores: List[float] = field(default_factory=list)
-    avg_confidence: float = 0.0
 
 
 class AdvancedNERProcessor:
@@ -100,7 +90,7 @@ class AdvancedNERProcessor:
         """
         logger.debug(f"Processing {len(pipeline_result)} raw entities")
 
-        filtered_entities: List[EntitySpan] = []
+        filtered_entities = []
 
         for entity in pipeline_result:
             # Confidence filter
@@ -154,8 +144,8 @@ class AdvancedNERProcessor:
         if not tokens:
             return []
 
-        entities: List[EntitySpan] = []
-        current_entity: Optional[EntitySpan] = None
+        entities = []
+        current_entity = None
 
         for token in tokens:
             label = token.get("entity", "O")
@@ -215,7 +205,7 @@ class AdvancedNERProcessor:
         Returns:
             List of filtered EntitySpan objects
         """
-        filtered: List[EntitySpan] = []
+        filtered = []
 
         for entity in entities:
             # Skip if below confidence threshold
@@ -268,8 +258,8 @@ class AdvancedNERProcessor:
         if len(entities) < 2:
             return entities
 
-        merged: List[EntitySpan] = []
-        current: EntitySpan = entities[0]
+        merged = []
+        current = entities[0]
 
         for next_entity in entities[1:]:
             # Check if same entity type and close proximity
@@ -359,38 +349,36 @@ class AdvancedNERProcessor:
         if not entities:
             return {"total": 0, "by_type": {}, "confidence_stats": {}}
 
-        by_type_summary: Dict[str, LabelSummary] = {}
-        scores: List[float] = []
+        by_type = {}
+        scores = []
 
         for entity in entities:
-            summary = by_type_summary.setdefault(entity.label, LabelSummary())
-            summary.count += 1
-            summary.scores.append(entity.score)
+            label = entity.label
+            if label not in by_type:
+                by_type[label] = {
+                    "count": 0,
+                    "examples": [],
+                    "avg_confidence": 0.0,
+                    "scores": []
+                }
+
+            by_type[label]["count"] += 1
+            by_type[label]["scores"].append(entity.score)
             scores.append(entity.score)
 
-            if (
-                entity.text not in summary.examples
-                and len(summary.examples) < 5
-            ):
-                summary.examples.append(entity.text)
+            # Keep unique examples (up to 5)
+            if entity.text not in by_type[label]["examples"] and len(by_type[label]["examples"]) < 5:
+                by_type[label]["examples"].append(entity.text)
 
-        for summary in by_type_summary.values():
-            if summary.scores:
-                summary.avg_confidence = sum(summary.scores) / len(summary.scores)
-
-        by_type: Dict[str, Dict[str, Any]] = {
-            label: {
-                "count": summary.count,
-                "examples": list(summary.examples),
-                "avg_confidence": summary.avg_confidence,
-            }
-            for label, summary in by_type_summary.items()
-        }
+        # Calculate average confidences
+        for label in by_type:
+            by_type[label]["avg_confidence"] = sum(by_type[label]["scores"]) / len(by_type[label]["scores"])
+            del by_type[label]["scores"]  # Remove raw scores from output
 
         confidence_stats = {
             "mean": sum(scores) / len(scores) if scores else 0.0,
             "min": min(scores) if scores else 0.0,
-            "max": max(scores) if scores else 0.0,
+            "max": max(scores) if scores else 0.0
         }
 
         return {
