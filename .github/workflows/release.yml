@@ -31,17 +31,3 @@ jobs:
         HATCH_INDEX_USER: __token__
         HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
       run: hatch publish
-
-    - name: Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body: |
-          Automated release of ${{ github.ref }}
-
-          View on PyPI: https://pypi.org/project/openmed/${{ github.ref_name }}/
-        draft: false
-        prerelease: false

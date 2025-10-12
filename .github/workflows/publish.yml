@@ -73,10 +73,3 @@ jobs:
           HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           hatch publish
-
-      - name: Create GitHub Release Assets
-        if: github.event_name == 'release'
-        run: |
-          gh release upload ${{ github.ref_name }} dist/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
