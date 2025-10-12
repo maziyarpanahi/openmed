@@ -34,6 +34,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install build hatch
 
+      - name: Clean package cache
+        run: |
+          pip uninstall openmed -y || true
+          rm -rf ~/.cache/pip || true
       - name: Verify version matches tag (for releases)
         if: github.event_name == 'release'
         run: |
