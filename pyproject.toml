@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openmed"
-version = "0.1.6"
+version = "0.1.7"
 description = "Placeholder package to reserve the name. Real library coming soon."
 readme = "README.md"
 requires-python = ">=3.6"
