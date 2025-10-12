@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs</title>
     <meta name="description"
-        content="OpenMed delivers state-of-the-art LLMs for healthcare, biomedical NER models, and zero-shot clinical AI — free, open-source healthcare AI under Apache-2.0. Advanced clinical NLP and medical AI models for production." />
+        content="OpenMed provides open-source healthcare LLMs, biomedical NER, and clinical AI toolkits under Apache-2.0 for secure, production-ready medical NLP workflows." />
     <meta name="keywords"
         content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical natural language processing, healthcare machine learning, clinical NLP, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
     <meta name="author" content="Maziyar Panahi" />
@@ -45,10 +45,35 @@
     }
   }
   </script>
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "OpenMed Clinical NLP Suite",
+    "operatingSystem": "Cloud, On-Premises",
+    "applicationCategory": "AIApplication",
+    "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, and deployment toolkits for compliant medical workflows.",
+    "softwareVersion": "2025.10",
+    "url": "https://openmed.life/",
+    "provider": {
+      "@type": "Organization",
+      "name": "OpenMed",
+      "url": "https://openmed.life/"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    },
+    "screenshot": "https://openmed.life/og.png",
+    "downloadUrl": "https://pypi.org/project/openmed/"
+  }
+  </script>
 
     <link rel="stylesheet" href="assets/style.css">
 
-    <script src="assets/script.js"></script>
+    <script src="assets/script.js" defer></script>
 
 </head>
 
@@ -57,7 +82,7 @@
     <nav class="nav">
         <div class="container">
             <div class="nav-content">
-                <a href="" class="logo">
+                <a href="/" class="logo">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path
                             d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
@@ -75,6 +100,7 @@
                     <li><a href="#models">Models</a></li>
                     <li><a href="#sagemaker">SageMaker</a></li>
                     <li><a href="#research">Research</a></li>
+                    <li><a href="#faq">FAQ</a></li>
                     <!-- <li><a href="#demos">Demos</a></li> -->
                     <li><a href="#about">About</a></li>
                 </ul>
@@ -103,7 +129,8 @@
     </nav>
 
     <!-- Hero Section -->
-    <section id="home" class="hero">
+    <main id="main-content">
+        <section id="home" class="hero">
         <div class="container">
             <div class="hero-content">
                 <div class="hero-text">
@@ -112,13 +139,19 @@
                         State-of-the-Art <span class="primary">LLMs for Healthcare</span>, Free Forever.
                     </h1>
                     <p class="hero-desc">
-                        OpenMed delivers cutting-edge state-of-the-art LLMs for healthcare,
-                        advanced biomedical NER models, and zero-shot clinical AI — under Apache-2.0
-                        — empowering teams to build safe, high-quality clinical NLP and medical
-                        AI solutions without paywalls.
+                        OpenMed equips clinical engineering and data science teams with open-source LLMs, biomedical NER,
+                        and evaluation tooling to ship HIPAA-aware workflows faster—without vendor lock-in.
                     </p>
+                    <ul class="hero-benefits"
+                        style="display: grid; gap: 0.35rem; margin: 1rem 0 1.5rem; padding-left: 1.25rem; color: hsl(var(--muted-foreground)); font-size: 0.95rem;">
+                        <li>Launch production SageMaker endpoints in under five minutes with managed packages.</li>
+                        <li>Reduce annotation and triage costs with 12 benchmark-proven entity extractors.</li>
+                        <li>Meet compliance goals with Apache-2.0 licensing and transparent training data.</li>
+                    </ul>
                     <div class="hero-buttons">
                         <a href="#models" class="btn btn-primary btn-lg">Explore Models</a>
+                        <a href="https://aws.amazon.com/marketplace/seller-profile?id=seller-ovsgauetge4d6"
+                            class="btn btn-outline btn-lg" target="_blank" rel="noopener">Launch on AWS</a>
                         <button class="btn btn-outline" onclick="copyInstall(this)"
                             style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install openmed</button>
 
@@ -756,6 +789,45 @@
         </div>
     </section>
 
+    <!-- FAQ Section -->
+    <section id="faq" class="faq" style="padding: 5rem 0; background: hsl(var(--muted) / 0.2);">
+        <div class="container">
+            <div style="text-align: center; margin-bottom: 3.5rem;">
+                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.25rem;">Healthcare AI FAQ</h2>
+                <p style="font-size: 1.1rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                    Answers to the most common questions from clinical innovation, ML, and compliance teams evaluating
+                    OpenMed for production NLP and decision support workloads.
+                </p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.75rem;">
+                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">What makes OpenMed models production-ready for healthcare?</h3>
+                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                        Each model ships with benchmark results across 12 biomedical NER datasets, guardrail evaluations, and Apache-2.0 licensing, so teams can satisfy procurement reviews and accelerate go-live timelines.
+                    </p>
+                </article>
+                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">How do I deploy OpenMed in the cloud or on-premises?</h3>
+                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                        Use the AWS Marketplace model packages and JumpStart notebooks for guided SageMaker deployment, or pull the Docker images and Python package to host inside your own VPC or on hospital infrastructure.
+                    </p>
+                </article>
+                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">Does OpenMed support HIPAA-aligned workflows?</h3>
+                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                        Yes. Models are trained on de-identified, ethically sourced corpora, support private deployment, and integrate audit logging, encryption, and access controls when run on SageMaker or self-managed environments.
+                    </p>
+                </article>
+                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">Can we fine-tune OpenMed LLMs for custom vocabularies?</h3>
+                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                        Absolutely. Lightweight LoRA adapters, curated tokenizers, and starter notebooks are provided so you can extend entity coverage to local ontologies or multi-lingual records while keeping compute requirements modest.
+                    </p>
+                </article>
+            </div>
+        </div>
+    </section>
+
     <!-- Demo Section -->
     <!-- <section id="demos" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
         <div class="container">
@@ -849,8 +921,10 @@
                             <span>2.1K users</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
-                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
-                            <a href="#" class="btn btn-outline">View Code</a>
+                            <a href="https://huggingface.co/OpenMed" class="btn btn-primary" style="flex: 1;"
+                                target="_blank" rel="noopener">Try Demo</a>
+                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-outline" target="_blank"
+                                rel="noopener">View Code</a>
                         </div>
                     </div>
                 </div>
@@ -894,8 +968,10 @@
                             <span>1.8K users</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
-                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
-                            <a href="#" class="btn btn-outline">View Code</a>
+                            <a href="https://huggingface.co/OpenMed" class="btn btn-primary" style="flex: 1;"
+                                target="_blank" rel="noopener">Try Demo</a>
+                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-outline" target="_blank"
+                                rel="noopener">View Code</a>
                         </div>
                     </div>
                 </div>
@@ -938,8 +1014,10 @@
                             <span>3.2K users</span>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
-                            <a href="#" class="btn btn-primary" style="flex: 1;">Try Demo</a>
-                            <a href="#" class="btn btn-outline">View Code</a>
+                            <a href="https://huggingface.co/OpenMed" class="btn btn-primary" style="flex: 1;"
+                                target="_blank" rel="noopener">Try Demo</a>
+                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-outline" target="_blank"
+                                rel="noopener">View Code</a>
                         </div>
                     </div>
                 </div>
@@ -953,8 +1031,10 @@
                 </p>
             </div>
             <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
-                <a href="#" class="btn btn-primary btn-lg">View All Demos</a>
-                <a href="#" class="btn btn-outline btn-lg">API Documentation</a>
+                <a href="https://huggingface.co/spaces/OpenMed" class="btn btn-primary btn-lg" target="_blank"
+                    rel="noopener">View All Demos</a>
+                <a href="https://github.com/maziyarpanahi/openmed#readme" class="btn btn-outline btn-lg"
+                    target="_blank" rel="noopener">API Documentation</a>
             </div>
         </div>
     </section> -->
@@ -1000,11 +1080,55 @@
                             style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">Hugging Face</a>
                     </div>
                     <!-- <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
-                        logo: <a href="#" style="text-decoration: underline;">coming soon</a></p> -->
+                        logo: <a href="https://openmed.life/media-kit" style="text-decoration: underline;">coming
+                            soon</a></p> -->
                 </div>
             </div>
         </div>
-    </section>
+</section>
+
+    </main>
+
+    <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What makes OpenMed models production-ready for healthcare?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OpenMed releases each model with benchmarking across 12 biomedical named-entity datasets, documented guardrail evaluations, and Apache-2.0 licensing so procurement, security, and clinical governance teams can validate readiness quickly."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I deploy OpenMed in the cloud or on-premises?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "You can subscribe to OpenMed model packages on AWS Marketplace for guided SageMaker deployment, or pull the Docker images and Python package to host models inside your own VPC or on hospital-controlled infrastructure."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does OpenMed support HIPAA-aligned workflows?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. OpenMed models are trained on de-identified, ethically sourced corpora and support private deployment with encryption, audit logging, and access controls to help organizations align with HIPAA and regional data privacy requirements."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can we fine-tune OpenMed LLMs for custom vocabularies?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "OpenMed provides LoRA adapters, tokenizer assets, and starter notebooks that let teams extend entity coverage to local ontologies or multilingual documents while keeping compute costs manageable."
+        }
+      }
+    ]
+  }
+  </script>
 
     <!-- Footer -->
     <footer class="footer">
