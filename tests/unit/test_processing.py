@@ -238,6 +238,82 @@ class TestOutputFormatter:
         assert "text" in csv_rows[0]
         assert "label" in csv_rows[0]
 
+    def test_sentencepiece_offsets_are_trimmed(self):
+        """Leading whitespace from SentencePiece offsets should be removed."""
+        text = "Patient diagnosed with acute lymphoblastic leukemia and started on imatinib."
+        predictions = [
+            {
+                "entity_group": "DISEASE",
+                "score": 0.95,
+                "word": "acute lymphoblastic leukemia",
+                "start": 22,
+                "end": 51,
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, text, model_name="test-model")
+        entity = result.entities[0]
+
+        assert entity.text == "acute lymphoblastic leukemia"
+        assert entity.start == 23  # Skip the leading space in the original text
+        assert entity.end == 51
+
+    def test_fallback_word_normalization_handles_sentencepiece_marker(self):
+        """Fallback to raw word should strip SentencePiece marker."""
+        predictions = [
+            {
+                "entity": "B-DISEASE",
+                "score": 0.91,
+                "word": "▁leukemia",
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, "", model_name="test-model")
+        entity = result.entities[0]
+
+        assert entity.text == "leukemia"
+        assert entity.start is None
+        assert entity.end is None
+
+    def test_fallback_word_normalization_handles_byte_level_prefix(self):
+        """Fallback text should strip byte-level BPE whitespace prefix."""
+        predictions = [
+            {
+                "entity": "B-MEDICATION",
+                "score": 0.88,
+                "word": "Ġimatinib",
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, "", model_name="test-model")
+        entity = result.entities[0]
+
+        assert entity.text == "imatinib"
+
+    def test_whitespace_trim_updates_offsets(self):
+        """Whitespace around offsets should be trimmed and offsets updated."""
+        text = "Note:  fever  reported."
+        predictions = [
+            {
+                "entity_group": "SYMPTOM",
+                "score": 0.93,
+                "word": "fever",
+                "start": 6,
+                "end": 14,
+            }
+        ]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, text, model_name="test-model")
+        entity = result.entities[0]
+
+        assert entity.text == "fever"
+        assert entity.start == 7
+        assert entity.end == 12
+
 
 class TestFormatPredictionsFunction:
     """Test cases for the format_predictions function."""
