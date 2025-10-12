@@ -1,0 +1,1 @@
+python3 -m venv .venv && source .venv/bin/activate && python -m pip install --upgrade pip >/tmp/pip-up.log && pip install -e '.[dev]' >/tmp/pip-install.log && pytest
