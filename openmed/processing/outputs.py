@@ -88,11 +88,33 @@ class OutputFormatter:
             start = pred.get("start")
             end = pred.get("end")
             raw_word = pred.get("word", "")
-            token_text = (
-                original_text[start:end]
-                if isinstance(start, int) and isinstance(end, int)
-                else raw_word
-            )
+            token_text = ""
+            adjusted_start = start if isinstance(start, int) else None
+            adjusted_end = end if isinstance(end, int) else None
+
+            if isinstance(start, int) and isinstance(end, int):
+                token_text = original_text[start:end]
+
+                if token_text:
+                    leading_ws = len(token_text) - len(token_text.lstrip())
+                    trailing_ws = len(token_text) - len(token_text.rstrip())
+
+                    if leading_ws:
+                        adjusted_start = start + leading_ws
+                    if trailing_ws:
+                        adjusted_end = end - trailing_ws
+
+                    token_text = token_text.strip()
+
+            if not token_text and raw_word:
+                token_text = raw_word
+
+            normalized_text = self._normalize_token_text(token_text)
+
+            if not normalized_text and raw_word:
+                normalized_text = self._normalize_token_text(raw_word)
+
+            entity_text = normalized_text
 
             raw_label = (
                 pred.get("entity_group")
@@ -103,11 +125,11 @@ class OutputFormatter:
             label = clean_label or raw_label or "UNKNOWN"
 
             entity = EntityPrediction(
-                text=token_text,
+                text=entity_text,
                 label=label,
                 confidence=pred.get("score", 0.0),
-                start=start,
-                end=end
+                start=adjusted_start,
+                end=adjusted_end
             )
             entities.append(entity)
 
@@ -127,6 +149,23 @@ class OutputFormatter:
         self._current_text = None
 
         return result
+
+    def _normalize_token_text(self, text: Optional[str]) -> str:
+        """Clean token text produced by different tokenization strategies."""
+        if not text:
+            return ""
+
+        cleaned = text.replace("▁", " ").replace("Ġ", " ").replace("Ċ", " ").replace("@@", " ")
+
+        while cleaned.startswith("##"):
+            cleaned = cleaned[2:]
+
+        cleaned = cleaned.strip()
+
+        if not cleaned:
+            return ""
+
+        return " ".join(cleaned.split())
 
     def _group_adjacent_entities(
         self,
