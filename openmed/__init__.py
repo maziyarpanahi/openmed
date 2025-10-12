@@ -31,7 +31,7 @@ from .utils.validation import (
     sanitize_filename,
 )
 
-__version__ = "0.1.1"
+__version__ = "0.1.6"
 
 
 def list_models(
