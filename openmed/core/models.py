@@ -11,6 +11,10 @@ try:
         pipeline,
     )
     from huggingface_hub import list_models, model_info as hf_model_info
+    try:
+        from huggingface_hub import ModelFilter
+    except ImportError:  # pragma: no cover - older hub versions
+        ModelFilter = None  # type: ignore[assignment]
 
     HF_AVAILABLE = True
 except ImportError as e:
@@ -31,6 +35,8 @@ except ImportError as e:
 
     def hf_model_info(*args, **kwargs):  # type: ignore[override]
         raise RuntimeError("HuggingFace Hub is not available")
+
+    ModelFilter = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from .config import OpenMedConfig
@@ -89,8 +95,7 @@ class ModelLoader:
 
         try:
             hf_models = list_models(
-                author=self.config.default_org,
-                task="token-classification",
+                **self._build_model_filter_kwargs(),
                 **auth_kwargs,
             )
             hf_model_ids = [model.modelId for model in hf_models]
@@ -299,6 +304,24 @@ class ModelLoader:
         except Exception as e:
             logger.error(f"Failed to get model info for {full_model_name}: {e}")
             return None
+
+    def _build_model_filter_kwargs(self) -> Dict[str, Any]:
+        """Build keyword arguments for huggingface_hub.list_models."""
+        if HF_AVAILABLE and ModelFilter is not None:  # type: ignore[name-defined]
+            return {
+                "filter": ModelFilter(
+                    author=self.config.default_org, task="token-classification"
+                )
+            }
+
+        # Fallback for older huggingface_hub versions without ModelFilter import.
+        logger.debug(
+            "huggingface_hub.ModelFilter unavailable; using deprecated author/task arguments."
+        )
+        return {
+            "author": self.config.default_org,
+            "task": "token-classification",
+        }
 
     def _hub_auth_kwargs(self) -> Dict[str, Any]:
         """Return authentication kwargs for Hugging Face Hub calls."""
