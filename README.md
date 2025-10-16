@@ -75,6 +75,27 @@ for entity in result.entities:
     print(entity)
 ```
 
+## Command-line usage
+
+Install the package in the usual way and the `openmed` console command will be
+available. It provides quick access to model discovery, text analysis, and
+configuration management.
+
+```bash
+# List models from the local registry and Hugging Face
+openmed models list
+
+# Analyse inline text or a file with a specific model
+openmed analyze --model disease_detection_superclinical --text "Acute leukemia treated with imatinib."
+
+# Inspect or edit the CLI configuration (defaults to ~/.config/openmed/config.toml)
+openmed config show
+openmed config set device cuda
+```
+
+Provide `--config-path /custom/path.toml` to work with a different configuration
+file during automation or testing. Run `openmed --help` to see all options.
+
 ## Discovering models
 
 ```python
