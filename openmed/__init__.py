@@ -136,8 +136,16 @@ def analyze_text(
     )
 
 
+def cli_main(argv: Optional[List[str]] = None) -> int:
+    """Entry point for invoking the OpenMed CLI from Python."""
+    from .cli.main import main as _main
+
+    return _main(argv)
+
+
 __all__ = [
     "__version__",
+    "cli_main",
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
@@ -166,4 +174,3 @@ __all__ = [
     "list_models",
     "analyze_text",
 ]
-
