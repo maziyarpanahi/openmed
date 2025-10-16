@@ -16,7 +16,7 @@ class CLITestCase(unittest.TestCase):
                 return {"text": "demo", "entities": []}
 
         buffer = StringIO()
-        with patch("openmed.cli.main.analyze_text", return_value=DummyResult()):
+        with patch("openmed.cli.main_module.analyze_text", return_value=DummyResult()):
             with redirect_stdout(buffer):
                 exit_code = cli_main(
                     ["analyze", "--text", "Sample clinical note."]
@@ -30,7 +30,7 @@ class CLITestCase(unittest.TestCase):
     def test_models_list_outputs(self):
         buffer = StringIO()
         with patch(
-            "openmed.cli.main.list_models",
+            "openmed.cli.main_module.list_models",
             return_value=["model-a", "model-b"],
         ):
             with redirect_stdout(buffer):
