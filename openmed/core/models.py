@@ -3,6 +3,9 @@
 import logging
 from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
 
+
+logger = logging.getLogger(__name__)
+
 try:
     from transformers import (
         AutoTokenizer,
@@ -19,10 +22,10 @@ try:
     HF_AVAILABLE = True
 except ImportError as e:
     HF_AVAILABLE = False
-    import warnings
-
-    warnings.warn(
-        f"HuggingFace transformers not available: {e}. Install with: pip install transformers"
+    logger.warning(
+        "HuggingFace transformers could not be imported (%s). "
+        "Install with: pip install transformers",
+        e,
     )
 
     AutoTokenizer = None  # type: ignore[assignment]
@@ -50,9 +53,6 @@ from .model_registry import (
     get_all_models,
     ModelInfo as RegistryModelInfo,
 )
-
-
-logger = logging.getLogger(__name__)
 
 
 class ModelLoader:
