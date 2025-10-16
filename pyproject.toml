@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openmed"
-version = "0.1.7"
+version = "0.1.8-rc"
 description = "Placeholder package to reserve the name. Real library coming soon."
 readme = "README.md"
 requires-python = ">=3.6"
@@ -12,6 +12,9 @@ license = { text = "MIT" }
 authors = [
   { name = "OpenMed Maintainers" }
 ]
+
+[project.scripts]
+openmed = "openmed.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -37,3 +40,9 @@ disable = false
 
 [tool.hatch.publish.index.repos]
 pypi = { url = "https://upload.pypi.org/legacy/" }
+
+[tool.pytest.ini_options]
+markers = [
+  "integration: marks end-to-end or external integration tests",
+  "slow: marks tests that are expected to run slowly"
+]
