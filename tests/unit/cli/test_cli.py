@@ -46,6 +46,34 @@ class CLITestCase(unittest.TestCase):
             config=ANY,
         )
 
+    def test_models_info_includes_max_length(self):
+        info = type(
+            "Info",
+            (),
+            {
+                "model_id": "OpenMed/test-model",
+                "display_name": "Test Model",
+                "category": "Disease",
+                "specialization": "Testing",
+                "description": "desc",
+                "entity_types": ["ENTITY"],
+                "size_category": "Tiny",
+                "recommended_confidence": 0.5,
+                "size_mb": 42,
+            },
+        )()
+
+        with patch("openmed.cli.main.get_model_info", return_value=info), patch(
+            "openmed.cli.main.get_model_max_length", return_value=256
+        ):
+            buffer = StringIO()
+            with redirect_stdout(buffer):
+                exit_code = cli_main(["models", "info", "disease_detection_superclinical"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(buffer.getvalue())
+        self.assertEqual(payload["max_length"], 256)
+
     def test_config_show_without_file(self):
         with TemporaryDirectory() as tmp_dir:
             config_path = Path(tmp_dir) / "config.toml"
