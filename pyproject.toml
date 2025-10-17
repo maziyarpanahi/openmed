@@ -9,6 +9,23 @@ description = "OpenMed delivers state-of-the-art biomedical and clinical LLMs th
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
+keywords = [
+  "biomedical",
+  "clinical",
+  "NLP",
+  "LLM",
+  "healthcare",
+  "medical",
+  "natural language processing",
+  "medical language models",
+  "medical LLMs",
+  "medical NLP",
+  "medical NER",
+  "medical de-identification",
+  "medical extraction",
+  "medical reasoning",
+]
+
 authors = [
   { name = "Maziyar Panahi" }
 ]
