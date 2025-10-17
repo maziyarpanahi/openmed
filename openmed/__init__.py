@@ -120,18 +120,16 @@ def analyze_text(
     )
 
     provided_max_length = pipeline_kwargs.pop("max_length", None)
-    provided_truncation = pipeline_kwargs.pop("truncation", True)
+    truncate_inputs = pipeline_kwargs.pop("truncation", True)
 
     pipeline_args.update(pipeline_kwargs)
 
     ner_pipeline = loader.create_pipeline(validated_model, **pipeline_args)
 
-    call_kwargs: Dict[str, Any] = {"truncation": provided_truncation}
-
     effective_max_length: Optional[int] = None
-    if provided_max_length is not None:
+    if truncate_inputs and provided_max_length is not None:
         effective_max_length = provided_max_length
-    elif provided_truncation:
+    elif truncate_inputs:
         effective_max_length = loader.get_max_sequence_length(
             validated_model,
             tokenizer=getattr(ner_pipeline, "tokenizer", None),
@@ -144,11 +142,8 @@ def analyze_text(
                 except Exception:
                     pass
 
-    if effective_max_length is not None:
-        call_kwargs["max_length"] = effective_max_length
-
     start_time = time.time()
-    predictions = ner_pipeline(validated_text, **call_kwargs)
+    predictions = ner_pipeline(validated_text)
     processing_time = time.time() - start_time
 
     fmt_kwargs: Dict[str, Any] = {
