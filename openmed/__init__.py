@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, Dict, Optional, Union, List
 
+from .__about__ import __version__
 from .core import ModelLoader, load_model, OpenMedConfig
 from .core.model_registry import (
     get_model_info,
@@ -30,8 +31,6 @@ from .utils.validation import (
     validate_batch_size,
     sanitize_filename,
 )
-
-__version__ = "0.1.7"
 
 
 def list_models(
