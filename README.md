@@ -24,8 +24,7 @@ It also bundles configuration management, model loading, support for cutting-edg
 
 ### Requirements
 
-- Python 3.8 or newer (the package metadata allows 3.6+, but Hugging Face tooling typically
-  requires >=3.8).
+- Python 3.10 or newer.
 - [`transformers`](https://huggingface.co/docs/transformers/index) and a compatible deep learning
   backend such as [PyTorch](https://pytorch.org/get-started/locally/).
 - An optional `HF_TOKEN` environment variable if you need to access gated models.
