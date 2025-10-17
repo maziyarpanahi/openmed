@@ -193,7 +193,7 @@ class TestAnalyzeTextBehaviour:
 
         analyze_text("sample text", model_name="model")
 
-        pipeline.assert_called_once_with("sample text", truncation=True, max_length=256)
+        pipeline.assert_called_once_with("sample text")
         assert mock_format_predictions.called
         kwargs = mock_format_predictions.call_args.kwargs
         assert kwargs["metadata"]["max_length"] == 256
