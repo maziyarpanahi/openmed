@@ -63,8 +63,8 @@ class CLITestCase(unittest.TestCase):
             },
         )()
 
-        with patch("openmed.cli.main.get_model_info", return_value=info), patch(
-            "openmed.cli.main.get_model_max_length", return_value=256
+        with patch("openmed.cli.main_module.get_model_info", return_value=info), patch(
+            "openmed.cli.main_module.get_model_max_length", return_value=256
         ):
             buffer = StringIO()
             with redirect_stdout(buffer):
