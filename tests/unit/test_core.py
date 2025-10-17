@@ -102,6 +102,21 @@ class TestModelLoader:
         assert models == []
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.get_all_models')
+    @patch('openmed.core.models.list_models')
+    def test_list_available_models_offline(self, mock_list_models, mock_get_all_models):
+        """Ensure registry listing works without remote fetch."""
+        mock_get_all_models.return_value = {
+            "disease_detection": Mock(model_id="OpenMed/model1")
+        }
+
+        loader = ModelLoader()
+        models = loader.list_available_models(include_remote=False)
+
+        assert models == ["OpenMed/model1"]
+        mock_list_models.assert_not_called()
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.AutoConfig')
     @patch('openmed.core.models.AutoTokenizer')
     @patch('openmed.core.models.AutoModelForTokenClassification')

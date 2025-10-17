@@ -4,9 +4,10 @@ from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, ANY
 
 from openmed.cli import main as cli_main
+from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
 class CLITestCase(unittest.TestCase):
@@ -32,13 +33,18 @@ class CLITestCase(unittest.TestCase):
         with patch(
             "openmed.cli.main_module.list_models",
             return_value=["model-a", "model-b"],
-        ):
+        ) as mock_list_models:
             with redirect_stdout(buffer):
-                exit_code = cli_main(["models", "list", "--registry-only"])
+                exit_code = cli_main(["models", "list"])
 
         self.assertEqual(exit_code, 0)
         lines = buffer.getvalue().strip().splitlines()
         self.assertEqual(lines, ["model-a", "model-b"])
+        mock_list_models.assert_called_once_with(
+            include_registry=True,
+            include_remote=False,
+            config=ANY,
+        )
 
     def test_config_show_without_file(self):
         with TemporaryDirectory() as tmp_dir:
@@ -72,6 +78,39 @@ class CLITestCase(unittest.TestCase):
             self.assertTrue(config_path.exists())
             content = config_path.read_text(encoding="utf-8")
             self.assertIn("timeout = 120", content)
+
+    def test_analyze_json_handles_non_native_numbers(self):
+        class FakeFloat:
+            def __float__(self):
+                return 0.42
+
+        result = PredictionResult(
+            text="demo",
+            entities=[
+                EntityPrediction(
+                    text="entity",
+                    label="LABEL",
+                    confidence=FakeFloat(),
+                    start=0,
+                    end=6,
+                )
+            ],
+            model_name="test-model",
+            timestamp="2025-10-17T00:00:00",
+            processing_time=FakeFloat(),
+        )
+
+        with patch(
+            "openmed.cli.main_module.analyze_text",
+            return_value=result,
+        ):
+            buffer = StringIO()
+            with redirect_stdout(buffer):
+                exit_code = cli_main(["analyze", "--text", "demo"])
+
+        self.assertEqual(exit_code, 0)
+        payload = json.loads(buffer.getvalue())
+        self.assertEqual(payload["entities"][0]["confidence"], 0.42)
 
 if __name__ == "__main__":
     unittest.main()

@@ -156,6 +156,30 @@ class TestEntityPrediction:
         assert result["label"] == "CONDITION"
         assert result["confidence"] == 0.95
 
+    def test_to_dict_handles_non_native_numbers(self):
+        """Ensure numpy-like numbers are converted to native types."""
+
+        class FakeFloat:
+            def __float__(self):
+                return 0.42
+
+        class FakeInt:
+            def __int__(self):
+                return 7
+
+        entity = EntityPrediction(
+            text="entity",
+            label="LABEL",
+            confidence=FakeFloat(),
+            start=FakeInt(),
+            end=FakeInt(),
+        )
+        result = entity.to_dict()
+
+        assert result["confidence"] == pytest.approx(0.42)
+        assert result["start"] == 7
+        assert result["end"] == 7
+
 
 class TestOutputFormatter:
     """Test cases for OutputFormatter."""
@@ -191,6 +215,55 @@ class TestOutputFormatter:
         assert result.text == sample_text
         assert result.model_name == "test-model"
         assert len(result.entities) == len(sample_predictions)
+
+    def test_format_predictions_casts_numeric_types(self):
+        """Predictions with non-native numbers should serialize cleanly."""
+
+        class FakeFloat:
+            def __float__(self):
+                return 0.88
+
+        class FakeInt:
+            def __int__(self):
+                return 12
+
+        predictions = [{
+            "entity": "LABEL",
+            "score": FakeFloat(),
+            "start": FakeInt(),
+            "end": FakeInt(),
+            "word": "entity",
+        }]
+
+        formatter = OutputFormatter()
+        result = formatter.format_predictions(predictions, "entity text", "model")
+        entity = result.entities[0]
+
+        assert isinstance(entity.confidence, float)
+        assert entity.confidence == pytest.approx(0.88)
+        assert entity.start == 12
+        assert entity.end == 12
+
+        serialized = result.to_dict()
+        assert serialized["entities"][0]["confidence"] == pytest.approx(0.88)
+
+    def test_prediction_result_to_dict_casts_processing_time(self):
+        """Processing time uses built-in floats for JSON."""
+
+        class FakeFloat:
+            def __float__(self):
+                return 1.23
+
+        result = PredictionResult(
+            text="demo",
+            entities=[],
+            model_name="model",
+            timestamp="2025-10-17T00:00:00",
+            processing_time=FakeFloat(),
+        )
+
+        data = result.to_dict()
+        assert data["processing_time"] == pytest.approx(1.23)
 
     def test_format_predictions_with_threshold(self, sample_predictions, sample_text):
         """Test prediction formatting with confidence threshold."""
