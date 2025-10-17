@@ -16,7 +16,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.12'
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
@@ -26,8 +26,14 @@ jobs:
     - name: Build package
       run: python -m build
 
+    - name: Check package
+      run: |
+        pip install twine
+        twine check dist/*
+
     - name: Publish to PyPI
       env:
         HATCH_INDEX_USER: __token__
         HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
+        HATCH_KEYRING: disabled
       run: hatch publish
