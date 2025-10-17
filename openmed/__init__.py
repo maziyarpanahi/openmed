@@ -55,6 +55,18 @@ def list_models(
     )
 
 
+def get_model_max_length(
+    model_name: str,
+    *,
+    config: Optional[OpenMedConfig] = None,
+    loader: Optional[ModelLoader] = None,
+) -> Optional[int]:
+    """Return the inferred maximum sequence length for ``model_name``."""
+
+    loader = loader or ModelLoader(config)
+    return loader.get_max_sequence_length(model_name)
+
+
 def analyze_text(
     text: str,
     model_name: str = "disease_detection_superclinical",
@@ -105,22 +117,41 @@ def analyze_text(
         task="token-classification",
         aggregation_strategy=aggregation_strategy,
         use_fast_tokenizer=use_fast_tokenizer,
-        truncation=True,
     )
+
+    provided_max_length = pipeline_kwargs.pop("max_length", None)
+    provided_truncation = pipeline_kwargs.pop("truncation", True)
+
     pipeline_args.update(pipeline_kwargs)
 
     ner_pipeline = loader.create_pipeline(validated_model, **pipeline_args)
 
+    call_kwargs: Dict[str, Any] = {"truncation": provided_truncation}
+
+    if provided_max_length is not None:
+        call_kwargs["max_length"] = provided_max_length
+    else:
+        max_len = loader.get_max_sequence_length(
+            validated_model,
+            tokenizer=getattr(ner_pipeline, "tokenizer", None),
+        )
+        if max_len is not None:
+            call_kwargs["max_length"] = max_len
+
     start_time = time.time()
-    predictions = ner_pipeline(validated_text)
+    predictions = ner_pipeline(validated_text, **call_kwargs)
     processing_time = time.time() - start_time
 
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,
         "group_entities": group_entities,
-        "metadata": metadata,
+        "metadata": metadata or {},
         "processing_time": processing_time,
     }
+
+    if call_kwargs.get("max_length") is not None:
+        fmt_kwargs.setdefault("metadata", {})
+        fmt_kwargs["metadata"]["max_length"] = call_kwargs["max_length"]
 
     if confidence_threshold is not None:
         fmt_kwargs["confidence_threshold"] = validate_confidence_threshold(
@@ -177,5 +208,6 @@ __all__ = [
     "list_model_categories",
     "get_model_suggestions",
     "list_models",
+    "get_model_max_length",
     "analyze_text",
 ]
