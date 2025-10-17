@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from .. import analyze_text, list_models
+from .. import analyze_text, get_model_max_length, list_models
 from ..core.config import (
     OpenMedConfig,
     get_config,
@@ -219,12 +219,14 @@ def _handle_models_list(args: argparse.Namespace) -> int:
 
 
 def _handle_models_info(args: argparse.Namespace) -> int:
-    _load_and_apply_config(args)
+    config = _load_and_apply_config(args)
 
     info = get_model_info(args.model_key)
     if not info:
         sys.stderr.write(f"Unknown model key: {args.model_key}\n")
         return 1
+
+    max_length = get_model_max_length(args.model_key, config=config)
 
     payload = {
         "model_id": info.model_id,
@@ -237,6 +239,8 @@ def _handle_models_info(args: argparse.Namespace) -> int:
         "recommended_confidence": info.recommended_confidence,
         "size_mb": info.size_mb,
     }
+    if max_length is not None:
+        payload["max_length"] = max_length
     sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
     return 0
 
