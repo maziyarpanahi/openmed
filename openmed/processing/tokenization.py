@@ -11,6 +11,78 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+_UNSET_MAX_LENGTH_SENTINEL = 1_000_000
+
+
+def _is_reasonable_length(value: Optional[int], threshold: int = _UNSET_MAX_LENGTH_SENTINEL) -> bool:
+    if value is None:
+        return False
+    try:
+        # Some tokenizers return special sentinel values like `int(1e30)`
+        as_int = int(value)
+    except (TypeError, ValueError):
+        return False
+    if as_int <= 0:
+        return False
+    return as_int < threshold
+
+
+def infer_tokenizer_max_length(
+    tokenizer: "PreTrainedTokenizer",
+    *,
+    fallback: Optional[int] = None,
+    threshold: int = _UNSET_MAX_LENGTH_SENTINEL,
+) -> Optional[int]:
+    """Infer a sensible maximum sequence length for a tokenizer.
+
+    Many Hugging Face tokenizers expose very large placeholder values (e.g., ``int(1e30)``,
+    ``2**63 - 1``) when the underlying model does not specify an explicit limit. This helper
+    collapses the common hints into a single manageable integer suitable for truncation.
+
+    Args:
+        tokenizer: Hugging Face tokenizer instance.
+        fallback: Optional value to return if no reasonable limit is discovered.
+        threshold: Maximum value considered a realistic limit.
+
+    Returns:
+        Inferred maximum length or ``None`` if unknown.
+    """
+    candidates: List[Optional[int]] = []
+
+    max_length = getattr(tokenizer, "model_max_length", None)
+    if _is_reasonable_length(max_length, threshold):
+        return int(max_length)
+    candidates.append(max_length)  # record for debugging
+
+    init_kwargs = getattr(tokenizer, "init_kwargs", {})
+    kw_max = init_kwargs.get("model_max_length")
+    if _is_reasonable_length(kw_max, threshold):
+        return int(kw_max)
+    candidates.append(kw_max)
+
+    config = getattr(tokenizer, "config", None)
+    if config is not None:
+        for attr in (
+            "model_max_length",
+            "max_position_embeddings",
+            "n_positions",
+            "seq_length",
+        ):
+            candidate = getattr(config, attr, None)
+            if _is_reasonable_length(candidate, threshold):
+                return int(candidate)
+            candidates.append(candidate)
+
+    if fallback is not None and _is_reasonable_length(fallback, threshold):
+        return int(fallback)
+
+    logger.debug(
+        "Tokenizer %s did not expose a reasonable max_length; candidates=%s",
+        getattr(tokenizer, "name_or_path", "<unknown>"),
+        candidates,
+    )
+    return None
+
 
 class TokenizationHelper:
     """Helper class for tokenization operations in medical text."""
