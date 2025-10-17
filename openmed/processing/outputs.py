@@ -9,6 +9,48 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
+    """Convert value to built-in float if possible."""
+    if value is None:
+        return default
+
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    if hasattr(value, "item"):
+        try:
+            return float(value.item())
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        logger.debug("Failed to convert %r to float", value)
+        return default
+
+
+def _to_int(value: Any) -> Optional[int]:
+    """Convert value to built-in int if possible."""
+    if value is None:
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if hasattr(value, "item"):
+        try:
+            return int(value.item())
+        except (TypeError, ValueError):
+            pass
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        logger.debug("Failed to convert %r to int", value)
+        return None
+
+
 @dataclass
 class EntityPrediction:
     """Represents a single entity prediction."""
@@ -20,7 +62,13 @@ class EntityPrediction:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
-        return asdict(self)
+        return {
+            "text": self.text,
+            "label": self.label,
+            "confidence": _to_float(self.confidence, 0.0),
+            "start": _to_int(self.start),
+            "end": _to_int(self.end),
+        }
 
 
 @dataclass
@@ -37,6 +85,7 @@ class PredictionResult:
         """Convert to dictionary."""
         result = asdict(self)
         result["entities"] = [entity.to_dict() for entity in self.entities]
+        result["processing_time"] = _to_float(result.get("processing_time"))
         return result
 
 
@@ -82,7 +131,9 @@ class OutputFormatter:
         self._current_text = original_text
 
         for pred in predictions:
-            if pred.get("score", 0) < self.confidence_threshold:
+            score = _to_float(pred.get("score", 0.0), 0.0) or 0.0
+
+            if score < self.confidence_threshold:
                 continue
 
             start = pred.get("start")
@@ -127,9 +178,9 @@ class OutputFormatter:
             entity = EntityPrediction(
                 text=entity_text,
                 label=label,
-                confidence=pred.get("score", 0.0),
-                start=adjusted_start,
-                end=adjusted_end
+                confidence=score,
+                start=_to_int(adjusted_start if adjusted_start is not None else start),
+                end=_to_int(adjusted_end if adjusted_end is not None else end)
             )
             entities.append(entity)
 
