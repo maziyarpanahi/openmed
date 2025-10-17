@@ -74,11 +74,16 @@ class ModelLoader:
         self._models = {}  # Cache for loaded models
         self._tokenizers = {}  # Cache for loaded tokenizers
 
-    def list_available_models(self, include_registry: bool = True) -> List[str]:
+    def list_available_models(
+        self,
+        include_registry: bool = True,
+        include_remote: bool = True,
+    ) -> List[str]:
         """List all available TokenClassification models from OpenMed org.
 
         Args:
             include_registry: Whether to include models from local registry
+            include_remote: Whether to query Hugging Face Hub for additional models
 
         Returns:
             List of model names available for loading.
@@ -90,25 +95,24 @@ class ModelLoader:
             registry_models = [info.model_id for info in get_all_models().values()]
             models.extend(registry_models)
 
-        # Try to fetch from HuggingFace Hub
-        auth_kwargs = self._hub_auth_kwargs()
+        if include_remote:
+            auth_kwargs = self._hub_auth_kwargs()
 
-        try:
-            hf_models = list_models(
-                **self._build_model_filter_kwargs(),
-                **auth_kwargs,
-            )
-            hf_model_ids = [model.modelId for model in hf_models]
+            try:
+                hf_models = list_models(
+                    **self._build_model_filter_kwargs(),
+                    **auth_kwargs,
+                )
+                hf_model_ids = [model.modelId for model in hf_models]
 
-            # Add any models not already in registry
-            for model_id in hf_model_ids:
-                if model_id not in models:
-                    models.append(model_id)
+                for model_id in hf_model_ids:
+                    if model_id not in models:
+                        models.append(model_id)
 
-        except Exception as e:
-            logger.warning(f"Failed to fetch models from HuggingFace Hub: {e}")
-            if not models:  # If no registry models either
-                return []
+            except Exception as e:
+                logger.warning(f"Failed to fetch models from HuggingFace Hub: {e}")
+                if not models:  # If no registry models either
+                    return []
 
         return sorted(models)
 

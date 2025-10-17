@@ -36,6 +36,7 @@ from .utils.validation import (
 def list_models(
     *,
     include_registry: bool = True,
+    include_remote: bool = True,
     config: Optional[OpenMedConfig] = None,
 ) -> List[str]:
     """Return available OpenMed model identifiers.
@@ -43,11 +44,15 @@ def list_models(
     Args:
         include_registry: Include entries from the bundled registry in addition to
             results fetched from Hugging Face.
+        include_remote: Query Hugging Face Hub for additional models.
         config: Optional custom configuration for model discovery.
     """
 
     loader = ModelLoader(config)
-    return loader.list_available_models(include_registry=include_registry)
+    return loader.list_available_models(
+        include_registry=include_registry,
+        include_remote=include_remote,
+    )
 
 
 def analyze_text(
@@ -100,6 +105,7 @@ def analyze_text(
         task="token-classification",
         aggregation_strategy=aggregation_strategy,
         use_fast_tokenizer=use_fast_tokenizer,
+        truncation=True,
     )
     pipeline_args.update(pipeline_kwargs)
 

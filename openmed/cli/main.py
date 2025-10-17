@@ -94,9 +94,9 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
 
     models_list = models_sub.add_parser("list", help="List available models.")
     models_list.add_argument(
-        "--registry-only",
+        "--include-remote",
         action="store_true",
-        help="Only show models bundled with the OpenMed registry.",
+        help="Fetch additional models from Hugging Face Hub.",
     )
     models_list.set_defaults(handler=_handle_models_list)
 
@@ -202,10 +202,13 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 
 def _handle_models_list(args: argparse.Namespace) -> int:
     config = _load_and_apply_config(args)
-    include_registry = not args.registry_only
 
     try:
-        models = list_models(include_registry=include_registry, config=config)
+        models = list_models(
+            include_registry=True,
+            include_remote=args.include_remote,
+            config=config,
+        )
     except Exception as exc:  # pragma: no cover - defensive
         sys.stderr.write(f"Failed to list models: {exc}\n")
         return 1
