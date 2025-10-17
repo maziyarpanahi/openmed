@@ -91,6 +91,9 @@ openmed analyze --model disease_detection_superclinical --text "Acute leukemia t
 # Inspect or edit the CLI configuration (defaults to ~/.config/openmed/config.toml)
 openmed config show
 openmed config set device cuda
+
+# Inspect the model's inferred context window
+openmed models info disease_detection_superclinical
 ```
 
 Provide `--config-path /custom/path.toml` to work with a different configuration
@@ -114,6 +117,9 @@ for key, info, reason in suggestions:
 print(list_model_categories())
 for info in get_models_by_category("Oncology"):
     print(f"- {info.display_name} ({info.model_id})")
+
+from openmed import get_model_max_length
+print(get_model_max_length("disease_detection_superclinical"))
 ```
 
 Or use the top-level helper:
