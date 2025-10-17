@@ -144,11 +144,11 @@ def analyze_text(
                 except Exception:
                     pass
 
+    if effective_max_length is not None:
+        call_kwargs["max_length"] = effective_max_length
+
     start_time = time.time()
-    if provided_truncation:
-        predictions = ner_pipeline(validated_text, truncation=True)
-    else:
-        predictions = ner_pipeline(validated_text)
+    predictions = ner_pipeline(validated_text, **call_kwargs)
     processing_time = time.time() - start_time
 
     fmt_kwargs: Dict[str, Any] = {
