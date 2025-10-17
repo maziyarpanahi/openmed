@@ -254,6 +254,61 @@ class ModelLoader:
                 **kwargs,
             )
 
+    def get_max_sequence_length(
+        self,
+        model_name: str,
+        *,
+        tokenizer: Optional[Any] = None,
+    ) -> Optional[int]:
+        """Infer the maximum supported sequence length for a model/tokenizer."""
+        if not HF_AVAILABLE:
+            return None
+
+        from ..processing.tokenization import infer_tokenizer_max_length
+
+        full_model_name = self._resolve_model_name(model_name)
+        auth_kwargs = self._hub_auth_kwargs()
+
+        if tokenizer is None:
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(
+                    full_model_name,
+                    cache_dir=self.config.cache_dir,
+                    use_fast=True,
+                    **auth_kwargs,
+                )
+            except Exception as exc:
+                logger.debug(
+                    "Failed to load tokenizer for %s when inferring max length: %s",
+                    full_model_name,
+                    exc,
+                )
+                tokenizer = None
+
+        if tokenizer is not None:
+            inferred = infer_tokenizer_max_length(tokenizer)
+            if inferred is not None:
+                return inferred
+
+        try:
+            config = AutoConfig.from_pretrained(
+                full_model_name,
+                cache_dir=self.config.cache_dir,
+                **auth_kwargs,
+            )
+            for attr in ("max_position_embeddings", "n_positions", "seq_length"):
+                value = getattr(config, attr, None)
+                if isinstance(value, int) and 0 < value < 1_000_000:
+                    return value
+        except Exception as exc:
+            logger.debug(
+                "Failed to load config for %s when inferring max length: %s",
+                full_model_name,
+                exc,
+            )
+
+        return None
+
     def _resolve_model_name(self, model_name: str) -> str:
         """Resolve model name from registry key or return full model name."""
         # Check if it's a registry key
