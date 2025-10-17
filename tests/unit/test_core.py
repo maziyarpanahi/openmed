@@ -117,6 +117,88 @@ class TestModelLoader:
         mock_list_models.assert_not_called()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.AutoTokenizer')
+    def test_get_max_sequence_length_from_tokenizer(
+        self,
+        mock_auto_tokenizer,
+    ):
+        """Tokenizer-derived max length should be returned when available."""
+
+        tokenizer = Mock()
+        tokenizer.model_max_length = 384
+        tokenizer.init_kwargs = {}
+        tokenizer.config = None
+        mock_auto_tokenizer.from_pretrained.return_value = tokenizer
+        loader = ModelLoader()
+        max_len = loader.get_max_sequence_length("test-model")
+
+        assert max_len == 384
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.AutoTokenizer')
+    @patch('openmed.core.models.AutoConfig')
+    def test_get_max_sequence_length_falls_back_to_config(
+        self,
+        mock_auto_config,
+        mock_auto_tokenizer,
+        *_
+    ):
+        """Configuration attributes provide a fallback when tokenizer lacks data."""
+
+        config = Mock()
+        config.max_position_embeddings = 1024
+        mock_auto_config.from_pretrained.return_value = config
+        mock_auto_tokenizer.from_pretrained.side_effect = Exception("no tokenizer")
+
+        loader = ModelLoader()
+        max_len = loader.get_max_sequence_length("test-model")
+
+        assert max_len == 1024
+        mock_auto_config.from_pretrained.assert_called_once()
+
+
+class TestGetModelMaxLengthFunction:
+    """Tests for the top-level get_model_max_length helper."""
+
+    @patch('openmed.ModelLoader')
+    def test_get_model_max_length_wrapper(self, mock_loader_cls):
+        instance = Mock()
+        instance.get_max_sequence_length.return_value = 256
+        mock_loader_cls.return_value = instance
+
+        from openmed import get_model_max_length
+
+        assert get_model_max_length("model") == 256
+        instance.get_max_sequence_length.assert_called_once_with("model")
+
+
+class TestAnalyzeTextBehaviour:
+    """Behavioural tests for the public analyze_text helper."""
+
+    @patch('openmed.format_predictions')
+    @patch('openmed.ModelLoader')
+    def test_analyze_text_attaches_max_length(
+        self,
+        mock_loader_cls,
+        mock_format_predictions,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[{"entity": "LABEL", "score": 0.9, "word": "foo"}])
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 256
+        mock_loader_cls.return_value = loader
+        mock_format_predictions.return_value = "ok"
+
+        from openmed import analyze_text
+
+        analyze_text("sample text", model_name="model")
+
+        pipeline.assert_called_once_with("sample text", truncation=True, max_length=256)
+        assert mock_format_predictions.called
+        kwargs = mock_format_predictions.call_args.kwargs
+        assert kwargs["metadata"]["max_length"] == 256
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.AutoConfig')
     @patch('openmed.core.models.AutoTokenizer')
     @patch('openmed.core.models.AutoModelForTokenClassification')
