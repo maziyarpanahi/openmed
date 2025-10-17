@@ -81,8 +81,9 @@ available. It provides quick access to model discovery, text analysis, and
 configuration management.
 
 ```bash
-# List models from the local registry and Hugging Face
+# List models from the bundled registry (add --include-remote for Hugging Face)
 openmed models list
+openmed models list --include-remote
 
 # Analyse inline text or a file with a specific model
 openmed analyze --model disease_detection_superclinical --text "Acute leukemia treated with imatinib."
