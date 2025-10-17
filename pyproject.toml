@@ -24,8 +24,8 @@ dev = [
 ]
 
 hf = [
-  "transformers>=4.40",
-  "huggingface-hub>=0.23"
+  "transformers>=4.50",
+  "huggingface-hub>=0.30"
 ]
 
 [tool.hatch.build]
