@@ -1,9 +1,8 @@
 # OpenMed
 
-OpenMed is a Python toolkit for working with the OpenMed collection of healthcare-focused
-named-entity recognition (NER) models on Hugging Face. It bundles configuration, model loading,
-advanced post-processing, and formatting utilities that mirror the behaviour of the OpenMed Gradio
-demos, making it easier to integrate clinical NER into scripts, services, or notebooks.
+OpenMed is a Python toolkit for biomedical and clinical NLP, built to deliver state-of-the-art models, including advanced large language models (LLMs) for healthcare, that rival and often outperform proprietary enterprise solutions. It unifies model discovery, assertion status detection, de-identification pipelines, advanced extraction and reasoning tools, and one-line orchestration for scripts, services, or notebooks, enabling teams to deploy production-grade healthcare AI without vendor lock-in.
+
+It also bundles configuration management, model loading, support for cutting-edge medical LLMs, post-processing, and formatting utilities — making it seamless to integrate clinical AI into existing scripts, services, and research workflows.
 
 > **Status:** The package is pre-release and the API may change. Feedback and contributions are
 > welcome while the project stabilises.
@@ -215,3 +214,19 @@ Use these helpers to guard API endpoints or batch pipelines against malformed in
 ## License
 
 OpenMed is released under the Apache-2.0 License.
+
+## Citing
+
+If you use OpenMed in your research, please cite:
+
+```bibtex
+@misc{panahi2025openmedneropensourcedomainadapted,
+      title={OpenMed NER: Open-Source, Domain-Adapted State-of-the-Art Transformers for Biomedical NER Across 12 Public Datasets},
+      author={Maziyar Panahi},
+      year={2025},
+      eprint={2508.01630},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2508.01630},
+}
+```
