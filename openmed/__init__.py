@@ -128,18 +128,27 @@ def analyze_text(
 
     call_kwargs: Dict[str, Any] = {"truncation": provided_truncation}
 
+    effective_max_length: Optional[int] = None
     if provided_max_length is not None:
-        call_kwargs["max_length"] = provided_max_length
-    else:
-        max_len = loader.get_max_sequence_length(
+        effective_max_length = provided_max_length
+    elif provided_truncation:
+        effective_max_length = loader.get_max_sequence_length(
             validated_model,
             tokenizer=getattr(ner_pipeline, "tokenizer", None),
         )
-        if max_len is not None:
-            call_kwargs["max_length"] = max_len
+        if effective_max_length:
+            tokenizer = getattr(ner_pipeline, "tokenizer", None)
+            if tokenizer is not None:
+                try:
+                    tokenizer.model_max_length = effective_max_length
+                except Exception:
+                    pass
 
     start_time = time.time()
-    predictions = ner_pipeline(validated_text, **call_kwargs)
+    if provided_truncation:
+        predictions = ner_pipeline(validated_text, truncation=True)
+    else:
+        predictions = ner_pipeline(validated_text)
     processing_time = time.time() - start_time
 
     fmt_kwargs: Dict[str, Any] = {
@@ -149,9 +158,9 @@ def analyze_text(
         "processing_time": processing_time,
     }
 
-    if call_kwargs.get("max_length") is not None:
+    if effective_max_length is not None:
         fmt_kwargs.setdefault("metadata", {})
-        fmt_kwargs["metadata"]["max_length"] = call_kwargs["max_length"]
+        fmt_kwargs["metadata"]["max_length"] = effective_max_length
 
     if confidence_threshold is not None:
         fmt_kwargs["confidence_threshold"] = validate_confidence_threshold(
