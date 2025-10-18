@@ -381,7 +381,7 @@ wheels = [
 
 [[package]]
 name = "openmed"
-version = "0.1.9rc1"
+version = "0.1.10"
 source = { editable = "." }
 
 [package.optional-dependencies]
