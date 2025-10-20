@@ -59,6 +59,7 @@ class EntityPrediction:
     confidence: float
     start: Optional[int] = None
     end: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -68,6 +69,7 @@ class EntityPrediction:
             "confidence": _to_float(self.confidence, 0.0),
             "start": _to_int(self.start),
             "end": _to_int(self.end),
+            "metadata": self.metadata or {},
         }
 
 
@@ -175,12 +177,24 @@ class OutputFormatter:
             clean_label = raw_label.replace("B-", "").replace("I-", "")
             label = clean_label or raw_label or "UNKNOWN"
 
+            span_metadata = None
+            raw_metadata = pred.get("metadata")
+            if raw_metadata:
+                if isinstance(raw_metadata, dict):
+                    span_metadata = dict(raw_metadata)
+                else:
+                    try:
+                        span_metadata = dict(raw_metadata)
+                    except Exception:
+                        span_metadata = {"value": raw_metadata}
+
             entity = EntityPrediction(
                 text=entity_text,
                 label=label,
                 confidence=score,
                 start=_to_int(adjusted_start if adjusted_start is not None else start),
-                end=_to_int(adjusted_end if adjusted_end is not None else end)
+                end=_to_int(adjusted_end if adjusted_end is not None else end),
+                metadata=span_metadata
             )
             entities.append(entity)
 
@@ -239,11 +253,21 @@ class OutputFormatter:
         for entity in entities[1:]:
             last_entity = current_group[-1]
 
+            last_sentence = (
+                last_entity.metadata or {}
+            ).get("sentence_index")
+            current_sentence = (
+                entity.metadata or {}
+            ).get("sentence_index")
+
             # Check if entities are adjacent and same label
-            if (entity.label == last_entity.label and
-                entity.start is not None and
-                last_entity.end is not None and
-                entity.start <= last_entity.end + 2):  # Allow small gaps
+            if (
+                entity.label == last_entity.label
+                and entity.start is not None
+                and last_entity.end is not None
+                and entity.start <= last_entity.end + 2  # Allow small gaps
+                and last_sentence == current_sentence
+            ):
                 current_group.append(entity)
             else:
                 # Finalize current group
@@ -306,6 +330,7 @@ class OutputFormatter:
         # Use the label and average confidence
         label = entities[0].label
         avg_confidence = sum(e.confidence for e in entities) / len(entities)
+        merged_metadata = entities[0].metadata.copy() if entities[0].metadata else None
 
         # Use start of first and end of last
         return EntityPrediction(
@@ -313,7 +338,8 @@ class OutputFormatter:
             label=label,
             confidence=avg_confidence,
             start=start,
-            end=end
+            end=end,
+            metadata=merged_metadata
         )
 
     def to_json(self, result: PredictionResult, indent: int = 2) -> str:
@@ -440,6 +466,17 @@ class OutputFormatter:
                 "processing_time": result.processing_time,
                 "original_text": result.text
             }
+            if entity.metadata:
+                sentence_index = entity.metadata.get("sentence_index")
+                sentence_text = entity.metadata.get("sentence_text")
+                if sentence_index is not None:
+                    row["sentence_index"] = sentence_index
+                if sentence_text:
+                    row["sentence_text"] = sentence_text
+                for key, value in entity.metadata.items():
+                    if key in {"sentence_index", "sentence_text"}:
+                        continue
+                    row[f"metadata_{key}"] = value
             rows.append(row)
         return rows
 
