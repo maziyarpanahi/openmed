@@ -25,19 +25,34 @@ It also bundles configuration management, model loading, support for cutting-edg
 ### Requirements
 
 - Python 3.10 or newer.
-- [`transformers`](https://huggingface.co/docs/transformers/index) and a compatible deep learning
-  backend such as [PyTorch](https://pytorch.org/get-started/locally/).
-- An optional `HF_TOKEN` environment variable if you need to access gated models.
+- Optional access to Hugging Face Hub (`HF_TOKEN`) if you consume gated models.
+- A deep-learning runtime such as [PyTorch](https://pytorch.org/get-started/locally/) when you run on real hardware.
 
-### Install from PyPI
+The core package keeps its mandatory dependency list intentionally small. Transformer-based pipelines live behind the
+`hf` optional extra (see `pyproject.toml`) so minimal deployments—static data processing, registry exploration,
+formatting—can install only what they need. When you want Hugging Face pipelines, install the extra.
+
+### Install with `uv`
 
 ```bash
-pip install openmed transformers
-# Install a backend (PyTorch shown here; follow the instructions for your platform):
-pip install torch --index-url https://download.pytorch.org/whl/cpu
+# inside your project virtualenv (e.g. `source .venv/bin/activate`)
+# base install
+uv pip install .
+
+# include Hugging Face support (transformers + huggingface-hub + compatible versions)
+uv pip install ".[hf]"
+
+# add developer tooling (pytest, linters, coverage)
+uv pip install ".[dev]"
 ```
 
-If you plan to run on GPU, install the CUDA-enabled PyTorch wheels from the official instructions.
+Install the appropriate PyTorch wheel for your platform if you plan to execute models:
+
+```bash
+uv pip install "torch==2.9.0" --index-url https://download.pytorch.org/whl/cpu
+```
+
+Swap in a CUDA/CU121 index URL when targeting GPUs.
 
 ## Quick start
 
