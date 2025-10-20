@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from .. import analyze_text, get_model_max_length, list_models
 from ..core.config import (
     OpenMedConfig,
     get_config,
@@ -18,6 +17,12 @@ from ..core.config import (
     resolve_config_path,
 )
 from ..core.model_registry import get_model_info
+
+
+def _lazy_api():
+    from .. import analyze_text, get_model_max_length, list_models
+
+    return analyze_text, get_model_max_length, list_models
 
 Handler = Callable[[argparse.Namespace], int]
 
@@ -180,6 +185,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Failed to read {args.input_file}: {exc}\n")
             return 1
 
+    analyze_text, _, _ = _lazy_api()
+
     result = analyze_text(
         text,
         model_name=args.model,
@@ -203,6 +210,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 def _handle_models_list(args: argparse.Namespace) -> int:
     config = _load_and_apply_config(args)
 
+    _, _, list_models = _lazy_api()
+
     try:
         models = list_models(
             include_registry=True,
@@ -225,6 +234,8 @@ def _handle_models_info(args: argparse.Namespace) -> int:
     if not info:
         sys.stderr.write(f"Unknown model key: {args.model_key}\n")
         return 1
+
+    _, get_model_max_length, _ = _lazy_api()
 
     max_length = get_model_max_length(args.model_key, config=config)
 
