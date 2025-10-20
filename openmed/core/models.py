@@ -20,7 +20,7 @@ try:
         ModelFilter = None  # type: ignore[assignment]
 
     HF_AVAILABLE = True
-except ImportError as e:
+except (ImportError, OSError) as e:
     HF_AVAILABLE = False
     logger.warning(
         "HuggingFace transformers could not be imported (%s). "
