@@ -7,63 +7,298 @@ It also bundles configuration management, model loading, support for cutting-edg
 > **Status:** The package is pre-release and the API may change. Feedback and contributions are
 > welcome while the project stabilises.
 
-## Features
+## 🏗️ Project Architecture
+
+```mermaid
+graph TB
+    subgraph "OpenMed Core"
+        A[ModelLoader] --> B[Model Registry]
+        A --> C[Configuration]
+        A --> D[Pipeline Creation]
+    end
+    
+    subgraph "Processing Pipeline"
+        E[Text Input] --> F[Text Preprocessing]
+        F --> G[Tokenization]
+        G --> H[Model Inference]
+        H --> I[Advanced NER Processing]
+        I --> J[Output Formatting]
+    end
+    
+    subgraph "Medical AI Models"
+        K[Disease Detection] --> L[Pharmaceutical Detection]
+        L --> M[Anatomy Detection]
+        M --> N[Clinical Entity Recognition]
+    end
+    
+    subgraph "Output Formats"
+        O[JSON] --> P[CSV]
+        P --> Q[HTML]
+        Q --> R[Structured Data]
+    end
+    
+    A --> E
+    D --> H
+    I --> O
+    B --> K
+```
+
+## 🔄 Development Workflow
+
+```mermaid
+graph LR
+    subgraph "Development Environment"
+        A[Cursor IDE] --> B[Custom Commands]
+        B --> C[Code Review]
+        C --> D[Testing]
+        D --> E[Documentation]
+    end
+    
+    subgraph "Quality Assurance"
+        F[UV Python] --> G[Package Management]
+        G --> H[Type Checking]
+        H --> I[Linting]
+        I --> J[Security Audit]
+    end
+    
+    subgraph "CI/CD Pipeline"
+        K[GitHub Actions] --> L[Automated Testing]
+        L --> M[Code Quality Checks]
+        M --> N[Documentation Generation]
+        N --> O[Release Management]
+    end
+    
+    A --> F
+    E --> K
+    J --> L
+```
+
+## 📚 Documentation & Development Tools
+
+### **Core Development Guides**
+
+- **[Cursor IDE Configuration](.cursor/rules/)** - Custom development rules and standards
+- **[Cursor Commands](.cursor/commands/)** - AI-powered development workflow commands
+- **[UV Python Package Manager](.cursor/rules/uv-python.mdc)** - Modern Python development standards
+- **[Docker Integration](.cursor/rules/docker-uv-python.mdc)** - Containerised development workflows
+
+### **Available Cursor Commands**
+
+- **`/code-review`** - Comprehensive code review automation
+- **`/write-tests`** - Generate comprehensive test suites
+- **`/fix-bugs`** - Systematic debugging and issue resolution
+- **`/refactor-code`** - Intelligent code refactoring
+- **`/setup-new-feature`** - Complete feature implementation
+- **`/optimise-performance`** - Performance analysis and improvement
+- **`/security-audit`** - Comprehensive security review
+- **`/add-documentation`** - Generate comprehensive documentation
+- **`/create-pr`** - Generate detailed pull requests
+- **`/debug-issue`** - Systematic issue debugging
+- **`/onboard-developer`** - New team member onboarding
+
+## 🏗️ Repository Structure
+
+```text
+openmed/
+├── openmed/                                # Core package
+│   ├── core/                              # Core functionality
+│   │   ├── config.py                      # Configuration management
+│   │   ├── model_registry.py              # Model registry and discovery
+│   │   └── models.py                      # Model definitions
+│   ├── processing/                        # Text processing pipeline
+│   │   ├── advanced_ner.py                # Advanced NER post-processing
+│   │   ├── outputs.py                     # Output formatting utilities
+│   │   ├── text.py                        # Text preprocessing
+│   │   └── tokenization.py                # Tokenisation helpers
+│   ├── cli/                               # Command-line interface
+│   │   └── main.py                        # CLI entry point
+│   └── utils/                             # Utility functions
+│       ├── logging.py                     # Logging configuration
+│       └── validation.py                  # Input validation
+├── .cursor/                               # Cursor IDE configuration
+│   ├── rules/                             # Development rules
+│   │   ├── global.mdc                     # Global project standards
+│   │   ├── uv-python.mdc                  # UV Python development rules
+│   │   └── docker-uv-python.mdc           # Docker with UV standards
+│   └── commands/                          # Custom slash commands
+│       ├── README.md                      # Commands overview
+│       ├── code-review.md                 # Code review automation
+│       ├── write-tests.md                 # Test generation
+│       ├── fix-bugs.md                    # Bug fixing
+│       ├── refactor-code.md               # Code refactoring
+│       ├── setup-new-feature.md           # Feature implementation
+│       ├── optimise-performance.md        # Performance optimization
+│       ├── security-audit.md              # Security auditing
+│       ├── add-documentation.md           # Documentation addition
+│       ├── create-pr.md                   # Pull request creation
+│       ├── debug-issue.md                 # Issue debugging
+│       └── onboard-developer.md           # Developer onboarding
+├── docs/                                  # Documentation
+│   ├── README.md                          # Documentation overview
+│   └── website/                           # Project website
+├── examples/                              # Usage examples
+│   └── notebooks/                         # Jupyter notebooks
+├── tests/                                 # Test suite
+│   ├── unit/                              # Unit tests
+│   ├── integration/                       # Integration tests
+│   └── fixtures/                          # Test fixtures
+├── scripts/                               # Automation scripts
+└── pyproject.toml                         # Project configuration
+```
+
+## ✨ Key Features
+
+### 🧠 **Medical AI Models**
 
 - **Curated model registry** with metadata for the OpenMed Hugging Face collection, including
-  category filters, entity coverage, and confidence guidance.
+  category filters, entity coverage, and confidence guidance
+- **State-of-the-art medical LLMs** that rival and outperform proprietary enterprise solutions
+- **Specialised medical entity recognition** for diseases, pharmaceuticals, anatomy, and clinical entities
+
+### 🔧 **Core Functionality**
+
 - **One-line model loading** via `ModelLoader`, with optional pipeline creation,
-  caching, and authenticated access to private models.
+  caching, and authenticated access to private models
 - **Advanced NER post-processing** (`AdvancedNERProcessor`) that applies the filtering and
-  grouping techniques proven in the OpenMed demos.
-- **Text preprocessing & tokenisation helpers** tailored for medical text workflows.
+  grouping techniques proven in the OpenMed demos
+- **Text preprocessing & tokenisation helpers** tailored for medical text workflows
 - **Output formatting utilities** that convert raw predictions into dict/JSON/HTML/CSV for
-  downstream systems.
-- **Logging and validation helpers** to keep pipelines observable and inputs safe.
+  downstream systems
 
-## Installation
+### 🛠️ **Development Tools**
 
-### Requirements
+- **Cursor IDE Integration** - AI-powered development with custom rules and commands
+- **UV Python Package Manager** - 10-100x faster than traditional tools
+- **Comprehensive Testing** - Unit tests, integration tests, and fixtures
+- **Quality Assurance** - Logging and validation helpers to keep pipelines observable and inputs safe
+- **Documentation System** - Automated generation and comprehensive guides
 
-- Python 3.10 or newer.
+### 🚀 **Production Ready**
+
+- **Configuration management** with environment variable support
+- **Caching and optimisation** for production workloads
+- **Security features** including input validation and secure model access
+- **CLI interface** for quick model discovery and text analysis
+
+## 🔄 Medical AI Processing Workflow
+
+```mermaid
+flowchart TD
+    A[Medical Text Input] --> B[Text Preprocessing]
+    B --> C[Model Selection]
+    C --> D[Tokenization]
+    D --> E[Model Inference]
+    E --> F[Raw Predictions]
+    F --> G[Advanced NER Processing]
+    G --> H[Entity Filtering]
+    H --> I[Confidence Scoring]
+    I --> J[Output Formatting]
+    J --> K[Structured Results]
+    
+    subgraph "Model Registry"
+        L[Disease Detection Models]
+        M[Pharmaceutical Models]
+        N[Anatomy Models]
+        O[Clinical Entity Models]
+    end
+    
+    subgraph "Output Formats"
+        P[JSON]
+        Q[CSV]
+        R[HTML]
+        S[Structured Data]
+    end
+    
+    C --> L
+    C --> M
+    C --> N
+    C --> O
+    K --> P
+    K --> Q
+    K --> R
+    K --> S
+```
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.10 or newer
 - [`transformers`](https://huggingface.co/docs/transformers/index) and a compatible deep learning
-  backend such as [PyTorch](https://pytorch.org/get-started/locally/).
-- An optional `HF_TOKEN` environment variable if you need to access gated models.
+  backend such as [PyTorch](https://pytorch.org/get-started/locally/)
+- Optional `HF_TOKEN` environment variable for gated models
 
-### Install from PyPI
+### Installation
+
+#### Option 1: PyPI Installation
 
 ```bash
 pip install openmed transformers
-# Install a backend (PyTorch shown here; follow the instructions for your platform):
+# Install PyTorch backend (CPU version shown):
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 ```
 
-If you plan to run on GPU, install the CUDA-enabled PyTorch wheels from the official instructions.
+#### Option 2: UV Package Manager (Recommended)
 
-## Quick start
+```bash
+# Install UV if not already installed
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create new project with UV
+uv init my-medical-ai-project
+cd my-medical-ai-project
+
+# Add OpenMed dependencies
+uv add openmed transformers torch
+```
+
+#### Option 3: Development Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/OpenMed/OpenMed.git
+cd OpenMed
+
+# Install with UV (recommended)
+uv sync
+
+# Or install with pip
+pip install -e .
+```
+
+> **Note:** For GPU support, install CUDA-enabled PyTorch wheels following the [official instructions](https://pytorch.org/get-started/locally/).
+
+### Basic Usage
 
 ```python
 from openmed.core import ModelLoader
 from openmed.processing import format_predictions
 
+# Initialise the model loader
 loader = ModelLoader()  # uses the default configuration
+
+# Create a medical NER pipeline
 ner = loader.create_pipeline(
     "disease_detection_superclinical",  # registry key or full model ID
     aggregation_strategy="simple",      # group sub-token predictions for quick wins
 )
 
+# Analyse medical text
 text = "Patient diagnosed with acute lymphoblastic leukemia and started on imatinib."
 raw_predictions = ner(text)
 
+# Format and display results
 result = format_predictions(raw_predictions, text, model_name="Disease Detection")
 for entity in result.entities:
     print(f"{entity.label:<12} -> {entity.text} (confidence={entity.confidence:.2f})")
 ```
 
-Use the convenience helper if you prefer a single call:
+### Convenience Helper
 
 ```python
 from openmed import analyze_text
 
+# Single-call analysis
 result = analyze_text(
     "Patient received 75mg clopidogrel for NSTEMI.",
     model_name="pharma_detection_superclinical"
@@ -73,30 +308,88 @@ for entity in result.entities:
     print(entity)
 ```
 
-## Command-line usage
+## 🛠️ Technologies & Tools
 
-Install the package in the usual way and the `openmed` console command will be
-available. It provides quick access to model discovery, text analysis, and
-configuration management.
+### **Core Technologies**
+
+- **Python 3.10+** - Modern Python with type hints and error handling
+- **Transformers** - Hugging Face transformers for medical AI models
+- **PyTorch** - Deep learning backend for model inference
+- **UV Python** - Ultra-fast Python package manager (10-100x faster than pip)
+
+### **Development Tools**
+
+- **Cursor IDE** - AI-powered code editor with custom rules and commands
+- **GitHub Actions** - CI/CD workflows and automated testing
+- **Docker** - Containerised development and deployment
+- **Pre-commit Hooks** - Automated code quality checks
+
+### **Medical AI Stack**
+
+- **Hugging Face Hub** - Model registry and distribution
+- **Medical NLP Models** - Specialised biomedical and clinical models
+- **Advanced NER** - Post-processing for medical entity recognition
+- **Clinical Text Processing** - Medical-specific text preprocessing
+
+### **Quality Assurance**
+
+- **Black** - Code formatting
+- **Ruff** - Fast Python linter
+- **MyPy** - Static type checking
+- **Pytest** - Testing framework
+- **Security Auditing** - Automated security checks
+
+## 💼 Use Cases
+
+### **For Healthcare Researchers**
+
+- **Clinical text analysis** for research studies and clinical trials
+- **Medical entity extraction** from electronic health records
+- **Biomedical literature mining** for drug discovery and research
+- **Clinical decision support** system development
+
+### **For Healthcare Organisations**
+
+- **Electronic health record processing** and structured data extraction
+- **Clinical documentation automation** and quality improvement
+- **Medical coding assistance** and billing optimisation
+- **Patient safety monitoring** through clinical text analysis
+
+### **For Medical AI Developers**
+
+- **Rapid prototyping** of medical AI applications
+- **Model evaluation and benchmarking** against clinical datasets
+- **Integration into existing healthcare systems** and workflows
+- **Custom medical AI model development** and fine-tuning
+
+### **For Academic Institutions**
+
+- **Medical education** and training material development
+- **Research collaboration** and reproducible medical AI studies
+- **Student projects** and medical AI curriculum development
+- **Publication support** with clinical text analysis tools
+
+## 🖥️ Command-Line Interface
+
+The `openmed` CLI provides quick access to model discovery, text analysis, and configuration management:
 
 ```bash
-# List models from the bundled registry (add --include-remote for Hugging Face)
+# List available models from the registry
 openmed models list
 openmed models list --include-remote
 
-# Analyse inline text or a file with a specific model
+# Analyse medical text with specific models
 openmed analyze --model disease_detection_superclinical --text "Acute leukemia treated with imatinib."
 
-# Inspect or edit the CLI configuration (defaults to ~/.config/openmed/config.toml)
+# Configuration management
 openmed config show
 openmed config set device cuda
 
-# Inspect the model's inferred context window
+# Model information and capabilities
 openmed models info disease_detection_superclinical
 ```
 
-Provide `--config-path /custom/path.toml` to work with a different configuration
-file during automation or testing. Run `openmed --help` to see all options.
+> **Tip:** Use `--config-path /custom/path.toml` for custom configurations during automation or testing. Run `openmed --help` for all available options.
 
 ## Discovering models
 
@@ -217,11 +510,33 @@ model = validate_model_name("OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434
 
 Use these helpers to guard API endpoints or batch pipelines against malformed inputs.
 
-## License
+## 🔗 Resources & Links
 
-OpenMed is released under the Apache-2.0 License.
+### **Official Resources**
 
-## Citing
+- **Repository**: [https://github.com/OpenMed/OpenMed](https://github.com/OpenMed/OpenMed)
+- **Hugging Face Models**: [https://huggingface.co/OpenMed](https://huggingface.co/OpenMed)
+- **Documentation**: [https://openmed.readthedocs.io](https://openmed.readthedocs.io)
+- **PyPI Package**: [https://pypi.org/project/openmed](https://pypi.org/project/openmed)
+
+### **External Tools & Resources**
+
+- **Cursor IDE**: [https://cursor.com](https://cursor.com)
+- **UV Python**: [https://docs.astral.sh/uv/](https://docs.astral.sh/uv/)
+- **Hugging Face Transformers**: [https://huggingface.co/docs/transformers/](https://huggingface.co/docs/transformers/)
+- **PyTorch**: [https://pytorch.org/](https://pytorch.org/)
+
+### **Medical AI Community**
+
+- **Medical AI Research**: [https://arxiv.org/abs/2508.01630](https://arxiv.org/abs/2508.01630)
+- **Clinical NLP Resources**: [https://huggingface.co/medical-ai](https://huggingface.co/medical-ai)
+- **Biomedical NLP**: [https://huggingface.co/bio-ai](https://huggingface.co/bio-ai)
+
+## 📄 License
+
+OpenMed is released under the Apache-2.0 License. See [LICENSE](LICENSE) for details.
+
+## 📚 Citation
 
 If you use OpenMed in your research, please cite:
 
@@ -236,3 +551,19 @@ If you use OpenMed in your research, please cite:
       url={https://arxiv.org/abs/2508.01630},
 }
 ```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details on how to:
+
+- Report bugs and request features
+- Submit code contributions
+- Improve documentation
+- Join our community discussions
+
+## 🙏 Acknowledgments
+
+- **Hugging Face** for the transformers library and model hosting
+- **Medical AI Research Community** for datasets and model development
+- **Open Source Contributors** who make this project possible
+- **Healthcare Professionals** who provide domain expertise and validation
