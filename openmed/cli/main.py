@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
-from .. import analyze_text, get_model_max_length, list_models
 from ..core.config import (
     OpenMedConfig,
     get_config,
@@ -18,6 +17,57 @@ from ..core.config import (
     resolve_config_path,
 )
 from ..core.model_registry import get_model_info
+
+
+_ANALYZE_TEXT = None
+_GET_MODEL_MAX_LENGTH = None
+_LIST_MODELS = None
+
+# Exposed for unit tests to patch without importing heavy modules eagerly.
+analyze_text = None
+get_model_max_length = None
+list_models = None
+
+
+def _lazy_api():
+    global _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS
+
+    global analyze_text, get_model_max_length, list_models
+
+    if analyze_text is not None and analyze_text is not _ANALYZE_TEXT:
+        _ANALYZE_TEXT = analyze_text
+
+    if _ANALYZE_TEXT is None:
+        if analyze_text is not None:
+            _ANALYZE_TEXT = analyze_text
+        else:
+            from .. import analyze_text as _analyze
+
+            _ANALYZE_TEXT = analyze_text = _analyze
+
+    if get_model_max_length is not None and get_model_max_length is not _GET_MODEL_MAX_LENGTH:
+        _GET_MODEL_MAX_LENGTH = get_model_max_length
+
+    if _GET_MODEL_MAX_LENGTH is None:
+        if get_model_max_length is not None:
+            _GET_MODEL_MAX_LENGTH = get_model_max_length
+        else:
+            from .. import get_model_max_length as _get_max_len
+
+            _GET_MODEL_MAX_LENGTH = get_model_max_length = _get_max_len
+
+    if list_models is not None and list_models is not _LIST_MODELS:
+        _LIST_MODELS = list_models
+
+    if _LIST_MODELS is None:
+        if list_models is not None:
+            _LIST_MODELS = list_models
+        else:
+            from .. import list_models as _list
+
+            _LIST_MODELS = list_models = _list
+
+    return _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS
 
 Handler = Callable[[argparse.Namespace], int]
 
@@ -180,6 +230,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Failed to read {args.input_file}: {exc}\n")
             return 1
 
+    analyze_text, _, _ = _lazy_api()
+
     result = analyze_text(
         text,
         model_name=args.model,
@@ -203,6 +255,8 @@ def _handle_analyze(args: argparse.Namespace) -> int:
 def _handle_models_list(args: argparse.Namespace) -> int:
     config = _load_and_apply_config(args)
 
+    _, _, list_models = _lazy_api()
+
     try:
         models = list_models(
             include_registry=True,
@@ -225,6 +279,8 @@ def _handle_models_info(args: argparse.Namespace) -> int:
     if not info:
         sys.stderr.write(f"Unknown model key: {args.model_key}\n")
         return 1
+
+    _, get_model_max_length, _ = _lazy_api()
 
     max_length = get_model_max_length(args.model_key, config=config)
 

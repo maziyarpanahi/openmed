@@ -6,7 +6,7 @@ import logging
 try:
     from transformers import PreTrainedTokenizer
     HF_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
     HF_AVAILABLE = False
 
 logger = logging.getLogger(__name__)

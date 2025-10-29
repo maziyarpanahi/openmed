@@ -25,6 +25,9 @@ keywords = [
   "medical extraction",
   "medical reasoning",
 ]
+dependencies = [
+  "pysbd>=0.3.4,<0.4",
+]
 
 authors = [
   { name = "Maziyar Panahi" }
