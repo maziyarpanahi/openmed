@@ -1,9 +1,11 @@
 """Unit tests for core functionality."""
 
+from pathlib import Path
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from openmed.core.config import OpenMedConfig, get_config, set_config
 from openmed.core.models import ModelLoader, load_model
+from openmed.processing.sentences import SentenceSpan
 
 
 class TestOpenMedConfig:
@@ -175,28 +177,173 @@ class TestGetModelMaxLengthFunction:
 class TestAnalyzeTextBehaviour:
     """Behavioural tests for the public analyze_text helper."""
 
+    @patch('openmed.processing.sentences.segment_text')
     @patch('openmed.format_predictions')
     @patch('openmed.ModelLoader')
     def test_analyze_text_attaches_max_length(
         self,
         mock_loader_cls,
         mock_format_predictions,
+        mock_segment_text,
     ):
         loader = Mock()
         pipeline = Mock(return_value=[{"entity": "LABEL", "score": 0.9, "word": "foo"}])
+        pipeline.tokenizer = Mock()
         loader.create_pipeline.return_value = pipeline
         loader.get_max_sequence_length.return_value = 256
         mock_loader_cls.return_value = loader
         mock_format_predictions.return_value = "ok"
+        mock_segment_text.return_value = [SentenceSpan("sample text", 0, len("sample text"))]
 
         from openmed import analyze_text
 
         analyze_text("sample text", model_name="model")
 
-        pipeline.assert_called_once_with("sample text")
+        pipeline.assert_called_once()
+        call_args, call_kwargs = pipeline.call_args
+        assert call_args == (["sample text"],)
+        assert call_kwargs == {}
         assert mock_format_predictions.called
         kwargs = mock_format_predictions.call_args.kwargs
         assert kwargs["metadata"]["max_length"] == 256
+        assert kwargs["metadata"]["sentence_detection"] is True
+        assert pipeline.tokenizer.model_max_length == 256
+
+    @patch('openmed.processing.sentences.segment_text')
+    @patch('openmed.format_predictions')
+    @patch('openmed.ModelLoader')
+    def test_analyze_text_respects_truncation_flag(
+        self,
+        mock_loader_cls,
+        mock_format_predictions,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(return_value=[{"entity": "LABEL", "score": 0.9, "word": "foo"}])
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 1024
+        mock_loader_cls.return_value = loader
+        mock_format_predictions.return_value = "ok"
+        mock_segment_text.return_value = [SentenceSpan("sample text", 0, len("sample text"))]
+        pipeline.tokenizer = Mock()
+
+        from openmed import analyze_text
+
+        analyze_text(
+            "sample text",
+            model_name="model",
+            max_length=128,
+            truncation=False,
+            sentence_detection=False,
+        )
+
+        pipeline.assert_called_once()
+        call_args, call_kwargs = pipeline.call_args
+        assert call_args == ("sample text",)
+        assert call_kwargs == {}
+        loader.get_max_sequence_length.assert_not_called()
+        assert pipeline.tokenizer.model_max_length == 0
+
+    @patch('openmed.processing.sentences.segment_text')
+    @patch('openmed.ModelLoader')
+    def test_sentence_detection_attaches_metadata(
+        self,
+        mock_loader_cls,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        pipeline = Mock(
+            return_value=[
+                {
+                    "entity": "COND",
+                    "score": 0.9,
+                    "word": "First",
+                    "start": 0,
+                    "end": 5,
+                },
+                {
+                    "entity": "COND",
+                    "score": 0.85,
+                    "word": "Second",
+                    "start": 17,
+                    "end": 23,
+                },
+            ]
+        )
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 384
+        mock_loader_cls.return_value = loader
+
+        text = "First sentence. Second sentence."
+        mock_segment_text.return_value = [
+            SentenceSpan("First sentence.", 0, 15),
+            SentenceSpan("Second sentence.", 16, 32),
+        ]
+
+        from openmed import analyze_text
+
+        result = analyze_text(
+            text,
+            model_name="model",
+            output_format="dict",
+        )
+
+        assert len(result.entities) == 2
+        first, second = result.entities
+        assert first.start == 0
+        assert first.metadata["sentence_index"] == 0
+        assert first.metadata["sentence_text"] == "First sentence."
+        assert second.metadata["sentence_index"] == 1
+        assert second.metadata["sentence_text"] == "Second sentence."
+        assert second.start >= second.metadata["sentence_start"]
+        assert result.metadata["sentence_count"] == 2
+        assert result.metadata["sentence_detection"] is True
+        assert pipeline.tokenizer.model_max_length == 384
+
+    @patch('openmed.processing.sentences.segment_text')
+    @patch('openmed.format_predictions')
+    @patch('openmed.ModelLoader')
+    def test_sentence_detection_batches_large_inputs(
+        self,
+        mock_loader_cls,
+        mock_format_predictions,
+        mock_segment_text,
+    ):
+        loader = Mock()
+        sentences_fixture = Path(__file__).resolve().parents[1] / "fixtures" / "long_clinical_note.txt"
+        long_text = sentences_fixture.read_text().strip()
+        sentence_lines = [line.strip() for line in long_text.splitlines() if line.strip()]
+
+        segments = []
+        cursor = 0
+        for sentence in sentence_lines:
+            start = long_text.index(sentence, cursor)
+            end = start + len(sentence)
+            segments.append(SentenceSpan(sentence, start, end))
+            cursor = end
+
+        mock_segment_text.return_value = segments
+
+        pipeline = Mock(return_value=[[] for _ in segments])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 512
+        mock_loader_cls.return_value = loader
+        mock_format_predictions.return_value = "ok"
+
+        from openmed import analyze_text
+
+        analyze_text(long_text, model_name="model")
+
+        pipeline.assert_called_once()
+        call_args, call_kwargs = pipeline.call_args
+        assert isinstance(call_args[0], list)
+        assert 0 < len(call_args[0]) < len(segments)
+        assert call_kwargs == {}
+
+        fmt_kwargs = mock_format_predictions.call_args.kwargs
+        assert fmt_kwargs["metadata"]["sentence_count"] == len(segments)
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.AutoConfig')
