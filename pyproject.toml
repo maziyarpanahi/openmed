@@ -45,12 +45,20 @@ dev = [
 
 hf = [
   "transformers>=4.50",
-  "huggingface-hub>=0.30"
+  "huggingface-hub>=0.30",
+  "accelerate>=0.29"
+]
+
+gliner = [
+  "gliner[tokenizers]>=0.2.0",
+  "torch>=2.0"
 ]
 
 [tool.hatch.build]
 include = [
   "openmed/**",
+  "ner_tools/**",
+  "label_maps/**",
   "README.md",
   "pyproject.toml"
 ]
@@ -68,4 +76,11 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 markers = [
   "integration: marks end-to-end or external integration tests",
   "slow: marks tests that are expected to run slowly"
+]
+python_files = [
+  "test_*.py",
+  "*_test.py",
+]
+testpaths = [
+  "tests",
 ]
