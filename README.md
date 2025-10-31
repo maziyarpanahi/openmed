@@ -54,6 +54,33 @@ uv pip install "torch==2.9.0" --index-url https://download.pytorch.org/whl/cpu
 
 Swap in a CUDA/CU121 index URL when targeting GPUs.
 
+### Optional extras at a glance
+
+Pick the extras that fit your workflow and stack them as needed:
+
+- `.[hf]` – Hugging Face pipelines (`transformers`, `huggingface-hub`, `accelerate`)
+- `.[gliner]` – Zero-shot GLiNER models, PyTorch, tokenizer deps
+- `.[dev]` – Test and lint tooling (`pytest`, coverage, flake8)
+
+Common install patterns with `uv`:
+
+```bash
+# Base toolkit only
+uv pip install .
+
+# Add Hugging Face integration
+uv pip install ".[hf]"
+
+# Add zero-shot GLiNER stack
+uv pip install ".[gliner]"
+
+# Developer tools for local hacking
+uv pip install ".[dev]"
+
+# Everything in one go (HF + GLiNER + dev)
+uv pip install ".[dev,hf,gliner]"
+```
+
 ## Quick start
 
 ```python
@@ -112,6 +139,38 @@ openmed models info disease_detection_superclinical
 
 Provide `--config-path /custom/path.toml` to work with a different configuration
 file during automation or testing. Run `openmed --help` to see all options.
+
+### Zero-shot NER tooling
+
+Install the optional extras first:
+
+```bash
+uv pip install ".[gliner]"
+```
+
+Then discover models, inspect domain defaults, and run zero-shot inference:
+
+```bash
+# Build or refresh the model index (scans your models directory)
+python -m ner_tools.index --models-dir /path/to/zero-shot-models
+
+# Inspect default labels per domain
+python -m ner_tools.labels dump-defaults --json
+
+# Run inference with custom labels or domain defaults
+python -m ner_tools.infer \
+  --model-id gliner-biomed-tiny \
+  --text "Imatinib inhibits BCR-ABL in CML." \
+  --threshold 0.55 \
+  --labels Drug,Gene
+
+# Smoke-test multiple GLiNER models (requires models/index.json)
+python scripts/smoke_gliner.py --limit 3 --adapter
+```
+
+Use `OPENMED_ZEROSHOT_MODELS_DIR` to avoid passing `--models-dir` every time. The
+CLI utilities share the same default `models/index.json` location bundled in the
+package when an external index is not supplied.
 
 ## Discovering models
 
