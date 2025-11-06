@@ -7,6 +7,36 @@ It also bundles configuration management, model loading, support for cutting-edg
 > **Status:** The package is pre-release and the API may change. Feedback and contributions are
 > welcome while the project stabilises.
 
+## TL;DR — run this first
+
+```bash
+# 1. Install uv (skip if you already have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Create and activate a fresh Python 3.11 environment in this repo
+uv venv --python 3.11
+source .venv/bin/activate
+# 3. Install OpenMed (with Hugging Face extras) and run a one-liner demo
+uv pip install "openmed[hf]"
+```
+
+```python
+from openmed import analyze_text
+
+result = analyze_text(
+    "Patient started on imatinib for chronic myeloid leukemia.",
+    model_name="disease_detection_superclinical",
+)
+
+for entity in result.entities:
+    confidence = float(entity.confidence) if entity.confidence is not None else None
+    print(f"{entity.label:<18} {entity.text:<35} confidence={confidence}")
+```
+
+### Try it in Google Colab (no setup required)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1x1xJjTZTWR3Z7uLJ0B5B_FyAomeeZGq5?usp=sharing)
+
 ## Features
 
 - **Curated model registry** with metadata for the OpenMed Hugging Face collection, including
@@ -53,6 +83,33 @@ uv pip install "torch==2.9.0" --index-url https://download.pytorch.org/whl/cpu
 ```
 
 Swap in a CUDA/CU121 index URL when targeting GPUs.
+
+### Optional extras at a glance
+
+Pick the extras that fit your workflow and stack them as needed:
+
+- `.[hf]` – Hugging Face pipelines (`transformers`, `huggingface-hub`, `accelerate`)
+- `.[gliner]` – Zero-shot GLiNER models, PyTorch, tokenizer deps
+- `.[dev]` – Test and lint tooling (`pytest`, coverage, flake8)
+
+Common install patterns with `uv`:
+
+```bash
+# Base toolkit only
+uv pip install .
+
+# Add Hugging Face integration
+uv pip install ".[hf]"
+
+# Add zero-shot GLiNER stack
+uv pip install ".[gliner]"
+
+# Developer tools for local hacking
+uv pip install ".[dev]"
+
+# Everything in one go (HF + GLiNER + dev)
+uv pip install ".[dev,hf,gliner]"
+```
 
 ## Quick start
 
@@ -112,6 +169,38 @@ openmed models info disease_detection_superclinical
 
 Provide `--config-path /custom/path.toml` to work with a different configuration
 file during automation or testing. Run `openmed --help` to see all options.
+
+### Zero-shot NER tooling
+
+Install the optional extras first:
+
+```bash
+uv pip install ".[gliner]"
+```
+
+Then discover models, inspect domain defaults, and run zero-shot inference:
+
+```bash
+# Build or refresh the model index (scans your models directory)
+python -m ner_tools.index --models-dir /path/to/zero-shot-models
+
+# Inspect default labels per domain
+python -m ner_tools.labels dump-defaults --json
+
+# Run inference with custom labels or domain defaults
+python -m ner_tools.infer \
+  --model-id gliner-biomed-tiny \
+  --text "Imatinib inhibits BCR-ABL in CML." \
+  --threshold 0.55 \
+  --labels Drug,Gene
+
+# Smoke-test multiple GLiNER models (requires models/index.json)
+python scripts/smoke_gliner.py --limit 3 --adapter
+```
+
+Use `OPENMED_ZEROSHOT_MODELS_DIR` to avoid passing `--models-dir` every time. The
+CLI utilities share the same default `models/index.json` location bundled in the
+package when an external index is not supplied.
 
 ## Discovering models
 
