@@ -7,6 +7,36 @@ It also bundles configuration management, model loading, support for cutting-edg
 > **Status:** The package is pre-release and the API may change. Feedback and contributions are
 > welcome while the project stabilises.
 
+## TL;DR — run this first
+
+```bash
+# 1. Install uv (skip if you already have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. Create and activate a fresh Python 3.11 environment in this repo
+uv venv --python 3.11
+source .venv/bin/activate
+# 3. Install OpenMed (with Hugging Face extras) and run a one-liner demo
+uv pip install "openmed[hf]"
+```
+
+```python
+from openmed import analyze_text
+
+result = analyze_text(
+    "Patient started on imatinib for chronic myeloid leukemia.",
+    model_name="disease_detection_superclinical",
+)
+
+for entity in result.entities:
+    confidence = float(entity.confidence) if entity.confidence is not None else None
+    print(f"{entity.label:<18} {entity.text:<35} confidence={confidence}")
+```
+
+### Try it in Google Colab (no setup required)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1x1xJjTZTWR3Z7uLJ0B5B_FyAomeeZGq5?usp=sharing)
+
 ## Features
 
 - **Curated model registry** with metadata for the OpenMed Hugging Face collection, including
