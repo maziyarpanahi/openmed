@@ -1,0 +1,16 @@
+{
+  "biomedical": ["Disease", "Drug", "Gene", "Organism"],
+  "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
+  "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
+  "finance": ["Company", "Ticker", "Instrument", "Event"],
+  "legal": ["Case", "Court", "Judge", "Statute"],
+  "news": ["Person", "Organization", "Location", "Date"],
+  "ecommerce": ["Product", "Brand", "Price", "Attribute"],
+  "cybersecurity": ["Vulnerability", "CVE", "Software", "Vendor"],
+  "chemistry": ["Compound", "Reaction", "Property", "Unit"],
+  "organism": ["Species", "Strain", "Taxon", "Habitat"],
+  "education": ["Course", "Topic", "Institution", "Degree"],
+  "social": ["Person", "Handle", "Hashtag", "URL"],
+  "public_health": ["Condition", "Intervention", "Outcome", "Population"],
+  "generic": ["Person", "Organization", "Location", "Date"]
+}
