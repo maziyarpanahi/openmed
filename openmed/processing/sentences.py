@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+
+# Python 3.12 emits SyntaxWarnings for old-style regex escapes in pysbd.
+warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 
 _SEGMENTER_CACHE: Dict[Tuple[str, bool], Any] = {}
 
