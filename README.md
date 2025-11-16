@@ -292,6 +292,22 @@ print(formatted)  # JSON string ready for logging or storage
 
 `format_predictions` can also return CSV rows or rich HTML snippets for dashboards.
 
+## Documentation
+
+MkDocs + Material power the official docs served at <https://openmed.life/docs/>.
+Every push to `master` rebuilds the site, but you can preview locally in seconds:
+
+```bash
+uv pip install ".[docs]"
+make docs-serve          # http://127.0.0.1:8000 with live reload
+make docs-build          # run the strict production build
+make docs-stage          # copies docs into site/ alongside docs/website
+python -m http.server --directory site 9000  # preview marketing+docs at http://127.0.0.1:9000
+```
+
+To stage a manual deployment (marketing site + docs bundle), run `make docs-deploy`; it builds the docs into `site/docs`,
+copies `docs/website/` into `site/`, and pushes that bundle to the `gh-pages` branch.
+
 ## Configuration & logging
 
 ```python
