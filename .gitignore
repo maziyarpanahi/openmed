@@ -123,6 +123,7 @@ celerybeat.pid
 .env
 .venv
 .venv-openmed
+.venv-docs
 env/
 venv/
 ENV/
@@ -217,3 +218,5 @@ docs/website/_build/
 docs/api/_build/
 
 .pypirc
+
+AGENTS.md
