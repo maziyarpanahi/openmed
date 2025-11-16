@@ -1,6 +1,7 @@
 site_name: OpenMed
 site_description: "Open-source healthcare NLP toolkit with curated models, advanced NER, and one-call orchestration."
-site_url: https://maziyarpanahi.github.io/openmed/
+site_url: https://openmed.life/docs/
+site_dir: site/docs
 repo_url: https://github.com/maziyarpanahi/openmed
 repo_name: maziyarpanahi/openmed
 edit_uri: edit/master/docs/
