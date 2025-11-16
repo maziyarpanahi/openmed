@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install test
+.PHONY: help build publish release clean install test docs-serve docs-build docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -23,6 +23,18 @@ clean: ## Clean build artifacts
 install: ## Install the package locally
 	@echo "📦 Installing package locally..."
 	pip install -e .
+
+docs-serve: ## Run the MkDocs dev server with live reload
+	@echo "📚 Serving docs at http://127.0.0.1:8000 ..."
+	uv run mkdocs serve -a 127.0.0.1:8000
+
+docs-build: ## Build the MkDocs site (strict mode)
+	@echo "🏗️ Building documentation..."
+	uv run mkdocs build --strict
+
+docs-deploy: docs-build ## Publish the MkDocs site to GitHub Pages (gh-pages branch)
+	@echo "🚀 Deploying documentation to GitHub Pages..."
+	uv run mkdocs gh-deploy --force
 
 test-build: ## Test build without publishing
 	@echo "🧪 Testing build..."
