@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install test docs-serve docs-build docs-deploy
+.PHONY: help build publish release clean install test docs-serve docs-build docs-stage docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -32,9 +32,13 @@ docs-build: ## Build the MkDocs site (strict mode)
 	@echo "🏗️ Building documentation..."
 	uv run mkdocs build --strict
 
-docs-deploy: docs-build ## Publish the MkDocs site to GitHub Pages (gh-pages branch)
+docs-stage: docs-build ## Build docs and bundle them with the marketing site into site/
+	@echo "📦 Bundling marketing site with docs..."
+	rsync -av docs/website/ site/
+
+docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages (gh-pages branch)
 	@echo "🚀 Deploying documentation to GitHub Pages..."
-	uv run mkdocs gh-deploy --force
+	ghp-import site -f -p
 
 test-build: ## Test build without publishing
 	@echo "🧪 Testing build..."
