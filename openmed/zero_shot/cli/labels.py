@@ -16,7 +16,7 @@ from openmed.ner.labels import (
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m ner_tools.labels",
+        prog="python -m openmed.zero_shot.cli.labels",
         description="Inspect default zero-shot NER label maps.",
     )
     subparsers = parser.add_subparsers(dest="command")
