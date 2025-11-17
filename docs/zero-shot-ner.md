@@ -20,7 +20,7 @@ available locally (by default the toolkit looks for `models/index.json`).
 Create or refresh the index by pointing the tool at your model directory:
 
 ```bash
-python -m ner_tools.index --models-dir /path/to/models
+python -m openmed.zero_shot.cli.index --models-dir /path/to/models
 ```
 
 - Generates `index.json` with metadata (`id`, `family`, `domains`, `languages`).
@@ -32,11 +32,11 @@ python -m ner_tools.index --models-dir /path/to/models
 Inspect the curated label maps and discover available domains:
 
 ```bash
-python -m ner_tools.labels dump-defaults
-python -m ner_tools.labels dump-defaults --domain biomedical
+python -m openmed.zero_shot.cli.labels dump-defaults
+python -m openmed.zero_shot.cli.labels dump-defaults --domain biomedical
 ```
 
-The defaults are packaged in `label_maps/defaults.json` and can be overridden in
+The defaults are packaged in `openmed/zero_shot/data/label_maps/defaults.json` and can be overridden in
 tests or deployments by supplying a custom path to the high-level APIs.
 
 ## Inference API
@@ -57,7 +57,7 @@ for entity in resp.entities:
     print(entity.label, entity.text, entity.score)
 ```
 
-CLI usage mirrors the API (`python -m ner_tools.infer`). Label precedence is:
+CLI usage mirrors the API (`python -m openmed.zero_shot.cli.infer`). Label precedence is:
 
 1. Explicit `--labels`
 2. `--domain` defaults

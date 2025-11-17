@@ -182,13 +182,13 @@ Then discover models, inspect domain defaults, and run zero-shot inference:
 
 ```bash
 # Build or refresh the model index (scans your models directory)
-python -m ner_tools.index --models-dir /path/to/zero-shot-models
+python -m openmed.zero_shot.cli.index --models-dir /path/to/zero-shot-models
 
 # Inspect default labels per domain
-python -m ner_tools.labels dump-defaults --json
+python -m openmed.zero_shot.cli.labels dump-defaults --json
 
 # Run inference with custom labels or domain defaults
-python -m ner_tools.infer \
+python -m openmed.zero_shot.cli.infer \
   --model-id gliner-biomed-tiny \
   --text "Imatinib inhibits BCR-ABL in CML." \
   --threshold 0.55 \
@@ -291,6 +291,22 @@ print(formatted)  # JSON string ready for logging or storage
 ```
 
 `format_predictions` can also return CSV rows or rich HTML snippets for dashboards.
+
+## Documentation
+
+MkDocs + Material power the official docs served at <https://openmed.life/docs/>.
+Every push to `master` rebuilds the site, but you can preview locally in seconds:
+
+```bash
+uv pip install ".[docs]"
+make docs-serve          # http://127.0.0.1:8000 with live reload
+make docs-build          # run the strict production build
+make docs-stage          # copies docs into site/ alongside docs/website
+python -m http.server --directory site 9000  # preview marketing+docs at http://127.0.0.1:9000
+```
+
+To stage a manual deployment (marketing site + docs bundle), run `make docs-deploy`; it builds the docs into `site/docs`,
+copies `docs/website/` into `site/`, and pushes that bundle to the `gh-pages` branch.
 
 ## Configuration & logging
 

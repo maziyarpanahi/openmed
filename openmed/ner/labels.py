@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional
 
 
-_RESOURCE_PACKAGE = "label_maps"
+_RESOURCE_PACKAGE = "openmed.zero_shot.data.label_maps"
 _DEFAULT_RESOURCE = "defaults.json"
 _GENERIC_DOMAIN = "generic"
 
