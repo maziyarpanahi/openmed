@@ -10,7 +10,7 @@ as the starting point when you are unsure which page (or module) to visit.
 | Model registry | Curated metadata (`ModelInfo`, categories, suggestions) for every OpenMed Hugging Face release. | `openmed/core/model_registry.py`, [Model Registry](./model-registry.md) |
 | Discovery & loading | Hugging Face discovery, optional auth, caching, tokenizers, pipeline helpers. | `openmed/core/models.py`, [ModelLoader & Pipelines](./model-loader.md) |
 | One-call inference | `analyze_text`, validation, pySBD segmentation, output formatting for dict/JSON/HTML/CSV. | `openmed/__init__.py:analyze_text`, [Analyze Text Helper](./analyze-text.md) |
-| Zero-shot toolkit | GLiNER-powered indexing, label maps, adapters, smoke scripts. | `ner_tools/`, `label_maps/`, [Zero-shot Toolkit](./zero-shot-ner.md) |
+| Zero-shot toolkit | GLiNER-powered indexing, label maps, adapters, smoke scripts. | `openmed/zero_shot/**`, [Zero-shot Toolkit](./zero-shot-ner.md) |
 
 ## Processing & outputs
 
