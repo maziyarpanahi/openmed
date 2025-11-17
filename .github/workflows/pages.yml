@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Deploy Docs to GitHub Pages
 
 on:
   push:
@@ -23,12 +23,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install documentation tooling
+        run: pip install ".[docs]"
+      - name: Build MkDocs site
+        run: mkdocs build --strict
+      - name: Bundle marketing site
+        run: rsync -av docs/website/ site/
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload docs/website/ as Pages artifact
+      - name: Upload site/ as Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./docs/website
+          path: ./site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -54,11 +54,17 @@ gliner = [
   "torch>=2.0"
 ]
 
+docs = [
+  "mkdocs>=1.6",
+  "mkdocs-material>=9.5",
+  "mkdocs-git-revision-date-localized-plugin>=1.2.6",
+  "mkdocs-minify-plugin>=0.8.0",
+  "pymdown-extensions>=10.8",
+]
+
 [tool.hatch.build]
 include = [
   "openmed/**",
-  "ner_tools/**",
-  "label_maps/**",
   "README.md",
   "pyproject.toml"
 ]

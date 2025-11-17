@@ -1,0 +1,115 @@
+site_name: OpenMed
+site_description: "Open-source healthcare NLP toolkit with curated models, advanced NER, and one-call orchestration."
+site_url: https://openmed.life/docs/
+site_dir: site/docs
+repo_url: https://github.com/maziyarpanahi/openmed
+repo_name: maziyarpanahi/openmed
+edit_uri: edit/master/docs/
+copyright: "© {year} Maziyar Panahi — Apache-2.0"
+strict: true
+
+nav:
+  - Overview:
+      - Welcome: index.md
+      - Feature Map: feature-map.md
+      - Quick Start: getting-started.md
+  - Core Guides:
+      - Analyze Text Helper: analyze-text.md
+      - ModelLoader & Pipelines: model-loader.md
+      - Model Registry: model-registry.md
+      - Advanced NER & Output Formatting: output-formatting.md
+      - Configuration & Validation: configuration.md
+      - Zero-shot Toolkit: zero-shot-ner.md
+      - CLI & Automation: cli.md
+      - Examples & Copy/Paste Recipes: examples.md
+      - Testing & QA: testing.md
+  - Project:
+      - Contributing & Releases: contributing.md
+
+theme:
+  name: material
+  language: en
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tracking
+    - toc.integrate
+    - content.action.edit
+    - content.code.annotate
+    - content.code.copy
+    - content.tabs.link
+    - announce.dismiss
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/maziyarpanahi/openmed
+      name: GitHub
+    - icon: simple/huggingface
+      link: https://huggingface.co/OpenMed
+      name: Hugging Face
+    - icon: fontawesome/brands/x-twitter
+      link: https://x.com/MaziyarPanahi
+      name: Maziyar on X
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/openmed-ai/
+      name: LinkedIn
+
+plugins:
+  - search
+  - git-revision-date-localized:
+      enable_creation_date: true
+      fallback_to_build_date: true
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+      permalink_title: Link to this section
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+watch:
+  - openmed
+  - openmed/zero_shot
+
+exclude_docs: |
+  website/**

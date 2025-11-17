@@ -1,7 +1,7 @@
 """Command-line interface for building the zero-shot model index.
 
 Usage:
-    python -m ner_tools.index --models-dir /path/to/models
+    python -m openmed.zero_shot.cli.index --models-dir /path/to/models
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ _MODELS_DIR_ENV = "OPENMED_ZEROSHOT_MODELS_DIR"
 
 def _parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        prog="python -m ner_tools.index",
+        prog="python -m openmed.zero_shot.cli.index",
         description="Build or refresh the zero-shot model metadata index.",
     )
     parser.add_argument(
