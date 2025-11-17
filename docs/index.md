@@ -41,9 +41,17 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## How these docs are structured
 
-1. **Quick Start** – fastest path to a working environment plus a copy/paste script.
-2. **Guides** – configuration, validation, and zero-shot NER toolkit tasks.
-3. **Project** – contribution and release workflows so the automation stays in sync with packaging.
+1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
+2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
+3. Core guides:
+   - [Analyze Text Helper](./analyze-text.md) for single-call inference.
+   - [ModelLoader & Pipelines](./model-loader.md) for long-running jobs.
+   - [Model Registry](./model-registry.md) to pick the right checkpoint.
+   - [Advanced NER & Output Formatting](./output-formatting.md) to polish spans.
+   - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
+   - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
+   - [CLI & Automation](./cli.md), [Examples](./examples.md), and [Testing & QA](./testing.md) for day-to-day operations.
+4. [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
 
 Need something that is not here yet? Drop an issue on GitHub and mention the missing recipe. Every addition is just a
 Markdown file away.
