@@ -19,6 +19,7 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 | Path | What it does |
 | --- | --- |
 | `examples/analyze_cli.py` | Thin wrapper around `analyze_text` ideal for batch jobs or serverless functions. Accepts text, model name, and formatter options via argparse. |
+| `python -m openmed.zero_shot.cli.*` | Collection of zero-shot utilities (`index`, `labels`, `infer`) now namespaced inside the package to keep the repo root tidy. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds or CLI flows. |
 
