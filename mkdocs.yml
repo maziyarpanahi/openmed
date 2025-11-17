@@ -11,10 +11,18 @@ strict: true
 nav:
   - Overview:
       - Welcome: index.md
+      - Feature Map: feature-map.md
       - Quick Start: getting-started.md
-  - Guides:
-      - Configuration: configuration.md
+  - Core Guides:
+      - Analyze Text Helper: analyze-text.md
+      - ModelLoader & Pipelines: model-loader.md
+      - Model Registry: model-registry.md
+      - Advanced NER & Output Formatting: output-formatting.md
+      - Configuration & Validation: configuration.md
       - Zero-shot Toolkit: zero-shot-ner.md
+      - CLI & Automation: cli.md
+      - Examples & Copy/Paste Recipes: examples.md
+      - Testing & QA: testing.md
   - Project:
       - Contributing & Releases: contributing.md
 
