@@ -13,7 +13,7 @@ from openmed.ner import MissingDependencyError, NerRequest, infer
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m ner_tools.infer",
+        prog="python -m openmed.zero_shot.cli.infer",
         description="Run zero-shot NER inference using the zero-shot toolkit.",
     )
     parser.add_argument("--model-id", required=True, help="Model identifier from the index.")
