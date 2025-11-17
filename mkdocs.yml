@@ -109,8 +109,7 @@ markdown_extensions:
 
 watch:
   - openmed
-  - label_maps
-  - ner_tools
+  - openmed/zero_shot
 
 exclude_docs: |
   website/**
