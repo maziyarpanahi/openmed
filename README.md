@@ -182,13 +182,13 @@ Then discover models, inspect domain defaults, and run zero-shot inference:
 
 ```bash
 # Build or refresh the model index (scans your models directory)
-python -m ner_tools.index --models-dir /path/to/zero-shot-models
+python -m openmed.zero_shot.cli.index --models-dir /path/to/zero-shot-models
 
 # Inspect default labels per domain
-python -m ner_tools.labels dump-defaults --json
+python -m openmed.zero_shot.cli.labels dump-defaults --json
 
 # Run inference with custom labels or domain defaults
-python -m ner_tools.infer \
+python -m openmed.zero_shot.cli.infer \
   --model-id gliner-biomed-tiny \
   --text "Imatinib inhibits BCR-ABL in CML." \
   --threshold 0.55 \
