@@ -65,8 +65,6 @@ docs = [
 [tool.hatch.build]
 include = [
   "openmed/**",
-  "ner_tools/**",
-  "label_maps/**",
   "README.md",
   "pyproject.toml"
 ]
