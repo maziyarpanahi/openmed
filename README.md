@@ -299,7 +299,7 @@ Every push to `master` rebuilds the site, but you can preview locally in seconds
 
 ```bash
 uv pip install ".[docs]"
-make docs-serve          # http://127.0.0.1:8000 with live reload
+make docs-serve          # http://127.0.0.1:8008 with live reload
 make docs-build          # run the strict production build
 make docs-stage          # copies docs into site/ alongside docs/website
 python -m http.server --directory site 9000  # preview marketing+docs at http://127.0.0.1:9000
