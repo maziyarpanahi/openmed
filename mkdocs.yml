@@ -80,6 +80,9 @@ plugins:
   - minify:
       minify_html: true
 
+hooks:
+  - docs/_hooks.py
+
 markdown_extensions:
   - admonition
   - attr_list
