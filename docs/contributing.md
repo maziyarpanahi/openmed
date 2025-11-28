@@ -6,7 +6,7 @@ publish the package to PyPI or GitHub Pages.
 ## Local workflows
 
 - `make help` prints a list of scripted tasks (build, publish, release, docs, etc.).
-- `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8000`.
+- `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
 - `make docs-build` runs `mkdocs build --strict` for CI parity.
 - `uv pip install ".[dev]"` pulls in pytest + coverage; `uv pip install ".[dev,hf]"` stacks extras.
 
@@ -24,7 +24,7 @@ The `pages.yml` workflow builds MkDocs on every push to `master`, bundles the ma
 
 ```bash
 uv pip install ".[docs]"
-uv run mkdocs serve -a 127.0.0.1:8000
+uv run mkdocs serve -a 127.0.0.1:8008
 make docs-stage
 python -m http.server --directory site 9000  # inspect the marketing+docs bundle
 ```
