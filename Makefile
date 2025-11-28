@@ -25,8 +25,8 @@ install: ## Install the package locally
 	pip install -e .
 
 docs-serve: ## Run the MkDocs dev server with live reload
-	@echo "📚 Serving docs at http://127.0.0.1:8000 ..."
-	uv run mkdocs serve -a 127.0.0.1:8000
+	@echo "📚 Serving docs at http://127.0.0.1:8008 ..."
+	uv run mkdocs serve -a 127.0.0.1:8008
 
 docs-build: ## Build the MkDocs site (strict mode)
 	@echo "🏗️ Building documentation..."
