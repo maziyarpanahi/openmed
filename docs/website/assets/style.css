@@ -90,8 +90,55 @@ body {
 
 .nav-buttons {
     display: flex;
-    gap: 1rem;
+    gap: 0.75rem;
     align-items: center;
+}
+
+.nav-pill {
+    padding: 0.4rem 1rem;
+    border-radius: 999px;
+    border: 1px solid hsl(214 32% 91%);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: hsl(var(--foreground));
+    text-decoration: none;
+    transition: var(--transition-smooth);
+}
+
+.nav-pill:hover {
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
+}
+
+.dark .nav-pill {
+    border-color: hsl(217 32% 17%);
+}
+
+.github-badge {
+    display: flex;
+    align-items: center;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid hsl(214 32% 91%);
+    background: hsl(var(--background));
+    text-decoration: none;
+    transition: var(--transition-smooth);
+}
+
+.github-badge:hover {
+    border-color: hsl(var(--primary));
+    box-shadow: var(--shadow-medical);
+}
+
+.github-badge img {
+    height: 28px;
+    width: auto;
+    display: block;
+}
+
+.dark .github-badge {
+    border-color: hsl(217 32% 17%);
+    background: hsl(217 32% 12%);
 }
 
 .theme-toggle {
