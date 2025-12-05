@@ -48,6 +48,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
    - [ModelLoader & Pipelines](./model-loader.md) for long-running jobs.
    - [Model Registry](./model-registry.md) to pick the right checkpoint.
    - [Advanced NER & Output Formatting](./output-formatting.md) to polish spans.
+   - [Medical-Aware Tokenizer](./medical-tokenizer.md) for better clinical token boundaries.
    - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
    - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
    - [CLI & Automation](./cli.md), [Examples](./examples.md), and [Testing & QA](./testing.md) for day-to-day operations.
