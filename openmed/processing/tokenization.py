@@ -21,131 +21,15 @@ logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
 
-# Common biomedical hyphenated exceptions to keep intact when possible
-DEFAULT_MEDICAL_EXCEPTIONS = [
-    "COVID-19",
-    "SARS-CoV-2",
-    "IL-6",
-    "IL-2",
-    "TNF-alpha",
-    "BCR-ABL1",
-    "t(8;21)",
-    "t(15;17)",
-    "CAR-T",
-    "post-CAR-T",
-]
-
-
-class MedicalPreTokenizer:
-    """SciSpaCy-inspired pre-tokenizer with biomedical hyphen protection."""
-
-    def __init__(self, exceptions: Optional[Iterable[str]] = None):
-        if not TOKENIZERS_AVAILABLE:
-            raise ImportError("`tokenizers` package is required for MedicalPreTokenizer")
-
-        prefix_pattern = "(" + "|".join(_combined_rule_prefixes()) + ")"
-        hyphens = r"[‒–—-]"  # match char_classes.HYPHENS semantics without importing spaCy here
-        infix_patterns = [
-            r"…",
-            r"\.\.\.",
-            r"×",
-            r"(?<=[0-9])[+\-\*^](?=[0-9-])",
-            r"(?<=[a-z])\.(?=[A-Z])",
-            r"(?<=[A-Za-z]),(?=[A-Za-z])",
-            rf'(?<=[A-Za-z])[?";:=,.]*(?:{hyphens})(?=[A-Za-z])',
-            rf'(?<=[A-Za-z"])[:<>=](?=[A-Za-z])',
-        ]
-        suffix_patterns = [
-            r"'s",
-            r"'S",
-            r"’s",
-            r"’S",
-            r"(?<=[0-9])\+",
-            r"(?<=°[FfCcKk])\.",
-            r"(?<=[0-9])(?:[$£€¥₩])",
-            r"(?<=[0-9])(?:mg|mL|mmHg|kg|g|L|µL|mcg|ng|IU)",
-            r"(?<=[0-9a-z%²\-\)\]\+])\.",
-            r"(?<=[A-Z]|\d[A-Z])\.",
-        ]
-
-        self.base = PreSeq(
-            [
-                pre_tokenizers.Whitespace(),
-                Split(prefix_pattern, behavior="isolated"),
-                Split("|".join(infix_patterns), behavior="isolated"),
-                Split("|".join(suffix_patterns), behavior="isolated"),
-            ]
-        )
-
-        self.exceptions = set(exceptions or DEFAULT_MEDICAL_EXCEPTIONS)
-
-    def pre_tokenize_str(self, text: str):
-        pieces = self.base.pre_tokenize_str(text)
-        merged = []
-        i = 0
-        while i < len(pieces):
-            tok, (s, e) = pieces[i]
-            if tok in self.exceptions:
-                merged.append((tok, (s, e)))
-                i += 1
-                continue
-
-            # Merge patterns like COVID-19, IL-6, BCR-ABL1, post-CAR-T, t(8;21)
-            if (
-                i + 2 < len(pieces)
-                and pieces[i + 1][0] == "-"
-                and _is_alphaish(tok)
-                and _is_alnumish(pieces[i + 2][0])
-            ):
-                new_tok = tok + "-" + pieces[i + 2][0]
-                start = s
-                end = pieces[i + 2][1][1]
-                i += 3
-                # allow multiple chained hyphens (e.g., CAR-T-cell)
-                while (
-                    i + 1 < len(pieces)
-                    and pieces[i][0] == "-"
-                    and _is_alnumish(pieces[i + 1][0])
-                ):
-                    new_tok += "-" + pieces[i + 1][0]
-                    end = pieces[i + 1][1][1]
-                    i += 2
-                merged.append((new_tok, (start, end)))
-                continue
-
-            merged.append((tok, (s, e)))
-            i += 1
-        return merged
-
-
-def _is_alphaish(token: str) -> bool:
-    return bool(re.match(r"^[A-Za-z]{2,}$", token))
-
-
-def _is_alnumish(token: str) -> bool:
-    return bool(re.match(r"^[A-Za-z0-9\(\);]+$", token))
-
-
-def _combined_rule_prefixes() -> List[str]:
-    # Lightweight port of SciSpaCy prefix rules
-    prefix_punct = r"[\\[\\({\\-–—‒\\.\\,\\!\\?\\:\\;\\#\\$\\%\\&\\*\\+\\=]"
-    return [
-        "§",
-        "%",
-        "=",
-        r"\+",
-        prefix_punct,
-        r"\.\.\.",
-        r"…",
-    ]
-
-
 def build_medical_pretokenizer(exceptions: Optional[Iterable[str]] = None):
-    """Return a MedicalPreTokenizer instance (or None if tokenizers missing)."""
+    """Return a safe Bert-style pretokenizer. Exceptions are handled via added tokens."""
     if not TOKENIZERS_AVAILABLE:
         logger.warning("tokenizers package not available; skipping medical pretokenizer")
         return None
-    return pre_tokenizers.PreTokenizer.custom(MedicalPreTokenizer(exceptions=exceptions))
+    try:
+        return pre_tokenizers.BertPreTokenizer()
+    except AttributeError:  # pragma: no cover - older tokenizers versions
+        return pre_tokenizers.Whitespace()
 
 
 def apply_medical_pretokenizer(tokenizer: Any, exceptions: Optional[Iterable[str]] = None) -> bool:
@@ -161,8 +45,17 @@ def apply_medical_pretokenizer(tokenizer: Any, exceptions: Optional[Iterable[str
     pre_tok = build_medical_pretokenizer(exceptions=exceptions)
     if pre_tok is None:
         return False
-    backend.pre_tokenizer = pre_tok  # type: ignore[attr-defined]
-    return True
+    try:
+        backend.pre_tokenizer = pre_tok  # type: ignore[attr-defined]
+        if exceptions:
+            try:
+                tokenizer.add_tokens(list(exceptions), special_tokens=False)
+            except Exception:
+                pass
+        return True
+    except Exception as exc:
+        logger.warning("Medical pre-tokenizer not applied: %s", exc)
+        return False
 
 
 def _is_reasonable_length(value: Optional[int], threshold: int = _UNSET_MAX_LENGTH_SENTINEL) -> bool:
