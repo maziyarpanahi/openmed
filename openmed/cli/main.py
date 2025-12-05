@@ -133,6 +133,25 @@ def _add_analyze_command(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Omit confidence scores from the output.",
     )
+    analyze_parser.add_argument(
+        "--use-medical-tokenizer",
+        dest="use_medical_tokenizer",
+        action="store_true",
+        default=None,
+        help="Force-enable the medical-aware pre-tokenizer (default from config).",
+    )
+    analyze_parser.add_argument(
+        "--no-medical-tokenizer",
+        dest="use_medical_tokenizer",
+        action="store_false",
+        default=None,
+        help="Disable the medical-aware pre-tokenizer and fall back to the model default.",
+    )
+    analyze_parser.add_argument(
+        "--medical-tokenizer-exceptions",
+        default=None,
+        help="Comma-separated extra terms to keep intact (e.g., MY-DRUG-123,ABC-001).",
+    )
     analyze_parser.set_defaults(handler=_handle_analyze)
 
 
@@ -212,7 +231,22 @@ def _load_and_apply_config(args: argparse.Namespace) -> OpenMedConfig:
         set_config(config)
         return config
     except FileNotFoundError:
-        return get_config()
+        config = get_config()
+
+    # Apply CLI overrides if present
+    if hasattr(args, "use_medical_tokenizer") and args.use_medical_tokenizer is not None:
+        config.use_medical_tokenizer = bool(args.use_medical_tokenizer)
+
+    if getattr(args, "medical_tokenizer_exceptions", None):
+        extras = [
+            item.strip()
+            for item in str(args.medical_tokenizer_exceptions).split(",")
+            if item.strip()
+        ]
+        config.medical_tokenizer_exceptions = extras if extras else None
+
+    set_config(config)
+    return config
 
 
 def _handle_analyze(args: argparse.Namespace) -> int:
