@@ -177,6 +177,18 @@ class ModelLoader:
                 **auth_kwargs,
             )
 
+            # Apply medical pre-tokenizer if enabled and available
+            if getattr(self.config, "use_medical_tokenizer", False):
+                try:
+                    from ..processing.tokenization import apply_medical_pretokenizer
+                    applied = apply_medical_pretokenizer(
+                        tokenizer, exceptions=getattr(self.config, "medical_tokenizer_exceptions", None)
+                    )
+                    if applied:
+                        logger.info("Applied medical pre-tokenizer to %s", full_model_name)
+                except Exception as exc:  # pragma: no cover - safety net
+                    logger.warning("Could not apply medical pre-tokenizer: %s", exc)
+
             # Load model
             model_kwargs = {**auth_kwargs, **kwargs}
             model = AutoModelForTokenClassification.from_pretrained(
@@ -237,6 +249,21 @@ class ModelLoader:
             pipeline_kwargs.update(kwargs)
 
             ner_pipeline = pipeline(task, **pipeline_kwargs)
+
+            # Attach medical pre-tokenizer if enabled and fast tokenizer present
+            if getattr(self.config, "use_medical_tokenizer", False):
+                try:
+                    from ..processing.tokenization import apply_medical_pretokenizer
+
+                    if hasattr(ner_pipeline, "tokenizer"):
+                        applied = apply_medical_pretokenizer(
+                            ner_pipeline.tokenizer,
+                            exceptions=getattr(self.config, "medical_tokenizer_exceptions", None),
+                        )
+                        if applied:
+                            logger.info("Applied medical pre-tokenizer to pipeline tokenizer")
+                except Exception as exc:  # pragma: no cover
+                    logger.warning("Could not apply medical pre-tokenizer to pipeline: %s", exc)
 
             logger.info(f"Created pipeline for {full_model_name}")
             return ner_pipeline
