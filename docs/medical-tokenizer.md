@@ -1,8 +1,8 @@
 # Medical-Aware Tokenizer
 
-OpenMed now applies a SciSpaCy-inspired medical pre-tokenizer to Hugging Face **fast** tokenizers by default. It keeps
-common biomedical hyphenations and codes intact (e.g., `COVID-19`, `IL-6`, `CAR-T`, `BCR-ABL1`, `t(8;21)`) to improve
-alignment and entity labeling, while remaining fast (Rust backend via `tokenizers`).
+OpenMed can apply a medical-aware pre-tokenizer to Hugging Face **fast** tokenizers. It uses the fast `tokenizers`
+backend (Bert-style) and lets you inject domain exceptions (e.g., `COVID-19`, `IL-6`, `CAR-T`) as added tokens so they
+stay intact when possible.
 
 ## Python usage
 
@@ -46,9 +46,8 @@ Without flags, the CLI inherits the config file and defaults to the medical toke
 
 ## How it works
 
-- Built with `tokenizers` pre-tokenizers + custom merge step for biomedical hyphen/plus patterns.
-- Exception list protects critical tokens from being split (default list covers frequent clinical terms; extend via
-  config/CLI/env).
+- Built with `tokenizers` (Rust) Bert-style pre-tokenizer; exceptions are injected as added tokens to reduce splitting of
+  critical biomedical terms.
 - Falls back silently to the model’s native tokenizer if `tokenizers` is unavailable or the tokenizer is a slow (Python)
   variant.
 
