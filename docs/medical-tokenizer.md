@@ -57,6 +57,7 @@ See `examples/custom_tokenizer/` for runnable scripts:
 
 - `custom_tokenize_alignment.py` – custom tokens -> model -> back-map labels.
 - `eval_tokenization_comparison.py` – tables comparing WordPiece vs spaCy vs medical pre-tokenizer on hard clinical text.
+- `notebooks/Medical_Tokenizer_Benchmark.ipynb` – quick latency + entity stability check with tokenizer on/off.
 
 Run them after installing `examples/custom_tokenizer/requirements.txt`.
 

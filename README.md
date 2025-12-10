@@ -51,8 +51,9 @@ for entity in result.entities:
 - **Logging and validation helpers** to keep pipelines observable and inputs safe.
 
 ### Medical-aware tokenizer (default)
-- Fast Rust-backed pre-tokenizer (ported from SciSpaCy) applied automatically to Hugging Face *fast* tokenizers.
-- Keeps biomedical hyphenations and codes intact (e.g., `COVID-19`, `IL-6`, `CAR-T`, `BCR-ABL1`, `t(8;21)`), improving alignment and downstream labeling.
+
+- Fast Rust-backed pre-tokenizer applied automatically to Hugging Face *fast* tokenizers.
+- Supports biomedical exceptions (e.g., `COVID-19`, `IL-6`, `CAR-T`) injected as added tokens to reduce unwanted splits.
 - Configurable via `OpenMedConfig.use_medical_tokenizer` (default `True`) and optional `medical_tokenizer_exceptions` for additional protected terms. Environment overrides: `OPENMED_USE_MEDICAL_TOKENIZER=0` to disable, `OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS="MY-NEW-TERM,ABC-123"`.
 
 ## Installation
