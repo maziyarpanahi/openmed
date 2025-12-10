@@ -1,0 +1,4 @@
+spacy>=3.7,<3.8
+tokenizers>=0.15
+transformers>=4.55
+torch>=2.1

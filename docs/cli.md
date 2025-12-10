@@ -31,6 +31,8 @@ Flags:
 - `--output-format`: `dict`, `json`, `html`, or `csv`.
 - `--group-entities`: toggles adjacent span merging.
 - `--no-confidence`: omit confidence values from output.
+- `--use-medical-tokenizer` / `--no-medical-tokenizer`: force on/off the medical-aware pre-tokenizer (defaults to config/on).
+- `--medical-tokenizer-exceptions`: comma-separated terms to keep intact (adds to the default biomedical list).
 
 ## Discover models
 

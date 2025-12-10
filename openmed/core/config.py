@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 import os
 
 # Environment variable used to override the config file location
@@ -40,6 +40,12 @@ class OpenMedConfig:
     # Model loading timeout
     timeout: int = 300
 
+    # Medical-aware pre-tokenizer toggle (fast tokenizers only)
+    use_medical_tokenizer: bool = True
+
+    # Optional list of hyphenated/clinical exceptions to keep intact
+    medical_tokenizer_exceptions: Optional[List[str]] = None
+
     def __post_init__(self):
         """Post-initialization to set default values."""
         if self.cache_dir is None:
@@ -47,6 +53,14 @@ class OpenMedConfig:
 
         if self.hf_token is None:
             self.hf_token = os.getenv("HF_TOKEN")
+
+        env_use_med_tok = os.getenv("OPENMED_USE_MEDICAL_TOKENIZER")
+        if env_use_med_tok is not None:
+            self.use_medical_tokenizer = env_use_med_tok.lower() not in {"0", "false", "no"}
+
+        env_exceptions = os.getenv("OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS")
+        if env_exceptions:
+            self.medical_tokenizer_exceptions = [item.strip() for item in env_exceptions.split(",") if item.strip()]
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> "OpenMedConfig":
@@ -62,6 +76,8 @@ class OpenMedConfig:
             "hf_token": self.hf_token,
             "log_level": self.log_level,
             "timeout": self.timeout,
+            "use_medical_tokenizer": self.use_medical_tokenizer,
+            "medical_tokenizer_exceptions": self.medical_tokenizer_exceptions,
         }
 
 

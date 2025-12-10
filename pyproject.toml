@@ -46,7 +46,8 @@ dev = [
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
-  "accelerate>=0.29"
+  "accelerate>=0.29",
+  "tokenizers>=0.15"
 ]
 
 gliner = [
