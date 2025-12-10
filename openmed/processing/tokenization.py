@@ -20,6 +20,18 @@ except (ImportError, OSError):
 logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
+DEFAULT_MEDICAL_EXCEPTIONS = [
+    "COVID-19",
+    "SARS-CoV-2",
+    "IL-6",
+    "IL-2",
+    "TNF-alpha",
+    "BCR-ABL1",
+    "CAR-T",
+    "post-CAR-T",
+    "t(8;21)",
+    "t(15;17)",
+]
 
 def build_medical_pretokenizer(exceptions: Optional[Iterable[str]] = None):
     """Return a safe Bert-style pretokenizer. Exceptions are handled via added tokens."""
@@ -42,16 +54,19 @@ def apply_medical_pretokenizer(tokenizer: Any, exceptions: Optional[Iterable[str
     backend = getattr(tokenizer, "_tokenizer", None)
     if backend is None:
         return False
-    pre_tok = build_medical_pretokenizer(exceptions=exceptions)
+    merged_exceptions = list(DEFAULT_MEDICAL_EXCEPTIONS)
+    if exceptions:
+        merged_exceptions.extend(list(exceptions))
+
+    pre_tok = build_medical_pretokenizer(exceptions=merged_exceptions)
     if pre_tok is None:
         return False
     try:
         backend.pre_tokenizer = pre_tok  # type: ignore[attr-defined]
-        if exceptions:
-            try:
-                tokenizer.add_tokens(list(exceptions), special_tokens=False)
-            except Exception:
-                pass
+        try:
+            tokenizer.add_tokens(merged_exceptions, special_tokens=False)
+        except Exception:
+            pass
         return True
     except Exception as exc:
         logger.warning("Medical pre-tokenizer not applied: %s", exc)
