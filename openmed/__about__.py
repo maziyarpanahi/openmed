@@ -1,3 +1,3 @@
 """Version information for OpenMed."""
 
-__version__ = "0.2.1-rc1"
+__version__ = "0.2.1"
