@@ -12,7 +12,8 @@ pytestmark = pytest.mark.skipif(not TOKENIZERS_AVAILABLE, reason="tokenizers pac
 def test_medical_pretokenizer_merges_hyphenated_terms():
     pre = build_medical_pretokenizer()
     splits = pre.pre_tokenize_str("COVID-19+ pt post-CAR-T on IL-6-mediated therapy.")
-    # Ensure it runs and returns tuples
+    surface = [t for t, _ in splits]
+    assert "COVID-19" in surface or "COVID" in surface  # BertPreTokenizer may keep or split
     assert all(isinstance(tok, str) and isinstance(span, tuple) for tok, span in splits)
 
 
