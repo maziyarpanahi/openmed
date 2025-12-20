@@ -52,8 +52,8 @@ for entity in result.entities:
 
 ### Medical-aware tokenizer (default)
 
-- Fast Rust-backed pre-tokenizer applied automatically to Hugging Face *fast* tokenizers.
-- Supports biomedical exceptions (e.g., `COVID-19`, `IL-6`, `CAR-T`) injected as added tokens to reduce unwanted splits.
+- Medical-friendly tokenization used for output remapping and grouping (model tokenization remains unchanged).
+- Helps produce cleaner spans for clinical patterns (e.g., `COVID-19`, `IL-6-mediated`, `CAR-T`, `t(8;21)`).
 - Configurable via `OpenMedConfig.use_medical_tokenizer` (default `True`) and optional `medical_tokenizer_exceptions` for additional protected terms. Environment overrides: `OPENMED_USE_MEDICAL_TOKENIZER=0` to disable, `OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS="MY-NEW-TERM,ABC-123"`.
 
 ## Installation
