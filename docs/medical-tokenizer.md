@@ -1,8 +1,13 @@
 # Medical-Aware Tokenizer
 
-OpenMed can apply a medical-aware pre-tokenizer to Hugging Face **fast** tokenizers. It uses the fast `tokenizers`
-backend (Bert-style) and lets you inject domain exceptions (e.g., `COVID-19`, `IL-6`, `CAR-T`) as added tokens so they
-stay intact when possible.
+OpenMed supports a medical-aware tokenizer **for output remapping**:
+
+1) OpenMed runs the model using the model’s own Hugging Face tokenizer (WordPiece/BPE), unchanged.
+2) OpenMed tokenizes the same text using a medical-friendly tokenizer (span tokens with offsets).
+3) Model predictions (char spans) are remapped onto the medical tokens and merged, producing cleaner entities for UI and
+   downstream pipelines.
+
+This avoids imposing new tokens/vocabulary on the model and keeps inference behavior stable.
 
 ## Python usage
 
@@ -46,10 +51,10 @@ Without flags, the CLI inherits the config file and defaults to the medical toke
 
 ## How it works
 
-- Built with `tokenizers` (Rust) Bert-style pre-tokenizer; exceptions are injected as added tokens to reduce splitting of
-  critical biomedical terms.
-- Falls back silently to the model’s native tokenizer if `tokenizers` is unavailable or the tokenizer is a slow (Python)
-  variant.
+- Uses `medical_tokenize(...)` to produce stable clinical tokens with character offsets (no model involvement).
+- Uses `remap_predictions_to_tokens(...)` to project model spans back to those tokens and merge adjacent tokens with the
+  same label.
+- Does **not** modify the model tokenizer, model vocab, or embeddings.
 
 ## Examples
 
@@ -57,6 +62,7 @@ See `examples/custom_tokenizer/` for runnable scripts:
 
 - `custom_tokenize_alignment.py` – custom tokens -> model -> back-map labels.
 - `eval_tokenization_comparison.py` – tables comparing WordPiece vs spaCy vs medical pre-tokenizer on hard clinical text.
+- `compare_medical_remap.py` – side-by-side comparison of OpenMed outputs with remapping on/off.
 - `notebooks/Medical_Tokenizer_Benchmark.ipynb` – quick latency + entity stability check with tokenizer on/off.
 
 Run them after installing `examples/custom_tokenizer/requirements.txt`.

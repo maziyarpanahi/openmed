@@ -15,7 +15,13 @@ from .indexing import (
     load_index,
 )
 from .exceptions import MissingDependencyError
-from .families import ModelFamily, ensure_gliner_available, is_gliner_available
+from .families import (
+    ModelFamily,
+    ensure_gliner_available,
+    is_gliner_available,
+    ensure_gliner2_available,
+    is_gliner2_available,
+)
 from .labels import (
     available_domains,
     get_default_labels,
@@ -36,6 +42,8 @@ __all__ = [
     "MissingDependencyError",
     "ensure_gliner_available",
     "is_gliner_available",
+    "ensure_gliner2_available",
+    "is_gliner2_available",
     "load_default_label_map",
     "reload_default_label_map",
     "get_default_labels",

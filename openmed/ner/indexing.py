@@ -171,6 +171,10 @@ FAMILY_HINTS = {
     "zero-shot": ModelFamily.GLINER,
     "zeroshot": ModelFamily.GLINER,
     "biomed": ModelFamily.GLINER,
+    "gliner2": ModelFamily.GLINER2,
+    "fastino": ModelFamily.GLINER2,
+    "fastgliner": ModelFamily.GLINER2,
+    "v2": ModelFamily.GLINER2,
 }
 
 LANGUAGE_HINTS = {

@@ -10,6 +10,7 @@ class ModelFamily(str, Enum):
     """Enumeration of supported model families."""
 
     GLINER = "gliner"
+    GLINER2 = "gliner2"
     OTHER = "other"
 
 

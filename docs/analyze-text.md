@@ -52,6 +52,8 @@ When you need full-control over tokenizer behaviour:
   unlimited (0) so HF pipelines accept longer inputs.
 - Provide `batch_size` or `num_workers` in `pipeline_kwargs` and they will be forwarded to the pipeline call but not to the
   constructor.
+- Enable medical token remapping with `OpenMedConfig(use_medical_tokenizer=True)` to group outputs onto clinical-friendly
+  tokens without changing the model tokenizer.
 
 ## Streaming multiple texts
 

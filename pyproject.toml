@@ -63,6 +63,11 @@ docs = [
   "pymdown-extensions>=10.8",
 ]
 
+cli = [
+  "typer>=0.12",
+  "rich>=13.9",
+]
+
 [tool.hatch.build]
 include = [
   "openmed/**",
