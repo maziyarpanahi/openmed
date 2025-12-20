@@ -28,8 +28,8 @@ pip install -e .   # from repo root to get openmed package
 # Tokenization comparison with tables
 .venv-openmed/bin/python examples/custom_tokenizer/eval_tokenization_comparison.py
 
-# Toggle medical tokenizer via CLI (uses config defaults otherwise)
-.venv-openmed/bin/openmed analyze --text "COVID-19 patient on IL-6 inhibitor" --no-medical-tokenizer
+# Toggle medical token remapping via CLI (uses config defaults otherwise)
+openmed analyze --text "COVID-19 patient on IL-6 inhibitor" --no-medical-tokenizer
 ```
 
 ## Notes
