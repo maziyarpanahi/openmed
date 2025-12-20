@@ -138,19 +138,19 @@ def _add_analyze_command(subparsers: argparse._SubParsersAction) -> None:
         dest="use_medical_tokenizer",
         action="store_true",
         default=None,
-        help="Force-enable the medical-aware pre-tokenizer (default from config).",
+        help="Force-enable medical token remapping in the output (default from config).",
     )
     analyze_parser.add_argument(
         "--no-medical-tokenizer",
         dest="use_medical_tokenizer",
         action="store_false",
         default=None,
-        help="Disable the medical-aware pre-tokenizer and fall back to the model default.",
+        help="Disable medical token remapping in the output and fall back to raw model spans.",
     )
     analyze_parser.add_argument(
         "--medical-tokenizer-exceptions",
         default=None,
-        help="Comma-separated extra terms to keep intact (e.g., MY-DRUG-123,ABC-001).",
+        help="Comma-separated extra terms to keep intact when remapping (e.g., MY-DRUG-123,ABC-001).",
     )
     analyze_parser.set_defaults(handler=_handle_analyze)
 
