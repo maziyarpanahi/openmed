@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+import logging
 from typing import Any, Dict, Optional, Union, List
 
 from .__about__ import __version__
@@ -37,6 +38,8 @@ from .utils.validation import (
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(
     r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE
 )
+
+logger = logging.getLogger(__name__)
 
 def list_models(
     *,
@@ -410,6 +413,29 @@ def analyze_text(
     if sentence_detection:
         base_metadata.setdefault("sentence_count", len(processed_segments))
         base_metadata.setdefault("sentence_language", sentence_language)
+
+    # Optional: remap model spans onto medical-friendly tokens (no change to model tokenization).
+    active_config = loader.config if hasattr(loader, "config") else config
+    if active_config is not None and getattr(active_config, "use_medical_tokenizer", False):
+        try:
+            from .processing.tokenization import (
+                medical_tokenize,
+                remap_predictions_to_tokens,
+                DEFAULT_MEDICAL_EXCEPTIONS,
+            )
+
+            extra_exceptions = getattr(active_config, "medical_tokenizer_exceptions", None) or []
+            token_exceptions = list(DEFAULT_MEDICAL_EXCEPTIONS) + list(extra_exceptions)
+            medical_tokens = medical_tokenize(validated_text, exceptions=token_exceptions)
+            flattened_predictions = remap_predictions_to_tokens(
+                flattened_predictions,
+                validated_text,
+                medical_tokens,
+            )
+            base_metadata.setdefault("medical_tokenizer", True)
+        except Exception as exc:  # pragma: no cover
+            logger.warning("Failed to remap predictions to medical tokens: %s", exc)
+            base_metadata.setdefault("medical_tokenizer", False)
 
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,

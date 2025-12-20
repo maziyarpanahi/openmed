@@ -1,5 +1,6 @@
 """Tokenization utilities for OpenMed."""
 
+from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Tuple, Union, Iterable
 import logging
 import re
@@ -9,13 +10,6 @@ try:
     HF_AVAILABLE = True
 except (ImportError, OSError):
     HF_AVAILABLE = False
-
-try:
-    from tokenizers import pre_tokenizers
-    from tokenizers.pre_tokenizers import Split, Sequence as PreSeq
-    TOKENIZERS_AVAILABLE = True
-except (ImportError, OSError):
-    TOKENIZERS_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -33,44 +27,146 @@ DEFAULT_MEDICAL_EXCEPTIONS = [
     "t(15;17)",
 ]
 
-def build_medical_pretokenizer(exceptions: Optional[Iterable[str]] = None):
-    """Return a safe Bert-style pretokenizer. Exceptions are handled via added tokens."""
-    if not TOKENIZERS_AVAILABLE:
-        logger.warning("tokenizers package not available; skipping medical pretokenizer")
-        return None
-    try:
-        return pre_tokenizers.BertPreTokenizer()
-    except AttributeError:  # pragma: no cover - older tokenizers versions
-        return pre_tokenizers.Whitespace()
+_MEDICAL_TOKEN_PATTERN = re.compile(
+    r"\d+(?:\.\d+)?(?:°?[CFK])?"  # numbers/decimals with optional temperature unit (39.8C)
+    r"|[A-Za-z]+(?:-[A-Za-z0-9]+)*"  # words, allowing hyphen chains (IL-6-mediated, COVID-19)
+    r"|[A-Za-z0-9]+(?:/[A-Za-z0-9µ]+)+"  # ratios like mg/kg, mmHg/...
+    r"|[^ \t\r\n]"  # any other non-space char as its own token
+)
 
 
-def apply_medical_pretokenizer(tokenizer: Any, exceptions: Optional[Iterable[str]] = None) -> bool:
-    """Attach the medical pretokenizer to a Hugging Face fast tokenizer.
+@dataclass(frozen=True)
+class SpanToken:
+    text: str
+    start: int
+    end: int
 
-    Returns True if applied, False otherwise.
+
+def medical_tokenize(
+    text: str,
+    *,
+    exceptions: Optional[Iterable[str]] = None,
+) -> List[SpanToken]:
+    """Tokenize clinical text into stable span tokens for output remapping.
+
+    This tokenizer is **not** used to create model input ids. It is used to produce
+    user-facing token boundaries and to remap model predictions back onto medical-friendly
+    spans.
     """
-    if not TOKENIZERS_AVAILABLE:
-        return False
-    backend = getattr(tokenizer, "_tokenizer", None)
-    if backend is None:
-        return False
-    merged_exceptions = list(DEFAULT_MEDICAL_EXCEPTIONS)
-    if exceptions:
-        merged_exceptions.extend(list(exceptions))
+    exceptions_set = {e for e in (exceptions or []) if e}
+    if not exceptions_set:
+        return [SpanToken(m.group(0), m.start(), m.end()) for m in _MEDICAL_TOKEN_PATTERN.finditer(text)]
 
-    pre_tok = build_medical_pretokenizer(exceptions=merged_exceptions)
-    if pre_tok is None:
-        return False
-    try:
-        backend.pre_tokenizer = pre_tok  # type: ignore[attr-defined]
-        try:
-            tokenizer.add_tokens(merged_exceptions, special_tokens=False)
-        except Exception:
-            pass
-        return True
-    except Exception as exc:
-        logger.warning("Medical pre-tokenizer not applied: %s", exc)
-        return False
+    protected: List[Tuple[int, int]] = []
+    for exc in sorted(exceptions_set, key=len, reverse=True):
+        start = 0
+        while True:
+            idx = text.find(exc, start)
+            if idx == -1:
+                break
+            span = (idx, idx + len(exc))
+            if any(not (span[1] <= a or span[0] >= b) for a, b in protected):
+                start = idx + 1
+                continue
+            protected.append(span)
+            start = idx + len(exc)
+
+    if not protected:
+        return [SpanToken(m.group(0), m.start(), m.end()) for m in _MEDICAL_TOKEN_PATTERN.finditer(text)]
+
+    protected.sort()
+    tokens: List[SpanToken] = []
+    cursor = 0
+    for s, e in protected:
+        if cursor < s:
+            for m in _MEDICAL_TOKEN_PATTERN.finditer(text[cursor:s]):
+                tokens.append(SpanToken(m.group(0), m.start() + cursor, m.end() + cursor))
+        tokens.append(SpanToken(text[s:e], s, e))
+        cursor = e
+    if cursor < len(text):
+        for m in _MEDICAL_TOKEN_PATTERN.finditer(text[cursor:]):
+            tokens.append(SpanToken(m.group(0), m.start() + cursor, m.end() + cursor))
+
+    return [t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start]
+
+
+def remap_predictions_to_tokens(
+    predictions: List[Dict[str, Any]],
+    text: str,
+    tokens: List[SpanToken],
+    *,
+    gap: int = 1,
+) -> List[Dict[str, Any]]:
+    """Remap model predictions (char spans) onto custom tokens and merge contiguous tokens.
+
+    Returns a list of prediction dicts compatible with OutputFormatter.
+    """
+    if not predictions or not tokens:
+        return predictions
+
+    token_labels: List[Optional[str]] = [None] * len(tokens)
+    token_scores: List[float] = [0.0] * len(tokens)
+    token_meta: List[Optional[Dict[str, Any]]] = [None] * len(tokens)
+
+    for idx, tok in enumerate(tokens):
+        best_label: Optional[str] = None
+        best_score = -1.0
+        best_meta: Optional[Dict[str, Any]] = None
+        for pred in predictions:
+            start = pred.get("start")
+            end = pred.get("end")
+            if not (isinstance(start, int) and isinstance(end, int)):
+                continue
+            if end <= tok.start or start >= tok.end:
+                continue
+            raw_label = pred.get("entity_group") or pred.get("entity") or ""
+            if not raw_label:
+                continue
+            clean = str(raw_label).replace("B-", "").replace("I-", "")
+            score = float(pred.get("score", 0.0) or 0.0)
+            if score > best_score:
+                best_label = clean
+                best_score = score
+                meta = pred.get("metadata")
+                best_meta = dict(meta) if isinstance(meta, dict) else None
+        if best_label is not None:
+            token_labels[idx] = best_label
+            token_scores[idx] = best_score
+            token_meta[idx] = best_meta
+
+    remapped: List[Dict[str, Any]] = []
+    i = 0
+    while i < len(tokens):
+        label = token_labels[i]
+        if label is None:
+            i += 1
+            continue
+        start = tokens[i].start
+        end = tokens[i].end
+        scores = [token_scores[i]]
+        meta = token_meta[i] or {}
+        j = i + 1
+        while j < len(tokens) and token_labels[j] == label and tokens[j].start <= end + gap:
+            end = tokens[j].end
+            scores.append(token_scores[j])
+            if not meta and token_meta[j]:
+                meta = token_meta[j] or {}
+            j += 1
+
+        remapped.append(
+            {
+                "start": start,
+                "end": end,
+                "score": sum(scores) / len(scores),
+                "entity_group": label,
+                "word": text[start:end],
+                "metadata": meta,
+            }
+        )
+        i = j
+
+    return remapped
+
 
 
 def _is_reasonable_length(value: Optional[int], threshold: int = _UNSET_MAX_LENGTH_SENTINEL) -> bool:

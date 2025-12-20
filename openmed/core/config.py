@@ -40,10 +40,10 @@ class OpenMedConfig:
     # Model loading timeout
     timeout: int = 300
 
-    # Medical-aware pre-tokenizer toggle (fast tokenizers only)
+    # Medical-aware tokenizer toggle (output remapping only; does not change model tokenization)
     use_medical_tokenizer: bool = True
 
-    # Optional list of hyphenated/clinical exceptions to keep intact
+    # Optional list of terms to keep intact when remapping output onto medical tokens
     medical_tokenizer_exceptions: Optional[List[str]] = None
 
     def __post_init__(self):

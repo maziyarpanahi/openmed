@@ -10,7 +10,12 @@ from openmed.core.config import OpenMedConfig, get_config
 from openmed.core.models import ModelLoader
 
 from .exceptions import MissingDependencyError
-from .families import ModelFamily, ensure_gliner_available
+from .families import (
+    ModelFamily,
+    ensure_gliner_available,
+    ensure_gliner2_available,
+    load_gliner2_handle,
+)
 from .families.gliner import GLiNERHandle, load_gliner_handle
 from .indexing import DEFAULT_INDEX_PATH, ModelIndex, ModelRecord, load_index
 from .labels import get_default_labels
@@ -79,6 +84,13 @@ def infer(
 
     if record.family == ModelFamily.GLINER.value:
         entities = _run_gliner_inference(
+            record,
+            request,
+            resolved_labels,
+            config=config,
+        )
+    elif record.family == ModelFamily.GLINER2.value:
+        entities = _run_gliner2_inference(
             record,
             request,
             resolved_labels,
@@ -153,6 +165,36 @@ def _run_gliner_inference(
     device = effective_config.device
 
     handle = load_gliner_handle(
+        record.id,
+        cache_dir=cache_dir,
+        token=token,
+        device=device,
+    )
+
+    raw_entities = handle.predict_entities(
+        request.text,
+        labels=labels,
+        threshold=request.threshold,
+        flat_ner=True,
+    )
+
+    return [_convert_gliner_entity(item) for item in raw_entities]
+
+
+def _run_gliner2_inference(
+    record: ModelRecord,
+    request: NerRequest,
+    labels: List[str],
+    *,
+    config: Optional[OpenMedConfig],
+) -> List[Entity]:
+    ensure_gliner2_available()
+    effective_config = config or get_config()
+    token = effective_config.hf_token
+    cache_dir = effective_config.cache_dir
+    device = effective_config.device
+
+    handle = load_gliner2_handle(
         record.id,
         cache_dir=cache_dir,
         token=token,
