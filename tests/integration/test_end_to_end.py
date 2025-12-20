@@ -59,7 +59,13 @@ class TestEndToEndAnalysis:
         mock_pipeline.return_value = mock_pipeline_instance
 
         # Run analysis
-        result = analyze_text(sample_text, model_name="medical-ner")
+        from openmed.core.config import OpenMedConfig
+
+        result = analyze_text(
+            sample_text,
+            model_name="medical-ner",
+            config=OpenMedConfig(use_medical_tokenizer=False),
+        )
 
         # Verify result structure
         assert hasattr(result, 'text')
