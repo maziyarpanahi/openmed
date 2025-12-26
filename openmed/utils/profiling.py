@@ -252,7 +252,6 @@ def enable_profiling() -> Profiler:
 
 def disable_profiling() -> None:
     """Disable global profiling."""
-    global _global_profiler
     if _global_profiler is not None:
         _global_profiler.stop()
         _global_profiler.enabled = False
