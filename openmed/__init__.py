@@ -23,11 +23,29 @@ from .processing import (
     TokenizationHelper,
     OutputFormatter,
     format_predictions,
+    BatchProcessor,
+    BatchItem,
+    BatchItemResult,
+    BatchResult,
+    process_batch,
 )
 from .processing import sentences as sentence_utils
 from .processing.advanced_ner import AdvancedNERProcessor, create_advanced_processor
 from .processing.outputs import PredictionResult
-from .utils import setup_logging, get_logger, validate_input, validate_model_name
+from .utils import (
+    setup_logging,
+    get_logger,
+    validate_input,
+    validate_model_name,
+    Profiler,
+    ProfileReport,
+    Timer,
+    enable_profiling,
+    disable_profiling,
+    get_profile_report,
+    profile,
+    timed,
+)
 from .utils.validation import (
     validate_confidence_threshold,
     validate_output_format,
@@ -485,6 +503,11 @@ __all__ = [
     "TokenizationHelper",
     "OutputFormatter",
     "format_predictions",
+    "BatchProcessor",
+    "BatchItem",
+    "BatchItemResult",
+    "BatchResult",
+    "process_batch",
     "AdvancedNERProcessor",
     "create_advanced_processor",
     "PredictionResult",
@@ -504,4 +527,13 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    # Profiling utilities
+    "Profiler",
+    "ProfileReport",
+    "Timer",
+    "enable_profiling",
+    "disable_profiling",
+    "get_profile_report",
+    "profile",
+    "timed",
 ]
