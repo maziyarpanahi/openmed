@@ -15,6 +15,12 @@ from ..core.config import (
     load_config_from_file,
     save_config_to_file,
     resolve_config_path,
+    list_profiles,
+    get_profile,
+    save_profile,
+    delete_profile,
+    load_config_with_profile,
+    PROFILE_PRESETS,
 )
 from ..core.model_registry import get_model_info
 
@@ -22,17 +28,19 @@ from ..core.model_registry import get_model_info
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
 _LIST_MODELS = None
+_BATCH_PROCESSOR = None
 
 # Exposed for unit tests to patch without importing heavy modules eagerly.
 analyze_text = None
 get_model_max_length = None
 list_models = None
+BatchProcessor = None
 
 
 def _lazy_api():
-    global _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS
+    global _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS, _BATCH_PROCESSOR
 
-    global analyze_text, get_model_max_length, list_models
+    global analyze_text, get_model_max_length, list_models, BatchProcessor
 
     if analyze_text is not None and analyze_text is not _ANALYZE_TEXT:
         _ANALYZE_TEXT = analyze_text
@@ -67,7 +75,18 @@ def _lazy_api():
 
             _LIST_MODELS = list_models = _list
 
-    return _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS
+    if BatchProcessor is not None and BatchProcessor is not _BATCH_PROCESSOR:
+        _BATCH_PROCESSOR = BatchProcessor
+
+    if _BATCH_PROCESSOR is None:
+        if BatchProcessor is not None:
+            _BATCH_PROCESSOR = BatchProcessor
+        else:
+            from .. import BatchProcessor as _batch
+
+            _BATCH_PROCESSOR = BatchProcessor = _batch
+
+    return _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS, _BATCH_PROCESSOR
 
 Handler = Callable[[argparse.Namespace], int]
 
@@ -87,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     _add_analyze_command(subparsers)
+    _add_batch_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     return parser
@@ -155,6 +175,85 @@ def _add_analyze_command(subparsers: argparse._SubParsersAction) -> None:
     analyze_parser.set_defaults(handler=_handle_analyze)
 
 
+def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
+    batch_parser = subparsers.add_parser(
+        "batch", help="Process multiple texts or files in batch mode."
+    )
+    batch_parser.add_argument(
+        "--model",
+        default="disease_detection_superclinical",
+        help="Model registry key or Hugging Face identifier.",
+    )
+
+    input_group = batch_parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
+        "--input-dir",
+        type=Path,
+        help="Directory containing text files to process.",
+    )
+    input_group.add_argument(
+        "--input-files",
+        nargs="+",
+        type=Path,
+        help="List of text files to process.",
+    )
+    input_group.add_argument(
+        "--texts",
+        nargs="+",
+        help="List of text strings to process.",
+    )
+
+    batch_parser.add_argument(
+        "--pattern",
+        default="*.txt",
+        help="Glob pattern for matching files in directory (default: *.txt).",
+    )
+    batch_parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Search recursively in directory.",
+    )
+    batch_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output file for results (JSON format).",
+    )
+    batch_parser.add_argument(
+        "--output-format",
+        choices=["json", "summary"],
+        default="summary",
+        help="Output format: json (full results) or summary (default).",
+    )
+    batch_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=None,
+        help="Minimum confidence score for predictions.",
+    )
+    batch_parser.add_argument(
+        "--group-entities",
+        action="store_true",
+        help="Group adjacent entities of the same label.",
+    )
+    batch_parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        default=True,
+        help="Continue processing on individual item errors (default: true).",
+    )
+    batch_parser.add_argument(
+        "--stop-on-error",
+        action="store_true",
+        help="Stop processing on first error.",
+    )
+    batch_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress output.",
+    )
+    batch_parser.set_defaults(handler=_handle_batch)
+
+
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser(
         "models", help="Discover OpenMed models."
@@ -187,6 +286,10 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     config_sub = config_parser.add_subparsers(dest="config_command")
 
     config_show = config_sub.add_parser("show", help="Display active configuration.")
+    config_show.add_argument(
+        "--profile",
+        help="Show configuration with a specific profile applied.",
+    )
     config_show.set_defaults(handler=_handle_config_show)
 
     config_set = config_sub.add_parser("set", help="Persist a configuration value.")
@@ -202,6 +305,36 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
         help="Clear the value for the given key.",
     )
     config_set.set_defaults(handler=_handle_config_set)
+
+    # Profile management subcommands
+    profile_list = config_sub.add_parser(
+        "profiles", help="List available configuration profiles."
+    )
+    profile_list.set_defaults(handler=_handle_profile_list)
+
+    profile_show = config_sub.add_parser(
+        "profile-show", help="Show settings for a specific profile."
+    )
+    profile_show.add_argument("profile_name", help="Name of the profile to show.")
+    profile_show.set_defaults(handler=_handle_profile_show)
+
+    profile_use = config_sub.add_parser(
+        "profile-use", help="Apply a profile to the current configuration."
+    )
+    profile_use.add_argument("profile_name", help="Name of the profile to use.")
+    profile_use.set_defaults(handler=_handle_profile_use)
+
+    profile_save = config_sub.add_parser(
+        "profile-save", help="Save current configuration as a named profile."
+    )
+    profile_save.add_argument("profile_name", help="Name for the new profile.")
+    profile_save.set_defaults(handler=_handle_profile_save)
+
+    profile_delete = config_sub.add_parser(
+        "profile-delete", help="Delete a custom profile."
+    )
+    profile_delete.add_argument("profile_name", help="Name of the profile to delete.")
+    profile_delete.set_defaults(handler=_handle_profile_delete)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -264,7 +397,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Failed to read {args.input_file}: {exc}\n")
             return 1
 
-    analyze_text, _, _ = _lazy_api()
+    analyze_text, _, _, _ = _lazy_api()
 
     result = analyze_text(
         text,
@@ -286,10 +419,86 @@ def _handle_analyze(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_batch(args: argparse.Namespace) -> int:
+    config = _load_and_apply_config(args)
+
+    _, _, _, BatchProcessor = _lazy_api()
+
+    continue_on_error = not args.stop_on_error if args.stop_on_error else True
+
+    processor = BatchProcessor(
+        model_name=args.model,
+        config=config,
+        confidence_threshold=args.confidence_threshold or 0.0,
+        group_entities=args.group_entities,
+        continue_on_error=continue_on_error,
+    )
+
+    def progress_callback(current: int, total: int, result: Any) -> None:
+        if args.quiet:
+            return
+        status = "OK" if result and result.success else "FAILED"
+        item_id = result.id if result else "?"
+        sys.stderr.write(f"\r[{current}/{total}] {item_id}: {status}")
+        sys.stderr.flush()
+
+    try:
+        if args.texts:
+            result = processor.process_texts(
+                args.texts,
+                progress_callback=progress_callback if not args.quiet else None,
+            )
+        elif args.input_files:
+            result = processor.process_files(
+                args.input_files,
+                progress_callback=progress_callback if not args.quiet else None,
+            )
+        elif args.input_dir:
+            if not args.input_dir.is_dir():
+                sys.stderr.write(f"Not a directory: {args.input_dir}\n")
+                return 1
+            result = processor.process_directory(
+                args.input_dir,
+                pattern=args.pattern,
+                recursive=args.recursive,
+                progress_callback=progress_callback if not args.quiet else None,
+            )
+        else:
+            sys.stderr.write("No input provided.\n")
+            return 1
+
+    except Exception as exc:
+        sys.stderr.write(f"\nBatch processing failed: {exc}\n")
+        return 1
+
+    if not args.quiet:
+        sys.stderr.write("\n")
+
+    if args.output_format == "json":
+        output = json.dumps(result.to_dict(), indent=2)
+    else:
+        output = result.summary()
+
+    if args.output:
+        try:
+            args.output.write_text(
+                json.dumps(result.to_dict(), indent=2) if args.output_format == "json" else output,
+                encoding="utf-8",
+            )
+            sys.stdout.write(f"Results written to: {args.output}\n")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write output: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(f"{output}\n")
+
+    return 0 if result.failed_items == 0 else 1
+
+
 def _handle_models_list(args: argparse.Namespace) -> int:
     config = _load_and_apply_config(args)
 
-    _, _, list_models = _lazy_api()
+    _, _, list_models, _ = _lazy_api()
 
     try:
         models = list_models(
@@ -314,7 +523,7 @@ def _handle_models_info(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Unknown model key: {args.model_key}\n")
         return 1
 
-    _, get_model_max_length, _ = _lazy_api()
+    _, get_model_max_length, _, _ = _lazy_api()
 
     max_length = get_model_max_length(args.model_key, config=config)
 
@@ -337,12 +546,23 @@ def _handle_models_info(args: argparse.Namespace) -> int:
 
 def _handle_config_show(args: argparse.Namespace) -> int:
     config_path = resolve_config_path(getattr(args, "config_path", None))
+    profile_name = getattr(args, "profile", None)
+
     try:
         config = load_config_from_file(config_path)
         source = str(config_path)
     except FileNotFoundError:
         config = get_config()
         source = "defaults (not yet saved)"
+
+    # Apply profile if specified
+    if profile_name:
+        try:
+            config = config.with_profile(profile_name)
+            source = f"{source} (with profile: {profile_name})"
+        except ValueError as e:
+            sys.stderr.write(f"{e}\n")
+            return 1
 
     payload = config.to_dict()
     payload["_source"] = source
@@ -399,6 +619,101 @@ def _coerce_value(key: str, value: str) -> Any:
         except ValueError:
             raise ValueError("timeout must be an integer") from None
     return value
+
+
+# ---------------------------------------------------------------------------
+# Profile Handlers
+# ---------------------------------------------------------------------------
+
+
+def _handle_profile_list(args: argparse.Namespace) -> int:
+    profiles = list_profiles()
+
+    sys.stdout.write("Available profiles:\n")
+    for profile in profiles:
+        marker = " (built-in)" if profile in PROFILE_PRESETS else " (custom)"
+        sys.stdout.write(f"  - {profile}{marker}\n")
+
+    sys.stdout.write(f"\nTotal: {len(profiles)} profiles\n")
+    sys.stdout.write("\nUse 'openmed config profile-show <name>' to view settings.\n")
+    return 0
+
+
+def _handle_profile_show(args: argparse.Namespace) -> int:
+    profile_name = args.profile_name
+
+    try:
+        settings = get_profile(profile_name)
+    except ValueError as e:
+        sys.stderr.write(f"{e}\n")
+        return 1
+
+    marker = "(built-in)" if profile_name in PROFILE_PRESETS else "(custom)"
+    sys.stdout.write(f"Profile: {profile_name} {marker}\n")
+    sys.stdout.write(f"{json.dumps(settings, indent=2)}\n")
+    return 0
+
+
+def _handle_profile_use(args: argparse.Namespace) -> int:
+    profile_name = args.profile_name
+    config_path = resolve_config_path(getattr(args, "config_path", None))
+
+    try:
+        config = load_config_from_file(config_path)
+    except FileNotFoundError:
+        config = get_config()
+
+    try:
+        new_config = config.with_profile(profile_name)
+    except ValueError as e:
+        sys.stderr.write(f"{e}\n")
+        return 1
+
+    set_config(new_config)
+    saved_path = save_config_to_file(new_config, config_path)
+
+    sys.stdout.write(f"Applied profile '{profile_name}' to {saved_path}\n")
+    return 0
+
+
+def _handle_profile_save(args: argparse.Namespace) -> int:
+    profile_name = args.profile_name
+    config_path = resolve_config_path(getattr(args, "config_path", None))
+
+    # Cannot overwrite built-in profiles
+    if profile_name in PROFILE_PRESETS:
+        sys.stderr.write(f"Cannot overwrite built-in profile: {profile_name}\n")
+        return 1
+
+    try:
+        config = load_config_from_file(config_path)
+    except FileNotFoundError:
+        config = get_config()
+
+    # Get settings without profile-specific keys
+    settings = config.to_dict()
+    settings.pop("profile", None)  # Don't save profile reference
+
+    saved_path = save_profile(profile_name, settings)
+    sys.stdout.write(f"Saved profile '{profile_name}' to {saved_path}\n")
+    return 0
+
+
+def _handle_profile_delete(args: argparse.Namespace) -> int:
+    profile_name = args.profile_name
+
+    try:
+        deleted = delete_profile(profile_name)
+    except ValueError as e:
+        sys.stderr.write(f"{e}\n")
+        return 1
+
+    if deleted:
+        sys.stdout.write(f"Deleted profile: {profile_name}\n")
+        return 0
+    else:
+        sys.stderr.write(f"Profile not found: {profile_name}\n")
+        return 1
 
 
 if __name__ == "__main__":  # pragma: no cover

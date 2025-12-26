@@ -1,7 +1,7 @@
 # CLI & Automation
 
-The `openmed` console script mirrors the Python APIs so you can analyze snippets, inspect registry metadata, and tweak
-configuration without writing code. It is perfect for demos, notebooks, or CI smoke tests.
+The `openmed` console script mirrors the Python APIs so you can analyze snippets, process batches, inspect registry metadata,
+manage profiles, and tweak configuration without writing code. It is perfect for demos, notebooks, or CI smoke tests.
 
 ## Installation
 
@@ -12,6 +12,22 @@ uv pip install .
 # or pip install openmed
 openmed --help
 ```
+
+## Commands Overview
+
+| Command | Description |
+|---------|-------------|
+| `analyze` | Analyze single text or file |
+| `batch` | Process multiple texts or files |
+| `models list` | List available models |
+| `models info` | Show model metadata |
+| `config show` | Display configuration |
+| `config set` | Set configuration value |
+| `config profiles` | List available profiles |
+| `config profile-show` | Show profile settings |
+| `config profile-use` | Apply a profile |
+| `config profile-save` | Save current config as profile |
+| `config profile-delete` | Delete custom profile |
 
 ## Analyze text from the terminal
 
@@ -70,5 +86,54 @@ openmed config set hf_token xxx --unset    # remove a setting
 - Use `uv run` or `pipx run` to avoid polluting system environments when scripting release pipelines.
 - In GitHub Actions, you can execute the CLI after installing `.[hf]` to ensure models load before publishing.
 
-For more complex workflows (batch jobs, structured logging, streaming), prefer the Python APIs covered in
+For more complex workflows (structured logging, streaming), prefer the Python APIs covered in
 [Analyze Text Helper](./analyze-text.md) and [ModelLoader & Pipelines](./model-loader.md).
+
+## Batch processing
+
+Process multiple texts or files in one command:
+
+```bash
+# Process inline texts
+openmed batch --texts "Text one" "Text two" "Text three" --model disease_detection_superclinical
+
+# Process files
+openmed batch --input-files note1.txt note2.txt --output-format json
+
+# Process a directory
+openmed batch --input-dir /path/to/notes --pattern "*.txt" --recursive
+
+# Save results to file
+openmed batch --input-dir ./notes --output results.json --output-format json
+
+# Quiet mode (suppress progress)
+openmed batch --input-dir ./notes --quiet
+```
+
+See [Batch Processing](./batch-processing.md) for full documentation.
+
+## Profile management
+
+Manage configuration profiles from the command line:
+
+```bash
+# List all available profiles
+openmed config profiles
+
+# Show settings for a profile
+openmed config profile-show dev
+
+# Apply a profile to your configuration
+openmed config profile-use prod
+
+# Show config with a profile applied (without saving)
+openmed config show --profile dev
+
+# Save current configuration as a new profile
+openmed config profile-save myprofile
+
+# Delete a custom profile
+openmed config profile-delete myprofile
+```
+
+See [Configuration Profiles](./profiles.md) for full documentation.

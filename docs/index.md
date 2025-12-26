@@ -45,12 +45,15 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
 3. Core guides:
    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
+   - [Batch Processing](./batch-processing.md) for multi-text/file processing.
    - [ModelLoader & Pipelines](./model-loader.md) for long-running jobs.
    - [Model Registry](./model-registry.md) to pick the right checkpoint.
+   - [Configuration Profiles](./profiles.md) for dev/prod/test switching.
    - [Advanced NER & Output Formatting](./output-formatting.md) to polish spans.
    - [Medical-Aware Tokenizer](./medical-tokenizer.md) for better clinical token boundaries.
    - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
    - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
+   - [Performance Profiling](./profiling.md) for timing and optimization.
    - [CLI & Automation](./cli.md), [Examples](./examples.md), and [Testing & QA](./testing.md) for day-to-day operations.
 4. [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
 
