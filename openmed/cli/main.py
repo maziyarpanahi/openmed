@@ -19,7 +19,6 @@ from ..core.config import (
     get_profile,
     save_profile,
     delete_profile,
-    load_config_with_profile,
     PROFILE_PRESETS,
 )
 from ..core.model_registry import get_model_info
@@ -107,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
+    _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     return parser
@@ -252,6 +252,24 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         help="Suppress progress output.",
     )
     batch_parser.set_defaults(handler=_handle_batch)
+
+
+def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
+    tui_parser = subparsers.add_parser(
+        "tui", help="Launch interactive terminal UI for clinical NER analysis."
+    )
+    tui_parser.add_argument(
+        "--model",
+        default=None,
+        help="Model registry key or Hugging Face identifier (default: disease_detection_superclinical).",
+    )
+    tui_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.5,
+        help="Minimum confidence score for predictions (default: 0.5).",
+    )
+    tui_parser.set_defaults(handler=_handle_tui)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -493,6 +511,23 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_tui(args: argparse.Namespace) -> int:
+    try:
+        from openmed.tui import OpenMedTUI
+    except ImportError:
+        sys.stderr.write(
+            "TUI dependencies not installed. Install with: pip install openmed[tui]\n"
+        )
+        return 1
+
+    app = OpenMedTUI(
+        model_name=args.model,
+        confidence_threshold=args.confidence_threshold,
+    )
+    app.run()
+    return 0
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
