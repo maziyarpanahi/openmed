@@ -49,9 +49,9 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
 │  └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Model: disease_detection_superclinical │ Threshold: 0.50 │ Inference: 23ms   │
+│ Model: default │ Profile: dev │ Thresh: 0.30 │ MedTok │ 23ms                 │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ Ctrl+Enter Analyze  Ctrl+L Clear  F1 Help  Ctrl+Q Quit                       │
+│ Ctrl+Enter Analyze  F1 Help  F2 Model  F3 Config  F4 Profile  Ctrl+Q Quit    │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -79,7 +79,10 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
 
 ### Status Bar
 - Current model name
+- Active profile (if any)
 - Confidence threshold
+- Grouped indicator (when entity grouping is enabled)
+- MedTok indicator (when medical tokenizer is enabled)
 - Last inference time in milliseconds
 
 ## Keyboard Shortcuts
@@ -88,8 +91,84 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
 |-----|--------|
 | `Ctrl+Enter` | Analyze current text |
 | `Ctrl+L` | Clear input and results |
-| `Ctrl+Q` | Quit application |
 | `F1` | Show help |
+| `F2` | Switch model |
+| `F3` | Configuration panel |
+| `F4` | Switch profile |
+| `Ctrl+Q` | Quit application |
+
+## Model Switcher (F2)
+
+Press `F2` to open the model switcher modal:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Select Model                       │
+│                                                     │
+│  > disease_detection_superclinical [current]        │
+│    pharma_detection_superclinical                   │
+│    clinical_ner_base                                │
+│    biobert_ner                                      │
+│                                                     │
+│            [Select]    [Cancel]                     │
+└─────────────────────────────────────────────────────┘
+```
+
+- Navigate with arrow keys
+- Press Enter or click Select to switch models
+- The new model will automatically re-analyze your text
+
+## Configuration Panel (F3)
+
+Press `F3` to open the configuration panel:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Configuration                       │
+│                                                     │
+│  Confidence Threshold:    0.50                      │
+│                                                     │
+│       [−0.1]  [−]  [+]  [+0.1]                      │
+│                                                     │
+│  Group Entities:          [OFF]                     │
+│  Medical Tokenizer:       [ON ]                     │
+│                                                     │
+│            [Apply]    [Cancel]                      │
+└─────────────────────────────────────────────────────┘
+```
+
+- Adjust confidence threshold with buttons
+- Toggle entity grouping on/off
+- Toggle medical tokenizer on/off
+- Changes automatically re-analyze your text
+
+## Profile Switcher (F4)
+
+Press `F4` to quickly apply a configuration profile:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                  Select Profile                      │
+│                                                     │
+│  > dev [active]                                     │
+│    prod                                             │
+│    test                                             │
+│    fast                                             │
+│                                                     │
+│  Threshold: 0.3  Grouped: No  MedTok: Yes           │
+│                                                     │
+│            [Apply]    [Cancel]                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### Built-in Profiles
+
+| Profile | Threshold | Grouped | MedTok | Description |
+|---------|-----------|---------|--------|-------------|
+| `dev` | 0.3 | No | Yes | Development - low threshold, see more entities |
+| `prod` | 0.7 | Yes | Yes | Production - high confidence, grouped entities |
+| `test` | 0.5 | No | No | Testing - balanced, raw output |
+| `fast` | 0.5 | Yes | No | Fast - grouped, no tokenizer overhead |
 
 ## CLI Options
 
@@ -117,6 +196,8 @@ app.run()
 app = OpenMedTUI(
     model_name="disease_detection_superclinical",
     confidence_threshold=0.6,
+    group_entities=True,
+    use_medical_tokenizer=True,
 )
 app.run()
 
@@ -137,6 +218,8 @@ from openmed.tui.app import run_tui
 run_tui(
     model_name="pharma_detection_superclinical",
     confidence_threshold=0.7,
+    group_entities=True,
+    use_medical_tokenizer=True,
 )
 ```
 
@@ -158,9 +241,13 @@ run_tui(
 
 2. **Quick Iteration**: Adjust your text and re-analyze instantly with `Ctrl+Enter`.
 
-3. **Remote Access**: The TUI works over SSH, making it perfect for analyzing data on remote servers.
+3. **Live Config Changes**: Use F3 to tweak threshold and see results update in real-time.
 
-4. **Demo Mode**: Great for presenting OpenMed capabilities in meetings or at conferences.
+4. **Profile Switching**: Use F4 to quickly switch between dev/prod/test configurations.
+
+5. **Remote Access**: The TUI works over SSH, making it perfect for analyzing data on remote servers.
+
+6. **Demo Mode**: Great for presenting OpenMed capabilities in meetings or at conferences.
 
 ## Troubleshooting
 
@@ -175,6 +262,9 @@ Make sure your terminal supports true color. Most modern terminals do (iTerm2, W
 
 ### Slow first analysis
 The first analysis may take longer as the model is loaded. Subsequent analyses will be faster.
+
+### Modal dialogs not appearing
+Make sure your terminal window is large enough. The dialogs need a minimum width to render properly.
 
 ## See Also
 
