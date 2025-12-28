@@ -54,6 +54,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
    - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
    - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
    - [Performance Profiling](./profiling.md) for timing and optimization.
+   - [TUI - Interactive Terminal](./tui.md) for visual analysis in the terminal.
    - [CLI & Automation](./cli.md), [Examples](./examples.md), and [Testing & QA](./testing.md) for day-to-day operations.
 4. [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
 
