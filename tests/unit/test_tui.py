@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from openmed.tui.app import (
     Entity,
-    ENTITY_COLORS,
+    HistoryItem,
     PROFILE_PRESETS,
     get_entity_color,
     get_available_models,
     OpenMedTUI,
-    InputPanel,
-    AnnotatedView,
-    EntityTable,
     StatusBar,
     ModelSwitcherScreen,
     ProfileSwitcherScreen,
     ConfigPanelScreen,
+    HistoryScreen,
+    ExportScreen,
+    FileNavigationScreen,
 )
 
 
@@ -191,8 +190,6 @@ class TestGetAvailableModels:
     def test_fallback_models(self):
         """Test fallback models when registry unavailable."""
         with patch.dict("sys.modules", {"openmed.core.model_registry": None}):
-            # Force reimport to trigger fallback
-            from openmed.tui import app
             # The function should return fallback models
             models = get_available_models()
             assert isinstance(models, list)
@@ -419,7 +416,7 @@ class TestRunTui:
         """Test run_tui creates OpenMedTUI with correct params."""
         from openmed.tui.app import run_tui
 
-        with patch.object(OpenMedTUI, "run") as mock_run:
+        with patch.object(OpenMedTUI, "run"):
             with patch("openmed.tui.app.OpenMedTUI") as MockApp:
                 mock_instance = MagicMock()
                 MockApp.return_value = mock_instance
@@ -482,3 +479,266 @@ class TestCLIIntegration:
         parser = build_parser()
         args = parser.parse_args(["tui"])
         assert args.model is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 Tests
+# ---------------------------------------------------------------------------
+
+
+class TestHistoryItem:
+    """Tests for HistoryItem dataclass."""
+
+    def test_basic_creation(self):
+        """Test creating a history item."""
+        from datetime import datetime
+
+        entities = [
+            Entity(text="leukemia", label="DISEASE", start=0, end=8, confidence=0.95)
+        ]
+        item = HistoryItem(
+            id="test-1",
+            text="Test text",
+            entities=entities,
+            model_name="test_model",
+            threshold=0.5,
+            inference_time=42.5,
+        )
+        assert item.id == "test-1"
+        assert item.text == "Test text"
+        assert len(item.entities) == 1
+        assert item.model_name == "test_model"
+        assert item.threshold == 0.5
+        assert item.inference_time == 42.5
+        assert isinstance(item.timestamp, datetime)
+
+    def test_to_dict(self):
+        """Test converting history item to dictionary."""
+        entities = [
+            Entity(text="imatinib", label="DRUG", start=0, end=8, confidence=0.88)
+        ]
+        item = HistoryItem(
+            id="test-2",
+            text="Patient on imatinib",
+            entities=entities,
+            model_name="disease_model",
+            threshold=0.6,
+            inference_time=100.0,
+        )
+        result = item.to_dict()
+
+        assert result["id"] == "test-2"
+        assert result["text"] == "Patient on imatinib"
+        assert len(result["entities"]) == 1
+        assert result["entities"][0]["text"] == "imatinib"
+        assert result["entities"][0]["label"] == "DRUG"
+        assert result["model_name"] == "disease_model"
+        assert result["threshold"] == 0.6
+        assert result["inference_time"] == 100.0
+        assert "timestamp" in result
+
+    def test_to_dict_with_multiple_entities(self):
+        """Test to_dict with multiple entities."""
+        entities = [
+            Entity(text="diabetes", label="DISEASE", start=0, end=8, confidence=0.9),
+            Entity(text="metformin", label="DRUG", start=10, end=19, confidence=0.85),
+        ]
+        item = HistoryItem(
+            id="test-3",
+            text="diabetes metformin",
+            entities=entities,
+            model_name="model",
+            threshold=0.5,
+            inference_time=50.0,
+        )
+        result = item.to_dict()
+        assert len(result["entities"]) == 2
+
+
+class TestHistoryScreen:
+    """Tests for HistoryScreen modal."""
+
+    def test_init_with_empty_history(self):
+        """Test initialization with empty history."""
+        screen = HistoryScreen([])
+        assert screen._history == []
+
+    def test_init_with_history(self):
+        """Test initialization with history items."""
+        entities = [Entity(text="test", label="TEST", start=0, end=4, confidence=0.9)]
+        item = HistoryItem(
+            id="h-1",
+            text="Sample text",
+            entities=entities,
+            model_name="model",
+            threshold=0.5,
+            inference_time=25.0,
+        )
+        screen = HistoryScreen([item])
+        assert len(screen._history) == 1
+        assert screen._history[0].id == "h-1"
+
+    def test_bindings(self):
+        """Test modal bindings."""
+        screen = HistoryScreen([])
+        binding_keys = [b.key for b in screen.BINDINGS]
+        assert "escape" in binding_keys
+        assert "enter" in binding_keys
+        assert "delete" in binding_keys
+
+
+class TestExportScreen:
+    """Tests for ExportScreen modal."""
+
+    def test_init(self):
+        """Test initialization."""
+        entities = [
+            Entity(text="cancer", label="DISEASE", start=0, end=6, confidence=0.92)
+        ]
+        screen = ExportScreen(
+            text="Patient has cancer",
+            entities=entities,
+            model_name="test_model",
+        )
+        assert screen._text == "Patient has cancer"
+        assert len(screen._entities) == 1
+        assert screen._model_name == "test_model"
+
+    def test_init_without_model(self):
+        """Test initialization without model name."""
+        screen = ExportScreen(text="test", entities=[])
+        assert screen._text == "test"
+        assert screen._entities == []
+        assert screen._model_name is None
+
+    def test_get_json_output(self):
+        """Test JSON export output."""
+        import json
+
+        entities = [
+            Entity(text="aspirin", label="DRUG", start=0, end=7, confidence=0.95)
+        ]
+        screen = ExportScreen(
+            text="Take aspirin",
+            entities=entities,
+            model_name="pharma_model",
+        )
+        output = screen._get_json_output()
+        data = json.loads(output)
+
+        assert data["text"] == "Take aspirin"
+        assert data["model"] == "pharma_model"
+        assert len(data["entities"]) == 1
+        assert data["entities"][0]["text"] == "aspirin"
+        assert data["entities"][0]["label"] == "DRUG"
+
+    def test_get_csv_output(self):
+        """Test CSV export output."""
+        entities = [
+            Entity(text="diabetes", label="DISEASE", start=0, end=8, confidence=0.9),
+            Entity(text="insulin", label="DRUG", start=10, end=17, confidence=0.85),
+        ]
+        screen = ExportScreen(text="test", entities=entities)
+        output = screen._get_csv_output()
+
+        lines = output.split("\n")
+        assert lines[0] == "text,label,start,end,confidence"
+        assert len(lines) == 3  # header + 2 entities
+        assert "diabetes" in lines[1]
+        assert "insulin" in lines[2]
+
+    def test_get_csv_handles_quotes(self):
+        """Test CSV export handles quotes in text."""
+        entities = [
+            Entity(text='test "quote"', label="TEST", start=0, end=12, confidence=0.9)
+        ]
+        screen = ExportScreen(text="test", entities=entities)
+        output = screen._get_csv_output()
+        assert '""quote""' in output  # Escaped quotes
+
+    def test_get_export_content_json(self):
+        """Test get_export_content returns JSON."""
+        screen = ExportScreen(text="test", entities=[])
+        content = screen.get_export_content("json")
+        assert "{" in content
+        assert '"text"' in content
+
+    def test_get_export_content_csv(self):
+        """Test get_export_content returns CSV."""
+        screen = ExportScreen(text="test", entities=[])
+        content = screen.get_export_content("csv")
+        assert "text,label" in content
+
+    def test_bindings(self):
+        """Test modal bindings."""
+        screen = ExportScreen(text="test", entities=[])
+        binding_keys = [b.key for b in screen.BINDINGS]
+        assert "escape" in binding_keys
+
+
+class TestFileNavigationScreen:
+    """Tests for FileNavigationScreen modal."""
+
+    def test_init_default_path(self):
+        """Test initialization with default path."""
+        from pathlib import Path
+
+        screen = FileNavigationScreen()
+        assert screen._start_path == Path.cwd()
+        assert screen._selected_path is None
+
+    def test_init_custom_path(self):
+        """Test initialization with custom path."""
+        from pathlib import Path
+
+        custom_path = Path("/tmp")
+        screen = FileNavigationScreen(start_path=custom_path)
+        assert screen._start_path == custom_path
+
+    def test_bindings(self):
+        """Test modal bindings."""
+        screen = FileNavigationScreen()
+        binding_keys = [b.key for b in screen.BINDINGS]
+        assert "escape" in binding_keys
+        assert "enter" in binding_keys
+
+
+class TestOpenMedTUIPhase3:
+    """Tests for Phase 3 features of OpenMedTUI."""
+
+    def test_init_has_history(self):
+        """Test TUI initialization includes history list."""
+        app = OpenMedTUI()
+        assert hasattr(app, "_history")
+        assert app._history == []
+        assert hasattr(app, "_history_counter")
+        assert app._history_counter == 0
+
+    def test_phase3_bindings(self):
+        """Test Phase 3 key bindings are defined."""
+        app = OpenMedTUI()
+        binding_keys = [b.key for b in app.BINDINGS]
+        assert "f5" in binding_keys  # History
+        assert "f6" in binding_keys  # Export
+        assert "ctrl+o" in binding_keys  # Open file
+
+    def test_all_bindings_present(self):
+        """Test all bindings from all phases are present."""
+        app = OpenMedTUI()
+        binding_keys = [b.key for b in app.BINDINGS]
+
+        # Phase 1 bindings
+        assert "ctrl+q" in binding_keys
+        assert "ctrl+enter" in binding_keys
+        assert "ctrl+l" in binding_keys
+        assert "f1" in binding_keys
+
+        # Phase 2 bindings
+        assert "f2" in binding_keys
+        assert "f3" in binding_keys
+        assert "f4" in binding_keys
+
+        # Phase 3 bindings
+        assert "f5" in binding_keys
+        assert "f6" in binding_keys
+        assert "ctrl+o" in binding_keys
