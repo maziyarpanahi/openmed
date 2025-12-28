@@ -91,10 +91,13 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
 |-----|--------|
 | `Ctrl+Enter` | Analyze current text |
 | `Ctrl+L` | Clear input and results |
+| `Ctrl+O` | Open text file |
 | `F1` | Show help |
 | `F2` | Switch model |
 | `F3` | Configuration panel |
 | `F4` | Switch profile |
+| `F5` | Analysis history |
+| `F6` | Export results |
 | `Ctrl+Q` | Quit application |
 
 ## Model Switcher (F2)
@@ -169,6 +172,102 @@ Press `F4` to quickly apply a configuration profile:
 | `prod` | 0.7 | Yes | Yes | Production - high confidence, grouped entities |
 | `test` | 0.5 | No | No | Testing - balanced, raw output |
 | `fast` | 0.5 | Yes | No | Fast - grouped, no tokenizer overhead |
+
+## Analysis History (F5)
+
+Press `F5` to view your analysis history:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Analysis History                                 │
+│                                                                         │
+│  Time       Model                    Entities  Text Preview             │
+│  14:32:15   disease_detection         3        Patient diagnosed with..  │
+│  14:30:42   pharma_detection          2        Take imatinib 400mg...    │
+│  14:28:10   disease_detection         5        Clinical notes from...    │
+│                                                                         │
+│  Entities: chronic myeloid leukemia, imatinib, BCR-ABL (+2 more)        │
+│                                                                         │
+│          [Load]    [Delete]    [Close]                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- View all previous analyses in the current session
+- Navigate with arrow keys to preview entity details
+- Press Enter or click Load to restore a previous analysis
+- Delete entries you no longer need
+
+## Export Results (F6)
+
+Press `F6` to export your analysis results:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Export Results                     │
+│                                                     │
+│         [Export as JSON]                            │
+│         [Export as CSV]                             │
+│         [Copy to Clipboard]                         │
+│                                                     │
+│                   [Cancel]                          │
+└─────────────────────────────────────────────────────┘
+```
+
+### Export Formats
+
+**JSON Export:**
+```json
+{
+  "text": "Patient has chronic myeloid leukemia",
+  "model": "disease_detection_superclinical",
+  "entities": [
+    {
+      "text": "chronic myeloid leukemia",
+      "label": "DISEASE",
+      "start": 12,
+      "end": 36,
+      "confidence": 0.98
+    }
+  ]
+}
+```
+
+**CSV Export:**
+```csv
+text,label,start,end,confidence
+"chronic myeloid leukemia",DISEASE,12,36,0.9800
+```
+
+**Clipboard:**
+- Copies JSON format to your system clipboard
+- Requires `pyperclip` package: `pip install pyperclip`
+
+## File Navigation (Ctrl+O)
+
+Press `Ctrl+O` to open and load text files:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          Open Text File                                  │
+│                                                                         │
+│  📁 Documents/                                                           │
+│  ├── 📁 clinical_notes/                                                  │
+│  │   ├── 📄 patient_001.txt                                              │
+│  │   ├── 📄 patient_002.txt                                              │
+│  │   └── 📄 discharge_summary.txt                                        │
+│  ├── 📁 research/                                                        │
+│  └── 📄 sample.txt                                                       │
+│                                                                         │
+│  Selected: patient_001.txt                                              │
+│                                                                         │
+│              [Open]    [Cancel]                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+- Browse your filesystem with a tree view
+- Navigate directories with arrow keys
+- Select a text file and click Open to load its contents
+- The file content will be placed in the input panel for analysis
 
 ## CLI Options
 
@@ -248,6 +347,12 @@ run_tui(
 5. **Remote Access**: The TUI works over SSH, making it perfect for analyzing data on remote servers.
 
 6. **Demo Mode**: Great for presenting OpenMed capabilities in meetings or at conferences.
+
+7. **Batch Analysis**: Use `Ctrl+O` to load text files, analyze them, and build up your history for comparison.
+
+8. **Export for Reports**: Use `F6` to export results in JSON or CSV format for integration with other tools.
+
+9. **Compare Analyses**: Use F5 to recall previous analyses and compare results across different models or thresholds.
 
 ## Troubleshooting
 
