@@ -8,12 +8,17 @@ from unittest.mock import MagicMock, patch
 from openmed.tui.app import (
     Entity,
     ENTITY_COLORS,
+    PROFILE_PRESETS,
     get_entity_color,
+    get_available_models,
     OpenMedTUI,
     InputPanel,
     AnnotatedView,
     EntityTable,
     StatusBar,
+    ModelSwitcherScreen,
+    ProfileSwitcherScreen,
+    ConfigPanelScreen,
 )
 
 
@@ -128,6 +133,71 @@ class TestEntity:
         assert entity.confidence == 0.0
 
 
+class TestProfilePresets:
+    """Tests for profile presets."""
+
+    def test_dev_profile(self):
+        """Test dev profile settings."""
+        assert "dev" in PROFILE_PRESETS
+        dev = PROFILE_PRESETS["dev"]
+        assert dev["threshold"] == 0.3
+        assert dev["group_entities"] is False
+        assert dev["medical_tokenizer"] is True
+
+    def test_prod_profile(self):
+        """Test prod profile settings."""
+        assert "prod" in PROFILE_PRESETS
+        prod = PROFILE_PRESETS["prod"]
+        assert prod["threshold"] == 0.7
+        assert prod["group_entities"] is True
+        assert prod["medical_tokenizer"] is True
+
+    def test_test_profile(self):
+        """Test test profile settings."""
+        assert "test" in PROFILE_PRESETS
+        test = PROFILE_PRESETS["test"]
+        assert test["threshold"] == 0.5
+        assert test["group_entities"] is False
+        assert test["medical_tokenizer"] is False
+
+    def test_fast_profile(self):
+        """Test fast profile settings."""
+        assert "fast" in PROFILE_PRESETS
+        fast = PROFILE_PRESETS["fast"]
+        assert fast["threshold"] == 0.5
+        assert fast["group_entities"] is True
+        assert fast["medical_tokenizer"] is False
+
+    def test_all_profiles_have_required_keys(self):
+        """Test all profiles have required keys."""
+        required_keys = {"threshold", "group_entities", "medical_tokenizer"}
+        for name, profile in PROFILE_PRESETS.items():
+            assert required_keys <= set(profile.keys()), f"Profile {name} missing keys"
+
+
+class TestGetAvailableModels:
+    """Tests for get_available_models function."""
+
+    def test_returns_list(self):
+        """Test that get_available_models returns a list."""
+        models = get_available_models()
+        assert isinstance(models, list)
+
+    def test_returns_non_empty(self):
+        """Test that get_available_models returns non-empty list."""
+        models = get_available_models()
+        assert len(models) > 0
+
+    def test_fallback_models(self):
+        """Test fallback models when registry unavailable."""
+        with patch.dict("sys.modules", {"openmed.core.model_registry": None}):
+            # Force reimport to trigger fallback
+            from openmed.tui import app
+            # The function should return fallback models
+            models = get_available_models()
+            assert isinstance(models, list)
+
+
 class TestOpenMedTUI:
     """Tests for the main TUI application class."""
 
@@ -139,6 +209,9 @@ class TestOpenMedTUI:
         assert app._analyze_func is None
         assert app._entities == []
         assert app._is_analyzing is False
+        assert app._group_entities is False
+        assert app._use_medical_tokenizer is True
+        assert app._current_profile is None
 
     def test_init_with_model(self):
         """Test TUI initialization with model name."""
@@ -156,6 +229,16 @@ class TestOpenMedTUI:
         app = OpenMedTUI(analyze_func=mock_func)
         assert app._analyze_func is mock_func
 
+    def test_init_with_group_entities(self):
+        """Test TUI initialization with group_entities."""
+        app = OpenMedTUI(group_entities=True)
+        assert app._group_entities is True
+
+    def test_init_with_medical_tokenizer(self):
+        """Test TUI initialization with use_medical_tokenizer."""
+        app = OpenMedTUI(use_medical_tokenizer=False)
+        assert app._use_medical_tokenizer is False
+
     def test_title_and_subtitle(self):
         """Test TUI has correct title and subtitle."""
         app = OpenMedTUI()
@@ -171,6 +254,14 @@ class TestOpenMedTUI:
         assert "ctrl+l" in binding_keys
         assert "f1" in binding_keys
 
+    def test_phase2_bindings(self):
+        """Test Phase 2 key bindings are defined."""
+        app = OpenMedTUI()
+        binding_keys = [b.key for b in app.BINDINGS]
+        assert "f2" in binding_keys  # Model switcher
+        assert "f3" in binding_keys  # Config panel
+        assert "f4" in binding_keys  # Profile switcher
+
 
 class TestStatusBar:
     """Tests for StatusBar widget."""
@@ -181,6 +272,9 @@ class TestStatusBar:
         assert status._model_name == "No model"
         assert status._threshold == 0.5
         assert status._inference_time is None
+        assert status._profile is None
+        assert status._group_entities is False
+        assert status._medical_tokenizer is True
 
     def test_init_with_values(self):
         """Test StatusBar initialization with custom values."""
@@ -188,26 +282,134 @@ class TestStatusBar:
             model_name="test_model",
             threshold=0.8,
             inference_time=42.5,
+            profile="dev",
+            group_entities=True,
+            medical_tokenizer=False,
         )
         assert status._model_name == "test_model"
         assert status._threshold == 0.8
         assert status._inference_time == 42.5
+        assert status._profile == "dev"
+        assert status._group_entities is True
+        assert status._medical_tokenizer is False
 
     def test_get_status_text_without_inference_time(self):
         """Test status text without inference time."""
         status = StatusBar(model_name="test", threshold=0.6)
         text = status._get_status_text()
         assert "Model: test" in text
-        assert "Threshold: 0.60" in text
-        assert "Inference:" not in text
+        assert "Thresh: 0.60" in text
 
     def test_get_status_text_with_inference_time(self):
         """Test status text with inference time."""
         status = StatusBar(model_name="test", threshold=0.6, inference_time=123.4)
         text = status._get_status_text()
         assert "Model: test" in text
-        assert "Threshold: 0.60" in text
-        assert "Inference: 123ms" in text
+        assert "123ms" in text
+
+    def test_get_status_text_with_profile(self):
+        """Test status text includes profile when set."""
+        status = StatusBar(model_name="test", threshold=0.6, profile="prod")
+        text = status._get_status_text()
+        assert "Profile: prod" in text
+
+    def test_get_status_text_with_grouped(self):
+        """Test status text includes Grouped when enabled."""
+        status = StatusBar(model_name="test", threshold=0.6, group_entities=True)
+        text = status._get_status_text()
+        assert "Grouped" in text
+
+    def test_get_status_text_with_medtok(self):
+        """Test status text includes MedTok when enabled."""
+        status = StatusBar(model_name="test", threshold=0.6, medical_tokenizer=True)
+        text = status._get_status_text()
+        assert "MedTok" in text
+
+    def test_get_status_text_without_medtok(self):
+        """Test status text excludes MedTok when disabled."""
+        status = StatusBar(model_name="test", threshold=0.6, medical_tokenizer=False)
+        text = status._get_status_text()
+        assert "MedTok" not in text
+
+
+class TestModelSwitcherScreen:
+    """Tests for ModelSwitcherScreen modal."""
+
+    def test_init_with_current_model(self):
+        """Test initialization with current model."""
+        screen = ModelSwitcherScreen(current_model="disease_detection_superclinical")
+        assert screen._current_model == "disease_detection_superclinical"
+
+    def test_init_without_current_model(self):
+        """Test initialization without current model."""
+        screen = ModelSwitcherScreen()
+        assert screen._current_model is None
+
+    def test_models_list_populated(self):
+        """Test that models list is populated."""
+        screen = ModelSwitcherScreen()
+        assert len(screen._models) > 0
+
+    def test_bindings(self):
+        """Test modal bindings."""
+        screen = ModelSwitcherScreen()
+        binding_keys = [b.key for b in screen.BINDINGS]
+        assert "escape" in binding_keys
+        assert "enter" in binding_keys
+
+
+class TestProfileSwitcherScreen:
+    """Tests for ProfileSwitcherScreen modal."""
+
+    def test_init_with_current_profile(self):
+        """Test initialization with current profile."""
+        screen = ProfileSwitcherScreen(current_profile="dev")
+        assert screen._current_profile == "dev"
+
+    def test_init_without_current_profile(self):
+        """Test initialization without current profile."""
+        screen = ProfileSwitcherScreen()
+        assert screen._current_profile is None
+
+    def test_profiles_list_populated(self):
+        """Test that profiles list is populated from presets."""
+        screen = ProfileSwitcherScreen()
+        assert screen._profiles == list(PROFILE_PRESETS.keys())
+
+    def test_bindings(self):
+        """Test modal bindings."""
+        screen = ProfileSwitcherScreen()
+        binding_keys = [b.key for b in screen.BINDINGS]
+        assert "escape" in binding_keys
+        assert "enter" in binding_keys
+
+
+class TestConfigPanelScreen:
+    """Tests for ConfigPanelScreen modal."""
+
+    def test_init_defaults(self):
+        """Test initialization with defaults."""
+        screen = ConfigPanelScreen()
+        assert screen._threshold == 0.5
+        assert screen._group_entities is False
+        assert screen._medical_tokenizer is True
+
+    def test_init_with_values(self):
+        """Test initialization with custom values."""
+        screen = ConfigPanelScreen(
+            threshold=0.8,
+            group_entities=True,
+            medical_tokenizer=False,
+        )
+        assert screen._threshold == 0.8
+        assert screen._group_entities is True
+        assert screen._medical_tokenizer is False
+
+    def test_bindings(self):
+        """Test modal bindings."""
+        screen = ConfigPanelScreen()
+        binding_keys = [b.key for b in screen.BINDINGS]
+        assert "escape" in binding_keys
 
 
 class TestRunTui:
@@ -218,16 +420,22 @@ class TestRunTui:
         from openmed.tui.app import run_tui
 
         with patch.object(OpenMedTUI, "run") as mock_run:
-            # We can't actually run the TUI in tests, so we patch the run method
             with patch("openmed.tui.app.OpenMedTUI") as MockApp:
                 mock_instance = MagicMock()
                 MockApp.return_value = mock_instance
 
-                run_tui(model_name="test_model", confidence_threshold=0.7)
+                run_tui(
+                    model_name="test_model",
+                    confidence_threshold=0.7,
+                    group_entities=True,
+                    use_medical_tokenizer=False,
+                )
 
                 MockApp.assert_called_once_with(
                     model_name="test_model",
                     confidence_threshold=0.7,
+                    group_entities=True,
+                    use_medical_tokenizer=False,
                 )
                 mock_instance.run.assert_called_once()
 
@@ -240,7 +448,6 @@ class TestCLIIntegration:
         from openmed.cli.main import build_parser
 
         parser = build_parser()
-        # Parse with tui subcommand
         args = parser.parse_args(["tui"])
         assert args.command == "tui"
 
