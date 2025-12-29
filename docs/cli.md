@@ -10,8 +10,11 @@ The CLI is installed automatically with the base package:
 ```bash
 uv pip install .
 # or pip install openmed
-openmed --help
 ```
+
+!!! tip "Quick Launch"
+    Running `openmed` with no arguments launches the [interactive TUI](./tui.md) directly.
+    Use `openmed --help` to see CLI commands.
 
 ## Commands Overview
 
@@ -19,6 +22,7 @@ openmed --help
 |---------|-------------|
 | `analyze` | Analyze single text or file |
 | `batch` | Process multiple texts or files |
+| `tui` | Launch interactive terminal interface |
 | `models list` | List available models |
 | `models info` | Show model metadata |
 | `config show` | Display configuration |
@@ -137,3 +141,23 @@ openmed config profile-delete myprofile
 ```
 
 See [Configuration Profiles](./profiles.md) for full documentation.
+
+## Interactive TUI
+
+Launch the interactive terminal interface for visual NER analysis:
+
+```bash
+# Basic launch
+openmed tui
+
+# With custom model and threshold
+openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
+```
+
+The TUI provides:
+- Real-time text analysis with `Ctrl+Enter`
+- Color-coded entity highlighting
+- Sortable entity table with confidence bars
+- Keyboard-driven workflow
+
+See [TUI - Interactive Terminal](./tui.md) for full documentation.

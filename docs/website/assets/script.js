@@ -59,6 +59,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
 <span class="keyword">print</span>(<span class="string">f"Found {len(result.entities)} entities"</span>)
 <span class="keyword">print</span>(<span class="string">f"Entities: {result.entities}"</span>)</code></pre>`,
+
+    cli: `<pre><code><span class="comment"># Analyze text from the command line</span>
+<span class="keyword">$</span> openmed analyze --text <span class="string">"Patient has Type 2 diabetes mellitus"</span> \\
+    --model disease_detection_superclinical --output-format json
+
+<span class="comment"># Batch process multiple files</span>
+<span class="keyword">$</span> openmed batch --input-dir ./clinical_notes --pattern <span class="string">"*.txt"</span> \\
+    --output results.json --output-format json
+
+<span class="comment"># List available models</span>
+<span class="keyword">$</span> openmed models list --include-remote
+
+<span class="comment"># Manage configuration profiles</span>
+<span class="keyword">$</span> openmed config profiles
+<span class="keyword">$</span> openmed config profile-use prod</code></pre>`,
+
+    tui: `<pre><code><span class="comment"># Launch the interactive terminal UI</span>
+<span class="keyword">$</span> openmed tui
+
+<span class="comment"># With custom model and threshold</span>
+<span class="keyword">$</span> openmed tui --model pharma_detection_superclinical \\
+    --confidence-threshold 0.7
+
+<span class="comment"># Features:</span>
+<span class="comment">#   Ctrl+Enter  - Analyze text</span>
+<span class="comment">#   F2          - Switch model</span>
+<span class="comment">#   F3          - Configuration panel</span>
+<span class="comment">#   F4          - Switch profile (dev/prod/test)</span>
+<span class="comment">#   F5          - View analysis history</span>
+<span class="comment">#   F6          - Export results (JSON/CSV)</span>
+<span class="comment">#   Ctrl+O      - Open text file</span></code></pre>`,
   };
 
   // Full code for copying (includes installation and comments)
@@ -67,11 +98,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
 # Quick analysis with smart model suggestions
 text = "Patient received 5mg warfarin for atrial fibrillation."
-result = openmed.analyze_text(text")
+result = openmed.analyze_text(text)
 
 print(f"Found {len(result.entities)} entities")
 for entity in result.entities:
     print(f"- {entity.text} ({entity.label}): {entity.confidence:.3f}")`,
+
+    cli: `# Analyze text from the command line
+openmed analyze --text "Patient has Type 2 diabetes mellitus" \\
+    --model disease_detection_superclinical --output-format json
+
+# Batch process multiple files
+openmed batch --input-dir ./clinical_notes --pattern "*.txt" \\
+    --output results.json --output-format json
+
+# List available models
+openmed models list --include-remote
+
+# Manage configuration profiles
+openmed config profiles
+openmed config profile-use prod`,
+
+    tui: `# Launch the interactive terminal UI
+openmed tui
+
+# With custom model and threshold
+openmed tui --model pharma_detection_superclinical \\
+    --confidence-threshold 0.7
+
+# Features:
+#   Ctrl+Enter  - Analyze text
+#   F2          - Switch model
+#   F3          - Configuration panel
+#   F4          - Switch profile (dev/prod/test)
+#   F5          - View analysis history
+#   F6          - Export results (JSON/CSV)
+#   Ctrl+O      - Open text file`,
   };
 
   let currentTab = "python";
@@ -92,15 +154,11 @@ for entity in result.entities:
     }
 
     codeTabs.forEach((tabButton) => {
-      if (tabButton.style.display !== "none") {
-        tabButton.classList.remove("active");
-        tabButton.classList.add("inactive");
-      }
+      tabButton.classList.remove("active");
     });
 
-    if (button && button.style.display !== "none") {
+    if (button) {
       button.classList.add("active");
-      button.classList.remove("inactive");
     }
 
     setCodeContent(tab);

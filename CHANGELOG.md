@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-12-29
+
+### Added
+
+- **Interactive TUI (Terminal User Interface)**: Full-featured terminal workbench for clinical NER analysis
+  - Rich text input with multi-line support
+  - Color-coded entity highlighting in annotated view
+  - Entity table with confidence bars sorted by score
+  - Model switcher modal (F2) for switching between models
+  - Configuration panel (F3) for adjusting threshold and settings
+  - Profile switcher (F4) for quick dev/prod/test/fast presets
+  - Analysis history (F5) with recall and deletion
+  - Export results (F6) to JSON, CSV, or clipboard
+  - File navigation (Ctrl+O) for loading text files
+  - Status bar showing model, profile, threshold, and inference time
+  - CLI command: `openmed tui`
+
+- **TUI Documentation**: Comprehensive guide at `docs/tui.md`
+  - Interface overview with ASCII preview
+  - Keyboard shortcuts reference
+  - Profile presets documentation
+  - Export format examples
+  - Python API usage
+
+- **Website Updates**
+  - New Python Toolkit section showcasing TUI, CLI, batch processing, and profiles
+  - Interactive TUI preview with color-coded entities
+  - CLI and TUI tabs in hero code block
+  - Updated software version metadata
+
+### Changed
+
+- Updated mkdocs navigation to include TUI documentation
+
 ## [0.3.0] - 2025-12-26
 
 ### Added
@@ -91,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/OpenMed/openmed/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/OpenMed/openmed/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/OpenMed/openmed/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/OpenMed/openmed/compare/v0.2.0...v0.2.1

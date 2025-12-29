@@ -28,7 +28,8 @@ as the starting point when you are unsure which page (or module) to visit.
 | Configuration Profiles | Built-in profiles (dev, prod, test, fast) + custom profiles. | `openmed/core/config.py`, [Configuration Profiles](./profiles.md) |
 | Batch Processing | Multi-text/file processing with progress and aggregation. | `openmed/processing/batch.py`, [Batch Processing](./batch-processing.md) |
 | Performance Profiling | Timing utilities, metrics, and profiling decorators. | `openmed/utils/profiling.py`, [Performance Profiling](./profiling.md) |
-| CLI | `openmed` console (`analyze`, `batch`, `models`, `config`). | `openmed/cli/main.py`, [CLI & Automation](./cli.md) |
+| CLI | `openmed` console (`analyze`, `batch`, `tui`, `models`, `config`). | `openmed/cli/main.py`, [CLI & Automation](./cli.md) |
+| TUI | Interactive terminal interface for visual NER analysis. | `openmed/tui/app.py`, [TUI - Interactive Terminal](./tui.md) |
 | Testing | `tests/run-tests.sh`, unit/integration markers, smoke runners. | `tests/`, [Testing & QA](./testing.md) |
 | Examples | Notebooks, CLI/analysis snippets, `examples/`. | `examples/`, [Examples & Copy/Paste Recipes](./examples.md) |
 | Automation | Make targets, GitHub Actions (CI, publish, docs). | `Makefile`, `.github/workflows/*.yml`, [Contributing & Releases](./contributing.md) |
@@ -44,5 +45,6 @@ as the starting point when you are unsure which page (or module) to visit.
 7. [Advanced NER & Output Formatting](./output-formatting.md) — polish predictions.
 8. [Zero-shot Toolkit](./zero-shot-ner.md) — GLiNER workflows.
 9. [Performance Profiling](./profiling.md) — timing and metrics.
-10. [CLI & Automation](./cli.md) and [Examples](./examples.md) — day-to-day tools.
-11. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
+10. [TUI - Interactive Terminal](./tui.md) — visual analysis workbench.
+11. [CLI & Automation](./cli.md) and [Examples](./examples.md) — day-to-day tools.
+12. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
