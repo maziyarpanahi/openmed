@@ -10,8 +10,11 @@ The CLI is installed automatically with the base package:
 ```bash
 uv pip install .
 # or pip install openmed
-openmed --help
 ```
+
+!!! tip "Quick Launch"
+    Running `openmed` with no arguments launches the [interactive TUI](./tui.md) directly.
+    Use `openmed --help` to see CLI commands.
 
 ## Commands Overview
 
