@@ -363,8 +363,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handler: Optional[Handler] = getattr(args, "handler", None)
 
     if handler is None:
-        # No subcommand provided; show help and hint at interactive mode.
-        parser.print_help()
+        # No subcommand provided; launch TUI directly.
+        try:
+            from openmed.tui import OpenMedTUI
+        except ImportError:
+            sys.stderr.write(
+                "TUI dependencies not installed. Install with: pip install openmed[tui]\n"
+                "\nFor CLI commands, use:\n"
+                "  openmed analyze --text \"...\"\n"
+                "  openmed batch --input-dir ./notes\n"
+                "  openmed models list\n"
+                "  openmed config show\n"
+                "\nRun 'openmed --help' for more options.\n"
+            )
+            return 1
+
+        app = OpenMedTUI()
+        app.run()
         return 0
 
     return handler(args)
