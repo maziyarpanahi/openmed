@@ -30,7 +30,7 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  OpenMed TUI                                         Interactive Clinical NER │
+│  OpenMed TUI                                        Interactive Clinical NER │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ┌─ Input (Ctrl+Enter to analyze) ─────────────────────────────────────────┐ │
@@ -58,11 +58,13 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
 ## Panels
 
 ### Input Panel
+
 - Multi-line text area for entering clinical notes
 - Paste text directly or type manually
 - Press `Ctrl+Enter` to analyze
 
 ### Annotated View
+
 - Shows your text with entities highlighted inline
 - Color-coded by entity type:
   - **Red**: Diseases, conditions, diagnoses
@@ -73,11 +75,13 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.6
   - **Cyan**: Species, organisms
 
 ### Entity Table
+
 - Lists all detected entities sorted by confidence
 - Visual confidence bars
 - Zebra striping for readability
 
 ### Status Bar
+
 - Current model name
 - Active profile (if any)
 - Confidence threshold
@@ -106,7 +110,7 @@ Press `F2` to open the model switcher modal:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Select Model                       │
+│                   Select Model                      │
 │                                                     │
 │  > disease_detection_superclinical [current]        │
 │    pharma_detection_superclinical                   │
@@ -127,7 +131,7 @@ Press `F3` to open the configuration panel:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Configuration                       │
+│                  Configuration                      │
 │                                                     │
 │  Confidence Threshold:    0.50                      │
 │                                                     │
@@ -151,7 +155,7 @@ Press `F4` to quickly apply a configuration profile:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                  Select Profile                      │
+│                  Select Profile                     │
 │                                                     │
 │  > dev [active]                                     │
 │    prod                                             │
@@ -179,12 +183,12 @@ Press `F5` to view your analysis history:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                         Analysis History                                 │
+│                         Analysis History                                │
 │                                                                         │
 │  Time       Model                    Entities  Text Preview             │
-│  14:32:15   disease_detection         3        Patient diagnosed with..  │
-│  14:30:42   pharma_detection          2        Take imatinib 400mg...    │
-│  14:28:10   disease_detection         5        Clinical notes from...    │
+│  14:32:15   disease_detection         3        Patient diagnosed with.. │
+│  14:30:42   pharma_detection          2        Take imatinib 400mg...   │
+│  14:28:10   disease_detection         5        Clinical notes from...   │
 │                                                                         │
 │  Entities: chronic myeloid leukemia, imatinib, BCR-ABL (+2 more)        │
 │                                                                         │
@@ -203,7 +207,7 @@ Press `F6` to export your analysis results:
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Export Results                     │
+│                   Export Results                    │
 │                                                     │
 │         [Export as JSON]                            │
 │         [Export as CSV]                             │
@@ -216,6 +220,7 @@ Press `F6` to export your analysis results:
 ### Export Formats
 
 **JSON Export:**
+
 ```json
 {
   "text": "Patient has chronic myeloid leukemia",
@@ -233,12 +238,14 @@ Press `F6` to export your analysis results:
 ```
 
 **CSV Export:**
+
 ```csv
 text,label,start,end,confidence
 "chronic myeloid leukemia",DISEASE,12,36,0.9800
 ```
 
 **Clipboard:**
+
 - Copies JSON format to your system clipboard
 - Requires `pyperclip` package: `pip install pyperclip`
 
@@ -248,15 +255,15 @@ Press `Ctrl+O` to open and load text files:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          Open Text File                                  │
+│                          Open Text File                                 │
 │                                                                         │
-│  📁 Documents/                                                           │
-│  ├── 📁 clinical_notes/                                                  │
-│  │   ├── 📄 patient_001.txt                                              │
-│  │   ├── 📄 patient_002.txt                                              │
-│  │   └── 📄 discharge_summary.txt                                        │
-│  ├── 📁 research/                                                        │
-│  └── 📄 sample.txt                                                       │
+│  📁 Documents/                                                          │
+│  ├── 📁 clinical_notes/                                                 │
+│  │   ├── 📄 patient_001.txt                                             │
+│  │   ├── 📄 patient_002.txt                                             │
+│  │   └── 📄 discharge_summary.txt                                       │
+│  ├── 📁 research/                                                       │
+│  └── 📄 sample.txt                                                      │
 │                                                                         │
 │  Selected: patient_001.txt                                              │
 │                                                                         │
@@ -357,18 +364,23 @@ run_tui(
 ## Troubleshooting
 
 ### TUI doesn't start
+
 Ensure you have the TUI dependencies installed:
+
 ```bash
 pip install openmed[tui]
 ```
 
 ### Colors not showing
+
 Make sure your terminal supports true color. Most modern terminals do (iTerm2, Windows Terminal, GNOME Terminal, etc.).
 
 ### Slow first analysis
+
 The first analysis may take longer as the model is loaded. Subsequent analyses will be faster.
 
 ### Modal dialogs not appearing
+
 Make sure your terminal window is large enough. The dialogs need a minimum width to render properly.
 
 ## See Also
