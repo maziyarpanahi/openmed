@@ -53,7 +53,7 @@
     "operatingSystem": "Cloud, On-Premises",
     "applicationCategory": "AIApplication",
     "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, and deployment toolkits for compliant medical workflows.",
-    "softwareVersion": "2025.10",
+    "softwareVersion": "0.4.0",
     "url": "https://openmed.life/",
     "provider": {
       "@type": "Organization",
@@ -133,960 +133,945 @@
     <!-- Hero Section -->
     <main id="main-content">
         <section id="home" class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <div class="hero-text">
-                    <span class="badge">State-of-the-Art Healthcare AI — Quick Start</span>
-                    <h1 class="hero-title">
-                        State-of-the-Art <span class="primary">LLMs for Healthcare</span>, Free Forever.
-                    </h1>
-                    <p class="hero-desc">
-                        OpenMed equips clinical engineering and data science teams with open-source LLMs, biomedical NER,
-                        and evaluation tooling to ship HIPAA-aware workflows faster—without vendor lock-in.
-                    </p>
-                    <ul class="hero-benefits"
-                        style="display: grid; gap: 0.35rem; margin: 1rem 0 1.5rem; padding-left: 1.25rem; color: hsl(var(--muted-foreground)); font-size: 0.95rem;">
-                        <li>Launch production SageMaker endpoints in under five minutes with managed packages.</li>
-                        <li>Reduce annotation and triage costs with 12 benchmark-proven entity extractors.</li>
-                        <li>Meet compliance goals with Apache-2.0 licensing and transparent training data.</li>
-                    </ul>
-                    <div class="hero-buttons">
-                        <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-primary btn-lg"
-                            target="_blank" rel="noopener">Get started</a>
-                        <button class="btn btn-outline" onclick="copyInstall(this)"
-                            style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install openmed</button>
+            <div class="container">
+                <div class="hero-content">
+                    <div class="hero-text">
+                        <span class="badge">State-of-the-Art Healthcare AI — Quick Start</span>
+                        <h1 class="hero-title">
+                            State-of-the-Art <span class="primary">LLMs for Healthcare</span>, Free Forever.
+                        </h1>
+                        <p class="hero-desc">
+                            OpenMed equips clinical engineering and data science teams with open-source LLMs, biomedical
+                            NER,
+                            and evaluation tooling to ship HIPAA-aware workflows faster—without vendor lock-in.
+                        </p>
+                        <ul class="hero-benefits"
+                            style="display: grid; gap: 0.35rem; margin: 1rem 0 1.5rem; padding-left: 1.25rem; color: hsl(var(--muted-foreground)); font-size: 0.95rem;">
+                            <li>Launch production SageMaker endpoints in under five minutes with managed packages.</li>
+                            <li>Reduce annotation and triage costs with 12 benchmark-proven entity extractors.</li>
+                            <li>Meet compliance goals with Apache-2.0 licensing and transparent training data.</li>
+                        </ul>
+                        <div class="hero-buttons">
+                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-primary btn-lg"
+                                target="_blank" rel="noopener">Get started</a>
+                            <button class="btn btn-outline" onclick="copyInstall(this)"
+                                style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install openmed</button>
 
-                    </div>
-                    <div class="stats">
-                        <div class="stat">
-                            <div class="stat-number">475+</div>
-                            <div class="stat-label">HF models</div>
                         </div>
-                        <div class="stat">
-                            <div class="stat-number">13</div>
-                            <div class="stat-label">Biomedical Categories</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Code Demo -->
-                <div class="code-demo">
-                    <div class="code-header">
-                        <div style="display: flex; align-items: center; gap: 1rem;">
-                            <div class="code-dots">
-                                <div class="code-dot red"></div>
-                                <div class="code-dot yellow"></div>
-                                <div class="code-dot green"></div>
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat-number">475+</div>
+                                <div class="stat-label">HF models</div>
                             </div>
-                            <span class="code-title">State-of-the-Art Healthcare AI — Quick Start</span>
+                            <div class="stat">
+                                <div class="stat-number">13</div>
+                                <div class="stat-label">Biomedical Categories</div>
+                            </div>
                         </div>
-                        <!-- <button class="btn btn-outline" onclick="expandCode()"
+                    </div>
+
+                    <!-- Code Demo -->
+                    <div class="code-demo">
+                        <div class="code-header">
+                            <div style="display: flex; align-items: center; gap: 1rem;">
+                                <div class="code-dots">
+                                    <div class="code-dot red"></div>
+                                    <div class="code-dot yellow"></div>
+                                    <div class="code-dot green"></div>
+                                </div>
+                                <span class="code-title">State-of-the-Art Healthcare AI — Quick Start</span>
+                            </div>
+                            <!-- <button class="btn btn-outline" onclick="expandCode()"
                             style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">Expand</button> -->
-                    </div>
-
-                    <div class="code-tabs">
-                        <button class="code-tab active" onclick="switchTab('python', this)">Python</button>
-                        <button class="code-tab inactive" onclick="switchTab('cli', this)"
-                            style="display: none;">CLI</button>
-                    </div>
-
-                    <div class="code-block">
-                        <button class="copy-btn" onclick="copyCode(this)" title="Copy code">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="5" y="5" width="18" height="18" rx="2" ry="2"></rect>
-                            </svg>
-                        </button>
-                        <div id="codeContent"></div>
-                    </div>
-
-                    <div class="code-footer">
-                        <button class="btn btn-outline" onclick="copyCode(this)">Copy</button>
-                        <!-- <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
-                            class="btn btn-outline">Browse on HF</a> -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Platform Section -->
-    <section class="platform">
-        <div class="container">
-            <div class="platform-content">
-                <h2 class="platform-title">
-                    State-of-the-Art Healthcare AI Models
-                </h2>
-
-                <p class="platform-desc">
-                    Production-ready state-of-the-art LLMs for healthcare and clinical AI across biomedical
-                    domains — chemicals, diseases, genes/proteins, species, anatomy, oncology, and more.
-                    Advanced healthcare AI models trained on clinical and biomedical data.
-                </p>
-
-                <div class="platform-badges">
-                    <span style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Available
-                        on</span>
-                    <div class="platform-badge">
-                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
-                            </path>
-                        </svg>
-                        <span>Hugging Face <span style="color: hsl(var(--muted-foreground));">(475+
-                                models)</span></span>
-                    </div>
-                    <div class="platform-badge">
-                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
-                            </path>
-                        </svg>
-                        <span>Python Package</span>
-                    </div>
-                    <div class="platform-badge">
-                        <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7">
-                            </path>
-                        </svg>
-                        <span>Apache-2.0</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Models Section -->
-    <section id="models" style="padding: 5rem 0; background: hsl(var(--background));">
-        <div class="container">
-            <div style="text-align: center; margin-bottom: 4rem;">
-                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Healthcare AI Models</h2>
-                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
-                    Explore our comprehensive collection of state-of-the-art models for clinical NLP,
-                    biomedical NER, and healthcare applications.
-                </p>
-            </div>
-
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Chemical Detect</h3>
-                        <span
-                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
-                    </div>
-                    <p
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
-                        Specialized model for Chemical Entity Recognition - Identifies chemical compounds and substances
-                        in biomedical literature.</p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chemical-entity-recognition</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">drug-discovery</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pharmacology</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chemistry</span>
-                    </div>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        <span>33M parameters</span>
-                        <span>117.06K downloads</span>
-                    </div>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M" target="_blank"
-                        rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
-                        HF</a>
-                </div>
-
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Disease Detect</h3>
-                        <span
-                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
-                    </div>
-                    <p
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
-                        Specialized model for Disease Entity Recognition - Disease entities from the BC5CDR dataset.</p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">disease-entity-recognition</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">medical-diagnosis</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pathology</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">biocuration</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">biomedical-nlp</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">detect-disease</span>
-                    </div>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        <span>335M parameters</span>
-                        <span>104K downloads</span>
-                    </div>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M" target="_blank"
-                        rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
-                        HF</a>
-                </div>
-
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Genomic Detect</h3>
-                        <span
-                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
-                    </div>
-                    <p
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
-                        Specialized model for Gene Entity Recognition - Gene-related entities.</p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">gene-recognition</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">genetics</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">genomics</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">molecular-biology</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">cell-line-name</span>
-                    </div>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        <span>109M parameters</span>
-                        <span>103.1K downloads</span>
-                    </div>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M" target="_blank"
-                        rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
-                        HF</a>
-                </div>
-
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Oncology Detect</h3>
-                        <span
-                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
-                    </div>
-                    <p
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
-                        Specialized model for Cancer Genetics - Cancer-related genetic entities.</p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">cancer-genetics</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">oncology</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">gene-regulation</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">cancer-research</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pathological_formation</span>
-                    </div>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        <span>568M parameters</span>
-                        <span>101.92K downloads</span>
-                    </div>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M" target="_blank"
-                        rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
-                        HF</a>
-                </div>
-
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER DNA Detect</h3>
-                        <span
-                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
-                    </div>
-                    <p
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
-                        Specialized model for Biomedical Entity Recognition - Proteins, DNA, RNA, cell lines, and cell
-                        types.</p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">protein-recognition</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">gene-recognition</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">molecular-biology</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">genomics</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">dna</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">rna</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">protein</span>
-                    </div>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        <span>184M parameters</span>
-                        <span>90.18xK downloads</span>
-                    </div>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M" target="_blank"
-                        rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
-                        HF</a>
-                </div>
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Pharma Detect</h3>
-                        <span
-                            style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
-                    </div>
-                    <p
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
-                        Specialized model for Chemical Entity Recognition - Chemical entities from the BC5CDR dataset.
-                    </p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chemical-entity-recognition</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">drug-discovery</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pharmacology</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">biocuration</span>
-                        <span
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chem</span>
-                    </div>
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
-                        <span>278M parameters</span>
-                        <span>100.12K downloads</span>
-                    </div>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M" target="_blank"
-                        rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
-                        HF</a>
-                </div>
-            </div>
-
-            <div style="text-align: center;">
-                <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
-                    class="btn btn-primary btn-lg">Browse All 475+ Models</a>
-            </div>
-        </div>
-    </section>
-
-    <!-- SageMaker Section -->
-    <section id="sagemaker" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
-        <div class="container">
-            <div style="text-align: center; margin-bottom: 4rem;">
-                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">AWS SageMaker Deployment</h2>
-                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
-                    Production-ready healthcare AI models deployed on AWS SageMaker with
-                    enterprise-grade security and scalability.
-                </p>
-            </div>
-
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
-                <div style="text-align: center;">
-                    <div
-                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z">
-                            </path>
-                        </svg>
-                    </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Enterprise Deployment</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Scalable cloud infrastructure
-                        with automatic provisioning and load balancing</p>
-                </div>
-                <div style="text-align: center;">
-                    <div
-                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                    </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">High Performance</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Optimized inference endpoints
-                        with sub-100ms latency for real-time applications</p>
-                </div>
-                <div style="text-align: center;">
-                    <div
-                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
-                            </path>
-                        </svg>
-                    </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Security & Compliance</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">HIPAA-compliant infrastructure
-                        with end-to-end encryption and audit trails</p>
-                </div>
-            </div>
-
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column; gap: 1rem; height: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">OpenMed NER Genome
-                                Detection Tiny</h3>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span
-                                    style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Model
-                                    Package</span>
-                                <span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">Amazon
-                                    SageMaker</span>
-                            </div>
                         </div>
-                    </div>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Open-source gene entity
-                        recognition tuned on BC2GM for precision genomics workflows. Deploy secure inference endpoints
-                        in
-                        under five minutes using the managed marketplace package.</p>
-                    <div
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1;">
-                        <div><span style="font-weight: 500;">Regions:</span> us-east-1, us-east-2, us-west-1, us-west-2,
-                            eu-central-1 and more</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Gene
-                                NER</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">BC2GM
-                                dataset</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical
-                                genomics</span>
-                        </div>
-                        <div><span style="font-weight: 500;">Fulfillment:</span> Marketplace-managed SageMaker model
-                            package</div>
-                    </div>
-                    <a href="https://aws.amazon.com/marketplace/pp/prodview-wbdotr776wwym?sr=0-1&amp;ref_=beagle&amp;applicationId=AWSMPContessa"
-                        target="_blank" rel="noopener" class="btn btn-outline"
-                        style="width: 100%; margin-top: auto;">View Marketplace Listing</a>
-                </div>
 
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column; gap: 1rem; height: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">OpenMed NER
-                                Species
-                                Detection</h3>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span
-                                    style="background: #fee2e2; color: #b91c1c; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Pathogen
-                                    NER</span>
-                                <span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">Marketplace
-                                    ready</span>
-                            </div>
+                        <div class="code-tabs">
+                            <button class="code-tab active" onclick="switchTab('python', this)">Python</button>
+                            <button class="code-tab" onclick="switchTab('cli', this)">CLI</button>
+                            <button class="code-tab" onclick="switchTab('tui', this)">TUI</button>
                         </div>
-                    </div>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Identifies organism mentions in
-                        clinical narratives to accelerate biosurveillance, antimicrobial stewardship and microbiome
-                        research pipelines.</p>
-                    <div
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1;">
-                        <div><span style="font-weight: 500;">Best for:</span> Epidemiology pipelines, infectious disease
-                            dashboards, lab automation</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Species
-                                NER</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Microbiology</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Batch
-                                & real-time</span>
-                        </div>
-                        <div><span style="font-weight: 500;">Quickstart:</span> Use the
-                            <a href="https://github.com/maziyarpanahi/openmed-starter/tree/main/aws-marketplace-notebooks/OpenMed-NER-Species-Detection-Model"
-                                target="_blank" rel="noopener" style="color: hsl(var(--primary));">SageMaker sample
-                                notebook</a> to deploy and monitor endpoints.
-                        </div>
-                    </div>
-                    <a href="https://aws.amazon.com/marketplace/search/results?prevFilters=%257B%2522sr%2522%3A%25220-3%2522%2C%2522ref_%2522%3A%2522beagle%2522%2C%2522applicationId%2522%3A%2522AWSMPContessa%2522%257D&searchTerms=OpenMed+NER+Species"
-                        target="_blank" rel="noopener" class="btn btn-outline"
-                        style="width: 100%; margin-top: auto;">Find on AWS Marketplace</a>
-                </div>
 
-                <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column; gap: 1rem; height: 100%;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
-                            <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">SageMaker Starter
-                                Notebooks</h3>
-                            <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span
-                                    style="background: #e0e7ff; color: #3730a3; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">GitHub</span>
-                                <span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">Examples
-                                    repo</span>
-                            </div>
-                        </div>
-                    </div>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Hands-on notebooks for
-                        deployment,
-                        scaling, monitoring and cost optimization across every OpenMed marketplace model.</p>
-                    <div
-                        style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1;">
-                        <div><span style="font-weight: 500;">Includes:</span> JumpStart templates, marketplace
-                            entitlement
-                            helpers, automation scripts</div>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Notebook-ready</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Step-by-step</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Monitoring</span>
-                        </div>
-                        <div><span style="font-weight: 500;">Coverage:</span> Batch transform, real-time endpoints, cost
-                            governance</div>
-                    </div>
-                    <a href="https://github.com/maziyarpanahi/openmed-starter/tree/main/aws-marketplace-notebooks/examples"
-                        target="_blank" rel="noopener" class="btn btn-outline"
-                        style="width: 100%; margin-top: auto;">Browse Notebooks</a>
-                </div>
-            </div>
-
-            <div style="text-align: center;">
-                <a href="https://aws.amazon.com/marketplace/seller-profile?id=seller-ovsgauetge4d6" target="_blank"
-                    rel="noopener" class="btn btn-primary btn-lg">OpenMed on AWS Marketplace</a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Research Section -->
-    <section id="research" style="padding: 5rem 0; background: hsl(var(--background));">
-        <div class="container">
-            <div style="text-align: center; margin-bottom: 4rem;">
-                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Research & Publications</h2>
-                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
-                    Peer-reviewed research advancing the state of healthcare AI with
-                    rigorous scientific methodology and reproducible results.
-                </p>
-            </div>
-
-            <div
-                style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical); margin-bottom: 3rem;">
-                <div
-                    style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
-                    <div style="flex: 1;">
-                        <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;">OpenMed NER: Open-Source,
-                            Domain-Adapted State-of-the-Art Transformers for Biomedical NER Across 12 Public Datasets
-                        </h3>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                            <span
-                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">arXiv:2508.01630</span>
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">2025</span>
-                            <span
-                                style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; display: flex; align-items: center; gap: 0.25rem;">
-                                <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
-                                    </path>
+                        <div class="code-block">
+                            <button class="copy-btn" onclick="copyCode(this)" title="Copy code">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <rect x="5" y="5" width="18" height="18" rx="2" ry="2"></rect>
                                 </svg>
-                                Maziyar Panahi
-                            </span>
+                            </button>
+                            <div id="codeContent"></div>
+                        </div>
+
+                        <div class="code-footer">
+                            <button class="btn btn-outline" onclick="copyCode(this)">Copy</button>
+                            <!-- <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                            class="btn btn-outline">Browse on HF</a> -->
                         </div>
                     </div>
                 </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="font-weight: 600; margin-bottom: 0.5rem;">Abstract</h4>
-                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.6;">
-                        Named-entity recognition (NER) is fundamental to extracting structured information from the >80%
-                        of healthcare data that resides in unstructured clinical notes and biomedical literature.
-                        Despite recent advances with large language models, achieving state-of-the-art performance
-                        across diverse entity types while maintaining computational efficiency remains a significant
-                        challenge. We introduce OpenMed NER, a suite of open-source, domain-adapted transformer models
-                        that combine lightweight domain-adaptive pre-training (DAPT) with parameter-efficient Low-Rank
-                        Adaptation (LoRA). Our approach performs cost-effective DAPT on a 350k-passage corpus compiled
-                        from ethically sourced, publicly available research repositories and de-identified clinical
-                        notes (PubMed, arXiv, and MIMIC-III) using DeBERTa-v3, PubMedBERT, and BioELECTRA backbones.
-                        This is followed by task-specific fine-tuning with LoRA, which updates less than 1.5% of model
-                        parameters. We evaluate our models on 12 established biomedical NER benchmarks spanning
-                        chemicals, diseases, genes, and species. OpenMed NER achieves new state-of-the-art micro-F1
-                        scores on 10 of these 12 datasets, with substantial gains across diverse entity types. Our
-                        models advance the state-of-the-art on foundational disease and chemical benchmarks (e.g.,
-                        BC5CDR-Disease, +2.70 pp), while delivering even larger improvements of over 5.3 and 9.7
-                        percentage points on more specialized gene and clinical cell line corpora. This work
-                        demonstrates that strategically adapted open-source models can surpass closed-source solutions.
-                        This performance is achieved with remarkable efficiency: training completes in under 12 hours on
-                        a single GPU with a low carbon footprint (< 1.2 kg CO2e), producing permissively licensed,
-                            open-source checkpoints designed to help practitioners facilitate compliance with emerging
-                            data protection and AI regulations, such as the EU AI Act. </p>
-                </div>
-
-                <div style="margin-bottom: 1.5rem;">
-                    <h4 style="font-weight: 600; margin-bottom: 0.75rem;">Key Achievements</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem;">
-                        <div
-                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
-                            <div
-                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
-                                10/12</div>
-                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">SOTA Benchmarks
-                            </div>
-                        </div>
-                        <div
-                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
-                            <div
-                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
-                                +9.7pp</div>
-                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Max Improvement</div>
-                        </div>
-                        <div
-                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
-                            <div
-                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
-                                &lt;12h</div>
-                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Training Time
-                            </div>
-                        </div>
-                        <div
-                            style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
-                            <div
-                                style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
-                                &lt;1.2kg</div>
-                            <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">CO2e Footprint</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; padding-top: 1rem;">
-                    <a href="https://huggingface.co/papers/2508.01630" target="_blank" rel="noopener"
-                        class="btn btn-primary">Read on Hugging Face</a>
-                    <a href="https://arxiv.org/pdf/2508.01630" target="_blank" rel="noopener"
-                        class="btn btn-outline">Download PDF</a>
-                    <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener" class="btn btn-outline">View
-                        Models</a>
-                </div>
             </div>
+        </section>
 
-            <div style="text-align: center;">
-                <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Author</h3>
-                <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;">
-                    <span
-                        style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Maziyar
-                        Panahi</span>
-                </div>
-            </div>
-        </div>
-    </section>
+        <!-- Platform Section -->
+        <section class="platform">
+            <div class="container">
+                <div class="platform-content">
+                    <h2 class="platform-title">
+                        State-of-the-Art Healthcare AI Models
+                    </h2>
 
-    <!-- FAQ Section -->
-    <section id="faq" class="faq" style="padding: 5rem 0; background: hsl(var(--muted) / 0.2);">
-        <div class="container">
-            <div style="text-align: center; margin-bottom: 3.5rem;">
-                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.25rem;">Healthcare AI FAQ</h2>
-                <p style="font-size: 1.1rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
-                    Answers to the most common questions from clinical innovation, ML, and compliance teams evaluating
-                    OpenMed for production NLP and decision support workloads.
-                </p>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.75rem;">
-                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
-                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">What makes OpenMed models production-ready for healthcare?</h3>
-                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
-                        Each model ships with benchmark results across 12 biomedical NER datasets, guardrail evaluations, and Apache-2.0 licensing, so teams can satisfy procurement reviews and accelerate go-live timelines.
+                    <p class="platform-desc">
+                        Production-ready state-of-the-art LLMs for healthcare and clinical AI across biomedical
+                        domains — chemicals, diseases, genes/proteins, species, anatomy, oncology, and more.
+                        Advanced healthcare AI models trained on clinical and biomedical data.
                     </p>
-                </article>
-                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
-                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">How do I deploy OpenMed in the cloud or on-premises?</h3>
-                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
-                        Use the AWS Marketplace model packages and JumpStart notebooks for guided SageMaker deployment, or pull the Docker images and Python package to host inside your own VPC or on hospital infrastructure.
-                    </p>
-                </article>
-                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
-                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">Does OpenMed support HIPAA-aligned workflows?</h3>
-                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
-                        Yes. Models are trained on de-identified, ethically sourced corpora, support private deployment, and integrate audit logging, encryption, and access controls when run on SageMaker or self-managed environments.
-                    </p>
-                </article>
-                <article style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
-                    <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">Can we fine-tune OpenMed LLMs for custom vocabularies?</h3>
-                    <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
-                        Absolutely. Lightweight LoRA adapters, curated tokenizers, and starter notebooks are provided so you can extend entity coverage to local ontologies or multi-lingual records while keeping compute requirements modest.
-                    </p>
-                </article>
-            </div>
-        </div>
-    </section>
 
-    <!-- Demo Section -->
-    <!-- <section id="demos" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
-        <div class="container">
-            <div style="text-align: center; margin-bottom: 4rem;">
-                <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Interactive Demos</h2>
-                <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
-                    Experience our healthcare AI models in action with interactive demos
-                    and live spaces on Hugging Face.
-                </p>
-            </div>
-
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
-                <div style="text-align: center;">
-                    <div
-                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <polygon points="5,3 19,12 5,21"></polygon>
-                        </svg>
+                    <div class="platform-badges">
+                        <span
+                            style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Available
+                            on</span>
+                        <div class="platform-badge">
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 13l4 4L19 7">
+                                </path>
+                            </svg>
+                            <span>Hugging Face <span style="color: hsl(var(--muted-foreground));">(475+
+                                    models)</span></span>
+                        </div>
+                        <div class="platform-badge">
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 13l4 4L19 7">
+                                </path>
+                            </svg>
+                            <span>Python Package</span>
+                        </div>
+                        <div class="platform-badge">
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 13l4 4L19 7">
+                                </path>
+                            </svg>
+                            <span>Apache-2.0</span>
+                        </div>
                     </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Interactive Demos</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Try our models directly in your
-                        browser with real-time results</p>
-                </div>
-                <div style="text-align: center;">
-                    <div
-                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <polyline points="16,18 22,12 16,6"></polyline>
-                            <polyline points="8,6 2,12 8,18"></polyline>
-                        </svg>
-                    </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">API Integration</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Easy-to-use APIs with
-                        comprehensive documentation and examples</p>
-                </div>
-                <div style="text-align: center;">
-                    <div
-                        style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
-                        <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                        </svg>
-                    </div>
-                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Instant Results</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Sub-second inference times for
-                        real-time healthcare applications</p>
                 </div>
             </div>
+        </section>
 
-            <div
-                style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+        <!-- Python Toolkit Section -->
+        <section id="toolkit" style="padding: 5rem 0; background: hsl(var(--background));">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Python Toolkit</h2>
+                    <p
+                        style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                        A complete toolkit for clinical NLP workflows — from quick analysis to batch processing,
+                        with an interactive terminal UI for exploration.
+                    </p>
+                </div>
+
                 <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                    <!-- Interactive TUI -->
                     <div
-                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
-                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                            <polyline points="21,15 16,10 5,21"></polyline>
-                        </svg>
-                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
-                            <span
-                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                                <line x1="8" y1="21" x2="16" y2="21"></line>
+                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                            </svg>
                         </div>
-                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Hugging
-                                Face Space</span>
-                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Interactive TUI</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Rich terminal interface for visual NER analysis. Model switching, config profiles, history,
+                            and export.
+                        </p>
+                        <code
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed tui</code>
                     </div>
-                    <div style="padding: 1.5rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Clinical Text Analysis
+
+                    <!-- CLI Analysis -->
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <polyline points="4 17 10 11 4 5"></polyline>
+                                <line x1="12" y1="19" x2="20" y2="19"></line>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">CLI Analysis</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Analyze text from the command line. Output as JSON, CSV, or HTML for downstream processing.
+                        </p>
+                        <code
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed analyze --text "..."</code>
+                    </div>
+
+                    <!-- Batch Processing -->
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                </path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Batch Processing</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
+                            Process directories of clinical notes. Progress tracking, error handling, and aggregated
+                            results.
+                        </p>
+                        <code
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed batch --input-dir ./notes</code>
+                    </div>
+
+                    <!-- Configuration Profiles -->
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path
+                                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+                                </path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Configuration Profiles
                         </h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            Interactive demo showing real-time analysis of clinical notes and medical records</p>
+                            Built-in dev/prod/test profiles. Save custom configurations and switch instantly.
+                        </p>
+                        <code
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed config profile-use prod</code>
+                    </div>
+                </div>
+
+                <!-- TUI Preview -->
+                <div
+                    style="background: hsl(var(--muted) / 0.3); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; margin-bottom: 2rem;">
+                    <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; text-align: center;">
+                        Interactive TUI Preview</h3>
+                    <pre
+                        style="background: hsl(220 13% 10%); color: hsl(0 0% 90%); padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.4;"><code>┌──────────────────────────────────────────────────────────────────────────────┐
+│ OpenMed TUI                                         Interactive Clinical NER │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ┌─ Input (Ctrl+Enter to analyze) ──────────────────────────────────────────┐ │
+│ │ Patient diagnosed with chronic myeloid leukemia, started on imatinib.    │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│ ┌─ Annotated ──────────────────────────────────────────────────────────────┐ │
+│ │ Patient diagnosed with <span style="color: #ef4444;">[chronic myeloid leukemia]</span>, started on <span style="color: #3b82f6;">[imatinib]</span>.│ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│ ┌─ Entities (2) ───────────────────────────────────────────────────────────┐ │
+│ │  Label     Entity                      Confidence                        │ │
+│ │  <span style="color: #ef4444;">DISEASE</span>   chronic myeloid leukemia    <span style="color: #22c55e;">████████████████████</span> 0.98         │ │
+│ │  <span style="color: #3b82f6;">DRUG</span>      imatinib                    <span style="color: #22c55e;">███████████████████░</span> 0.95         │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Model: default │ Profile: dev │ Thresh: 0.30 │ MedTok │ 23ms                 │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ Ctrl+Enter Analyze  F2 Model  F3 Config  F4 Profile  F5 History  F6 Export   │
+└──────────────────────────────────────────────────────────────────────────────┘</code></pre>
+                </div>
+
+                <div style="text-align: center;">
+                    <a href="https://openmed.life/docs/tui.html" class="btn btn-primary btn-lg"
+                        style="margin-right: 0.5rem;">TUI Documentation</a>
+                    <a href="https://openmed.life/docs/cli.html" class="btn btn-outline btn-lg">CLI Reference</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Models Section -->
+        <section id="models" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Healthcare AI Models</h2>
+                    <p
+                        style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                        Explore our comprehensive collection of state-of-the-art models for clinical NLP,
+                        biomedical NER, and healthcare applications.
+                    </p>
+                </div>
+
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Chemical Detect</h3>
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                        </div>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
+                            Specialized model for Chemical Entity Recognition - Identifies chemical compounds and
+                            substances
+                            in biomedical literature.</p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
                             <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NLP</span>
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chemical-entity-recognition</span>
                             <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical</span>
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">drug-discovery</span>
                             <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Real-time</span>
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pharmacology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chemistry</span>
                         </div>
                         <div
-                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            <span>2.1K users</span>
+                            style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                            <span>33M parameters</span>
+                            <span>117.06K downloads</span>
                         </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <a href="https://huggingface.co/OpenMed" class="btn btn-primary" style="flex: 1;"
-                                target="_blank" rel="noopener">Try Demo</a>
-                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-outline" target="_blank"
-                                rel="noopener">View Code</a>
+                        <a href="https://huggingface.co/OpenMed/OpenMed-NER-ChemicalDetect-ElectraMed-33M"
+                            target="_blank" rel="noopener" class="btn btn-primary"
+                            style="width: 100%; margin-bottom: 0.5rem;">View on
+                            HF</a>
+                    </div>
+
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Disease Detect</h3>
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
                         </div>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
+                            Specialized model for Disease Entity Recognition - Disease entities from the BC5CDR dataset.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">disease-entity-recognition</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">medical-diagnosis</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pathology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">biocuration</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">biomedical-nlp</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">detect-disease</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                            <span>335M parameters</span>
+                            <span>104K downloads</span>
+                        </div>
+                        <a href="https://huggingface.co/OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M" target="_blank"
+                            rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
+                            HF</a>
+                    </div>
+
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Genomic Detect</h3>
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                        </div>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
+                            Specialized model for Gene Entity Recognition - Gene-related entities.</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">gene-recognition</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">genetics</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">genomics</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">molecular-biology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">cell-line-name</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                            <span>109M parameters</span>
+                            <span>103.1K downloads</span>
+                        </div>
+                        <a href="https://huggingface.co/OpenMed/OpenMed-NER-GenomicDetect-PubMed-109M" target="_blank"
+                            rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
+                            HF</a>
+                    </div>
+
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Oncology Detect</h3>
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                        </div>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
+                            Specialized model for Cancer Genetics - Cancer-related genetic entities.</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">cancer-genetics</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">oncology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">gene-regulation</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">cancer-research</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pathological_formation</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                            <span>568M parameters</span>
+                            <span>101.92K downloads</span>
+                        </div>
+                        <a href="https://huggingface.co/OpenMed/OpenMed-NER-OncologyDetect-MultiMed-568M"
+                            target="_blank" rel="noopener" class="btn btn-primary"
+                            style="width: 100%; margin-bottom: 0.5rem;">View on
+                            HF</a>
+                    </div>
+
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER DNA Detect</h3>
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                        </div>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
+                            Specialized model for Biomedical Entity Recognition - Proteins, DNA, RNA, cell lines, and
+                            cell
+                            types.</p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">protein-recognition</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">gene-recognition</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">molecular-biology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">genomics</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">dna</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">rna</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">protein</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                            <span>184M parameters</span>
+                            <span>90.18K downloads</span>
+                        </div>
+                        <a href="https://huggingface.co/OpenMed/OpenMed-NER-DNADetect-SuperClinical-184M"
+                            target="_blank" rel="noopener" class="btn btn-primary"
+                            style="width: 100%; margin-bottom: 0.5rem;">View on
+                            HF</a>
+                    </div>
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column;">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                            <h3 style="font-size: 1.125rem; font-weight: 600;">OpenMed-NER Pharma Detect</h3>
+                            <span
+                                style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem;">Featured</span>
+                        </div>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem; flex-grow: 1;">
+                            Specialized model for Chemical Entity Recognition - Chemical entities from the BC5CDR
+                            dataset.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chemical-entity-recognition</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">drug-discovery</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">pharmacology</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">biocuration</span>
+                            <span
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">chem</span>
+                        </div>
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: hsl(var(--muted-foreground)); margin-bottom: 1rem;">
+                            <span>278M parameters</span>
+                            <span>100.12K downloads</span>
+                        </div>
+                        <a href="https://huggingface.co/OpenMed/OpenMed-NER-PharmaDetect-BigMed-278M" target="_blank"
+                            rel="noopener" class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;">View on
+                            HF</a>
+                    </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                        class="btn btn-primary btn-lg">Browse All 475+ Models</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- SageMaker Section -->
+        <section id="sagemaker" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">AWS SageMaker Deployment
+                    </h2>
+                    <p
+                        style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                        Production-ready healthcare AI models deployed on AWS SageMaker with
+                        enterprise-grade security and scalability.
+                    </p>
+                </div>
+
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
+                    <div style="text-align: center;">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z">
+                                </path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Enterprise Deployment
+                        </h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Scalable cloud
+                            infrastructure
+                            with automatic provisioning and load balancing</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">High Performance</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Optimized inference
+                            endpoints
+                            with sub-100ms latency for real-time applications</p>
+                    </div>
+                    <div style="text-align: center;">
+                        <div
+                            style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                            <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
+                                stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z">
+                                </path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Security & Compliance
+                        </h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">HIPAA-compliant
+                            infrastructure
+                            with end-to-end encryption and audit trails</p>
                     </div>
                 </div>
 
                 <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
                     <div
-                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
-                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                            <polyline points="21,15 16,10 5,21"></polyline>
-                        </svg>
-                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
-                            <span
-                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column; gap: 1rem; height: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">OpenMed NER
+                                    Genome
+                                    Detection Tiny</h3>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span
+                                        style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Model
+                                        Package</span>
+                                    <span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">Amazon
+                                        SageMaker</span>
+                                </div>
+                            </div>
                         </div>
-                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Interactive
-                                Demo</span>
-                        </div>
-                    </div>
-                    <div style="padding: 1.5rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Medical Image
-                            Diagnosis</h3>
-                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            AI-powered radiology assistant for X-ray and MRI image analysis</p>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                            <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Computer
-                                Vision</span>
-                            <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Radiology</span>
-                            <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Diagnosis</span>
-                        </div>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Open-source gene entity
+                            recognition tuned on BC2GM for precision genomics workflows. Deploy secure inference
+                            endpoints
+                            in
+                            under five minutes using the managed marketplace package.</p>
                         <div
-                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            <span>1.8K users</span>
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1;">
+                            <div><span style="font-weight: 500;">Regions:</span> us-east-1, us-east-2, us-west-1,
+                                us-west-2,
+                                eu-central-1 and more</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Gene
+                                    NER</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">BC2GM
+                                    dataset</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Clinical
+                                    genomics</span>
+                            </div>
+                            <div><span style="font-weight: 500;">Fulfillment:</span> Marketplace-managed SageMaker model
+                                package</div>
                         </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <a href="https://huggingface.co/OpenMed" class="btn btn-primary" style="flex: 1;"
-                                target="_blank" rel="noopener">Try Demo</a>
-                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-outline" target="_blank"
-                                rel="noopener">View Code</a>
-                        </div>
+                        <a href="https://aws.amazon.com/marketplace/pp/prodview-wbdotr776wwym?sr=0-1&amp;ref_=beagle&amp;applicationId=AWSMPContessa"
+                            target="_blank" rel="noopener" class="btn btn-outline"
+                            style="width: 100%; margin-top: auto;">View Marketplace Listing</a>
                     </div>
+
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column; gap: 1rem; height: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">OpenMed NER
+                                    Species
+                                    Detection</h3>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span
+                                        style="background: #fee2e2; color: #b91c1c; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Pathogen
+                                        NER</span>
+                                    <span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">Marketplace
+                                        ready</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Identifies organism
+                            mentions in
+                            clinical narratives to accelerate biosurveillance, antimicrobial stewardship and microbiome
+                            research pipelines.</p>
+                        <div
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1;">
+                            <div><span style="font-weight: 500;">Best for:</span> Epidemiology pipelines, infectious
+                                disease
+                                dashboards, lab automation</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Species
+                                    NER</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Microbiology</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Batch
+                                    & real-time</span>
+                            </div>
+                            <div><span style="font-weight: 500;">Quickstart:</span> Use the
+                                <a href="https://github.com/maziyarpanahi/openmed-starter/tree/main/aws-marketplace-notebooks/OpenMed-NER-Species-Detection-Model"
+                                    target="_blank" rel="noopener" style="color: hsl(var(--primary));">SageMaker sample
+                                    notebook</a> to deploy and monitor endpoints.
+                            </div>
+                        </div>
+                        <a href="https://aws.amazon.com/marketplace/search/results?prevFilters=%257B%2522sr%2522%3A%25220-3%2522%2C%2522ref_%2522%3A%2522beagle%2522%2C%2522applicationId%2522%3A%2522AWSMPContessa%2522%257D&searchTerms=OpenMed+NER+Species"
+                            target="_blank" rel="noopener" class="btn btn-outline"
+                            style="width: 100%; margin-top: auto;">Find on AWS Marketplace</a>
+                    </div>
+
+                    <div
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical); display: flex; flex-direction: column; gap: 1rem; height: 100%;">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">SageMaker
+                                    Starter
+                                    Notebooks</h3>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span
+                                        style="background: #e0e7ff; color: #3730a3; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">GitHub</span>
+                                    <span style="color: hsl(var(--muted-foreground)); font-size: 0.75rem;">Examples
+                                        repo</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem;">Hands-on notebooks for
+                            deployment,
+                            scaling, monitoring and cost optimization across every OpenMed marketplace model.</p>
+                        <div
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1;">
+                            <div><span style="font-weight: 500;">Includes:</span> JumpStart templates, marketplace
+                                entitlement
+                                helpers, automation scripts</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Notebook-ready</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Step-by-step</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Monitoring</span>
+                            </div>
+                            <div><span style="font-weight: 500;">Coverage:</span> Batch transform, real-time endpoints,
+                                cost
+                                governance</div>
+                        </div>
+                        <a href="https://github.com/maziyarpanahi/openmed-starter/tree/main/aws-marketplace-notebooks/examples"
+                            target="_blank" rel="noopener" class="btn btn-outline"
+                            style="width: 100%; margin-top: auto;">Browse Notebooks</a>
+                    </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <a href="https://aws.amazon.com/marketplace/seller-profile?id=seller-ovsgauetge4d6" target="_blank"
+                        rel="noopener" class="btn btn-primary btn-lg">OpenMed on AWS Marketplace</a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Research Section -->
+        <section id="research" style="padding: 5rem 0; background: hsl(var(--background));">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.5rem;">Research & Publications</h2>
+                    <p
+                        style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                        Peer-reviewed research advancing the state of healthcare AI with
+                        rigorous scientific methodology and reproducible results.
+                    </p>
                 </div>
 
                 <div
-                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; overflow: hidden; box-shadow: var(--shadow-medical);">
+                    style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical); margin-bottom: 3rem;">
                     <div
-                        style="aspect-ratio: 16/9; background: linear-gradient(135deg, hsl(var(--primary) / 0.1), hsl(var(--primary) / 0.05)); display: flex; align-items: center; justify-content: center; position: relative;">
-                        <svg style="width: 3rem; height: 3rem; color: hsl(var(--primary) / 0.4);" fill="none"
-                            stroke="currentColor" viewBox="0 0 24 24">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                            <polyline points="21,15 16,10 5,21"></polyline>
-                        </svg>
-                        <div style="position: absolute; top: 0.75rem; left: 0.75rem;">
-                            <span
-                                style="background: #dcfce7; color: #166534; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Live</span>
-                        </div>
-                        <div style="position: absolute; top: 0.75rem; right: 0.75rem;">
-                            <span
-                                style="border: 1px solid hsl(214 32% 91%); background: hsl(var(--background) / 0.9); padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.75rem;">Hugging
-                                Face Space</span>
+                        style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5rem;">
+                        <div style="flex: 1;">
+                            <h3 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem;">OpenMed NER:
+                                Open-Source,
+                                Domain-Adapted State-of-the-Art Transformers for Biomedical NER Across 12 Public
+                                Datasets
+                            </h3>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
+                                <span
+                                    style="background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">arXiv:2508.01630</span>
+                                <span
+                                    style="border: 1px solid hsl(214 32% 91%); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">2025</span>
+                                <span
+                                    style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; display: flex; align-items: center; gap: 0.25rem;">
+                                    <svg style="width: 1rem; height: 1rem;" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z">
+                                        </path>
+                                    </svg>
+                                    Maziyar Panahi
+                                </span>
+                            </div>
                         </div>
                     </div>
-                    <div style="padding: 1.5rem;">
-                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Drug Interaction
-                            Checker</h3>
-                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            Advanced pharmaceutical interaction detection and safety recommendations</p>
-                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem;">
-                            <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Pharmacy</span>
-                            <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Safety</span>
-                            <span
-                                style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Interactions</span>
-                        </div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="font-weight: 600; margin-bottom: 0.5rem;">Abstract</h4>
+                        <p style="color: hsl(var(--muted-foreground)); line-height: 1.6;">
+                            Named-entity recognition (NER) is fundamental to extracting structured information from the
+                            >80%
+                            of healthcare data that resides in unstructured clinical notes and biomedical literature.
+                            Despite recent advances with large language models, achieving state-of-the-art performance
+                            across diverse entity types while maintaining computational efficiency remains a significant
+                            challenge. We introduce OpenMed NER, a suite of open-source, domain-adapted transformer
+                            models
+                            that combine lightweight domain-adaptive pre-training (DAPT) with parameter-efficient
+                            Low-Rank
+                            Adaptation (LoRA). Our approach performs cost-effective DAPT on a 350k-passage corpus
+                            compiled
+                            from ethically sourced, publicly available research repositories and de-identified clinical
+                            notes (PubMed, arXiv, and MIMIC-III) using DeBERTa-v3, PubMedBERT, and BioELECTRA backbones.
+                            This is followed by task-specific fine-tuning with LoRA, which updates less than 1.5% of
+                            model
+                            parameters. We evaluate our models on 12 established biomedical NER benchmarks spanning
+                            chemicals, diseases, genes, and species. OpenMed NER achieves new state-of-the-art micro-F1
+                            scores on 10 of these 12 datasets, with substantial gains across diverse entity types. Our
+                            models advance the state-of-the-art on foundational disease and chemical benchmarks (e.g.,
+                            BC5CDR-Disease, +2.70 pp), while delivering even larger improvements of over 5.3 and 9.7
+                            percentage points on more specialized gene and clinical cell line corpora. This work
+                            demonstrates that strategically adapted open-source models can surpass closed-source
+                            solutions.
+                            This performance is achieved with remarkable efficiency: training completes in under 12
+                            hours on
+                            a single GPU with a low carbon footprint (< 1.2 kg CO2e), producing permissively licensed,
+                                open-source checkpoints designed to help practitioners facilitate compliance with
+                                emerging data protection and AI regulations, such as the EU AI Act. </p>
+                    </div>
+
+                    <div style="margin-bottom: 1.5rem;">
+                        <h4 style="font-weight: 600; margin-bottom: 0.75rem;">Key Achievements</h4>
                         <div
-                            style="display: flex; justify-content: space-between; color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            <span>3.2K users</span>
-                        </div>
-                        <div style="display: flex; gap: 0.5rem;">
-                            <a href="https://huggingface.co/OpenMed" class="btn btn-primary" style="flex: 1;"
-                                target="_blank" rel="noopener">Try Demo</a>
-                            <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-outline" target="_blank"
-                                rel="noopener">View Code</a>
+                            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem;">
+                            <div
+                                style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                                <div
+                                    style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                    10/12</div>
+                                <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">SOTA Benchmarks
+                                </div>
+                            </div>
+                            <div
+                                style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                                <div
+                                    style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                    +9.7pp</div>
+                                <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Max Improvement
+                                </div>
+                            </div>
+                            <div
+                                style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                                <div
+                                    style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                    &lt;12h</div>
+                                <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">Training Time
+                                </div>
+                            </div>
+                            <div
+                                style="text-align: center; padding: 1rem; background: hsl(var(--muted) / 0.3); border-radius: 0.5rem;">
+                                <div
+                                    style="font-size: 1.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.25rem;">
+                                    &lt;1.2kg</div>
+                                <div style="font-size: 0.75rem; color: hsl(var(--muted-foreground));">CO2e Footprint
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <div style="text-align: center; margin-bottom: 1.5rem;">
-                <h3 style="font-size: 1.5rem; font-weight: 600; margin-bottom: 1rem;">Ready to build with OpenMed?</h3>
-                <p style="color: hsl(var(--muted-foreground)); max-width: 32rem; margin: 0 auto;">
-                    Get started with our APIs, explore our models, or try the interactive demos
-                    to see how OpenMed can enhance your healthcare applications.
-                </p>
-            </div>
-            <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem;">
-                <a href="https://huggingface.co/spaces/OpenMed" class="btn btn-primary btn-lg" target="_blank"
-                    rel="noopener">View All Demos</a>
-                <a href="https://github.com/maziyarpanahi/openmed#readme" class="btn btn-outline btn-lg"
-                    target="_blank" rel="noopener">API Documentation</a>
-            </div>
-        </div>
-    </section> -->
-
-    <!-- About Section -->
-    <section id="about" class="about">
-        <div class="container">
-            <div class="about-grid">
-                <div>
-                    <h2 class="about-title">About OpenMed - Leading Healthcare AI Innovation</h2>
-                    <p class="about-desc">Founded by <a href="https://x.com/OpenMed_AI" target="_blank" rel="noopener"
-                            style="text-decoration: underline;">Maziyar Panahi</a>, OpenMed is a
-                        community-driven, non-profit effort to democratize state-of-the-art LLMs for healthcare and make
-                        powerful clinical AI freely available. All healthcare AI models are released under Apache-2.0
-                        with practical demos and deployment recipes for medical and clinical applications.</p>
-                    <ul class="about-list">
-                        <li>Transparent benchmarking & reproducible training</li>
-                        <li>Privacy-minded, on-prem & cloud-friendly</li>
-                        <li>Ecosystem: Hugging Face org, Spaces, GitHub starter</li>
-                    </ul>
-                    <div class="about-buttons">
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.75rem; padding-top: 1rem;">
+                        <a href="https://huggingface.co/papers/2508.01630" target="_blank" rel="noopener"
+                            class="btn btn-primary">Read on Hugging Face</a>
+                        <a href="https://arxiv.org/pdf/2508.01630" target="_blank" rel="noopener"
+                            class="btn btn-outline">Download PDF</a>
                         <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
-                            class="btn btn-primary">Hugging Face</a>
-                        <a href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener"
-                            class="btn btn-outline">GitHub</a>
-                        <a href="https://huggingface.co/spaces/OpenMed/OpenMed-NER-Model-Discovery" target="_blank"
-                            rel="noopener" class="btn btn-outline">Model Discovery</a>
+                            class="btn btn-outline">View
+                            Models</a>
                     </div>
                 </div>
-                <div class="contact-card">
-                    <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Press & Community</h3>
-                    <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">For
-                        interviews, speaking, or partnerships, reach out and we'll get back quickly.</p>
-                    <div class="contact-grid">
-                        <a href="mailto:noemail.please" class="contact-link"
-                            style="background: hsl(var(--muted)); color: hsl(var(--foreground));">no email :-)</a>
-                        <a href="https://www.linkedin.com/company/openmed-ai/" target="_blank" rel="noopener"
-                            class="contact-link"
-                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">LinkedIn</a>
-                        <a href="https://x.com/OpenMed_AI" target="_blank" rel="noopener" class="contact-link"
-                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">X (Twitter)</a>
-                        <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener" class="contact-link"
-                            style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">Hugging Face</a>
+
+                <div style="text-align: center;">
+                    <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem;">Author</h3>
+                    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem;">
+                        <span
+                            style="background: hsl(var(--muted)); color: hsl(var(--foreground)); padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.875rem;">Maziyar
+                            Panahi</span>
                     </div>
-                    <!-- <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ Section -->
+        <section id="faq" class="faq" style="padding: 5rem 0; background: hsl(var(--muted) / 0.2);">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 3.5rem;">
+                    <h2 style="font-size: 2.5rem; font-weight: 700; margin-bottom: 1.25rem;">Healthcare AI FAQ</h2>
+                    <p
+                        style="font-size: 1.1rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
+                        Answers to the most common questions from clinical innovation, ML, and compliance teams
+                        evaluating
+                        OpenMed for production NLP and decision support workloads.
+                    </p>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.75rem;">
+                    <article
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">What makes OpenMed
+                            models production-ready for healthcare?</h3>
+                        <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                            Each model ships with benchmark results across 12 biomedical NER datasets, guardrail
+                            evaluations, and Apache-2.0 licensing, so teams can satisfy procurement reviews and
+                            accelerate go-live timelines.
+                        </p>
+                    </article>
+                    <article
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">How do I deploy
+                            OpenMed in the cloud or on-premises?</h3>
+                        <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                            Use the AWS Marketplace model packages and JumpStart notebooks for guided SageMaker
+                            deployment, or pull the Docker images and Python package to host inside your own VPC or on
+                            hospital infrastructure.
+                        </p>
+                    </article>
+                    <article
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">Does OpenMed support
+                            HIPAA-aligned workflows?</h3>
+                        <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                            Yes. Models are trained on de-identified, ethically sourced corpora, support private
+                            deployment, and integrate audit logging, encryption, and access controls when run on
+                            SageMaker or self-managed environments.
+                        </p>
+                    </article>
+                    <article
+                        style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <h3 style="font-size: 1.15rem; font-weight: 600; margin-bottom: 0.75rem;">Can we fine-tune
+                            OpenMed LLMs for custom vocabularies?</h3>
+                        <p style="color: hsl(var(--muted-foreground)); line-height: 1.7;">
+                            Absolutely. Lightweight LoRA adapters, curated tokenizers, and starter notebooks are
+                            provided so you can extend entity coverage to local ontologies or multi-lingual records
+                            while keeping compute requirements modest.
+                        </p>
+                    </article>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about" class="about">
+            <div class="container">
+                <div class="about-grid">
+                    <div>
+                        <h2 class="about-title">About OpenMed - Leading Healthcare AI Innovation</h2>
+                        <p class="about-desc">Founded by <a href="https://x.com/OpenMed_AI" target="_blank"
+                                rel="noopener" style="text-decoration: underline;">Maziyar Panahi</a>, OpenMed is a
+                            community-driven, non-profit effort to democratize state-of-the-art LLMs for healthcare and
+                            make
+                            powerful clinical AI freely available. All healthcare AI models are released under
+                            Apache-2.0
+                            with practical demos and deployment recipes for medical and clinical applications.</p>
+                        <ul class="about-list">
+                            <li>Transparent benchmarking & reproducible training</li>
+                            <li>Privacy-minded, on-prem & cloud-friendly</li>
+                            <li>Ecosystem: Hugging Face org, Spaces, GitHub starter</li>
+                        </ul>
+                        <div class="about-buttons">
+                            <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
+                                class="btn btn-primary">Hugging Face</a>
+                            <a href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener"
+                                class="btn btn-outline">GitHub</a>
+                            <a href="https://huggingface.co/spaces/OpenMed/OpenMed-NER-Model-Discovery" target="_blank"
+                                rel="noopener" class="btn btn-outline">Model Discovery</a>
+                        </div>
+                    </div>
+                    <div class="contact-card">
+                        <h3 style="font-weight: 600; margin-bottom: 0.5rem;">Press & Community</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">For
+                            interviews, speaking, or partnerships, reach out and we'll get back quickly.</p>
+                        <div class="contact-grid">
+                            <a href="mailto:noemail.please" class="contact-link"
+                                style="background: hsl(var(--muted)); color: hsl(var(--foreground));">no email :-)</a>
+                            <a href="https://www.linkedin.com/company/openmed-ai/" target="_blank" rel="noopener"
+                                class="contact-link"
+                                style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">LinkedIn</a>
+                            <a href="https://x.com/OpenMed_AI" target="_blank" rel="noopener" class="contact-link"
+                                style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">X
+                                (Twitter)</a>
+                            <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener" class="contact-link"
+                                style="border: 1px solid hsl(214 32% 91%); color: hsl(var(--foreground));">Hugging
+                                Face</a>
+                        </div>
+                        <!-- <p style="margin-top: 1rem; font-size: 0.75rem; color: hsl(var(--muted-foreground));">Media kit &
                         logo: <a href="https://openmed.life/media-kit" style="text-decoration: underline;">coming
                             soon</a></p> -->
+                    </div>
                 </div>
             </div>
-        </div>
-</section>
+        </section>
 
     </main>
 

@@ -19,8 +19,12 @@ nav:
       - Model Registry: model-registry.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Configuration & Validation: configuration.md
+      - Configuration Profiles: profiles.md
+      - Batch Processing: batch-processing.md
+      - Performance Profiling: profiling.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - CLI & Automation: cli.md
+      - Interactive TUI: tui.md
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
   - Project:

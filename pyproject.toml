@@ -68,6 +68,11 @@ cli = [
   "rich>=13.9",
 ]
 
+tui = [
+  "textual>=0.89",
+  "rich>=13.9",
+]
+
 [tool.hatch.build]
 include = [
   "openmed/**",
