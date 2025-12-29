@@ -17,6 +17,10 @@ uv pip install openmed[tui]
 Launch the TUI from the command line:
 
 ```bash
+# Simply run openmed with no arguments
+openmed
+
+# Or explicitly with the tui subcommand
 openmed tui
 ```
 
