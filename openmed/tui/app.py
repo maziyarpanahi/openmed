@@ -78,8 +78,8 @@ def get_entity_color(label: str) -> str:
 def get_available_models() -> list[str]:
     """Get list of available models from registry."""
     try:
-        from openmed.core.model_registry import MODEL_REGISTRY
-        return list(MODEL_REGISTRY.keys())
+        from openmed.core.model_registry import OPENMED_MODELS
+        return list(OPENMED_MODELS.keys())
     except ImportError:
         return ["disease_detection_superclinical", "pharma_detection_superclinical"]
 
