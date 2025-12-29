@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
+
+# Skip all tests in this module if TUI dependencies are not installed
+pytest.importorskip("rich")
+pytest.importorskip("textual")
+
 from unittest.mock import MagicMock, patch
 
 from openmed.tui.app import (
