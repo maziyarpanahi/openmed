@@ -1,150 +1,56 @@
 # OpenMed
 
-OpenMed is a Python toolkit for biomedical and clinical NLP, built to deliver state-of-the-art models, including advanced large language models (LLMs) for healthcare, that rival and often outperform proprietary enterprise solutions. It unifies model discovery, assertion status detection, de-identification pipelines, advanced extraction and reasoning tools, and one-line orchestration for scripts, services, or notebooks, enabling teams to deploy production-grade healthcare AI without vendor lock-in.
+> **Production-ready medical NLP toolkit powered by state-of-the-art transformers**
 
-It also bundles configuration management, model loading, support for cutting-edge medical LLMs, post-processing, and formatting utilities — making it seamless to integrate clinical AI into existing scripts, services, and research workflows.
+Transform clinical text into structured insights with a single line of code. OpenMed delivers enterprise-grade entity extraction, assertion detection, and medical reasoning—no vendor lock-in, no compromise on accuracy.
 
-> **Status:** The package is pre-release and the API may change. Feedback and contributions are
-> welcome while the project stabilises.
-
-## TL;DR — run this first
-
-```bash
-# 1. Install uv (skip if you already have it)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. Create and activate a fresh Python 3.11 environment in this repo
-uv venv --python 3.11
-source .venv/bin/activate
-# 3. Install OpenMed (with Hugging Face extras) and run a one-liner demo
-uv pip install "openmed[hf]"
-```
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![arXiv](https://img.shields.io/badge/arXiv-2508.01630-b31b1b.svg)](https://arxiv.org/abs/2508.01630)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1x1xJjTZTWR3Z7uLJ0B5B_FyAomeeZGq5?usp=sharing)
 
 ```python
 from openmed import analyze_text
 
 result = analyze_text(
     "Patient started on imatinib for chronic myeloid leukemia.",
-    model_name="disease_detection_superclinical",
+    model_name="disease_detection_superclinical"
 )
 
 for entity in result.entities:
-    confidence = float(entity.confidence) if entity.confidence is not None else None
-    print(f"{entity.label:<18} {entity.text:<35} confidence={confidence}")
+    print(f"{entity.label:<12} {entity.text:<35} {entity.confidence:.2f}")
+# DISEASE      chronic myeloid leukemia            0.98
+# DRUG         imatinib                            0.95
 ```
 
-### Try it in Google Colab (no setup required)
+---
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1x1xJjTZTWR3Z7uLJ0B5B_FyAomeeZGq5?usp=sharing)
+## ✨ Why OpenMed?
 
-## Features
+- 🎯 **Specialized Models**: 12+ curated medical NER models outperforming proprietary solutions
+- 🚀 **One-Line Deployment**: From prototype to production in minutes
+- 🎨 **Interactive TUI**: Beautiful terminal interface for rapid experimentation
+- ⚡ **Batch Processing**: Multi-file workflows with progress tracking
+- 🔧 **Production-Ready**: Configuration profiles, profiling tools, and medical-aware tokenization
+- 📦 **Zero Lock-In**: Apache 2.0 licensed, runs on your infrastructure
 
-- **Curated model registry** with metadata for the OpenMed Hugging Face collection, including
-  category filters, entity coverage, and confidence guidance.
-- **One-line model loading** via `ModelLoader`, with optional pipeline creation,
-  caching, and authenticated access to private models.
-- **Advanced NER post-processing** (`AdvancedNERProcessor`) that applies the filtering and
-  grouping techniques proven in the OpenMed demos.
-- **Text preprocessing & tokenisation helpers** tailored for medical text workflows.
-- **Output formatting utilities** that convert raw predictions into dict/JSON/HTML/CSV for
-  downstream systems.
-- **Logging and validation helpers** to keep pipelines observable and inputs safe.
+---
 
-### Medical-aware tokenizer (default)
+## 🚀 Quick Start
 
-- Medical-friendly tokenization used for output remapping and grouping (model tokenization remains unchanged).
-- Helps produce cleaner spans for clinical patterns (e.g., `COVID-19`, `IL-6-mediated`, `CAR-T`, `t(8;21)`).
-- Configurable via `OpenMedConfig.use_medical_tokenizer` (default `True`) and optional `medical_tokenizer_exceptions` for additional protected terms. Environment overrides: `OPENMED_USE_MEDICAL_TOKENIZER=0` to disable, `OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS="MY-NEW-TERM,ABC-123"`.
-
-## Installation
-
-### Requirements
-
-- Python 3.10 or newer.
-- Optional access to Hugging Face Hub (`HF_TOKEN`) if you consume gated models.
-- A deep-learning runtime such as [PyTorch](https://pytorch.org/get-started/locally/) when you run on real hardware.
-
-The core package keeps its mandatory dependency list intentionally small. Transformer-based pipelines live behind the
-`hf` optional extra (see `pyproject.toml`) so minimal deployments—static data processing, registry exploration,
-formatting—can install only what they need. When you want Hugging Face pipelines, install the extra.
-
-### Install with `uv`
+### Installation
 
 ```bash
-# inside your project virtualenv (e.g. `source .venv/bin/activate`)
-# base install
-uv pip install .
+# Install with Hugging Face support
+pip install openmed[hf]
 
-# include Hugging Face support (transformers + huggingface-hub + compatible versions)
-uv pip install ".[hf]"
-
-# add developer tooling (pytest, linters, coverage)
-uv pip install ".[dev]"
+# Or try the interactive TUI
+pip install openmed[tui]
 ```
 
-Install the appropriate PyTorch wheel for your platform if you plan to execute models:
+### Three Ways to Use OpenMed
 
-```bash
-uv pip install "torch==2.9.0" --index-url https://download.pytorch.org/whl/cpu
-```
-
-Swap in a CUDA/CU121 index URL when targeting GPUs.
-
-### Optional extras at a glance
-
-Pick the extras that fit your workflow and stack them as needed:
-
-- `.[hf]` – Hugging Face pipelines (`transformers`, `huggingface-hub`, `accelerate`)
-- `.[gliner]` – Zero-shot GLiNER models, PyTorch, tokenizer deps
-- `.[dev]` – Test and lint tooling (`pytest`, coverage, flake8)
-
-Common install patterns with `uv`:
-
-```bash
-# Base toolkit only
-uv pip install .
-
-# Add Hugging Face integration
-uv pip install ".[hf]"
-
-# Add zero-shot GLiNER stack
-uv pip install ".[gliner]"
-
-# Developer tools for local hacking
-uv pip install ".[dev]"
-
-# Everything in one go (HF + GLiNER + dev)
-uv pip install ".[dev,hf,gliner]"
-```
-
-CLI toggle for the medical tokenizer (defaults to on):
-
-```bash
-openmed analyze --text "COVID-19 patient on IL-6 inhibitor" --no-medical-tokenizer
-openmed analyze --text "t(8;21) AML post-CAR-T" --medical-tokenizer-exceptions "MY-NEW-TERM"
-```
-
-## Quick start
-
-```python
-from openmed.core import ModelLoader
-from openmed.processing import format_predictions
-
-loader = ModelLoader()  # uses the default configuration
-ner = loader.create_pipeline(
-    "disease_detection_superclinical",  # registry key or full model ID
-    aggregation_strategy="simple",      # group sub-token predictions for quick wins
-)
-
-text = "Patient diagnosed with acute lymphoblastic leukemia and started on imatinib."
-raw_predictions = ner(text)
-
-result = format_predictions(raw_predictions, text, model_name="Disease Detection")
-for entity in result.entities:
-    print(f"{entity.label:<12} -> {entity.text} (confidence={entity.confidence:.2f})")
-```
-
-Use the convenience helper if you prefer a single call:
+**1️⃣ Python API** — One-liner for scripts and notebooks
 
 ```python
 from openmed import analyze_text
@@ -153,208 +59,166 @@ result = analyze_text(
     "Patient received 75mg clopidogrel for NSTEMI.",
     model_name="pharma_detection_superclinical"
 )
-
-for entity in result.entities:
-    print(entity)
 ```
 
-## Command-line usage
-
-Install the package in the usual way and the `openmed` console command will be
-available. It provides quick access to model discovery, text analysis, and
-configuration management.
+**2️⃣ Interactive TUI** — Visual workbench for exploration
 
 ```bash
-# List models from the bundled registry (add --include-remote for Hugging Face)
-openmed models list
-openmed models list --include-remote
-
-# Analyse inline text or a file with a specific model
-openmed analyze --model disease_detection_superclinical --text "Acute leukemia treated with imatinib."
-
-# Inspect or edit the CLI configuration (defaults to ~/.config/openmed/config.toml)
-openmed config show
-openmed config set device cuda
-
-# Inspect the model's inferred context window
-openmed models info disease_detection_superclinical
+openmed  # Launch the TUI directly
 ```
 
-Provide `--config-path /custom/path.toml` to work with a different configuration
-file during automation or testing. Run `openmed --help` to see all options.
+![TUI Screenshot](docs/website/assets/openmed-tui-preview.png)
 
-### Zero-shot NER tooling
-
-Install the optional extras first:
+**3️⃣ CLI Automation** — Batch processing for production
 
 ```bash
-uv pip install ".[gliner]"
+# Process a directory of clinical notes
+openmed batch --input-dir ./notes --output results.json
+
+# Use configuration profiles
+openmed config profile-use prod
 ```
 
-Then discover models, inspect domain defaults, and run zero-shot inference:
+---
+
+## 🎨 Interactive Terminal Interface
+
+The OpenMed TUI provides a full-featured workbench that runs in any terminal:
+
+- 🎯 Real-time entity extraction with `Ctrl+Enter`
+- 🌈 Color-coded entity highlighting
+- ⚡ Live configuration tuning (threshold, grouping, tokenization)
+- 📊 Confidence visualization with progress bars
+- 💾 Analysis history and export (JSON, CSV)
+- 🔄 Hot-swappable models and profiles
+- 📁 File browser for batch analysis
 
 ```bash
-# Build or refresh the model index (scans your models directory)
-python -m openmed.zero_shot.cli.index --models-dir /path/to/zero-shot-models
-
-# Inspect default labels per domain
-python -m openmed.zero_shot.cli.labels dump-defaults --json
-
-# Run inference with custom labels or domain defaults
-python -m openmed.zero_shot.cli.infer \
-  --model-id gliner-biomed-tiny \
-  --text "Imatinib inhibits BCR-ABL in CML." \
-  --threshold 0.55 \
-  --labels Drug,Gene
-
-# Smoke-test multiple GLiNER models (requires models/index.json)
-python scripts/smoke_gliner.py --limit 3 --adapter
+# Launch with custom settings
+openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
 ```
 
-Use `OPENMED_ZEROSHOT_MODELS_DIR` to avoid passing `--models-dir` every time. The
-CLI utilities share the same default `models/index.json` location bundled in the
-package when an external index is not supplied.
+[📖 Full TUI Documentation](https://openmed.life/docs/tui)
 
-## Discovering models
+---
 
-```python
-from openmed.core import ModelLoader
-from openmed.core.model_registry import list_model_categories, get_models_by_category
+## 📦 Key Features
 
-loader = ModelLoader()
-print(loader.list_available_models()[:5])  # Hugging Face + registry entries
+### Core Capabilities
 
-suggestions = loader.get_model_suggestions(
-    "Metastatic breast cancer treated with paclitaxel and trastuzumab"
-)
-for key, info, reason in suggestions:
-    print(f"{info.display_name} -> {reason}")
+- **Curated Model Registry**: Metadata-rich catalog with 12+ specialized medical NER models
+- **Medical-Aware Tokenization**: Clean handling of clinical patterns (`COVID-19`, `CAR-T`, `IL-6`)
+- **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
+- **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-print(list_model_categories())
-for info in get_models_by_category("Oncology"):
-    print(f"- {info.display_name} ({info.model_id})")
+### Production Tools (v0.4.0)
 
-from openmed import get_model_max_length
-print(get_model_max_length("disease_detection_superclinical"))
+- **Batch Processing**: Multi-text and multi-file workflows with progress tracking
+- **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
+- **Performance Profiling**: Built-in inference timing and bottleneck analysis
+- **Interactive TUI**: Rich terminal UI for rapid iteration
+
+### Coming Soon (v0.5.0+)
+
+- 🔗 UMLS/SNOMED Concept Linking
+- 💰 HCC & ICD-10 Medical Coding
+- 🔒 HIPAA-Compliant De-identification
+- 🧠 Assertion Status Detection
+- 🔗 Clinical Relation Extraction
+- ⏰ Temporal Reasoning & Event Timelines
+
+[🗺️ View Full Roadmap](https://github.com/maziyarpanahi/openmed/blob/master/PLAN.md)
+
+---
+
+## 📚 Documentation
+
+Comprehensive guides available at **[openmed.life/docs](https://openmed.life/docs/)**
+
+Quick links:
+
+- [Getting Started](https://openmed.life/docs/) — Installation and first analysis
+- [Analyze Text Helper](https://openmed.life/docs/analyze-text) — Python API reference
+- [CLI & Automation](https://openmed.life/docs/cli) — Batch processing and profiles
+- [Interactive TUI](https://openmed.life/docs/tui) — Terminal interface guide
+- [Model Registry](https://openmed.life/docs/model-registry) — Browse available models
+- [Configuration](https://openmed.life/docs/config) — Settings and environment variables
+
+---
+
+## 🔬 Models
+
+OpenMed includes a curated registry of 12+ specialized medical NER models:
+
+| Model | Specialization | Entity Types | Size |
+|-------|---------------|--------------|------|
+| `disease_detection_superclinical` | Disease & Conditions | DISEASE, CONDITION, DIAGNOSIS | 434M |
+| `pharma_detection_superclinical` | Drugs & Medications | DRUG, MEDICATION, TREATMENT | 434M |
+| `anatomy_detection_electramed` | Anatomy & Body Parts | ANATOMY, ORGAN, BODY_PART | 109M |
+| `gene_detection_genecorpus` | Genes & Proteins | GENE, PROTEIN | 109M |
+
+[📖 Full Model Catalog](https://openmed.life/docs/model-registry)
+
+---
+
+## 🛠️ Advanced Usage
+
+### Batch Processing
+
+```bash
+# Process multiple files with progress tracking
+openmed batch --input-dir ./clinical_notes --pattern "*.txt" --recursive
+
+# Use profiles for different environments
+openmed config profile-use prod
+openmed batch --input-files note1.txt note2.txt --output results.json
 ```
 
-Or use the top-level helper:
+### Configuration Profiles
 
 ```python
-from openmed import list_models
+from openmed import analyze_text
 
-print(list_models()[:10])
-```
-
-## Advanced NER processing
-
-```python
-from openmed.core import ModelLoader
-from openmed.processing.advanced_ner import create_advanced_processor
-
-loader = ModelLoader()
-# aggregation_strategy=None yields raw token-level predictions for maximum control
-ner = loader.create_pipeline("pharma_detection_superclinical", aggregation_strategy=None)
-
-text = "Administered 75mg clopidogrel daily alongside aspirin for secondary stroke prevention."
-raw = ner(text)
-
-processor = create_advanced_processor(confidence_threshold=0.65)
-entities = processor.process_pipeline_output(text, raw)
-summary = processor.create_entity_summary(entities)
-
-for entity in entities:
-    print(f"{entity.label}: {entity.text} (score={entity.score:.3f})")
-
-print(summary["by_type"])
-```
-
-## Text preprocessing & tokenisation
-
-```python
-from openmed.processing import TextProcessor, TokenizationHelper
-from openmed.core import ModelLoader
-
-text_processor = TextProcessor(normalize_whitespace=True, lowercase=False)
-clean_text = text_processor.clean_text("BP 120/80, HR 88 bpm. Start Metformin 500mg bid.")
-print(clean_text)
-
-loader = ModelLoader()
-model_data = loader.load_model("anatomy_detection_electramed")
-token_helper = TokenizationHelper(model_data["tokenizer"])
-encoding = token_helper.tokenize_with_alignment(clean_text)
-print(encoding["tokens"][:10])
-```
-
-## Formatting outputs
-
-```python
-# Reuse `raw_predictions` and `text` from the quick start example
-from openmed.processing import format_predictions
-
-formatted = format_predictions(
-    raw_predictions,
+# Apply a profile programmatically
+result = analyze_text(
     text,
-    model_name="Disease Detection",
-    output_format="json",
-    include_confidence=True,
-    confidence_threshold=0.5,
+    model_name="disease_detection_superclinical",
+    config_profile="prod"  # High confidence, grouped entities
 )
-print(formatted)  # JSON string ready for logging or storage
 ```
 
-`format_predictions` can also return CSV rows or rich HTML snippets for dashboards.
-
-## Documentation
-
-MkDocs + Material power the official docs served at <https://openmed.life/docs/>.
-Every push to `master` rebuilds the site, but you can preview locally in seconds:
-
-```bash
-uv pip install ".[docs]"
-make docs-serve          # http://127.0.0.1:8008 with live reload
-make docs-build          # run the strict production build
-make docs-stage          # copies docs into site/ alongside docs/website
-python -m http.server --directory site 9000  # preview marketing+docs at http://127.0.0.1:9000
-```
-
-To stage a manual deployment (marketing site + docs bundle), run `make docs-deploy`; it builds the docs into `site/docs`,
-copies `docs/website/` into `site/`, and pushes that bundle to the `gh-pages` branch.
-
-## Configuration & logging
+### Performance Profiling
 
 ```python
-from openmed.core import OpenMedConfig, ModelLoader
-from openmed.utils import setup_logging
+from openmed import analyze_text, profile_inference
 
-config = OpenMedConfig(
-    default_org="OpenMed",
-    cache_dir="/tmp/openmed-cache",
-    device="cuda",  # "cpu", "cuda", or a specific device index
-)
-setup_logging(level="INFO")
-loader = ModelLoader(config=config)
+with profile_inference() as profiler:
+    result = analyze_text(text, model_name="disease_detection_superclinical")
+
+print(profiler.summary())  # Inference time, bottlenecks, recommendations
 ```
 
-`OpenMedConfig` automatically picks up `HF_TOKEN` from the environment so you can access
-private or gated models without storing credentials in code.
+[📖 More Examples](https://openmed.life/docs/examples)
 
-## Validation utilities
+---
 
-```python
-from openmed.utils.validation import validate_input, validate_model_name
+## 🤝 Contributing
 
-text = validate_input(user_supplied_text, max_length=2000)
-model = validate_model_name("OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M")
-```
+We welcome contributions! Whether it's bug reports, feature requests, or pull requests.
 
-Use these helpers to guard API endpoints or batch pipelines against malformed inputs.
+- 🐛 **Found a bug?** [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
+- 💡 **Have an idea?** Check our [roadmap](https://github.com/maziyarpanahi/openmed/blob/master/PLAN.md) and discuss
+- 🔧 **Want to contribute?** See [CONTRIBUTING.md](./CONTRIBUTING.md)
 
-## License
+---
 
-OpenMed is released under the Apache-2.0 License.
+## 📄 License
 
-## Citing
+OpenMed is released under the [Apache-2.0 License](LICENSE).
+
+---
+
+## 📖 Citation
 
 If you use OpenMed in your research, please cite:
 
@@ -369,3 +233,15 @@ If you use OpenMed in your research, please cite:
       url={https://arxiv.org/abs/2508.01630},
 }
 ```
+
+---
+
+## 🌟 Star History
+
+If you find OpenMed useful, consider giving it a star ⭐ to help others discover it!
+
+---
+
+**Built with ❤️ by the OpenMed team**
+
+[🌐 Website](https://openmed.life) • [📚 Documentation](https://openmed.life/docs) • [🐦 X/Twitter](https://x.com/openmed_ai) • [💬 LinkedIn](https://www.linkedin.com/company/openmed-ai/)
