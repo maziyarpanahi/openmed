@@ -27,16 +27,16 @@ for entity in result.entities:
 
 ## ✨ Why OpenMed?
 
-- 🎯 **Specialized Models**: 12+ curated medical NER models outperforming proprietary solutions
-- 🚀 **One-Line Deployment**: From prototype to production in minutes
-- 🎨 **Interactive TUI**: Beautiful terminal interface for rapid experimentation
-- ⚡ **Batch Processing**: Multi-file workflows with progress tracking
-- 🔧 **Production-Ready**: Configuration profiles, profiling tools, and medical-aware tokenization
-- 📦 **Zero Lock-In**: Apache 2.0 licensed, runs on your infrastructure
+- **Specialized Models**: 12+ curated medical NER models outperforming proprietary solutions
+- **One-Line Deployment**: From prototype to production in minutes
+- **Interactive TUI**: Beautiful terminal interface for rapid experimentation
+- **Batch Processing**: Multi-file workflows with progress tracking
+- **Production-Ready**: Configuration profiles, profiling tools, and medical-aware tokenization
+- **Zero Lock-In**: Apache 2.0 licensed, runs on your infrastructure
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Installation
 
@@ -81,17 +81,17 @@ openmed config profile-use prod
 
 ---
 
-## 🎨 Interactive Terminal Interface
+## Interactive Terminal Interface
 
 The OpenMed TUI provides a full-featured workbench that runs in any terminal:
 
-- 🎯 Real-time entity extraction with `Ctrl+Enter`
-- 🌈 Color-coded entity highlighting
-- ⚡ Live configuration tuning (threshold, grouping, tokenization)
-- 📊 Confidence visualization with progress bars
-- 💾 Analysis history and export (JSON, CSV)
-- 🔄 Hot-swappable models and profiles
-- 📁 File browser for batch analysis
+- Real-time entity extraction with `Ctrl+Enter`
+- Color-coded entity highlighting
+- Live configuration tuning (threshold, grouping, tokenization)
+- Confidence visualization with progress bars
+- Analysis history and export (JSON, CSV)
+- Hot-swappable models and profiles
+- File browser for batch analysis
 
 ```bash
 # Launch with custom settings
@@ -102,7 +102,7 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
 
 ---
 
-## 📦 Key Features
+## Key Features
 
 ### Core Capabilities
 
@@ -120,18 +120,18 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
 
 ### Coming Soon (v0.5.0+)
 
-- 🔗 UMLS/SNOMED Concept Linking
-- 💰 HCC & ICD-10 Medical Coding
-- 🔒 HIPAA-Compliant De-identification
-- 🧠 Assertion Status Detection
-- 🔗 Clinical Relation Extraction
-- ⏰ Temporal Reasoning & Event Timelines
+- UMLS/SNOMED Concept Linking
+- HCC & ICD-10 Medical Coding
+- HIPAA-Compliant De-identification
+- Assertion Status Detection
+- Clinical Relation Extraction
+- Temporal Reasoning & Event Timelines
 
 [🗺️ View Full Roadmap](https://github.com/maziyarpanahi/openmed/blob/master/PLAN.md)
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 Comprehensive guides available at **[openmed.life/docs](https://openmed.life/docs/)**
 
@@ -146,7 +146,7 @@ Quick links:
 
 ---
 
-## 🔬 Models
+## Models
 
 OpenMed includes a curated registry of 12+ specialized medical NER models:
 
@@ -161,7 +161,7 @@ OpenMed includes a curated registry of 12+ specialized medical NER models:
 
 ---
 
-## 🛠️ Advanced Usage
+## Advanced Usage
 
 ### Batch Processing
 
@@ -202,7 +202,7 @@ print(profiler.summary())  # Inference time, bottlenecks, recommendations
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Whether it's bug reports, feature requests, or pull requests.
 
@@ -212,13 +212,13 @@ We welcome contributions! Whether it's bug reports, feature requests, or pull re
 
 ---
 
-## 📄 License
+## License
 
 OpenMed is released under the [Apache-2.0 License](LICENSE).
 
 ---
 
-## 📖 Citation
+## Citation
 
 If you use OpenMed in your research, please cite:
 
@@ -236,7 +236,7 @@ If you use OpenMed in your research, please cite:
 
 ---
 
-## 🌟 Star History
+## Star History
 
 If you find OpenMed useful, consider giving it a star ⭐ to help others discover it!
 
