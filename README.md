@@ -118,17 +118,6 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
 - **Performance Profiling**: Built-in inference timing and bottleneck analysis
 - **Interactive TUI**: Rich terminal UI for rapid iteration
 
-### Coming Soon (v0.5.0+)
-
-- UMLS/SNOMED Concept Linking
-- HCC & ICD-10 Medical Coding
-- HIPAA-Compliant De-identification
-- Assertion Status Detection
-- Clinical Relation Extraction
-- Temporal Reasoning & Event Timelines
-
-[🗺️ View Full Roadmap](https://github.com/maziyarpanahi/openmed/blob/master/PLAN.md)
-
 ---
 
 ## Documentation
@@ -142,7 +131,7 @@ Quick links:
 - [CLI & Automation](https://openmed.life/docs/cli) — Batch processing and profiles
 - [Interactive TUI](https://openmed.life/docs/tui) — Terminal interface guide
 - [Model Registry](https://openmed.life/docs/model-registry) — Browse available models
-- [Configuration](https://openmed.life/docs/config) — Settings and environment variables
+- [Configuration](https://openmed.life/docs/configuration) — Settings and environment variables
 
 ---
 
@@ -207,8 +196,6 @@ print(profiler.summary())  # Inference time, bottlenecks, recommendations
 We welcome contributions! Whether it's bug reports, feature requests, or pull requests.
 
 - 🐛 **Found a bug?** [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
-- 💡 **Have an idea?** Check our [roadmap](https://github.com/maziyarpanahi/openmed/blob/master/PLAN.md) and discuss
-- 🔧 **Want to contribute?** See [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ---
 
