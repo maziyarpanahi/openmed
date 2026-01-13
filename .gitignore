@@ -219,6 +219,4 @@ docs/api/_build/
 
 .pypirc
 
-AGENTS.md
-PLAN.md
-REPORT.md
+PLANS/**
