@@ -8,6 +8,7 @@ close at hand—each section is Markdown-first, searchable, and optimized for qu
 
 - **Curated registries** – discoverable Hugging Face models with metadata (domain, size, device guidance).
 - **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for CLI, scripts, or services.
+- **PII detection & de-identification** – HIPAA-compliant smart entity merging for production-ready de-identification.
 - **Advanced NER post-processing** – score-aware grouping, PHI-friendly filtering, and CSV/JSON/HTML export helpers.
 - **Composable config** – `OpenMedConfig` reads YAML/ENV so deployments stay reproducible across laptops and clusters.
 
@@ -45,6 +46,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
 3. Core guides:
    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
+   - [PII Detection & Smart Merging](./pii-smart-merging.md) for HIPAA-compliant de-identification (v0.5.0).
    - [Batch Processing](./batch-processing.md) for multi-text/file processing.
    - [ModelLoader & Pipelines](./model-loader.md) for long-running jobs.
    - [Model Registry](./model-registry.md) to pick the right checkpoint.
