@@ -106,6 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
+    _add_pii_command(subparsers)
     _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
@@ -252,6 +253,130 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
         help="Suppress progress output.",
     )
     batch_parser.set_defaults(handler=_handle_batch)
+
+
+def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add PII extraction and de-identification commands."""
+    pii_parser = subparsers.add_parser(
+        "pii", help="PII extraction and de-identification."
+    )
+    pii_sub = pii_parser.add_subparsers(dest="pii_command")
+
+    # PII Extract command
+    extract_parser = pii_sub.add_parser(
+        "extract", help="Extract PII entities from text."
+    )
+    extract_parser.add_argument(
+        "--model",
+        default="lakshyakh93/deberta_finetuned_pii",
+        help="PII detection model.",
+    )
+    text_group = extract_parser.add_mutually_exclusive_group(required=True)
+    text_group.add_argument("--text", help="Text to analyze.")
+    text_group.add_argument("--input-file", type=Path, help="Input file.")
+    extract_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output file for results (JSON format).",
+    )
+    extract_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.5,
+        help="Minimum confidence score.",
+    )
+    extract_parser.set_defaults(handler=_handle_pii_extract)
+
+    # PII De-identify command
+    deid_parser = pii_sub.add_parser(
+        "deidentify", help="De-identify text by redacting PII."
+    )
+    deid_parser.add_argument(
+        "--model",
+        default="lakshyakh93/deberta_finetuned_pii",
+        help="PII detection model.",
+    )
+    deid_text_group = deid_parser.add_mutually_exclusive_group(required=True)
+    deid_text_group.add_argument("--text", help="Text to de-identify.")
+    deid_text_group.add_argument("--input-file", type=Path, help="Input file.")
+    deid_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Output file for de-identified text.",
+    )
+    deid_parser.add_argument(
+        "--method",
+        choices=["mask", "remove", "replace", "hash", "shift_dates"],
+        default="mask",
+        help="De-identification method.",
+    )
+    deid_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.7,
+        help="Minimum confidence for redaction.",
+    )
+    deid_parser.add_argument(
+        "--keep-year",
+        action="store_true",
+        help="Keep year in dates.",
+    )
+    deid_parser.add_argument(
+        "--shift-dates",
+        action="store_true",
+        help="Shift dates by random offset.",
+    )
+    deid_parser.add_argument(
+        "--keep-mapping",
+        action="store_true",
+        help="Keep mapping for re-identification.",
+    )
+    deid_parser.set_defaults(handler=_handle_pii_deidentify)
+
+    # PII Batch command
+    batch_parser = pii_sub.add_parser(
+        "batch", help="Batch de-identification of files."
+    )
+    batch_parser.add_argument(
+        "--model",
+        default="lakshyakh93/deberta_finetuned_pii",
+        help="PII detection model.",
+    )
+    batch_parser.add_argument(
+        "--input-dir",
+        type=Path,
+        required=True,
+        help="Directory with files to process.",
+    )
+    batch_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for de-identified files.",
+    )
+    batch_parser.add_argument(
+        "--pattern",
+        default="*.txt",
+        help="File pattern to match.",
+    )
+    batch_parser.add_argument(
+        "--recursive",
+        action="store_true",
+        help="Search recursively.",
+    )
+    batch_parser.add_argument(
+        "--method",
+        choices=["mask", "remove", "replace", "hash"],
+        default="mask",
+        help="De-identification method.",
+    )
+    batch_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.7,
+        help="Minimum confidence for redaction.",
+    )
+    batch_parser.set_defaults(handler=_handle_pii_batch)
 
 
 def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
@@ -764,6 +889,159 @@ def _handle_profile_delete(args: argparse.Namespace) -> int:
     else:
         sys.stderr.write(f"Profile not found: {profile_name}\n")
         return 1
+
+
+# ---------------------------------------------------------------------------
+# PII Handlers
+# ---------------------------------------------------------------------------
+
+
+def _handle_pii_extract(args: argparse.Namespace) -> int:
+    """Handle PII extraction command."""
+    from ..core.pii import extract_pii
+
+    config = _load_and_apply_config(args)
+
+    if args.text:
+        text = args.text
+    else:
+        try:
+            text = args.input_file.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            sys.stderr.write(f"Input file not found: {args.input_file}\n")
+            return 1
+
+    result = extract_pii(
+        text,
+        model_name=args.model,
+        confidence_threshold=args.confidence_threshold,
+        config=config,
+    )
+
+    output = {
+        "text": text,
+        "model": args.model,
+        "entities": [
+            {
+                "text": e.text,
+                "label": e.label,
+                "start": e.start,
+                "end": e.end,
+                "confidence": float(e.confidence) if e.confidence else None,
+            }
+            for e in result.entities
+        ],
+        "num_entities": len(result.entities),
+    }
+
+    if args.output:
+        args.output.write_text(json.dumps(output, indent=2), encoding="utf-8")
+        sys.stdout.write(f"Results written to: {args.output}\n")
+    else:
+        sys.stdout.write(f"{json.dumps(output, indent=2)}\n")
+
+    return 0
+
+
+def _handle_pii_deidentify(args: argparse.Namespace) -> int:
+    """Handle PII de-identification command."""
+    from ..core.pii import deidentify
+
+    config = _load_and_apply_config(args)
+
+    if args.text:
+        text = args.text
+    else:
+        try:
+            text = args.input_file.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            sys.stderr.write(f"Input file not found: {args.input_file}\n")
+            return 1
+
+    result = deidentify(
+        text,
+        method=args.method,
+        model_name=args.model,
+        confidence_threshold=args.confidence_threshold,
+        keep_year=args.keep_year,
+        shift_dates=args.shift_dates,
+        keep_mapping=args.keep_mapping,
+        config=config,
+    )
+
+    if args.output:
+        args.output.write_text(result.deidentified_text, encoding="utf-8")
+        sys.stdout.write(f"De-identified text written to: {args.output}\n")
+        sys.stdout.write(f"Redacted {len(result.pii_entities)} PII entities\n")
+    else:
+        sys.stdout.write(f"{result.deidentified_text}\n")
+        sys.stderr.write(f"\n[Redacted {len(result.pii_entities)} entities]\n")
+
+    return 0
+
+
+def _handle_pii_batch(args: argparse.Namespace) -> int:
+    """Handle batch PII de-identification command."""
+    from ..core.pii import deidentify
+
+    config = _load_and_apply_config(args)
+
+    if not args.input_dir.is_dir():
+        sys.stderr.write(f"Not a directory: {args.input_dir}\n")
+        return 1
+
+    # Create output directory
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Find files to process
+    if args.recursive:
+        files = list(args.input_dir.rglob(args.pattern))
+    else:
+        files = list(args.input_dir.glob(args.pattern))
+
+    if not files:
+        sys.stderr.write(f"No files found matching pattern: {args.pattern}\n")
+        return 1
+
+    # Process files
+    processed = 0
+    failed = 0
+
+    for input_file in files:
+        try:
+            text = input_file.read_text(encoding="utf-8")
+
+            result = deidentify(
+                text,
+                method=args.method,
+                model_name=args.model,
+                confidence_threshold=args.confidence_threshold,
+                config=config,
+            )
+
+            # Preserve directory structure
+            relative_path = input_file.relative_to(args.input_dir)
+            output_file = args.output_dir / relative_path
+            output_file.parent.mkdir(parents=True, exist_ok=True)
+
+            output_file.write_text(result.deidentified_text, encoding="utf-8")
+
+            processed += 1
+            sys.stdout.write(
+                f"[{processed}/{len(files)}] {input_file.name}: "
+                f"{len(result.pii_entities)} entities redacted\n"
+            )
+
+        except Exception as exc:
+            failed += 1
+            sys.stderr.write(f"Failed to process {input_file}: {exc}\n")
+
+    sys.stdout.write(
+        f"\nProcessed {processed} files, {failed} failed\n"
+        f"Output directory: {args.output_dir}\n"
+    )
+
+    return 0 if failed == 0 else 1
 
 
 if __name__ == "__main__":  # pragma: no cover
