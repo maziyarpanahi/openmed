@@ -21,26 +21,34 @@ class ModelInfo:
         """Extract estimated size in MB from model name."""
         if "Tiny" in self.model_id or "33M" in self.model_id:
             return 33
-        elif "60M" in self.model_id or "65M" in self.model_id:
-            return 65
-        elif "108M" in self.model_id or "109M" in self.model_id:
-            return 109
+        elif "44M" in self.model_id:
+            return 44
+        elif "60M" in self.model_id or "65M" in self.model_id or "66M" in self.model_id:
+            return 66
+        elif "82M" in self.model_id:
+            return 82
+        elif "108M" in self.model_id or "109M" in self.model_id or "110M" in self.model_id:
+            return 110
         elif "125M" in self.model_id:
             return 125
         elif "135M" in self.model_id:
             return 135
         elif "141M" in self.model_id:
             return 141
+        elif "149M" in self.model_id:
+            return 149
         elif "166M" in self.model_id:
             return 166
-        elif "209M" in self.model_id or "212M" in self.model_id:
-            return 209
+        elif "184M" in self.model_id:
+            return 184
+        elif "209M" in self.model_id or "210M" in self.model_id or "212M" in self.model_id:
+            return 210
         elif "220M" in self.model_id:
             return 220
-        elif "278M" in self.model_id:
-            return 278
-        elif "335M" in self.model_id:
-            return 335
+        elif "278M" in self.model_id or "279M" in self.model_id:
+            return 279
+        elif "335M" in self.model_id or "340M" in self.model_id:
+            return 340
         elif "355M" in self.model_id:
             return 355
         elif "395M" in self.model_id:
@@ -51,6 +59,10 @@ class ModelInfo:
             return 459
         elif "560M" in self.model_id:
             return 560
+        elif "568M" in self.model_id:
+            return 568
+        elif "600M" in self.model_id:
+            return 600
         elif "770M" in self.model_id:
             return 770
         return None
@@ -231,13 +243,378 @@ OPENMED_MODELS = {
         size_category="Medium",
         recommended_confidence=0.70
     ),
-    "pii_detection_superclinical": ModelInfo(
-        model_id="openmed/OpenMed-PII-SuperClinical-Large-434M-v1",
-        display_name="PII Detection (SuperClinical)",
+
+    # OpenMed PII Detection Model Collection (33 models)
+    # SuperClinical Family
+    "pii_superclinical_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1",
+        display_name="PII Detection - SuperClinical Large",
         category="Privacy",
         specialization="Advanced PII detection for clinical text",
-        description="OpenMed's flagship PII detection model with 53 entity types for comprehensive HIPAA-compliant de-identification including medical records, SSN, demographics, contact info, and more",
+        description="OpenMed's flagship PII detection model with comprehensive HIPAA-compliant de-identification including medical records, SSN, demographics, contact info, and more",
         entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number", "api_key", "credit_debit_card", "occupation"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_superclinical_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-SuperClinical-Base-184M-v1",
+        display_name="PII Detection - SuperClinical Base",
+        category="Privacy",
+        specialization="Balanced PII detection",
+        description="Medium-sized PII detection model balancing speed and accuracy for clinical text de-identification",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+    "pii_superclinical_small": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        display_name="PII Detection - SuperClinical Small",
+        category="Privacy",
+        specialization="Fast PII detection",
+        description="Lightweight PII detection model optimized for speed while maintaining good accuracy",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
+        size_category="Small",
+        recommended_confidence=0.50
+    ),
+
+    # BioClinicalModern Family
+    "pii_bioclinical_modern_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BioClinicalModern-Large-395M-v1",
+        display_name="PII Detection - BioClinicalModern Large",
+        category="Privacy",
+        specialization="BioClinical PII detection",
+        description="Large BioClinical model for comprehensive PII detection in clinical notes",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_bioclinical_modern_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BioClinicalModern-Base-149M-v1",
+        display_name="PII Detection - BioClinicalModern Base",
+        category="Privacy",
+        specialization="BioClinical PII detection",
+        description="Base BioClinical model for balanced PII detection performance",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # BioClinicalBERT
+    "pii_bioclinical_bert": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1",
+        display_name="PII Detection - BioClinicalBERT",
+        category="Privacy",
+        specialization="BERT-based PII detection",
+        description="BioClinicalBERT-based model for reliable PII detection in medical text",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # ClinicDischarge
+    "pii_clinic_discharge": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicDischarge-Base-110M-v1",
+        display_name="PII Detection - ClinicDischarge",
+        category="Privacy",
+        specialization="Discharge note PII detection",
+        description="Specialized for PII detection in clinical discharge summaries and medical records",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # BiomedBERT Family
+    "pii_biomed_bert_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BiomedBERT-Large-340M-v1",
+        display_name="PII Detection - BiomedBERT Large",
+        category="Privacy",
+        specialization="Biomedical PII detection",
+        description="Large BiomedBERT model for comprehensive biomedical text de-identification",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_biomed_bert_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BiomedBERT-Base-110M-v1",
+        display_name="PII Detection - BiomedBERT Base",
+        category="Privacy",
+        specialization="Biomedical PII detection",
+        description="Base BiomedBERT model for balanced biomedical text de-identification",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # BiomedELECTRA Family
+    "pii_biomed_electra_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BiomedELECTRA-Large-335M-v1",
+        display_name="PII Detection - BiomedELECTRA Large",
+        category="Privacy",
+        specialization="ELECTRA-based PII detection",
+        description="Large ELECTRA model for efficient PII detection in biomedical text",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_biomed_electra_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1",
+        display_name="PII Detection - BiomedELECTRA Base",
+        category="Privacy",
+        specialization="ELECTRA-based PII detection",
+        description="Base ELECTRA model for fast and efficient PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # ClinicalLongformer
+    "pii_clinical_longformer": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicalLongformer-Base-149M-v1",
+        display_name="PII Detection - ClinicalLongformer",
+        category="Privacy",
+        specialization="Long document PII detection",
+        description="Longformer-based model optimized for long clinical documents and notes",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # ModernMed Family
+    "pii_modern_med_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ModernMed-Large-395M-v1",
+        display_name="PII Detection - ModernMed Large",
+        category="Privacy",
+        specialization="Modern clinical PII detection",
+        description="Large modern architecture for comprehensive clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_modern_med_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ModernMed-Base-149M-v1",
+        display_name="PII Detection - ModernMed Base",
+        category="Privacy",
+        specialization="Modern clinical PII detection",
+        description="Base modern architecture for balanced clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # QwenMed
+    "pii_qwen_med_xlarge": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-QwenMed-XLarge-600M-v1",
+        display_name="PII Detection - QwenMed XLarge",
+        category="Privacy",
+        specialization="High-accuracy PII detection",
+        description="Extra-large Qwen-based model for maximum PII detection accuracy",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number"],
+        size_category="XLarge",
+        recommended_confidence=0.50
+    ),
+
+    # ClinicalBGE Family
+    "pii_clinical_bge_large_568m": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicalBGE-Large-568M-v1",
+        display_name="PII Detection - ClinicalBGE Large (568M)",
+        category="Privacy",
+        specialization="BGE-based PII detection",
+        description="Large BGE model for high-quality clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="XLarge",
+        recommended_confidence=0.50
+    ),
+    "pii_clinical_bge_large_335m": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicalBGE-Large-335M-v1",
+        display_name="PII Detection - ClinicalBGE Large (335M)",
+        category="Privacy",
+        specialization="BGE-based PII detection",
+        description="BGE model for balanced clinical PII detection performance",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+
+    # EuroMed
+    "pii_euro_med": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-EuroMed-Large-210M-v1",
+        display_name="PII Detection - EuroMed",
+        category="Privacy",
+        specialization="European clinical PII detection",
+        description="Optimized for European clinical text and GDPR compliance",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # LiteClinical
+    "pii_lite_clinical": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
+        display_name="PII Detection - LiteClinical",
+        category="Privacy",
+        specialization="Lightweight PII detection",
+        description="Ultra-lightweight model for fast PII detection with minimal resource usage",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
+        size_category="Small",
+        recommended_confidence=0.50
+    ),
+
+    # mLiteClinical
+    "pii_mlite_clinical": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-mLiteClinical-Base-135M-v1",
+        display_name="PII Detection - mLiteClinical",
+        category="Privacy",
+        specialization="Multilingual lightweight PII",
+        description="Multilingual lightweight model for PII detection across languages",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # FastClinical
+    "pii_fast_clinical": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-FastClinical-Small-82M-v1",
+        display_name="PII Detection - FastClinical",
+        category="Privacy",
+        specialization="Speed-optimized PII detection",
+        description="Optimized for maximum inference speed while maintaining accuracy",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
+        size_category="Small",
+        recommended_confidence=0.50
+    ),
+
+    # ClinicalE5 Family
+    "pii_clinical_e5_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicalE5-Large-335M-v1",
+        display_name="PII Detection - ClinicalE5 Large",
+        category="Privacy",
+        specialization="E5-based PII detection",
+        description="Large E5 model for comprehensive clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_clinical_e5_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicalE5-Base-109M-v1",
+        display_name="PII Detection - ClinicalE5 Base",
+        category="Privacy",
+        specialization="E5-based PII detection",
+        description="Base E5 model for balanced clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+    "pii_clinical_e5_small": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+        display_name="PII Detection - ClinicalE5 Small",
+        category="Privacy",
+        specialization="E5-based fast PII detection",
+        description="Small E5 model for fast PII detection with minimal resources",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
+        size_category="Tiny",
+        recommended_confidence=0.50
+    ),
+
+    # GTEMed
+    "pii_gte_med": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-GTEMed-Base-149M-v1",
+        display_name="PII Detection - GTEMed",
+        category="Privacy",
+        specialization="GTE-based PII detection",
+        description="GTE architecture model for clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # mSuperClinical
+    "pii_msuper_clinical": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-mSuperClinical-Large-279M-v1",
+        display_name="PII Detection - mSuperClinical",
+        category="Privacy",
+        specialization="Multilingual advanced PII",
+        description="Multilingual SuperClinical model for cross-language PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+
+    # NomicMed
+    "pii_nomic_med": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-NomicMed-Large-395M-v1",
+        display_name="PII Detection - NomicMed",
+        category="Privacy",
+        specialization="Nomic-based PII detection",
+        description="Nomic architecture model for comprehensive PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+
+    # mClinicalE5
+    "pii_mclinical_e5": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-mClinicalE5-Large-560M-v1",
+        display_name="PII Detection - mClinicalE5",
+        category="Privacy",
+        specialization="Multilingual E5 PII detection",
+        description="Multilingual E5 model for cross-language clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="XLarge",
+        recommended_confidence=0.50
+    ),
+
+    # SuperMedical Family
+    "pii_super_medical_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-SuperMedical-Large-355M-v1",
+        display_name="PII Detection - SuperMedical Large",
+        category="Privacy",
+        specialization="Medical-focused PII detection",
+        description="Large SuperMedical model for comprehensive medical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
+    "pii_super_medical_base": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-SuperMedical-Base-125M-v1",
+        display_name="PII Detection - SuperMedical Base",
+        category="Privacy",
+        specialization="Medical-focused PII detection",
+        description="Base SuperMedical model for balanced medical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # SnowflakeMed
+    "pii_snowflake_med": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-SnowflakeMed-Large-568M-v1",
+        display_name="PII Detection - SnowflakeMed",
+        category="Privacy",
+        specialization="Snowflake-based PII detection",
+        description="Large Snowflake architecture for high-quality PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number"],
+        size_category="XLarge",
+        recommended_confidence=0.50
+    ),
+
+    # BigMed Family
+    "pii_big_med_large_560m": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BigMed-Large-560M-v1",
+        display_name="PII Detection - BigMed Large (560M)",
+        category="Privacy",
+        specialization="Large-scale PII detection",
+        description="Extra-large BigMed model for maximum PII detection coverage",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number"],
+        size_category="XLarge",
+        recommended_confidence=0.50
+    ),
+    "pii_big_med_large_278m": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
+        display_name="PII Detection - BigMed Large (278M)",
+        category="Privacy",
+        specialization="Large-scale PII detection",
+        description="Large BigMed model for comprehensive PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
         size_category="Large",
         recommended_confidence=0.50
     ),
@@ -255,14 +632,50 @@ CATEGORIES = {
     "Protein": ["protein_detection_pubmed"],
     "Pathology": ["pathology_detection_modern"],
     "Hematology": ["blood_cancer_detection"],
-    "Privacy": ["pii_detection", "pii_detection_superclinical"],
+    "Privacy": [
+        "pii_detection",
+        # OpenMed PII Collection (33 models)
+        "pii_superclinical_large",
+        "pii_superclinical_base",
+        "pii_superclinical_small",
+        "pii_bioclinical_modern_large",
+        "pii_bioclinical_modern_base",
+        "pii_bioclinical_bert",
+        "pii_clinic_discharge",
+        "pii_biomed_bert_large",
+        "pii_biomed_bert_base",
+        "pii_biomed_electra_large",
+        "pii_biomed_electra_base",
+        "pii_clinical_longformer",
+        "pii_modern_med_large",
+        "pii_modern_med_base",
+        "pii_qwen_med_xlarge",
+        "pii_clinical_bge_large_568m",
+        "pii_clinical_bge_large_335m",
+        "pii_euro_med",
+        "pii_lite_clinical",
+        "pii_mlite_clinical",
+        "pii_fast_clinical",
+        "pii_clinical_e5_large",
+        "pii_clinical_e5_base",
+        "pii_clinical_e5_small",
+        "pii_gte_med",
+        "pii_msuper_clinical",
+        "pii_nomic_med",
+        "pii_mclinical_e5",
+        "pii_super_medical_large",
+        "pii_super_medical_base",
+        "pii_snowflake_med",
+        "pii_big_med_large_560m",
+        "pii_big_med_large_278m",
+    ],
 }
 
 # Size-based recommendations
 SIZE_RECOMMENDATIONS = {
-    "fast": ["disease_detection_tiny", "oncology_detection_tiny"],
-    "balanced": ["pharma_detection_supermedical", "genome_detection_bioclinical", "anatomy_detection_electramed"],
-    "accurate": ["disease_detection_superclinical", "pharma_detection_superclinical", "oncology_detection_superclinical"],
+    "fast": ["disease_detection_tiny", "oncology_detection_tiny", "pii_superclinical_small", "pii_lite_clinical", "pii_fast_clinical"],
+    "balanced": ["pharma_detection_supermedical", "genome_detection_bioclinical", "anatomy_detection_electramed", "pii_superclinical_base", "pii_clinical_e5_base"],
+    "accurate": ["disease_detection_superclinical", "pharma_detection_superclinical", "oncology_detection_superclinical", "pii_superclinical_large", "pii_qwen_med_xlarge"],
 }
 
 
@@ -309,6 +722,7 @@ def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
 
     # Keywords that suggest specific model categories
     keywords = {
+        "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": ("privacy", "Contains PII/de-identification terms"),
         "cancer|tumor|oncolog|malign|chemotherapy|radiation": ("oncology", "Contains cancer/oncology terms"),
         "drug|medication|pharma|dose|mg|pill|tablet": ("pharma", "Contains pharmaceutical terms"),
         "gene|dna|protein|mutation|chromosome": ("genomics", "Contains genomic/genetic terms"),
