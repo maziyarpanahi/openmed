@@ -52,6 +52,20 @@ from .utils.validation import (
     validate_batch_size,
     sanitize_filename,
 )
+from .core.pii import (
+    extract_pii,
+    deidentify,
+    reidentify,
+    PIIEntity,
+    DeidentificationResult,
+)
+from .core.pii_entity_merger import (
+    merge_entities_with_semantic_units,
+    find_semantic_units,
+    calculate_dominant_label,
+    PII_PATTERNS,
+    PIIPattern,
+)
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(
     r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE
@@ -536,4 +550,16 @@ __all__ = [
     "get_profile_report",
     "profile",
     "timed",
+    # PII detection and de-identification
+    "extract_pii",
+    "deidentify",
+    "reidentify",
+    "PIIEntity",
+    "DeidentificationResult",
+    # PII entity merging utilities
+    "merge_entities_with_semantic_units",
+    "find_semantic_units",
+    "calculate_dominant_label",
+    "PII_PATTERNS",
+    "PIIPattern",
 ]
