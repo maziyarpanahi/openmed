@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-01-13
+
+### Added
+
+- **PII Detection & De-identification**: HIPAA-compliant PII extraction and de-identification
+  - `extract_pii()` function for detecting PII entities in clinical text
+  - `deidentify()` function with 5 de-identification methods:
+    - `mask`: Replace with placeholders (`[NAME]`, `[DATE]`, etc.)
+    - `remove`: Complete removal of PII entities
+    - `replace`: Replace with synthetic data
+    - `hash`: Cryptographic hashing for record linking
+    - `shift_dates`: Shift dates while preserving temporal relationships
+  - `reidentify()` function for reversing de-identification with stored mappings
+  - Support for all 18 HIPAA Safe Harbor identifiers
+  - Configurable confidence thresholds for precision/recall control
+  - Batch processing support for PII extraction and de-identification
+  - `PIIEntity` and `DeidentificationResult` dataclasses
+
+- **Smart Entity Merging**: Advanced post-processing to fix tokenization fragmentation
+  - Regex-based semantic unit detection with 20+ PII patterns
+  - Automatic merging of fragmented entities (e.g., dates split as "01" + "/15/1970" → "01/15/1970")
+  - Dominant label selection with confidence-based tie-breaking
+  - Label specificity hierarchy (e.g., `date_of_birth` > `date`)
+  - Support for dates (6 formats), SSN, phone numbers, emails, URLs, addresses, IP addresses, MAC addresses, ZIPs, credit cards
+  - Custom pattern support via `PIIPattern` class
+  - Enabled by default with `use_smart_merging=True` parameter
+  - Public API exports: `merge_entities_with_semantic_units()`, `find_semantic_units()`, `calculate_dominant_label()`, `PII_PATTERNS`
+  - Minimal performance overhead (~5-10%)
+
+- **PII CLI Commands**: Comprehensive command-line interface for PII operations
+  - `openmed pii extract`: Extract PII entities from text or files
+  - `openmed pii deidentify`: De-identify text or files with method selection
+  - `openmed pii batch-extract`: Batch PII extraction from directories
+  - `openmed pii batch-deidentify`: Batch de-identification with method selection
+  - All commands support confidence thresholds, smart merging, and output formatting
+  - Date shifting parameter (`--date-shift-days`) for temporal preservation
+
+- **PII TUI Mode**: Interactive PII detection in the terminal interface
+  - Visual PII entity highlighting with color coding
+  - Real-time de-identification preview
+  - Model selection for PII detection models
+
+- **PII Model Registry**: Added PII detection models
+  - `pii_detection_superclinical` (434M parameters)
+  - Covers 18+ PII entity types (names, dates, SSN, phone, email, addresses, medical records, etc.)
+
+- **Comprehensive Documentation**
+  - [PII Detection & Smart Merging Guide](docs/pii-smart-merging.md) (452 lines)
+    - Algorithm explanation and implementation details
+    - Complete API reference with examples
+    - Supported PII patterns catalog
+    - Performance characteristics
+    - Troubleshooting guide
+  - [Complete PII Jupyter Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) (48 cells)
+    - Step-by-step tutorial covering all PII functionality
+    - Before/after smart merging comparisons
+    - All 5 de-identification methods demonstrated
+    - Re-identification workflows
+    - Batch processing examples
+    - Confidence thresholding guidelines
+    - Custom PII patterns
+    - Clinical use cases (discharge summaries, research datasets, HIPAA compliance)
+    - HTML visualization examples
+    - CLI usage reference
+    - Best practices and security considerations
+  - [Notebooks README](examples/notebooks/README.md)
+    - Navigation guide for all notebooks
+    - Learning paths for different user types
+    - Quick reference table
+  - Updated README.md with PII capabilities
+  - Updated CLI documentation with PII commands
+  - Updated feature map and documentation index
+
+- **Testing**
+  - Comprehensive PII extraction and de-identification test suite
+  - Smart entity merging validation tests
+  - All 5 de-identification methods tested
+  - Complex clinical note integration tests
+
+### Changed
+
+- Default PII extraction behavior now uses smart entity merging (`use_smart_merging=True`)
+- Enhanced model registry with PII detection category
+
 ## [0.4.0] - 2025-12-29
 
 ### Added
@@ -125,7 +209,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/OpenMed/openmed/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/OpenMed/openmed/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/OpenMed/openmed/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/OpenMed/openmed/compare/v0.2.1...v0.2.2
