@@ -219,6 +219,28 @@ OPENMED_MODELS = {
         size_category="Medium",
         recommended_confidence=0.65
     ),
+
+    # PII Detection Models (Privacy/De-identification)
+    "pii_detection": ModelInfo(
+        model_id="lakshyakh93/deberta_finetuned_pii",
+        display_name="PII Detection (DeBERTa)",
+        category="Privacy",
+        specialization="Personally Identifiable Information detection",
+        description="Detects PII entities for HIPAA-compliant de-identification including names, emails, phone numbers, addresses, and other protected identifiers",
+        entity_types=["NAME", "EMAIL", "PHONE", "ID_NUM", "STREET_ADDRESS", "URL_PERSONAL", "USERNAME", "DATE", "AGE", "LOCATION"],
+        size_category="Medium",
+        recommended_confidence=0.70
+    ),
+    "pii_detection_superclinical": ModelInfo(
+        model_id="openmed/OpenMed-PII-SuperClinical-Large-434M-v1",
+        display_name="PII Detection (SuperClinical)",
+        category="Privacy",
+        specialization="Advanced PII detection for clinical text",
+        description="OpenMed's flagship PII detection model with 53 entity types for comprehensive HIPAA-compliant de-identification including medical records, SSN, demographics, contact info, and more",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number", "api_key", "credit_debit_card", "occupation"],
+        size_category="Large",
+        recommended_confidence=0.50
+    ),
 }
 
 # Category mappings for easy filtering
@@ -233,6 +255,7 @@ CATEGORIES = {
     "Protein": ["protein_detection_pubmed"],
     "Pathology": ["pathology_detection_modern"],
     "Hematology": ["blood_cancer_detection"],
+    "Privacy": ["pii_detection", "pii_detection_superclinical"],
 }
 
 # Size-based recommendations
