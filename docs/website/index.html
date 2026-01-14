@@ -392,6 +392,191 @@
             </div>
         </section>
 
+        <!-- PII De-identification Section -->
+        <section id="deidentification" style="padding: 5rem 0; background: linear-gradient(135deg, hsl(var(--primary) / 0.03) 0%, hsl(var(--background)) 100%);">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 4rem;">
+                    <span style="background: hsl(142 76% 36% / 0.1); color: hsl(142 76% 36%); padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 500; display: inline-block; margin-bottom: 1.5rem;">Healthcare Data Privacy</span>
+                    <h2 style="font-size: 2.75rem; font-weight: 700; margin-bottom: 1.5rem; line-height: 1.2;">
+                        Clinical Text De-Identification<br>
+                        <span style="color: hsl(var(--primary));">Built for HIPAA & GDPR Compliance</span>
+                    </h2>
+                    <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 52rem; margin: 0 auto; line-height: 1.7;">
+                        De-identify clinical notes, medical records, and healthcare documents with context-aware AI models.
+                        Process data locally—your PHI never leaves your environment. Open-source, auditable, and production-ready.
+                    </p>
+                </div>
+
+                <!-- Key Stats Row -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 4rem;">
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">18+</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">HIPAA Safe Harbor PHI Types</div>
+                    </div>
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(142 76% 36%); margin-bottom: 0.5rem;">100%</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Local Processing</div>
+                    </div>
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">$0</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Per-Token API Fees</div>
+                    </div>
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
+                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(142 76% 36%); margin-bottom: 0.5rem;">Apache-2.0</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Fully Open Source</div>
+                    </div>
+                </div>
+
+                <!-- Feature Grid -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem; margin-bottom: 4rem;">
+
+                    <!-- Context-Aware Detection -->
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical);">
+                        <div style="width: 3.5rem; height: 3.5rem; background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05)); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+                            <svg style="width: 1.75rem; height: 1.75rem; color: hsl(var(--primary));" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Context-Aware PHI Detection</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+                            Presidio-inspired scoring system that boosts confidence when keywords like "SSN:", "DOB:", or "NPI:" appear near detected entities. Low base scores prevent false positives; context words confirm true PHI.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Keyword Boosting</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">100-char Context Window</span>
+                        </div>
+                    </div>
+
+                    <!-- Checksum Validation -->
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical);">
+                        <div style="width: 3.5rem; height: 3.5rem; background: linear-gradient(135deg, hsl(142 76% 36% / 0.15), hsl(142 76% 36% / 0.05)); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+                            <svg style="width: 1.75rem; height: 1.75rem; color: hsl(142 76% 36%);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Checksum & Format Validation</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+                            Built-in validators reduce false positives: Luhn algorithm for credit cards and NPIs, SSN area code rules, US phone number format checking. Invalid matches get reduced confidence scores.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Luhn Checksum</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">SSN Validation</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NPI Verification</span>
+                        </div>
+                    </div>
+
+                    <!-- Smart Entity Merging -->
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical);">
+                        <div style="width: 3.5rem; height: 3.5rem; background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05)); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+                            <svg style="width: 1.75rem; height: 1.75rem; color: hsl(var(--primary));" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Smart Entity Merging</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+                            Fixes tokenization fragmentation automatically. Subword tokenizers split "123-45-6789" into fragments—our semantic patterns reassemble complete SSNs, phones, and multi-word entities.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">BIO Tag Handling</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Regex Patterns</span>
+                        </div>
+                    </div>
+
+                    <!-- Zero Data Movement -->
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical);">
+                        <div style="width: 3.5rem; height: 3.5rem; background: linear-gradient(135deg, hsl(142 76% 36% / 0.15), hsl(142 76% 36% / 0.05)); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+                            <svg style="width: 1.75rem; height: 1.75rem; color: hsl(142 76% 36%);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Zero Data Movement</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+                            Process PHI entirely on your infrastructure. No API calls to external services. Models run locally on CPU or GPU. Your clinical data never leaves your secure environment.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Air-Gapped Ready</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">On-Premises</span>
+                        </div>
+                    </div>
+
+                    <!-- Multiple De-ID Methods -->
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical);">
+                        <div style="width: 3.5rem; height: 3.5rem; background: linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.05)); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+                            <svg style="width: 1.75rem; height: 1.75rem; color: hsl(var(--primary));" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Flexible Redaction Methods</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+                            Choose your de-identification strategy: mask with entity type labels [NAME], redact completely, or replace with synthetic data. Configurable confidence thresholds for precision control.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Masking</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Redaction</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Replacement</span>
+                        </div>
+                    </div>
+
+                    <!-- Comprehensive PHI Coverage -->
+                    <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; box-shadow: var(--shadow-medical);">
+                        <div style="width: 3.5rem; height: 3.5rem; background: linear-gradient(135deg, hsl(142 76% 36% / 0.15), hsl(142 76% 36% / 0.05)); border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem;">
+                            <svg style="width: 1.75rem; height: 1.75rem; color: hsl(142 76% 36%);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                            </svg>
+                        </div>
+                        <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">HIPAA Safe Harbor Ready</h3>
+                        <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
+                            Detects all 18 HIPAA Safe Harbor identifiers: names, dates, SSNs, phone numbers, emails, addresses, MRNs, account numbers, NPIs, IP addresses, URLs, and more.
+                        </p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">18+ Entity Types</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">GDPR Compatible</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Code Example -->
+                <div style="background: hsl(220 13% 10%); border-radius: 0.75rem; padding: 2rem; margin-bottom: 3rem; overflow: hidden;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                        <div style="display: flex; align-items: center; gap: 1rem;">
+                            <div style="display: flex; gap: 0.5rem;">
+                                <div style="width: 0.75rem; height: 0.75rem; background: #ff5f56; border-radius: 50%;"></div>
+                                <div style="width: 0.75rem; height: 0.75rem; background: #ffbd2e; border-radius: 50%;"></div>
+                                <div style="width: 0.75rem; height: 0.75rem; background: #27ca40; border-radius: 50%;"></div>
+                            </div>
+                            <span style="color: hsl(0 0% 60%); font-size: 0.875rem;">PII De-identification Example</span>
+                        </div>
+                    </div>
+                    <pre style="color: hsl(0 0% 90%); font-size: 0.85rem; line-height: 1.6; overflow-x: auto; margin: 0;"><code><span style="color: #c586c0;">from</span> <span style="color: #4ec9b0;">openmed.core.pii</span> <span style="color: #c586c0;">import</span> extract_pii, deidentify
+
+<span style="color: #6a9955;"># Extract PII with context-aware scoring</span>
+text = <span style="color: #ce9178;">"""Patient: John Smith, DOB: 01/15/1980
+SSN: 123-45-6789, Phone: (555) 234-5678
+Email: john.smith@email.com
+Provider NPI: 1234567893"""</span>
+
+result = extract_pii(text, use_smart_merging=<span style="color: #569cd6;">True</span>)
+
+<span style="color: #6a9955;"># View detected entities with confidence scores</span>
+<span style="color: #c586c0;">for</span> entity <span style="color: #c586c0;">in</span> result.entities:
+    <span style="color: #dcdcaa;">print</span>(<span style="color: #ce9178;">f"</span><span style="color: #569cd6;">{</span>entity.text<span style="color: #569cd6;">}</span><span style="color: #ce9178;"> → </span><span style="color: #569cd6;">{</span>entity.label<span style="color: #569cd6;">}</span><span style="color: #ce9178;"> (</span><span style="color: #569cd6;">{</span>entity.confidence<span style="color: #569cd6;">:</span><span style="color: #ce9178;">.2f</span><span style="color: #569cd6;">}</span><span style="color: #ce9178;">)"</span>)
+
+<span style="color: #6a9955;"># De-identify the text</span>
+deid_result = deidentify(text, method=<span style="color: #ce9178;">"mask"</span>)
+<span style="color: #dcdcaa;">print</span>(deid_result.deidentified_text)
+<span style="color: #6a9955;"># Output: Patient: [FIRST_NAME] [LAST_NAME], DOB: [DATE_OF_BIRTH]</span>
+<span style="color: #6a9955;"># SSN: [SSN], Phone: [PHONE_NUMBER]</span>
+<span style="color: #6a9955;"># Email: [EMAIL], Provider NPI: [NPI]</span></code></pre>
+                </div>
+
+                <!-- CTA -->
+                <div style="text-align: center;">
+                    <a href="https://openmed.life/docs/pii.html" class="btn btn-primary btn-lg" style="margin-right: 0.75rem;">PII Documentation</a>
+                    <a href="https://huggingface.co/OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1" target="_blank" rel="noopener" class="btn btn-outline btn-lg">View PII Models on HF</a>
+                </div>
+            </div>
+        </section>
+
         <!-- Models Section -->
         <section id="models" style="padding: 5rem 0; background: hsl(var(--muted) / 0.3);">
             <div class="container">
@@ -1044,7 +1229,7 @@
                                 class="btn btn-primary">Hugging Face</a>
                             <a href="https://github.com/maziyarpanahi/openmed" target="_blank" rel="noopener"
                                 class="btn btn-outline">GitHub</a>
-                            <a href="https://huggingface.co/spaces/OpenMed/OpenMed-NER-Model-Discovery" target="_blank"
+                            <a href="https://huggingface.co/OpenMed" target="_blank"
                                 rel="noopener" class="btn btn-outline">Model Discovery</a>
                         </div>
                     </div>

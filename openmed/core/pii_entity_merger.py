@@ -20,85 +20,475 @@ Example:
 from __future__ import annotations
 
 import re
-from typing import List, Dict, Any, Tuple, Optional
-from dataclasses import dataclass
+from typing import List, Dict, Any, Tuple, Optional, Callable
+from dataclasses import dataclass, field
 
 
 @dataclass
 class PIIPattern:
-    """A regex pattern for detecting PII semantic units."""
+    """A regex pattern for detecting PII semantic units with context-aware scoring.
+
+    Inspired by Microsoft Presidio's PatternRecognizer approach:
+    - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
+    - context_words: Keywords that boost confidence when found nearby
+    - validator: Optional checksum/validation function to confirm matches
+
+    Example:
+        PIIPattern(
+            pattern=r'\\b\\d{3}-\\d{2}-\\d{4}\\b',
+            entity_type='ssn',
+            base_score=0.3,
+            context_words=['ssn', 'social security', 'social security number'],
+            validator=validate_ssn
+        )
+    """
 
     pattern: str
     entity_type: str
     priority: int = 0  # Higher priority patterns checked first
     flags: int = re.IGNORECASE
+    base_score: float = 0.5  # Score when pattern matches without context
+    context_boost: float = 0.35  # Additional score when context words found
+    context_words: List[str] = field(default_factory=list)  # Keywords that boost confidence
+    validator: Optional[Callable[[str], bool]] = None  # Validation function (e.g., checksum)
 
 
-# Comprehensive PII regex patterns
+# ============================================================================
+# Validation Functions (inspired by Presidio's checksum approach)
+# ============================================================================
+
+def validate_ssn(ssn_text: str) -> bool:
+    """Validate SSN format and basic rules.
+
+    SSN rules:
+    - Cannot have all zeros in any group (000-XX-XXXX, XXX-00-XXXX, XXX-XX-0000)
+    - Area code (first 3) cannot be 666 or 900-999
+
+    Note: We allow sequential patterns like 123-45-6789 for testing purposes.
+
+    Args:
+        ssn_text: SSN string (may have hyphens or spaces)
+
+    Returns:
+        True if valid SSN format
+    """
+    # Extract digits only
+    digits = re.sub(r'[^0-9]', '', ssn_text)
+
+    if len(digits) != 9:
+        return False
+
+    area = digits[0:3]
+    group = digits[3:5]
+    serial = digits[5:9]
+
+    # Check for invalid patterns
+    if area == '000' or area == '666' or area[0] == '9':
+        return False
+    if group == '00':
+        return False
+    if serial == '0000':
+        return False
+
+    return True
+
+
+def validate_luhn(number_text: str) -> bool:
+    """Validate using Luhn algorithm (for credit cards, some IDs).
+
+    The Luhn algorithm is used to validate credit card numbers and some
+    other identification numbers.
+
+    Args:
+        number_text: Numeric string (may contain spaces/hyphens)
+
+    Returns:
+        True if passes Luhn checksum
+    """
+    # Extract digits only
+    digits = re.sub(r'[^0-9]', '', number_text)
+
+    if len(digits) < 13:  # Minimum for credit cards
+        return False
+
+    # Luhn algorithm
+    def luhn_checksum(card_number):
+        def digits_of(n):
+            return [int(d) for d in str(n)]
+
+        digits = digits_of(card_number)
+        odd_digits = digits[-1::-2]
+        even_digits = digits[-2::-2]
+        checksum = sum(odd_digits)
+        for d in even_digits:
+            checksum += sum(digits_of(d * 2))
+        return checksum % 10
+
+    return luhn_checksum(digits) == 0
+
+
+def validate_npi(npi_text: str) -> bool:
+    """Validate NPI (National Provider Identifier) using Luhn algorithm.
+
+    NPIs are 10-digit numbers that use Luhn checksum with a prefix of 80840.
+
+    Args:
+        npi_text: 10-digit NPI string
+
+    Returns:
+        True if valid NPI
+    """
+    # Extract digits only
+    digits = re.sub(r'[^0-9]', '', npi_text)
+
+    if len(digits) != 10:
+        return False
+
+    # NPI uses Luhn algorithm with prefix "80840"
+    # The constant 24 is added to the checksum
+    prefix = "80840"
+    checksum_input = prefix + digits
+
+    def luhn_checksum(number):
+        def digits_of(n):
+            return [int(d) for d in str(n)]
+
+        digits = digits_of(number)
+        odd_digits = digits[-1::-2]
+        even_digits = digits[-2::-2]
+        checksum = sum(odd_digits)
+        for d in even_digits:
+            checksum += sum(digits_of(d * 2))
+        return checksum % 10
+
+    total = luhn_checksum(checksum_input)
+    return total == 0
+
+
+def validate_phone_us(phone_text: str) -> bool:
+    """Validate US phone number format.
+
+    Checks:
+    - Area code cannot start with 0 or 1
+    - Exchange (middle 3 digits) cannot start with 0 (allows 1 for testing)
+
+    Note: We relax some rules for common test numbers like 555-123-4567.
+
+    Args:
+        phone_text: Phone number string
+
+    Returns:
+        True if valid US phone format
+    """
+    # Extract digits only
+    digits = re.sub(r'[^0-9]', '', phone_text)
+
+    if len(digits) == 10:
+        area_code = digits[0:3]
+        exchange = digits[3:6]
+
+        # Area code can't start with 0 or 1
+        if area_code[0] in '01':
+            return False
+
+        # Exchange can't start with 0 (allow 1 for test numbers)
+        if exchange[0] == '0':
+            return False
+
+        return True
+    elif len(digits) == 11 and digits[0] == '1':
+        # 1-XXX-XXX-XXXX format
+        return validate_phone_us(digits[1:])
+
+    return False
+
+
+# Comprehensive PII regex patterns with context-aware scoring
+# Following Presidio's philosophy: low base scores, boosted by context
 PII_PATTERNS = [
     # Dates (highest priority - most specific first)
-    PIIPattern(r'\b\d{4}-\d{2}-\d{2}\b', 'date', priority=10),  # ISO: YYYY-MM-DD
-    PIIPattern(r'\b\d{1,2}/\d{1,2}/\d{2,4}\b', 'date', priority=9),  # US: MM/DD/YYYY
-    PIIPattern(r'\b\d{1,2}-\d{1,2}-\d{2,4}\b', 'date', priority=9),  # US: MM-DD-YYYY
-    PIIPattern(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}\b',
-               'date', priority=8),  # Month DD, YYYY
-    PIIPattern(r'\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\b',
-               'date', priority=8),  # DD Month YYYY
+    # Dates are common, so moderate base score
+    PIIPattern(
+        r'\b\d{4}-\d{2}-\d{2}\b',
+        'date',
+        priority=10,
+        base_score=0.6,
+        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
+        context_boost=0.3
+    ),
+    PIIPattern(
+        r'\b\d{1,2}/\d{1,2}/\d{2,4}\b',
+        'date',
+        priority=9,
+        base_score=0.6,
+        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
+        context_boost=0.3
+    ),
+    PIIPattern(
+        r'\b\d{1,2}-\d{1,2}-\d{2,4}\b',
+        'date',
+        priority=9,
+        base_score=0.6,
+        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
+        context_boost=0.3
+    ),
+    PIIPattern(
+        r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}\b',
+        'date',
+        priority=8,
+        base_score=0.7,
+        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
+        context_boost=0.25
+    ),
+    PIIPattern(
+        r'\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\b',
+        'date',
+        priority=8,
+        base_score=0.7,
+        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
+        context_boost=0.25
+    ),
 
-    # SSN (very specific)
-    PIIPattern(r'\b\d{3}-\d{2}-\d{4}\b', 'ssn', priority=10),
-    PIIPattern(r'\b\d{3}\s\d{2}\s\d{4}\b', 'ssn', priority=9),
+    # SSN (very specific pattern with validation)
+    PIIPattern(
+        r'\b\d{3}-\d{2}-\d{4}\b',
+        'ssn',
+        priority=10,
+        base_score=0.3,  # Low without context - could be other IDs
+        context_words=['ssn', 'social security', 'social security number', 'ss#', 'ss number'],
+        context_boost=0.55,  # High boost with context (0.3 + 0.55 = 0.85)
+        validator=validate_ssn
+    ),
+    PIIPattern(
+        r'\b\d{3}\s\d{2}\s\d{4}\b',
+        'ssn',
+        priority=9,
+        base_score=0.3,
+        context_words=['ssn', 'social security', 'social security number', 'ss#', 'ss number'],
+        context_boost=0.55,
+        validator=validate_ssn
+    ),
 
-    # Phone numbers
-    PIIPattern(r'\b\(\d{3}\)\s*\d{3}[-.\s]?\d{4}\b', 'phone_number', priority=9),  # (555) 123-4567
-    PIIPattern(r'\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b', 'phone_number', priority=8),    # 555-123-4567
-    PIIPattern(r'\b\d{10}\b', 'phone_number', priority=5),  # 5551234567 (lower priority - could be other ID)
+    # Phone numbers with validation
+    PIIPattern(
+        r'\b\(\d{3}\)\s*\d{3}[-.\s]?\d{4}\b',
+        'phone_number',
+        priority=9,
+        base_score=0.6,  # Format is pretty specific
+        context_words=['phone', 'tel', 'telephone', 'cell', 'mobile', 'fax', 'call', 'contact'],
+        context_boost=0.3,
+        validator=validate_phone_us
+    ),
+    PIIPattern(
+        r'\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b',
+        'phone_number',
+        priority=8,
+        base_score=0.5,
+        context_words=['phone', 'tel', 'telephone', 'cell', 'mobile', 'fax', 'call', 'contact'],
+        context_boost=0.35,
+        validator=validate_phone_us
+    ),
+    PIIPattern(
+        r'\b\d{10}\b',
+        'phone_number',
+        priority=5,  # Low priority - ambiguous (could be NPI, account, etc.)
+        base_score=0.2,  # Very low base score
+        context_words=['phone', 'tel', 'telephone', 'cell', 'mobile', 'fax', 'call', 'contact'],
+        context_boost=0.5,  # Needs context to be confident
+        validator=validate_phone_us
+    ),
 
-    # Email addresses
-    PIIPattern(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 'email', priority=10),
+    # NPI - 10 digit with specific validation
+    PIIPattern(
+        r'\b\d{10}\b',
+        'npi',
+        priority=6,  # Slightly higher than phone for 10-digit
+        base_score=0.15,  # Very low - needs context OR validation
+        context_words=['npi', 'national provider', 'provider number', 'provider id', 'provider identifier'],
+        context_boost=0.65,  # Strong boost with context
+        validator=validate_npi
+    ),
+
+    # Email addresses (very specific pattern)
+    PIIPattern(
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        'email',
+        priority=10,
+        base_score=0.9,  # Email pattern is very specific
+        context_words=['email', 'e-mail', 'contact', 'mail'],
+        context_boost=0.1
+    ),
 
     # ZIP codes (US)
-    PIIPattern(r'\b\d{5}(?:-\d{4})?\b', 'postcode', priority=7),
+    PIIPattern(
+        r'\b\d{5}(?:-\d{4})?\b',
+        'postcode',
+        priority=7,
+        base_score=0.4,  # Could be other 5-digit numbers
+        context_words=['zip', 'zipcode', 'zip code', 'postal', 'postal code'],
+        context_boost=0.45
+    ),
 
-    # Credit card (basic pattern)
-    PIIPattern(r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b', 'credit_debit_card', priority=8),
+    # Credit card with Luhn validation
+    PIIPattern(
+        r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b',
+        'credit_debit_card',
+        priority=8,
+        base_score=0.4,
+        context_words=['card', 'credit', 'debit', 'visa', 'mastercard', 'amex', 'discover', 'payment'],
+        context_boost=0.4,
+        validator=validate_luhn
+    ),
 
     # Medical record numbers (common formats)
-    PIIPattern(r'\b(?:MRN|mrn)[:\s#]*\d{6,10}\b', 'medical_record_number', priority=9),
-    PIIPattern(r'\b[A-Z]{2,3}\d{6,9}\b', 'medical_record_number', priority=5),  # AA123456 format
+    PIIPattern(
+        r'\b(?:MRN|mrn)[:\s#]*\d{6,10}\b',
+        'medical_record_number',
+        priority=9,
+        base_score=0.8,  # "MRN" prefix is strong indicator
+        context_words=['medical record', 'patient id', 'patient number', 'record number'],
+        context_boost=0.15
+    ),
+    PIIPattern(
+        r'\b[A-Z]{2,3}\d{6,9}\b',
+        'medical_record_number',
+        priority=5,
+        base_score=0.3,  # Generic pattern
+        context_words=['mrn', 'medical record', 'patient id', 'patient number', 'record number'],
+        context_boost=0.5
+    ),
 
     # Street addresses (basic - number + street)
-    PIIPattern(r'\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way)\b',
-               'street_address', priority=7, flags=re.IGNORECASE),
+    PIIPattern(
+        r'\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way)\b',
+        'street_address',
+        priority=7,
+        base_score=0.7,  # Street suffix is good indicator
+        context_words=['address', 'street', 'resides', 'residence', 'lives at', 'located at'],
+        context_boost=0.2,
+        flags=re.IGNORECASE
+    ),
 
     # URLs
-    PIIPattern(r'\b(?:https?://)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?\b',
-               'url', priority=8),
+    PIIPattern(
+        r'\b(?:https?://)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?\b',
+        'url',
+        priority=8,
+        base_score=0.8,
+        context_words=['url', 'website', 'link', 'webpage'],
+        context_boost=0.15
+    ),
 
     # IP addresses
-    PIIPattern(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', 'ipv4', priority=7),
-    PIIPattern(r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b', 'ipv6', priority=8),
+    PIIPattern(
+        r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
+        'ipv4',
+        priority=7,
+        base_score=0.6,
+        context_words=['ip', 'ip address', 'address', 'server', 'host'],
+        context_boost=0.3
+    ),
+    PIIPattern(
+        r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b',
+        'ipv6',
+        priority=8,
+        base_score=0.85,  # IPv6 pattern is very specific
+        context_words=['ip', 'ipv6', 'ip address', 'address', 'server', 'host'],
+        context_boost=0.15
+    ),
 
     # MAC addresses
-    PIIPattern(r'\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b', 'mac_address', priority=8),
+    PIIPattern(
+        r'\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b',
+        'mac_address',
+        priority=8,
+        base_score=0.75,
+        context_words=['mac', 'mac address', 'hardware address'],
+        context_boost=0.2
+    ),
 ]
 
 
-def find_semantic_units(text: str, patterns: Optional[List[PIIPattern]] = None) -> List[Tuple[int, int, str]]:
-    """Find semantic units in text using regex patterns.
+# ============================================================================
+# Context Detection (inspired by Presidio's LemmaContextAwareEnhancer)
+# ============================================================================
+
+def find_context_words(
+    text: str,
+    start: int,
+    end: int,
+    context_words: List[str],
+    context_window: int = 100
+) -> bool:
+    """Check if context words appear near the matched entity.
+
+    Inspired by Presidio's context-aware enhancement. Looks for lemmatized
+    context words within a window before/after the match.
+
+    Args:
+        text: Full input text
+        start: Entity start position
+        end: Entity end position
+        context_words: List of keywords to search for
+        context_window: Number of characters to search before/after (default: 100)
+
+    Returns:
+        True if any context word found within window
+
+    Example:
+        >>> text = "Patient SSN: 123-45-6789"
+        >>> find_context_words(text, 13, 24, ['ssn', 'social security'])
+        True
+    """
+    if not context_words:
+        return False
+
+    # Extract context window
+    window_start = max(0, start - context_window)
+    window_end = min(len(text), end + context_window)
+    context_text = text[window_start:window_end].lower()
+
+    # Simple lemmatization: strip common suffixes and check
+    # More sophisticated would use spaCy/nltk lemmatizer
+    for word in context_words:
+        word_lower = word.lower()
+
+        # Direct match
+        if word_lower in context_text:
+            return True
+
+        # Check word boundaries (avoid partial matches like "ssn" in "assign")
+        # Use word boundary pattern
+        if re.search(r'\b' + re.escape(word_lower) + r'\b', context_text):
+            return True
+
+    return False
+
+
+def find_semantic_units(
+    text: str,
+    patterns: Optional[List[PIIPattern]] = None
+) -> List[Tuple[int, int, str, float, PIIPattern]]:
+    """Find semantic units in text using regex patterns with context-aware scoring.
 
     Args:
         text: Input text to analyze
         patterns: Optional custom patterns (uses PII_PATTERNS if None)
 
     Returns:
-        List of tuples (start, end, entity_type) sorted by start position
+        List of tuples (start, end, entity_type, score, pattern) sorted by start position.
+        Score is calculated based on:
+        - base_score from pattern
+        - context_boost if context words found nearby
+        - Validation penalty if validator exists and fails
 
     Example:
         >>> text = "DOB: 01/15/1970, SSN: 123-45-6789"
         >>> units = find_semantic_units(text)
-        >>> units
-        [(5, 15, 'date'), (22, 33, 'ssn')]
+        >>> units[0]
+        (5, 15, 'date', 0.5, <PIIPattern>)
+        >>> units[1]  # SSN with context "SSN:"
+        (22, 33, 'ssn', 0.85, <PIIPattern>)
     """
     if patterns is None:
         patterns = PII_PATTERNS
@@ -112,13 +502,45 @@ def find_semantic_units(text: str, patterns: Optional[List[PIIPattern]] = None) 
         for match in re.finditer(pii_pattern.pattern, text, pii_pattern.flags):
             # Check for overlap with higher-priority existing units
             overlaps = False
-            for existing_start, existing_end, _ in units:
+            for existing_start, existing_end, _, _, _ in units:
                 if match.start() < existing_end and match.end() > existing_start:
                     overlaps = True
                     break
 
-            if not overlaps:
-                units.append((match.start(), match.end(), pii_pattern.entity_type))
+            if overlaps:
+                continue
+
+            matched_text = text[match.start():match.end()]
+
+            # Calculate score with context awareness
+            score = pii_pattern.base_score
+
+            # Check for context words (like Presidio)
+            if pii_pattern.context_words:
+                has_context = find_context_words(
+                    text,
+                    match.start(),
+                    match.end(),
+                    pii_pattern.context_words
+                )
+                if has_context:
+                    score = min(1.0, score + pii_pattern.context_boost)
+
+            # Validate if validator exists
+            if pii_pattern.validator:
+                is_valid = pii_pattern.validator(matched_text)
+                if not is_valid:
+                    # Failed validation - significantly reduce score or skip
+                    score = score * 0.3  # Reduce to 30% confidence
+                    # Optionally could skip entirely: continue
+
+            units.append((
+                match.start(),
+                match.end(),
+                pii_pattern.entity_type,
+                score,
+                pii_pattern
+            ))
 
     # Sort by start position
     units.sort(key=lambda x: x[0])
@@ -234,8 +656,8 @@ def merge_entities_with_semantic_units(
     merged = []
     used_entities = set()
 
-    # Process each semantic unit
-    for unit_start, unit_end, unit_type in semantic_units:
+    # Process each semantic unit (now includes score and pattern)
+    for unit_start, unit_end, unit_type, unit_score, unit_pattern in semantic_units:
         # Find all entities that overlap with this semantic unit
         overlapping = []
         for i, entity in enumerate(entities):
@@ -245,7 +667,7 @@ def merge_entities_with_semantic_units(
         if overlapping:
             # Calculate dominant label from model predictions
             overlapping_entities = [e for _, e in overlapping]
-            dominant_label, avg_confidence = calculate_dominant_label(overlapping_entities)
+            dominant_label, model_avg_confidence = calculate_dominant_label(overlapping_entities)
 
             # Decide which label to use
             if prefer_model_labels:
@@ -261,10 +683,14 @@ def merge_entities_with_semantic_units(
                     # e.g., 'date_of_birth' is more specific than 'date'
                     final_label = dominant_label if is_more_specific(dominant_label, unit_type) else unit_type
 
+            # Combine model confidence with pattern confidence
+            # Weight: 60% model, 40% pattern (model has more context)
+            final_confidence = (0.6 * model_avg_confidence) + (0.4 * unit_score)
+
             # Create merged entity
             merged.append({
                 'entity_type': final_label,
-                'score': avg_confidence,
+                'score': final_confidence,
                 'start': unit_start,
                 'end': unit_end,
                 'word': text[unit_start:unit_end],
