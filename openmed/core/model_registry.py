@@ -234,14 +234,14 @@ OPENMED_MODELS = {
 
     # PII Detection Models (Privacy/De-identification)
     "pii_detection": ModelInfo(
-        model_id="lakshyakh93/deberta_finetuned_pii",
-        display_name="PII Detection (DeBERTa)",
+        model_id="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        display_name="PII Detection (SuperClinical Small)",
         category="Privacy",
         specialization="Personally Identifiable Information detection",
         description="Detects PII entities for HIPAA-compliant de-identification including names, emails, phone numbers, addresses, and other protected identifiers",
-        entity_types=["NAME", "EMAIL", "PHONE", "ID_NUM", "STREET_ADDRESS", "URL_PERSONAL", "USERNAME", "DATE", "AGE", "LOCATION"],
-        size_category="Medium",
-        recommended_confidence=0.70
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
+        size_category="Small",
+        recommended_confidence=0.50
     ),
 
     # OpenMed PII Detection Model Collection (33 models)
