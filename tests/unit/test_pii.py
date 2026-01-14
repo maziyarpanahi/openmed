@@ -238,7 +238,7 @@ class TestExtractPII:
         extract_pii("Test")
 
         call_args = mock_analyze.call_args
-        assert call_args[1]["model_name"] == "lakshyakh93/deberta_finetuned_pii"
+        assert call_args[1]["model_name"] == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 
 
 # ---------------------------------------------------------------------------
