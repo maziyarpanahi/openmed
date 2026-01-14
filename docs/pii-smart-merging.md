@@ -428,11 +428,10 @@ def select_label(predictions):
 
 ## Related Documentation
 
-- [PII Detection Overview](./pii-detection.md)
-- [De-identification Methods](./deidentification.md)
-- [HIPAA Compliance Guide](./hipaa-compliance.md)
 - [Model Registry](./model-registry.md)
-- [API Reference](./api-reference.md)
+- [CLI & Automation](./cli.md)
+- [Batch Processing](./batch-processing.md)
+- [Examples & Recipes](./examples.md)
 
 ---
 
