@@ -268,7 +268,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     extract_parser.add_argument(
         "--model",
-        default="lakshyakh93/deberta_finetuned_pii",
+        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
         help="PII detection model.",
     )
     text_group = extract_parser.add_mutually_exclusive_group(required=True)
@@ -293,7 +293,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     deid_parser.add_argument(
         "--model",
-        default="lakshyakh93/deberta_finetuned_pii",
+        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
         help="PII detection model.",
     )
     deid_text_group = deid_parser.add_mutually_exclusive_group(required=True)
@@ -339,7 +339,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     batch_parser.add_argument(
         "--model",
-        default="lakshyakh93/deberta_finetuned_pii",
+        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
         help="PII detection model.",
     )
     batch_parser.add_argument(
