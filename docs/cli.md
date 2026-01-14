@@ -22,6 +22,10 @@ uv pip install .
 |---------|-------------|
 | `analyze` | Analyze single text or file |
 | `batch` | Process multiple texts or files |
+| `pii extract` | Extract PII entities from text |
+| `pii deidentify` | De-identify PII in text or files |
+| `pii batch-extract` | Batch PII extraction |
+| `pii batch-deidentify` | Batch de-identification |
 | `tui` | Launch interactive terminal interface |
 | `models list` | List available models |
 | `models info` | Show model metadata |
@@ -32,6 +36,57 @@ uv pip install .
 | `config profile-use` | Apply a profile |
 | `config profile-save` | Save current config as profile |
 | `config profile-delete` | Delete custom profile |
+
+## PII Detection & De-identification (v0.5.0)
+
+Extract and de-identify PII entities from clinical text:
+
+```bash
+# Extract PII entities
+openmed pii extract \
+  --text "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789" \
+  --model pii_detection_superclinical \
+  --confidence-threshold 0.6
+
+# Extract from file
+openmed pii extract \
+  --input-file patient_note.txt \
+  --output results.json
+
+# De-identify with different methods
+openmed pii deidentify \
+  --text "Patient: John Doe, DOB: 01/15/1970" \
+  --method mask \
+  --output deidentified.txt
+
+# De-identify with date shifting
+openmed pii deidentify \
+  --input-file note.txt \
+  --method shift_dates \
+  --date-shift-days 180
+
+# Batch PII extraction
+openmed pii batch-extract \
+  --input-dir ./patient_notes \
+  --output-dir ./pii_results
+
+# Batch de-identification
+openmed pii batch-deidentify \
+  --input-dir ./notes \
+  --output-dir ./deidentified \
+  --method mask
+```
+
+**De-identification methods:**
+- `mask` — Replace with placeholders `[NAME]`, `[DATE]`, etc.
+- `remove` — Remove PII entities completely
+- `replace` — Replace with synthetic data
+- `hash` — Cryptographic hashing for linking
+- `shift_dates` — Shift dates while preserving temporal relationships
+
+**Smart Entity Merging** (default): Prevents fragmentation of dates, SSN, phone numbers by merging tokenized fragments into complete entities.
+
+See [PII Detection & Smart Merging](./pii-smart-merging.md) for comprehensive documentation and [PII notebook](../examples/notebooks/PII_Detection_Complete_Guide.ipynb) for examples.
 
 ## Analyze text from the terminal
 

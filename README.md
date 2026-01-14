@@ -28,6 +28,7 @@ for entity in result.entities:
 ## ✨ Why OpenMed?
 
 - **Specialized Models**: 12+ curated medical NER models outperforming proprietary solutions
+- **HIPAA-Compliant PII Detection**: Smart de-identification with all 18 Safe Harbor identifiers
 - **One-Line Deployment**: From prototype to production in minutes
 - **Interactive TUI**: Beautiful terminal interface for rapid experimentation
 - **Batch Processing**: Multi-file workflows with progress tracking
@@ -107,6 +108,7 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
 ### Core Capabilities
 
 - **Curated Model Registry**: Metadata-rich catalog with 12+ specialized medical NER models
+- **PII Detection & De-identification**: HIPAA-compliant de-identification with smart entity merging
 - **Medical-Aware Tokenization**: Clean handling of clinical patterns (`COVID-19`, `CAR-T`, `IL-6`)
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
@@ -128,6 +130,7 @@ Quick links:
 
 - [Getting Started](https://openmed.life/docs/) — Installation and first analysis
 - [Analyze Text Helper](https://openmed.life/docs/analyze-text) — Python API reference
+- [PII Detection Guide](examples/notebooks/PII_Detection_Complete_Guide.ipynb) — Complete de-identification tutorial (v0.5.0)
 - [CLI & Automation](https://openmed.life/docs/cli) — Batch processing and profiles
 - [Interactive TUI](https://openmed.life/docs/tui) — Terminal interface guide
 - [Model Registry](https://openmed.life/docs/model-registry) — Browse available models
@@ -143,6 +146,7 @@ OpenMed includes a curated registry of 12+ specialized medical NER models:
 |-------|---------------|--------------|------|
 | `disease_detection_superclinical` | Disease & Conditions | DISEASE, CONDITION, DIAGNOSIS | 434M |
 | `pharma_detection_superclinical` | Drugs & Medications | DRUG, MEDICATION, TREATMENT | 434M |
+| `pii_detection_superclinical` | PII & De-identification | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
 | `anatomy_detection_electramed` | Anatomy & Body Parts | ANATOMY, ORGAN, BODY_PART | 109M |
 | `gene_detection_genecorpus` | Genes & Proteins | GENE, PROTEIN | 109M |
 
@@ -151,6 +155,32 @@ OpenMed includes a curated registry of 12+ specialized medical NER models:
 ---
 
 ## Advanced Usage
+
+### PII Detection & De-identification (v0.5.0)
+
+```python
+from openmed import extract_pii, deidentify
+
+# Extract PII entities with smart merging (default)
+result = extract_pii(
+    "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789",
+    model_name="pii_detection_superclinical",
+    use_smart_merging=True  # Prevents entity fragmentation
+)
+
+# De-identify with multiple methods
+masked = deidentify(text, method="mask")        # [NAME], [DATE]
+removed = deidentify(text, method="remove")     # Complete removal
+replaced = deidentify(text, method="replace")   # Synthetic data
+hashed = deidentify(text, method="hash")        # Cryptographic hashing
+shifted = deidentify(text, method="shift_dates", date_shift_days=180)
+```
+
+**Smart Entity Merging** (NEW in v0.5.0): Fixes tokenization fragmentation by merging split entities like dates (`01/15/1970` instead of `01` + `/15/1970`), ensuring production-ready de-identification.
+
+**HIPAA Compliance**: Covers all 18 Safe Harbor identifiers with configurable confidence thresholds.
+
+[📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Documentation](docs/pii-smart-merging.md)
 
 ### Batch Processing
 
