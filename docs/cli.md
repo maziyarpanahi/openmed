@@ -86,7 +86,7 @@ openmed pii batch-deidentify \
 
 **Smart Entity Merging** (default): Prevents fragmentation of dates, SSN, phone numbers by merging tokenized fragments into complete entities.
 
-See [PII Detection & Smart Merging](./pii-smart-merging.md) for comprehensive documentation and [PII notebook](../examples/notebooks/PII_Detection_Complete_Guide.ipynb) for examples.
+See [PII Detection & Smart Merging](./pii-smart-merging.md) for comprehensive documentation and [PII notebook](https://github.com/maziyarpanahi/openmed/blob/master/examples/notebooks/PII_Detection_Complete_Guide.ipynb) for examples.
 
 ## Analyze text from the terminal
 
