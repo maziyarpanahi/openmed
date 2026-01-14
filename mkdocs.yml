@@ -18,6 +18,7 @@ nav:
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
       - Advanced NER & Output Formatting: output-formatting.md
+      - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
       - Batch Processing: batch-processing.md
@@ -27,6 +28,8 @@ nav:
       - Interactive TUI: tui.md
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
+  - PII & De-identification:
+      - Smart Entity Merging: pii-smart-merging.md
   - Project:
       - Contributing & Releases: contributing.md
 
