@@ -124,7 +124,7 @@ class DeidentificationResult:
 
 def extract_pii(
     text: str,
-    model_name: str = "pii_detection",
+    model_name: str = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
     confidence_threshold: float = 0.5,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
