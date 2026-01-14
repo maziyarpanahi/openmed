@@ -10,6 +10,7 @@ as the starting point when you are unsure which page (or module) to visit.
 | Model registry | Curated metadata (`ModelInfo`, categories, suggestions) for every OpenMed Hugging Face release. | `openmed/core/model_registry.py`, [Model Registry](./model-registry.md) |
 | Discovery & loading | Hugging Face discovery, optional auth, caching, tokenizers, pipeline helpers. | `openmed/core/models.py`, [ModelLoader & Pipelines](./model-loader.md) |
 | One-call inference | `analyze_text`, validation, pySBD segmentation, output formatting for dict/JSON/HTML/CSV. | `openmed/__init__.py:analyze_text`, [Analyze Text Helper](./analyze-text.md) |
+| PII detection & de-identification | `extract_pii`, `deidentify`, smart entity merging, HIPAA Safe Harbor compliance. | `openmed/core/pii.py`, `openmed/core/pii_entity_merger.py`, [PII Detection & Smart Merging](./pii-smart-merging.md) |
 | Zero-shot toolkit | GLiNER-powered indexing, label maps, adapters, smoke scripts. | `openmed/zero_shot/**`, [Zero-shot Toolkit](./zero-shot-ner.md) |
 
 ## Processing & outputs
@@ -38,13 +39,14 @@ as the starting point when you are unsure which page (or module) to visit.
 
 1. [Quick Start](./getting-started.md) — install + first inference.
 2. [Analyze Text Helper](./analyze-text.md) — single-call orchestration.
-3. [Batch Processing](./batch-processing.md) — multi-text processing.
-4. [ModelLoader & Pipelines](./model-loader.md) — lower-level control.
-5. [Model Registry](./model-registry.md) — pick the right checkpoint.
-6. [Configuration Profiles](./profiles.md) — dev/prod/test profiles.
-7. [Advanced NER & Output Formatting](./output-formatting.md) — polish predictions.
-8. [Zero-shot Toolkit](./zero-shot-ner.md) — GLiNER workflows.
-9. [Performance Profiling](./profiling.md) — timing and metrics.
-10. [TUI - Interactive Terminal](./tui.md) — visual analysis workbench.
-11. [CLI & Automation](./cli.md) and [Examples](./examples.md) — day-to-day tools.
-12. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
+3. [PII Detection & Smart Merging](./pii-smart-merging.md) — de-identification (v0.5.0).
+4. [Batch Processing](./batch-processing.md) — multi-text processing.
+5. [ModelLoader & Pipelines](./model-loader.md) — lower-level control.
+6. [Model Registry](./model-registry.md) — pick the right checkpoint.
+7. [Configuration Profiles](./profiles.md) — dev/prod/test profiles.
+8. [Advanced NER & Output Formatting](./output-formatting.md) — polish predictions.
+9. [Zero-shot Toolkit](./zero-shot-ner.md) — GLiNER workflows.
+10. [Performance Profiling](./profiling.md) — timing and metrics.
+11. [TUI - Interactive Terminal](./tui.md) — visual analysis workbench.
+12. [CLI & Automation](./cli.md) and [Examples](./examples.md) — day-to-day tools.
+13. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.

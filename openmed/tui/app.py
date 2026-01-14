@@ -57,6 +57,17 @@ ENTITY_COLORS: dict[str, str] = {
     # Species
     "SPECIES": "#06b6d4",  # cyan
     "ORGANISM": "#06b6d4",
+    # PII entities (for de-identification)
+    "NAME": "#ec4899",  # pink
+    "EMAIL": "#8b5cf6",  # violet
+    "PHONE": "#14b8a6",  # teal
+    "ID_NUM": "#f97316",  # orange
+    "STREET_ADDRESS": "#84cc16",  # lime
+    "URL_PERSONAL": "#06b6d4",  # cyan
+    "USERNAME": "#a855f7",  # purple
+    "DATE": "#eab308",  # yellow
+    "AGE": "#22c55e",  # green
+    "LOCATION": "#3b82f6",  # blue
     # Default
     "DEFAULT": "#9ca3af",  # gray
 }
@@ -1197,6 +1208,7 @@ class OpenMedTUI(App):
         Binding("f4", "switch_profile", "Profile"),
         Binding("f5", "show_history", "History"),
         Binding("f6", "export_results", "Export"),
+        Binding("f7", "toggle_pii_mode", "PII Mode"),
     ]
 
     def __init__(
@@ -1228,6 +1240,8 @@ class OpenMedTUI(App):
         self._is_analyzing = False
         self._history: list[HistoryItem] = []
         self._history_counter = 0
+        self._pii_mode: bool = False
+        self._original_model_name: str | None = None  # Store model when switching to PII
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -1387,17 +1401,21 @@ OpenMed TUI - Keyboard Shortcuts
 
 Ctrl+Enter  Analyze current text
 Ctrl+L      Clear input and results
+Ctrl+O      Open file
 F1          Show this help
 F2          Switch model
 F3          Configuration panel
 F4          Switch profile
+F5          View history
+F6          Export results
+F7          Toggle PII Mode
 Ctrl+Q      Quit application
 
 Tips:
 - Paste clinical notes into the input area
 - Entities are color-coded by type
 - Table shows entities sorted by confidence
-- Changing config re-analyzes automatically
+- PII Mode detects personal information (names, emails, phones)
         """
         self.notify(help_text.strip(), timeout=10)
 
@@ -1557,6 +1575,27 @@ Tips:
                     self.notify(f"Error reading file: {e}", severity="error", timeout=3)
 
         self.push_screen(FileNavigationScreen(), on_file_selected)
+
+    def action_toggle_pii_mode(self) -> None:
+        """Toggle PII detection mode."""
+        self._pii_mode = not self._pii_mode
+
+        if self._pii_mode:
+            # Store original model and switch to PII model
+            self._original_model_name = self._model_name
+            self._model_name = "pii_detection"
+            self.query_one(StatusBar).update_status(model_name="PII Detection")
+            self.notify("PII Mode enabled - detecting personal information", timeout=3)
+        else:
+            # Restore original model
+            self._model_name = self._original_model_name
+            self._original_model_name = None
+            model_display = self._model_name or "default"
+            self.query_one(StatusBar).update_status(model_name=model_display)
+            self.notify("PII Mode disabled", timeout=2)
+
+        # Re-analyze if we have text
+        self._reanalyze_if_needed()
 
 
 def run_tui(
