@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-01-14
+
+### Added
+
+- **Context-Aware PII Scoring**: Presidio-inspired confidence scoring system
+  - `PIIPattern` dataclass extended with `base_score`, `context_words`, `context_boost`, and `validator` fields
+  - Context detection via `find_context_words()` - boosts confidence when keywords like "SSN:", "DOB:", "NPI:" appear near detected entities
+  - Checksum validation functions: `validate_ssn()`, `validate_luhn()` (credit cards), `validate_npi()`, `validate_phone_us()`
+  - Invalid matches (e.g., SSN starting with 000 or 666) get reduced confidence scores
+  - Combined model + pattern scoring (60/40 weighted average) for optimal accuracy
+  - Low base scores prevent false positives; context words confirm true PHI
+
+- **Website Updates**
+  - New "Clinical Text De-Identification" section on landing page
+  - Key stats row: 18+ PHI types, 100% local processing, $0 API fees, Apache-2.0
+  - Six feature cards: Context-Aware Detection, Checksum Validation, Smart Merging, Zero Data Movement, Flexible Redaction, HIPAA Safe Harbor
+  - Syntax-highlighted code example with correct API usage
+  - CTA buttons linking to documentation and HuggingFace models
+
+### Changed
+
+- Updated default PII detection model name to `OpenMed-PII-SuperClinical-Small-44M-v1`
+- `merge_entities_with_semantic_units()` now supports context-aware pattern scoring
+
+### Fixed
+
+- MkDocs navigation: Added `medical-tokenizer.md` and `pii-smart-merging.md` to nav structure
+- Broken link in `cli.md` to PII notebook (now links to GitHub)
+- Broken links in `pii-smart-merging.md` to non-existent documentation pages
+- Website code example now uses correct API (`entity.text`, `entity.label`, `entity.confidence`)
+
 ## [0.5.0] - 2026-01-13
 
 ### Added
@@ -209,7 +240,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/OpenMed/openmed/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/OpenMed/openmed/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/OpenMed/openmed/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/OpenMed/openmed/compare/v0.2.2...v0.3.0
