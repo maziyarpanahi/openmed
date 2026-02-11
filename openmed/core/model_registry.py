@@ -1,5 +1,7 @@
 """Model registry for OpenMed models from HuggingFace collection."""
 
+from __future__ import annotations
+
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 
@@ -620,6 +622,86 @@ OPENMED_MODELS = {
     ),
 }
 
+
+# ---------------------------------------------------------------------------
+# Multilingual PII model generation
+# ---------------------------------------------------------------------------
+
+_LANGUAGE_CONFIG = {
+    "fr": {"name": "French", "prefix": "French-"},
+    "de": {"name": "German", "prefix": "German-"},
+    "it": {"name": "Italian", "prefix": "Italian-"},
+}
+
+# Keys to skip when generating multilingual variants
+# (pii_detection is a legacy alias for pii_superclinical_small)
+_PII_SKIP_KEYS = {"pii_detection"}
+
+
+def _generate_multilingual_pii_models() -> Dict[str, ModelInfo]:
+    """Generate registry entries for French, German, and Italian PII models.
+
+    For each of the 33 English PII model templates and each target language,
+    creates a new ModelInfo with the language prefix inserted into the
+    HuggingFace model ID.
+
+    Returns:
+        Dictionary mapping new registry keys to ModelInfo instances.
+    """
+    generated: Dict[str, ModelInfo] = {}
+
+    for en_key, en_model in list(OPENMED_MODELS.items()):
+        if not en_key.startswith("pii_") or en_key in _PII_SKIP_KEYS:
+            continue
+        if en_model.category != "Privacy":
+            continue
+
+        for lang_code, lang_cfg in _LANGUAGE_CONFIG.items():
+            lang_name = lang_cfg["name"]
+            lang_prefix = lang_cfg["prefix"]
+
+            # Build new registry key: pii_fr_superclinical_large
+            new_key = f"pii_{lang_code}_{en_key[4:]}"  # strip "pii_" prefix
+
+            # Insert language prefix into model_id:
+            # OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1
+            # -> OpenMed/OpenMed-PII-French-SuperClinical-Large-434M-v1
+            new_model_id = en_model.model_id.replace(
+                "OpenMed/OpenMed-PII-",
+                f"OpenMed/OpenMed-PII-{lang_prefix}",
+            )
+
+            new_display = en_model.display_name.replace(
+                "PII Detection",
+                f"PII Detection ({lang_name})",
+            )
+
+            new_description = (
+                f"{lang_name} language variant: {en_model.description}"
+            )
+
+            new_specialization = (
+                f"{lang_name} {en_model.specialization}"
+            )
+
+            generated[new_key] = ModelInfo(
+                model_id=new_model_id,
+                display_name=new_display,
+                category="Privacy",
+                specialization=new_specialization,
+                description=new_description,
+                entity_types=list(en_model.entity_types),
+                size_category=en_model.size_category,
+                recommended_confidence=en_model.recommended_confidence,
+            )
+
+    return generated
+
+
+# Merge generated multilingual models into the main registry
+OPENMED_MODELS.update(_generate_multilingual_pii_models())
+
+
 # Category mappings for easy filtering
 CATEGORIES = {
     "Disease": ["disease_detection_superclinical", "disease_detection_tiny"],
@@ -632,43 +714,9 @@ CATEGORIES = {
     "Protein": ["protein_detection_pubmed"],
     "Pathology": ["pathology_detection_modern"],
     "Hematology": ["blood_cancer_detection"],
-    "Privacy": [
-        "pii_detection",
-        # OpenMed PII Collection (33 models)
-        "pii_superclinical_large",
-        "pii_superclinical_base",
-        "pii_superclinical_small",
-        "pii_bioclinical_modern_large",
-        "pii_bioclinical_modern_base",
-        "pii_bioclinical_bert",
-        "pii_clinic_discharge",
-        "pii_biomed_bert_large",
-        "pii_biomed_bert_base",
-        "pii_biomed_electra_large",
-        "pii_biomed_electra_base",
-        "pii_clinical_longformer",
-        "pii_modern_med_large",
-        "pii_modern_med_base",
-        "pii_qwen_med_xlarge",
-        "pii_clinical_bge_large_568m",
-        "pii_clinical_bge_large_335m",
-        "pii_euro_med",
-        "pii_lite_clinical",
-        "pii_mlite_clinical",
-        "pii_fast_clinical",
-        "pii_clinical_e5_large",
-        "pii_clinical_e5_base",
-        "pii_clinical_e5_small",
-        "pii_gte_med",
-        "pii_msuper_clinical",
-        "pii_nomic_med",
-        "pii_mclinical_e5",
-        "pii_super_medical_large",
-        "pii_super_medical_base",
-        "pii_snowflake_med",
-        "pii_big_med_large_560m",
-        "pii_big_med_large_278m",
-    ],
+    "Privacy": sorted(
+        k for k in OPENMED_MODELS if k.startswith("pii_")
+    ),
 }
 
 # Size-based recommendations
@@ -765,3 +813,41 @@ def get_entity_types_by_category(category: str) -> List[str]:
     for model in models:
         entity_types.update(model.entity_types)
     return sorted(list(entity_types))
+
+
+# ---------------------------------------------------------------------------
+# Multilingual PII helpers
+# ---------------------------------------------------------------------------
+
+def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
+    """Return all PII models for a given language.
+
+    Args:
+        lang: ISO 639-1 language code (en, fr, de, it)
+
+    Returns:
+        Dict mapping registry keys to ModelInfo for that language.
+    """
+    if lang == "en":
+        return {
+            k: v
+            for k, v in OPENMED_MODELS.items()
+            if k.startswith("pii_")
+            and not any(k.startswith(f"pii_{lc}_") for lc in _LANGUAGE_CONFIG)
+        }
+
+    prefix = f"pii_{lang}_"
+    return {k: v for k, v in OPENMED_MODELS.items() if k.startswith(prefix)}
+
+
+def get_default_pii_model(lang: str) -> Optional[str]:
+    """Return the default (recommended) PII model_id for a language.
+
+    Args:
+        lang: ISO 639-1 language code (en, fr, de, it)
+
+    Returns:
+        HuggingFace model ID string, or None if language unsupported.
+    """
+    from .pii_i18n import DEFAULT_PII_MODELS
+    return DEFAULT_PII_MODELS.get(lang)
