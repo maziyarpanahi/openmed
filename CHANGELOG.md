@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-02-11
+
+### Added
+
+- **Multilingual PII Detection & De-identification**: Language-aware PII extraction for clinical text
+  - `extract_pii()` and `deidentify()` now accept a `lang` parameter (ISO 639-1: `en`, `fr`, `de`, `it`)
+  - Automatic model selection — correct language-specific model chosen when `lang` is specified
+  - Language-specific regex patterns for dates, phone numbers, addresses, postal codes, and national IDs
+  - 18 new regex patterns (6 per language) for French, German, and Italian
+
+- **National ID Validators**: Country-specific document validation with checksum verification
+  - `validate_french_nir()` — French NIR/INSEE 15-digit social security numbers (mod-97 checksum)
+  - `validate_german_steuer_id()` — German 11-digit tax identification numbers (digit-frequency rules)
+  - `validate_italian_codice_fiscale()` — Italian 16-character alphanumeric fiscal codes
+
+- **Locale-Aware Date Handling**: Language-appropriate date parsing and formatting
+  - European day-first parsing for `fr`/`de`/`it` (DD/MM/YYYY, DD.MM.YYYY)
+  - US month-first parsing for `en` (MM/DD/YYYY)
+  - Localized month names preserved during date shifting
+
+- **Culturally Appropriate De-identification**: Language-specific synthetic data for the `replace` method
+  - Fake names, emails, phone numbers, addresses, and IDs per locale
+  - `LANGUAGE_FAKE_DATA` dictionary for English, French, German, and Italian
+
+- **Expanded Model Registry**: Multilingual model generation across all PII architectures
+  - ~99 new multilingual PII models (33 architectures x 3 new languages)
+  - Total PII models expanded from 33 to 132+
+  - `get_pii_models_by_language()` — returns all PII models for a given language
+  - `get_default_pii_model()` — returns the recommended default model for a language
+
+- **New Module**: `openmed/core/pii_i18n.py` — Internationalization module
+  - `SUPPORTED_LANGUAGES`, `DEFAULT_PII_MODELS`, `LANGUAGE_PII_PATTERNS` constants
+  - `get_patterns_for_language()` — returns combined English + language-specific regex patterns
+  - `LANGUAGE_MONTH_NAMES` dictionary with month names in all 4 languages
+
+- **Documentation**
+  - New [Multilingual PII Detection Guide](examples/notebooks/Multilingual_PII_Detection_Guide.ipynb) notebook
+    - Cross-language comparison, batch processing, and custom model selection
+    - Examples for French, German, and Italian clinical notes
+    - All de-identification methods with multilingual fake data
+
+- **Testing**
+  - `test_pii_i18n.py` — unit tests for the i18n module (373 lines)
+  - `test_model_registry_multilingual.py` — unit tests for multilingual model generation (202 lines)
+  - Updated `test_pii.py` and `test_pii_entity_merger.py` with multilingual test cases
+
+### Changed
+
+- `_redact_entity()` and `_generate_fake_pii()` now propagate `lang` parameter for language-appropriate replacements
+- `normalize_label()` handles national ID variants (`nir`, `insee`, `steuer_id`, `codice_fiscale`) and postal code variants (`postcode`, `zipcode`, `postal_code`)
+- Label specificity hierarchy expanded with `national_id` sub-types for cross-language entity resolution
+- `CATEGORIES["Privacy"]` dynamically includes all PII model keys (English + multilingual)
+- Updated `__init__.py` exports with multilingual PII support functions
+
 ## [0.5.1] - 2026-01-14
 
 ### Added
@@ -240,7 +294,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/OpenMed/openmed/compare/v0.5.1...v0.5.5
 [0.5.1]: https://github.com/OpenMed/openmed/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/OpenMed/openmed/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/OpenMed/openmed/compare/v0.3.0...v0.4.0

@@ -15,6 +15,8 @@ from .core.model_registry import (
     get_all_models,
     list_model_categories,
     get_model_suggestions,
+    get_pii_models_by_language,
+    get_default_pii_model,
 )
 from .processing import (
     TextProcessor,
@@ -65,6 +67,12 @@ from .core.pii_entity_merger import (
     calculate_dominant_label,
     PII_PATTERNS,
     PIIPattern,
+)
+from .core.pii_i18n import (
+    SUPPORTED_LANGUAGES,
+    DEFAULT_PII_MODELS,
+    LANGUAGE_PII_PATTERNS,
+    get_patterns_for_language,
 )
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(
@@ -538,6 +546,8 @@ __all__ = [
     "get_all_models",
     "list_model_categories",
     "get_model_suggestions",
+    "get_pii_models_by_language",
+    "get_default_pii_model",
     "list_models",
     "get_model_max_length",
     "analyze_text",
@@ -562,4 +572,9 @@ __all__ = [
     "calculate_dominant_label",
     "PII_PATTERNS",
     "PIIPattern",
+    # Multilingual PII support
+    "SUPPORTED_LANGUAGES",
+    "DEFAULT_PII_MODELS",
+    "LANGUAGE_PII_PATTERNS",
+    "get_patterns_for_language",
 ]
