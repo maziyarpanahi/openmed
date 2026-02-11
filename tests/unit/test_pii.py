@@ -608,6 +608,177 @@ class TestReidentify:
 
 
 # ---------------------------------------------------------------------------
+# Multilingual PII Tests
+# ---------------------------------------------------------------------------
+
+
+class TestMultilingualPII:
+    """Tests for multilingual PII detection and de-identification."""
+
+    def test_extract_pii_unsupported_language_raises(self):
+        """Test that unsupported language raises ValueError."""
+        with pytest.raises(ValueError, match="Unsupported language"):
+            extract_pii("test", lang="es")
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_french_uses_french_model(self, mock_analyze):
+        """Test that lang='fr' auto-resolves to French default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Né le 15/01/1970",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Né le 15/01/1970", lang="fr")
+
+        call_args = mock_analyze.call_args
+        assert "French" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_german_uses_german_model(self, mock_analyze):
+        """Test that lang='de' auto-resolves to German default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Geboren am 15.01.1970",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Geboren am 15.01.1970", lang="de")
+
+        call_args = mock_analyze.call_args
+        assert "German" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_italian_uses_italian_model(self, mock_analyze):
+        """Test that lang='it' auto-resolves to Italian default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Nato il 15/01/1970",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Nato il 15/01/1970", lang="it")
+
+        call_args = mock_analyze.call_args
+        assert "Italian" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_english_backward_compat(self, mock_analyze):
+        """Test that lang='en' (default) uses English model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Dr. Smith",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Dr. Smith")
+
+        call_args = mock_analyze.call_args
+        model_name = call_args[1]["model_name"]
+        assert "French" not in model_name
+        assert "German" not in model_name
+        assert "Italian" not in model_name
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_custom_model_overrides_lang(self, mock_analyze):
+        """Test that explicit model_name is used even with lang parameter."""
+        mock_analyze.return_value = PredictionResult(
+            text="test",
+            entities=[],
+            model_name="custom",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("test", model_name="custom-model", lang="fr")
+
+        call_args = mock_analyze.call_args
+        assert call_args[1]["model_name"] == "custom-model"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_passes_lang(self, mock_extract):
+        """Test that deidentify passes lang parameter to extract_pii."""
+        mock_extract.return_value = PredictionResult(
+            text="Patient Marie Dupont",
+            entities=[
+                EntityPrediction(
+                    text="Marie Dupont", label="NAME", start=8, end=20, confidence=0.95,
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deidentify("Patient Marie Dupont", method="mask", lang="fr")
+
+        call_args = mock_extract.call_args
+        assert call_args[1]["lang"] == "fr"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_replace_uses_lang_fake_data(self, mock_extract):
+        """Test replace method uses language-appropriate fake data."""
+        mock_extract.return_value = PredictionResult(
+            text="Patient Marie Dupont",
+            entities=[
+                EntityPrediction(
+                    text="Marie Dupont", label="NAME", start=8, end=20, confidence=0.95,
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify("Patient Marie Dupont", method="replace", lang="fr")
+
+        # Should use French fake names
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        french_names = LANGUAGE_FAKE_DATA["fr"]["NAME"]
+        assert result.pii_entities[0].redacted_text in french_names
+
+    def test_generate_fake_pii_french(self):
+        """Test fake PII generation with French locale."""
+        result = _generate_fake_pii("NAME", lang="fr")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["fr"]["NAME"]
+
+    def test_generate_fake_pii_german(self):
+        """Test fake PII generation with German locale."""
+        result = _generate_fake_pii("NAME", lang="de")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["de"]["NAME"]
+
+    def test_generate_fake_pii_fallback_to_english(self):
+        """Test fake PII falls back to English for missing types."""
+        result = _generate_fake_pii("USERNAME", lang="fr")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["fr"]["USERNAME"]
+
+    def test_generate_fake_pii_unknown_type_returns_placeholder(self):
+        """Test fake PII for unknown type returns placeholder."""
+        result = _generate_fake_pii("UNKNOWN_ENTITY", lang="de")
+        assert result == "[UNKNOWN_ENTITY]"
+
+    def test_shift_date_german_format(self):
+        """Test date shifting with German DD.MM.YYYY format."""
+        result = _shift_date("15.01.2020", 30, lang="de")
+        assert result == "14.02.2020"
+
+    def test_shift_date_french_format(self):
+        """Test date shifting with French DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="fr")
+        # French: day-first, so 15/01/2020 is Jan 15
+        assert result == "14/02/2020"
+
+    def test_shift_date_italian_format(self):
+        """Test date shifting with Italian DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="it")
+        assert result == "14/02/2020"
+
+
+# ---------------------------------------------------------------------------
 # Integration Tests
 # ---------------------------------------------------------------------------
 
