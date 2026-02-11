@@ -268,5 +268,107 @@ class TestMergeWithContextAwareScoring:
         assert email_entities[0]['word'] == 'john@example.com'
 
 
+class TestMultilingualPatterns:
+    """Test multilingual pattern matching and label normalization."""
+
+    def test_normalize_label_national_id_variants(self):
+        """Test normalize_label handles national ID types."""
+        from openmed.core.pii_entity_merger import normalize_label
+
+        assert normalize_label('national_id') == 'national_id'
+        assert normalize_label('nir') == 'national_id'
+        assert normalize_label('insee') == 'national_id'
+        assert normalize_label('steuer_id') == 'national_id'
+        assert normalize_label('steuernummer') == 'national_id'
+        assert normalize_label('codice_fiscale') == 'national_id'
+
+    def test_normalize_label_postcode_variants(self):
+        """Test normalize_label handles postcode variants."""
+        from openmed.core.pii_entity_merger import normalize_label
+
+        assert normalize_label('postcode') == 'postcode'
+        assert normalize_label('zipcode') == 'postcode'
+        assert normalize_label('zip') == 'postcode'
+        assert normalize_label('postal_code') == 'postcode'
+
+    def test_is_more_specific_national_id(self):
+        """Test is_more_specific with national_id hierarchy."""
+        from openmed.core.pii_entity_merger import is_more_specific
+
+        assert is_more_specific('nir', 'national_id') is True
+        assert is_more_specific('steuer_id', 'national_id') is True
+        assert is_more_specific('codice_fiscale', 'national_id') is True
+        assert is_more_specific('national_id', 'nir') is False
+
+    def test_french_date_pattern_with_context(self):
+        """Test French date pattern detection with context scoring."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "Patient né le 15/01/1970"
+        fr_date_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["fr"]
+            if p.entity_type == "date" and "\\d{1,2}/\\d{1,2}" in p.pattern
+        ]
+
+        units = find_semantic_units(text, fr_date_patterns)
+        assert len(units) >= 1
+        # Should detect "15/01/1970"
+        matched_text = text[units[0][0]:units[0][1]]
+        assert "15/01/1970" in matched_text
+
+    def test_german_date_pattern_dot_format(self):
+        """Test German DD.MM.YYYY date pattern."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "Geburtsdatum: 15.01.1970"
+        de_date_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["de"]
+            if p.entity_type == "date"
+        ]
+
+        units = find_semantic_units(text, de_date_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert "15.01.1970" in matched_text
+
+    def test_italian_codice_fiscale_pattern(self):
+        """Test Italian Codice Fiscale pattern detection."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "Codice fiscale: RSSMRA85M01H501Z"
+        it_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["it"]
+            if p.entity_type == "national_id"
+        ]
+
+        units = find_semantic_units(text, it_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert matched_text == "RSSMRA85M01H501Z"
+
+    def test_merge_with_french_patterns(self):
+        """Test entity merging with French language patterns."""
+        from openmed.core.pii_i18n import get_patterns_for_language
+
+        text = "Né le 15/01/1970, email: patient@exemple.fr"
+        entities = [
+            {'entity_type': 'date', 'score': 0.8, 'start': 6, 'end': 8, 'word': '15'},
+            {'entity_type': 'date', 'score': 0.75, 'start': 8, 'end': 16, 'word': '/01/1970'},
+            {'entity_type': 'email', 'score': 0.95, 'start': 25, 'end': 43, 'word': 'patient@exemple.fr'},
+        ]
+
+        fr_patterns = get_patterns_for_language("fr")
+        merged = merge_entities_with_semantic_units(
+            entities, text, patterns=fr_patterns, use_semantic_patterns=True,
+        )
+
+        date_entities = [e for e in merged if 'date' in e['entity_type'].lower()]
+        email_entities = [e for e in merged if e['entity_type'] == 'email']
+
+        assert len(date_entities) == 1
+        assert date_entities[0]['word'] == '15/01/1970'
+        assert len(email_entities) == 1
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
