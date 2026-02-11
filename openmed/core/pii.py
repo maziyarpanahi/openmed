@@ -122,12 +122,16 @@ class DeidentificationResult:
         }
 
 
+_DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+
+
 def extract_pii(
     text: str,
-    model_name: str = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+    model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.5,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
+    lang: str = "en",
 ):
     """Extract PII entities from text with intelligent entity merging.
 
@@ -141,10 +145,14 @@ def extract_pii(
 
     Args:
         text: Input text to analyze
-        model_name: PII detection model (registry key or HuggingFace ID)
+        model_name: PII detection model (registry key or HuggingFace ID).
+            When the default is used and ``lang`` is not ``"en"``, the
+            language-appropriate default model is selected automatically.
         confidence_threshold: Minimum confidence score (0-1)
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
+        lang: ISO 639-1 language code (en, fr, de, it). Controls which
+            default model and regex patterns are used.
 
     Returns:
         AnalysisResult with detected PII entities
@@ -156,16 +164,28 @@ def extract_pii(
         date_of_birth: 01/15/1970
         ssn: 123-45-6789
 
-        Without smart merging, the date might be split into fragments:
-        >>> result = extract_pii(text, use_smart_merging=False)
-        >>> # May produce: date: '01', date_of_birth: '/15/1970'
+        >>> # French PII detection
+        >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
+    from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+
+    if lang not in SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"Unsupported language '{lang}'. "
+            f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+        )
+
+    # Resolve language-appropriate default model
+    effective_model = model_name
+    if model_name == _DEFAULT_EN_MODEL and lang != "en":
+        effective_model = DEFAULT_PII_MODELS[lang]
+
     # Import here to avoid circular dependency
     from .. import analyze_text
 
     result = analyze_text(
         text,
-        model_name=model_name,
+        model_name=effective_model,
         confidence_threshold=confidence_threshold,
         config=config,
         group_entities=True,  # Group multi-token PII entities
@@ -174,6 +194,10 @@ def extract_pii(
     # Apply smart merging if enabled
     if use_smart_merging:
         from .pii_entity_merger import merge_entities_with_semantic_units
+        from .pii_i18n import get_patterns_for_language
+
+        # Get language-specific patterns
+        lang_patterns = get_patterns_for_language(lang)
 
         # Convert entities to dict format for merging
         entity_dicts = [
@@ -193,6 +217,7 @@ def extract_pii(
         merged_dicts = merge_entities_with_semantic_units(
             entity_dicts,
             result.text,
+            patterns=lang_patterns,
             use_semantic_patterns=True,
             prefer_model_labels=True  # Prefer model's more specific labels
         )
@@ -228,6 +253,7 @@ def deidentify(
     keep_mapping: bool = False,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
+    lang: str = "en",
 ) -> DeidentificationResult:
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -253,6 +279,8 @@ def deidentify(
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
+        lang: ISO 639-1 language code (en, fr, de, it). Controls model
+            selection, regex patterns, and fake data for replacement.
 
     Returns:
         DeidentificationResult with original and de-identified text
@@ -266,12 +294,13 @@ def deidentify(
         >>> print(result.deidentified_text)
         Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
 
-        >>> result = deidentify(text, method="replace")
-        >>> print(result.deidentified_text)
-        Patient Jane Smith (DOB: 03/22/1970) called from 555-9876
+        >>> result = deidentify(text, method="replace", lang="de")
     """
     # Extract PII entities with smart merging
-    pii_result = extract_pii(text, model_name, confidence_threshold, config, use_smart_merging)
+    pii_result = extract_pii(
+        text, model_name, confidence_threshold, config, use_smart_merging,
+        lang=lang,
+    )
 
     # Convert to PIIEntity with metadata
     pii_entities = [
@@ -304,6 +333,7 @@ def deidentify(
             method,
             keep_year=keep_year,
             date_shift_days=date_shift_days if shift_dates else None,
+            lang=lang,
         )
         entity.redacted_text = redacted
 
@@ -331,6 +361,7 @@ def _redact_entity(
     method: DeidentificationMethod,
     keep_year: bool = True,
     date_shift_days: Optional[int] = None,
+    lang: str = "en",
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -339,6 +370,7 @@ def _redact_entity(
         method: De-identification method
         keep_year: Keep year in dates
         date_shift_days: Days to shift dates
+        lang: Language code for fake data and date formatting
 
     Returns:
         Redacted text replacement
@@ -353,7 +385,7 @@ def _redact_entity(
 
     elif method == "replace":
         # Replace with fake but realistic data
-        return _generate_fake_pii(entity.entity_type)
+        return _generate_fake_pii(entity.entity_type, lang=lang)
 
     elif method == "hash":
         # Generate consistent hash
@@ -364,7 +396,7 @@ def _redact_entity(
     elif method == "shift_dates":
         # Shift dates by offset
         if entity.entity_type == "DATE" and date_shift_days is not None:
-            return _shift_date(entity.text, date_shift_days, keep_year)
+            return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
         else:
             # Non-date entities get masked
             return f"[{entity.entity_type}]"
@@ -372,48 +404,48 @@ def _redact_entity(
     return entity.text
 
 
-def _generate_fake_pii(entity_type: str) -> str:
+def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
     """Generate fake but realistic PII data.
 
     Args:
         entity_type: Type of PII entity
+        lang: Language code for language-appropriate fake data
 
     Returns:
         Fake replacement text
     """
-    fake_data = {
-        "NAME": ["Jane Smith", "John Doe", "Alex Johnson", "Sam Taylor"],
-        "EMAIL": ["patient@example.com", "contact@example.org"],
-        "PHONE": ["555-0123", "555-0456", "555-0789"],
-        "ID_NUM": ["XXX-XX-1234", "MRN-987654"],
-        "STREET_ADDRESS": ["123 Main St", "456 Oak Ave"],
-        "URL_PERSONAL": ["https://example.com"],
-        "USERNAME": ["user123", "patient456"],
-        "DATE": ["01/01/2000", "12/31/1999"],
-        "AGE": ["45", "62", "38"],
-        "LOCATION": ["New York", "Los Angeles"],
-    }
+    from .pii_i18n import LANGUAGE_FAKE_DATA
+
+    fake_data = LANGUAGE_FAKE_DATA.get(lang, LANGUAGE_FAKE_DATA["en"])
 
     if entity_type in fake_data:
         return random.choice(fake_data[entity_type])
 
+    # Fall back to English if the entity type isn't in the language-specific data
+    en_data = LANGUAGE_FAKE_DATA["en"]
+    if entity_type in en_data:
+        return random.choice(en_data[entity_type])
+
     return f"[{entity_type}]"
 
 
-def _shift_date(date_str: str, shift_days: int, keep_year: bool = True) -> str:
+def _shift_date(
+    date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
+) -> str:
     """Shift a date string by specified number of days.
 
     Supports multiple date formats commonly found in clinical documents:
-    - MM/DD/YYYY, MM-DD-YYYY
-    - DD/MM/YYYY, DD-MM-YYYY (European)
+    - MM/DD/YYYY, MM-DD-YYYY (US/English)
+    - DD/MM/YYYY, DD-MM-YYYY (French/Italian)
+    - DD.MM.YYYY (German)
     - YYYY-MM-DD (ISO)
-    - Month DD, YYYY (e.g., January 15, 2020)
-    - DD Month YYYY (e.g., 15 January 2020)
+    - Month DD, YYYY / DD Month YYYY (with localized month names)
 
     Args:
         date_str: Date string to shift
         shift_days: Number of days to shift (positive = future, negative = past)
         keep_year: Keep the year unchanged (only shift month/day)
+        lang: Language code for date format conventions
 
     Returns:
         Shifted date string in the same format as input
@@ -424,11 +456,12 @@ def _shift_date(date_str: str, shift_days: int, keep_year: bool = True) -> str:
         from dateutil.relativedelta import relativedelta
     except ImportError:
         # Fallback without dateutil - basic pattern matching
-        return _shift_date_basic(date_str, shift_days, keep_year)
+        return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
     try:
-        # Parse the date
-        parsed_date = date_parser.parse(date_str, fuzzy=False)
+        # For European languages, try day-first parsing
+        dayfirst = lang in ("fr", "de", "it")
+        parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
         original_year = parsed_date.year
 
         # Shift the date
@@ -439,14 +472,16 @@ def _shift_date(date_str: str, shift_days: int, keep_year: bool = True) -> str:
             shifted_date = shifted_date.replace(year=original_year)
 
         # Try to preserve the original format
-        return _format_date_like_original(date_str, shifted_date)
+        return _format_date_like_original(date_str, shifted_date, lang=lang)
 
     except (ValueError, OverflowError):
         # If parsing fails, return a masked placeholder
         return "[DATE_SHIFTED]"
 
 
-def _shift_date_basic(date_str: str, shift_days: int, keep_year: bool = True) -> str:
+def _shift_date_basic(
+    date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
+) -> str:
     """Basic date shifting without dateutil dependency.
 
     Handles common date formats using regex and datetime.
@@ -455,21 +490,34 @@ def _shift_date_basic(date_str: str, shift_days: int, keep_year: bool = True) ->
         date_str: Date string to shift
         shift_days: Number of days to shift
         keep_year: Keep the year unchanged
+        lang: Language code for date format conventions
 
     Returns:
         Shifted date string or placeholder
     """
-    # Common date patterns
-    patterns = [
-        # MM/DD/YYYY or MM-DD-YYYY
-        (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "%m/%d/%Y", "mdy"),
-        # YYYY-MM-DD (ISO)
-        (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "%Y-%m-%d", "ymd"),
-        # DD/MM/YYYY (allow European interpretation based on values)
-        (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "%d/%m/%Y", "dmy"),
-    ]
+    # Order patterns based on language convention
+    if lang in ("fr", "it"):
+        # European: DD/MM/YYYY first
+        patterns = [
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
+        ]
+    elif lang == "de":
+        # German: DD.MM.YYYY
+        patterns = [
+            (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
+        ]
+    else:
+        # US/English: MM/DD/YYYY first
+        patterns = [
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "mdy"),
+            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+        ]
 
-    for pattern, fmt, order in patterns:
+    for pattern, order in patterns:
         match = re.match(pattern, date_str.strip())
         if match:
             groups = match.groups()
@@ -480,6 +528,10 @@ def _shift_date_basic(date_str: str, shift_days: int, keep_year: bool = True) ->
                     year, month, day = int(groups[0]), int(groups[1]), int(groups[2])
                 else:  # dmy
                     day, month, year = int(groups[0]), int(groups[1]), int(groups[2])
+
+                # Handle 2-digit years
+                if year < 100:
+                    year += 2000 if year < 50 else 1900
 
                 # Validate and create date
                 original_date = datetime(year, month, day)
@@ -492,8 +544,14 @@ def _shift_date_basic(date_str: str, shift_days: int, keep_year: bool = True) ->
                 if keep_year:
                     shifted = shifted.replace(year=original_year)
 
-                # Format back
-                sep = "/" if "/" in date_str else "-"
+                # Format back preserving separator
+                if "." in date_str:
+                    sep = "."
+                elif "/" in date_str:
+                    sep = "/"
+                else:
+                    sep = "-"
+
                 if order == "mdy":
                     return f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
                 elif order == "ymd":
@@ -507,50 +565,64 @@ def _shift_date_basic(date_str: str, shift_days: int, keep_year: bool = True) ->
     return "[DATE_SHIFTED]"
 
 
-def _format_date_like_original(original: str, new_date: datetime) -> str:
+def _format_date_like_original(
+    original: str, new_date: datetime, lang: str = "en",
+) -> str:
     """Format a datetime to match the original string's format.
 
     Args:
         original: Original date string (for format detection)
         new_date: New datetime to format
+        lang: Language code for date format conventions
 
     Returns:
         Formatted date string
     """
-    # Detect format from original string
+    from .pii_i18n import LANGUAGE_MONTH_NAMES
+
     original_stripped = original.strip()
 
     # ISO format: YYYY-MM-DD
     if re.match(r"\d{4}-\d{2}-\d{2}", original_stripped):
         return new_date.strftime("%Y-%m-%d")
 
-    # US format: MM/DD/YYYY
-    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
-        return new_date.strftime("%m/%d/%Y")
+    # German dot-separated: DD.MM.YYYY
+    if re.match(r"\d{1,2}\.\d{1,2}\.\d{2,4}", original_stripped):
+        return new_date.strftime("%d.%m.%Y")
 
-    # US with dashes: MM-DD-YYYY
+    # Slash-separated dates: interpretation depends on language
+    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
+        if lang in ("fr", "de", "it"):
+            # European: DD/MM/YYYY
+            return new_date.strftime("%d/%m/%Y")
+        else:
+            # US: MM/DD/YYYY
+            return new_date.strftime("%m/%d/%Y")
+
+    # Dash-separated dates
     if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
-        return new_date.strftime("%m-%d-%Y")
+        if lang in ("fr", "de", "it"):
+            return new_date.strftime("%d-%m-%Y")
+        else:
+            return new_date.strftime("%m-%d-%Y")
 
-    # European format: DD/MM/YYYY
-    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
-        return new_date.strftime("%d/%m/%Y")
-
-    # Month name formats
-    month_names = [
-        "january", "february", "march", "april", "may", "june",
-        "july", "august", "september", "october", "november", "december"
-    ]
+    # Month name formats - check all supported languages
+    month_names_flat = []
+    for month_list in LANGUAGE_MONTH_NAMES.values():
+        month_names_flat.extend(m.lower() for m in month_list)
 
     original_lower = original_stripped.lower()
-    for month in month_names:
+    for month in month_names_flat:
         if month in original_lower:
-            # January 15, 2020 format
-            if re.match(r"[A-Za-z]+ \d+,? \d{4}", original_stripped):
-                return new_date.strftime("%B %d, %Y")
-            # 15 January 2020 format
-            if re.match(r"\d+ [A-Za-z]+ \d{4}", original_stripped):
-                return new_date.strftime("%d %B %Y")
+            # Use language-specific month name
+            lang_months = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])
+            month_name = lang_months[new_date.month - 1]
+
+            # "15 janvier 2020" or "January 15, 2020" format
+            if re.match(r"\d+\.?\s+[A-Za-z\u00c0-\u00ff]+\s+\d{4}", original_stripped):
+                return f"{new_date.day} {month_name} {new_date.year}"
+            if re.match(r"[A-Za-z\u00c0-\u00ff]+\s+\d+,?\s+\d{4}", original_stripped):
+                return f"{month_name} {new_date.day}, {new_date.year}"
             break
 
     # Default to ISO format
