@@ -220,6 +220,11 @@ def extract_pii(
     # Decide whether to strip accents before inference
     do_normalize = normalize_accents if normalize_accents is not None else (lang in _ACCENT_NORMALIZE_LANGS)
 
+    # Strip leading/trailing whitespace to match what validate_input() does
+    # inside analyze_text().  Entity spans are relative to the stripped text,
+    # so original_text must be aligned the same way.
+    text = text.strip()
+
     original_text = text
     if do_normalize:
         text = _strip_accents(text)
@@ -358,6 +363,9 @@ def deidentify(
 
         >>> result = deidentify(text, method="replace", lang="de")
     """
+    # Strip to align with validate_input() inside analyze_text()
+    text = text.strip()
+
     # Extract PII entities with smart merging
     pii_result = extract_pii(
         text, model_name, confidence_threshold, config, use_smart_merging,
