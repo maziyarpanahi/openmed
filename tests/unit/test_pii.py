@@ -841,6 +841,38 @@ class TestAccentNormalization:
         assert result.entities[0].text == "María López"
 
     @patch("openmed.analyze_text")
+    def test_spanish_accent_remapping_with_off_by_one(self, mock_analyze):
+        """Off-by-one spans from model are fixed before accent remapping."""
+        # Simulate a model returning end=4 instead of 5 for "Maria" (off-by-one)
+        mock_analyze.return_value = PredictionResult(
+            text="Maria Lopez",
+            entities=[
+                EntityPrediction(text="Mari", label="first_name", start=0, end=4, confidence=0.95),
+                EntityPrediction(text="Lope", label="last_name", start=6, end=10, confidence=0.93),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        # _fix_entity_spans runs inside format_predictions (within analyze_text),
+        # NOT inside extract_pii. Since we mock analyze_text, the fix is bypassed.
+        # So we pre-apply it manually to simulate the real pipeline.
+        from openmed.processing.outputs import OutputFormatter
+        fixed_entities = OutputFormatter._fix_entity_spans(
+            mock_analyze.return_value.entities, "Maria Lopez"
+        )
+        mock_analyze.return_value.entities = fixed_entities
+
+        result = extract_pii("María López", lang="es")
+
+        assert result.entities[0].text == "María"
+        assert result.entities[0].start == 0
+        assert result.entities[0].end == 5
+        assert result.entities[1].text == "López"
+        assert result.entities[1].start == 6
+        assert result.entities[1].end == 11
+
+    @patch("openmed.analyze_text")
     def test_normalize_accents_false_skips(self, mock_analyze):
         """Test that normalize_accents=False sends original text."""
         mock_analyze.return_value = PredictionResult(
