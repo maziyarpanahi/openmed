@@ -35,7 +35,7 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Literal
+from typing import Dict, Optional, Literal
 from datetime import datetime, timedelta
 import hashlib
 import random
@@ -220,6 +220,11 @@ def extract_pii(
     # Decide whether to strip accents before inference
     do_normalize = normalize_accents if normalize_accents is not None else (lang in _ACCENT_NORMALIZE_LANGS)
 
+    # Strip leading/trailing whitespace to match what validate_input() does
+    # inside analyze_text().  Entity spans are relative to the stripped text,
+    # so original_text must be aligned the same way.
+    text = text.strip()
+
     original_text = text
     if do_normalize:
         text = _strip_accents(text)
@@ -304,7 +309,7 @@ def extract_pii(
 def deidentify(
     text: str,
     method: DeidentificationMethod = "mask",
-    model_name: str = "pii_detection",
+    model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
     keep_year: bool = True,
     shift_dates: bool = False,
@@ -358,6 +363,9 @@ def deidentify(
 
         >>> result = deidentify(text, method="replace", lang="de")
     """
+    # Strip to align with validate_input() inside analyze_text()
+    text = text.strip()
+
     # Extract PII entities with smart merging
     pii_result = extract_pii(
         text, model_name, confidence_threshold, config, use_smart_merging,
@@ -467,6 +475,81 @@ def _redact_entity(
     return entity.text
 
 
+_LABEL_TO_FAKE_KEY: Dict[str, str] = {
+    # Name variants
+    "first_name": "FIRST_NAME",
+    "FIRSTNAME": "FIRST_NAME",
+    "firstname": "FIRST_NAME",
+    "last_name": "LAST_NAME",
+    "LASTNAME": "LAST_NAME",
+    "lastname": "LAST_NAME",
+    "name": "NAME",
+    "NAME": "NAME",
+    "patient": "NAME",
+    "PATIENT": "NAME",
+    "doctor": "NAME",
+    "DOCTOR": "NAME",
+
+    # Phone variants
+    "phone_number": "PHONE",
+    "PHONE": "PHONE",
+    "phone": "PHONE",
+    "PHONENUMBER": "PHONE",
+
+    # Location variants
+    "city": "LOCATION",
+    "CITY": "LOCATION",
+    "state": "LOCATION",
+    "STATE": "LOCATION",
+    "country": "LOCATION",
+    "COUNTRY": "LOCATION",
+    "location": "LOCATION",
+    "LOCATION": "LOCATION",
+
+    # Address variants
+    "street_address": "STREET_ADDRESS",
+    "STREET": "STREET_ADDRESS",
+    "street": "STREET_ADDRESS",
+    "STREETADDRESS": "STREET_ADDRESS",
+    "address": "STREET_ADDRESS",
+    "ADDRESS": "STREET_ADDRESS",
+
+    # Date variants
+    "date": "DATE",
+    "DATE": "DATE",
+    "date_of_birth": "DATE",
+    "DATEOFBIRTH": "DATE",
+    "dateofbirth": "DATE",
+    "dob": "DATE",
+    "DOB": "DATE",
+
+    # ID variants
+    "id_num": "ID_NUM",
+    "ID_NUM": "ID_NUM",
+    "ssn": "ID_NUM",
+    "SSN": "ID_NUM",
+    "national_id": "ID_NUM",
+    "NATIONAL_ID": "ID_NUM",
+    "medical_record_number": "ID_NUM",
+    "MEDICAL_RECORD_NUMBER": "ID_NUM",
+
+    # Other
+    "email": "EMAIL",
+    "EMAIL": "EMAIL",
+    "age": "AGE",
+    "AGE": "AGE",
+    "username": "USERNAME",
+    "USERNAME": "USERNAME",
+    "url_personal": "URL_PERSONAL",
+    "URL_PERSONAL": "URL_PERSONAL",
+    "zipcode": "ZIPCODE",
+    "ZIPCODE": "ZIPCODE",
+    "zip": "ZIPCODE",
+    "ZIP": "ZIPCODE",
+    "postal_code": "ZIPCODE",
+}
+
+
 def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
     """Generate fake but realistic PII data.
 
@@ -481,13 +564,16 @@ def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
 
     fake_data = LANGUAGE_FAKE_DATA.get(lang, LANGUAGE_FAKE_DATA["en"])
 
-    if entity_type in fake_data:
-        return random.choice(fake_data[entity_type])
+    # Resolve the model label to a fake-data key
+    key = _LABEL_TO_FAKE_KEY.get(entity_type, entity_type.upper())
+
+    if key in fake_data:
+        return random.choice(fake_data[key])
 
     # Fall back to English if the entity type isn't in the language-specific data
     en_data = LANGUAGE_FAKE_DATA["en"]
-    if entity_type in en_data:
-        return random.choice(en_data[entity_type])
+    if key in en_data:
+        return random.choice(en_data[key])
 
     return f"[{entity_type}]"
 
