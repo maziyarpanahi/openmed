@@ -620,6 +620,30 @@ OPENMED_MODELS = {
         size_category="Large",
         recommended_confidence=0.50
     ),
+
+    # BiomedBERTFull
+    "pii_biomed_bert_full": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-BiomedBERTFull-Base-110M-v1",
+        display_name="PII Detection - BiomedBERTFull",
+        category="Privacy",
+        specialization="Full BiomedBERT PII detection",
+        description="Full BiomedBERT model for comprehensive biomedical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
+        size_category="Medium",
+        recommended_confidence=0.50
+    ),
+
+    # LiteClinicalU
+    "pii_lite_clinical_u": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-LiteClinicalU-Small-66M-v1",
+        display_name="PII Detection - LiteClinicalU",
+        category="Privacy",
+        specialization="Universal lightweight PII detection",
+        description="Universal lightweight clinical model for fast PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
+        size_category="Small",
+        recommended_confidence=0.50
+    ),
 }
 
 
@@ -631,6 +655,7 @@ _LANGUAGE_CONFIG = {
     "fr": {"name": "French", "prefix": "French-"},
     "de": {"name": "German", "prefix": "German-"},
     "it": {"name": "Italian", "prefix": "Italian-"},
+    "es": {"name": "Spanish", "prefix": "Spanish-"},
 }
 
 # Keys to skip when generating multilingual variants
@@ -639,11 +664,11 @@ _PII_SKIP_KEYS = {"pii_detection"}
 
 
 def _generate_multilingual_pii_models() -> Dict[str, ModelInfo]:
-    """Generate registry entries for French, German, and Italian PII models.
+    """Generate registry entries for French, German, Italian, and Spanish PII models.
 
-    For each of the 33 English PII model templates and each target language,
-    creates a new ModelInfo with the language prefix inserted into the
-    HuggingFace model ID.
+    For each English PII model template and each target language, creates a
+    new ModelInfo with the language prefix inserted into the HuggingFace
+    model ID.
 
     Returns:
         Dictionary mapping new registry keys to ModelInfo instances.
@@ -823,7 +848,7 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
     """Return all PII models for a given language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it)
+        lang: ISO 639-1 language code (en, fr, de, it, es)
 
     Returns:
         Dict mapping registry keys to ModelInfo for that language.
@@ -844,7 +869,7 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it)
+        lang: ISO 639-1 language code (en, fr, de, it, es)
 
     Returns:
         HuggingFace model ID string, or None if language unsupported.

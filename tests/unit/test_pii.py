@@ -15,6 +15,7 @@ from openmed.core.pii import (
     _redact_entity,
     _generate_fake_pii,
     _shift_date,
+    _strip_accents,
 )
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
@@ -618,7 +619,7 @@ class TestMultilingualPII:
     def test_extract_pii_unsupported_language_raises(self):
         """Test that unsupported language raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported language"):
-            extract_pii("test", lang="es")
+            extract_pii("test", lang="ja")
 
     @patch("openmed.analyze_text")
     def test_extract_pii_french_uses_french_model(self, mock_analyze):
@@ -776,6 +777,113 @@ class TestMultilingualPII:
         """Test date shifting with Italian DD/MM/YYYY format."""
         result = _shift_date("15/01/2020", 30, lang="it")
         assert result == "14/02/2020"
+
+    def test_shift_date_spanish_format(self):
+        """Test date shifting with Spanish DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="es")
+        assert result == "14/02/2020"
+
+
+# ---------------------------------------------------------------------------
+# Accent Normalization Tests
+# ---------------------------------------------------------------------------
+
+
+class TestStripAccents:
+    """Tests for _strip_accents helper."""
+
+    def test_strip_spanish_accents(self):
+        assert _strip_accents("María López") == "Maria Lopez"
+
+    def test_strip_preserves_length(self):
+        text = "María López García"
+        stripped = _strip_accents(text)
+        assert len(stripped) == len(text)
+
+    def test_strip_no_accents_unchanged(self):
+        assert _strip_accents("John Doe") == "John Doe"
+
+    def test_strip_empty_string(self):
+        assert _strip_accents("") == ""
+
+    def test_strip_n_tilde(self):
+        assert _strip_accents("niño") == "nino"
+
+    def test_strip_u_diaeresis(self):
+        assert _strip_accents("pingüino") == "pinguino"
+
+    def test_strip_preserves_digits_and_punctuation(self):
+        assert _strip_accents("DNI: 12345678Z, teléfono: +34 612") == "DNI: 12345678Z, telefono: +34 612"
+
+
+class TestAccentNormalization:
+    """Tests for accent normalization in extract_pii."""
+
+    @patch("openmed.analyze_text")
+    def test_spanish_auto_normalizes_accents(self, mock_analyze):
+        """Test that lang='es' auto-strips accents for model inference."""
+        mock_analyze.return_value = PredictionResult(
+            text="Maria Lopez",
+            entities=[
+                EntityPrediction(text="Maria Lopez", label="first_name", start=0, end=11, confidence=0.95),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = extract_pii("María López", lang="es")
+
+        # Model should receive accent-stripped text
+        call_args = mock_analyze.call_args
+        assert call_args[0][0] == "Maria Lopez"
+
+        # But result entity text should reference original accented text
+        assert result.entities[0].text == "María López"
+
+    @patch("openmed.analyze_text")
+    def test_normalize_accents_false_skips(self, mock_analyze):
+        """Test that normalize_accents=False sends original text."""
+        mock_analyze.return_value = PredictionResult(
+            text="María López",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("María López", lang="es", normalize_accents=False)
+
+        call_args = mock_analyze.call_args
+        assert call_args[0][0] == "María López"
+
+    @patch("openmed.analyze_text")
+    def test_english_no_normalization_by_default(self, mock_analyze):
+        """Test that lang='en' does not normalize by default."""
+        mock_analyze.return_value = PredictionResult(
+            text="José García",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("José García", lang="en")
+
+        call_args = mock_analyze.call_args
+        assert call_args[0][0] == "José García"
+
+    @patch("openmed.analyze_text")
+    def test_normalize_accents_explicit_true_for_any_lang(self, mock_analyze):
+        """Test that normalize_accents=True works for any language."""
+        mock_analyze.return_value = PredictionResult(
+            text="Jose Garcia",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("José García", lang="en", normalize_accents=True)
+
+        call_args = mock_analyze.call_args
+        assert call_args[0][0] == "Jose Garcia"
 
 
 # ---------------------------------------------------------------------------

@@ -40,6 +40,7 @@ from datetime import datetime, timedelta
 import hashlib
 import random
 import re
+import unicodedata
 
 from .config import OpenMedConfig
 from ..processing.outputs import EntityPrediction
@@ -122,7 +123,37 @@ class DeidentificationResult:
         }
 
 
+# Languages whose PII models were trained on accent-free text.
+# For these, input is automatically stripped of accents before model
+# inference and entity positions are mapped back to the original text.
+_ACCENT_NORMALIZE_LANGS = frozenset({"es"})
+
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+
+
+def _strip_accents(text: str) -> str:
+    """Remove combining diacritical marks from *text*.
+
+    The input is first NFC-normalised so that pre-composed characters like
+    ``\u00e9`` are handled consistently.  After NFD decomposition every
+    combining mark (Unicode category ``Mn``) is dropped and the result is
+    NFC-normalised again.
+
+    For common Latin-script accented characters this is a 1-to-1 character
+    mapping, so ``len(result) == len(text)`` and character positions are
+    preserved — critical for mapping model entity offsets back to the
+    original text.
+
+    Args:
+        text: Arbitrary Unicode string.
+
+    Returns:
+        Accent-free copy with the same character count.
+    """
+    nfc = unicodedata.normalize("NFC", text)
+    nfd = unicodedata.normalize("NFD", nfc)
+    stripped = "".join(ch for ch in nfd if unicodedata.category(ch) != "Mn")
+    return unicodedata.normalize("NFC", stripped)
 
 
 def extract_pii(
@@ -132,6 +163,7 @@ def extract_pii(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    normalize_accents: Optional[bool] = None,
 ):
     """Extract PII entities from text with intelligent entity merging.
 
@@ -151,8 +183,13 @@ def extract_pii(
         confidence_threshold: Minimum confidence score (0-1)
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it). Controls which
+        lang: ISO 639-1 language code (en, fr, de, it, es). Controls which
             default model and regex patterns are used.
+        normalize_accents: Strip diacritical marks before model inference so
+            that models trained on accent-free text still detect accented
+            names.  Entity spans in the result reference the *original*
+            (accented) text.  ``None`` (default) auto-enables for languages
+            in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
 
     Returns:
         AnalysisResult with detected PII entities
@@ -180,6 +217,13 @@ def extract_pii(
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
         effective_model = DEFAULT_PII_MODELS[lang]
 
+    # Decide whether to strip accents before inference
+    do_normalize = normalize_accents if normalize_accents is not None else (lang in _ACCENT_NORMALIZE_LANGS)
+
+    original_text = text
+    if do_normalize:
+        text = _strip_accents(text)
+
     # Import here to avoid circular dependency
     from .. import analyze_text
 
@@ -190,6 +234,21 @@ def extract_pii(
         config=config,
         group_entities=True,  # Group multi-token PII entities
     )
+
+    # Map entity spans back to the original (possibly accented) text
+    if do_normalize and original_text != text:
+        result.text = original_text
+        from ..processing.outputs import EntityPrediction as _EP
+        result.entities = [
+            _EP(
+                text=original_text[e.start:e.end],
+                label=e.label,
+                start=e.start,
+                end=e.end,
+                confidence=e.confidence,
+            )
+            for e in result.entities
+        ]
 
     # Apply smart merging if enabled
     if use_smart_merging:
@@ -254,6 +313,7 @@ def deidentify(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    normalize_accents: Optional[bool] = None,
 ) -> DeidentificationResult:
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -279,8 +339,10 @@ def deidentify(
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it). Controls model
+        lang: ISO 639-1 language code (en, fr, de, it, es). Controls model
             selection, regex patterns, and fake data for replacement.
+        normalize_accents: Strip diacritical marks before model inference.
+            ``None`` (default) auto-enables for Spanish.
 
     Returns:
         DeidentificationResult with original and de-identified text
@@ -300,6 +362,7 @@ def deidentify(
     pii_result = extract_pii(
         text, model_name, confidence_threshold, config, use_smart_merging,
         lang=lang,
+        normalize_accents=normalize_accents,
     )
 
     # Convert to PIIEntity with metadata
@@ -460,7 +523,7 @@ def _shift_date(
 
     try:
         # For European languages, try day-first parsing
-        dayfirst = lang in ("fr", "de", "it")
+        dayfirst = lang in ("fr", "de", "it", "es")
         parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
         original_year = parsed_date.year
 
@@ -496,7 +559,7 @@ def _shift_date_basic(
         Shifted date string or placeholder
     """
     # Order patterns based on language convention
-    if lang in ("fr", "it"):
+    if lang in ("fr", "it", "es"):
         # European: DD/MM/YYYY first
         patterns = [
             (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
@@ -592,7 +655,7 @@ def _format_date_like_original(
 
     # Slash-separated dates: interpretation depends on language
     if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
-        if lang in ("fr", "de", "it"):
+        if lang in ("fr", "de", "it", "es"):
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
         else:
@@ -601,7 +664,7 @@ def _format_date_like_original(
 
     # Dash-separated dates
     if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
-        if lang in ("fr", "de", "it"):
+        if lang in ("fr", "de", "it", "es"):
             return new_date.strftime("%d-%m-%Y")
         else:
             return new_date.strftime("%m-%d-%Y")

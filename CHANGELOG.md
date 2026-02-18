@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.6] - 2026-02-18
+
+### Added
+
+- **Spanish PII Detection & De-identification**: Full Spanish language support for PII extraction
+  - `extract_pii()` and `deidentify()` now accept `lang="es"` for Spanish clinical text
+  - Automatic model selection for Spanish — correct language-specific model chosen when `lang="es"`
+  - 7 new Spanish-specific regex patterns for dates, phone numbers, addresses, postal codes, and national IDs
+  - Spanish date format support with unique "de" connector (e.g., "15 de enero de 2020")
+
+- **Spanish National ID Validators**: DNI and NIE document validation with checksum verification
+  - `validate_spanish_dni()` — Spanish DNI 8-digit + check letter (mod-23 lookup table)
+  - `validate_spanish_nie()` — Spanish NIE with X/Y/Z prefix conversion and DNI algorithm
+
+- **2 New English Base Model Architectures**: Expanded PII model coverage
+  - `pii_biomed_bert_full` — BiomedBERTFull-Base-110M for comprehensive biomedical PII detection
+  - `pii_lite_clinical_u` — LiteClinicalU-Small-66M for universal lightweight PII detection
+  - Both architectures auto-generate variants for all 5 supported languages
+
+- **Expanded Model Registry**: 35 Spanish PII models + 8 new models across existing languages
+  - Total PII models expanded from 133 to 176+ (36 English + 35 x 4 languages)
+  - `get_pii_models_by_language("es")` returns all 35 Spanish models
+  - `get_default_pii_model("es")` returns the recommended Spanish default model
+
+- **Accent Normalization**: Transparent accent stripping for models trained on accent-free text
+  - `normalize_accents` parameter on `extract_pii()` and `deidentify()` (auto-enabled for Spanish)
+  - Strips diacritical marks before model inference, maps entity positions back to original accented text
+  - `_strip_accents()` helper preserves character count via NFC/NFD normalization
+  - Can be explicitly enabled (`normalize_accents=True`) or disabled (`normalize_accents=False`) for any language
+
+- **Spanish Locale Data**: Culturally appropriate synthetic data for the `replace` method
+  - Spanish fake names, emails, phone numbers (+34), addresses, and IDs (DNI/NIE)
+  - Spanish month names for date parsing and formatting
+  - European DD/MM/YYYY date handling for Spanish
+
+- **Testing**: Comprehensive Spanish PII test coverage
+  - Spanish DNI validator tests (6 tests) and NIE validator tests (6 tests)
+  - Spanish pattern matching tests for dates, phones, DNI, NIE
+  - Spanish model registry tests: count, naming, mirror structure
+  - Updated existing tests: fixed `"es"` to `"ja"` in unsupported language assertions
+
+### Changed
+
+- `_LANGUAGE_CONFIG` in model registry now includes `"es": {"name": "Spanish", "prefix": "Spanish-"}`
+- French, German, and Italian model counts updated from 33 to 35 per language (2 new base architectures)
+- `SUPPORTED_LANGUAGES` expanded to include `"es"`
+- Date handling functions (`_shift_date`, `_shift_date_basic`, `_format_date_like_original`) now support Spanish
+
 ## [0.5.5] - 2026-02-11
 
 ### Added
@@ -294,7 +342,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/OpenMed/openmed/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/OpenMed/openmed/compare/v0.5.1...v0.5.5
 [0.5.1]: https://github.com/OpenMed/openmed/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/OpenMed/openmed/compare/v0.4.0...v0.5.0
