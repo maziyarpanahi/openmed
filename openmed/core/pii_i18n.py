@@ -1,7 +1,7 @@
 """Multilingual PII detection support.
 
 Language-specific data, validators, regex patterns, and fake data
-for French, German, and Italian PII detection and de-identification.
+for French, German, Italian, and Spanish PII detection and de-identification.
 """
 
 from __future__ import annotations
@@ -13,13 +13,14 @@ from typing import Dict, List, Optional, Set
 # Constants
 # ---------------------------------------------------------------------------
 
-SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it"}
+SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it", "es"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
     "fr": "French",
     "de": "German",
     "it": "Italian",
+    "es": "Spanish",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -27,6 +28,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "fr": "French-",
     "de": "German-",
     "it": "Italian-",
+    "es": "Spanish-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -34,6 +36,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "fr": "OpenMed/OpenMed-PII-French-SuperClinical-Small-44M-v1",
     "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
     "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
+    "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
 }
 
 
@@ -137,6 +140,65 @@ def validate_italian_codice_fiscale(text: str) -> bool:
     return bool(re.match(pattern, cleaned))
 
 
+_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+
+
+def validate_spanish_dni(text: str) -> bool:
+    """Validate Spanish DNI (Documento Nacional de Identidad).
+
+    Format: 8 digits + 1 check letter.
+    The check letter is determined by number mod 23 mapped to a lookup table.
+
+    Args:
+        text: DNI string (may contain spaces)
+
+    Returns:
+        True if valid DNI format and check letter
+    """
+    cleaned = re.sub(r"\s", "", text).upper()
+
+    if len(cleaned) != 9:
+        return False
+
+    match = re.match(r"^(\d{8})([A-Z])$", cleaned)
+    if not match:
+        return False
+
+    number = int(match.group(1))
+    letter = match.group(2)
+    return letter == _DNI_LETTERS[number % 23]
+
+
+def validate_spanish_nie(text: str) -> bool:
+    """Validate Spanish NIE (N\u00famero de Identidad de Extranjero).
+
+    Format: X/Y/Z prefix + 7 digits + 1 check letter.
+    The prefix is replaced with 0/1/2, then the same DNI mod-23 check applies.
+
+    Args:
+        text: NIE string (may contain spaces)
+
+    Returns:
+        True if valid NIE format and check letter
+    """
+    cleaned = re.sub(r"\s", "", text).upper()
+
+    if len(cleaned) != 9:
+        return False
+
+    match = re.match(r"^([XYZ])(\d{7})([A-Z])$", cleaned)
+    if not match:
+        return False
+
+    prefix_map = {"X": "0", "Y": "1", "Z": "2"}
+    prefix = match.group(1)
+    digits = match.group(2)
+    letter = match.group(3)
+
+    number = int(prefix_map[prefix] + digits)
+    return letter == _DNI_LETTERS[number % 23]
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -157,6 +219,10 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
     "it": [
         "gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
         "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre",
+    ],
+    "es": [
+        "enero", "febrero", "marzo", "abril", "mayo", "junio",
+        "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
     ],
 }
 
@@ -394,10 +460,100 @@ _ITALIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_SPANISH_PII_PATTERNS: List[PIIPattern] = [
+    # Spanish dates DD/MM/YYYY
+    PIIPattern(
+        r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "nacido", "nacida", "nacimiento", "fecha de nacimiento",
+            "fallecimiento", "fallecido", "ingreso", "alta",
+        ],
+        context_boost=0.3,
+    ),
+    # Spanish dates with month names (unique "de" connector)
+    PIIPattern(
+        r"\b\d{1,2}\s+de\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+de\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "nacido", "nacida", "nacimiento", "fecha de nacimiento",
+            "fallecimiento", "ingreso", "alta",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Spanish phone numbers: +34, mobile 6xx/7xx, landline 9xx
+    PIIPattern(
+        r"(?<!\w)(?:\+34\s?)?[679]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "tel\u00e9fono", "tel", "m\u00f3vil", "celular",
+            "n\u00famero", "llamar", "contacto", "fax",
+        ],
+        context_boost=0.3,
+    ),
+    # Spanish DNI (8 digits + letter)
+    PIIPattern(
+        r"\b\d{8}[A-Za-z]\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "dni", "documento nacional", "identidad",
+            "documento de identidad",
+        ],
+        context_boost=0.4,
+        validator=validate_spanish_dni,
+    ),
+    # Spanish NIE (X/Y/Z + 7 digits + letter)
+    PIIPattern(
+        r"\b[XYZxyz]\d{7}[A-Za-z]\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "nie", "n\u00famero de identidad de extranjero",
+            "extranjero", "residencia",
+        ],
+        context_boost=0.4,
+        validator=validate_spanish_nie,
+    ),
+    # Spanish street addresses
+    PIIPattern(
+        r"\b(?:calle|avenida|paseo|plaza|camino|carretera|ronda|traves\u00eda|glorieta)\s+[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]+(?:\s+[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]+)*(?:\s*,?\s*\d{1,5})?\b",
+        "street_address",
+        priority=7,
+        base_score=0.7,
+        context_words=[
+            "direcci\u00f3n", "domicilio", "residente", "reside", "ubicaci\u00f3n",
+        ],
+        context_boost=0.2,
+        flags=re.IGNORECASE,
+    ),
+    # Spanish postal codes (01000–52999)
+    PIIPattern(
+        r"\b(?:0[1-9]|[1-4]\d|5[0-2])\d{3}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "c\u00f3digo postal", "cp",
+        ],
+        context_boost=0.5,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
+    "es": _SPANISH_PII_PATTERNS,
 }
 
 
@@ -454,6 +610,18 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Roma", "Milano", "Napoli"],
     },
+    "es": {
+        "NAME": ["Mar\u00eda L\u00f3pez", "Carlos Garc\u00eda", "Ana Mart\u00ednez", "Pedro S\u00e1nchez"],
+        "EMAIL": ["paciente@ejemplo.es", "contacto@ejemplo.org"],
+        "PHONE": ["+34 612 345 678", "+34 934 567 890", "+34 711 234 567"],
+        "ID_NUM": ["12345678Z", "X1234567L"],
+        "STREET_ADDRESS": ["Calle Serrano 42", "Avenida de la Constituci\u00f3n 10"],
+        "URL_PERSONAL": ["https://ejemplo.es"],
+        "USERNAME": ["usuario123", "paciente456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Madrid", "Barcelona", "Sevilla"],
+    },
 }
 
 
@@ -469,7 +637,7 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it)
+        lang: ISO 639-1 language code (en, fr, de, it, es)
 
     Returns:
         List of PIIPattern instances for the language
