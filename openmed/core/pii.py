@@ -35,7 +35,7 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Literal
+from typing import Dict, Optional, Literal
 from datetime import datetime, timedelta
 import hashlib
 import random
