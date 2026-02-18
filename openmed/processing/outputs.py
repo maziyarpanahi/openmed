@@ -198,6 +198,9 @@ class OutputFormatter:
             )
             entities.append(entity)
 
+        if original_text:
+            entities = self._fix_entity_spans(entities, original_text)
+
         if self.group_entities:
             entities = self._group_adjacent_entities(entities)
 
@@ -214,6 +217,52 @@ class OutputFormatter:
         self._current_text = None
 
         return result
+
+    @staticmethod
+    def _fix_entity_spans(
+        entities: List["EntityPrediction"],
+        text: str,
+    ) -> List["EntityPrediction"]:
+        """Correct off-by-one entity spans produced by HuggingFace tokenizers.
+
+        Some tokenizers return ``end`` offsets that are one character short,
+        causing ``text[start:end]`` to miss the final character of a word.
+        This method detects the mismatch and extends ``end`` forward while
+        the next character is still part of the same word (alphanumeric or
+        combining mark).
+        """
+        text_len = len(text)
+        fixed: List["EntityPrediction"] = []
+        for e in entities:
+            start = e.start
+            end = e.end
+            if start is None or end is None:
+                fixed.append(e)
+                continue
+
+            # Extend end forward if the next character is still word-like
+            while end < text_len and text[end].isalnum():
+                end += 1
+
+            # Trim leading/trailing whitespace
+            while start < end and text[start].isspace():
+                start += 1
+            while end > start and text[end - 1].isspace():
+                end -= 1
+
+            span_text = text[start:end].strip()
+            if span_text:
+                fixed.append(EntityPrediction(
+                    text=span_text,
+                    label=e.label,
+                    confidence=e.confidence,
+                    start=start,
+                    end=end,
+                    metadata=e.metadata,
+                ))
+            else:
+                fixed.append(e)
+        return fixed
 
     def _normalize_token_text(self, text: Optional[str]) -> str:
         """Clean token text produced by different tokenization strategies."""

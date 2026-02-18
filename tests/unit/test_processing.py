@@ -388,6 +388,81 @@ class TestOutputFormatter:
         assert entity.end == 12
 
 
+class TestFixEntitySpans:
+    """Test cases for OutputFormatter._fix_entity_spans."""
+
+    def test_extends_truncated_end(self):
+        """Entity with end 1 short should be extended."""
+        text = "Patient María García"
+        entities = [
+            EntityPrediction(text="Marí", label="NAME", confidence=0.9, start=8, end=12),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "María"
+        assert fixed[0].start == 8
+        assert fixed[0].end == 13
+
+    def test_extends_truncated_city(self):
+        """Entity with end 1 short for a city."""
+        text = "Ciudad: Barcelon"
+        entities = [
+            EntityPrediction(text="Barcelon", label="CITY", confidence=0.9, start=8, end=15),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text + "a")
+        assert fixed[0].text == "Barcelona"
+        assert fixed[0].end == 17
+
+    def test_correct_span_unchanged(self):
+        """Entity with correct span should not change."""
+        text = "Patient John Doe"
+        entities = [
+            EntityPrediction(text="John", label="NAME", confidence=0.9, start=8, end=12),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "John"
+        assert fixed[0].start == 8
+        assert fixed[0].end == 12
+
+    def test_span_at_end_of_text(self):
+        """Entity at end of text should not crash."""
+        text = "Hello María"
+        entities = [
+            EntityPrediction(text="Marí", label="NAME", confidence=0.9, start=6, end=10),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "María"
+        assert fixed[0].end == 11
+
+    def test_span_followed_by_space(self):
+        """Entity followed by space should not extend into space."""
+        text = "Hello John is here"
+        entities = [
+            EntityPrediction(text="John", label="NAME", confidence=0.9, start=6, end=10),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "John"
+        assert fixed[0].end == 10
+
+    def test_none_offsets_preserved(self):
+        """Entity with None start/end should pass through."""
+        entities = [
+            EntityPrediction(text="test", label="X", confidence=0.5, start=None, end=None),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, "some text")
+        assert fixed[0].start is None
+        assert fixed[0].end is None
+
+    def test_strips_leading_whitespace(self):
+        """Entity span starting with whitespace should be trimmed."""
+        text = "Hello  John"
+        entities = [
+            EntityPrediction(text=" John", label="NAME", confidence=0.9, start=6, end=11),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "John"
+        assert fixed[0].start == 7
+
+
 class TestFormatPredictionsFunction:
     """Test cases for the format_predictions function."""
 
