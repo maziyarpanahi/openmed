@@ -564,6 +564,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
     "en": {
         "NAME": ["Jane Smith", "John Doe", "Alex Johnson", "Sam Taylor"],
+        "FIRST_NAME": ["Jane", "John", "Alex", "Sam"],
+        "LAST_NAME": ["Smith", "Doe", "Johnson", "Taylor"],
         "EMAIL": ["patient@example.com", "contact@example.org"],
         "PHONE": ["555-0123", "555-0456", "555-0789"],
         "ID_NUM": ["XXX-XX-1234", "MRN-987654"],
@@ -573,9 +575,12 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "DATE": ["01/01/2000", "12/31/1999"],
         "AGE": ["45", "62", "38"],
         "LOCATION": ["New York", "Los Angeles"],
+        "ZIPCODE": ["10001", "90210", "60601"],
     },
     "fr": {
         "NAME": ["Marie Dupont", "Jean Martin", "Sophie Bernard", "Pierre Durand"],
+        "FIRST_NAME": ["Marie", "Jean", "Sophie", "Pierre"],
+        "LAST_NAME": ["Dupont", "Martin", "Bernard", "Durand"],
         "EMAIL": ["patient@exemple.fr", "contact@exemple.org"],
         "PHONE": ["+33 6 12 34 56 78", "+33 7 98 76 54 32", "01 23 45 67 89"],
         "ID_NUM": ["1 85 05 78 006 084 36"],
@@ -585,9 +590,12 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "DATE": ["01/01/2000", "31/12/1999"],
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Paris", "Lyon", "Marseille"],
+        "ZIPCODE": ["75001", "69002", "13001"],
     },
     "de": {
         "NAME": ["Anna M\u00fcller", "Hans Schmidt", "Petra Weber", "Klaus Fischer"],
+        "FIRST_NAME": ["Anna", "Hans", "Petra", "Klaus"],
+        "LAST_NAME": ["M\u00fcller", "Schmidt", "Weber", "Fischer"],
         "EMAIL": ["patient@beispiel.de", "kontakt@beispiel.org"],
         "PHONE": ["+49 30 1234567", "+49 89 9876543", "+49 170 1234567"],
         "ID_NUM": ["12345678901"],
@@ -597,9 +605,12 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "DATE": ["01.01.2000", "31.12.1999"],
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Berlin", "M\u00fcnchen", "Hamburg"],
+        "ZIPCODE": ["10115", "80331", "20095"],
     },
     "it": {
         "NAME": ["Maria Rossi", "Marco Bianchi", "Giulia Russo", "Luca Ferrari"],
+        "FIRST_NAME": ["Maria", "Marco", "Giulia", "Luca"],
+        "LAST_NAME": ["Rossi", "Bianchi", "Russo", "Ferrari"],
         "EMAIL": ["paziente@esempio.it", "contatto@esempio.org"],
         "PHONE": ["+39 333 1234567", "+39 06 12345678", "+39 348 9876543"],
         "ID_NUM": ["RSSMRA85M01H501Z"],
@@ -609,9 +620,12 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "DATE": ["01/01/2000", "31/12/1999"],
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Roma", "Milano", "Napoli"],
+        "ZIPCODE": ["00100", "20121", "80100"],
     },
     "es": {
         "NAME": ["Mar\u00eda L\u00f3pez", "Carlos Garc\u00eda", "Ana Mart\u00ednez", "Pedro S\u00e1nchez"],
+        "FIRST_NAME": ["Mar\u00eda", "Carlos", "Ana", "Pedro"],
+        "LAST_NAME": ["L\u00f3pez", "Garc\u00eda", "Mart\u00ednez", "S\u00e1nchez"],
         "EMAIL": ["paciente@ejemplo.es", "contacto@ejemplo.org"],
         "PHONE": ["+34 612 345 678", "+34 934 567 890", "+34 711 234 567"],
         "ID_NUM": ["12345678Z", "X1234567L"],
@@ -621,6 +635,7 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "DATE": ["01/01/2000", "31/12/1999"],
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Madrid", "Barcelona", "Sevilla"],
+        "ZIPCODE": ["28001", "08001", "41001"],
     },
 }
 
