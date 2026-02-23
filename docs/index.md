@@ -7,14 +7,14 @@ close at hand—each section is Markdown-first, searchable, and optimized for qu
 ## What you get
 
 - **Curated registries** – discoverable Hugging Face models with metadata (domain, size, device guidance).
-- **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for CLI, scripts, or services.
+- **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for scripts, notebooks, or services.
 - **PII detection & de-identification** – HIPAA-compliant smart entity merging for production-ready de-identification.
 - **Advanced NER post-processing** – score-aware grouping, PHI-friendly filtering, and CSV/JSON/HTML export helpers.
 - **Composable config** – `OpenMedConfig` reads YAML/ENV so deployments stay reproducible across laptops and clusters.
 
 !!! tip "Copy-friendly defaults"
     Every page in this site exposes code fences with copy buttons and callouts so teammates (or AI copilots) can lift the
-    exact snippet they need. Use the search shortcut (`/` or `cmd/ctrl + K`) to jump straight to an entity, CLI command,
+    exact snippet they need. Use the search shortcut (`/` or `cmd/ctrl + K`) to jump straight to an entity, API call,
     or API surface.
 
 ## First look
@@ -34,7 +34,7 @@ for entity in result.entities:
 
 ```bash
 uv pip install "openmed[hf]"
-uv run python examples/analyze_cli.py
+uv run python examples/pii_model_comparison.py
 ```
 
 The rest of the docs expand on this snippet—head to **Quick Start** for the end-to-end setup, then explore the guides for
@@ -56,8 +56,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
    - [Configuration & Validation](./configuration.md) to keep deployments reproducible.
    - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
    - [Performance Profiling](./profiling.md) for timing and optimization.
-   - [TUI - Interactive Terminal](./tui.md) for visual analysis in the terminal.
-   - [CLI & Automation](./cli.md), [Examples](./examples.md), and [Testing & QA](./testing.md) for day-to-day operations.
+   - [Examples](./examples.md) and [Testing & QA](./testing.md) for day-to-day operations.
 4. [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
 
 Need something that is not here yet? Drop an issue on GitHub and mention the missing recipe. Every addition is just a
