@@ -24,8 +24,6 @@ nav:
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
       - Zero-shot Toolkit: zero-shot-ner.md
-      - CLI & Automation: cli.md
-      - Interactive TUI: tui.md
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
   - PII & De-identification:
