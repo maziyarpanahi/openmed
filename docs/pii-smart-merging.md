@@ -429,7 +429,7 @@ def select_label(predictions):
 ## Related Documentation
 
 - [Model Registry](./model-registry.md)
-- [CLI & Automation](./cli.md)
+- [Analyze Text Helper](./analyze-text.md)
 - [Batch Processing](./batch-processing.md)
 - [Examples & Recipes](./examples.md)
 
