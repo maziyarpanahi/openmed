@@ -1,8 +1,9 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -29,8 +30,8 @@ jobs:
         run: |
           pip uninstall openmed -y || true
           rm -rf ~/.cache/pip || true
-      - name: Verify version matches tag (for releases)
-        if: github.event_name == 'release'
+      - name: Verify version matches tag
+        if: github.event_name == 'push'
         run: |
           VERSION=$(python -c "from openmed import __version__; print(__version__)")
           TAG=${GITHUB_REF#refs/tags/v}
