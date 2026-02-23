@@ -187,8 +187,8 @@
 
                         <div class="code-tabs">
                             <button class="code-tab active" onclick="switchTab('python', this)">Python</button>
-                            <button class="code-tab" onclick="switchTab('cli', this)">CLI</button>
-                            <button class="code-tab" onclick="switchTab('tui', this)">TUI</button>
+                            <button class="code-tab" onclick="switchTab('pii', this)">PII API</button>
+                            <button class="code-tab" onclick="switchTab('batch', this)">Batch API</button>
                         </div>
 
                         <div class="code-block">
@@ -267,53 +267,49 @@
                     <p
                         style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 48rem; margin: 0 auto;">
                         A complete toolkit for clinical NLP workflows — from quick analysis to batch processing,
-                        with an interactive terminal UI for exploration.
+                        built around composable Python APIs for notebooks and services.
                     </p>
                 </div>
 
                 <div
                     style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 3rem;">
-                    <!-- Interactive TUI -->
                     <div
                         style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
                         <div
                             style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
                             <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
                                 stroke="currentColor" viewBox="0 0 24 24">
-                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                                <line x1="8" y1="21" x2="16" y2="21"></line>
-                                <line x1="12" y1="17" x2="12" y2="21"></line>
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
                             </svg>
                         </div>
-                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Interactive TUI</h3>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Analyze Text API</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            Rich terminal interface for visual NER analysis. Model switching, config profiles, history,
-                            and export.
+                            One-call inference with structured outputs and confidence filtering for downstream systems.
                         </p>
                         <code
-                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed tui</code>
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">analyze_text(...)</code>
                     </div>
 
-                    <!-- CLI Analysis -->
                     <div
                         style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
                         <div
                             style="width: 3rem; height: 3rem; background: hsl(var(--primary) / 0.1); border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
                             <svg style="width: 1.5rem; height: 1.5rem; color: hsl(var(--primary));" fill="none"
                                 stroke="currentColor" viewBox="0 0 24 24">
-                                <polyline points="4 17 10 11 4 5"></polyline>
-                                <line x1="12" y1="19" x2="20" y2="19"></line>
+                                <path d="M12 1v22"></path>
+                                <path d="M5 7h14"></path>
+                                <path d="M5 17h14"></path>
                             </svg>
                         </div>
-                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">CLI Analysis</h3>
+                        <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">PII APIs</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            Analyze text from the command line. Output as JSON, CSV, or HTML for downstream processing.
+                            `extract_pii` and `deidentify` support multilingual PHI detection and safe redaction workflows.
                         </p>
                         <code
-                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed analyze --text "..."</code>
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">extract_pii(...)</code>
                     </div>
 
-                    <!-- Batch Processing -->
                     <div
                         style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
                         <div
@@ -327,14 +323,12 @@
                         </div>
                         <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Batch Processing</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            Process directories of clinical notes. Progress tracking, error handling, and aggregated
-                            results.
+                            Process many notes with progress callbacks, per-item results, and aggregate summaries.
                         </p>
                         <code
-                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed batch --input-dir ./notes</code>
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">BatchProcessor(...)</code>
                     </div>
 
-                    <!-- Configuration Profiles -->
                     <div
                         style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.5rem; box-shadow: var(--shadow-medical);">
                         <div
@@ -350,44 +344,36 @@
                         <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">Configuration Profiles
                         </h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            Built-in dev/prod/test profiles. Save custom configurations and switch instantly.
+                            Built-in dev/prod/test profiles with programmatic overrides for reproducible deployments.
                         </p>
                         <code
-                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">openmed config profile-use prod</code>
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">OpenMedConfig.from_profile(\"prod\")</code>
                     </div>
                 </div>
 
-                <!-- TUI Preview -->
                 <div
                     style="background: hsl(var(--muted) / 0.3); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 2rem; margin-bottom: 2rem;">
                     <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; text-align: center;">
-                        Interactive TUI Preview</h3>
+                        API Workflow Preview</h3>
                     <pre
-                        style="background: hsl(220 13% 10%); color: hsl(0 0% 90%); padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.4;"><code>┌──────────────────────────────────────────────────────────────────────────────┐
-│ OpenMed TUI                                         Interactive Clinical NER │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ ┌─ Input (Ctrl+Enter to analyze) ──────────────────────────────────────────┐ │
-│ │ Patient diagnosed with chronic myeloid leukemia, started on imatinib.    │ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
-│ ┌─ Annotated ──────────────────────────────────────────────────────────────┐ │
-│ │ Patient diagnosed with <span style="color: #ef4444;">[chronic myeloid leukemia]</span>, started on <span style="color: #3b82f6;">[imatinib]</span>.│ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
-│ ┌─ Entities (2) ───────────────────────────────────────────────────────────┐ │
-│ │  Label     Entity                      Confidence                        │ │
-│ │  <span style="color: #ef4444;">DISEASE</span>   chronic myeloid leukemia    <span style="color: #22c55e;">████████████████████</span> 0.98         │ │
-│ │  <span style="color: #3b82f6;">DRUG</span>      imatinib                    <span style="color: #22c55e;">███████████████████░</span> 0.95         │ │
-│ └──────────────────────────────────────────────────────────────────────────┘ │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Model: default │ Profile: dev │ Thresh: 0.30 │ MedTok │ 23ms                 │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Ctrl+Enter Analyze  F2 Model  F3 Config  F4 Profile  F5 History  F6 Export   │
-└──────────────────────────────────────────────────────────────────────────────┘</code></pre>
+                        style="background: hsl(220 13% 10%); color: hsl(0 0% 90%); padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.4;"><code>from openmed import OpenMedConfig, analyze_text, deidentify
+
+config = OpenMedConfig.from_profile("prod")
+
+text = "Patient John Doe diagnosed with chronic myeloid leukemia."
+result = analyze_text(text, model_name="disease_detection_superclinical", config=config)
+
+for entity in result.entities:
+    print(entity.label, entity.text, entity.confidence)
+
+deid = deidentify(text, method="mask", config=config)
+print(deid.deidentified_text)</code></pre>
                 </div>
 
                 <div style="text-align: center;">
-                    <a href="https://openmed.life/docs/tui.html" class="btn btn-primary btn-lg"
-                        style="margin-right: 0.5rem;">TUI Documentation</a>
-                    <a href="https://openmed.life/docs/cli.html" class="btn btn-outline btn-lg">CLI Reference</a>
+                    <a href="https://openmed.life/docs/analyze-text.html" class="btn btn-primary btn-lg"
+                        style="margin-right: 0.5rem;">Analyze Text Guide</a>
+                    <a href="https://openmed.life/docs/pii-smart-merging.html" class="btn btn-outline btn-lg">PII Guide</a>
                 </div>
             </div>
         </section>
