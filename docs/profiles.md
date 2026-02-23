@@ -49,39 +49,11 @@ config = OpenMedConfig()
 print(config.profile)  # "prod"
 ```
 
-### CLI Usage
-
-```bash
-# List available profiles
-openmed config profiles
-
-# Show profile settings
-openmed config profile-show dev
-
-# Apply a profile to your config
-openmed config profile-use prod
-
-# Show config with profile applied
-openmed config show --profile dev
-```
-
 ## Custom Profiles
 
 ### Creating Custom Profiles
 
-Save your current configuration as a profile:
-
-```bash
-# First configure your settings
-openmed config set log_level DEBUG
-openmed config set timeout 900
-openmed config set device cuda
-
-# Save as custom profile
-openmed config profile-save myproject
-```
-
-Or programmatically:
+Programmatic example:
 
 ```python
 from openmed.core.config import save_profile
@@ -105,10 +77,6 @@ config = OpenMedConfig.from_profile("myproject")
 ```
 
 ### Deleting Custom Profiles
-
-```bash
-openmed config profile-delete myproject
-```
 
 ```python
 from openmed.core.config import delete_profile
