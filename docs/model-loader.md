@@ -8,7 +8,7 @@ runners without rewriting glue code.
 
 - You want to reuse a single tokenizer/pipeline across many documents.
 - You need to load multiple models (e.g., disease + pharma) side-by-side.
-- You are deploying a service/CLI and prefer to hydrate everything at startup.
+- You are deploying a service and prefer to hydrate everything at startup.
 - You require maximum control over device placement, dtype, batch size, or tokenizer configuration.
 
 ## Essentials
@@ -47,7 +47,7 @@ print(loader.list_available_models(include_registry=True, include_remote=False))
 print(loader.list_available_models(include_registry=True, include_remote=True)[:5])
 ```
 
-These functions power `openmed.list_models()` and the CLI equivalents. Use them to present dropdowns in UIs or to
+These functions power `openmed.list_models()`. Use them to present dropdowns in UIs or to
 pre-flight deployments before running inference.
 
 ## Device & caching strategy
