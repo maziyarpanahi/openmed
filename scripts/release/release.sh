@@ -24,7 +24,7 @@ echo -e "${YELLOW}📦 Bump type: $BUMP_TYPE${NC}"
 # Clean and build
 echo -e "${YELLOW}🧹 Cleaning and building...${NC}"
 rm -rf dist/
-python -m build
+python3 -m build
 
 # Publish using Hatch (it will handle credentials)
 echo -e "${YELLOW}📤 Publishing to PyPI...${NC}"
@@ -37,7 +37,7 @@ if git rev-parse --git-dir > /dev/null 2>&1; then
     echo -e "${YELLOW}💾 Creating git commit and tag...${NC}"
     git add .
     git commit -m "Release: bump $BUMP_TYPE version" || echo "No changes to commit"
-    git tag "v$(python -c "import toml; print(toml.load('pyproject.toml')['project']['version'])")" || echo "Tag may already exist"
+    git tag "v$(python3 -c "import re, pathlib; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")" || echo "Tag may already exist"
     echo -e "${GREEN}✅ Git operations completed${NC}"
 else
     echo -e "${YELLOW}⚠️  Git repository not initialized - skipping git operations${NC}"
