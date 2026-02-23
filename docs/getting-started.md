@@ -36,11 +36,10 @@ print(resp.entities[0])
 print(resp.html_snippet)  # ready for dashboards or docs
 ```
 
-Prefer the CLI? Reuse the example script:
+Prefer a quick script entrypoint? Run a one-file smoke script:
 
 ```bash
-uv run python examples/analyze_cli.py \
-  --text "Imatinib inhibits BCR-ABL in chronic myeloid leukemia."
+uv run python examples/pii_model_comparison.py
 ```
 
 ## 3. Copy code snippets from the docs
