@@ -60,36 +60,31 @@ document.addEventListener("DOMContentLoaded", () => {
 <span class="keyword">print</span>(<span class="string">f"Found {len(result.entities)} entities"</span>)
 <span class="keyword">print</span>(<span class="string">f"Entities: {result.entities}"</span>)</code></pre>`,
 
-    cli: `<pre><code><span class="comment"># Analyze text from the command line</span>
-<span class="keyword">$</span> openmed analyze --text <span class="string">"Patient has Type 2 diabetes mellitus"</span> \\
-    --model disease_detection_superclinical --output-format json
+    pii: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> extract_pii, deidentify
 
-<span class="comment"># Batch process multiple files</span>
-<span class="keyword">$</span> openmed batch --input-dir ./clinical_notes --pattern <span class="string">"*.txt"</span> \\
-    --output results.json --output-format json
+<span class="variable">text</span> = <span class="string">"Patient: Jane Doe, DOB: 03/15/1975, SSN: 123-45-6789"</span>
+<span class="variable">entities</span> = <span class="function">extract_pii</span>(<span class="variable">text</span>, use_smart_merging=<span class="keyword">True</span>)
 
-<span class="comment"># List available models</span>
-<span class="keyword">$</span> openmed models list --include-remote
+<span class="keyword">for</span> <span class="variable">entity</span> <span class="keyword">in</span> <span class="variable">entities</span>.entities:
+    <span class="keyword">print</span>(<span class="variable">entity</span>.label, <span class="variable">entity</span>.text, <span class="variable">entity</span>.confidence)
 
-<span class="comment"># Manage configuration profiles</span>
-<span class="keyword">$</span> openmed config profiles
-<span class="keyword">$</span> openmed config profile-use prod</code></pre>`,
+<span class="variable">masked</span> = <span class="function">deidentify</span>(<span class="variable">text</span>, method=<span class="string">"mask"</span>)
+<span class="keyword">print</span>(<span class="variable">masked</span>.deidentified_text)</code></pre>`,
 
-    tui: `<pre><code><span class="comment"># Launch the interactive terminal UI</span>
-<span class="keyword">$</span> openmed tui
+    batch: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> BatchProcessor
 
-<span class="comment"># With custom model and threshold</span>
-<span class="keyword">$</span> openmed tui --model pharma_detection_superclinical \\
-    --confidence-threshold 0.7
+<span class="variable">processor</span> = <span class="function">BatchProcessor</span>(
+    model_name=<span class="string">"disease_detection_superclinical"</span>,
+    confidence_threshold=<span class="number">0.55</span>,
+    group_entities=<span class="keyword">True</span>,
+)
 
-<span class="comment"># Features:</span>
-<span class="comment">#   Ctrl+Enter  - Analyze text</span>
-<span class="comment">#   F2          - Switch model</span>
-<span class="comment">#   F3          - Configuration panel</span>
-<span class="comment">#   F4          - Switch profile (dev/prod/test)</span>
-<span class="comment">#   F5          - View analysis history</span>
-<span class="comment">#   F6          - Export results (JSON/CSV)</span>
-<span class="comment">#   Ctrl+O      - Open text file</span></code></pre>`,
+<span class="variable">result</span> = <span class="variable">processor</span>.<span class="function">process_texts</span>([
+    <span class="string">"Metastatic breast cancer treated with trastuzumab."</span>,
+    <span class="string">"Acute lymphoblastic leukemia diagnosed."</span>,
+])
+
+<span class="keyword">print</span>(<span class="variable">result</span>.summary())</code></pre>`,
   };
 
   // Full code for copying (includes installation and comments)
@@ -104,36 +99,31 @@ print(f"Found {len(result.entities)} entities")
 for entity in result.entities:
     print(f"- {entity.text} ({entity.label}): {entity.confidence:.3f}")`,
 
-    cli: `# Analyze text from the command line
-openmed analyze --text "Patient has Type 2 diabetes mellitus" \\
-    --model disease_detection_superclinical --output-format json
+    pii: `from openmed import extract_pii, deidentify
 
-# Batch process multiple files
-openmed batch --input-dir ./clinical_notes --pattern "*.txt" \\
-    --output results.json --output-format json
+text = "Patient: Jane Doe, DOB: 03/15/1975, SSN: 123-45-6789"
+entities = extract_pii(text, use_smart_merging=True)
 
-# List available models
-openmed models list --include-remote
+for entity in entities.entities:
+    print(entity.label, entity.text, entity.confidence)
 
-# Manage configuration profiles
-openmed config profiles
-openmed config profile-use prod`,
+masked = deidentify(text, method="mask")
+print(masked.deidentified_text)`,
 
-    tui: `# Launch the interactive terminal UI
-openmed tui
+    batch: `from openmed import BatchProcessor
 
-# With custom model and threshold
-openmed tui --model pharma_detection_superclinical \\
-    --confidence-threshold 0.7
+processor = BatchProcessor(
+    model_name="disease_detection_superclinical",
+    confidence_threshold=0.55,
+    group_entities=True,
+)
 
-# Features:
-#   Ctrl+Enter  - Analyze text
-#   F2          - Switch model
-#   F3          - Configuration panel
-#   F4          - Switch profile (dev/prod/test)
-#   F5          - View analysis history
-#   F6          - Export results (JSON/CSV)
-#   Ctrl+O      - Open text file`,
+result = processor.process_texts([
+    "Metastatic breast cancer treated with trastuzumab.",
+    "Acute lymphoblastic leukemia diagnosed.",
+])
+
+print(result.summary())`,
   };
 
   let currentTab = "python";
