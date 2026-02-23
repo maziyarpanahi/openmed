@@ -15,25 +15,32 @@ uv pip install ".[gliner]"
 If you plan to run smoke tests or inference, ensure the GLiNER checkpoints are
 available locally (by default the toolkit looks for `models/index.json`).
 
-## Model indexing
+## Model indexing (Python API)
 
-Create or refresh the index by pointing the tool at your model directory:
+Create or refresh the index by pointing the API at your model directory:
 
-```bash
-python -m openmed.zero_shot.cli.index --models-dir /path/to/models
+```python
+from pathlib import Path
+
+from openmed.ner import build_index, write_index
+
+models_dir = Path("/path/to/models")
+index = build_index(models_dir)
+write_index(index, Path("models/index.json"), pretty=True)
 ```
 
 - Generates `index.json` with metadata (`id`, `family`, `domains`, `languages`).
 - Deduplicates model identifiers and records the generation timestamp.
-- Reads `OPENMED_ZEROSHOT_MODELS_DIR` if `--models-dir` is omitted.
 
 ## Domain defaults
 
 Inspect the curated label maps and discover available domains:
 
-```bash
-python -m openmed.zero_shot.cli.labels dump-defaults
-python -m openmed.zero_shot.cli.labels dump-defaults --domain biomedical
+```python
+from openmed.ner import available_domains, get_default_labels
+
+print(available_domains())
+print(get_default_labels("biomedical"))
 ```
 
 The defaults are packaged in `openmed/zero_shot/data/label_maps/defaults.json` and can be overridden in
@@ -57,10 +64,10 @@ for entity in resp.entities:
     print(entity.label, entity.text, entity.score)
 ```
 
-CLI usage mirrors the API (`python -m openmed.zero_shot.cli.infer`). Label precedence is:
+Label resolution precedence is:
 
-1. Explicit `--labels`
-2. `--domain` defaults
+1. Explicit `request.labels`
+2. `request.domain` defaults
 3. Domain inferred from the index entry
 4. Generic fallback label set
 
@@ -75,9 +82,8 @@ tokens = to_token_classification(resp.entities, req.text, scheme="BILOU")
 print(tokens.labels())
 ```
 
-The adapter honours entity groups, resolves overlapping spans with score-based
-priority, and gracefully falls back to regex tokenisation when no tokenizer is
-supplied.
+The adapter honors entity groups, resolves overlapping spans with score-based
+priority, and falls back to regex tokenization when no tokenizer is supplied.
 
 ## Smoke tests
 
@@ -96,13 +102,13 @@ dependencies are missing.
 Run the unit tests (excluding slow smoke checks) with:
 
 ```bash
-python -m pytest tests/unit/ner -m "not slow"
+python3 -m pytest tests/unit/ner -m "not slow"
 ```
 
 Include slow tests for full coverage:
 
 ```bash
-python -m pytest -m slow
+python3 -m pytest -m slow
 ```
 
 The suite uses mocks for GLiNER APIs, so no model downloads occur during unit
