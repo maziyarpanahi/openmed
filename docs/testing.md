@@ -7,7 +7,7 @@ summarizes what already exists so you can extend it confidently.
 
 | Marker | Location | Purpose |
 | --- | --- | --- |
-| `unit` (default) | `tests/unit/**` | Fast validation of model registry helpers, config utilities, CLI parser, etc. |
+| `unit` (default) | `tests/unit/**` | Fast validation of model registry helpers, config utilities, and core APIs. |
 | `integration` | opt-in | Exercises multi-component flows (e.g., pipeline creation + formatter). |
 | `slow` | opt-in | Runs heavier GLiNER or Hugging Face calls; disabled unless you pass `-m slow`. |
 
@@ -31,14 +31,16 @@ python scripts/smoke_gliner.py --limit 2 --threshold 0.4 --adapter
 
 `tests/run-tests.sh` stitches together typical workflows (lint, unit tests, smoke scripts). Use it as the baseline for CI.
 
-## Docs & CLI checks
+## Docs & API checks
 
 - Add `uv run mkdocs build --strict` to your CI to fail on missing nav entries, duplicate anchors, or broken markdown.
-- Combine CLI runs with fixtures to ensure packaging and extras stay in sync:
+- Add a lightweight API smoke test to ensure packaging and extras stay in sync:
 
-  ```bash
-  openmed analyze --model disease_detection_superclinical --text "QA ping" --output-format json >/tmp/result.json
-  jq .entities[0] /tmp/result.json
+  ```python
+  from openmed import analyze_text
+
+  result = analyze_text("QA ping", model_name="disease_detection_superclinical")
+  assert result.entities is not None
   ```
 
 ## Coverage ideas
@@ -46,7 +48,7 @@ python scripts/smoke_gliner.py --limit 2 --threshold 0.4 --adapter
 When adding new features, consider tests for:
 
 - Model registry entries (ensuring new keys appear in `list_model_categories`).
-- CLI options (e.g., new `openmed analyze` flag).
+- Public API options and default behaviors.
 - Formatter behaviours (HTML/CSS attributes, metadata propagation).
 - Zero-shot adapters (BIO/BILOU conversions).
 

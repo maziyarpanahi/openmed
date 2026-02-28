@@ -8,7 +8,7 @@ help: ## Show this help message
 
 build: ## Build the package
 	@echo "🔨 Building package..."
-	python -m build
+	python3 -m build
 
 publish: ## Publish to PyPI using Hatch
 	@echo "📤 Publishing to PyPI..."
@@ -42,20 +42,20 @@ docs-deploy: docs-stage ## Publish marketing site + docs bundle to GitHub Pages 
 
 test-build: ## Test build without publishing
 	@echo "🧪 Testing build..."
-	python -m build
+	python3 -m build
 	@echo "✅ Build successful! Check dist/ directory"
 
 bump-patch: ## Bump patch version (0.1.1 -> 0.1.2)
 	@echo "📈 Bumping patch version..."
-	python scripts/release/release.py patch
+	python3 scripts/release/release.py patch
 
 bump-minor: ## Bump minor version (0.1.1 -> 0.2.0)
 	@echo "📈 Bumping minor version..."
-	python scripts/release/release.py minor
+	python3 scripts/release/release.py minor
 
 bump-major: ## Bump major version (0.1.1 -> 1.0.0)
 	@echo "📈 Bumping major version..."
-	python scripts/release/release.py major
+	python3 scripts/release/release.py major
 
 # Quick commands for common workflows
 patch: bump-patch release ## Bump patch version and release

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-02-23
+
+### Removed
+
+- **CLI and TUI surfaces removed**: OpenMed is now a Python API-first package
+  - Removed `openmed` console entrypoint from package metadata
+  - Removed `openmed.cli` and `openmed.tui` modules
+  - Removed zero-shot CLI modules under `openmed.zero_shot.cli`
+  - Removed `cli_main` from the top-level `openmed` public API
+
+### Changed
+
+- Updated package metadata to remove CLI/TUI extras (`cli`, `tui`)
+- Updated docs and website content to API-only guidance
+- Consolidated PyPI publishing into a single tag-driven workflow (`publish.yml`)
+- Updated release tooling to use `openmed/__about__.py` as the version source of truth
+
+## [0.5.8] - 2026-02-19
+
+### Fixed
+
+- **PII replace label mapping coverage**:
+  - Added robust normalization map so replacement data is generated for label variants (`first_name`, `last_name`, `dob`, `postal_code`, etc.)
+  - Expanded locale fake-data dictionaries with `FIRST_NAME`, `LAST_NAME`, and `ZIPCODE` values across supported languages
+- **Span alignment stability**:
+  - `extract_pii()` and `deidentify()` now strip leading/trailing whitespace before inference so spans remain aligned with `analyze_text()` validation behavior
+- **Spanish accent remapping robustness**:
+  - Added regression coverage for off-by-one spans combined with accent restoration
+
+## [0.5.7] - 2026-02-18
+
+### Fixed
+
+- **Entity span repair in output formatter**:
+  - Added `_fix_entity_spans()` to correct tokenizer end-offset truncation and trim whitespace around predicted spans
+  - Integrated span repair into output formatting before grouping
+- **Regression coverage**:
+  - Added dedicated tests for off-by-one span fixes, whitespace trimming, and boundary handling
+- **Documentation notebook refresh**:
+  - Updated multilingual PII notebook examples to reflect span-fix behavior
+
 ## [0.5.6] - 2026-02-18
 
 ### Added
@@ -342,7 +383,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.5.6...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/OpenMed/openmed/compare/v0.5.8...v0.6.0
+[0.5.8]: https://github.com/OpenMed/openmed/compare/v0.5.7...v0.5.8
+[0.5.7]: https://github.com/OpenMed/openmed/compare/v0.5.6...v0.5.7
 [0.5.6]: https://github.com/OpenMed/openmed/compare/v0.5.5...v0.5.6
 [0.5.5]: https://github.com/OpenMed/openmed/compare/v0.5.1...v0.5.5
 [0.5.1]: https://github.com/OpenMed/openmed/compare/v0.5.0...v0.5.1

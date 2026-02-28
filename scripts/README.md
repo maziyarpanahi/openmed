@@ -1,190 +1,63 @@
 # Release Process
 
-This document outlines the automated release process for publishing the `openmed` package to PyPI.
+This document outlines the release process for publishing the `openmed` package to PyPI.
 
-## Quick Start
+## Source of truth
 
-### Option 1: Using Make (Recommended)
+OpenMed versioning is dynamic and stored in:
 
-```bash
-# Patch release (0.1.1 → 0.1.2)
-make patch
+- `openmed/__about__.py` (`__version__ = "X.Y.Z"`)
 
-# Minor release (0.1.1 → 0.2.0)
-make minor
+Do not edit `pyproject.toml` for version bumps.
 
-# Major release (0.1.1 → 1.0.0)
-make major
+## Quick start
 
-# Just build and publish current version
-make release
-```
-
-### Option 2: Using Python Script
+### Option 1: Make targets (recommended)
 
 ```bash
-# Patch release
-python scripts/release/release.py patch
+# Bump only
+make bump-patch
+make bump-minor
+make bump-major
 
-# Minor release
-python scripts/release/release.py minor
-
-# Major release
-python scripts/release/release.py major
-```
-
-### Option 3: Using Shell Script
-
-```bash
-# Patch release
-./scripts/release/release.sh patch
-
-# Minor release
-./scripts/release/release.sh minor
-
-# Major release
-./scripts/release/release.sh major
-```
-
-## Available Commands
-
-### Make Commands
-
-- `make help` - Show all available commands
-- `make build` - Build the package only
-- `make publish` - Publish to PyPI only
-- `make release` - Full release cycle (clean + build + publish)
-- `make clean` - Clean build artifacts
-- `make install` - Install locally for testing
-- `make test-build` - Test build without publishing
-
-### Version Bumping
-
-- `make patch` - Bump patch version and release (0.1.1 → 0.1.2)
-- `make minor` - Bump minor version and release (0.1.1 → 0.2.0)
-- `make major` - Bump major version and release (0.1.1 → 1.0.0)
-
-## Manual Process
-
-If you prefer to do things manually:
-
-1. **Update version numbers** in:
-   - `pyproject.toml`
-   - `openmed/__init__.py`
-
-2. **Build the package**:
-
-   ```bash
-   python -m build
-   ```
-
-3. **Publish to PyPI**:
-
-   ```bash
-   hatch publish
-   # or
-   python -m twine upload dist/*
-   ```
-
-## Credentials Setup
-
-The scripts use your existing PyPI credentials from:
-
-- `.pypirc` file (recommended for Hatch)
-- `creds.txt` file (fallback)
-
-Make sure your `.pypirc` contains:
-
-```ini
-[pypi]
-username = __token__
-password = pypi-AgEIcHl...
-```
-
-## Git Integration
-
-The scripts automatically:
-
-- Commit changes with message "Release: bump {type} version"
-- Create git tags (e.g., `v0.1.2`)
-- Push to remote (if configured)
-
-## Troubleshooting
-
-### Build Issues
-
-```bash
-# Clean and rebuild
-make clean
+# Build only
 make build
-```
 
-### Publish Issues
-
-```bash
-# Check your credentials
-cat ~/.pypirc
-
-# Test Hatch publishing
-hatch publish --dry-run
-```
-
-### Version Conflicts
-
-If you get "File already exists" error:
-
-1. Update the version number manually in `pyproject.toml`
-2. Run the release process again
-
-## Advanced Usage
-
-### Custom Version
-
-To set a specific version instead of auto-bumping:
-
-```bash
-# Edit pyproject.toml manually
-version = "1.2.3"
-
-# Then run
+# Full local publish (manual)
 make release
 ```
 
-### Pre-release Versions
-
-For beta/rc versions:
-
-```toml
-version = "1.0.0-beta.1"
-```
-
-### Multiple Repositories
-
-To publish to test PyPI first:
+### Option 2: Bump script directly
 
 ```bash
-# Publish to test PyPI
-hatch publish -r test
+python3 scripts/release/release.py patch
+python3 scripts/release/release.py minor
+python3 scripts/release/release.py major
+```
 
-# Publish to main PyPI
+The bump script updates only `openmed/__about__.py`.
+
+## Tag-driven CI publish (recommended)
+
+1. Update changelog and commit.
+2. Push a release tag:
+
+```bash
+git tag v0.6.0
+git push origin v0.6.0
+```
+
+3. `.github/workflows/publish.yml` builds and publishes to PyPI.
+
+## Manual local publish
+
+```bash
+python3 -m build
 hatch publish
 ```
 
-## Future Enhancements
+## Notes
 
-Consider setting up:
-
-- GitHub Actions for automated releases on tag push
-- Pre-commit hooks for version consistency
-- Automated testing before release
-- Changelog generation
-
-## Files Overview
-
-- `Makefile` - Main automation interface
-- `scripts/release/release.py` - Python script for version bumping and release
-- `scripts/release/release.sh` - Simple shell script alternative
-- `docs/RELEASE.md` - This documentation
-- `pyproject.toml` - Package configuration with Hatch settings
-- `.pypirc` - PyPI credentials (keep secure!)
-- `.gitignore` - Excludes sensitive files from git
+- Keep `CHANGELOG.md` aligned with released tags.
+- Use `uv run mkdocs build --strict` before tagging to keep docs links healthy.
+- Prefer CI publishing over local publish for traceability.

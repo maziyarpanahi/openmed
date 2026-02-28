@@ -25,14 +25,12 @@ as the starting point when you are unsure which page (or module) to visit.
 
 | Area | What it covers | Where to look |
 | --- | --- | --- |
-| Configuration | YAML/ENV + per-run overrides via `OpenMedConfig`; CLI config store. | `openmed/core/config.py`, [Configuration & Validation](./configuration.md) |
+| Configuration | YAML/ENV + per-run overrides via `OpenMedConfig`; profile-aware runtime settings. | `openmed/core/config.py`, [Configuration & Validation](./configuration.md) |
 | Configuration Profiles | Built-in profiles (dev, prod, test, fast) + custom profiles. | `openmed/core/config.py`, [Configuration Profiles](./profiles.md) |
 | Batch Processing | Multi-text/file processing with progress and aggregation. | `openmed/processing/batch.py`, [Batch Processing](./batch-processing.md) |
 | Performance Profiling | Timing utilities, metrics, and profiling decorators. | `openmed/utils/profiling.py`, [Performance Profiling](./profiling.md) |
-| CLI | `openmed` console (`analyze`, `batch`, `tui`, `models`, `config`). | `openmed/cli/main.py`, [CLI & Automation](./cli.md) |
-| TUI | Interactive terminal interface for visual NER analysis. | `openmed/tui/app.py`, [TUI - Interactive Terminal](./tui.md) |
 | Testing | `tests/run-tests.sh`, unit/integration markers, smoke runners. | `tests/`, [Testing & QA](./testing.md) |
-| Examples | Notebooks, CLI/analysis snippets, `examples/`. | `examples/`, [Examples & Copy/Paste Recipes](./examples.md) |
+| Examples | Notebooks, scripts, and analysis snippets in `examples/`. | `examples/`, [Examples & Copy/Paste Recipes](./examples.md) |
 | Automation | Make targets, GitHub Actions (CI, publish, docs). | `Makefile`, `.github/workflows/*.yml`, [Contributing & Releases](./contributing.md) |
 
 ## Suggested reading order
@@ -47,6 +45,5 @@ as the starting point when you are unsure which page (or module) to visit.
 8. [Advanced NER & Output Formatting](./output-formatting.md) — polish predictions.
 9. [Zero-shot Toolkit](./zero-shot-ner.md) — GLiNER workflows.
 10. [Performance Profiling](./profiling.md) — timing and metrics.
-11. [TUI - Interactive Terminal](./tui.md) — visual analysis workbench.
-12. [CLI & Automation](./cli.md) and [Examples](./examples.md) — day-to-day tools.
-13. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
+11. [Examples](./examples.md) — runnable notebooks and scripts.
+12. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
