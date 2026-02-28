@@ -112,38 +112,6 @@ Each item result contains:
 - `processing_time`: Time taken for this item
 - `source`: Source file path (if applicable)
 
-## CLI Usage
-
-Batch processing from the command line:
-
-```bash
-# Process multiple texts
-openmed batch --texts "Text one" "Text two" "Text three" --model disease_detection_superclinical
-
-# Process files
-openmed batch --input-files file1.txt file2.txt --output-format json
-
-# Process directory
-openmed batch --input-dir /path/to/notes --pattern "*.txt" --recursive
-
-# Output to file
-openmed batch --input-dir ./notes --output results.json --output-format json
-```
-
-### CLI Options
-
-- `--model`: Model to use (default: disease_detection_superclinical)
-- `--input-dir`: Directory containing files
-- `--input-files`: List of specific files
-- `--texts`: List of text strings
-- `--pattern`: Glob pattern for directory (default: *.txt)
-- `--recursive`: Search directories recursively
-- `--output`: Output file path
-- `--output-format`: `json` or `summary` (default: summary)
-- `--confidence-threshold`: Minimum confidence
-- `--group-entities`: Group adjacent entities
-- `--quiet`: Suppress progress output
-
 ## Error Handling
 
 By default, batch processing continues on individual item errors:

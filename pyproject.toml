@@ -33,9 +33,6 @@ authors = [
   { name = "Maziyar Panahi" }
 ]
 
-[project.scripts]
-openmed = "openmed.cli:main"
-
 [project.optional-dependencies]
 dev = [
   "flake8>=7.0",
@@ -61,16 +58,6 @@ docs = [
   "mkdocs-git-revision-date-localized-plugin>=1.2.6",
   "mkdocs-minify-plugin>=0.8.0",
   "pymdown-extensions>=10.8",
-]
-
-cli = [
-  "typer>=0.12",
-  "rich>=13.9",
-]
-
-tui = [
-  "textual>=0.89",
-  "rich>=13.9",
 ]
 
 [tool.hatch.build]

@@ -4,7 +4,7 @@ The indexer walks a directory hierarchy that contains model artefacts (GLiNER
 checkpoints, Hugging Face exports, etc.) and generates a consolidated
 ``index.json`` file. Each entry records the model identifier, detected family,
 domain tags, supported languages, on-disk path, and optional notes. The resulting
-metadata powers downstream domain default selection, smoke tests, and CLI UX.
+metadata powers downstream domain default selection, smoke tests, and API UX.
 
 The module intentionally avoids making strong assumptions about the storage
 layout; instead it uses lightweight heuristics that can be refined as the model

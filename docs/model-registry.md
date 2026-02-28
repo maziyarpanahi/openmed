@@ -33,16 +33,6 @@ for model_key, info, reason in suggestions:
 - `get_model_suggestions` leans on lightweight heuristics to recommend models based on text snippets or hints (disease,
   pharma, oncology, etc.).
 
-## CLI parity
-
-```bash
-openmed models list              # registry + remote (HF) by default
-openmed models list --include-remote
-openmed models info disease_detection_superclinical
-```
-
-The CLI uses the same helpers but returns terminal-friendly tables/JSON, making it easy to integrate into scripts or CI.
-
 ## Metadata for UIs & validation
 
 - `ModelInfo.size_category` and `.size_mb` help you decide whether a model can fit on CPU-only infrastructure.

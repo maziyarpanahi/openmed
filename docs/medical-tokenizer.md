@@ -38,17 +38,6 @@ OPENMED_USE_MEDICAL_TOKENIZER=0
 OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS="MY-DRUG-001,ABC-123"
 ```
 
-## CLI usage
-
-Use the new flags on `openmed analyze`:
-
-```bash
-openmed analyze --text "COVID-19 patient on IL-6 inhibitor" --no-medical-tokenizer
-openmed analyze --text "t(8;21) AML post-CAR-T" --medical-tokenizer-exceptions "MY-TERM,ABC-001"
-```
-
-Without flags, the CLI inherits the config file and defaults to the medical tokenizer on.
-
 ## How it works
 
 - Uses `medical_tokenize(...)` to produce stable clinical tokens with character offsets (no model involvement).
@@ -76,4 +65,4 @@ Run them after installing `examples/custom_tokenizer/requirements.txt`.
 
 - Keep the medical tokenizer enabled for clinical/biomedical text; disable if you deliberately want raw model tokenization
   (e.g., benchmarking against published baselines).
-- Add project-specific exceptions for proprietary codes or trial IDs via config or CLI flags.
+- Add project-specific exceptions for proprietary codes or trial IDs via config values.

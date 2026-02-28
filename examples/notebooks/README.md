@@ -19,7 +19,6 @@ A comprehensive tutorial covering **everything** about PII functionality:
 - **Custom Patterns** - Add domain-specific PII patterns
 - **Clinical Use Cases** - Real-world examples (discharge summaries, research datasets, HIPAA compliance)
 - **Visualization** - Display results with highlighting
-- **CLI Usage** - Command-line interface examples
 
 **Topics covered:**
 
@@ -98,21 +97,6 @@ Compare tokenization performance:
 
 ---
 
-### [OpenMed_CLI_Demo.ipynb](./OpenMed_CLI_Demo.ipynb)
-
-**Command-line interface demonstration**
-
-Learn CLI usage:
-
-- Command-line text analysis
-- Batch processing via CLI
-- Configuration management
-- Scripting examples
-
-**Recommended for:** System administrators, automation
-
----
-
 ### [ZeroShot_NER_Tour.ipynb](./ZeroShot_NER_Tour.ipynb)
 
 **Zero-shot NER capabilities**
@@ -181,7 +165,6 @@ Get your token from: <https://huggingface.co/settings/tokens>
 | **Sentence_Detection_Batching** | Intermediate | Batch processing | 15-20 min |
 | **Medical_Tokenizer_Demo** | Intermediate | Tokenization | 10-15 min |
 | **Medical_Tokenizer_Benchmark** | Advanced | Performance | 15-20 min |
-| **OpenMed_CLI_Demo** | Beginner | CLI | 10-15 min |
 | **ZeroShot_NER_Tour** | Advanced | Zero-shot NER | 20-30 min |
 
 ---
@@ -191,8 +174,7 @@ Get your token from: <https://huggingface.co/settings/tokens>
 ### Path 1: Getting Started with OpenMed
 
 1. `getting_started.ipynb` - Learn basics
-2. `OpenMed_CLI_Demo.ipynb` - CLI usage
-3. `Sentence_Detection_Batching.ipynb` - Batch processing
+2. `Sentence_Detection_Batching.ipynb` - Batch processing
 
 ### Path 2: PII Detection & De-identification
 
@@ -210,7 +192,7 @@ Get your token from: <https://huggingface.co/settings/tokens>
 
 1. `Sentence_Detection_Batching.ipynb` - Batch processing
 2. `Medical_Tokenizer_Benchmark.ipynb` - Performance tuning
-3. `PII_Detection_Complete_Guide.ipynb` - Section 10 (CLI)
+3. `PII_Detection_Complete_Guide.ipynb` - End-to-end de-identification workflows
 
 ---
 

@@ -16,8 +16,8 @@ def _skip_if_env_disabled() -> None:
 @pytest.mark.slow
 def test_sentence_detection_short_text_consistency(tmp_path):
     """Sentence detection should behave identically on short inputs."""
-    transformers = pytest.importorskip("transformers")  # noqa: F841
-    torch = pytest.importorskip("torch")  # noqa: F841
+    transformers = pytest.importorskip("transformers", exc_type=ImportError)  # noqa: F841
+    torch = pytest.importorskip("torch", exc_type=ImportError)  # noqa: F841
     _skip_if_env_disabled()
 
     from openmed import analyze_text, OpenMedConfig, ModelLoader
@@ -52,8 +52,8 @@ def test_sentence_detection_short_text_consistency(tmp_path):
 @pytest.mark.slow
 def test_sentence_detection_filters_placeholders(tmp_path):
     """Placeholder-only segments should not yield entities when sentence detection is enabled."""
-    transformers = pytest.importorskip("transformers")  # noqa: F841
-    torch = pytest.importorskip("torch")  # noqa: F841
+    transformers = pytest.importorskip("transformers", exc_type=ImportError)  # noqa: F841
+    torch = pytest.importorskip("torch", exc_type=ImportError)  # noqa: F841
     _skip_if_env_disabled()
 
     from openmed import analyze_text, OpenMedConfig, ModelLoader
