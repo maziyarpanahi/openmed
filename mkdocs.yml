@@ -15,6 +15,7 @@ nav:
       - Quick Start: getting-started.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
+      - REST Service (MVP): rest-service.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
       - Advanced NER & Output Formatting: output-formatting.md

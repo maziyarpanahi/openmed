@@ -26,6 +26,7 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 You can find these directly in the docs:
 
 - [Analyze Text Helper](./analyze-text.md) — dict/JSON/HTML/CSV outputs with metadata.
+- [REST Service (MVP)](./rest-service.md) — FastAPI endpoints and Docker runbook.
 - [ModelLoader & Pipelines](./model-loader.md) — caching, token helpers, multi-model setups.
 - [Advanced NER & Output Formatting](./output-formatting.md) — span filtering and conversions.
 - [Zero-shot Toolkit](./zero-shot-ner.md) — indexing, label defaults, and inference APIs.

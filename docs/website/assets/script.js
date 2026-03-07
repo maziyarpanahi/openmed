@@ -62,13 +62,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     pii: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> extract_pii, deidentify
 
-<span class="variable">text</span> = <span class="string">"Patient: Jane Doe, DOB: 03/15/1975, SSN: 123-45-6789"</span>
-<span class="variable">entities</span> = <span class="function">extract_pii</span>(<span class="variable">text</span>, use_smart_merging=<span class="keyword">True</span>)
+<span class="comment"># Language-aware APIs: en, fr, de, it, es</span>
+<span class="variable">text</span> = <span class="string">"Paciente: Maria Garcia, DNI: 12345678Z, Telefono: +34 612 345 678"</span>
+<span class="variable">entities</span> = <span class="function">extract_pii</span>(<span class="variable">text</span>, lang=<span class="string">"es"</span>, use_smart_merging=<span class="keyword">True</span>)
 
 <span class="keyword">for</span> <span class="variable">entity</span> <span class="keyword">in</span> <span class="variable">entities</span>.entities:
     <span class="keyword">print</span>(<span class="variable">entity</span>.label, <span class="variable">entity</span>.text, <span class="variable">entity</span>.confidence)
 
-<span class="variable">masked</span> = <span class="function">deidentify</span>(<span class="variable">text</span>, method=<span class="string">"mask"</span>)
+<span class="variable">masked</span> = <span class="function">deidentify</span>(<span class="variable">text</span>, lang=<span class="string">"es"</span>, method=<span class="string">"mask"</span>)
 <span class="keyword">print</span>(<span class="variable">masked</span>.deidentified_text)</code></pre>`,
 
     batch: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> BatchProcessor
@@ -101,13 +102,14 @@ for entity in result.entities:
 
     pii: `from openmed import extract_pii, deidentify
 
-text = "Patient: Jane Doe, DOB: 03/15/1975, SSN: 123-45-6789"
-entities = extract_pii(text, use_smart_merging=True)
+# Language-aware APIs: en, fr, de, it, es
+text = "Paciente: Maria Garcia, DNI: 12345678Z, Telefono: +34 612 345 678"
+entities = extract_pii(text, lang="es", use_smart_merging=True)
 
 for entity in entities.entities:
     print(entity.label, entity.text, entity.confidence)
 
-masked = deidentify(text, method="mask")
+masked = deidentify(text, lang="es", method="mask")
 print(masked.deidentified_text)`,
 
     batch: `from openmed import BatchProcessor
