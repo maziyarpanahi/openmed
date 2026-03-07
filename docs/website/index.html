@@ -53,7 +53,7 @@
     "operatingSystem": "Cloud, On-Premises",
     "applicationCategory": "AIApplication",
     "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, and deployment toolkits for compliant medical workflows.",
-    "softwareVersion": "0.4.0",
+    "softwareVersion": "0.6.1",
     "url": "https://openmed.life/",
     "provider": {
       "@type": "Organization",
@@ -160,7 +160,7 @@
                         </div>
                         <div class="stats">
                             <div class="stat">
-                                <div class="stat-number">500+</div>
+                                <div class="stat-number">640+</div>
                                 <div class="stat-label">HF models</div>
                             </div>
                             <div class="stat">
@@ -235,7 +235,7 @@
                                     d="M5 13l4 4L19 7">
                                 </path>
                             </svg>
-                            <span>Hugging Face <span style="color: hsl(var(--muted-foreground));">(500+
+                            <span>Hugging Face <span style="color: hsl(var(--muted-foreground));">(640+
                                     models)</span></span>
                         </div>
                         <div class="platform-badge">
@@ -304,10 +304,10 @@
                         </div>
                         <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">PII APIs</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            `extract_pii` and `deidentify` support multilingual PHI detection and safe redaction workflows.
+                            `extract_pii` and `deidentify` support English plus Spanish, French, German, and Italian PHI workflows.
                         </p>
                         <code
-                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">extract_pii(...)</code>
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">extract_pii(..., lang="es")</code>
                     </div>
 
                     <div
@@ -347,7 +347,7 @@
                             Built-in dev/prod/test profiles with programmatic overrides for reproducible deployments.
                         </p>
                         <code
-                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">OpenMedConfig.from_profile(\"prod\")</code>
+                            style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">OpenMedConfig.from_profile(...)</code>
                     </div>
                 </div>
 
@@ -356,24 +356,24 @@
                     <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; text-align: center;">
                         API Workflow Preview</h3>
                     <pre
-                        style="background: hsl(220 13% 10%); color: hsl(0 0% 90%); padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.4;"><code>from openmed import OpenMedConfig, analyze_text, deidentify
+                        style="background: hsl(220 13% 10%); color: hsl(0 0% 90%); padding: 1.5rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.8rem; line-height: 1.4;"><code><span style="color: #c586c0;">from</span> <span style="color: #4ec9b0;">openmed</span> <span style="color: #c586c0;">import</span> OpenMedConfig, analyze_text, deidentify
 
-config = OpenMedConfig.from_profile("prod")
+config = OpenMedConfig.from_profile(<span style="color: #ce9178;">"prod"</span>)
 
-text = "Patient John Doe diagnosed with chronic myeloid leukemia."
-result = analyze_text(text, model_name="disease_detection_superclinical", config=config)
+text = <span style="color: #ce9178;">"Patient John Doe diagnosed with chronic myeloid leukemia."</span>
+result = <span style="color: #dcdcaa;">analyze_text</span>(text, model_name=<span style="color: #ce9178;">"disease_detection_superclinical"</span>, config=config)
 
-for entity in result.entities:
-    print(entity.label, entity.text, entity.confidence)
+<span style="color: #c586c0;">for</span> entity <span style="color: #c586c0;">in</span> result.entities:
+    <span style="color: #dcdcaa;">print</span>(entity.label, entity.text, entity.confidence)
 
-deid = deidentify(text, method="mask", config=config)
-print(deid.deidentified_text)</code></pre>
+deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style="color: #ce9178;">"mask"</span>, config=config)
+<span style="color: #dcdcaa;">print</span>(deid.deidentified_text)</code></pre>
                 </div>
 
                 <div style="text-align: center;">
-                    <a href="https://openmed.life/docs/analyze-text.html" class="btn btn-primary btn-lg"
+                    <a href="https://openmed.life/docs/analyze-text/" class="btn btn-primary btn-lg"
                         style="margin-right: 0.5rem;">Analyze Text Guide</a>
-                    <a href="https://openmed.life/docs/pii-smart-merging.html" class="btn btn-outline btn-lg">PII Guide</a>
+                    <a href="https://openmed.life/docs/pii-smart-merging/" class="btn btn-outline btn-lg">PII Guide</a>
                 </div>
             </div>
         </section>
@@ -388,7 +388,7 @@ print(deid.deidentified_text)</code></pre>
                         <span style="color: hsl(var(--primary));">Built for HIPAA & GDPR Compliance</span>
                     </h2>
                     <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 52rem; margin: 0 auto; line-height: 1.7;">
-                        De-identify clinical notes, medical records, and healthcare documents with context-aware AI models.
+                        De-identify clinical notes and medical records with language-aware PII models across English, Spanish, French, German, and Italian.
                         Process data locally—your PHI never leaves your environment. Open-source, auditable, and production-ready.
                     </p>
                 </div>
@@ -404,8 +404,8 @@ print(deid.deidentified_text)</code></pre>
                         <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Local Processing</div>
                     </div>
                     <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
-                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">$0</div>
-                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Per-Token API Fees</div>
+                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">176+</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">PII Models Across 5 Languages</div>
                     </div>
                     <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
                         <div style="font-size: 2.5rem; font-weight: 700; color: hsl(142 76% 36%); margin-bottom: 0.5rem;">Apache-2.0</div>
@@ -442,12 +442,12 @@ print(deid.deidentified_text)</code></pre>
                         </div>
                         <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Checksum & Format Validation</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
-                            Built-in validators reduce false positives: Luhn algorithm for credit cards and NPIs, SSN area code rules, US phone number format checking. Invalid matches get reduced confidence scores.
+                            Built-in validators reduce false positives across locales: French NIR/INSEE, German Steuer-ID, Italian Codice Fiscale, Spanish DNI/NIE, plus Luhn checks for cards and NPIs.
                         </p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Luhn Checksum</span>
-                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">SSN Validation</span>
-                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NPI Verification</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NIR / Steuer-ID</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">Codice Fiscale</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">DNI / NIE</span>
                         </div>
                     </div>
 
@@ -512,11 +512,11 @@ print(deid.deidentified_text)</code></pre>
                         </div>
                         <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">HIPAA Safe Harbor Ready</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
-                            Detects all 18 HIPAA Safe Harbor identifiers: names, dates, SSNs, phone numbers, emails, addresses, MRNs, account numbers, NPIs, IP addresses, URLs, and more.
+                            Detects all 18 HIPAA Safe Harbor identifiers with multilingual date, phone, address, and national-ID patterns for English, Spanish, French, German, and Italian clinical text.
                         </p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">18+ Entity Types</span>
-                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">GDPR Compatible</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">5 Languages</span>
                         </div>
                     </div>
                 </div>
@@ -533,32 +533,29 @@ print(deid.deidentified_text)</code></pre>
                             <span style="color: hsl(0 0% 60%); font-size: 0.875rem;">PII De-identification Example</span>
                         </div>
                     </div>
-                    <pre style="color: hsl(0 0% 90%); font-size: 0.85rem; line-height: 1.6; overflow-x: auto; margin: 0;"><code><span style="color: #c586c0;">from</span> <span style="color: #4ec9b0;">openmed.core.pii</span> <span style="color: #c586c0;">import</span> extract_pii, deidentify
+                    <pre style="color: hsl(0 0% 90%); font-size: 0.85rem; line-height: 1.6; overflow-x: auto; margin: 0;"><code><span style="color: #c586c0;">from</span> <span style="color: #4ec9b0;">openmed</span> <span style="color: #c586c0;">import</span> extract_pii, deidentify
 
-<span style="color: #6a9955;"># Extract PII with context-aware scoring</span>
-text = <span style="color: #ce9178;">"""Patient: John Smith, DOB: 01/15/1980
-SSN: 123-45-6789, Phone: (555) 234-5678
-Email: john.smith@email.com
-Provider NPI: 1234567893"""</span>
+<span style="color: #6a9955;"># Language-aware APIs: en, fr, de, it, es</span>
+text = <span style="color: #ce9178;">"""Paciente: Maria Garcia Lopez
+Fecha de nacimiento: 15/03/1985
+DNI: 12345678Z
+Telefono: +34 612 345 678"""</span>
 
-result = extract_pii(text, use_smart_merging=<span style="color: #569cd6;">True</span>)
+result = <span style="color: #dcdcaa;">extract_pii</span>(text, lang=<span style="color: #ce9178;">"es"</span>, use_smart_merging=<span style="color: #569cd6;">True</span>)
 
 <span style="color: #6a9955;"># View detected entities with confidence scores</span>
 <span style="color: #c586c0;">for</span> entity <span style="color: #c586c0;">in</span> result.entities:
-    <span style="color: #dcdcaa;">print</span>(<span style="color: #ce9178;">f"</span><span style="color: #569cd6;">{</span>entity.text<span style="color: #569cd6;">}</span><span style="color: #ce9178;"> → </span><span style="color: #569cd6;">{</span>entity.label<span style="color: #569cd6;">}</span><span style="color: #ce9178;"> (</span><span style="color: #569cd6;">{</span>entity.confidence<span style="color: #569cd6;">:</span><span style="color: #ce9178;">.2f</span><span style="color: #569cd6;">}</span><span style="color: #ce9178;">)"</span>)
+    <span style="color: #dcdcaa;">print</span>(entity.label, entity.text, entity.confidence)
 
-<span style="color: #6a9955;"># De-identify the text</span>
-deid_result = deidentify(text, method=<span style="color: #ce9178;">"mask"</span>)
-<span style="color: #dcdcaa;">print</span>(deid_result.deidentified_text)
-<span style="color: #6a9955;"># Output: Patient: [FIRST_NAME] [LAST_NAME], DOB: [DATE_OF_BIRTH]</span>
-<span style="color: #6a9955;"># SSN: [SSN], Phone: [PHONE_NUMBER]</span>
-<span style="color: #6a9955;"># Email: [EMAIL], Provider NPI: [NPI]</span></code></pre>
+<span style="color: #6a9955;"># De-identify with the same language setting</span>
+deid_result = <span style="color: #dcdcaa;">deidentify</span>(text, lang=<span style="color: #ce9178;">"es"</span>, method=<span style="color: #ce9178;">"mask"</span>)
+<span style="color: #dcdcaa;">print</span>(deid_result.deidentified_text)</code></pre>
                 </div>
 
                 <!-- CTA -->
                 <div style="text-align: center;">
-                    <a href="https://openmed.life/docs/pii.html" class="btn btn-primary btn-lg" style="margin-right: 0.75rem;">PII Documentation</a>
-                    <a href="https://huggingface.co/OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1" target="_blank" rel="noopener" class="btn btn-outline btn-lg">View PII Models on HF</a>
+                    <a href="https://openmed.life/docs/pii-smart-merging/" class="btn btn-primary btn-lg" style="margin-right: 0.75rem;">PII Documentation</a>
+                    <a href="https://huggingface.co/collections/OpenMed/multilingual-pii-and-de-identification" target="_blank" rel="noopener" class="btn btn-outline btn-lg">View Multilingual PII Models on HF</a>
                 </div>
             </div>
         </section>
@@ -791,7 +788,7 @@ deid_result = deidentify(text, method=<span style="color: #ce9178;">"mask"</span
 
                 <div style="text-align: center;">
                     <a href="https://huggingface.co/OpenMed" target="_blank" rel="noopener"
-                        class="btn btn-primary btn-lg">Browse All 500+ Models</a>
+                        class="btn btn-primary btn-lg">Browse All 640+ Models</a>
                 </div>
             </div>
         </section>
