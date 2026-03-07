@@ -30,7 +30,7 @@ for entity in result.entities:
 - **Specialized Models**: 12+ curated medical NER models outperforming proprietary solutions
 - **HIPAA-Compliant PII Detection**: Smart de-identification with all 18 Safe Harbor identifiers
 - **One-Line Deployment**: From prototype to production in minutes
-- **Interactive TUI**: Beautiful terminal interface for rapid experimentation
+- **Dockerized REST API**: FastAPI endpoints for service deployments
 - **Batch Processing**: Multi-file workflows with progress tracking
 - **Production-Ready**: Configuration profiles, profiling tools, and medical-aware tokenization
 - **Zero Lock-In**: Apache 2.0 licensed, runs on your infrastructure
@@ -43,10 +43,10 @@ for entity in result.entities:
 
 ```bash
 # Install with Hugging Face support
-pip install openmed[hf]
+pip install "openmed[hf]"
 
-# Or try the interactive TUI
-pip install openmed[tui]
+# Or include REST service dependencies
+pip install "openmed[hf,service]"
 ```
 
 ### Three Ways to Use OpenMed
@@ -62,44 +62,28 @@ result = analyze_text(
 )
 ```
 
-**2️⃣ Interactive TUI** — Visual workbench for exploration
+**2️⃣ REST API Service** — FastAPI endpoints for app backends
 
 ```bash
-openmed  # Launch the TUI directly
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
-![TUI Screenshot](docs/website/assets/openmed-tui-preview.png)
+**3️⃣ Batch Processing** — Programmatic multi-document workflows
 
-**3️⃣ CLI Automation** — Batch processing for production
+```python
+from openmed import BatchProcessor
 
-```bash
-# Process a directory of clinical notes
-openmed batch --input-dir ./notes --output results.json
+processor = BatchProcessor(
+    model_name="disease_detection_superclinical",
+    confidence_threshold=0.55,
+    group_entities=True,
+)
 
-# Use configuration profiles
-openmed config profile-use prod
+result = processor.process_texts([
+    "Patient started metformin for type 2 diabetes.",
+    "Imatinib started for chronic myeloid leukemia.",
+])
 ```
-
----
-
-## Interactive Terminal Interface
-
-The OpenMed TUI provides a full-featured workbench that runs in any terminal:
-
-- Real-time entity extraction with `Ctrl+Enter`
-- Color-coded entity highlighting
-- Live configuration tuning (threshold, grouping, tokenization)
-- Confidence visualization with progress bars
-- Analysis history and export (JSON, CSV)
-- Hot-swappable models and profiles
-- File browser for batch analysis
-
-```bash
-# Launch with custom settings
-openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
-```
-
-[📖 Full TUI Documentation](https://openmed.life/docs/tui)
 
 ---
 
@@ -113,12 +97,12 @@ openmed tui --model disease_detection_superclinical --confidence-threshold 0.7
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v0.4.0)
+### Production Tools (v0.6.1)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
 - **Performance Profiling**: Built-in inference timing and bottleneck analysis
-- **Interactive TUI**: Rich terminal UI for rapid iteration
+- **Dockerized REST API**: `GET /health`, `POST /analyze`, `POST /pii/extract`, `POST /pii/deidentify`
 
 ---
 
@@ -131,10 +115,46 @@ Quick links:
 - [Getting Started](https://openmed.life/docs/) — Installation and first analysis
 - [Analyze Text Helper](https://openmed.life/docs/analyze-text) — Python API reference
 - [PII Detection Guide](examples/notebooks/PII_Detection_Complete_Guide.ipynb) — Complete de-identification tutorial (v0.5.0)
-- [CLI & Automation](https://openmed.life/docs/cli) — Batch processing and profiles
-- [Interactive TUI](https://openmed.life/docs/tui) — Terminal interface guide
+- [Batch Processing](https://openmed.life/docs/batch-processing) — Multi-text and multi-file workflows
+- [Configuration Profiles](https://openmed.life/docs/profiles) — Environment-specific presets
+- [REST Service](docs/rest-service.md) — FastAPI and Docker usage
 - [Model Registry](https://openmed.life/docs/model-registry) — Browse available models
 - [Configuration](https://openmed.life/docs/configuration) — Settings and environment variables
+
+---
+
+## REST API (v0.6.1 MVP)
+
+OpenMed now includes a Docker-friendly FastAPI service:
+
+- `GET /health`
+- `POST /analyze`
+- `POST /pii/extract`
+- `POST /pii/deidentify`
+
+### Run locally
+
+```bash
+pip install -e ".[hf,service]"
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+### Run with Docker
+
+```bash
+docker build -t openmed:0.6.1 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:0.6.1
+```
+
+### Example request
+
+```bash
+curl -X POST http://127.0.0.1:8080/pii/extract \
+  -H "Content-Type: application/json" \
+  -d '{"text":"Paciente: Maria Garcia, DNI: 12345678Z","lang":"es"}'
+```
+
+See the full service guide at [REST Service docs](docs/rest-service.md).
 
 ---
 
@@ -184,13 +204,20 @@ shifted = deidentify(text, method="shift_dates", date_shift_days=180)
 
 ### Batch Processing
 
-```bash
-# Process multiple files with progress tracking
-openmed batch --input-dir ./clinical_notes --pattern "*.txt" --recursive
+```python
+from openmed import BatchProcessor, OpenMedConfig
 
-# Use profiles for different environments
-openmed config profile-use prod
-openmed batch --input-files note1.txt note2.txt --output results.json
+config = OpenMedConfig.from_profile("prod")
+processor = BatchProcessor(
+    model_name="disease_detection_superclinical",
+    config=config,
+    group_entities=True,
+)
+
+result = processor.process_texts([
+    "Metastatic breast cancer treated with trastuzumab.",
+    "Acute lymphoblastic leukemia diagnosed.",
+])
 ```
 
 ### Configuration Profiles
