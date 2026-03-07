@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-03-01
+
+### Added
+
+- **Dockerized REST MVP** for OpenMed service use-cases
+  - New FastAPI service module at `openmed.service`
+  - `GET /health` endpoint for service status and active profile reporting
+  - `POST /analyze` endpoint mapped to `analyze_text(..., output_format="dict")`
+  - `POST /pii/extract` endpoint mapped to `extract_pii(...)`
+  - `POST /pii/deidentify` endpoint mapped to `deidentify(...)`
+- **Container runtime support**
+  - New CPU-focused `Dockerfile` for service deployment
+  - Added `.dockerignore` for smaller build contexts
+- **Service validation tests**
+  - New unit tests covering endpoint success/failure paths, schema validation, and profile selection
+
+### Changed
+
+- Added optional `service` dependency extra in `pyproject.toml` (`fastapi`, `uvicorn[standard]`)
+- Expanded `dev` extra with API test dependencies (`fastapi`, `httpx`)
+
+### Documentation
+
+- Added REST service guide: `docs/rest-service.md`
+- Added MkDocs navigation entry for REST service docs
+- Updated README with REST API and Docker usage examples
+
 ## [0.6.0] - 2026-02-23
 
 ### Removed
@@ -383,7 +410,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/OpenMed/openmed/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/OpenMed/openmed/compare/v0.5.8...v0.6.0
 [0.5.8]: https://github.com/OpenMed/openmed/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/OpenMed/openmed/compare/v0.5.6...v0.5.7
