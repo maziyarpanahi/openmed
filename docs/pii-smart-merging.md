@@ -430,6 +430,7 @@ def select_label(predictions):
 
 - [Model Registry](./model-registry.md)
 - [Analyze Text Helper](./analyze-text.md)
+- [REST Service (MVP)](./rest-service.md)
 - [Batch Processing](./batch-processing.md)
 - [Examples & Recipes](./examples.md)
 
