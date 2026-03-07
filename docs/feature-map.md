@@ -28,6 +28,7 @@ as the starting point when you are unsure which page (or module) to visit.
 | Configuration | YAML/ENV + per-run overrides via `OpenMedConfig`; profile-aware runtime settings. | `openmed/core/config.py`, [Configuration & Validation](./configuration.md) |
 | Configuration Profiles | Built-in profiles (dev, prod, test, fast) + custom profiles. | `openmed/core/config.py`, [Configuration Profiles](./profiles.md) |
 | Batch Processing | Multi-text/file processing with progress and aggregation. | `openmed/processing/batch.py`, [Batch Processing](./batch-processing.md) |
+| REST Service | FastAPI endpoints exposing analyze/PII APIs for containerized deployment. | `openmed/service/app.py`, [REST Service (MVP)](./rest-service.md) |
 | Performance Profiling | Timing utilities, metrics, and profiling decorators. | `openmed/utils/profiling.py`, [Performance Profiling](./profiling.md) |
 | Testing | `tests/run-tests.sh`, unit/integration markers, smoke runners. | `tests/`, [Testing & QA](./testing.md) |
 | Examples | Notebooks, scripts, and analysis snippets in `examples/`. | `examples/`, [Examples & Copy/Paste Recipes](./examples.md) |
@@ -39,11 +40,12 @@ as the starting point when you are unsure which page (or module) to visit.
 2. [Analyze Text Helper](./analyze-text.md) — single-call orchestration.
 3. [PII Detection & Smart Merging](./pii-smart-merging.md) — de-identification (v0.5.0).
 4. [Batch Processing](./batch-processing.md) — multi-text processing.
-5. [ModelLoader & Pipelines](./model-loader.md) — lower-level control.
-6. [Model Registry](./model-registry.md) — pick the right checkpoint.
-7. [Configuration Profiles](./profiles.md) — dev/prod/test profiles.
-8. [Advanced NER & Output Formatting](./output-formatting.md) — polish predictions.
-9. [Zero-shot Toolkit](./zero-shot-ner.md) — GLiNER workflows.
-10. [Performance Profiling](./profiling.md) — timing and metrics.
-11. [Examples](./examples.md) — runnable notebooks and scripts.
-12. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
+5. [REST Service (MVP)](./rest-service.md) — HTTP API + Docker runtime.
+6. [ModelLoader & Pipelines](./model-loader.md) — lower-level control.
+7. [Model Registry](./model-registry.md) — pick the right checkpoint.
+8. [Configuration Profiles](./profiles.md) — dev/prod/test profiles.
+9. [Advanced NER & Output Formatting](./output-formatting.md) — polish predictions.
+10. [Zero-shot Toolkit](./zero-shot-ner.md) — GLiNER workflows.
+11. [Performance Profiling](./profiling.md) — timing and metrics.
+12. [Examples](./examples.md) — runnable notebooks and scripts.
+13. [Testing & QA](./testing.md) + [Contributing](./contributing.md) — team processes.
