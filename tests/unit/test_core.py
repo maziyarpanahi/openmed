@@ -408,6 +408,23 @@ class TestAnalyzeTextBehaviour:
             mock_pipeline.assert_called_once()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.pipeline')
+    def test_create_pipeline_reuses_cached_pipeline(self, mock_pipeline):
+        """Repeated pipeline creation should reuse the cached pipeline."""
+        first_pipeline = Mock()
+        second_pipeline = Mock()
+        mock_pipeline.side_effect = [first_pipeline, second_pipeline]
+
+        loader = ModelLoader()
+
+        result_one = loader.create_pipeline("test-model", aggregation_strategy="simple")
+        result_two = loader.create_pipeline("test-model", aggregation_strategy="simple")
+
+        assert result_one is first_pipeline
+        assert result_two is first_pipeline
+        mock_pipeline.assert_called_once()
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.hf_model_info')
     def test_get_model_info_success(self, mock_model_info):
         """Test successful model info retrieval."""
