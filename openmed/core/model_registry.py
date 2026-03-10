@@ -657,6 +657,7 @@ _LANGUAGE_CONFIG = {
     "it": {"name": "Italian", "prefix": "Italian-"},
     "es": {"name": "Spanish", "prefix": "Spanish-"},
 }
+_SPARSE_LANGUAGE_KEYS = {"nl", "hi", "te"}
 
 # Keys to skip when generating multilingual variants
 # (pii_detection is a legacy alias for pii_superclinical_small)
@@ -725,6 +726,41 @@ def _generate_multilingual_pii_models() -> Dict[str, ModelInfo]:
 
 # Merge generated multilingual models into the main registry
 OPENMED_MODELS.update(_generate_multilingual_pii_models())
+
+
+# Sparse multilingual releases with a single public architecture.
+OPENMED_MODELS.update({
+    "pii_nl_superclinical_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+        display_name="PII Detection (Dutch) - SuperClinical Large",
+        category="Privacy",
+        specialization="Dutch PII detection",
+        description="Dutch language flagship model for clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "national_id", "date", "street_address", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.55,
+    ),
+    "pii_hi_superclinical_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
+        display_name="PII Detection (Hindi) - SuperClinical Large",
+        category="Privacy",
+        specialization="Hindi PII detection",
+        description="Hindi language flagship model for clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "date", "street_address", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.55,
+    ),
+    "pii_te_superclinical_large": ModelInfo(
+        model_id="OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
+        display_name="PII Detection (Telugu) - SuperClinical Large",
+        category="Privacy",
+        specialization="Telugu PII detection",
+        description="Telugu language flagship model for clinical PII detection",
+        entity_types=["first_name", "last_name", "email", "phone_number", "date", "street_address", "postcode"],
+        size_category="Large",
+        recommended_confidence=0.55,
+    ),
+})
 
 
 # Category mappings for easy filtering
@@ -848,17 +884,18 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
     """Return all PII models for a given language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te)
 
     Returns:
         Dict mapping registry keys to ModelInfo for that language.
     """
     if lang == "en":
+        localized_prefixes = _SPARSE_LANGUAGE_KEYS | set(_LANGUAGE_CONFIG)
         return {
             k: v
             for k, v in OPENMED_MODELS.items()
             if k.startswith("pii_")
-            and not any(k.startswith(f"pii_{lc}_") for lc in _LANGUAGE_CONFIG)
+            and not any(k.startswith(f"pii_{lc}_") for lc in localized_prefixes)
         }
 
     prefix = f"pii_{lang}_"
@@ -869,7 +906,7 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te)
 
     Returns:
         HuggingFace model ID string, or None if language unsupported.

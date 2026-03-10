@@ -38,6 +38,25 @@ A comprehensive tutorial covering **everything** about PII functionality:
 
 ---
 
+### 🌍 [Multilingual_PII_Detection_Guide.ipynb](./Multilingual_PII_Detection_Guide.ipynb)
+
+**Multilingual PII detection across 8 supported languages**
+
+Walk through language-aware extraction and de-identification for:
+
+- English, French, German, Italian, and Spanish full multilingual support
+- Dutch, Hindi, and Telugu flagship PII models
+- Locale-specific dates, phones, addresses, postcodes, and validators
+- Cross-language comparisons and custom model selection
+
+**Recommended for:**
+
+- Teams processing multilingual clinical text
+- Reviewers validating new PII releases
+- Anyone comparing locale-specific pattern behavior
+
+---
+
 ### [getting_started.ipynb](./getting_started.ipynb)
 
 **Introduction to OpenMed basics**
@@ -117,13 +136,13 @@ Explore zero-shot learning:
 
 ```bash
 # Install OpenMed
-pip install openmed
+uv pip install "openmed[hf]"
 
 # Install Jupyter
-pip install jupyter
+uv pip install jupyter
 
 # For PII notebooks, you may need:
-pip install matplotlib ipython
+uv pip install matplotlib ipython
 ```
 
 ### Running the Notebooks

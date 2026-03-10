@@ -671,7 +671,13 @@ def merge_entities_with_semantic_units(
 
             # Decide which label to use
             if prefer_model_labels:
-                final_label = dominant_label
+                if (
+                    normalize_label(dominant_label) == normalize_label(unit_type)
+                    or is_more_specific(dominant_label, unit_type)
+                ):
+                    final_label = dominant_label
+                else:
+                    final_label = unit_type
             else:
                 # Use pattern's label if it matches any model prediction
                 model_labels = set(e['entity_type'] for e in overlapping_entities)

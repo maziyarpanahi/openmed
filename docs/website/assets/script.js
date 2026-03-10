@@ -208,7 +208,7 @@ print(result.summary())`,
   };
 
   window.copyInstall = async (button) => {
-    const codeString = "uv pip install openmed";
+    const codeString = 'uv pip install "openmed[hf]"';
 
     try {
       await navigator.clipboard.writeText(codeString);
