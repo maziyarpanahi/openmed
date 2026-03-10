@@ -1,7 +1,7 @@
 """Multilingual PII detection support.
 
 Language-specific data, validators, regex patterns, and fake data
-for French, German, Italian, and Spanish PII detection and de-identification.
+for multilingual PII detection and de-identification.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Set
 # Constants
 # ---------------------------------------------------------------------------
 
-SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it", "es"}
+SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it", "es", "nl", "hi", "te"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -21,6 +21,9 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "de": "German",
     "it": "Italian",
     "es": "Spanish",
+    "nl": "Dutch",
+    "hi": "Hindi",
+    "te": "Telugu",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -29,6 +32,9 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "de": "German-",
     "it": "Italian-",
     "es": "Spanish-",
+    "nl": "Dutch-",
+    "hi": "Hindi-",
+    "te": "Telugu-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -37,6 +43,9 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
     "it": "OpenMed/OpenMed-PII-Italian-SuperClinical-Small-44M-v1",
     "es": "OpenMed/OpenMed-PII-Spanish-SuperClinical-Small-44M-v1",
+    "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+    "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
+    "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
 }
 
 
@@ -199,6 +208,32 @@ def validate_spanish_nie(text: str) -> bool:
     return letter == _DNI_LETTERS[number % 23]
 
 
+def validate_dutch_bsn(text: str) -> bool:
+    """Validate Dutch BSN (Burgerservicenummer).
+
+    The BSN uses the Elfproef checksum over 9 digits. Legacy 8-digit values are
+    left-padded with a zero for validation.
+
+    Args:
+        text: BSN string (may contain spaces or separators)
+
+    Returns:
+        True if the BSN passes the checksum test
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) not in (8, 9):
+        return False
+
+    digits = digits.zfill(9)
+    if digits == "000000000":
+        return False
+
+    weights = [9, 8, 7, 6, 5, 4, 3, 2, -1]
+    checksum = sum(int(digit) * weight for digit, weight in zip(digits, weights))
+    return checksum % 11 == 0
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -223,6 +258,38 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
     "es": [
         "enero", "febrero", "marzo", "abril", "mayo", "junio",
         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    ],
+    "nl": [
+        "januari", "februari", "maart", "april", "mei", "juni",
+        "juli", "augustus", "september", "oktober", "november", "december",
+    ],
+    "hi": [
+        "\u091c\u0928\u0935\u0930\u0940",
+        "\u092b\u093c\u0930\u0935\u0930\u0940",
+        "\u092e\u093e\u0930\u094d\u091a",
+        "\u0905\u092a\u094d\u0930\u0948\u0932",
+        "\u092e\u0908",
+        "\u091c\u0942\u0928",
+        "\u091c\u0941\u0932\u093e\u0908",
+        "\u0905\u0917\u0938\u094d\u0924",
+        "\u0938\u093f\u0924\u0902\u092c\u0930",
+        "\u0905\u0915\u094d\u091f\u0942\u092c\u0930",
+        "\u0928\u0935\u0902\u092c\u0930",
+        "\u0926\u093f\u0938\u0902\u092c\u0930",
+    ],
+    "te": [
+        "\u0c1c\u0c28\u0c35\u0c30\u0c3f",
+        "\u0c2b\u0c3f\u0c2c\u0c4d\u0c30\u0c35\u0c30\u0c3f",
+        "\u0c2e\u0c3e\u0c30\u0c4d\u0c1a\u0c3f",
+        "\u0c0f\u0c2a\u0c4d\u0c30\u0c3f\u0c32\u0c4d",
+        "\u0c2e\u0c47",
+        "\u0c1c\u0c42\u0c28\u0c4d",
+        "\u0c1c\u0c42\u0c32\u0c48",
+        "\u0c06\u0c17\u0c38\u0c4d\u0c1f\u0c41",
+        "\u0c38\u0c46\u0c2a\u0c4d\u0c1f\u0c46\u0c02\u0c2c\u0c30\u0c4d",
+        "\u0c05\u0c15\u0c4d\u0c1f\u0c4b\u0c2c\u0c30\u0c4d",
+        "\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d",
+        "\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d",
     ],
 }
 
@@ -549,11 +616,197 @@ _SPANISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_DUTCH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "geboren", "geboortedatum", "opname", "ontslag", "datum",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "geboren", "geboortedatum", "opname", "ontslag",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:(?:\+31\s?6|06)[\s.-]?\d{8}|(?:\+31\s?|0)\d{1,3}(?:[\s.-]?\d{2,4}){2,3})\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "telefoon", "tel", "mobiel", "nummer", "contact", "fax",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{9}\b",
+        "national_id",
+        priority=9,
+        base_score=0.25,
+        context_words=[
+            "bsn", "burgerservicenummer", "service nummer",
+        ],
+        context_boost=0.55,
+        validator=validate_dutch_bsn,
+    ),
+    PIIPattern(
+        r"\b[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]*(?:\s+[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]*)*(?:straat|laan|weg|plein|gracht|dreef|kade)\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.7,
+        context_words=[
+            "adres", "woonadres", "woont", "verblijft",
+        ],
+        context_boost=0.2,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{4}\s?[A-Z]{2}\b",
+        "postcode",
+        priority=6,
+        base_score=0.45,
+        context_words=[
+            "postcode", "post code", "adres",
+        ],
+        context_boost=0.4,
+        flags=re.IGNORECASE,
+    ),
+]
+
+_HINDI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u091c\u0928\u094d\u092e", "\u091c\u0928\u094d\u092e\u0924\u093f\u0925\u093f",
+            "\u092d\u0930\u094d\u0924\u0940", "\u0924\u093e\u0930\u0940\u0916",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:\u091c\u0928\u0935\u0930\u0940|\u092b(?:\u093c)?\u0930\u0935\u0930\u0940|\u092e\u093e\u0930\u094d\u091a|\u0905\u092a\u094d\u0930\u0948\u0932|\u092e\u0908|\u091c\u0942\u0928|\u091c\u0941\u0932\u093e\u0908|\u0905\u0917\u0938\u094d\u0924|\u0938\u093f\u0924\u0902\u092c\u0930|\u0905\u0915\u094d\u091f\u0942\u092c\u0930|\u0928\u0935\u0902\u092c\u0930|\u0926\u093f\u0938\u0902\u092c\u0930)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "\u091c\u0928\u094d\u092e", "\u091c\u0928\u094d\u092e\u0924\u093f\u0925\u093f",
+            "\u092d\u0930\u094d\u0924\u0940", "\u0924\u093e\u0930\u0940\u0916",
+        ],
+        context_boost=0.25,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+91[\s-]?)?[6-9]\d{9}\b|(?<!\w)(?:\+91[\s-]?)?[6-9]\d{1}[\s.-]?\d{4}[\s.-]?\d{5}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "\u092b\u094b\u0928", "\u092e\u094b\u092c\u093e\u0907\u0932",
+            "\u0928\u0902\u092c\u0930", "\u0938\u0902\u092a\u0930\u094d\u0915",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"\b(?:\d{1,5}\s+)?(?:[\u0900-\u097F]+\s+)*(?:\u0917\u0932\u0940|\u0938\u0921\u093c\u0915|\u0928\u0917\u0930|\u092e\u093e\u0930\u094d\u0917|Road|Street|Nagar)\s*(?:\u0938\u0902\u0916\u094d\u092f\u093e\s*)?\d+[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\u092a\u0924\u093e", "\u0928\u093f\u0935\u093e\u0938", "\u091a\u093f\u0930\u0941\u0928\u093e\u092e\u093e",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{6}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "\u092a\u093f\u0928", "\u092a\u093f\u0928\u0915\u094b\u0921",
+            "\u0921\u093e\u0915", "\u092a\u0924\u093e",
+        ],
+        context_boost=0.5,
+    ),
+]
+
+_TELUGU_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u0c1c\u0c28\u0c4d\u0c2e", "\u0c1c\u0c28\u0c4d\u0c2e\u0c24\u0c47\u0c26\u0c40",
+            "\u0c1a\u0c47\u0c30\u0c4d\u0c2a\u0c41", "\u0c24\u0c47\u0c26\u0c40",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:\u0c1c\u0c28\u0c35\u0c30\u0c3f|\u0c2b\u0c3f\u0c2c\u0c4d\u0c30\u0c35\u0c30\u0c3f|\u0c2e\u0c3e\u0c30\u0c4d\u0c1a\u0c3f|\u0c0f\u0c2a\u0c4d\u0c30\u0c3f\u0c32\u0c4d|\u0c2e\u0c47|\u0c1c\u0c42\u0c28\u0c4d|\u0c1c\u0c42\u0c32\u0c48|\u0c06\u0c17\u0c38\u0c4d\u0c1f\u0c41|\u0c38\u0c46\u0c2a\u0c4d\u0c1f\u0c46\u0c02\u0c2c\u0c30\u0c4d|\u0c05\u0c15\u0c4d\u0c1f\u0c4b\u0c2c\u0c30\u0c4d|\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d|\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "\u0c1c\u0c28\u0c4d\u0c2e", "\u0c1c\u0c28\u0c4d\u0c2e\u0c24\u0c47\u0c26\u0c40",
+            "\u0c24\u0c47\u0c26\u0c40", "\u0c1a\u0c47\u0c30\u0c4d\u0c2a\u0c41",
+        ],
+        context_boost=0.25,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+91[\s-]?)?[6-9]\d{9}\b|(?<!\w)(?:\+91[\s-]?)?[6-9]\d{1}[\s.-]?\d{4}[\s.-]?\d{5}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "\u0c2b\u0c4b\u0c28\u0c4d", "\u0c2e\u0c4a\u0c2c\u0c48\u0c32\u0c4d",
+            "\u0c28\u0c02\u0c2c\u0c30\u0c4d", "\u0c38\u0c02\u0c2a\u0c30\u0c4d\u0c15\u0c02",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"\b(?:\d{1,5}\s+)?(?:[\u0c00-\u0c7F]+\s+)*(?:\u0c35\u0c40\u0c27\u0c3f|\u0c30\u0c4b\u0c21\u0c4d|\u0c28\u0c17\u0c30\u0c02|\u0c2e\u0c3e\u0c30\u0c4d\u0c17\u0c02|Road|Street|Nagar)\s*\d+[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e", "\u0c35\u0c3f\u0c32\u0c3e\u0c38\u0c02", "\u0c28\u0c3f\u0c35\u0c3e\u0c38\u0c02",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{6}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "\u0c2a\u0c3f\u0c28\u0c4d", "\u0c2a\u0c3f\u0c28\u0c4d \u0c15\u0c4b\u0c21\u0c4d",
+            "\u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e",
+        ],
+        context_boost=0.5,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
     "es": _SPANISH_PII_PATTERNS,
+    "nl": _DUTCH_PII_PATTERNS,
+    "hi": _HINDI_PII_PATTERNS,
+    "te": _TELUGU_PII_PATTERNS,
 }
 
 
@@ -637,6 +890,95 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["Madrid", "Barcelona", "Sevilla"],
         "ZIPCODE": ["28001", "08001", "41001"],
     },
+    "nl": {
+        "NAME": ["Sanne de Vries", "Daan Jansen", "Lotte Bakker", "Milan Visser"],
+        "FIRST_NAME": ["Sanne", "Daan", "Lotte", "Milan"],
+        "LAST_NAME": ["de Vries", "Jansen", "Bakker", "Visser"],
+        "EMAIL": ["patient@voorbeeld.nl", "contact@voorbeeld.org"],
+        "PHONE": ["+31 6 12345678", "06 87654321"],
+        "ID_NUM": ["123456782"],
+        "STREET_ADDRESS": ["Keizersgracht 123", "Stationsweg 45A"],
+        "URL_PERSONAL": ["https://voorbeeld.nl"],
+        "USERNAME": ["gebruiker123", "patient456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Amsterdam", "Utrecht", "Rotterdam"],
+        "ZIPCODE": ["1012 AB", "3511 CC", "3011 AA"],
+    },
+    "hi": {
+        "NAME": [
+            "\u0905\u0928\u093f\u0924\u093e \u0936\u0930\u094d\u092e\u093e",
+            "\u0930\u093e\u091c\u0947\u0936 \u0915\u0941\u092e\u093e\u0930",
+            "\u092a\u094d\u0930\u093f\u092f\u093e \u0935\u0930\u094d\u092e\u093e",
+            "\u0905\u092e\u093f\u0924 \u0938\u093f\u0902\u0939",
+        ],
+        "FIRST_NAME": [
+            "\u0905\u0928\u093f\u0924\u093e",
+            "\u0930\u093e\u091c\u0947\u0936",
+            "\u092a\u094d\u0930\u093f\u092f\u093e",
+            "\u0905\u092e\u093f\u0924",
+        ],
+        "LAST_NAME": [
+            "\u0936\u0930\u094d\u092e\u093e",
+            "\u0915\u0941\u092e\u093e\u0930",
+            "\u0935\u0930\u094d\u092e\u093e",
+            "\u0938\u093f\u0902\u0939",
+        ],
+        "EMAIL": ["patient@example.in", "sampark@example.org"],
+        "PHONE": ["+91 9876543210", "9123456789"],
+        "ID_NUM": ["MRN-982341"],
+        "STREET_ADDRESS": [
+            "12 \u0917\u0932\u0940 \u0938\u0902\u0916\u094d\u092f\u093e 5",
+            "45 Green Park Road",
+        ],
+        "URL_PERSONAL": ["https://udaharan.in"],
+        "USERNAME": ["rogi123", "parichay456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": [
+            "\u0926\u093f\u0932\u094d\u0932\u0940",
+            "\u092e\u0941\u0902\u092c\u0908",
+            "\u0932\u0916\u0928\u090a",
+        ],
+        "ZIPCODE": ["110001", "400001", "226001"],
+    },
+    "te": {
+        "NAME": [
+            "\u0c38\u0c3f\u0c24\u0c3e \u0c30\u0c46\u0c21\u0c4d\u0c21\u0c3f",
+            "\u0c30\u0c3e\u0c2e\u0c4d \u0c15\u0c41\u0c2e\u0c3e\u0c30\u0c4d",
+            "\u0c2a\u0c4d\u0c30\u0c3f\u0c2f\u0c3e \u0c26\u0c47\u0c35\u0c3f",
+            "\u0c05\u0c30\u0c41\u0c23\u0c4d \u0c35\u0c30\u0c4d\u0c2e",
+        ],
+        "FIRST_NAME": [
+            "\u0c38\u0c3f\u0c24\u0c3e",
+            "\u0c30\u0c3e\u0c2e\u0c4d",
+            "\u0c2a\u0c4d\u0c30\u0c3f\u0c2f\u0c3e",
+            "\u0c05\u0c30\u0c41\u0c23\u0c4d",
+        ],
+        "LAST_NAME": [
+            "\u0c30\u0c46\u0c21\u0c4d\u0c21\u0c3f",
+            "\u0c15\u0c41\u0c2e\u0c3e\u0c30\u0c4d",
+            "\u0c26\u0c47\u0c35\u0c3f",
+            "\u0c35\u0c30\u0c4d\u0c2e",
+        ],
+        "EMAIL": ["patient@example.in", "sampark@example.org"],
+        "PHONE": ["+91 9876543210", "9988776655"],
+        "ID_NUM": ["MRN-548231"],
+        "STREET_ADDRESS": [
+            "12 \u0c35\u0c40\u0c27\u0c3f 5",
+            "45 Jubilee Hills Road",
+        ],
+        "URL_PERSONAL": ["https://udaharanam.in"],
+        "USERNAME": ["rogi123", "samacharam456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": [
+            "\u0c39\u0c48\u0c26\u0c30\u0c3e\u0c2c\u0c3e\u0c26\u0c4d",
+            "\u0c35\u0c3f\u0c1c\u0c2f\u0c35\u0c3e\u0c21",
+            "\u0c17\u0c41\u0c02\u0c1f\u0c42\u0c30\u0c41",
+        ],
+        "ZIPCODE": ["500001", "520001", "522001"],
+    },
 }
 
 
@@ -652,7 +994,7 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te)
 
     Returns:
         List of PIIPattern instances for the language

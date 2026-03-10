@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-03-10
+
+### Added
+
+- **Dutch, Hindi, and Telugu PII support**
+  - `extract_pii()` and `deidentify()` now accept `lang="nl"`, `lang="hi"`, and `lang="te"`
+  - Added sparse public registry entries for:
+    - `OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1`
+    - `OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1`
+    - `OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1`
+  - Added locale-aware patterns for Dutch BSN, Dutch postcodes, India PIN codes, localized month names, and day-first date shifting
+  - Added Dutch BSN checksum validation and locale-specific fake replacement data for `nl`, `hi`, and `te`
+  - Added `examples/pii_multilingual_new_languages.py` for registry, regex, and live-model smoke coverage
+- **REST service runtime hardening**
+  - Added `openmed.service.runtime.ServiceRuntime` for shared per-process config and model-loader reuse
+  - Added `OPENMED_SERVICE_PRELOAD_MODELS` to warm selected models at startup
+  - Added structured validation/bad-request/timeout/internal-error JSON envelopes for non-2xx responses
+  - Added request timeout enforcement around blocking inference work
+- **Testing coverage**
+  - Added regression tests for Dutch, Hindi, and Telugu routing, patterns, fake data, date handling, and entity merging
+  - Added REST service tests for validation errors, timeout behavior, shared-loader reuse, preload parsing, and the new `lang` values
+
+### Changed
+
+- Expanded the multilingual PII catalog from 176 to 179 models across 8 languages
+- `get_pii_models_by_language()` now returns sparse public releases for `nl`, `hi`, and `te` while keeping English filtering correct
+- `ModelLoader.create_pipeline()` now caches created pipelines for repeated requests with identical parameters
+- REST schemas now validate model names, confidence thresholds, extra fields, and the legacy `shift_dates` alias more strictly
+- Updated multilingual examples, notebook guidance, website copy, and install snippets to reflect the 8-language / 179-model PII catalog and `uv pip install "openmed[hf]"`
+
+### Fixed
+
+- Smart semantic-merge resolution no longer lets weaker model labels overwrite stronger validated pattern labels
+- Localized Dutch, Hindi, and Telugu month-name parsing now falls back correctly during date shifting instead of relying only on `dateutil`
+- Dutch phone, BSN, and street-address patterns were tightened after live smoke review to reduce overlap and improve entity labeling
+
+### Documentation
+
+- Updated README, REST service docs, website copy, notebook index, and the multilingual PII notebook for the `v0.6.2` release
+
 ## [0.6.1] - 2026-03-01
 
 ### Added

@@ -369,6 +369,72 @@ class TestMultilingualPatterns:
         assert date_entities[0]['word'] == '15/01/1970'
         assert len(email_entities) == 1
 
+    def test_pattern_label_overrides_conflicting_model_label(self):
+        """Conflicting model labels should not override a strong pattern label."""
+        from openmed.core.pii_i18n import get_patterns_for_language
+
+        text = "BSN: 123456782"
+        entities = [
+            {'entity_type': 'ssn', 'score': 0.88, 'start': 5, 'end': 14, 'word': '123456782'},
+        ]
+
+        nl_patterns = get_patterns_for_language("nl")
+        merged = merge_entities_with_semantic_units(
+            entities,
+            text,
+            patterns=nl_patterns,
+            use_semantic_patterns=True,
+            prefer_model_labels=True,
+        )
+
+        assert len(merged) == 1
+        assert merged[0]['entity_type'] == 'national_id'
+
+    def test_dutch_bsn_pattern(self):
+        """Test Dutch BSN pattern detection."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "BSN: 123456782"
+        nl_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["nl"]
+            if p.entity_type == "national_id"
+        ]
+
+        units = find_semantic_units(text, nl_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert matched_text == "123456782"
+
+    def test_hindi_phone_pattern(self):
+        """Test Hindi phone pattern detection."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "फ़ोन: +91 9876543210"
+        hi_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["hi"]
+            if p.entity_type == "phone_number"
+        ]
+
+        units = find_semantic_units(text, hi_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert matched_text.endswith("9876543210")
+
+    def test_telugu_pin_code_pattern(self):
+        """Test Telugu PIN code pattern detection."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "పిన్ కోడ్: 500001"
+        te_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["te"]
+            if p.entity_type == "postcode"
+        ]
+
+        units = find_semantic_units(text, te_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert matched_text == "500001"
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

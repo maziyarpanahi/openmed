@@ -35,7 +35,7 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Literal
+from typing import Dict, Optional, Literal, TYPE_CHECKING
 from datetime import datetime, timedelta
 import hashlib
 import random
@@ -44,6 +44,9 @@ import unicodedata
 
 from .config import OpenMedConfig
 from ..processing.outputs import EntityPrediction
+
+if TYPE_CHECKING:
+    from .models import ModelLoader
 
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
@@ -129,6 +132,7 @@ class DeidentificationResult:
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te"})
 
 
 def _strip_accents(text: str) -> str:
@@ -164,6 +168,8 @@ def extract_pii(
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
+    *,
+    loader: Optional["ModelLoader"] = None,
 ):
     """Extract PII entities from text with intelligent entity merging.
 
@@ -183,13 +189,14 @@ def extract_pii(
         confidence_threshold: Minimum confidence score (0-1)
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it, es). Controls which
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te). Controls which
             default model and regex patterns are used.
         normalize_accents: Strip diacritical marks before model inference so
             that models trained on accent-free text still detect accented
             names.  Entity spans in the result reference the *original*
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
+        loader: Optional shared model loader to reuse warmed pipelines.
 
     Returns:
         AnalysisResult with detected PII entities
@@ -237,6 +244,7 @@ def extract_pii(
         model_name=effective_model,
         confidence_threshold=confidence_threshold,
         config=config,
+        loader=loader,
         group_entities=True,  # Group multi-token PII entities
     )
 
@@ -312,13 +320,15 @@ def deidentify(
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
     keep_year: bool = True,
-    shift_dates: bool = False,
+    shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
+    *,
+    loader: Optional["ModelLoader"] = None,
 ) -> DeidentificationResult:
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -339,15 +349,16 @@ def deidentify(
         model_name: PII detection model
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
-        shift_dates: Shift all dates by a consistent random offset
+        shift_dates: Deprecated alias for ``method="shift_dates"``.
         date_shift_days: Specific number of days to shift (random if None)
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it, es). Controls model
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te). Controls model
             selection, regex patterns, and fake data for replacement.
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
+        loader: Optional shared model loader to reuse warmed pipelines.
 
     Returns:
         DeidentificationResult with original and de-identified text
@@ -366,11 +377,21 @@ def deidentify(
     # Strip to align with validate_input() inside analyze_text()
     text = text.strip()
 
+    effective_method = method
+    if shift_dates is True and method != "shift_dates":
+        effective_method = "shift_dates"
+    elif shift_dates is False and method == "shift_dates":
+        raise ValueError("shift_dates=false conflicts with method='shift_dates'")
+
+    if date_shift_days is not None and effective_method != "shift_dates":
+        raise ValueError("date_shift_days requires method='shift_dates'")
+
     # Extract PII entities with smart merging
     pii_result = extract_pii(
         text, model_name, confidence_threshold, config, use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        loader=loader,
     )
 
     # Convert to PIIEntity with metadata
@@ -391,7 +412,7 @@ def deidentify(
     pii_entities.sort(key=lambda e: e.start, reverse=True)
 
     # Generate date shift offset if needed
-    if shift_dates and date_shift_days is None:
+    if effective_method == "shift_dates" and date_shift_days is None:
         date_shift_days = random.randint(-365, 365)
 
     # Apply de-identification
@@ -401,9 +422,9 @@ def deidentify(
     for entity in pii_entities:
         redacted = _redact_entity(
             entity,
-            method,
+            effective_method,
             keep_year=keep_year,
-            date_shift_days=date_shift_days if shift_dates else None,
+            date_shift_days=date_shift_days if effective_method == "shift_dates" else None,
             lang=lang,
         )
         entity.redacted_text = redacted
@@ -421,7 +442,7 @@ def deidentify(
         original_text=text,
         deidentified_text=deidentified,
         pii_entities=pii_entities,
-        method=method,
+        method=effective_method,
         timestamp=datetime.now(),
         mapping=mapping,
     )
@@ -578,6 +599,68 @@ def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
     return f"[{entity_type}]"
 
 
+def _parse_localized_month_date(
+    date_str: str, lang: str,
+) -> tuple[datetime, str] | None:
+    """Parse localized month-name dates that dateutil may not understand."""
+    from .pii_i18n import LANGUAGE_MONTH_NAMES
+
+    month_names = LANGUAGE_MONTH_NAMES.get(lang)
+    if not month_names:
+        return None
+
+    month_alts = "|".join(re.escape(name) for name in month_names)
+    text = date_str.strip()
+
+    if lang == "es":
+        pattern = rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$"
+        style = "day_month_year_de"
+    elif lang == "de":
+        pattern = rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
+        style = "day_month_year_dot"
+    else:
+        pattern = rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
+        style = "day_month_year"
+
+    match = re.match(pattern, text, re.IGNORECASE)
+    if not match:
+        return None
+
+    month_lookup = {name.casefold(): index + 1 for index, name in enumerate(month_names)}
+    month_name = match.group("month").casefold()
+    month = month_lookup.get(month_name)
+    if month is None:
+        return None
+
+    try:
+        parsed = datetime(
+            int(match.group("year")),
+            month,
+            int(match.group("day")),
+        )
+    except ValueError:
+        return None
+
+    if lang == "de" and match.groupdict().get("dot"):
+        style = "day_month_year_dot"
+    return parsed, style
+
+
+def _format_localized_month_date(
+    new_date: datetime, lang: str, style: str,
+) -> str:
+    """Render a localized month-name date using the language month table."""
+    from .pii_i18n import LANGUAGE_MONTH_NAMES
+
+    month_name = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])[new_date.month - 1]
+
+    if style == "day_month_year_de":
+        return f"{new_date.day} de {month_name} de {new_date.year}"
+    if style == "day_month_year_dot":
+        return f"{new_date.day}. {month_name} {new_date.year}"
+    return f"{new_date.day} {month_name} {new_date.year}"
+
+
 def _shift_date(
     date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
 ) -> str:
@@ -599,17 +682,30 @@ def _shift_date(
     Returns:
         Shifted date string in the same format as input
     """
+    localized = _parse_localized_month_date(date_str, lang)
+    if localized is not None:
+        try:
+            parsed_date, localized_style = localized
+            original_year = parsed_date.year
+            shifted_date = parsed_date + timedelta(days=shift_days)
+
+            if keep_year:
+                shifted_date = shifted_date.replace(year=original_year)
+
+            return _format_localized_month_date(shifted_date, lang, localized_style)
+        except (ValueError, OverflowError):
+            return "[DATE_SHIFTED]"
+
     # Try to parse and shift using dateutil if available
     try:
         from dateutil import parser as date_parser
-        from dateutil.relativedelta import relativedelta
     except ImportError:
         # Fallback without dateutil - basic pattern matching
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
     try:
         # For European languages, try day-first parsing
-        dayfirst = lang in ("fr", "de", "it", "es")
+        dayfirst = lang in _DAY_FIRST_LANGS
         parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
         original_year = parsed_date.year
 
@@ -645,7 +741,7 @@ def _shift_date_basic(
         Shifted date string or placeholder
     """
     # Order patterns based on language convention
-    if lang in ("fr", "it", "es"):
+    if lang in _DAY_FIRST_LANGS - {"de"}:
         # European: DD/MM/YYYY first
         patterns = [
             (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
@@ -741,7 +837,7 @@ def _format_date_like_original(
 
     # Slash-separated dates: interpretation depends on language
     if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
-        if lang in ("fr", "de", "it", "es"):
+        if lang in _DAY_FIRST_LANGS:
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
         else:
@@ -750,7 +846,7 @@ def _format_date_like_original(
 
     # Dash-separated dates
     if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
-        if lang in ("fr", "de", "it", "es"):
+        if lang in _DAY_FIRST_LANGS:
             return new_date.strftime("%d-%m-%Y")
         else:
             return new_date.strftime("%m-%d-%Y")
@@ -767,10 +863,12 @@ def _format_date_like_original(
             lang_months = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])
             month_name = lang_months[new_date.month - 1]
 
-            # "15 janvier 2020" or "January 15, 2020" format
-            if re.match(r"\d+\.?\s+[A-Za-z\u00c0-\u00ff]+\s+\d{4}", original_stripped):
+            # "15 januari 2020" / "15. Januar 2020" / localized day-month-year
+            if re.match(r"\d+\.?\s+[^\W\d_]+\s+\d{4}", original_stripped, re.UNICODE):
                 return f"{new_date.day} {month_name} {new_date.year}"
-            if re.match(r"[A-Za-z\u00c0-\u00ff]+\s+\d+,?\s+\d{4}", original_stripped):
+            if re.match(r"\d+\s+de\s+[^\W\d_]+\s+de\s+\d{4}", original_stripped, re.UNICODE):
+                return f"{new_date.day} de {month_name} de {new_date.year}"
+            if re.match(r"[^\W\d_]+\s+\d+,?\s+\d{4}", original_stripped, re.UNICODE):
                 return f"{month_name} {new_date.day}, {new_date.year}"
             break
 

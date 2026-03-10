@@ -43,10 +43,10 @@ for entity in result.entities:
 
 ```bash
 # Install with Hugging Face support
-pip install "openmed[hf]"
+uv pip install "openmed[hf]"
 
 # Or include REST service dependencies
-pip install "openmed[hf,service]"
+uv pip install "openmed[hf,service]"
 ```
 
 ### Three Ways to Use OpenMed
@@ -97,12 +97,13 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v0.6.1)
+### Production Tools (v0.6.2)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
 - **Performance Profiling**: Built-in inference timing and bottleneck analysis
 - **Dockerized REST API**: `GET /health`, `POST /analyze`, `POST /pii/extract`, `POST /pii/deidentify`
+- **Service Reliability Hardening**: request validation, shared pipeline preload, and timeout/error envelopes
 
 ---
 
@@ -123,9 +124,9 @@ Quick links:
 
 ---
 
-## REST API (v0.6.1 MVP)
+## REST API (v0.6.2)
 
-OpenMed now includes a Docker-friendly FastAPI service:
+OpenMed includes a Docker-friendly FastAPI service with reliability hardening:
 
 - `GET /health`
 - `POST /analyze`
@@ -135,15 +136,22 @@ OpenMed now includes a Docker-friendly FastAPI service:
 ### Run locally
 
 ```bash
-pip install -e ".[hf,service]"
+uv pip install -e ".[hf,service]"
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+Optional shared model warm-up:
+
+```bash
+OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
 ### Run with Docker
 
 ```bash
-docker build -t openmed:0.6.1 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:0.6.1
+docker build -t openmed:0.6.2 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:0.6.2
 ```
 
 ### Example request
@@ -155,6 +163,24 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 ```
 
 See the full service guide at [REST Service docs](docs/rest-service.md).
+
+Non-2xx responses now use a unified envelope:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Request validation failed",
+    "details": [
+      {
+        "field": "body.text",
+        "message": "Text must not be blank",
+        "type": "value_error"
+      }
+    ]
+  }
+}
+```
 
 ---
 
@@ -201,6 +227,40 @@ shifted = deidentify(text, method="shift_dates", date_shift_days=180)
 **HIPAA Compliance**: Covers all 18 Safe Harbor identifiers with configurable confidence thresholds.
 
 [📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Documentation](docs/pii-smart-merging.md)
+
+### Multilingual PII (8 Languages)
+
+OpenMed now supports multilingual PII extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, and `te`.
+French, German, Italian, and Spanish expose the full 35-model family; Dutch, Hindi, and Telugu currently ship one flagship public model each, bringing the total PII catalog to **179 models**.
+
+```python
+from openmed import extract_pii
+
+dutch = extract_pii(
+    "Patiënt: Eva de Vries, geboortedatum: 15 januari 1984, BSN: 123456782, telefoon: +31 6 12345678",
+    lang="nl",
+    model_name="OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
+    use_smart_merging=True,
+)
+
+hindi = extract_pii(
+    "रोगी: अनीता शर्मा, जन्मतिथि: 15 जनवरी 1984, फोन: +91 9876543210, पता: 12 गली संख्या 5, नई दिल्ली 110001",
+    lang="hi",
+    model_name="OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
+    use_smart_merging=True,
+)
+
+telugu = extract_pii(
+    "రోగి: సితా రెడ్డి, జన్మ తేదీ: 15 జనవరి 1984, ఫోన్: +91 9876543210, చిరునామా: 12 వీధి 5, హైదరాబాద్ 500001",
+    lang="te",
+    model_name="OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
+    use_smart_merging=True,
+)
+
+print([(e.label, e.text) for e in dutch.entities])
+print([(e.label, e.text) for e in hindi.entities])
+print([(e.label, e.text) for e in telugu.entities])
+```
 
 ### Batch Processing
 
