@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime
@@ -961,6 +962,22 @@ class TestMultilingualPII:
         """Test Telugu month-name date shifting."""
         result = _shift_date("15 జనవరి 2020", 30, lang="te")
         assert result == "14 ఫిబ్రవరి 2020"
+
+    def test_shift_date_localized_month_name_without_dateutil(self, monkeypatch):
+        """Localized month-name shifting should not depend on python-dateutil."""
+
+        original_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "dateutil" or name.startswith("dateutil."):
+                raise ImportError("dateutil unavailable")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        assert _shift_date("15 januari 2020", 30, lang="nl") == "14 februari 2020"
+        assert _shift_date("15 जनवरी 2020", 30, lang="hi") == "14 फ़रवरी 2020"
+        assert _shift_date("15 జనవరి 2020", 30, lang="te") == "14 ఫిబ్రవరి 2020"
 
 
 # ---------------------------------------------------------------------------
