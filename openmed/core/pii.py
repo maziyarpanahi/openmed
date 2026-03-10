@@ -682,23 +682,31 @@ def _shift_date(
     Returns:
         Shifted date string in the same format as input
     """
+    localized = _parse_localized_month_date(date_str, lang)
+    if localized is not None:
+        try:
+            parsed_date, localized_style = localized
+            original_year = parsed_date.year
+            shifted_date = parsed_date + timedelta(days=shift_days)
+
+            if keep_year:
+                shifted_date = shifted_date.replace(year=original_year)
+
+            return _format_localized_month_date(shifted_date, lang, localized_style)
+        except (ValueError, OverflowError):
+            return "[DATE_SHIFTED]"
+
     # Try to parse and shift using dateutil if available
     try:
         from dateutil import parser as date_parser
-        from dateutil.relativedelta import relativedelta
     except ImportError:
         # Fallback without dateutil - basic pattern matching
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
     try:
-        localized = _parse_localized_month_date(date_str, lang)
-        localized_style = None
-        if localized is not None:
-            parsed_date, localized_style = localized
-        else:
-            # For European languages, try day-first parsing
-            dayfirst = lang in _DAY_FIRST_LANGS
-            parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
+        # For European languages, try day-first parsing
+        dayfirst = lang in _DAY_FIRST_LANGS
+        parsed_date = date_parser.parse(date_str, fuzzy=False, dayfirst=dayfirst)
         original_year = parsed_date.year
 
         # Shift the date
@@ -709,8 +717,6 @@ def _shift_date(
             shifted_date = shifted_date.replace(year=original_year)
 
         # Try to preserve the original format
-        if localized_style is not None:
-            return _format_localized_month_date(shifted_date, lang, localized_style)
         return _format_date_like_original(date_str, shifted_date, lang=lang)
 
     except (ValueError, OverflowError):
