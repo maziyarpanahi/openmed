@@ -213,6 +213,7 @@ class TestExtractPII:
             model_name="test_pii_model",
             confidence_threshold=0.6,
             config=None,
+            loader=None,
             group_entities=True,
         )
 
@@ -240,6 +241,18 @@ class TestExtractPII:
 
         call_args = mock_analyze.call_args
         assert call_args[1]["model_name"] == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_forwards_loader(self, mock_analyze):
+        """Test extract_pii forwards an explicit loader."""
+        mock_analyze.return_value = PredictionResult(
+            text="Test", entities=[], model_name="default", timestamp=datetime.now().isoformat()
+        )
+        loader = MagicMock()
+
+        extract_pii("Test", loader=loader)
+
+        assert mock_analyze.call_args.kwargs["loader"] is loader
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +421,79 @@ class TestDeidentify:
         mock_extract.assert_called_once()
         call_args = mock_extract.call_args
         assert call_args[0][2] == 0.8  # confidence_threshold parameter
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_forwards_loader(self, mock_extract):
+        """Test deidentify forwards an explicit loader to extract_pii."""
+        mock_extract.return_value = PredictionResult(
+            text="Test", entities=[], model_name="test", timestamp=datetime.now().isoformat()
+        )
+        loader = MagicMock()
+
+        deidentify("Test", loader=loader)
+
+        assert mock_extract.call_args.kwargs["loader"] is loader
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_method_does_not_require_alias(self, mock_extract):
+        """Test method='shift_dates' shifts dates without the legacy boolean flag."""
+        mock_extract.return_value = PredictionResult(
+            text="DOB 01/15/2020",
+            entities=[
+                EntityPrediction(text="01/15/2020", label="DATE", start=4, end=14, confidence=0.95)
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            "DOB 01/15/2020",
+            method="shift_dates",
+            date_shift_days=30,
+        )
+
+        assert result.method == "shift_dates"
+        assert result.deidentified_text == "DOB 02/14/2020"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_alias_promotes_method(self, mock_extract):
+        """Test the legacy shift_dates boolean is treated as an alias."""
+        mock_extract.return_value = PredictionResult(
+            text="DOB 01/15/2020",
+            entities=[
+                EntityPrediction(text="01/15/2020", label="DATE", start=4, end=14, confidence=0.95)
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            "DOB 01/15/2020",
+            method="mask",
+            shift_dates=True,
+            date_shift_days=30,
+        )
+
+        assert result.method == "shift_dates"
+        assert result.deidentified_text == "DOB 02/14/2020"
+
+    def test_deidentify_rejects_conflicting_shift_dates_flag(self):
+        """Test contradictory shift_dates combinations raise an error."""
+        with pytest.raises(ValueError, match="shift_dates=false conflicts"):
+            deidentify(
+                "DOB 01/15/2020",
+                method="shift_dates",
+                shift_dates=False,
+            )
+
+    def test_deidentify_rejects_date_shift_days_without_shift_method(self):
+        """Test date_shift_days requires shift_dates mode."""
+        with pytest.raises(ValueError, match="date_shift_days requires"):
+            deidentify(
+                "DOB 01/15/2020",
+                method="mask",
+                date_shift_days=30,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -667,6 +753,51 @@ class TestMultilingualPII:
         assert "Italian" in call_args[1]["model_name"]
 
     @patch("openmed.analyze_text")
+    def test_extract_pii_dutch_uses_dutch_model(self, mock_analyze):
+        """Test that lang='nl' auto-resolves to Dutch default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Geboren op 15/01/1970",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Geboren op 15/01/1970", lang="nl")
+
+        call_args = mock_analyze.call_args
+        assert "Dutch" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_hindi_uses_hindi_model(self, mock_analyze):
+        """Test that lang='hi' auto-resolves to Hindi default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="जन्म तिथि 15/01/1970",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("जन्म तिथि 15/01/1970", lang="hi")
+
+        call_args = mock_analyze.call_args
+        assert "Hindi" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_telugu_uses_telugu_model(self, mock_analyze):
+        """Test that lang='te' auto-resolves to Telugu default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="జన్మ తేదీ 15/01/1970",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("జన్మ తేదీ 15/01/1970", lang="te")
+
+        call_args = mock_analyze.call_args
+        assert "Telugu" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
     def test_extract_pii_english_backward_compat(self, mock_analyze):
         """Test that lang='en' (default) uses English model."""
         mock_analyze.return_value = PredictionResult(
@@ -751,6 +882,24 @@ class TestMultilingualPII:
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
         assert result in LANGUAGE_FAKE_DATA["de"]["NAME"]
 
+    def test_generate_fake_pii_dutch(self):
+        """Test fake PII generation with Dutch locale."""
+        result = _generate_fake_pii("NAME", lang="nl")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["nl"]["NAME"]
+
+    def test_generate_fake_pii_hindi(self):
+        """Test fake PII generation with Hindi locale."""
+        result = _generate_fake_pii("NAME", lang="hi")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["hi"]["NAME"]
+
+    def test_generate_fake_pii_telugu(self):
+        """Test fake PII generation with Telugu locale."""
+        result = _generate_fake_pii("NAME", lang="te")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["te"]["NAME"]
+
     def test_generate_fake_pii_fallback_to_english(self):
         """Test fake PII falls back to English for missing types."""
         result = _generate_fake_pii("USERNAME", lang="fr")
@@ -782,6 +931,36 @@ class TestMultilingualPII:
         """Test date shifting with Spanish DD/MM/YYYY format."""
         result = _shift_date("15/01/2020", 30, lang="es")
         assert result == "14/02/2020"
+
+    def test_shift_date_dutch_format(self):
+        """Test date shifting with Dutch DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="nl")
+        assert result == "14/02/2020"
+
+    def test_shift_date_hindi_format(self):
+        """Test date shifting with Hindi DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="hi")
+        assert result == "14/02/2020"
+
+    def test_shift_date_telugu_format(self):
+        """Test date shifting with Telugu DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="te")
+        assert result == "14/02/2020"
+
+    def test_shift_date_dutch_month_name_format(self):
+        """Test Dutch month-name date shifting."""
+        result = _shift_date("15 januari 2020", 30, lang="nl")
+        assert result == "14 februari 2020"
+
+    def test_shift_date_hindi_month_name_format(self):
+        """Test Hindi month-name date shifting."""
+        result = _shift_date("15 जनवरी 2020", 30, lang="hi")
+        assert result == "14 फ़रवरी 2020"
+
+    def test_shift_date_telugu_month_name_format(self):
+        """Test Telugu month-name date shifting."""
+        result = _shift_date("15 జనవరి 2020", 30, lang="te")
+        assert result == "14 ఫిబ్రవరి 2020"
 
 
 # ---------------------------------------------------------------------------
