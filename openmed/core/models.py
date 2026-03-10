@@ -1,6 +1,7 @@
 """Model loading functionality for OpenMed."""
 
 import logging
+from collections.abc import Mapping
 from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
 
 
@@ -73,6 +74,7 @@ class ModelLoader:
         self.config = config or get_config()
         self._models = {}  # Cache for loaded models
         self._tokenizers = {}  # Cache for loaded tokenizers
+        self._pipelines = {}  # Cache for created pipelines
 
     def list_available_models(
         self,
@@ -227,6 +229,17 @@ class ModelLoader:
         """
         # Resolve model name if it's a registry key
         full_model_name = self._resolve_model_name(model_name)
+        cache_key = self._build_pipeline_cache_key(
+            full_model_name,
+            task=task,
+            aggregation_strategy=aggregation_strategy,
+            use_fast_tokenizer=use_fast_tokenizer,
+            kwargs=kwargs,
+        )
+
+        if cache_key in self._pipelines:
+            logger.info(f"Using cached pipeline for {full_model_name}")
+            return self._pipelines[cache_key]
 
         try:
             # Create pipeline directly with model name for better caching
@@ -240,6 +253,7 @@ class ModelLoader:
             pipeline_kwargs.update(kwargs)
 
             ner_pipeline = pipeline(task, **pipeline_kwargs)
+            self._pipelines[cache_key] = ner_pipeline
 
             logger.info(f"Created pipeline for {full_model_name}")
             return ner_pipeline
@@ -249,13 +263,19 @@ class ModelLoader:
             # Fall back to loading model components manually
             model_data = self.load_model(model_name)
 
-            return pipeline(
+            fallback_kwargs = dict(kwargs)
+            if aggregation_strategy is not None:
+                fallback_kwargs["aggregation_strategy"] = aggregation_strategy
+
+            ner_pipeline = pipeline(
                 task,
                 model=model_data["model"],
                 tokenizer=model_data["tokenizer"],
                 device=self._get_device_id(),
-                **kwargs,
+                **fallback_kwargs,
             )
+            self._pipelines[cache_key] = ner_pipeline
+            return ner_pipeline
 
     def get_max_sequence_length(
         self,
@@ -390,6 +410,42 @@ class ModelLoader:
         if getattr(self.config, "hf_token", None):
             return {"token": self.config.hf_token}
         return {}
+
+    def _build_pipeline_cache_key(
+        self,
+        full_model_name: str,
+        *,
+        task: str,
+        aggregation_strategy: Optional[str],
+        use_fast_tokenizer: bool,
+        kwargs: Dict[str, Any],
+    ) -> Tuple[Any, ...]:
+        """Return a hashable cache key for pipeline creation."""
+        return (
+            full_model_name,
+            task,
+            aggregation_strategy,
+            use_fast_tokenizer,
+            self._get_device_id(),
+            self._freeze_cache_value(kwargs),
+        )
+
+    def _freeze_cache_value(self, value: Any) -> Any:
+        """Convert nested kwargs into a hashable representation."""
+        if isinstance(value, Mapping):
+            return tuple(
+                sorted(
+                    (str(key), self._freeze_cache_value(item))
+                    for key, item in value.items()
+                )
+            )
+        if isinstance(value, (list, tuple)):
+            return tuple(self._freeze_cache_value(item) for item in value)
+        if isinstance(value, set):
+            return tuple(sorted(self._freeze_cache_value(item) for item in value))
+        if isinstance(value, (str, int, float, bool, type(None))):
+            return value
+        return repr(value)
 
 
 # Convenience function for quick model loading
