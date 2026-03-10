@@ -11,6 +11,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_MONTH_NAMES,
     LANGUAGE_PII_PATTERNS,
     LANGUAGE_FAKE_DATA,
+    validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
     validate_italian_codice_fiscale,
@@ -30,7 +31,7 @@ class TestConstants:
     """Test module-level constants."""
 
     def test_supported_languages(self):
-        assert SUPPORTED_LANGUAGES == {"en", "fr", "de", "it", "es"}
+        assert SUPPORTED_LANGUAGES == {"en", "fr", "de", "it", "es", "nl", "hi", "te"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -41,6 +42,9 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["de"] == "German-"
         assert LANGUAGE_MODEL_PREFIX["it"] == "Italian-"
         assert LANGUAGE_MODEL_PREFIX["es"] == "Spanish-"
+        assert LANGUAGE_MODEL_PREFIX["nl"] == "Dutch-"
+        assert LANGUAGE_MODEL_PREFIX["hi"] == "Hindi-"
+        assert LANGUAGE_MODEL_PREFIX["te"] == "Telugu-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
@@ -50,6 +54,9 @@ class TestConstants:
         assert "German" in DEFAULT_PII_MODELS["de"]
         assert "Italian" in DEFAULT_PII_MODELS["it"]
         assert "Spanish" in DEFAULT_PII_MODELS["es"]
+        assert "Dutch" in DEFAULT_PII_MODELS["nl"]
+        assert "Hindi" in DEFAULT_PII_MODELS["hi"]
+        assert "Telugu" in DEFAULT_PII_MODELS["te"]
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -58,6 +65,27 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+# ---------------------------------------------------------------------------
+# French NIR Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestValidateDutchBSN:
+    """Tests for validate_dutch_bsn()."""
+
+    def test_valid_bsn(self):
+        assert validate_dutch_bsn("123456782") is True
+
+    def test_valid_bsn_with_spaces(self):
+        assert validate_dutch_bsn("123 456 782") is True
+
+    def test_invalid_bsn_wrong_checksum(self):
+        assert validate_dutch_bsn("123456789") is False
+
+    def test_invalid_bsn_wrong_length(self):
+        assert validate_dutch_bsn("1234567") is False
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +262,18 @@ class TestLanguagePIIPatterns:
         assert "es" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["es"]) > 0
 
+    def test_dutch_patterns_exist(self):
+        assert "nl" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["nl"]) > 0
+
+    def test_hindi_patterns_exist(self):
+        assert "hi" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["hi"]) > 0
+
+    def test_telugu_patterns_exist(self):
+        assert "te" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["te"]) > 0
+
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
             for p in patterns:
@@ -359,6 +399,63 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Spanish NIE pattern should match"
 
+    def test_dutch_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["nl"] if p.entity_type == "date"]
+        text = "15 januari 2020"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Dutch date pattern should match '{text}'"
+
+    def test_hindi_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["hi"] if p.entity_type == "date"]
+        text = "15 जनवरी 2020"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Hindi date pattern should match '{text}'"
+
+    def test_telugu_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["te"] if p.entity_type == "date"]
+        text = "15 జనవరి 2020"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Telugu date pattern should match '{text}'"
+
+    def test_dutch_phone(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["nl"] if p.entity_type == "phone_number"]
+        texts = ["+31 6 12345678", "06 12345678"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Dutch phone pattern should match '{text}'"
+
+    def test_hindi_phone(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["hi"] if p.entity_type == "phone_number"]
+        texts = ["+91 9876543210", "9876543210"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Hindi phone pattern should match '{text}'"
+
+    def test_telugu_phone(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["te"] if p.entity_type == "phone_number"]
+        texts = ["+91 9876543210", "9988776655"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Telugu phone pattern should match '{text}'"
+
+    def test_dutch_bsn_pattern(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["nl"] if p.entity_type == "national_id"]
+        text = "123456782"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Dutch BSN pattern should match"
+
+    def test_hindi_pin_code_pattern(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["hi"] if p.entity_type == "postcode"]
+        text = "110001"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Hindi PIN code pattern should match"
+
+    def test_telugu_pin_code_pattern(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["te"] if p.entity_type == "postcode"]
+        text = "500001"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Telugu PIN code pattern should match"
+
 
 # ---------------------------------------------------------------------------
 # get_patterns_for_language Tests
@@ -395,6 +492,24 @@ class TestGetPatternsForLanguage:
         base_count = len(PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["es"])
         assert len(es_patterns) == base_count + lang_count
+
+    def test_dutch_includes_base_and_language(self):
+        nl_patterns = get_patterns_for_language("nl")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["nl"])
+        assert len(nl_patterns) == base_count + lang_count
+
+    def test_hindi_includes_base_and_language(self):
+        hi_patterns = get_patterns_for_language("hi")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["hi"])
+        assert len(hi_patterns) == base_count + lang_count
+
+    def test_telugu_includes_base_and_language(self):
+        te_patterns = get_patterns_for_language("te")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["te"])
+        assert len(te_patterns) == base_count + lang_count
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
@@ -442,6 +557,18 @@ class TestLanguageFakeData:
         names = LANGUAGE_FAKE_DATA["es"]["NAME"]
         assert any("L\u00f3pez" in n or "Garc\u00eda" in n for n in names)
 
+    def test_dutch_names_are_dutch(self):
+        names = LANGUAGE_FAKE_DATA["nl"]["NAME"]
+        assert any("de Vries" in n or "Jansen" in n for n in names)
+
+    def test_hindi_names_are_hindi(self):
+        names = LANGUAGE_FAKE_DATA["hi"]["NAME"]
+        assert any("\u0936\u0930\u094d\u092e\u093e" in n or "\u0915\u0941\u092e\u093e\u0930" in n for n in names)
+
+    def test_telugu_names_are_telugu(self):
+        names = LANGUAGE_FAKE_DATA["te"]["NAME"]
+        assert any("\u0c30\u0c46\u0c21\u0c4d\u0c21\u0c3f" in n or "\u0c15\u0c41\u0c2e\u0c3e\u0c30\u0c4d" in n for n in names)
+
     def test_french_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["fr"]["PHONE"]
         assert any("+33" in p or p.startswith("0") for p in phones)
@@ -457,6 +584,18 @@ class TestLanguageFakeData:
     def test_spanish_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["es"]["PHONE"]
         assert any("+34" in p for p in phones)
+
+    def test_dutch_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["nl"]["PHONE"]
+        assert any("+31" in p or p.startswith("06") for p in phones)
+
+    def test_hindi_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["hi"]["PHONE"]
+        assert any("+91" in p or len(p) == 10 for p in phones)
+
+    def test_telugu_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["te"]["PHONE"]
+        assert any("+91" in p or len(p) == 10 for p in phones)
 
 
 if __name__ == "__main__":
