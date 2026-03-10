@@ -53,7 +53,7 @@
     "operatingSystem": "Cloud, On-Premises",
     "applicationCategory": "AIApplication",
     "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, and deployment toolkits for compliant medical workflows.",
-    "softwareVersion": "0.6.1",
+    "softwareVersion": "0.6.2",
     "url": "https://openmed.life/",
     "provider": {
       "@type": "Organization",
@@ -155,7 +155,7 @@
                             <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-primary btn-lg"
                                 target="_blank" rel="noopener">Get started</a>
                             <button class="btn btn-outline" onclick="copyInstall(this)"
-                                style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install openmed</button>
+                                style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install "openmed[hf]"</button>
 
                         </div>
                         <div class="stats">
@@ -304,7 +304,7 @@
                         </div>
                         <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">PII APIs</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            `extract_pii` and `deidentify` support English plus Spanish, French, German, and Italian PHI workflows.
+                            `extract_pii` and `deidentify` support English plus Spanish, French, German, Italian, Dutch, Hindi, and Telugu PHI workflows.
                         </p>
                         <code
                             style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">extract_pii(..., lang="es")</code>
@@ -388,7 +388,7 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         <span style="color: hsl(var(--primary));">Built for HIPAA & GDPR Compliance</span>
                     </h2>
                     <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 52rem; margin: 0 auto; line-height: 1.7;">
-                        De-identify clinical notes and medical records with language-aware PII models across English, Spanish, French, German, and Italian.
+                        De-identify clinical notes and medical records with language-aware PII models across English, Spanish, French, German, Italian, Dutch, Hindi, and Telugu.
                         Process data locally—your PHI never leaves your environment. Open-source, auditable, and production-ready.
                     </p>
                 </div>
@@ -404,8 +404,8 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">Local Processing</div>
                     </div>
                     <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
-                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">176+</div>
-                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">PII Models Across 5 Languages</div>
+                        <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">179</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">PII Models Across 8 Languages</div>
                     </div>
                     <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
                         <div style="font-size: 2.5rem; font-weight: 700; color: hsl(142 76% 36%); margin-bottom: 0.5rem;">Apache-2.0</div>
@@ -442,7 +442,7 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         </div>
                         <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Checksum & Format Validation</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
-                            Built-in validators reduce false positives across locales: French NIR/INSEE, German Steuer-ID, Italian Codice Fiscale, Spanish DNI/NIE, plus Luhn checks for cards and NPIs.
+                            Built-in validators reduce false positives across locales: French NIR/INSEE, German Steuer-ID, Italian Codice Fiscale, Spanish DNI/NIE, Dutch BSN, plus Luhn checks for cards and NPIs.
                         </p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NIR / Steuer-ID</span>
@@ -512,11 +512,11 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         </div>
                         <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">HIPAA Safe Harbor Ready</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
-                            Detects all 18 HIPAA Safe Harbor identifiers with multilingual date, phone, address, and national-ID patterns for English, Spanish, French, German, and Italian clinical text.
+                            Detects all 18 HIPAA Safe Harbor identifiers with multilingual date, phone, address, postcode, PIN-code, and national-ID patterns for English, Spanish, French, German, Italian, Dutch, Hindi, and Telugu clinical text.
                         </p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">18+ Entity Types</span>
-                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">5 Languages</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">8 Languages</span>
                         </div>
                     </div>
                 </div>
