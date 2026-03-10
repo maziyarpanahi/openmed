@@ -18,13 +18,13 @@ from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
 
 
 class TestRegistryCompleteness:
-    """Verify all 176+ PII models are registered."""
+    """Verify all multilingual PII models are registered."""
 
     def test_total_pii_model_count(self):
-        """All PII models including legacy alias should be >= 176."""
+        """All PII models including sparse locales should total 179."""
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
-        # 36 English (35 + pii_detection alias) + 35x4 langs = 176
-        assert len(pii_keys) >= 176
+        # 36 English + 35x4 dense languages + 3 sparse languages = 179
+        assert len(pii_keys) == 179
 
     def test_english_pii_model_count(self):
         """English has 35 PII models + 1 legacy alias = 36."""
@@ -50,6 +50,21 @@ class TestRegistryCompleteness:
         """Spanish has 35 PII models."""
         es_models = get_pii_models_by_language("es")
         assert len(es_models) == 35
+
+    def test_dutch_pii_model_count(self):
+        """Dutch currently has one public flagship model."""
+        nl_models = get_pii_models_by_language("nl")
+        assert len(nl_models) == 1
+
+    def test_hindi_pii_model_count(self):
+        """Hindi currently has one public flagship model."""
+        hi_models = get_pii_models_by_language("hi")
+        assert len(hi_models) == 1
+
+    def test_telugu_pii_model_count(self):
+        """Telugu currently has one public flagship model."""
+        te_models = get_pii_models_by_language("te")
+        assert len(te_models) == 1
 
     def test_privacy_category_includes_all(self):
         """Privacy category should list all PII model keys."""
@@ -94,10 +109,19 @@ class TestModelNaming:
                 f"Spanish model {key} missing 'Spanish-' in model_id: {info.model_id}"
             )
 
+    def test_sparse_locale_model_ids_contain_language_prefix(self):
+        for lang, token in (("nl", "Dutch-"), ("hi", "Hindi-"), ("te", "Telugu-")):
+            models = get_pii_models_by_language(lang)
+            assert len(models) == 1
+            for key, info in models.items():
+                assert token in info.model_id, (
+                    f"{lang} model {key} missing '{token}' in model_id: {info.model_id}"
+                )
+
     def test_english_model_ids_no_language_prefix(self):
         en_models = get_pii_models_by_language("en")
         for key, info in en_models.items():
-            for prefix in ("French-", "German-", "Italian-", "Spanish-"):
+            for prefix in ("French-", "German-", "Italian-", "Spanish-", "Dutch-", "Hindi-", "Telugu-"):
                 assert prefix not in info.model_id, (
                     f"English model {key} has unexpected prefix in: {info.model_id}"
                 )
@@ -118,7 +142,7 @@ class TestModelNaming:
 
     def test_generated_keys_follow_pattern(self):
         """Generated keys should be pii_{lang}_{architecture}."""
-        for lang in ("fr", "de", "it", "es"):
+        for lang in ("fr", "de", "it", "es", "nl", "hi", "te"):
             lang_models = get_pii_models_by_language(lang)
             for key in lang_models:
                 assert key.startswith(f"pii_{lang}_"), (
@@ -194,6 +218,21 @@ class TestHelperFunctions:
         model_id = get_default_pii_model("es")
         assert model_id == DEFAULT_PII_MODELS["es"]
         assert "Spanish-" in model_id
+
+    def test_get_default_pii_model_nl(self):
+        model_id = get_default_pii_model("nl")
+        assert model_id == DEFAULT_PII_MODELS["nl"]
+        assert "Dutch-" in model_id
+
+    def test_get_default_pii_model_hi(self):
+        model_id = get_default_pii_model("hi")
+        assert model_id == DEFAULT_PII_MODELS["hi"]
+        assert "Hindi-" in model_id
+
+    def test_get_default_pii_model_te(self):
+        model_id = get_default_pii_model("te")
+        assert model_id == DEFAULT_PII_MODELS["te"]
+        assert "Telugu-" in model_id
 
     def test_get_default_pii_model_unsupported(self):
         result = get_default_pii_model("ja")
