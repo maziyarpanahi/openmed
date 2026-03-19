@@ -200,6 +200,8 @@ class OutputFormatter:
 
         if original_text:
             entities = self._fix_entity_spans(entities, original_text)
+            from openmed.core.quality_gates import validate_entity_spans
+            validate_entity_spans(entities, original_text)
 
         if self.group_entities:
             entities = self._group_adjacent_entities(entities)
