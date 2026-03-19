@@ -311,6 +311,10 @@ def extract_pii(
         result.entities = merged_entities
         result.num_entities = len(merged_entities)
 
+    # Validate spans after all merging/fixing is complete
+    from .quality_gates import validate_entity_spans
+    validate_entity_spans(result.entities, result.text)
+
     return result
 
 

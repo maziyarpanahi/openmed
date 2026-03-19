@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-03-19
+
+### Added
+
+- **Span-boundary quality gates** (`openmed.core.quality_gates`)
+  - `validate_entity_spans()` checks start < end, in-bounds, text-match, and zero-length invariants for every entity after tokenizer repair and smart merging
+  - `detect_overlapping_entities()` returns pairs of overlapping character spans for informational use
+  - `SpanValidationWarning` emitted on violations — warn-only, never silently drops entities
+  - Integrated into `OutputFormatter.format_predictions()` (after `_fix_entity_spans`) and `extract_pii()` (after smart merging)
+- **Multilingual PII regression test suite** (`tests/unit/test_pii_multilingual_regression.py`)
+  - Golden-input regression tests for all 8 supported languages (en, fr, de, it, es, nl, hi, te)
+  - Validates entity type detection, span text matching, confidence thresholds, and smart merging boundaries
+  - 31 deterministic test cases using mocked model output
+- **Span-boundary guard tests** (`tests/unit/test_quality_gates.py`)
+  - 19 tests covering valid entities, inverted/zero-length spans, out-of-bounds, text mismatch, overlap detection, and integration with `_fix_entity_spans`
+- **Label-map consistency tests** (`tests/unit/ner/test_label_map_consistency.py`)
+  - Validates `defaults.json` domain invariants (at least 1 label per domain, no case-insensitive duplicates, `generic` domain exists)
+  - `normalize_label()` idempotency checks across all known label variants
+  - Specificity hierarchy validation against `is_more_specific()`
+  - All PII `entity_types` in `OPENMED_MODELS` recognized and idempotent under `normalize_label()`
+  - At least one PII model per supported language in the registry
+
+### Changed
+
+- Updated website model count from 640+ to 750+
+
+### Documentation
+
+- Updated README, website copy, and CHANGELOG for the `v0.6.3` release
+
 ## [0.6.2] - 2026-03-10
 
 ### Added
