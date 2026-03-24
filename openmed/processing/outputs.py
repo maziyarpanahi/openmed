@@ -1,6 +1,7 @@
 """Output formatting utilities for OpenMed."""
 
 import json
+import unicodedata
 from typing import List, Dict, Any, Optional, Union, Tuple
 from dataclasses import dataclass, asdict
 from datetime import datetime
@@ -221,6 +222,17 @@ class OutputFormatter:
         return result
 
     @staticmethod
+    def _is_word_char(ch: str) -> bool:
+        """Return True if *ch* is a word-like character (letter, mark, or number).
+
+        Unlike ``str.isalnum()``, this also matches Unicode combining marks
+        and modifier letters — important for accented characters and
+        non-Latin scripts (Hindi, Telugu, etc.).
+        """
+        cat = unicodedata.category(ch)
+        return cat[0] in ('L', 'M', 'N')
+
+    @staticmethod
     def _fix_entity_spans(
         entities: List["EntityPrediction"],
         text: str,
@@ -230,11 +242,14 @@ class OutputFormatter:
         Some tokenizers return ``end`` offsets that are one character short,
         causing ``text[start:end]`` to miss the final character of a word.
         This method detects the mismatch and extends ``end`` forward while
-        the next character is still part of the same word (alphanumeric or
-        combining mark).
+        the next character is still part of the same word (letter, combining
+        mark, or digit).  Extension is capped at 10 characters to prevent
+        runaway spans.
         """
+        _MAX_EXTEND = 10
         text_len = len(text)
         fixed: List["EntityPrediction"] = []
+        is_word = OutputFormatter._is_word_char
         for e in entities:
             start = e.start
             end = e.end
@@ -243,8 +258,10 @@ class OutputFormatter:
                 continue
 
             # Extend end forward if the next character is still word-like
-            while end < text_len and text[end].isalnum():
+            extended = 0
+            while end < text_len and extended < _MAX_EXTEND and is_word(text[end]):
                 end += 1
+                extended += 1
 
             # Trim leading/trailing whitespace
             while start < end and text[start].isspace():
@@ -252,8 +269,8 @@ class OutputFormatter:
             while end > start and text[end - 1].isspace():
                 end -= 1
 
-            span_text = text[start:end].strip()
-            if span_text:
+            span_text = text[start:end]
+            if span_text and not span_text.isspace():
                 fixed.append(EntityPrediction(
                     text=span_text,
                     label=e.label,

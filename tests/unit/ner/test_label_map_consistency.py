@@ -81,6 +81,10 @@ class TestNormalizeLabelIdempotency:
         "steuer_id",
         "steuernummer",
         "codice_fiscale",
+        "bsn",
+        "dni",
+        "nie",
+        "aadhaar",
         "postcode",
         "zipcode",
         "zip",
@@ -92,6 +96,15 @@ class TestNormalizeLabelIdempotency:
         "last_name",
         "date",
         "phone",
+        "medical_record_number",
+        "mrn",
+        "medical_record",
+        "account_number",
+        "account",
+        "credit_debit_card",
+        "credit_card",
+        "debit_card",
+        "payment_card",
     ])
     def test_normalize_is_idempotent(self, label):
         once = normalize_label(label)
