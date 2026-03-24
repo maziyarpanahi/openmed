@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-03-24
+
+### Added
+
+- **Aadhaar national ID support** for Hindi and Telugu PII detection
+  - Added Verhoeff checksum validator (`validate_aadhaar`) for 12-digit Aadhaar numbers
+  - Added Aadhaar patterns with context-aware scoring to Hindi and Telugu pattern libraries
+- **PII accuracy test suite** (`tests/unit/test_pii_accuracy.py`)
+  - Validation-failure confidence penalty tests
+  - Pattern tightening regression tests (postal codes, phone numbers, Steuer-ID)
+  - Confidence calibration verification
+  - New normalize_label coverage tests
+
+### Changed
+
+- **`_fix_entity_spans` now Unicode-aware** — replaced `.isalnum()` with `unicodedata.category` check covering letters, combining marks, and numbers; capped forward extension at 10 characters; removed redundant `.strip()` that caused text-mismatch false positives
+- **Quality gate text-mismatch relaxed** — whitespace-only differences (common after span normalization) are now downgraded to INFO level instead of WARNING
+- **Failed pattern validation now penalized in merged confidence** — unvalidated patterns contribute only 10% weight (down from 40%) in the model/pattern confidence blend
+- **`normalize_label` expanded** with `bsn`, `dni`, `nie`, `aadhaar` → `national_id`; `mrn` → `medical_record`; `account_number` → `account`; `credit_debit_card` → `payment_card`
+
+### Fixed
+
+- **French postal code pattern** tightened from bare `\d{5}` to range-constrained `01-95 + DOM-TOM 971-976` prefixes — reduces false positives from medical codes
+- **German Steuer-ID pattern** tightened to reject leading-zero numbers (`[1-9]\d{10}`); base_score raised to 0.35
+- **German postal code pattern** tightened to exclude `00xxx` range
+- **German phone pattern** now requires at least 4 digits after area code, reducing short-number false positives
+- **French NIR base_score** raised from 0.4 to 0.55 to reflect high structural specificity with validator
+
+### Documentation
+
+- Updated README, CHANGELOG, and website for the `v0.6.4` release
+
 ## [0.6.3] - 2026-03-19
 
 ### Added

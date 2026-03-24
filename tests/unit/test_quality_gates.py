@@ -226,3 +226,33 @@ class TestIntegrationWithFixEntitySpans:
             span_warns = [x for x in w if issubclass(x.category, SpanValidationWarning)]
             assert len(span_warns) == 0
         assert all(e.metadata.get("span_valid") for e in fixed)
+
+    def test_combining_mark_span_extension(self):
+        """Spans should extend through accented/combining-mark characters."""
+        from openmed.processing.outputs import OutputFormatter
+        text = "Patient José visited"
+        # Tokenizer returns truncated span "Jos"
+        entities = [
+            EntityPrediction(
+                text="Jos", label="NAME", start=8, end=11, confidence=0.9,
+            ),
+        ]
+        fixed = OutputFormatter._fix_entity_spans(entities, text)
+        assert fixed[0].text == "José"
+        assert fixed[0].end == 12
+
+    def test_whitespace_normalized_mismatch_no_warning(self):
+        """Entities where only whitespace differs should not trigger WARNING."""
+        text = "Hello  World"
+        # Entity text has single space but span covers double space
+        entities = [EntityPrediction(
+            text="Hello World", label="GREETING", start=0, end=12, confidence=0.9,
+        )]
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            validate_entity_spans(entities, text)
+            span_warns = [x for x in w if issubclass(x.category, SpanValidationWarning)]
+            # Should NOT produce a SpanValidationWarning (downgraded to INFO)
+            assert len(span_warns) == 0
+        # Still marked valid since it's only a whitespace difference
+        assert entities[0].metadata["span_valid"] is True
