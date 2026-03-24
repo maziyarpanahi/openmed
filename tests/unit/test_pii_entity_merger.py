@@ -117,7 +117,7 @@ class TestSemanticUnitsWithScoring:
 
         units = find_semantic_units(text, patterns)
         assert len(units) == 1
-        start, end, entity_type, score, pattern = units[0]
+        start, end, entity_type, score, pattern = units[0][:5]
 
         assert entity_type == 'ssn'
         assert text[start:end] == '123-45-6789'
@@ -142,7 +142,7 @@ class TestSemanticUnitsWithScoring:
 
         units = find_semantic_units(text, patterns)
         assert len(units) == 1
-        start, end, entity_type, score, pattern = units[0]
+        start, end, entity_type, score, pattern = units[0][:5]
 
         assert entity_type == 'ssn'
         # Should have only base score: 0.3
@@ -166,7 +166,7 @@ class TestSemanticUnitsWithScoring:
 
         units = find_semantic_units(text, patterns)
         assert len(units) == 1
-        start, end, entity_type, score, pattern = units[0]
+        start, end, entity_type, score, pattern = units[0][:5]
 
         # Failed validation, so score reduced to 30% of (base + context)
         # (0.3 + 0.55) * 0.3 = 0.255

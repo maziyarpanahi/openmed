@@ -234,6 +234,59 @@ def validate_dutch_bsn(text: str) -> bool:
     return checksum % 11 == 0
 
 
+# Verhoeff tables for Aadhaar checksum validation
+_VERHOEFF_D = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+    [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+    [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+    [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+    [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+    [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+    [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+    [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+    [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+]
+_VERHOEFF_P = [
+    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+    [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+    [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+    [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+    [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+    [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+    [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+]
+
+
+def validate_aadhaar(text: str) -> bool:
+    """Validate Indian Aadhaar number using the Verhoeff checksum.
+
+    Aadhaar is a 12-digit unique identity number. The last digit is a
+    Verhoeff check digit.
+
+    Args:
+        text: Aadhaar string (may contain spaces or separators)
+
+    Returns:
+        True if the Aadhaar passes the Verhoeff checksum
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 12:
+        return False
+
+    # First digit cannot be 0 or 1
+    if digits[0] in ("0", "1"):
+        return False
+
+    # Verhoeff checksum
+    c = 0
+    for i, digit in enumerate(reversed(digits)):
+        c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
+    return c == 0
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -343,7 +396,7 @@ _FRENCH_PII_PATTERNS: List[PIIPattern] = [
         r"\b[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2}\b",
         "national_id",
         priority=10,
-        base_score=0.4,
+        base_score=0.55,
         context_words=[
             "nir", "insee", "s\u00e9curit\u00e9 sociale",
             "num\u00e9ro de s\u00e9curit\u00e9",
@@ -363,12 +416,12 @@ _FRENCH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.2,
         flags=re.IGNORECASE,
     ),
-    # French postal code (5 digits)
+    # French postal code (valid department prefixes 01-95 + DOM-TOM 971-976)
     PIIPattern(
-        r"\b\d{5}\b",
+        r"\b(?:(?:0[1-9]|[1-8]\d|9[0-5])\d{3}|97[1-6]\d{2})\b",
         "postcode",
         priority=6,
-        base_score=0.3,
+        base_score=0.25,
         context_words=[
             "code postal", "cp", "cedex",
         ],
@@ -402,9 +455,9 @@ _GERMAN_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.25,
         flags=re.IGNORECASE,
     ),
-    # German phone numbers: +49, 0xxx
+    # German phone numbers: +49, 0xxx (require at least 7 digits after prefix)
     PIIPattern(
-        r"(?<!\w)(?:\+49\s?|0)\d{2,4}[\s/-]?\d{3,8}\b",
+        r"(?<!\w)(?:\+49\s?|0)\d{2,4}[\s/-]?\d{4,8}\b",
         "phone_number",
         priority=8,
         base_score=0.5,
@@ -414,12 +467,12 @@ _GERMAN_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.35,
     ),
-    # German Steuer-ID (11 digits)
+    # German Steuer-ID (11 digits, first digit non-zero)
     PIIPattern(
-        r"\b\d{11}\b",
+        r"\b[1-9]\d{10}\b",
         "national_id",
         priority=9,
-        base_score=0.2,
+        base_score=0.35,
         context_words=[
             "Steuer-ID", "Steueridentifikationsnummer", "Steuernummer",
             "IdNr", "Identifikationsnummer",
@@ -439,12 +492,12 @@ _GERMAN_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.2,
         flags=re.IGNORECASE,
     ),
-    # German PLZ (5 digits)
+    # German PLZ (valid range 01000-99999, excluding 00xxx)
     PIIPattern(
-        r"\b\d{5}\b",
+        r"\b(?:0[1-9]|[1-9]\d)\d{3}\b",
         "postcode",
         priority=6,
-        base_score=0.3,
+        base_score=0.25,
         context_words=[
             "PLZ", "Postleitzahl",
         ],
@@ -739,6 +792,19 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.5,
     ),
+    # Aadhaar (12 digits, possibly spaced as 4-4-4)
+    PIIPattern(
+        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
+        "national_id",
+        priority=9,
+        base_score=0.4,
+        context_words=[
+            "\u0906\u0927\u093e\u0930", "aadhaar", "\u092f\u0942\u0906\u0908\u0921\u0940\u090f\u0906\u0908",
+            "uid", "\u092a\u0939\u091a\u093e\u0928",
+        ],
+        context_boost=0.45,
+        validator=validate_aadhaar,
+    ),
 ]
 
 _TELUGU_PII_PATTERNS: List[PIIPattern] = [
@@ -796,6 +862,19 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
             "\u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e",
         ],
         context_boost=0.5,
+    ),
+    # Aadhaar (12 digits, possibly spaced as 4-4-4)
+    PIIPattern(
+        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
+        "national_id",
+        priority=9,
+        base_score=0.4,
+        context_words=[
+            "\u0c06\u0c27\u0c3e\u0c30\u0c4d", "aadhaar", "uid",
+            "\u0c17\u0c41\u0c30\u0c4d\u0c24\u0c3f\u0c02\u0c2a\u0c41",
+        ],
+        context_boost=0.45,
+        validator=validate_aadhaar,
     ),
 ]
 

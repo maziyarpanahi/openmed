@@ -502,7 +502,8 @@ def find_semantic_units(
         for match in re.finditer(pii_pattern.pattern, text, pii_pattern.flags):
             # Check for overlap with higher-priority existing units
             overlaps = False
-            for existing_start, existing_end, _, _, _ in units:
+            for existing in units:
+                existing_start, existing_end = existing[0], existing[1]
                 if match.start() < existing_end and match.end() > existing_start:
                     overlaps = True
                     break
@@ -527,19 +528,21 @@ def find_semantic_units(
                     score = min(1.0, score + pii_pattern.context_boost)
 
             # Validate if validator exists
+            validated = True
             if pii_pattern.validator:
                 is_valid = pii_pattern.validator(matched_text)
                 if not is_valid:
-                    # Failed validation - significantly reduce score or skip
+                    # Failed validation - significantly reduce score
                     score = score * 0.3  # Reduce to 30% confidence
-                    # Optionally could skip entirely: continue
+                    validated = False
 
             units.append((
                 match.start(),
                 match.end(),
                 pii_pattern.entity_type,
                 score,
-                pii_pattern
+                pii_pattern,
+                validated,
             ))
 
     # Sort by start position
@@ -656,8 +659,14 @@ def merge_entities_with_semantic_units(
     merged = []
     used_entities = set()
 
-    # Process each semantic unit (now includes score and pattern)
-    for unit_start, unit_end, unit_type, unit_score, unit_pattern in semantic_units:
+    # Process each semantic unit (includes score, pattern, and validation flag)
+    for unit_tuple in semantic_units:
+        # Unpack with backwards-compat for 5-element tuples (pre-v0.6.4)
+        if len(unit_tuple) >= 6:
+            unit_start, unit_end, unit_type, unit_score, unit_pattern, unit_validated = unit_tuple[:6]
+        else:
+            unit_start, unit_end, unit_type, unit_score, unit_pattern = unit_tuple[:5]
+            unit_validated = True
         # Find all entities that overlap with this semantic unit
         overlapping = []
         for i, entity in enumerate(entities):
@@ -689,9 +698,15 @@ def merge_entities_with_semantic_units(
                     # e.g., 'date_of_birth' is more specific than 'date'
                     final_label = dominant_label if is_more_specific(dominant_label, unit_type) else unit_type
 
-            # Combine model confidence with pattern confidence
-            # Weight: 60% model, 40% pattern (model has more context)
-            final_confidence = (0.6 * model_avg_confidence) + (0.4 * unit_score)
+            # Combine model confidence with pattern confidence.
+            # When pattern validation failed, heavily discount the pattern
+            # contribution to avoid high-confidence invalid entities.
+            if unit_validated:
+                # Normal blend: 60% model, 40% pattern
+                final_confidence = (0.6 * model_avg_confidence) + (0.4 * unit_score)
+            else:
+                # Unvalidated: 90% model, 10% pattern
+                final_confidence = (0.9 * model_avg_confidence) + (0.1 * unit_score)
 
             # Create merged entity
             merged.append({
@@ -748,12 +763,25 @@ def normalize_label(label: str) -> str:
 
     # Normalize national ID variants
     if label_lower in ('national_id', 'nir', 'insee', 'steuer_id',
-                        'steuernummer', 'codice_fiscale'):
+                        'steuernummer', 'codice_fiscale',
+                        'bsn', 'dni', 'nie', 'aadhaar'):
         return 'national_id'
 
     # Normalize postal code variants
     if label_lower in ('postcode', 'zipcode', 'zip', 'postal_code'):
         return 'postcode'
+
+    # Normalize medical record variants
+    if label_lower in ('medical_record_number', 'mrn', 'medical_record'):
+        return 'medical_record'
+
+    # Normalize account variants
+    if label_lower in ('account_number', 'account'):
+        return 'account'
+
+    # Normalize payment card variants
+    if label_lower in ('credit_debit_card', 'credit_card', 'debit_card', 'payment_card'):
+        return 'payment_card'
 
     return label_lower
 
