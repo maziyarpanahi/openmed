@@ -371,6 +371,16 @@ class TestHindiRegression:
                 assert e.start < e.end
                 assert e.end <= len(text)
 
+    @patch("openmed.analyze_text")
+    def test_hi_aadhaar_detection(self, mock_analyze):
+        text = "रोगी का आधार 2345 6789 0123 है"
+        mock_analyze.return_value = _make_result(text, [
+            _ent("2345 6789 0123", "national_id", 14, 28, 0.85),
+        ])
+        result = extract_pii(text, use_smart_merging=False, lang="hi")
+        ids = [e for e in result.entities if "national_id" in e.label.lower()]
+        assert len(ids) >= 1
+
 
 # ---------------------------------------------------------------------------
 # Telugu (te)
@@ -417,3 +427,13 @@ class TestTeluguRegression:
         result = extract_pii(text, use_smart_merging=False, lang="te", confidence_threshold=0.5)
         assert len(result.entities) >= 1
         assert all(e.confidence >= 0.5 for e in result.entities)
+
+    @patch("openmed.analyze_text")
+    def test_te_aadhaar_detection(self, mock_analyze):
+        text = "రోగి ఆధార్ 2345 6789 0123"
+        mock_analyze.return_value = _make_result(text, [
+            _ent("2345 6789 0123", "national_id", 12, 26, 0.83),
+        ])
+        result = extract_pii(text, use_smart_merging=False, lang="te")
+        ids = [e for e in result.entities if "national_id" in e.label.lower()]
+        assert len(ids) >= 1

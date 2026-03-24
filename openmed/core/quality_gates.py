@@ -69,10 +69,19 @@ def validate_entity_spans(
         if not problems and start >= 0 and end <= text_len:
             actual = text[start:end]
             if actual != entity.text:
-                problems.append(
-                    f"text mismatch: span gives {actual!r}, "
-                    f"entity stores {entity.text!r}"
-                )
+                # Allow whitespace-only differences (common after span
+                # trimming) — downgrade to INFO instead of a full warning.
+                if " ".join(actual.split()) == " ".join(entity.text.split()):
+                    logger.info(
+                        "SpanValidation: Entity %r @ [%d:%d]: "
+                        "whitespace-only text difference (span=%r, stored=%r)",
+                        entity.label, start, end, actual, entity.text,
+                    )
+                else:
+                    problems.append(
+                        f"text mismatch: span gives {actual!r}, "
+                        f"entity stores {entity.text!r}"
+                    )
 
         # --- report ---
         if problems:
