@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-03
+
+### Added
+
+- **Apple MLX inference backend** for hardware-accelerated NER on Apple Silicon
+  - `openmed.mlx.models.bert_tc`: Pure MLX BERT implementation with token-classification head
+  - `openmed.mlx.inference`: MLX NER pipeline producing HuggingFace-compatible output format
+  - `openmed.mlx.convert`: CLI tool to convert HuggingFace token-classification models to MLX format with optional 4/8-bit quantization
+  - Supports BIO tag decoding with `simple`, `first`, `average`, and `max` aggregation strategies
+  - Auto-detection: prefers MLX on Apple Silicon when available, falls back to HuggingFace/PyTorch
+- **CoreML export** for iOS and macOS deployment
+  - `openmed.coreml.convert`: CLI tool to convert HuggingFace models to CoreML `.mlpackage` format
+  - Supports flexible sequence lengths via `ct.RangeDim`, float16/float32 precision
+  - Embeds `id2label` mapping in model metadata for self-contained deployment
+- **Swift package: OpenMedKit** (`swift/OpenMedKit/`)
+  - SPM package for iOS 16+ / macOS 13+ with CoreML-based NER inference
+  - `NERPipeline`: CoreML inference with softmax → BIO decoding → entity extraction
+  - `PostProcessing`: BIO tag grouping with first/average/max aggregation strategies
+  - `EntityPrediction`: Swift equivalent of Python's EntityPrediction dataclass
+  - Uses `swift-transformers` for HuggingFace-compatible tokenization
+  - Includes unit tests for BIO decoding and aggregation strategies
+- **Backend abstraction layer** (`openmed.core.backends`)
+  - `InferenceBackend` protocol with `is_available()` and `create_pipeline()` interface
+  - `HuggingFaceBackend` and `MLXBackend` implementations
+  - `get_backend()` auto-detection with explicit override via `config.backend`
+- **New optional dependency groups**: `pip install openmed[mlx]` and `pip install openmed[coreml]`
+- **Pilot model**: `OpenMed-PII-SuperClinical-Small-44M-v1` as conversion and testing target
+- **37 new tests** for backends, MLX conversion key remapping, MLX pipeline output format, CoreML module structure
+
+### Changed
+
+- Added `backend` field to `OpenMedConfig` (None/auto, "hf", "mlx")
+
+### Documentation
+
+- Updated README, CHANGELOG, and website for the `v0.7.0` release
+
 ## [0.6.4] - 2026-03-24
 
 ### Added
