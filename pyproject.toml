@@ -70,6 +70,8 @@ coreml = [
   "coremltools>=8.0",
   "torch>=2.0",
   "transformers>=4.50",
+  "onnx>=1.16",
+  "onnxscript>=0.1",
 ]
 
 docs = [

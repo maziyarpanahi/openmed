@@ -1,10 +1,12 @@
 """Convert HuggingFace token-classification models to CoreML format.
 
 Produces a ``.mlpackage`` suitable for iOS 16+ and macOS 13+ deployment.
+Uses ONNX as an intermediate format to avoid ``torch.jit.trace`` issues
+with DeBERTa's int-typed sqrt operations.
 
 Usage::
 
-    python -m openmed.coreml.convert \\
+    python3 -m openmed.coreml.convert \\
         --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \\
         --output ./OpenMedPIISmall.mlpackage
 """
@@ -14,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -24,10 +27,18 @@ def convert(
     model_id: str,
     output_path: str | Path,
     max_seq_length: int = 512,
-    compute_precision: str = "float16",
+    compute_precision: str = "float32",
     cache_dir: Optional[str] = None,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
+
+    The conversion pipeline is::
+
+        HuggingFace model → ONNX → CoreML (.mlpackage)
+
+    Using ONNX as an intermediate step avoids ``torch.jit.trace``
+    limitations with DeBERTa's disentangled attention (which does
+    ``sqrt(int)`` that CoreML's MIL frontend cannot handle).
 
     Args:
         model_id: HuggingFace model identifier.
@@ -61,6 +72,8 @@ def convert(
 
     num_labels = model.config.num_labels
     id2label = model.config.id2label
+    arch = model.config.model_type
+    logger.info("Model architecture: %s (%d labels)", arch, num_labels)
 
     # 2. Create wrapper that returns only logits (not ModelOutput)
     class TokenClassificationWrapper(torch.nn.Module):
@@ -78,70 +91,94 @@ def convert(
     wrapper = TokenClassificationWrapper(model)
     wrapper.eval()
 
-    # 3. Trace with sample inputs
-    logger.info("Tracing model with sequence length %d ...", max_seq_length)
-    sample_text = "Patient John Doe visited the clinic on 2024-01-15."
+    # 3. Export to ONNX (handles DeBERTa's int-sqrt correctly)
+    trace_length = min(128, max_seq_length)
+    logger.info("Exporting to ONNX (trace_length=%d) ...", trace_length)
     sample = tokenizer(
-        sample_text,
-        max_length=max_seq_length,
+        "Patient John Doe visited the clinic on 2024-01-15.",
+        max_length=trace_length,
         padding="max_length",
         truncation=True,
         return_tensors="pt",
     )
 
-    traced = torch.jit.trace(
-        wrapper,
-        (sample["input_ids"], sample["attention_mask"]),
-    )
+    with tempfile.TemporaryDirectory() as tmpdir:
+        onnx_path = str(Path(tmpdir) / "model.onnx")
 
-    # 4. Convert to CoreML
-    logger.info("Converting to CoreML (%s precision) ...", compute_precision)
+        with torch.no_grad():
+            torch.onnx.export(
+                wrapper,
+                (sample["input_ids"], sample["attention_mask"]),
+                onnx_path,
+                input_names=["input_ids", "attention_mask"],
+                output_names=["logits"],
+                dynamic_axes={
+                    "input_ids": {0: "batch", 1: "seq_length"},
+                    "attention_mask": {0: "batch", 1: "seq_length"},
+                    "logits": {0: "batch", 1: "seq_length"},
+                },
+                opset_version=17,
+            )
+        logger.info("ONNX export complete: %s", onnx_path)
 
-    ct_precision = (
-        ct.precision.FLOAT16 if compute_precision == "float16"
-        else ct.precision.FLOAT32
-    )
+        # 4. Convert ONNX to CoreML
+        logger.info("Converting ONNX to CoreML (%s precision) ...", compute_precision)
 
-    mlmodel = ct.convert(
-        traced,
-        inputs=[
-            ct.TensorType(
-                name="input_ids",
-                shape=ct.Shape(
-                    shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=128)),
+        import onnx
+        onnx_model = onnx.load(onnx_path)
+
+        # Build compute_precision arg (API varies across coremltools versions)
+        if compute_precision == "float16":
+            try:
+                ct_precision = ct.precision.FLOAT16
+            except AttributeError:
+                ct_precision = ct.ComputePrecision.FLOAT16
+        else:
+            try:
+                ct_precision = ct.precision.FLOAT32
+            except AttributeError:
+                ct_precision = ct.ComputePrecision.FLOAT32
+
+        mlmodel = ct.convert(
+            onnx_model,
+            inputs=[
+                ct.TensorType(
+                    name="input_ids",
+                    shape=ct.Shape(
+                        shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=trace_length)),
+                    ),
+                    dtype=int,
                 ),
-                dtype=int,
-            ),
-            ct.TensorType(
-                name="attention_mask",
-                shape=ct.Shape(
-                    shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=128)),
+                ct.TensorType(
+                    name="attention_mask",
+                    shape=ct.Shape(
+                        shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=trace_length)),
+                    ),
+                    dtype=int,
                 ),
-                dtype=int,
-            ),
-        ],
-        outputs=[
-            ct.TensorType(name="logits"),
-        ],
-        compute_precision=ct_precision,
-        minimum_deployment_target=ct.target.iOS16,
-    )
+            ],
+            outputs=[
+                ct.TensorType(name="logits"),
+            ],
+            compute_precision=ct_precision,
+            minimum_deployment_target=ct.target.iOS16,
+        )
 
     # 5. Add metadata
     mlmodel.short_description = (
         f"OpenMed Token Classification: {model_id} "
-        f"({num_labels} labels, max_seq={max_seq_length})"
+        f"({num_labels} labels, {arch}, max_seq={max_seq_length})"
     )
     mlmodel.author = "OpenMed"
     mlmodel.license = "Apache-2.0"
 
-    # Store id2label as user-defined metadata
     mlmodel.user_defined_metadata["id2label"] = json.dumps(
         {str(k): v for k, v in id2label.items()}
     )
     mlmodel.user_defined_metadata["num_labels"] = str(num_labels)
     mlmodel.user_defined_metadata["max_seq_length"] = str(max_seq_length)
     mlmodel.user_defined_metadata["source_model"] = model_id
+    mlmodel.user_defined_metadata["architecture"] = arch
 
     # 6. Save
     logger.info("Saving to %s ...", output_path)
@@ -152,7 +189,7 @@ def convert(
     with open(id2label_path, "w") as f:
         json.dump({str(k): v for k, v in id2label.items()}, f, indent=2)
 
-    logger.info("CoreML model saved to %s", output_path)
+    logger.info("CoreML model saved to %s (%s)", output_path, arch)
     return output_path
 
 
@@ -173,8 +210,8 @@ def main():
         help="Maximum input sequence length (default: 512)",
     )
     parser.add_argument(
-        "--precision", choices=["float16", "float32"], default="float16",
-        help="Compute precision (default: float16 for Neural Engine)",
+        "--precision", choices=["float16", "float32"], default="float32",
+        help="Compute precision (default: float32)",
     )
     parser.add_argument(
         "--cache-dir", default=None,

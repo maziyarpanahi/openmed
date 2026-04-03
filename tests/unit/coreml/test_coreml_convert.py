@@ -1,8 +1,4 @@
-"""Tests for CoreML conversion script.
-
-These tests verify the conversion logic without requiring coremltools
-or torch — only the import structure and argument handling.
-"""
+"""Tests for CoreML conversion script."""
 
 from __future__ import annotations
 
@@ -32,3 +28,11 @@ class TestCoreMLConvertModule:
     def test_main_exists(self):
         from openmed.coreml.convert import main
         assert callable(main)
+
+    def test_uses_onnx_pipeline(self):
+        """Verify the converter uses ONNX as intermediate format."""
+        import inspect
+        from openmed.coreml.convert import convert
+        source = inspect.getsource(convert)
+        assert "torch.onnx.export" in source
+        assert "onnx_path" in source
