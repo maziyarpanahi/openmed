@@ -119,7 +119,7 @@ def save_mlx_model(
     try:
         import mlx.core as mx
         import mlx.nn as nn
-        from mlx.utils import save as mlx_save
+        from mlx.utils import tree_flatten
     except ImportError:
         raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
 
@@ -135,8 +135,8 @@ def save_mlx_model(
         model = BertForTokenClassification(config)
         model.load_weights(list(mlx_weights.items()))
         nn.quantize(model, bits=quantize_bits)
-        # Re-extract weights after quantization
-        mlx_weights = dict(model.parameters())
+        # Re-extract weights after quantization (tree_flatten returns flat list)
+        mlx_weights = dict(tree_flatten(model.parameters()))
 
     # Save weights
     weights_path = output_dir / "weights.npz"
@@ -157,6 +157,38 @@ def save_mlx_model(
     return output_dir
 
 
+def save_numpy_model(
+    weights: Dict,
+    config: dict,
+    output_dir: str | Path,
+) -> Path:
+    """Save converted weights as plain NumPy ``.npz`` — no MLX required.
+
+    This fallback is useful when converting on a machine without MLX
+    (e.g., Linux CI).  The resulting files are identical in structure to
+    :func:`save_mlx_model` and can be loaded by the MLX backend.
+    """
+    import numpy as np
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    weights_path = output_dir / "weights.npz"
+    np.savez(str(weights_path), **weights)
+
+    config_path = output_dir / "config.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+    if "id2label" in config:
+        id2label_path = output_dir / "id2label.json"
+        with open(id2label_path, "w") as f:
+            json.dump(config["id2label"], f, indent=2)
+
+    logger.info("Saved NumPy model to %s (MLX-compatible)", output_dir)
+    return output_dir
+
+
 def convert(
     model_id: str,
     output_dir: str | Path,
@@ -165,17 +197,30 @@ def convert(
 ) -> Path:
     """End-to-end: download HF model → remap → save MLX format.
 
+    If MLX is installed, uses MLX for saving (and optional quantization).
+    Otherwise, falls back to plain NumPy format (no quantization).
+
     Args:
         model_id: HuggingFace model identifier.
         output_dir: Destination directory for MLX model.
-        quantize_bits: Optional quantization (4 or 8 bits).
+        quantize_bits: Optional quantization (4 or 8 bits, requires MLX).
         cache_dir: HuggingFace cache directory.
 
     Returns:
         Path to the output directory.
     """
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
-    return save_mlx_model(weights, config, output_dir, quantize_bits)
+
+    try:
+        import mlx.core  # noqa: F401
+        return save_mlx_model(weights, config, output_dir, quantize_bits)
+    except ImportError:
+        if quantize_bits is not None:
+            logger.warning(
+                "MLX not available — skipping quantization. "
+                "Install mlx for quantization support."
+            )
+        return save_numpy_model(weights, config, output_dir)
 
 
 def main():
