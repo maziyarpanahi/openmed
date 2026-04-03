@@ -97,7 +97,7 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v0.7.0)
+### Production Tools (v1.0.0)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
@@ -124,7 +124,7 @@ Quick links:
 
 ---
 
-## REST API (v0.7.0)
+## REST API (v1.0.0)
 
 OpenMed includes a Docker-friendly FastAPI service with reliability hardening:
 
@@ -150,8 +150,8 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ### Run with Docker
 
 ```bash
-docker build -t openmed:0.7.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:0.7.0
+docker build -t openmed:1.0.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.0.0
 ```
 
 ### Example request

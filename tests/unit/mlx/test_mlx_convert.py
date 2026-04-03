@@ -129,3 +129,37 @@ class TestConvertEndToEnd:
             assert not mlx_key.startswith("bert."), (
                 f"Key {key!r} was not remapped: {mlx_key!r}"
             )
+
+
+class TestSaveNumpyModel:
+    """Test the NumPy fallback save path (no MLX required)."""
+
+    def test_saves_weights_and_config(self, tmp_path):
+        import numpy as np
+        from openmed.mlx.convert import save_numpy_model
+
+        weights = {
+            "classifier.weight": np.random.randn(3, 64).astype(np.float32),
+            "classifier.bias": np.random.randn(3).astype(np.float32),
+        }
+        config = {
+            "num_labels": 3,
+            "id2label": {"0": "O", "1": "B-NAME", "2": "I-NAME"},
+        }
+
+        output = save_numpy_model(weights, config, tmp_path / "model")
+        assert (output / "weights.npz").exists()
+        assert (output / "config.json").exists()
+        assert (output / "id2label.json").exists()
+
+    def test_weights_loadable(self, tmp_path):
+        import numpy as np
+        from openmed.mlx.convert import save_numpy_model
+
+        original_w = np.random.randn(3, 64).astype(np.float32)
+        weights = {"classifier.weight": original_w}
+        config = {"num_labels": 3}
+
+        output = save_numpy_model(weights, config, tmp_path / "model")
+        loaded = np.load(str(output / "weights.npz"))
+        np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
