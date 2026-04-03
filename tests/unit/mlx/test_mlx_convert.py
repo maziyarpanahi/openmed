@@ -6,6 +6,7 @@ remapping and config extraction logic in isolation.
 
 from __future__ import annotations
 
+import json
 import pytest
 
 from openmed.mlx.convert import remap_key
@@ -78,36 +79,7 @@ class TestWeightKeyRemapping:
         result = remap_key("bert.pooler.dense.weight")
         assert result.startswith("_")  # pooler is skipped
 
-
-class TestConvertEndToEnd:
-    """High-level conversion tests (require transformers but not MLX)."""
-
-    @pytest.fixture
-    def mock_hf_model(self):
-        """A minimal mock that simulates a HF model state dict."""
-        from unittest.mock import MagicMock, patch
-        import numpy as np
-
-        mock_config = MagicMock()
-        mock_config.num_labels = 3
-        mock_config.to_dict.return_value = {
-            "num_labels": 3,
-            "hidden_size": 64,
-            "id2label": {0: "O", 1: "B-NAME", 2: "I-NAME"},
-        }
-
-        import torch
-        mock_model = MagicMock()
-        mock_model.state_dict.return_value = {
-            "bert.encoder.layer.0.attention.self.query.weight": torch.randn(64, 64),
-            "bert.encoder.layer.0.intermediate.dense.weight": torch.randn(128, 64),
-            "classifier.weight": torch.randn(3, 64),
-            "classifier.bias": torch.randn(3),
-        }
-
-        return mock_config, mock_model
-
-    def test_remap_all_hf_keys(self, mock_hf_model):
+    def test_remap_all_hf_keys(self):
         """Verify that remap_key handles all common HF BERT keys."""
         hf_keys = [
             "bert.encoder.layer.0.attention.self.query.weight",
@@ -131,16 +103,22 @@ class TestConvertEndToEnd:
             )
 
 
+# ---------------------------------------------------------------------------
+# Tests that require numpy (skip gracefully on minimal CI environments)
+# ---------------------------------------------------------------------------
+
+numpy = pytest.importorskip("numpy")
+
+
 class TestSaveNumpyModel:
-    """Test the NumPy fallback save path (no MLX required)."""
+    """Test the NumPy fallback save path."""
 
     def test_saves_weights_and_config(self, tmp_path):
-        import numpy as np
         from openmed.mlx.convert import save_numpy_model
 
         weights = {
-            "classifier.weight": np.random.randn(3, 64).astype(np.float32),
-            "classifier.bias": np.random.randn(3).astype(np.float32),
+            "classifier.weight": numpy.random.randn(3, 64).astype(numpy.float32),
+            "classifier.bias": numpy.random.randn(3).astype(numpy.float32),
         }
         config = {
             "num_labels": 3,
@@ -152,14 +130,29 @@ class TestSaveNumpyModel:
         assert (output / "config.json").exists()
         assert (output / "id2label.json").exists()
 
+        # Verify config content
+        with open(output / "config.json") as f:
+            saved_config = json.load(f)
+        assert saved_config["num_labels"] == 3
+
     def test_weights_loadable(self, tmp_path):
-        import numpy as np
         from openmed.mlx.convert import save_numpy_model
 
-        original_w = np.random.randn(3, 64).astype(np.float32)
+        original_w = numpy.random.randn(3, 64).astype(numpy.float32)
         weights = {"classifier.weight": original_w}
         config = {"num_labels": 3}
 
         output = save_numpy_model(weights, config, tmp_path / "model")
-        loaded = np.load(str(output / "weights.npz"))
-        np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
+        loaded = numpy.load(str(output / "weights.npz"))
+        numpy.testing.assert_array_almost_equal(
+            loaded["classifier.weight"], original_w,
+        )
+
+    def test_creates_parent_dirs(self, tmp_path):
+        from openmed.mlx.convert import save_numpy_model
+
+        weights = {"w": numpy.array([1.0, 2.0], dtype=numpy.float32)}
+        config = {"num_labels": 1}
+
+        output = save_numpy_model(weights, config, tmp_path / "a" / "b" / "model")
+        assert (output / "weights.npz").exists()
