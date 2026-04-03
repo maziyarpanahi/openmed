@@ -1,0 +1,91 @@
+name: Convert Models
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_id:
+        description: 'HuggingFace model ID to convert'
+        required: true
+        default: 'OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1'
+      quantize:
+        description: 'Quantization bits (4, 8, or none)'
+        required: false
+        default: 'none'
+      formats:
+        description: 'Output formats (comma-separated: mlx,coreml)'
+        required: false
+        default: 'mlx'
+
+jobs:
+  convert-mlx:
+    name: Convert to MLX
+    runs-on: macos-latest
+    if: contains(github.event.inputs.formats, 'mlx')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[mlx,hf]"
+
+    - name: Convert model to MLX
+      run: |
+        QUANTIZE_ARG=""
+        if [ "${{ github.event.inputs.quantize }}" != "none" ]; then
+          QUANTIZE_ARG="--quantize ${{ github.event.inputs.quantize }}"
+        fi
+        python -m openmed.mlx.convert \
+          --model "${{ github.event.inputs.model_id }}" \
+          --output ./mlx-output \
+          $QUANTIZE_ARG
+
+    - name: List output files
+      run: ls -la mlx-output/
+
+    - name: Upload MLX model
+      uses: actions/upload-artifact@v4
+      with:
+        name: mlx-model
+        path: mlx-output/
+
+  convert-coreml:
+    name: Convert to CoreML
+    runs-on: macos-latest
+    if: contains(github.event.inputs.formats, 'coreml')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[coreml]"
+
+    - name: Convert model to CoreML
+      run: |
+        python -m openmed.coreml.convert \
+          --model "${{ github.event.inputs.model_id }}" \
+          --output ./OpenMedModel.mlpackage
+
+    - name: List output files
+      run: ls -la ./OpenMedModel.mlpackage/
+
+    - name: Upload CoreML model
+      uses: actions/upload-artifact@v4
+      with:
+        name: coreml-model
+        path: |
+          OpenMedModel.mlpackage/
+          *_id2label.json

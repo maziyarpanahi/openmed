@@ -29,6 +29,10 @@ nav:
       - Testing & QA: testing.md
   - PII & De-identification:
       - Smart Entity Merging: pii-smart-merging.md
+  - Apple Silicon & Mobile:
+      - MLX Backend: mlx-backend.md
+      - CoreML Export: coreml-export.md
+      - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - Contributing & Releases: contributing.md
 
