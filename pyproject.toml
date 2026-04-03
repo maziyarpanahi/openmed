@@ -59,6 +59,19 @@ gliner = [
   "torch>=2.0"
 ]
 
+mlx = [
+  "mlx>=0.22",
+  "huggingface-hub>=0.30",
+  "tokenizers>=0.15",
+  "safetensors>=0.4",
+]
+
+coreml = [
+  "coremltools>=8.0",
+  "torch>=2.0",
+  "transformers>=4.50",
+]
+
 docs = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",

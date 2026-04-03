@@ -74,6 +74,9 @@ class OpenMedConfig:
     # Optional list of terms to keep intact when remapping output onto medical tokens
     medical_tokenizer_exceptions: Optional[List[str]] = None
 
+    # Inference backend: None (auto-detect), "hf" (HuggingFace/PyTorch), "mlx" (Apple MLX)
+    backend: Optional[str] = None
+
     # Active profile name (if any)
     profile: Optional[str] = None
 

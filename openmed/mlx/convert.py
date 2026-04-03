@@ -1,0 +1,208 @@
+"""Convert HuggingFace token-classification models to MLX format.
+
+Usage::
+
+    python -m openmed.mlx.convert \\
+        --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \\
+        --output ./mlx-models/pii-small \\
+        --quantize 8
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import re
+from pathlib import Path
+from typing import Dict, Tuple
+
+logger = logging.getLogger(__name__)
+
+# ---- Weight key remapping ---------------------------------------------------
+
+# Map HuggingFace BERT keys → MLX BertForTokenClassification keys.
+# Order matters: more specific rules first.
+_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
+    # Attention projections
+    (".attention.self.query.", ".attention.query_proj."),
+    (".attention.self.key.", ".attention.key_proj."),
+    (".attention.self.value.", ".attention.value_proj."),
+    (".attention.output.dense.", ".attention.out_proj."),
+    # Attention LayerNorm → ln1
+    (".attention.output.LayerNorm.", ".ln1."),
+    # Feed-forward
+    (".intermediate.dense.", ".linear1."),
+    (".output.dense.", ".linear2."),
+    # Output LayerNorm → ln2
+    (".output.LayerNorm.", ".ln2."),
+    # Encoder layers
+    ("bert.encoder.layer.", "encoder.layers."),
+    # Embeddings
+    ("bert.embeddings.word_embeddings.", "embeddings.word_embeddings."),
+    ("bert.embeddings.position_embeddings.", "embeddings.position_embeddings."),
+    ("bert.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
+    ("bert.embeddings.LayerNorm.", "embeddings.norm."),
+    # Classification head (keep as-is)
+    ("classifier.", "classifier."),
+    # Pooler (not needed for TC, but remap to avoid warnings)
+    ("bert.pooler.", "_pooler."),
+]
+
+
+def remap_key(key: str) -> str:
+    """Remap a HuggingFace state-dict key to the MLX model namespace."""
+    for hf_pattern, mlx_pattern in _KEY_REPLACEMENTS:
+        key = key.replace(hf_pattern, mlx_pattern)
+    return key
+
+
+def convert_weights(model_id: str, cache_dir: str | None = None) -> Tuple[Dict, dict]:
+    """Load HF weights and config, remap keys for MLX.
+
+    Returns:
+        ``(weights_dict, config_dict)`` where *weights_dict* maps MLX key
+        names to numpy arrays.
+    """
+    try:
+        from transformers import AutoConfig, AutoModelForTokenClassification
+    except ImportError:
+        raise ImportError(
+            "transformers is required for model conversion. "
+            "Install with: pip install transformers"
+        )
+
+    logger.info("Loading HuggingFace model %s ...", model_id)
+    config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
+    model = AutoModelForTokenClassification.from_pretrained(
+        model_id, cache_dir=cache_dir,
+    )
+
+    state_dict = model.state_dict()
+    mlx_weights = {}
+    skipped = []
+
+    for hf_key, tensor in state_dict.items():
+        mlx_key = remap_key(hf_key)
+        if mlx_key.startswith("_"):
+            skipped.append(hf_key)
+            continue
+        mlx_weights[mlx_key] = tensor.detach().cpu().numpy()
+
+    if skipped:
+        logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
+
+    config_dict = config.to_dict()
+    # Ensure num_labels is present
+    config_dict.setdefault("num_labels", config.num_labels)
+
+    return mlx_weights, config_dict
+
+
+def save_mlx_model(
+    weights: Dict,
+    config: dict,
+    output_dir: str | Path,
+    quantize_bits: int | None = None,
+) -> Path:
+    """Save converted weights and config to *output_dir*.
+
+    Args:
+        weights: Remapped weight dict (key → numpy array).
+        config: Model config dict.
+        output_dir: Destination directory.
+        quantize_bits: If set (4 or 8), quantize weights.
+
+    Returns:
+        Path to the output directory.
+    """
+    try:
+        import mlx.core as mx
+        import mlx.nn as nn
+        from mlx.utils import save as mlx_save
+    except ImportError:
+        raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
+
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Convert numpy arrays to MLX arrays
+    mlx_weights = {k: mx.array(v) for k, v in weights.items()}
+
+    if quantize_bits is not None:
+        logger.info("Quantizing to %d bits ...", quantize_bits)
+        from openmed.mlx.models.bert_tc import BertForTokenClassification
+        model = BertForTokenClassification(config)
+        model.load_weights(list(mlx_weights.items()))
+        nn.quantize(model, bits=quantize_bits)
+        # Re-extract weights after quantization
+        mlx_weights = dict(model.parameters())
+
+    # Save weights
+    weights_path = output_dir / "weights.npz"
+    mx.savez(str(weights_path), **mlx_weights)
+
+    # Save config
+    config_path = output_dir / "config.json"
+    with open(config_path, "w") as f:
+        json.dump(config, f, indent=2)
+
+    # Save id2label if present
+    if "id2label" in config:
+        id2label_path = output_dir / "id2label.json"
+        with open(id2label_path, "w") as f:
+            json.dump(config["id2label"], f, indent=2)
+
+    logger.info("Saved MLX model to %s", output_dir)
+    return output_dir
+
+
+def convert(
+    model_id: str,
+    output_dir: str | Path,
+    quantize_bits: int | None = None,
+    cache_dir: str | None = None,
+) -> Path:
+    """End-to-end: download HF model → remap → save MLX format.
+
+    Args:
+        model_id: HuggingFace model identifier.
+        output_dir: Destination directory for MLX model.
+        quantize_bits: Optional quantization (4 or 8 bits).
+        cache_dir: HuggingFace cache directory.
+
+    Returns:
+        Path to the output directory.
+    """
+    weights, config = convert_weights(model_id, cache_dir=cache_dir)
+    return save_mlx_model(weights, config, output_dir, quantize_bits)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert a HuggingFace token-classification model to MLX format",
+    )
+    parser.add_argument(
+        "--model", required=True,
+        help="HuggingFace model ID (e.g. OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1)",
+    )
+    parser.add_argument(
+        "--output", required=True,
+        help="Output directory for MLX model files",
+    )
+    parser.add_argument(
+        "--quantize", type=int, choices=[4, 8], default=None,
+        help="Quantize weights to N bits (4 or 8)",
+    )
+    parser.add_argument(
+        "--cache-dir", default=None,
+        help="HuggingFace model cache directory",
+    )
+    args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
+    convert(args.model, args.output, args.quantize, args.cache_dir)
+
+
+if __name__ == "__main__":
+    main()
