@@ -1,0 +1,95 @@
+name: MLX Tests (Apple Silicon)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'openmed/mlx/**'
+      - 'openmed/core/backends.py'
+      - 'tests/unit/mlx/**'
+      - 'tests/unit/test_backends.py'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'openmed/mlx/**'
+      - 'openmed/core/backends.py'
+      - 'tests/unit/mlx/**'
+      - 'tests/unit/test_backends.py'
+
+jobs:
+  mlx-unit-tests:
+    name: MLX unit tests (no hardware)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Run MLX unit tests (mocked, no MLX required)
+      run: |
+        pytest tests/unit/mlx/ tests/unit/test_backends.py -v
+
+  mlx-integration:
+    name: MLX integration (Apple Silicon)
+    runs-on: macos-latest
+    # Only run on Apple Silicon runners
+    if: runner.arch == 'ARM64'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,mlx,hf]"
+
+    - name: Verify MLX is available
+      run: |
+        python -c "import mlx.core as mx; print(f'MLX {mx.__version__} on {mx.default_device()}')"
+
+    - name: Run backend auto-detection test
+      run: |
+        python -c "
+        from openmed.core.backends import get_backend
+        backend = get_backend()
+        print(f'Auto-detected backend: {type(backend).__name__}')
+        assert backend.is_available()
+        "
+
+    - name: Convert pilot model to MLX
+      run: |
+        python -m openmed.mlx.convert \
+          --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
+          --output /tmp/mlx-pii-small
+
+    - name: Run MLX inference smoke test
+      run: |
+        python -c "
+        from openmed.mlx.inference import create_mlx_pipeline
+        pipeline = create_mlx_pipeline('/tmp/mlx-pii-small')
+        result = pipeline('Patient John Doe, phone 555-123-4567')
+        print(f'Entities found: {len(result)}')
+        for ent in result:
+            print(f'  {ent[\"entity_group\"]}: {ent[\"word\"]} ({ent[\"score\"]:.2f})')
+        assert len(result) > 0, 'No entities detected'
+        "
+
+    - name: Run full test suite
+      run: pytest tests/ -v
