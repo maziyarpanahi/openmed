@@ -22,7 +22,7 @@ except ImportError:
 
 
 class MLXTokenClassificationPipeline:
-    """NER inference pipeline backed by an MLX BERT-TC model.
+    """NER inference pipeline backed by an MLX token-classification model.
 
     Designed to be a drop-in replacement for HuggingFace's
     ``pipeline("token-classification", aggregation_strategy=...)``.
@@ -43,7 +43,7 @@ class MLXTokenClassificationPipeline:
         if not MLX_AVAILABLE:
             raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
 
-        from openmed.mlx.models.bert_tc import load_model
+        from openmed.mlx.models import load_model
 
         self.model_path = Path(model_path)
         self.model = load_model(self.model_path)
@@ -67,6 +67,11 @@ class MLXTokenClassificationPipeline:
                 "HuggingFace tokenizers is required for MLX inference. "
                 "Install with: pip install tokenizers transformers"
             )
+
+    @staticmethod
+    def _is_special_offset(offset: Any) -> bool:
+        """Return True for special-token/padding offsets like ``(0, 0)``."""
+        return len(offset) >= 2 and offset[0] == 0 and offset[1] == 0
 
     def __call__(
         self,
@@ -124,7 +129,7 @@ class MLXTokenClassificationPipeline:
         """Return one dict per token (no aggregation)."""
         results = []
         for i, (label_id, offset) in enumerate(zip(pred_ids, offsets)):
-            if offset == [0, 0]:
+            if self._is_special_offset(offset):
                 continue  # skip [CLS], [SEP], padding
             start, end = offset
             label = self.id2label.get(label_id, f"LABEL_{label_id}")
@@ -156,7 +161,7 @@ class MLXTokenClassificationPipeline:
         current: Optional[Dict[str, Any]] = None
 
         for i, (label_id, offset) in enumerate(zip(pred_ids, offsets)):
-            if offset == [0, 0]:
+            if self._is_special_offset(offset):
                 continue  # skip special tokens
 
             start, end = offset
@@ -216,10 +221,30 @@ class MLXTokenClassificationPipeline:
 # -- MLX model registry -------------------------------------------------------
 
 _MLX_MODEL_MAP: Dict[str, str] = {
-    # HuggingFace model ID → pre-converted MLX model path on Hub
-    # These will be populated as models are converted and uploaded.
-    # Convention: append "-mlx" to the original model ID.
+    # Public runtime defaults currently prefer local/on-the-fly conversion.
+    # Private pre-converted snapshots can be wired here later if needed.
 }
+
+
+def _download_preconverted_mlx_model(
+    repo_id: str,
+    cache_dir: Optional[str] = None,
+) -> str:
+    """Download a pre-converted MLX model snapshot from the Hugging Face Hub."""
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as e:
+        raise ImportError(
+            f"Missing dependency: {e}. "
+            "Install with: pip install openmed[mlx]"
+        ) from e
+
+    return snapshot_download(
+        repo_id=repo_id,
+        repo_type="model",
+        cache_dir=cache_dir,
+        allow_patterns=["config.json", "id2label.json", "weights.npz"],
+    )
 
 
 def _resolve_mlx_model(
@@ -241,10 +266,24 @@ def _resolve_mlx_model(
     else:
         full_model_id = model_name
 
+    cache_dir = None
+    if config is not None:
+        cache_dir = getattr(config, "cache_dir", None)
+
     # Check pre-converted registry
     if full_model_id in _MLX_MODEL_MAP:
-        mlx_path = _MLX_MODEL_MAP[full_model_id]
-        return mlx_path, full_model_id
+        repo_id = _MLX_MODEL_MAP[full_model_id]
+        try:
+            mlx_path = _download_preconverted_mlx_model(repo_id, cache_dir=cache_dir)
+            return mlx_path, full_model_id
+        except Exception as exc:
+            logger.warning(
+                "Unable to download pre-converted MLX model %s for %s; "
+                "falling back to local conversion: %s",
+                repo_id,
+                full_model_id,
+                exc,
+            )
 
     # Check local path
     local = Path(model_name)
@@ -252,10 +291,6 @@ def _resolve_mlx_model(
         return str(local), model_name
 
     # On-the-fly conversion
-    cache_dir = None
-    if config is not None:
-        cache_dir = getattr(config, "cache_dir", None)
-
     mlx_cache = Path(cache_dir or "~/.cache/openmed/mlx").expanduser()
     safe_name = full_model_id.replace("/", "_")
     output_dir = mlx_cache / safe_name

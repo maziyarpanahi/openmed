@@ -6,6 +6,7 @@ remapping and config extraction logic in isolation.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import pytest
 
@@ -79,6 +80,42 @@ class TestWeightKeyRemapping:
         result = remap_key("bert.pooler.dense.weight")
         assert result.startswith("_")  # pooler is skipped
 
+    def test_deberta_attention_output_remapped(self):
+        result = remap_key(
+            "deberta.encoder.layer.0.attention.output.dense.weight",
+            "deberta-v2",
+        )
+        assert result == "deberta.encoder.layer.0.attention.out_proj.weight"
+
+    def test_deberta_ffn_and_norm_remapped(self):
+        result = remap_key(
+            "deberta.encoder.layer.0.output.LayerNorm.weight",
+            "deberta-v2",
+        )
+        assert result == "deberta.encoder.layer.0.ln2.weight"
+
+    def test_roberta_prefixes_remapped(self):
+        result = remap_key(
+            "roberta.encoder.layer.0.attention.self.query.weight",
+            "roberta",
+        )
+        assert result == "encoder.layers.0.attention.query_proj.weight"
+
+    def test_distilbert_keys_remapped(self):
+        result = remap_key(
+            "distilbert.transformer.layer.0.attention.q_lin.weight",
+            "distilbert",
+        )
+        assert result == "encoder.layers.0.attention.query_proj.weight"
+
+    def test_distilbert_norm_remapped(self):
+        result = remap_key(
+            "distilbert.transformer.layer.0.output_layer_norm.weight",
+            "distilbert",
+        )
+        assert result == "encoder.layers.0.ln2.weight"
+
+
     def test_remap_all_hf_keys(self):
         """Verify that remap_key handles all common HF BERT keys."""
         hf_keys = [
@@ -103,22 +140,20 @@ class TestWeightKeyRemapping:
             )
 
 
-# ---------------------------------------------------------------------------
-# Tests that require numpy (skip gracefully on minimal CI environments)
-# ---------------------------------------------------------------------------
-
-numpy = pytest.importorskip("numpy")
-
-
+@pytest.mark.skipif(
+    importlib.util.find_spec("numpy") is None,
+    reason="numpy is required for NumPy save/load tests",
+)
 class TestSaveNumpyModel:
     """Test the NumPy fallback save path."""
 
     def test_saves_weights_and_config(self, tmp_path):
+        import numpy as np
         from openmed.mlx.convert import save_numpy_model
 
         weights = {
-            "classifier.weight": numpy.random.randn(3, 64).astype(numpy.float32),
-            "classifier.bias": numpy.random.randn(3).astype(numpy.float32),
+            "classifier.weight": np.random.randn(3, 64).astype(np.float32),
+            "classifier.bias": np.random.randn(3).astype(np.float32),
         }
         config = {
             "num_labels": 3,
@@ -130,29 +165,101 @@ class TestSaveNumpyModel:
         assert (output / "config.json").exists()
         assert (output / "id2label.json").exists()
 
-        # Verify config content
         with open(output / "config.json") as f:
             saved_config = json.load(f)
         assert saved_config["num_labels"] == 3
 
     def test_weights_loadable(self, tmp_path):
+        import numpy as np
         from openmed.mlx.convert import save_numpy_model
 
-        original_w = numpy.random.randn(3, 64).astype(numpy.float32)
+        original_w = np.random.randn(3, 64).astype(np.float32)
         weights = {"classifier.weight": original_w}
         config = {"num_labels": 3}
 
         output = save_numpy_model(weights, config, tmp_path / "model")
-        loaded = numpy.load(str(output / "weights.npz"))
-        numpy.testing.assert_array_almost_equal(
-            loaded["classifier.weight"], original_w,
-        )
+        loaded = np.load(str(output / "weights.npz"))
+        np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
 
     def test_creates_parent_dirs(self, tmp_path):
+        import numpy as np
         from openmed.mlx.convert import save_numpy_model
 
-        weights = {"w": numpy.array([1.0, 2.0], dtype=numpy.float32)}
+        weights = {"w": np.array([1.0, 2.0], dtype=np.float32)}
         config = {"num_labels": 1}
 
         output = save_numpy_model(weights, config, tmp_path / "a" / "b" / "model")
         assert (output / "weights.npz").exists()
+
+
+class TestModelTypeResolution:
+    """Test architecture selection for MLX model loading."""
+
+    def test_resolves_bert(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type("bert") == "bert"
+
+    def test_resolves_deberta_from_architecture(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type(
+            {"architectures": ["DebertaV2ForTokenClassification"]},
+        ) == "deberta-v2"
+
+    def test_resolves_roberta_to_bert_family(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type("roberta") == "bert"
+
+    def test_resolves_xlm_roberta_to_bert_family(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type({"model_type": "xlm-roberta"}) == "bert"
+
+    def test_resolves_distilbert_to_bert_family(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type("distilbert") == "bert"
+
+
+class TestModelConfigNormalization:
+    """Test config aliasing for BERT-family architectures."""
+
+    def test_normalizes_distilbert_config(self):
+        from openmed.mlx.models import normalize_model_config
+
+        normalized = normalize_model_config(
+            {
+                "model_type": "distilbert",
+                "dim": 768,
+                "n_heads": 12,
+                "n_layers": 6,
+                "hidden_dim": 3072,
+                "dropout": 0.1,
+            }
+        )
+
+        assert normalized["hidden_size"] == 768
+        assert normalized["num_attention_heads"] == 12
+        assert normalized["num_hidden_layers"] == 6
+        assert normalized["intermediate_size"] == 3072
+        assert normalized["type_vocab_size"] == 0
+        assert normalized["_mlx_position_offset"] == 0
+
+    def test_normalizes_roberta_position_offset(self):
+        from openmed.mlx.models import normalize_model_config
+
+        normalized = normalize_model_config(
+            {
+                "model_type": "roberta",
+                "hidden_size": 768,
+                "num_attention_heads": 12,
+                "num_hidden_layers": 6,
+                "intermediate_size": 3072,
+                "pad_token_id": 1,
+            }
+        )
+
+        assert normalized["type_vocab_size"] == 1
+        assert normalized["_mlx_position_offset"] == 2

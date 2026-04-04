@@ -1,18 +1,31 @@
 # OpenMedKit (Swift Package)
 
-OpenMedKit is a Swift Package for on-device clinical NER and PII detection on iOS and macOS, powered by CoreML.
+OpenMedKit is the Swift package for running OpenMed models in **iOS** and **macOS** apps via **CoreML**.
+
+If you want Apple Silicon acceleration in **Python on macOS**, use the MLX backend instead. OpenMedKit does **not** load MLX `.npz` artifacts directly.
+
+The package API is public in `1.0.0`. OpenMed's broader cross-architecture model-packaging workflow for Apple platforms is still being hardened, so treat conversion itself as in progress rather than a stable public contract.
 
 ## Requirements
 
 - iOS 16+ / macOS 13+
 - Xcode 15+
-- A CoreML model converted from OpenMed (see [CoreML Export](coreml-export.md))
+- A compatible OpenMed CoreML bundle plus `id2label.json`
+
+## Apple Platform Matrix
+
+| Use case | Recommended path |
+|---|---|
+| Python app on Apple Silicon Mac | `pip install "openmed[mlx]"` |
+| Swift app on macOS | `OpenMedKit` + CoreML |
+| Swift app on iPhone/iPad | `OpenMedKit` + CoreML |
+| Direct use of MLX `.npz` in Swift | Not supported in 1.0.0 |
 
 ## Installation
 
 ### Swift Package Manager
 
-Add to your `Package.swift`:
+OpenMedKit is exported from the repository root, so you can add the repo directly:
 
 ```swift
 dependencies: [
@@ -62,6 +75,27 @@ for entity in entities {
 }
 ```
 
+## Offline Tokenizer Assets
+
+By default, OpenMedKit loads the tokenizer using the Hugging Face model name you pass in `tokenizerName`.
+
+For fully offline apps, bundle the tokenizer files in your app and initialize OpenMedKit with `tokenizerFolderURL`:
+
+```swift
+let openmed = try OpenMed(
+    modelURL: modelURL,
+    id2labelURL: labelsURL,
+    tokenizerFolderURL: Bundle.main.url(forResource: "TokenizerAssets", withExtension: nil)
+)
+```
+
+Your bundled tokenizer folder should include the tokenizer assets from the source OpenMed model repo, typically:
+
+- `tokenizer.json`
+- `tokenizer_config.json`
+- `special_tokens_map.json`
+- model-specific vocab assets such as `spm.model`
+
 ## API Reference
 
 ### `OpenMed`
@@ -75,6 +109,7 @@ public class OpenMed {
         modelURL: URL,
         id2labelURL: URL,
         tokenizerName: String = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        tokenizerFolderURL: URL? = nil,
         maxSeqLength: Int = 512
     ) throws
 
@@ -128,13 +163,7 @@ public enum PostProcessing {
 
 ## Preparing Your Model
 
-1. Convert using the Python CLI:
-   ```bash
-   pip install "openmed[coreml]"
-   python -m openmed.coreml.convert \
-       --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-       --output ./OpenMedPII.mlpackage
-   ```
+1. Obtain a compatible OpenMed CoreML bundle from your build or release flow.
 
 2. Compile for your app (optional, Xcode does this automatically):
    ```bash
@@ -142,6 +171,20 @@ public enum PostProcessing {
    ```
 
 3. Add `OpenMedPII.mlmodelc` and `id2label.json` to your Xcode project.
+
+4. If you want offline tokenization, also add a tokenizer asset folder and pass it via `tokenizerFolderURL`.
+
+For the current platform status and rollout direction, see [CoreML packaging status](coreml-export.md).
+
+## MLX vs Swift
+
+The OpenMed MLX backend is a **Python/macOS runtime**. It is ideal for local Apple Silicon scripts, notebooks, services, and desktop workflows.
+
+For Swift apps:
+
+- use **CoreML** with OpenMedKit
+- do **not** point OpenMedKit at `weights.npz`
+- if you need the same model in both Python and Swift, keep an MLX artifact for Python/macOS and a CoreML artifact for Swift/iOS/macOS apps
 
 ## Concurrency
 
