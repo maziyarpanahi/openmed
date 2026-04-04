@@ -114,6 +114,33 @@ class TestMLXPipelineOutputFormat:
             assert "end" in ent
             assert "index" in ent
 
+    def test_tuple_offsets_skip_special_tokens(self, tmp_path):
+        """Tuple ``(0, 0)`` offsets from fast tokenizers should be ignored."""
+        config = self._make_mock_pipeline(tmp_path)
+
+        from openmed.mlx.inference import MLXTokenClassificationPipeline
+
+        with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
+            pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+            pipeline.id2label = {int(k): v for k, v in config["id2label"].items()}
+            pipeline.aggregation_strategy = "simple"
+
+            pred_ids = [1, 1, 2, 0, 1]
+            probs = [
+                [0.05, 0.9, 0.03, 0.02],
+                [0.05, 0.9, 0.03, 0.02],
+                [0.03, 0.05, 0.9, 0.02],
+                [0.9, 0.05, 0.03, 0.02],
+                [0.05, 0.9, 0.03, 0.02],
+            ]
+            offsets = [(0, 0), (0, 4), (5, 8), (8, 9), (0, 0)]
+            text = "John Doe,"
+
+            result = pipeline._decode_grouped(pred_ids, probs, offsets, text)
+
+            assert len(result) == 1
+            assert result[0]["word"] == "John Doe"
+
     def test_aggregation_strategies(self, tmp_path):
         """Verify first/average/max aggregation produce correct scores."""
         config = self._make_mock_pipeline(tmp_path)
@@ -147,6 +174,44 @@ class TestMLXPipelineOutputFormat:
 class TestMLXModelResolve:
     """Test model resolution logic."""
 
+    def test_preconverted_repo_failure_falls_back_to_conversion(self, tmp_path):
+        """A private/missing Hub snapshot should fall back to local conversion."""
+        from openmed.mlx import inference
+
+        output_dir = tmp_path / "OpenMed_OpenMed-PII-SuperClinical-Small-44M-v1"
+        config = type("Config", (), {"cache_dir": str(tmp_path)})()
+
+        with patch.dict(
+            inference._MLX_MODEL_MAP,
+            {"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": "OpenMed/private-mlx"},
+            clear=True,
+        ), patch.object(
+            inference,
+            "_download_preconverted_mlx_model",
+            side_effect=RuntimeError("private repo"),
+        ) as mock_download, patch(
+            "openmed.mlx.convert.convert",
+            side_effect=lambda model_id, output_dir, cache_dir=None: Path(output_dir).mkdir(
+                parents=True, exist_ok=True
+            ) or (Path(output_dir) / "config.json").write_text("{}"),
+        ) as mock_convert:
+            path, tok_name = inference._resolve_mlx_model(
+                "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+                config=config,
+            )
+
+        assert path == str(output_dir)
+        assert tok_name == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+        mock_download.assert_called_once_with(
+            "OpenMed/private-mlx",
+            cache_dir=str(tmp_path),
+        )
+        mock_convert.assert_called_once_with(
+            "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            output_dir,
+            cache_dir=str(tmp_path),
+        )
+
     def test_local_path_detection(self, tmp_path):
         """If model_name is a local directory with config.json, use it."""
         (tmp_path / "config.json").write_text('{"num_labels": 3}')
@@ -154,3 +219,4 @@ class TestMLXModelResolve:
         from openmed.mlx.inference import _resolve_mlx_model
         path, tok_name = _resolve_mlx_model(str(tmp_path))
         assert path == str(tmp_path)
+        assert tok_name == str(tmp_path)

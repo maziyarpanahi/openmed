@@ -1,4 +1,6 @@
+import Dispatch
 import Foundation
+import Tokenizers
 
 /// OpenMedKit — On-device clinical NLP for iOS and macOS.
 ///
@@ -18,10 +20,11 @@ import Foundation
 ///     print(entity)  // [first_name] "John Doe" (8:16) conf=0.95
 /// }
 /// ```
-public class OpenMed {
+public final class OpenMed {
 
     private let pipeline: NERPipeline
-    private let tokenizerName: String
+    private let tokenizer: any Tokenizer
+    private let maxSeqLength: Int
 
     /// Initialize OpenMed with a CoreML model and tokenizer.
     ///
@@ -29,11 +32,13 @@ public class OpenMed {
     ///   - modelURL: URL to the compiled CoreML model (`.mlmodelc` or `.mlpackage`).
     ///   - id2labelURL: URL to the `id2label.json` label mapping file.
     ///   - tokenizerName: HuggingFace tokenizer name for text tokenization.
+    ///   - tokenizerFolderURL: Optional local tokenizer asset directory for offline use.
     ///   - maxSeqLength: Maximum token sequence length (default: 512).
     public init(
         modelURL: URL,
         id2labelURL: URL,
         tokenizerName: String = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        tokenizerFolderURL: URL? = nil,
         maxSeqLength: Int = 512
     ) throws {
         self.pipeline = try NERPipeline(
@@ -41,7 +46,11 @@ public class OpenMed {
             id2labelURL: id2labelURL,
             maxSeqLength: maxSeqLength
         )
-        self.tokenizerName = tokenizerName
+        self.tokenizer = try Self.loadTokenizer(
+            tokenizerName: tokenizerName,
+            tokenizerFolderURL: tokenizerFolderURL
+        )
+        self.maxSeqLength = maxSeqLength
     }
 
     /// Run NER on the given text and return detected entities.
@@ -82,28 +91,113 @@ public class OpenMed {
     private func tokenize(_ text: String) throws -> ([Int], [Int], [(Int, Int)]) {
         // Use swift-transformers for tokenization
         // This ensures token IDs match the Python HuggingFace tokenizer
-        let tokenizer = try AutoTokenizer.from(pretrained: tokenizerName)
-        let encoding = tokenizer(text)
-
-        let inputIds = encoding.inputIds
+        let inputIds = Array(tokenizer(text, addSpecialTokens: true).prefix(maxSeqLength))
+        let tokens = tokenizer.convertIdsToTokens(inputIds).map { $0 ?? "" }
         let attentionMask = Array(repeating: 1, count: inputIds.count)
-
-        // Build offset mapping from token spans
-        // swift-transformers provides offsets via the encoding
-        let offsets: [(Int, Int)]
-        if let tokenOffsets = encoding.offsets {
-            offsets = tokenOffsets.map { ($0.start, $0.end) }
-        } else {
-            // Fallback: approximate offsets (not ideal)
-            offsets = inputIds.enumerated().map { i, _ in
-                i == 0 || i == inputIds.count - 1 ? (0, 0) : (i, i + 1)
-            }
-        }
+        let offsets = Self.buildOffsets(tokens: tokens, in: text)
 
         return (inputIds, attentionMask, offsets)
     }
-}
 
-// Re-export swift-transformers tokenizer
-import Transformers
-typealias AutoTokenizer = Transformers.AutoTokenizer
+    private static func loadTokenizer(
+        tokenizerName: String,
+        tokenizerFolderURL: URL?
+    ) throws -> any Tokenizer {
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: Result<any Tokenizer, Error>?
+
+        Task.detached {
+            do {
+                let tokenizer: any Tokenizer
+                if let tokenizerFolderURL {
+                    tokenizer = try await AutoTokenizer.from(modelFolder: tokenizerFolderURL)
+                } else {
+                    tokenizer = try await AutoTokenizer.from(pretrained: tokenizerName)
+                }
+                result = .success(tokenizer)
+            } catch {
+                result = .failure(error)
+            }
+            semaphore.signal()
+        }
+
+        semaphore.wait()
+        return try result!.get()
+    }
+
+    private static func buildOffsets(
+        tokens: [String],
+        in text: String
+    ) -> [(Int, Int)] {
+        var offsets: [(Int, Int)] = []
+        var cursor = text.startIndex
+
+        for token in tokens {
+            if isSpecialToken(token) {
+                offsets.append((0, 0))
+                continue
+            }
+
+            let normalized = normalize(token: token)
+            let piece = normalized.piece
+
+            if piece.isEmpty {
+                offsets.append((0, 0))
+                continue
+            }
+
+            var searchStart = cursor
+            if normalized.skipLeadingWhitespace {
+                while searchStart < text.endIndex && text[searchStart].isWhitespace {
+                    searchStart = text.index(after: searchStart)
+                }
+            }
+
+            if let range = text[searchStart...].range(of: piece) ??
+                text[searchStart...].range(
+                    of: piece,
+                    options: [.caseInsensitive, .diacriticInsensitive]
+                ) {
+                let start = text.distance(from: text.startIndex, to: range.lowerBound)
+                let end = text.distance(from: text.startIndex, to: range.upperBound)
+                offsets.append((start, end))
+                cursor = range.upperBound
+                continue
+            }
+
+            let start = text.distance(from: text.startIndex, to: searchStart)
+            let endIndex = text.index(
+                searchStart,
+                offsetBy: piece.count,
+                limitedBy: text.endIndex
+            ) ?? text.endIndex
+            let end = text.distance(from: text.startIndex, to: endIndex)
+            offsets.append((start, end))
+            cursor = endIndex
+        }
+
+        return offsets
+    }
+
+    private static func normalize(token: String) -> (piece: String, skipLeadingWhitespace: Bool) {
+        if token == "Ċ" {
+            return ("\n", false)
+        }
+        if token.hasPrefix("##") {
+            return (String(token.dropFirst(2)), false)
+        }
+        if token.hasPrefix("▁") || token.hasPrefix("Ġ") {
+            return (String(token.dropFirst()), true)
+        }
+        return (token, false)
+    }
+
+    private static func isSpecialToken(_ token: String) -> Bool {
+        switch token {
+        case "[CLS]", "[SEP]", "[PAD]", "[MASK]", "<s>", "</s>", "<pad>", "<mask>":
+            return true
+        default:
+            return false
+        }
+    }
+}
