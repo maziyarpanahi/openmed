@@ -249,9 +249,35 @@ def save_mlx_model(
     else:
         config_to_save.pop("_mlx_quantization", None)
 
-    # Save weights
+    def _cleanup_other_weight_files(keep_path: Path) -> None:
+        for candidate in (
+            output_dir / "weights.safetensors",
+            output_dir / "weights.npz",
+        ):
+            if candidate != keep_path and candidate.exists():
+                candidate.unlink()
+
+    weights_format = "npz"
     weights_path = output_dir / "weights.npz"
-    mx.savez(str(weights_path), **mlx_weights)
+    try:
+        weights_path = output_dir / "weights.safetensors"
+        mx.save_safetensors(
+            weights_path,
+            mlx_weights,
+            metadata={"format": "mlx", "openmed": "token-classification"},
+        )
+        weights_format = "safetensors"
+    except Exception as exc:
+        logger.warning(
+            "Could not save MLX weights as safetensors; falling back to npz: %s",
+            exc,
+        )
+        weights_path = output_dir / "weights.npz"
+        mx.savez(str(weights_path), **mlx_weights)
+        weights_format = "npz"
+
+    _cleanup_other_weight_files(weights_path)
+    config_to_save["_mlx_weights_format"] = weights_format
 
     # Save config
     config_path = output_dir / "config.json"
@@ -273,7 +299,7 @@ def save_numpy_model(
     config: dict,
     output_dir: str | Path,
 ) -> Path:
-    """Save converted weights as plain NumPy ``.npz`` — no MLX required.
+    """Save converted weights without MLX, preferring ``.safetensors``.
 
     This fallback is useful when converting on a machine without MLX
     (e.g., Linux CI).  The resulting files are identical in structure to
@@ -283,20 +309,55 @@ def save_numpy_model(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    config_to_save = dict(config)
 
+    def _cleanup_other_weight_files(keep_path: Path) -> None:
+        for candidate in (
+            output_dir / "weights.safetensors",
+            output_dir / "weights.npz",
+        ):
+            if candidate != keep_path and candidate.exists():
+                candidate.unlink()
+
+    weights_format = "npz"
     weights_path = output_dir / "weights.npz"
-    np.savez(str(weights_path), **weights)
+    try:
+        from safetensors.numpy import save_file
+
+        weights_path = output_dir / "weights.safetensors"
+        safe_weights = {k: np.ascontiguousarray(v) for k, v in weights.items()}
+        save_file(
+            safe_weights,
+            str(weights_path),
+            metadata={"format": "mlx", "openmed": "token-classification"},
+        )
+        weights_format = "safetensors"
+    except Exception as exc:
+        logger.warning(
+            "Could not save NumPy weights as safetensors; falling back to npz: %s",
+            exc,
+        )
+        weights_path = output_dir / "weights.npz"
+        np.savez(str(weights_path), **weights)
+        weights_format = "npz"
+
+    _cleanup_other_weight_files(weights_path)
+    config_to_save["_mlx_weights_format"] = weights_format
 
     config_path = output_dir / "config.json"
     with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
+        json.dump(config_to_save, f, indent=2)
 
-    if "id2label" in config:
+    if "id2label" in config_to_save:
         id2label_path = output_dir / "id2label.json"
         with open(id2label_path, "w") as f:
-            json.dump(config["id2label"], f, indent=2)
+            json.dump(config_to_save["id2label"], f, indent=2)
 
-    logger.info("Saved NumPy model to %s (MLX-compatible)", output_dir)
+    logger.info(
+        "Saved MLX-compatible model to %s using %s weights",
+        output_dir,
+        weights_format,
+    )
     return output_dir
 
 

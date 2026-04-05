@@ -37,6 +37,7 @@ config = OpenMedConfig(backend=None)    # Auto-detect (default)
 
 1. **Auto-detection**: On Apple Silicon Macs with `mlx` installed, OpenMed automatically selects the MLX backend.
 2. **Internal model packaging**: The first time you use a supported model with MLX, OpenMed prepares an MLX-compatible copy in `~/.cache/openmed/mlx/`.
+   It now writes `weights.safetensors` by default and falls back to `weights.npz` only when that is the path that works for a given export environment.
 3. **Identical output**: MLX produces the same entity format as the HuggingFace backend — all downstream processing (entity merging, quality gates, PII detection) works identically.
 
 The public runtime focuses on automatic preparation at first use. OpenMed's broader cross-architecture conversion work is still being generalized privately across the full model collection.
@@ -71,4 +72,4 @@ OpenMed's MLX artifacts are for the **Python/macOS** runtime.
 
 - Use MLX when you are running OpenMed from Python on Apple Silicon.
 - Use CoreML + `OpenMedKit` when you are shipping a Swift app on macOS, iOS, or iPadOS.
-- Do not try to load `weights.npz` directly from Swift in 1.0.0.
+- Do not try to load MLX weight files such as `weights.safetensors` or `weights.npz` directly from Swift in 1.0.0.

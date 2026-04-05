@@ -10,7 +10,7 @@ As of April 4, 2026:
 
 - the `OpenMedKit` Swift package builds and tests successfully
 - the `OpenMedDemo` Xcode project builds and launches on macOS
-- MLX artifacts such as `weights.npz` are still separate from CoreML app bundles
+- MLX artifacts such as `weights.safetensors` or `weights.npz` are still separate from CoreML app bundles
 - a fresh DeBERTa-v2 pilot export is **not** yet release-ready in the current arm64 CoreML environment
 
 ## What To Ship Today

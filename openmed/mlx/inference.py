@@ -28,7 +28,8 @@ class MLXTokenClassificationPipeline:
     ``pipeline("token-classification", aggregation_strategy=...)``.
 
     Args:
-        model_path: Directory containing MLX ``weights.npz`` and ``config.json``.
+        model_path: Directory containing MLX ``weights.safetensors`` or
+            ``weights.npz`` and ``config.json``.
         tokenizer_name: HuggingFace tokenizer to use (usually same as original model).
         aggregation_strategy: How to aggregate sub-word tokens.
             ``None`` for raw per-token output, ``"simple"`` for grouped entities.
@@ -243,7 +244,12 @@ def _download_preconverted_mlx_model(
         repo_id=repo_id,
         repo_type="model",
         cache_dir=cache_dir,
-        allow_patterns=["config.json", "id2label.json", "weights.npz"],
+        allow_patterns=[
+            "config.json",
+            "id2label.json",
+            "weights.safetensors",
+            "weights.npz",
+        ],
     )
 
 

@@ -183,7 +183,7 @@ The OpenMed MLX backend is a **Python/macOS runtime**. It is ideal for local App
 For Swift apps:
 
 - use **CoreML** with OpenMedKit
-- do **not** point OpenMedKit at `weights.npz`
+- do **not** point OpenMedKit at MLX weight files such as `weights.safetensors` or `weights.npz`
 - if you need the same model in both Python and Swift, keep an MLX artifact for Python/macOS and a CoreML artifact for Swift/iOS/macOS apps
 
 ## Concurrency
