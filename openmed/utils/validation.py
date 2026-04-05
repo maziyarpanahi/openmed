@@ -1,5 +1,6 @@
 """Input validation utilities for OpenMed."""
 
+from pathlib import Path
 import re
 from typing import Any, Optional, List, Union
 
@@ -75,6 +76,11 @@ def validate_model_name(model_name: str) -> str:
 
     if not model_name:
         raise ValueError("Model name cannot be empty")
+
+    # Allow existing local model directories/files in addition to Hub-style ids.
+    expanded_path = Path(model_name).expanduser()
+    if expanded_path.exists():
+        return str(expanded_path)
 
     # Check format (organization/model or just model)
     if "/" in model_name:

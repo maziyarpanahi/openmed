@@ -100,3 +100,8 @@ class TestOpenMedConfigBackendField:
         from openmed.core.config import OpenMedConfig
         config = OpenMedConfig(backend="mlx")
         assert config.backend == "mlx"
+
+    def test_backend_round_trips_through_dict(self):
+        from openmed.core.config import OpenMedConfig
+        config = OpenMedConfig.from_dict({"backend": "mlx"})
+        assert config.backend == "mlx"

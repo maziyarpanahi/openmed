@@ -108,7 +108,7 @@ class OpenMedConfig:
         valid_keys = {
             "default_org", "cache_dir", "device", "hf_token",
             "log_level", "timeout", "use_medical_tokenizer",
-            "medical_tokenizer_exceptions", "profile"
+            "medical_tokenizer_exceptions", "backend", "profile"
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
         return cls(**filtered)
@@ -161,6 +161,7 @@ class OpenMedConfig:
             "timeout": self.timeout,
             "use_medical_tokenizer": self.use_medical_tokenizer,
             "medical_tokenizer_exceptions": self.medical_tokenizer_exceptions,
+            "backend": self.backend,
             "profile": self.profile,
         }
 

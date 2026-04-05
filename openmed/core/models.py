@@ -214,6 +214,53 @@ class ModelLoader:
         use_fast_tokenizer: bool = True,
         **kwargs,
     ):
+        """Create an inference pipeline for the configured backend."""
+        from openmed.core.backends import HuggingFaceBackend, get_backend
+
+        backend = get_backend(getattr(self.config, "backend", None), config=self.config)
+        if isinstance(backend, HuggingFaceBackend):
+            return self._create_hf_pipeline(
+                model_name,
+                task=task,
+                aggregation_strategy=aggregation_strategy,
+                use_fast_tokenizer=use_fast_tokenizer,
+                **kwargs,
+            )
+
+        try:
+            return backend.create_pipeline(
+                model_name,
+                task=task,
+                aggregation_strategy=aggregation_strategy,
+                use_fast_tokenizer=use_fast_tokenizer,
+                **kwargs,
+            )
+        except Exception:
+            if getattr(self.config, "backend", None) is not None:
+                raise
+
+            logger.warning(
+                "Auto-selected backend %s failed for %s; falling back to HuggingFace.",
+                type(backend).__name__,
+                model_name,
+                exc_info=True,
+            )
+            return self._create_hf_pipeline(
+                model_name,
+                task=task,
+                aggregation_strategy=aggregation_strategy,
+                use_fast_tokenizer=use_fast_tokenizer,
+                **kwargs,
+            )
+
+    def _create_hf_pipeline(
+        self,
+        model_name: str,
+        task: str = "token-classification",
+        aggregation_strategy: Optional[str] = None,
+        use_fast_tokenizer: bool = True,
+        **kwargs,
+    ):
         """Create a HuggingFace pipeline for the model.
 
         Args:
