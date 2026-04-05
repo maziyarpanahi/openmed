@@ -6,11 +6,23 @@ remapping and config extraction logic in isolation.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import pytest
 
 from openmed.mlx.convert import remap_key
+
+
+def _module_importable(module_name: str) -> bool:
+    """Return True only when a module can actually be imported."""
+    try:
+        __import__(module_name)
+    except Exception:
+        return False
+    return True
+
+
+_NUMPY_AVAILABLE = _module_importable("numpy")
+_SAFETENSORS_NUMPY_AVAILABLE = _module_importable("safetensors.numpy")
 
 
 class TestWeightKeyRemapping:
@@ -141,7 +153,7 @@ class TestWeightKeyRemapping:
 
 
 @pytest.mark.skipif(
-    importlib.util.find_spec("numpy") is None,
+    not _NUMPY_AVAILABLE,
     reason="numpy is required for NumPy save/load tests",
 )
 class TestSaveNumpyModel:
@@ -163,7 +175,7 @@ class TestSaveNumpyModel:
         output = save_numpy_model(weights, config, tmp_path / "model")
         expected_name = (
             "weights.safetensors"
-            if importlib.util.find_spec("safetensors") is not None
+            if _SAFETENSORS_NUMPY_AVAILABLE
             else "weights.npz"
         )
         assert (output / expected_name).exists()
@@ -207,7 +219,7 @@ class TestSaveNumpyModel:
         assert (output / "weights.safetensors").exists() or (output / "weights.npz").exists()
 
     @pytest.mark.skipif(
-        importlib.util.find_spec("safetensors") is None,
+        not _SAFETENSORS_NUMPY_AVAILABLE,
         reason="safetensors is required for fallback test",
     )
     def test_falls_back_to_npz_when_safetensors_save_fails(self, tmp_path, monkeypatch):
