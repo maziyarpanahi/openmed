@@ -170,6 +170,29 @@ class TestMLXPipelineOutputFormat:
                 assert abs(result[0]["score"] - expected_score) < 0.01, \
                     f"Strategy {strategy}: expected {expected_score}, got {result[0]['score']}"
 
+    def test_batch_input_returns_per_text_predictions(self, tmp_path):
+        """Batch input should return one prediction list per input string."""
+        self._make_mock_pipeline(tmp_path)
+
+        from openmed.mlx.inference import MLXTokenClassificationPipeline
+
+        with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
+            pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+            pipeline._predict_single = MagicMock(
+                side_effect=[
+                    [{"entity_group": "NAME", "word": "John"}],
+                    [{"entity_group": "DATE", "word": "1990-05-15"}],
+                ]
+            )
+
+            result = pipeline(["John Doe", "DOB 1990-05-15"])
+
+            assert result == [
+                [{"entity_group": "NAME", "word": "John"}],
+                [{"entity_group": "DATE", "word": "1990-05-15"}],
+            ]
+            assert pipeline._predict_single.call_count == 2
+
 
 class TestMLXModelResolve:
     """Test model resolution logic."""
@@ -214,9 +237,11 @@ class TestMLXModelResolve:
 
     def test_local_path_detection(self, tmp_path):
         """If model_name is a local directory with config.json, use it."""
-        (tmp_path / "config.json").write_text('{"num_labels": 3}')
+        (tmp_path / "config.json").write_text(
+            '{"num_labels": 3, "_name_or_path": "OpenMed/original-model"}'
+        )
 
         from openmed.mlx.inference import _resolve_mlx_model
         path, tok_name = _resolve_mlx_model(str(tmp_path))
         assert path == str(tmp_path)
-        assert tok_name == str(tmp_path)
+        assert tok_name == "OpenMed/original-model"

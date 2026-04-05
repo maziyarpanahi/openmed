@@ -76,16 +76,23 @@ class MLXTokenClassificationPipeline:
 
     def __call__(
         self,
-        text: str,
+        text: str | list[str],
         **kwargs: Any,
-    ) -> List[Dict[str, Any]]:
-        """Run token classification on *text*.
+    ) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
+        """Run token classification on *text* or a batch of texts.
 
         Returns a list of entity dicts matching the HuggingFace format::
 
             [{"entity_group": "NAME", "score": 0.95,
               "word": "John Doe", "start": 8, "end": 16}, ...]
         """
+        if isinstance(text, (list, tuple)):
+            return [self._predict_single(item) for item in text]
+
+        return self._predict_single(text)
+
+    def _predict_single(self, text: str) -> List[Dict[str, Any]]:
+        """Run token classification for a single input string."""
         # 1. Tokenize
         encoding = self.tokenizer(
             text,
@@ -294,7 +301,25 @@ def _resolve_mlx_model(
     # Check local path
     local = Path(model_name)
     if local.is_dir() and (local / "config.json").exists():
-        return str(local), model_name
+        bundled_tokenizer_files = (
+            local / "tokenizer.json",
+            local / "tokenizer_config.json",
+            local / "special_tokens_map.json",
+            local / "vocab.txt",
+            local / "merges.txt",
+            local / "spm.model",
+        )
+        if any(path.exists() for path in bundled_tokenizer_files):
+            return str(local), str(local)
+
+        try:
+            with open(local / "config.json") as f:
+                local_config = json.load(f)
+        except Exception:
+            local_config = {}
+
+        tokenizer_name = local_config.get("_name_or_path") or model_name
+        return str(local), tokenizer_name
 
     # On-the-fly conversion
     mlx_cache = Path(cache_dir or "~/.cache/openmed/mlx").expanduser()

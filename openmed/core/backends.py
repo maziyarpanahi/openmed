@@ -66,7 +66,7 @@ class HuggingFaceBackend:
     ) -> Callable:
         from openmed.core.models import ModelLoader
         loader = ModelLoader(self._config)
-        return loader.create_pipeline(
+        return loader._create_hf_pipeline(
             model_name,
             task=task,
             aggregation_strategy=aggregation_strategy,

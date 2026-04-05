@@ -392,7 +392,7 @@ class TestAnalyzeTextBehaviour:
         mock_pipeline_instance = Mock()
         mock_pipeline.return_value = mock_pipeline_instance
 
-        loader = ModelLoader()
+        loader = ModelLoader(OpenMedConfig(backend="hf"))
 
         # Mock the load_model method
         with patch.object(loader, 'load_model') as mock_load:
@@ -415,7 +415,7 @@ class TestAnalyzeTextBehaviour:
         second_pipeline = Mock()
         mock_pipeline.side_effect = [first_pipeline, second_pipeline]
 
-        loader = ModelLoader()
+        loader = ModelLoader(OpenMedConfig(backend="hf"))
 
         result_one = loader.create_pipeline("test-model", aggregation_strategy="simple")
         result_two = loader.create_pipeline("test-model", aggregation_strategy="simple")
@@ -423,6 +423,59 @@ class TestAnalyzeTextBehaviour:
         assert result_one is first_pipeline
         assert result_two is first_pipeline
         mock_pipeline.assert_called_once()
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.backends.get_backend')
+    def test_create_pipeline_dispatches_non_hf_backend(self, mock_get_backend):
+        """Non-HF backends should be routed through the backend registry."""
+        backend = Mock()
+        backend.create_pipeline.return_value = Mock()
+        mock_get_backend.return_value = backend
+
+        loader = ModelLoader(OpenMedConfig(backend="mlx"))
+        result = loader.create_pipeline("test-model", aggregation_strategy="simple")
+
+        assert result is backend.create_pipeline.return_value
+        backend.create_pipeline.assert_called_once_with(
+            "test-model",
+            task="token-classification",
+            aggregation_strategy="simple",
+            use_fast_tokenizer=True,
+        )
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.pipeline')
+    @patch('openmed.core.backends.get_backend')
+    def test_create_pipeline_auto_falls_back_to_hf_when_backend_fails(
+        self,
+        mock_get_backend,
+        mock_pipeline,
+    ):
+        """Auto-detect should fall back to HF if the preferred backend errors."""
+        backend = Mock()
+        backend.create_pipeline.side_effect = RuntimeError("mlx failed")
+        mock_get_backend.return_value = backend
+
+        loader = ModelLoader(OpenMedConfig())
+        result = loader.create_pipeline("test-model", aggregation_strategy="simple")
+
+        assert result is mock_pipeline.return_value
+        mock_pipeline.assert_called_once()
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.backends.get_backend')
+    def test_create_pipeline_explicit_backend_does_not_fallback(
+        self,
+        mock_get_backend,
+    ):
+        """Explicit backend selection should surface backend failures."""
+        backend = Mock()
+        backend.create_pipeline.side_effect = RuntimeError("mlx failed")
+        mock_get_backend.return_value = backend
+
+        loader = ModelLoader(OpenMedConfig(backend="mlx"))
+        with pytest.raises(RuntimeError, match="mlx failed"):
+            loader.create_pipeline("test-model", aggregation_strategy="simple")
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.hf_model_info')
