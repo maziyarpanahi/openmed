@@ -9,7 +9,7 @@ OpenMed v1.0.0 introduces native Apple Silicon acceleration via [Apple MLX](http
 pip install -e ".[mlx]"
 ```
 
-This installs `mlx`, `huggingface-hub`, `tokenizers`, and `safetensors`.
+This installs `mlx`, `huggingface-hub`, `transformers`, `tokenizers`, and `safetensors`.
 
 ## Quick Start
 
