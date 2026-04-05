@@ -51,11 +51,8 @@ class HuggingFaceBackend:
         self._config = config
 
     def is_available(self) -> bool:
-        try:
-            import transformers  # noqa: F401
-            return True
-        except ImportError:
-            return False
+        from openmed.core.models import HF_AVAILABLE
+        return HF_AVAILABLE
 
     def create_pipeline(
         self,
