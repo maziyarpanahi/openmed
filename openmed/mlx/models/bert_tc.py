@@ -179,8 +179,8 @@ class BertForTokenClassification(nn.Module):
 def load_model(model_path: str | Path) -> BertForTokenClassification:
     """Load a converted MLX BERT-TC model from *model_path*.
 
-    Expects the directory to contain ``config.json`` and ``weights.npz``
-    (or ``weights.safetensors``).
+    Expects the directory to contain ``config.json`` and MLX weights in
+    ``weights.safetensors`` or ``weights.npz``.
     """
     model_path = Path(model_path)
 
@@ -189,18 +189,23 @@ def load_model(model_path: str | Path) -> BertForTokenClassification:
 
     model = BertForTokenClassification(config)
 
+    preferred_format = config.get("_mlx_weights_format")
     weights_npz = model_path / "weights.npz"
     weights_sf = model_path / "weights.safetensors"
-    if weights_sf.exists():
-        from mlx.utils import load as mlx_load
-        weights = dict(mlx_load(str(weights_sf)))
-    elif weights_npz.exists():
-        weights = dict(mx.load(str(weights_npz)))
-    else:
+    candidate_paths = []
+    if preferred_format == "safetensors":
+        candidate_paths.append(weights_sf)
+    elif preferred_format == "npz":
+        candidate_paths.append(weights_npz)
+    candidate_paths.extend([weights_sf, weights_npz])
+
+    weights_path = next((path for path in candidate_paths if path.exists()), None)
+    if weights_path is None:
         raise FileNotFoundError(
             f"No weights found in {model_path}. "
-            "Expected weights.npz or weights.safetensors."
+            "Expected weights.safetensors or weights.npz."
         )
+    weights = dict(mx.load(str(weights_path)))
 
     model.load_weights(list(weights.items()))
     mx.eval(model.parameters())

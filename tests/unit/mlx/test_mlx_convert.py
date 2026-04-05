@@ -161,13 +161,19 @@ class TestSaveNumpyModel:
         }
 
         output = save_numpy_model(weights, config, tmp_path / "model")
-        assert (output / "weights.npz").exists()
+        expected_name = (
+            "weights.safetensors"
+            if importlib.util.find_spec("safetensors") is not None
+            else "weights.npz"
+        )
+        assert (output / expected_name).exists()
         assert (output / "config.json").exists()
         assert (output / "id2label.json").exists()
 
         with open(output / "config.json") as f:
             saved_config = json.load(f)
         assert saved_config["num_labels"] == 3
+        assert saved_config["_mlx_weights_format"] in {"safetensors", "npz"}
 
     def test_weights_loadable(self, tmp_path):
         import numpy as np
@@ -178,8 +184,17 @@ class TestSaveNumpyModel:
         config = {"num_labels": 3}
 
         output = save_numpy_model(weights, config, tmp_path / "model")
-        loaded = np.load(str(output / "weights.npz"))
-        np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
+        if (output / "weights.safetensors").exists():
+            from safetensors.numpy import load_file
+
+            loaded = load_file(str(output / "weights.safetensors"))
+            np.testing.assert_array_almost_equal(
+                loaded["classifier.weight"],
+                original_w,
+            )
+        else:
+            loaded = np.load(str(output / "weights.npz"))
+            np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
 
     def test_creates_parent_dirs(self, tmp_path):
         import numpy as np
@@ -189,7 +204,34 @@ class TestSaveNumpyModel:
         config = {"num_labels": 1}
 
         output = save_numpy_model(weights, config, tmp_path / "a" / "b" / "model")
+        assert (output / "weights.safetensors").exists() or (output / "weights.npz").exists()
+
+    @pytest.mark.skipif(
+        importlib.util.find_spec("safetensors") is None,
+        reason="safetensors is required for fallback test",
+    )
+    def test_falls_back_to_npz_when_safetensors_save_fails(self, tmp_path, monkeypatch):
+        import numpy as np
+        import safetensors.numpy as st_numpy
+        from openmed.mlx.convert import save_numpy_model
+
+        def raise_on_save(*args, **kwargs):
+            raise RuntimeError("forced safetensors failure")
+
+        monkeypatch.setattr(st_numpy, "save_file", raise_on_save)
+
+        output = save_numpy_model(
+            {"classifier.weight": np.random.randn(3, 64).astype(np.float32)},
+            {"num_labels": 3},
+            tmp_path / "model",
+        )
+
         assert (output / "weights.npz").exists()
+        assert not (output / "weights.safetensors").exists()
+
+        with open(output / "config.json") as f:
+            saved_config = json.load(f)
+        assert saved_config["_mlx_weights_format"] == "npz"
 
 
 class TestModelTypeResolution:
