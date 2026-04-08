@@ -12,6 +12,8 @@ The package API is public in `1.0.0`. OpenMed's broader cross-architecture model
 - Xcode 15+
 - A compatible OpenMed CoreML bundle plus `id2label.json`
 
+`OpenMedKit` accepts either a compiled `.mlmodelc` bundle or a source `.mlpackage`. If you pass `.mlpackage`, it will compile it on first load.
+
 ## Apple Platform Matrix
 
 | Use case | Recommended path |
@@ -49,6 +51,9 @@ Then add `OpenMedKit` as a dependency to your target:
 1. File > Add Package Dependencies
 2. Enter: `https://github.com/maziyarpanahi/openmed`
 3. Select "OpenMedKit" library
+4. Bundle one or more compatible CoreML model folders in your app target
+
+If you use the demo app in `swift/OpenMedDemo/`, it now includes a searchable model picker for bundled CoreML models plus a demo-mode fallback.
 
 ## Quick Start
 
@@ -63,7 +68,7 @@ let labelsURL = Bundle.main.url(forResource: "id2label", withExtension: "json")!
 let openmed = try OpenMed(
     modelURL: modelURL,
     id2labelURL: labelsURL,
-    tokenizerName: "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+    tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
 )
 
 // 3. Analyze text
@@ -108,7 +113,7 @@ public class OpenMed {
     public init(
         modelURL: URL,
         id2labelURL: URL,
-        tokenizerName: String = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
         tokenizerFolderURL: URL? = nil,
         maxSeqLength: Int = 512
     ) throws
@@ -174,7 +179,11 @@ public enum PostProcessing {
 
 4. If you want offline tokenization, also add a tokenizer asset folder and pass it via `tokenizerFolderURL`.
 
+If you only have `OpenMedPII.mlpackage`, you can bundle that directly instead of compiling it yourself. `OpenMedKit` will compile it automatically when the app first loads the model.
+
 For the current platform status and rollout direction, see [CoreML packaging status](coreml-export.md).
+
+BERT-family OpenMed models are the easiest validated Apple path today. Broader tokenizer-family coverage for Swift is still in progress.
 
 ## MLX vs Swift
 

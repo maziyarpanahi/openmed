@@ -13,7 +13,7 @@ import Tokenizers
 /// let openmed = try OpenMed(
 ///     modelURL: Bundle.main.url(forResource: "OpenMedPII", withExtension: "mlmodelc")!,
 ///     id2labelURL: Bundle.main.url(forResource: "id2label", withExtension: "json")!,
-///     tokenizerName: "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+///     tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
 /// )
 /// let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
 /// for entity in entities {
@@ -37,7 +37,7 @@ public final class OpenMed {
     public init(
         modelURL: URL,
         id2labelURL: URL,
-        tokenizerName: String = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
         tokenizerFolderURL: URL? = nil,
         maxSeqLength: Int = 512
     ) throws {
