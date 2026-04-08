@@ -23,6 +23,17 @@ The package API is public in `1.0.0`. OpenMed's broader cross-architecture model
 | Swift app on iPhone/iPad | `OpenMedKit` + CoreML |
 | Direct use of MLX `.npz` in Swift | Not supported in 1.0.0 |
 
+## Real MLX Models in Swift Apps
+
+If you want a Swift app to use a real OpenMed MLX model today, the supported path is to run the OpenMed REST service on an Apple Silicon Mac and point the app at that service:
+
+```bash
+uv pip install -e ".[hf,service,mlx]"
+OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+`OpenMedKit` now includes `OpenMedServiceClient` for `/health` and `/pii/extract`, which is the easiest way to drive uploaded OpenMed MLX models from a macOS app or from the iOS Simulator on the same Mac.
+
 ## Installation
 
 ### Swift Package Manager
@@ -194,6 +205,7 @@ For Swift apps:
 - use **CoreML** with OpenMedKit
 - do **not** point OpenMedKit at MLX weight files such as `weights.safetensors` or `weights.npz`
 - if you need the same model in both Python and Swift, keep an MLX artifact for Python/macOS and a CoreML artifact for Swift/iOS/macOS apps
+- if you need real MLX-backed app inference before a CoreML package exists, call the OpenMed REST service with `OPENMED_BACKEND=mlx`
 
 ## Concurrency
 
