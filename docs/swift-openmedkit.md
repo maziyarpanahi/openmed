@@ -53,7 +53,7 @@ Then add `OpenMedKit` as a dependency to your target:
 3. Select "OpenMedKit" library
 4. Bundle one or more compatible CoreML model folders in your app target
 
-If you use the demo app in `swift/OpenMedDemo/`, it now includes a searchable model picker for bundled CoreML models plus a demo-mode fallback.
+If you use the demo app in `swift/OpenMedDemo/`, it includes a searchable model picker for bundled CoreML models and blocks inference until a real bundle is present.
 
 ## Quick Start
 
