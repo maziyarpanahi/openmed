@@ -1,6 +1,6 @@
 # OpenMed PII Demo (SwiftUI)
 
-A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a searchable model picker. It runs in **demo mode** by default, and switches to real on-device inference as soon as you bundle one or more compatible OpenMed CoreML models.
+A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a searchable model picker for **real bundled CoreML models**.
 
 ![Demo Screenshot](screenshot.png)
 
@@ -8,22 +8,19 @@ A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a sear
 
 - Verified locally on macOS: the `OpenMedDemo` Xcode project builds successfully with `xcodebuild`
 - The app is wired to **OpenMedKit** for real bundled CoreML inference
-- The app includes a searchable model picker so you can switch between bundled models and demo mode
+- The app includes a searchable model picker for bundled models only
 - Uploaded MLX repos are for **Python/macOS** workflows, not direct Swift loading
 - Swift apps still need bundled **CoreML** assets plus `id2label.json`
 
-## Quick Start (Demo Mode)
-
-The app works immediately in **demo mode** with mock entity detection — no model download needed:
+## Quick Start
 
 1. Open `swift/OpenMedDemo/` in Xcode (File > Open)
 2. Select the `OpenMedDemo` scheme
 3. Choose a target: **My Mac** or **iPhone Simulator**
 4. Run (Cmd+R)
+5. Add a real OpenMed CoreML bundle before testing inference
 
-You'll see highlighted PII entities (names, dates, phone numbers, SSNs) in the sample clinical note.
-
-This is useful for validating the macOS/iOS UI flow even before you bundle a real model.
+If no bundled model is present, the app now blocks inference and tells you exactly which files are missing.
 
 ## Adding Real Models
 
