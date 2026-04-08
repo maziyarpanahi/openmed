@@ -16,6 +16,20 @@ struct ContentView: View {
         availableModels.first(where: { $0.id == selectedModelID }) ?? .demo
     }
 
+    private var canAnalyzeSelectedModel: Bool {
+        selectedModel.isRunnableInDemoApp
+    }
+
+    private var analyzeButtonTitle: String {
+        if isAnalyzing {
+            return "Analyzing..."
+        }
+        if selectedModel.runtimeKind == .catalog {
+            return "CoreML Bundle Required"
+        }
+        return "Detect PII Entities"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -62,7 +76,13 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     if availableModels.filter(\.isBundled).isEmpty {
-                        Text("No bundled CoreML model was found in this app build, so the demo is running in mock mode. Uploaded MLX repos are for Python on macOS; Swift apps still need bundled CoreML models.")
+                        Text("No bundled CoreML model was found in this app build. The picker includes the uploaded OpenMed MLX catalog, but Swift apps still need bundled CoreML models to run real inference.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if selectedModel.runtimeKind == .catalog {
+                        Text("Selected model is published on the Hub as an MLX checkpoint, but this Swift demo can only run CoreML bundles through OpenMedKit.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -134,13 +154,13 @@ struct ContentView: View {
                             } else {
                                 Image(systemName: "wand.and.stars")
                             }
-                            Text(isAnalyzing ? "Analyzing..." : "Detect PII Entities")
+                            Text(analyzeButtonTitle)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isAnalyzing || inputText.isEmpty)
+                    .disabled(isAnalyzing || inputText.isEmpty || !canAnalyzeSelectedModel)
                     .padding(.horizontal)
                     .padding(.top, 12)
                     .padding(.bottom, 8)
@@ -197,11 +217,13 @@ struct ContentView: View {
         availableModels = discovered
 
         let firstBundledID = discovered.first(where: \.isBundled)?.id
+        let firstCatalogID = discovered.first(where: { $0.runtimeKind == .catalog })?.id
+        let preferredID = firstBundledID ?? firstCatalogID ?? DemoModelDescriptor.demo.id
 
-        if selectedModelID == DemoModelDescriptor.demo.id, let firstBundledID {
-            selectedModelID = firstBundledID
+        if selectedModelID == DemoModelDescriptor.demo.id {
+            selectedModelID = preferredID
         } else if !discovered.contains(where: { $0.id == selectedModelID }) {
-            selectedModelID = firstBundledID ?? DemoModelDescriptor.demo.id
+            selectedModelID = preferredID
         }
     }
 }
@@ -215,6 +237,10 @@ private func runInference(
         return mockEntities(for: text)
     case .bundled:
         return try await OpenMedRuntimeCache.shared.analyze(text: text, using: model)
+    case .catalog:
+        throw DemoError.unavailableInSwift(
+            "\(model.displayName) is published as an MLX model on Hugging Face, but this Swift demo can only run bundled CoreML assets through OpenMedKit."
+        )
     }
 }
 
@@ -250,11 +276,14 @@ private func mockEntities(for text: String) -> [DetectedEntity] {
 
 enum DemoError: LocalizedError {
     case invalidBundle(String)
+    case unavailableInSwift(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidBundle(let detail):
             return "Bundled model is incomplete: \(detail)"
+        case .unavailableInSwift(let detail):
+            return detail
         }
     }
 }
@@ -283,12 +312,14 @@ struct DetectedEntity: Identifiable, Sendable {
 private enum DemoModelRuntimeKind: String, Hashable, Sendable {
     case demo
     case bundled
+    case catalog
 }
 
 private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
     let id: String
     let displayName: String
     let sourceModelID: String
+    let artifactRepoID: String?
     let tokenizerName: String
     let modelURL: URL?
     let id2labelURL: URL?
@@ -300,6 +331,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
         id: "demo-mode",
         displayName: "Demo Mode",
         sourceModelID: "UI-only mock entities",
+        artifactRepoID: nil,
         tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
         modelURL: nil,
         id2labelURL: nil,
@@ -309,11 +341,13 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
     )
 
     var isBundled: Bool { runtimeKind == .bundled }
+    var isRunnableInDemoApp: Bool { runtimeKind == .demo || runtimeKind == .bundled }
 
     var badgeText: String {
         switch runtimeKind {
         case .demo: return "Demo"
         case .bundled: return "Bundled CoreML"
+        case .catalog: return "Published MLX"
         }
     }
 
@@ -321,6 +355,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
         switch runtimeKind {
         case .demo: return .orange
         case .bundled: return .green
+        case .catalog: return .blue
         }
     }
 
@@ -333,11 +368,38 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
                 return "Runs through OpenMedKit with bundled tokenizer assets at \(tokenizerFolderURL.lastPathComponent)."
             }
             return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
+        case .catalog:
+            if let artifactRepoID {
+                return "Published on Hugging Face as \(artifactRepoID). Swift needs a CoreML bundle before it can run here."
+            }
+            return note
         }
     }
 
     var searchText: String {
-        [displayName, sourceModelID, tokenizerName, note].joined(separator: " ").lowercased()
+        [displayName, sourceModelID, artifactRepoID ?? "", tokenizerName, note]
+            .joined(separator: " ")
+            .lowercased()
+    }
+
+    static func catalog(
+        sourceModelID: String,
+        artifactRepoID: String,
+        tokenizerName: String? = nil,
+        note: String
+    ) -> DemoModelDescriptor {
+        DemoModelDescriptor(
+            id: sourceModelID,
+            displayName: sourceModelID.replacingOccurrences(of: "OpenMed/", with: ""),
+            sourceModelID: sourceModelID,
+            artifactRepoID: artifactRepoID,
+            tokenizerName: tokenizerName ?? sourceModelID,
+            modelURL: nil,
+            id2labelURL: nil,
+            tokenizerFolderURL: nil,
+            runtimeKind: .catalog,
+            note: note
+        )
     }
 }
 
@@ -372,16 +434,51 @@ private enum DemoModelCatalog {
         }
 
         discovered.append(contentsOf: discoverManifestBundles(from: bundle))
+        discovered.append(contentsOf: publishedCatalog)
 
         var seen = Set<String>()
         let unique = discovered.filter { seen.insert($0.id).inserted }
-        let demo = unique.filter { $0.runtimeKind == .demo }
         let bundled = unique
             .filter { $0.runtimeKind == .bundled }
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+        let catalog = unique.filter { $0.runtimeKind == .catalog }
+        let demo = unique.filter { $0.runtimeKind == .demo }
 
-        return demo + bundled
+        return bundled + catalog + demo
     }
+
+    private static let publishedCatalog: [DemoModelDescriptor] = [
+        .catalog(
+            sourceModelID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+            artifactRepoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
+            note: "Uploaded BERT-family MLX checkpoint and the easiest Apple/CoreML candidate."
+        ),
+        .catalog(
+            sourceModelID: "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            artifactRepoID: "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
+            note: "Uploaded DeBERTa-family MLX checkpoint."
+        ),
+        .catalog(
+            sourceModelID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1",
+            artifactRepoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx",
+            note: "Uploaded RoBERTa-family MLX checkpoint."
+        ),
+        .catalog(
+            sourceModelID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
+            artifactRepoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
+            note: "Uploaded DistilBERT-family MLX checkpoint."
+        ),
+        .catalog(
+            sourceModelID: "OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1",
+            artifactRepoID: "OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1-mlx",
+            note: "Uploaded ELECTRA-family MLX checkpoint."
+        ),
+        .catalog(
+            sourceModelID: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
+            artifactRepoID: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1-mlx",
+            note: "Uploaded XLM-RoBERTa-family MLX checkpoint."
+        ),
+    ]
 
     private static func discoverLegacyBundle(from bundle: Bundle) -> DemoModelDescriptor? {
         guard let resourceURL = bundle.resourceURL else {
@@ -403,6 +500,7 @@ private enum DemoModelCatalog {
             id: "legacy-openmedpii",
             displayName: "Bundled OpenMedPII",
             sourceModelID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+            artifactRepoID: nil,
             tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
             modelURL: modelURL,
             id2labelURL: labelsURL,
@@ -464,6 +562,7 @@ private enum DemoModelCatalog {
                         id: manifest.sourceModelID,
                         displayName: manifest.displayName,
                         sourceModelID: manifest.sourceModelID,
+                        artifactRepoID: nil,
                         tokenizerName: manifest.tokenizerName ?? manifest.sourceModelID,
                         modelURL: modelURL,
                         id2labelURL: labelsURL,
@@ -605,7 +704,7 @@ private struct ModelPickerSheet: View {
                             .foregroundStyle(.secondary)
                         Text("No Matching Models")
                             .font(.headline)
-                        Text("This demo only lists bundled CoreML models plus Demo Mode. Try a different search, or bundle a model into the app before launching it.")
+                        Text("Search bundled CoreML models, the uploaded OpenMed MLX catalog, or Demo Mode.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -660,7 +759,7 @@ private struct ModelPickerSheet: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search bundled models or demo mode")
+            .searchable(text: $searchText, prompt: "Search OpenMed models")
             .navigationTitle("Choose Model")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
