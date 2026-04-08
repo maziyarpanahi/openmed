@@ -18,7 +18,8 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Label("Model", systemImage: "shippingbox")
@@ -66,7 +67,7 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Clinical Note", systemImage: "doc.text")
@@ -80,24 +81,7 @@ struct ContentView: View {
                         .background(Color.gray.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
-                .padding()
-
-                Button(action: analyzeText) {
-                    HStack {
-                        if isAnalyzing {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Image(systemName: "wand.and.stars")
-                        }
-                        Text(isAnalyzing ? "Analyzing..." : "Detect PII Entities")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(isAnalyzing || inputText.isEmpty)
-                .padding(.horizontal)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let error = errorMessage {
                     HStack {
@@ -106,8 +90,7 @@ struct ContentView: View {
                         Text(error)
                             .font(.caption)
                     }
-                    .padding(.horizontal)
-                    .padding(.top, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 if !entities.isEmpty {
@@ -133,14 +116,41 @@ struct ContentView: View {
                             EntityRow(entity: entity)
                         }
                     }
-                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-
-                Spacer()
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .padding(.bottom, 96)
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    Divider()
+                    Button(action: analyzeText) {
+                        HStack {
+                            if isAnalyzing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "wand.and.stars")
+                            }
+                            Text(isAnalyzing ? "Analyzing..." : "Detect PII Entities")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isAnalyzing || inputText.isEmpty)
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                }
+                .background(.ultraThinMaterial)
             }
             .navigationTitle("OpenMed PII Demo")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             #endif
         }
         .onAppear {
