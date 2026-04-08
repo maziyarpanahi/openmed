@@ -56,10 +56,7 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS can use either:
-
-- `OpenMedKit` with **CoreML-compatible model bundles** for on-device inference
-- `OpenMedKit` plus the OpenMed REST service backed by `openmed[mlx]` for real MLX-backed app inference
+Swift apps on macOS and iOS use `OpenMedKit` with **CoreML-compatible model bundles**, not MLX:
 
 ```swift
 dependencies: [
@@ -87,7 +84,7 @@ result = analyze_text(
 **2️⃣ REST API Service** — FastAPI endpoints for app backends
 
 ```bash
-OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
 **3️⃣ Batch Processing** — Programmatic multi-document workflows
@@ -160,15 +157,15 @@ OpenMed includes a Docker-friendly FastAPI service with reliability hardening:
 ### Run locally
 
 ```bash
-uv pip install -e ".[hf,service,mlx]"
-OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uv pip install -e ".[hf,service]"
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
 Optional shared model warm-up:
 
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
 ### Run with Docker
