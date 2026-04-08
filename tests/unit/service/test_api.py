@@ -105,7 +105,6 @@ def client(monkeypatch, fake_loader_cls):
     """Create a test client with a stable profile and fake loader."""
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
-    monkeypatch.delenv("OPENMED_BACKEND", raising=False)
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
@@ -120,20 +119,6 @@ def test_health_returns_ok_and_version(client):
     assert payload["service"] == "openmed-rest"
     assert payload["version"] == openmed.__version__
     assert payload["profile"] == "test"
-
-
-def test_service_runtime_accepts_backend_env_override(monkeypatch, fake_loader_cls):
-    monkeypatch.setenv("OPENMED_PROFILE", "test")
-    monkeypatch.setenv("OPENMED_BACKEND", "mlx")
-    monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
-
-    app = create_app()
-
-    with TestClient(app, raise_server_exceptions=False) as client:
-        response = client.get("/health")
-
-        assert response.status_code == 200
-        assert client.app.state.runtime.config.backend == "mlx"
 
 
 def test_analyze_success_returns_prediction_result_shape(client, monkeypatch, fake_loader_cls):

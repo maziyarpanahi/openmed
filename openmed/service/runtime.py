@@ -12,7 +12,6 @@ from openmed.core.models import ModelLoader
 from openmed.utils.validation import validate_model_name
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
-SERVICE_BACKEND_ENV_VAR = "OPENMED_BACKEND"
 
 
 def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
@@ -52,9 +51,7 @@ class ServiceRuntime:
     def from_env(cls) -> "ServiceRuntime":
         """Create a runtime using the current process environment."""
         profile = os.getenv(PROFILE_ENV_VAR, "prod")
-        backend = os.getenv(SERVICE_BACKEND_ENV_VAR)
-        backend = backend.strip() if backend else None
-        config = OpenMedConfig.from_profile(profile, backend=backend)
+        config = OpenMedConfig.from_profile(profile)
         preload_models = parse_preload_models(os.getenv(SERVICE_PRELOAD_ENV_VAR))
         return cls(
             profile=profile,

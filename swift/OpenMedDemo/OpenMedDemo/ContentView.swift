@@ -3,7 +3,6 @@ import OpenMedKit
 import SwiftUI
 
 struct ContentView: View {
-    @AppStorage("openmed.serviceBaseURL") private var serviceBaseURLString = "http://127.0.0.1:8080"
     @State private var inputText = "Patient John Doe, DOB 1990-05-15, phone 555-123-4567, SSN 123-45-6789. Diagnosed with Type 2 diabetes."
     @State private var availableModels: [DemoModelDescriptor] = [.demo]
     @State private var selectedModelID = DemoModelDescriptor.demo.id
@@ -12,28 +11,13 @@ struct ContentView: View {
     @State private var isShowingModelPicker = false
     @State private var errorMessage: String?
     @State private var inferenceTime: Double?
-    @State private var serviceStatus: DemoServiceStatus = .unknown
 
     private var selectedModel: DemoModelDescriptor {
         availableModels.first(where: { $0.id == selectedModelID }) ?? .demo
     }
 
-    private var normalizedServiceURL: URL? {
-        let trimmed = serviceBaseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return nil
-        }
-        let normalized = trimmed.hasSuffix("/") ? trimmed : "\(trimmed)/"
-        return URL(string: normalized)
-    }
-
     private var canAnalyzeSelectedModel: Bool {
-        switch selectedModel.runtimeKind {
-        case .demo, .bundled:
-            return true
-        case .catalog:
-            return normalizedServiceURL != nil && serviceStatus.isReachable
-        }
+        selectedModel.isRunnableInDemoApp
     }
 
     private var analyzeButtonTitle: String {
@@ -41,7 +25,7 @@ struct ContentView: View {
             return "Analyzing..."
         }
         if selectedModel.runtimeKind == .catalog {
-            return canAnalyzeSelectedModel ? "Detect PII via MLX" : "Connect MLX Service"
+            return "CoreML Bundle Required"
         }
         return "Detect PII Entities"
     }
@@ -50,23 +34,139 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    modelSection
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("Model", systemImage: "shippingbox")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Choose Model") {
+                            refreshAvailableModels()
+                            isShowingModelPicker = true
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(selectedModel.displayName)
+                                .font(.title3.weight(.semibold))
+
+                            Text(selectedModel.badgeText)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(selectedModel.badgeColor.opacity(0.14))
+                                .foregroundStyle(selectedModel.badgeColor)
+                                .clipShape(Capsule())
+                        }
+
+                        Text(selectedModel.sourceModelID)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+
+                        Text(selectedModel.detailText)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.gray.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    if availableModels.filter(\.isBundled).isEmpty {
+                        Text("No bundled CoreML model was found in this app build. The picker includes the uploaded OpenMed MLX catalog, but Swift apps still need bundled CoreML models to run real inference.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if selectedModel.runtimeKind == .catalog {
-                        serviceSection
+                        Text("Selected model is published on the Hub as an MLX checkpoint, but this Swift demo can only run CoreML bundles through OpenMedKit.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    noteSection
-                    if let errorMessage {
-                        errorSection(errorMessage)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Clinical Note", systemImage: "doc.text")
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+
+                    TextEditor(text: $inputText)
+                        .font(.body.monospaced())
+                        .frame(minHeight: 120, maxHeight: 200)
+                        .padding(8)
+                        .background(Color.gray.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let error = errorMessage {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text(error)
+                            .font(.caption)
                     }
-                    if !entities.isEmpty {
-                        resultsSection
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                if !entities.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Label("Detected Entities", systemImage: "shield.lefthalf.filled")
+                                .font(.headline)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            if let time = inferenceTime {
+                                Text(String(format: "%.0fms", time * 1000))
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+
+                        HighlightedTextView(text: inputText, entities: entities)
+                            .padding(12)
+                            .background(Color.gray.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                        ForEach(entities) { entity in
+                            EntityRow(entity: entity)
+                        }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding()
                 .padding(.bottom, 96)
             }
-            .safeAreaInset(edge: .bottom) { analyzeBar }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                    Divider()
+                    Button(action: analyzeText) {
+                        HStack {
+                            if isAnalyzing {
+                                ProgressView()
+                                    .controlSize(.small)
+                            } else {
+                                Image(systemName: "wand.and.stars")
+                            }
+                            Text(analyzeButtonTitle)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isAnalyzing || inputText.isEmpty || !canAnalyzeSelectedModel)
+                    .padding(.horizontal)
+                    .padding(.top, 12)
+                    .padding(.bottom, 8)
+                }
+                .background(.ultraThinMaterial)
+            }
             .navigationTitle("OpenMed PII Demo")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -78,15 +178,6 @@ struct ContentView: View {
         }
         .task {
             refreshAvailableModels()
-            await refreshServiceStatus()
-        }
-        .onChange(of: selectedModelID) { _ in
-            Task {
-                await refreshServiceStatus()
-            }
-        }
-        .onChange(of: serviceBaseURLString) { _ in
-            serviceStatus = .unknown
         }
         .sheet(isPresented: $isShowingModelPicker) {
             ModelPickerSheet(
@@ -94,199 +185,6 @@ struct ContentView: View {
                 selectedModelID: $selectedModelID
             )
         }
-    }
-
-    private var modelSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Model", systemImage: "shippingbox")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Choose Model") {
-                    refreshAvailableModels()
-                    isShowingModelPicker = true
-                }
-                .buttonStyle(.bordered)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(selectedModel.displayName)
-                        .font(.title3.weight(.semibold))
-
-                    Text(selectedModel.badgeText)
-                        .font(.caption.weight(.semibold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(selectedModel.badgeColor.opacity(0.14))
-                        .foregroundStyle(selectedModel.badgeColor)
-                        .clipShape(Capsule())
-                }
-
-                Text(selectedModel.sourceModelID)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-
-                Text(selectedModel.detailText)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            if availableModels.filter(\.isBundled).isEmpty && selectedModel.runtimeKind != .catalog {
-                Text("No bundled CoreML model was found in this app build. Choose an uploaded MLX model and connect to a running OpenMed MLX service, or keep using Demo Mode.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if selectedModel.runtimeKind == .catalog {
-                Text("Selected model is published as an MLX checkpoint. This demo runs it through the OpenMed REST service on your Mac, while bundled CoreML remains the on-device path for Swift.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var serviceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("MLX Service", systemImage: "network")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Test Connection") {
-                    Task {
-                        await refreshServiceStatus()
-                    }
-                }
-                .buttonStyle(.bordered)
-            }
-
-            serviceURLField
-
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(serviceStatus.color)
-                    .frame(width: 10, height: 10)
-                Text(serviceStatus.title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(serviceStatus.color)
-            }
-
-            Text(serviceStatus.detailText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Text("Start locally with `OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080`. Use `127.0.0.1` for macOS or the iOS Simulator; on a physical iPhone, replace it with your Mac's LAN IP.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-                .textSelection(.enabled)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var noteSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Clinical Note", systemImage: "doc.text")
-                .font(.headline)
-                .foregroundStyle(.secondary)
-
-            TextEditor(text: $inputText)
-                .font(.body.monospaced())
-                .frame(minHeight: 120, maxHeight: 200)
-                .padding(8)
-                .background(Color.gray.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private var serviceURLField: some View {
-        #if os(iOS)
-        TextField("http://127.0.0.1:8080", text: $serviceBaseURLString)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .keyboardType(.URL)
-            .font(.system(.callout, design: .monospaced))
-            .padding(10)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        #else
-        TextField("http://127.0.0.1:8080", text: $serviceBaseURLString)
-            .font(.system(.callout, design: .monospaced))
-            .textFieldStyle(.plain)
-            .padding(10)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        #endif
-    }
-
-    private func errorSection(_ message: String) -> some View {
-        HStack {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            Text(message)
-                .font(.caption)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var resultsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("Detected Entities", systemImage: "shield.lefthalf.filled")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if let time = inferenceTime {
-                    Text(String(format: "%.0fms", time * 1000))
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-
-            HighlightedTextView(text: inputText, entities: entities)
-                .padding(12)
-                .background(Color.gray.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-            ForEach(entities) { entity in
-                EntityRow(entity: entity)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var analyzeBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-            Button(action: analyzeText) {
-                HStack {
-                    if isAnalyzing {
-                        ProgressView()
-                            .controlSize(.small)
-                    } else {
-                        Image(systemName: "wand.and.stars")
-                    }
-                    Text(analyzeButtonTitle)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isAnalyzing || inputText.isEmpty || !canAnalyzeSelectedModel)
-            .padding(.horizontal)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
-        }
-        .background(.ultraThinMaterial)
     }
 
     private func analyzeText() {
@@ -298,11 +196,7 @@ struct ContentView: View {
             let start = CFAbsoluteTimeGetCurrent()
 
             do {
-                let result = try await runInference(
-                    text: inputText,
-                    model: selectedModel,
-                    serviceBaseURL: normalizedServiceURL
-                )
+                let result = try await runInference(text: inputText, model: selectedModel)
                 inferenceTime = CFAbsoluteTimeGetCurrent() - start
                 entities = result.sorted { lhs, rhs in
                     if lhs.start == rhs.start {
@@ -315,28 +209,6 @@ struct ContentView: View {
             }
 
             isAnalyzing = false
-        }
-    }
-
-    @MainActor
-    private func refreshServiceStatus() async {
-        guard selectedModel.runtimeKind == .catalog else {
-            serviceStatus = .notNeeded
-            return
-        }
-
-        guard let serviceBaseURL = normalizedServiceURL else {
-            serviceStatus = .invalidURL
-            return
-        }
-
-        serviceStatus = .checking
-
-        do {
-            let health = try await OpenMedRemoteRuntimeCache.shared.health(serviceBaseURL: serviceBaseURL)
-            serviceStatus = .available(profile: health.profile)
-        } catch {
-            serviceStatus = .unavailable(error.localizedDescription)
         }
     }
 
@@ -358,8 +230,7 @@ struct ContentView: View {
 
 private func runInference(
     text: String,
-    model: DemoModelDescriptor,
-    serviceBaseURL: URL?
+    model: DemoModelDescriptor
 ) async throws -> [DetectedEntity] {
     switch model.runtimeKind {
     case .demo:
@@ -367,15 +238,8 @@ private func runInference(
     case .bundled:
         return try await OpenMedRuntimeCache.shared.analyze(text: text, using: model)
     case .catalog:
-        guard let serviceBaseURL else {
-            throw DemoError.invalidServiceURL(
-                "Enter a valid OpenMed service URL such as http://127.0.0.1:8080."
-            )
-        }
-        return try await OpenMedRemoteRuntimeCache.shared.analyze(
-            text: text,
-            using: model,
-            serviceBaseURL: serviceBaseURL
+        throw DemoError.unavailableInSwift(
+            "\(model.displayName) is published as an MLX model on Hugging Face, but this Swift demo can only run bundled CoreML assets through OpenMedKit."
         )
     }
 }
@@ -412,15 +276,12 @@ private func mockEntities(for text: String) -> [DetectedEntity] {
 
 enum DemoError: LocalizedError {
     case invalidBundle(String)
-    case invalidServiceURL(String)
     case unavailableInSwift(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidBundle(let detail):
             return "Bundled model is incomplete: \(detail)"
-        case .invalidServiceURL(let detail):
-            return detail
         case .unavailableInSwift(let detail):
             return detail
         }
@@ -509,7 +370,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
             return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
         case .catalog:
             if let artifactRepoID {
-                return "Published on Hugging Face as \(artifactRepoID). This demo can run it through the OpenMed MLX service on your Mac."
+                return "Published on Hugging Face as \(artifactRepoID). Swift needs a CoreML bundle before it can run here."
             }
             return note
         }
@@ -757,113 +618,6 @@ private actor OpenMedRuntimeCache {
                 end: prediction.end,
                 category: entityCategory(for: prediction.label)
             )
-        }
-    }
-}
-
-private actor OpenMedRemoteRuntimeCache {
-    static let shared = OpenMedRemoteRuntimeCache()
-
-    private var clients: [String: OpenMedServiceClient] = [:]
-
-    func health(serviceBaseURL: URL) async throws -> OpenMedServiceHealth {
-        let client = client(for: serviceBaseURL)
-        return try await client.health()
-    }
-
-    func analyze(
-        text: String,
-        using model: DemoModelDescriptor,
-        serviceBaseURL: URL
-    ) async throws -> [DetectedEntity] {
-        let client = client(for: serviceBaseURL)
-        let predictions = try await client.extractPII(
-            text,
-            modelName: model.sourceModelID
-        )
-        return predictions.map { prediction in
-            DetectedEntity(
-                label: prediction.label,
-                text: prediction.text,
-                confidence: prediction.confidence,
-                start: prediction.start,
-                end: prediction.end,
-                category: entityCategory(for: prediction.label)
-            )
-        }
-    }
-
-    private func client(for serviceBaseURL: URL) -> OpenMedServiceClient {
-        let key = serviceBaseURL.absoluteString
-        if let cached = clients[key] {
-            return cached
-        }
-
-        let client = OpenMedServiceClient(baseURL: serviceBaseURL)
-        clients[key] = client
-        return client
-    }
-}
-
-private enum DemoServiceStatus: Equatable {
-    case unknown
-    case checking
-    case invalidURL
-    case available(profile: String)
-    case unavailable(String)
-    case notNeeded
-
-    var isReachable: Bool {
-        if case .available = self {
-            return true
-        }
-        return false
-    }
-
-    var title: String {
-        switch self {
-        case .unknown:
-            return "Not checked yet"
-        case .checking:
-            return "Checking OpenMed service"
-        case .invalidURL:
-            return "Invalid service URL"
-        case .available(let profile):
-            return "Connected to OpenMed service (\(profile))"
-        case .unavailable:
-            return "OpenMed service unavailable"
-        case .notNeeded:
-            return "Service not needed"
-        }
-    }
-
-    var detailText: String {
-        switch self {
-        case .unknown:
-            return "The demo will use this URL for uploaded MLX models."
-        case .checking:
-            return "Pinging /health on the configured OpenMed service."
-        case .invalidURL:
-            return "Use a full URL such as http://127.0.0.1:8080."
-        case .available:
-            return "Uploaded MLX models can now run through the OpenMed REST service."
-        case .unavailable(let message):
-            return message
-        case .notNeeded:
-            return "Bundled CoreML models do not need the REST service."
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .available:
-            return .green
-        case .checking:
-            return .orange
-        case .invalidURL, .unavailable:
-            return .red
-        case .unknown, .notNeeded:
-            return .secondary
         }
     }
 }

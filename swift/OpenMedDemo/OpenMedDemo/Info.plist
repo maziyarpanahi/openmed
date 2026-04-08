@@ -12,11 +12,6 @@
     <string>1.0.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsLocalNetworking</key>
-        <true/>
-    </dict>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>UILaunchScreen</key>
