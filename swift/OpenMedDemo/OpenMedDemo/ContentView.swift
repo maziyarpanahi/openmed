@@ -2,6 +2,7 @@ import OpenMedKit
 import SwiftUI
 
 struct ContentView: View {
+    @AppStorage("openmed.demo.hfToken") private var huggingFaceToken = ""
     @State private var inputText = "Patient John Doe, DOB 1990-05-15, phone 555-123-4567, SSN 123-45-6789. Diagnosed with Type 2 diabetes."
     @State private var availableModels: [DemoModelDescriptor] = [.missingBundledModel]
     @State private var selectedModelID = DemoModelDescriptor.missingBundledModel.id
@@ -23,7 +24,14 @@ struct ContentView: View {
         if isAnalyzing {
             return "Analyzing..."
         }
-        return canAnalyzeSelectedModel ? "Detect PII Entities" : "Add Bundled CoreML Model"
+        switch selectedModel.runtimeKind {
+        case .bundled:
+            return canAnalyzeSelectedModel ? "Detect PII Entities" : "Add Bundled CoreML Model"
+        case .mlx:
+            return canAnalyzeSelectedModel ? "Download & Detect PII" : "Run on Apple Silicon Device"
+        case .unavailable:
+            return "Add a Supported Model"
+        }
     }
 
     var body: some View {
@@ -62,6 +70,13 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
 
+                        if let artifactRepoID = selectedModel.artifactRepoID {
+                            Text(artifactRepoID)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .textSelection(.enabled)
+                        }
+
                         Text(selectedModel.detailText)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -72,12 +87,27 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     if availableModels.filter(\.isBundled).isEmpty {
-                        Text("No bundled CoreML model was found in this app build. This app only runs real bundled OpenMed CoreML assets on macOS and iOS. Add `OpenMedPII.mlpackage` or `OpenMedPII.mlmodelc` plus `id2label.json` to test on-device inference.")
+                        Text("This app build does not currently include a bundled CoreML model. You can still test the published OpenMed MLX artifacts on Apple Silicon macOS or a physical iPhone/iPad by selecting an MLX model below and providing a Hugging Face token while the repos remain private.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                if selectedModel.runtimeKind == .mlx {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Hugging Face Token", systemImage: "key.horizontal")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+
+                        huggingFaceTokenField
+
+                        Text("Required while these MLX repos are private. Once the repos are public, you can leave this blank.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Clinical Note", systemImage: "doc.text")
@@ -186,7 +216,11 @@ struct ContentView: View {
             let start = CFAbsoluteTimeGetCurrent()
 
             do {
-                let result = try await runInference(text: inputText, model: selectedModel)
+                let result = try await runInference(
+                    text: inputText,
+                    model: selectedModel,
+                    authToken: huggingFaceToken
+                )
                 inferenceTime = CFAbsoluteTimeGetCurrent() - start
                 entities = result.sorted { lhs, rhs in
                     if lhs.start == rhs.start {
@@ -206,8 +240,10 @@ struct ContentView: View {
         let discovered = DemoModelCatalog.discover(from: .main)
         availableModels = discovered
 
-        let firstBundledID = discovered.first(where: \.isBundled)?.id
-        let preferredID = firstBundledID ?? DemoModelDescriptor.missingBundledModel.id
+        let preferredID =
+            discovered.first(where: \.isRunnableInDemoApp)?.id ??
+            discovered.first?.id ??
+            DemoModelDescriptor.missingBundledModel.id
 
         if selectedModelID == DemoModelDescriptor.missingBundledModel.id {
             selectedModelID = preferredID
@@ -215,30 +251,63 @@ struct ContentView: View {
             selectedModelID = preferredID
         }
     }
+
+    @ViewBuilder
+    private var huggingFaceTokenField: some View {
+        #if os(iOS)
+        SecureField("hf_...", text: $huggingFaceToken)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .font(.body.monospaced())
+            .padding(12)
+            .background(Color.gray.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        #else
+        SecureField("hf_...", text: $huggingFaceToken)
+            .font(.body.monospaced())
+            .padding(12)
+            .background(Color.gray.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        #endif
+    }
 }
 
 private func runInference(
     text: String,
-    model: DemoModelDescriptor
+    model: DemoModelDescriptor,
+    authToken: String
 ) async throws -> [DetectedEntity] {
     switch model.runtimeKind {
     case .bundled:
-        return try await OpenMedRuntimeCache.shared.analyze(text: text, using: model)
+        return try await OpenMedRuntimeCache.shared.analyze(
+            text: text,
+            using: model,
+            authToken: nil
+        )
+    case .mlx:
+        return try await OpenMedRuntimeCache.shared.analyze(
+            text: text,
+            using: model,
+            authToken: authToken
+        )
     case .unavailable:
-        throw DemoError.invalidBundle(
-            "Bundle a real OpenMed CoreML model before running this app on macOS or iOS."
+        throw DemoError.unavailableInSwift(
+            "Select a bundled CoreML model or a supported MLX model before running inference."
         )
     }
 }
 
 enum DemoError: LocalizedError {
     case invalidBundle(String)
+    case missingAuthToken(String)
     case unavailableInSwift(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidBundle(let detail):
             return "Bundled model is incomplete: \(detail)"
+        case .missingAuthToken(let detail):
+            return detail
         case .unavailableInSwift(let detail):
             return detail
         }
@@ -269,6 +338,7 @@ struct DetectedEntity: Identifiable, Sendable {
 private enum DemoModelRuntimeKind: String, Hashable, Sendable {
     case unavailable
     case bundled
+    case mlx
 }
 
 private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
@@ -285,24 +355,35 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
 
     static let missingBundledModel = DemoModelDescriptor(
         id: "missing-bundled-model",
-        displayName: "No Bundled Model",
-        sourceModelID: "Add a real OpenMed CoreML bundle to test this app",
+        displayName: "No Supported Model",
+        sourceModelID: "Add a bundled CoreML model or select a supported MLX artifact",
         artifactRepoID: nil,
         tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
         modelURL: nil,
         id2labelURL: nil,
         tokenizerFolderURL: nil,
         runtimeKind: .unavailable,
-        note: "This app does not run MLX checkpoints directly. Bundle `OpenMedPII.mlpackage` or `OpenMedPII.mlmodelc` plus `id2label.json`."
+        note: "OpenMedKit now supports BERT-family MLX artifacts on Apple Silicon macOS and physical iPhone/iPad devices, or bundled CoreML assets across Apple platforms."
     )
 
     var isBundled: Bool { runtimeKind == .bundled }
-    var isRunnableInDemoApp: Bool { runtimeKind == .bundled }
+    var requiresAuthToken: Bool { runtimeKind == .mlx && artifactRepoID != nil }
+    var isRunnableInDemoApp: Bool {
+        switch runtimeKind {
+        case .bundled:
+            return true
+        case .mlx:
+            return DemoPlatform.supportsOnDeviceMLX
+        case .unavailable:
+            return false
+        }
+    }
 
     var badgeText: String {
         switch runtimeKind {
-        case .unavailable: return "Needs CoreML"
+        case .unavailable: return "Unavailable"
         case .bundled: return "Bundled CoreML"
+        case .mlx: return "MLX Download"
         }
     }
 
@@ -310,6 +391,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
         switch runtimeKind {
         case .unavailable: return .orange
         case .bundled: return .green
+        case .mlx: return .blue
         }
     }
 
@@ -322,6 +404,11 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
                 return "Runs through OpenMedKit with bundled tokenizer assets at \(tokenizerFolderURL.lastPathComponent)."
             }
             return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
+        case .mlx:
+            if DemoPlatform.supportsOnDeviceMLX {
+                return "Downloads the MLX artifact from Hugging Face, caches it locally, and runs it on-device with OpenMedKit + MLX."
+            }
+            return "This MLX model requires Apple Silicon macOS or a physical iPhone/iPad. iOS Simulator is not supported."
         }
     }
 
@@ -357,7 +444,7 @@ private struct BundledModelManifest: Decodable {
 
 private enum DemoModelCatalog {
     static func discover(from bundle: Bundle) -> [DemoModelDescriptor] {
-        var discovered: [DemoModelDescriptor] = []
+        var discovered: [DemoModelDescriptor] = swiftMLXCatalog()
 
         if let legacy = discoverLegacyBundle(from: bundle) {
             discovered.append(legacy)
@@ -366,11 +453,75 @@ private enum DemoModelCatalog {
         discovered.append(contentsOf: discoverManifestBundles(from: bundle))
 
         var seen = Set<String>()
-        let bundled = discovered
+        let unique = discovered
             .filter { seen.insert($0.id).inserted }
-            .filter { $0.runtimeKind == .bundled }
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
-        return bundled.isEmpty ? [.missingBundledModel] : bundled
+        return unique.isEmpty ? [.missingBundledModel] : unique
+    }
+
+    private static func swiftMLXCatalog() -> [DemoModelDescriptor] {
+        [
+            DemoModelDescriptor(
+                id: "mlx-clinicale5-small",
+                displayName: "ClinicalE5 Small",
+                sourceModelID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+                artifactRepoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
+                tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "BERT family, 33M parameters. Smallest published OpenMed PII model for Swift MLX validation."
+            ),
+            DemoModelDescriptor(
+                id: "mlx-liteclinical-small",
+                displayName: "LiteClinical Small",
+                sourceModelID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
+                artifactRepoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
+                tokenizerName: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "DistilBERT family, 66M parameters."
+            ),
+            DemoModelDescriptor(
+                id: "mlx-fastclinical-small",
+                displayName: "FastClinical Small",
+                sourceModelID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1",
+                artifactRepoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx",
+                tokenizerName: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "RoBERTa family, 82M parameters."
+            ),
+            DemoModelDescriptor(
+                id: "mlx-biomedelectra-base",
+                displayName: "BiomedELECTRA Base",
+                sourceModelID: "OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1",
+                artifactRepoID: "OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1-mlx",
+                tokenizerName: "OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "ELECTRA family, 110M parameters."
+            ),
+            DemoModelDescriptor(
+                id: "mlx-bigmed-large",
+                displayName: "BigMed Large",
+                sourceModelID: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
+                artifactRepoID: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1-mlx",
+                tokenizerName: "OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "XLM-RoBERTa family, 278M parameters."
+            ),
+        ]
     }
 
     private static func discoverLegacyBundle(from bundle: Bundle) -> DemoModelDescriptor? {
@@ -478,25 +629,56 @@ private actor OpenMedRuntimeCache {
 
     private var runtimes: [String: OpenMed] = [:]
 
-    func analyze(text: String, using model: DemoModelDescriptor) throws -> [DetectedEntity] {
-        guard model.runtimeKind == .bundled,
-              let modelURL = model.modelURL,
-              let id2labelURL = model.id2labelURL else {
-            throw DemoError.invalidBundle("Model selection \(model.displayName) is not loadable.")
-        }
-
+    func analyze(
+        text: String,
+        using model: DemoModelDescriptor,
+        authToken: String?
+    ) async throws -> [DetectedEntity] {
         let runtime: OpenMed
         if let cached = runtimes[model.id] {
             runtime = cached
         } else {
-            _ = try Data(contentsOf: id2labelURL)
+            let openmed: OpenMed
+            switch model.runtimeKind {
+            case .bundled:
+                guard let modelURL = model.modelURL,
+                      let id2labelURL = model.id2labelURL else {
+                    throw DemoError.invalidBundle("Model selection \(model.displayName) is not loadable.")
+                }
 
-            let openmed = try OpenMed(
-                modelURL: modelURL,
-                id2labelURL: id2labelURL,
-                tokenizerName: model.tokenizerName,
-                tokenizerFolderURL: model.tokenizerFolderURL
-            )
+                openmed = try OpenMed(
+                    modelURL: modelURL,
+                    id2labelURL: id2labelURL,
+                    tokenizerName: model.tokenizerName,
+                    tokenizerFolderURL: model.tokenizerFolderURL
+                )
+
+            case .mlx:
+                guard let artifactRepoID = model.artifactRepoID else {
+                    throw DemoError.unavailableInSwift(
+                        "The selected MLX model does not define a Hugging Face artifact repo."
+                    )
+                }
+                let normalizedToken = authToken?.trimmingCharacters(in: .whitespacesAndNewlines)
+                if model.requiresAuthToken && (normalizedToken?.isEmpty ?? true) {
+                    throw DemoError.missingAuthToken(
+                        "Enter a Hugging Face token before downloading \(artifactRepoID). The repo is private for now."
+                    )
+                }
+
+                let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+                    repoID: artifactRepoID,
+                    authToken: normalizedToken,
+                    revision: "main"
+                )
+                openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
+
+            case .unavailable:
+                throw DemoError.unavailableInSwift(
+                    "The selected model cannot run in this app."
+                )
+            }
+
             runtimes[model.id] = openmed
             runtime = openmed
         }
@@ -597,7 +779,7 @@ private struct ModelPickerSheet: View {
                             .foregroundStyle(.secondary)
                         Text("No Matching Models")
                             .font(.headline)
-                        Text("Search bundled OpenMed CoreML models added to this app target.")
+                        Text("Search the bundled CoreML models and the Swift-MLX-compatible OpenMed model catalog.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -666,6 +848,18 @@ private struct ModelPickerSheet: View {
                 }
             }
         }
+    }
+}
+
+private enum DemoPlatform {
+    static var supportsOnDeviceMLX: Bool {
+        #if targetEnvironment(simulator)
+        false
+        #elseif arch(arm64) || arch(arm64e)
+        true
+        #else
+        false
+        #endif
     }
 }
 

@@ -4,27 +4,64 @@ import Tokenizers
 
 /// OpenMedKit — On-device clinical NLP for iOS and macOS.
 ///
-/// Provides NER and PII detection using CoreML models converted from
-/// the OpenMed Python library.
+/// Provides NER and PII detection using either CoreML or MLX models
+/// produced by the OpenMed Python library.
 ///
 /// ## Quick Start
 ///
 /// ```swift
-/// let openmed = try OpenMed(
-///     modelURL: Bundle.main.url(forResource: "OpenMedPII", withExtension: "mlmodelc")!,
-///     id2labelURL: Bundle.main.url(forResource: "id2label", withExtension: "json")!,
-///     tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
+/// let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+///     repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
+///     authToken: ProcessInfo.processInfo.environment["HF_TOKEN"]
 /// )
+/// let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
 /// let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
 /// for entity in entities {
 ///     print(entity)  // [first_name] "John Doe" (8:16) conf=0.95
 /// }
 /// ```
 public final class OpenMed {
+    private enum Runtime {
+        case coreML(NERPipeline)
+        case mlx(MLXTokenClassificationPipeline)
+    }
 
-    private let pipeline: NERPipeline
+    private let runtime: Runtime
     private let tokenizer: any Tokenizer
     private let maxSeqLength: Int
+
+    /// Initialize OpenMed with an explicit backend.
+    public init(
+        backend: OpenMedBackend,
+        maxSeqLength: Int = 512
+    ) throws {
+        switch backend {
+        case .coreML(let modelURL, let id2labelURL, let tokenizerName, let tokenizerFolderURL):
+            let pipeline = try NERPipeline(
+                modelURL: modelURL,
+                id2labelURL: id2labelURL,
+                maxSeqLength: maxSeqLength
+            )
+            self.runtime = .coreML(pipeline)
+            self.tokenizer = try Self.loadTokenizer(
+                tokenizerName: tokenizerName,
+                tokenizerFolderURL: tokenizerFolderURL
+            )
+            self.maxSeqLength = maxSeqLength
+
+        case .mlx(let modelDirectoryURL):
+            let pipeline = try MLXTokenClassificationPipeline(
+                modelDirectoryURL: modelDirectoryURL,
+                maxSeqLength: maxSeqLength
+            )
+            self.runtime = .mlx(pipeline)
+            self.tokenizer = try Self.loadTokenizer(
+                tokenizerName: pipeline.tokenizerName ?? modelDirectoryURL.path,
+                tokenizerFolderURL: pipeline.tokenizerDirectoryURL
+            )
+            self.maxSeqLength = pipeline.resolvedMaxSequenceLength
+        }
+    }
 
     /// Initialize OpenMed with a CoreML model and tokenizer.
     ///
@@ -34,23 +71,22 @@ public final class OpenMed {
     ///   - tokenizerName: HuggingFace tokenizer name for text tokenization.
     ///   - tokenizerFolderURL: Optional local tokenizer asset directory for offline use.
     ///   - maxSeqLength: Maximum token sequence length (default: 512).
-    public init(
+    public convenience init(
         modelURL: URL,
         id2labelURL: URL,
         tokenizerName: String = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
         tokenizerFolderURL: URL? = nil,
         maxSeqLength: Int = 512
     ) throws {
-        self.pipeline = try NERPipeline(
-            modelURL: modelURL,
-            id2labelURL: id2labelURL,
+        try self.init(
+            backend: .coreML(
+                modelURL: modelURL,
+                id2labelURL: id2labelURL,
+                tokenizerName: tokenizerName,
+                tokenizerFolderURL: tokenizerFolderURL
+            ),
             maxSeqLength: maxSeqLength
         )
-        self.tokenizer = try Self.loadTokenizer(
-            tokenizerName: tokenizerName,
-            tokenizerFolderURL: tokenizerFolderURL
-        )
-        self.maxSeqLength = maxSeqLength
     }
 
     /// Run NER on the given text and return detected entities.
@@ -63,14 +99,26 @@ public final class OpenMed {
         _ text: String,
         confidenceThreshold: Float = 0.5
     ) throws -> [EntityPrediction] {
-        let (inputIds, attentionMask, offsets) = try tokenize(text)
+        let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
 
-        let entities = try pipeline.predict(
-            inputIds: inputIds,
-            attentionMask: attentionMask,
-            offsets: offsets,
-            text: text
-        )
+        let entities: [EntityPrediction]
+        switch runtime {
+        case .coreML(let pipeline):
+            entities = try pipeline.predict(
+                inputIds: inputIDs,
+                attentionMask: attentionMask,
+                offsets: offsets,
+                text: text
+            )
+        case .mlx(let pipeline):
+            entities = try pipeline.predict(
+                inputIDs: inputIDs,
+                attentionMask: attentionMask,
+                tokenTypeIDs: tokenTypeIDs,
+                offsets: offsets,
+                text: text
+            )
+        }
 
         return entities.filter { $0.confidence >= confidenceThreshold }
     }
@@ -88,15 +136,16 @@ public final class OpenMed {
 
     // MARK: - Private
 
-    private func tokenize(_ text: String) throws -> ([Int], [Int], [(Int, Int)]) {
+    private func tokenize(_ text: String) throws -> ([Int], [Int], [Int], [(Int, Int)]) {
         // Use swift-transformers for tokenization
         // This ensures token IDs match the Python HuggingFace tokenizer
         let inputIds = Array(tokenizer(text, addSpecialTokens: true).prefix(maxSeqLength))
         let tokens = tokenizer.convertIdsToTokens(inputIds).map { $0 ?? "" }
         let attentionMask = Array(repeating: 1, count: inputIds.count)
+        let tokenTypeIDs = Array(repeating: 0, count: inputIds.count)
         let offsets = Self.buildOffsets(tokens: tokens, in: text)
 
-        return (inputIds, attentionMask, offsets)
+        return (inputIds, attentionMask, tokenTypeIDs, offsets)
     }
 
     private static func loadTokenizer(

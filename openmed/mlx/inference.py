@@ -12,6 +12,14 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from openmed.mlx.artifact import (
+    MANIFEST_FILENAME,
+    has_local_tokenizer,
+    load_artifact_config,
+    read_manifest,
+    resolve_tokenizer_reference,
+)
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -50,9 +58,7 @@ class MLXTokenClassificationPipeline:
         self.model = load_model(self.model_path)
         self.aggregation_strategy = aggregation_strategy
 
-        # Load config for id2label
-        with open(self.model_path / "config.json") as f:
-            config = json.load(f)
+        manifest, config = load_artifact_config(self.model_path)
 
         self.id2label: Dict[int, str] = {
             int(k): v for k, v in config.get("id2label", {}).items()
@@ -61,7 +67,11 @@ class MLXTokenClassificationPipeline:
         # Load HuggingFace tokenizer (framework-agnostic)
         try:
             from transformers import AutoTokenizer
-            tok_name = tokenizer_name or config.get("_name_or_path", str(self.model_path))
+            tok_name = tokenizer_name or resolve_tokenizer_reference(
+                self.model_path,
+                config=config,
+                manifest=manifest,
+            )
             self.tokenizer = AutoTokenizer.from_pretrained(tok_name)
         except ImportError:
             raise ImportError(
@@ -252,10 +262,20 @@ def _download_preconverted_mlx_model(
         repo_type="model",
         cache_dir=cache_dir,
         allow_patterns=[
+            MANIFEST_FILENAME,
             "config.json",
             "id2label.json",
             "weights.safetensors",
             "weights.npz",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "vocab.txt",
+            "vocab.json",
+            "merges.txt",
+            "spm.model",
+            "sentencepiece.bpe.model",
+            "added_tokens.json",
         ],
     )
 
@@ -268,7 +288,7 @@ def _resolve_mlx_model(
 
     Tries in order:
     1. Pre-converted MLX model from _MLX_MODEL_MAP
-    2. Local path if model_name is a directory with config.json
+    2. Local path if model_name is a directory with config.json or openmed-mlx.json
     3. On-the-fly conversion from HuggingFace
     """
     from openmed.core.model_registry import OPENMED_MODELS
@@ -300,17 +320,14 @@ def _resolve_mlx_model(
 
     # Check local path
     local = Path(model_name)
-    if local.is_dir() and (local / "config.json").exists():
-        bundled_tokenizer_files = (
-            local / "tokenizer.json",
-            local / "tokenizer_config.json",
-            local / "special_tokens_map.json",
-            local / "vocab.txt",
-            local / "merges.txt",
-            local / "spm.model",
-        )
-        if any(path.exists() for path in bundled_tokenizer_files):
-            return str(local), str(local)
+    if local.is_dir() and ((local / "config.json").exists() or (local / MANIFEST_FILENAME).exists()):
+        manifest = read_manifest(local)
+        if manifest is not None or has_local_tokenizer(local):
+            try:
+                _, local_config = load_artifact_config(local)
+            except Exception:
+                local_config = {}
+            return str(local), resolve_tokenizer_reference(local, config=local_config, manifest=manifest)
 
         try:
             with open(local / "config.json") as f:

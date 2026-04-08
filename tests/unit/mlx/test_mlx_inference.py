@@ -245,3 +245,26 @@ class TestMLXModelResolve:
         path, tok_name = _resolve_mlx_model(str(tmp_path))
         assert path == str(tmp_path)
         assert tok_name == "OpenMed/original-model"
+
+    def test_local_manifest_prefers_bundled_tokenizer_directory(self, tmp_path):
+        """Manifest-backed local artifacts should resolve tokenizer from local files."""
+        (tmp_path / "config.json").write_text(
+            '{"num_labels": 3, "_name_or_path": "OpenMed/original-model"}'
+        )
+        (tmp_path / "openmed-mlx.json").write_text(
+            json.dumps(
+                {
+                    "format": "openmed-mlx",
+                    "format_version": 1,
+                    "preferred_weights": "weights.safetensors",
+                    "available_weights": ["weights.safetensors"],
+                    "tokenizer": {"path": ".", "files": ["tokenizer.json"]},
+                }
+            )
+        )
+        (tmp_path / "tokenizer.json").write_text("{}")
+
+        from openmed.mlx.inference import _resolve_mlx_model
+        path, tok_name = _resolve_mlx_model(str(tmp_path))
+        assert path == str(tmp_path)
+        assert tok_name == str(tmp_path)

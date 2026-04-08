@@ -7,6 +7,9 @@ remapping and config extraction logic in isolation.
 from __future__ import annotations
 
 import json
+import sys
+import types
+from pathlib import Path
 import pytest
 
 from openmed.mlx.convert import remap_key
@@ -217,6 +220,51 @@ class TestSaveNumpyModel:
 
         output = save_numpy_model(weights, config, tmp_path / "a" / "b" / "model")
         assert (output / "weights.safetensors").exists() or (output / "weights.npz").exists()
+
+    def test_writes_manifest_and_tokenizer_assets_when_source_model_id_provided(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        import numpy as np
+        from openmed.mlx.convert import save_numpy_model
+
+        class FakeTokenizer:
+            def save_pretrained(self, output_dir):
+                Path(output_dir, "tokenizer.json").write_text("{}")
+                Path(output_dir, "tokenizer_config.json").write_text("{}")
+                Path(output_dir, "special_tokens_map.json").write_text("{}")
+
+        fake_transformers = types.ModuleType("transformers")
+        fake_transformers.AutoTokenizer = types.SimpleNamespace(
+            from_pretrained=lambda *args, **kwargs: FakeTokenizer()
+        )
+        monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+        output = save_numpy_model(
+            {"classifier.weight": np.random.randn(3, 64).astype(np.float32)},
+            {
+                "num_labels": 3,
+                "model_type": "bert",
+                "_mlx_model_type": "bert",
+                "max_position_embeddings": 128,
+            },
+            tmp_path / "model",
+            source_model_id="OpenMed/test-model",
+        )
+
+        manifest = json.loads((output / "openmed-mlx.json").read_text())
+        assert manifest["format"] == "openmed-mlx"
+        assert manifest["source_model_id"] == "OpenMed/test-model"
+        assert manifest["available_weights"]
+        assert manifest["tokenizer"]["files"] == [
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+        ]
+        assert (output / "tokenizer.json").exists()
+        assert (output / "tokenizer_config.json").exists()
+        assert (output / "special_tokens_map.json").exists()
 
     @pytest.mark.skipif(
         not _SAFETENSORS_NUMPY_AVAILABLE,

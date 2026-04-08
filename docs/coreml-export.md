@@ -1,8 +1,8 @@
 # CoreML Packaging Status (iOS & macOS)
 
-Use CoreML for **Swift/iOS/macOS app integration**. If you want Apple Silicon acceleration in Python on macOS, use the [MLX backend](mlx-backend.md) instead.
+Use CoreML when you need a bundled Apple model package for **Swift/iOS/macOS app integration**. If you want the shared OpenMed MLX artifact path, see the [MLX backend](mlx-backend.md) and [OpenMedKit Swift guide](swift-openmedkit.md).
 
-OpenMedKit is the public Swift runtime in `1.0.0`. The universal OpenMed-to-CoreML packaging workflow is still being generalized across the model collection, so conversion should be treated as **active platform work**, not a stable public release surface yet.
+OpenMedKit is the public Swift runtime in `1.0.0`, and now supports both MLX and CoreML backends. The universal OpenMed-to-CoreML packaging workflow is still being generalized across the model collection, so conversion should be treated as **active platform work**, not a stable public release surface yet.
 
 ## Current Status
 
@@ -10,6 +10,7 @@ As of April 4, 2026:
 
 - the `OpenMedKit` Swift package builds and tests successfully
 - the `OpenMedDemo` Xcode project builds and launches on macOS
+- Swift MLX is the forward Apple Silicon path for supported BERT-family artifacts
 - MLX artifacts such as `weights.safetensors` or `weights.npz` are still separate from CoreML app bundles
 - a fresh DeBERTa-v2 pilot export is **not** yet release-ready in the current arm64 CoreML environment
 

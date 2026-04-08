@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from openmed.mlx.artifact import load_artifact_config, resolve_weight_candidates
+
 _SUPPORTED_MODEL_TYPES = {
     "bert": "bert",
     "distilbert": "bert",
@@ -167,20 +169,10 @@ def load_model(model_path: str | Path):
 
     model_path = Path(model_path)
 
-    with open(model_path / "config.json") as f:
-        config = json.load(f)
+    manifest, config = load_artifact_config(model_path)
     config = normalize_model_config(config)
 
-    preferred_format = config.get("_mlx_weights_format")
-    weights_npz = model_path / "weights.npz"
-    weights_sf = model_path / "weights.safetensors"
-    candidate_paths = []
-    if preferred_format == "safetensors":
-        candidate_paths.append(weights_sf)
-    elif preferred_format == "npz":
-        candidate_paths.append(weights_npz)
-    candidate_paths.extend([weights_sf, weights_npz])
-
+    candidate_paths = resolve_weight_candidates(model_path, config=config, manifest=manifest)
     weights_path = next((path for path in candidate_paths if path.exists()), None)
     if weights_path is None:
         raise FileNotFoundError(
