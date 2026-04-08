@@ -56,7 +56,12 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS use `OpenMedKit` with **CoreML-compatible model bundles**, not MLX:
+Swift apps on macOS and iOS use `OpenMedKit`. In `1.0.0`, that means:
+
+- **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for the supported BERT-family OpenMed artifacts
+- **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
+
+Add the Swift package like this:
 
 ```swift
 dependencies: [
@@ -64,7 +69,7 @@ dependencies: [
 ]
 ```
 
-OpenMedKit is public in `1.0.0`. The universal OpenMed model-packaging flow for Apple platforms is still being hardened across BERT, DistilBERT, RoBERTa, XLM-R, Longformer, ModernBERT, and related families, so treat conversion as active work rather than a stable public release surface.
+OpenMedKit is public in `1.0.0`. The universal OpenMed model-packaging flow for Apple platforms is still being hardened across BERT, DistilBERT, RoBERTa, XLM-R, Longformer, ModernBERT, and related families, so treat conversion as active work rather than a fully universal public release surface.
 
 After `1.0.0` is published to PyPI, the editable install examples above can be replaced with plain `uv pip install "openmed[...]"`.
 

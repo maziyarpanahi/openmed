@@ -1,117 +1,118 @@
 # OpenMed PII Demo (SwiftUI)
 
-A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a searchable model picker for **real bundled CoreML models**.
+A SwiftUI demo for testing OpenMed on **macOS** and **iOS** with:
+
+- bundled CoreML models
+- downloadable OpenMed MLX artifacts
+- a searchable model picker
 
 ![Demo Screenshot](screenshot.png)
 
-## Current Status
+## What This Demo Now Tests
 
-- Verified locally on macOS: the `OpenMedDemo` Xcode project builds successfully with `xcodebuild`
-- The app is wired to **OpenMedKit** for real bundled CoreML inference
-- The app includes a searchable model picker for bundled models only
-- Uploaded MLX repos are for **Python/macOS** workflows, not direct Swift loading
-- Swift apps still need bundled **CoreML** assets plus `id2label.json`
+- **Swift MLX** through `OpenMedKit` on:
+  - Apple Silicon macOS
+  - real iPhone/iPad hardware
+- **CoreML** through `OpenMedKit` when you bundle an Apple model package
+
+iOS Simulator is not a Swift MLX target, so the app will tell you that directly if you select an MLX model there.
 
 ## Quick Start
 
-1. Open `swift/OpenMedDemo/` in Xcode (File > Open)
-2. Select the `OpenMedDemo` scheme
-3. Choose a target: **My Mac** or **iPhone Simulator**
-4. Run (Cmd+R)
-5. Add a real OpenMed CoreML bundle before testing inference
+1. Open [`swift/OpenMedDemo/OpenMedDemo.xcodeproj`](/Users/maziyar/Desktop/Work/openmed-release-1.0.0/swift/OpenMedDemo/OpenMedDemo.xcodeproj) in Xcode.
+2. Select the `OpenMedDemo` scheme.
+3. Choose:
+   - `My Mac` for Apple Silicon macOS MLX testing, or
+   - a real iPhone/iPad for on-device MLX testing
+4. Run the app.
+5. Choose one of the published OpenMed MLX models in the picker.
+6. Paste a Hugging Face token while the repos remain private.
+7. Run inference.
 
-If no bundled model is present, the app now blocks inference and tells you exactly which files are missing.
+The app downloads the artifact, caches it locally, and then runs it through `OpenMedKit`.
 
-## Adding Real Models
+If a private MLX repo was uploaded before the new manifest/tokenizer packaging, the demo still falls back to the legacy layout and uses the source Hugging Face tokenizer reference when needed.
 
-The demo discovers bundled models in two ways.
+## Published Swift-MLX-Compatible Models
+
+The demo currently hardcodes the supported OpenMed PII models already uploaded in MLX form:
+
+- `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx`
+- `OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx`
+- `OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx`
+- `OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1-mlx`
+- `OpenMed/OpenMed-PII-BigMed-Large-278M-v1-mlx`
+
+These map to the first Swift MLX rollout families:
+
+- BERT
+- DistilBERT
+- RoBERTa
+- ELECTRA
+- XLM-RoBERTa
+
+## Testing Bundled CoreML Models
+
+The demo still supports CoreML bundles too.
 
 ### Option 1: Legacy single-model bundle
 
-If you want a single default model, add:
+Add:
 
-1. Drag `OpenMedPII.mlpackage` into the Xcode project navigator
-2. Rename `OpenMedPII_id2label.json` to `id2label.json` and add it too
-3. Optionally add a `TokenizerAssets/` folder for offline tokenization
-4. Ensure all of them have **Target Membership** checked for `OpenMedDemo`
+1. `OpenMedPII.mlpackage` or `OpenMedPII.mlmodelc`
+2. `id2label.json`
+3. optional `TokenizerAssets/`
 
-The model picker will show this as `Bundled OpenMedPII`.
-`OpenMedKit` compiles `.mlpackage` automatically on first load, so you do not need to precompile it to `.mlmodelc` unless you want to.
+Once those files are part of the app target, the demo discovers them automatically.
 
-### Option 2: Multi-model switcher
+### Option 2: Multi-model bundle folders
 
-For multiple bundled models, create one folder per model in your Xcode project and add these files inside each folder:
+Create one folder per bundled model and include:
 
 1. `openmed-model.json`
-2. your compiled model such as `OpenMedPII.mlmodelc`
+2. the `.mlpackage` or `.mlmodelc`
 3. `id2label.json`
-4. optional tokenizer assets folder for offline tokenization
+4. optional tokenizer assets folder
 
 Example `openmed-model.json`:
 
 ```json
 {
-  "displayName": "ClinicalE5 Small",
+  "displayName": "ClinicalE5 Small CoreML",
   "sourceModelId": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
   "tokenizerName": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
   "compiledModelName": "OpenMedPII",
   "compiledModelExtension": "mlmodelc",
   "id2labelFileName": "id2label.json",
   "tokenizerFolderName": "TokenizerAssets",
-  "note": "Private CoreML packaging for Apple app validation."
+  "note": "Bundled CoreML validation."
 }
 ```
 
-Once those resources are in the app target, the demo discovers them automatically and the searchable picker lets you switch models at runtime.
+## Notes
 
-## Architecture
+- While the MLX repos are private, the demo needs a Hugging Face token.
+- Once the repos are public, the same app flow can download them without a token.
+- The demo does not route MLX through a Python service and does not use mock inference.
+- The app uses `OpenMedKit` directly for both MLX and CoreML runtime paths.
 
-```
-OpenMedDemoApp.swift     — App entry point
-ContentView.swift        — Main UI with:
-  - TextEditor for clinical note input
-  - "Detect PII Entities" button
-  - Highlighted text view (color-coded by entity type)
-  - Entity list with labels and confidence scores
-  - Inference timing display
-```
+## Production Path
 
-## Entity Color Coding
-
-| Entity Type | Color |
-|-------------|-------|
-| NAME | Blue |
-| DATE | Purple |
-| PHONE | Green |
-| SSN | Red |
-| ADDRESS | Orange |
-
-## Using OpenMedKit (Production)
-
-For production apps, use the `OpenMedKit` Swift package instead of the inline inference code:
+For production apps, use `OpenMedKit` directly:
 
 ```swift
 import OpenMedKit
 
-let openmed = try OpenMed(
-    modelURL: Bundle.main.url(forResource: "OpenMedPII", withExtension: "mlmodelc")!,
-    id2labelURL: Bundle.main.url(forResource: "id2label", withExtension: "json")!
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
+    authToken: "<token-if-private>"
 )
+
+let openmed = try OpenMed(
+    backend: .mlx(modelDirectoryURL: modelDirectory)
+)
+
 let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
 ```
 
-That is also what the demo app now does internally for bundled models.
-
-## macOS vs iOS
-
-- **Python on macOS**: use the private/public MLX repos with `openmed[mlx]`
-- **Swift on macOS**: use `OpenMedKit` with bundled CoreML
-- **Swift on iOS**: use `OpenMedKit` with bundled CoreML
-
-The MLX artifacts you uploaded are great for Python on Apple Silicon Macs, but they are not loaded directly by Swift or iOS.
-
-Today, the smoothest validated Apple path is a BERT-family OpenMed model such as `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1`, bundled through CoreML plus `id2label.json`.
-
-## Credits
-
-OpenMed is developed by the OpenMed project and community. The demo app in this repository is a lightweight SwiftUI example for validating the OpenMed macOS and iOS integration path.
+For the full Apple setup guide, see [OpenMedKit docs](/Users/maziyar/Desktop/Work/openmed-release-1.0.0/docs/swift-openmedkit.md).

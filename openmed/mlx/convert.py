@@ -16,6 +16,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Tuple
 
+from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
     build_model,
     normalize_model_config,
@@ -212,6 +213,8 @@ def save_mlx_model(
     config: dict,
     output_dir: str | Path,
     quantize_bits: int | None = None,
+    source_model_id: str | None = None,
+    cache_dir: str | None = None,
 ) -> Path:
     """Save converted weights and config to *output_dir*.
 
@@ -290,6 +293,13 @@ def save_mlx_model(
         with open(id2label_path, "w") as f:
             json.dump(config_to_save["id2label"], f, indent=2)
 
+    _finalize_artifact(
+        output_dir,
+        source_model_id=source_model_id,
+        config=config_to_save,
+        cache_dir=cache_dir,
+    )
+
     logger.info("Saved MLX model to %s", output_dir)
     return output_dir
 
@@ -298,6 +308,8 @@ def save_numpy_model(
     weights: Dict,
     config: dict,
     output_dir: str | Path,
+    source_model_id: str | None = None,
+    cache_dir: str | None = None,
 ) -> Path:
     """Save converted weights without MLX, preferring ``.safetensors``.
 
@@ -353,12 +365,55 @@ def save_numpy_model(
         with open(id2label_path, "w") as f:
             json.dump(config_to_save["id2label"], f, indent=2)
 
+    _finalize_artifact(
+        output_dir,
+        source_model_id=source_model_id,
+        config=config_to_save,
+        cache_dir=cache_dir,
+    )
+
     logger.info(
         "Saved MLX-compatible model to %s using %s weights",
         output_dir,
         weights_format,
     )
     return output_dir
+
+
+def _finalize_artifact(
+    output_dir: str | Path,
+    *,
+    source_model_id: str | None,
+    config: dict,
+    cache_dir: str | None,
+) -> None:
+    """Copy tokenizer assets and emit the shared OpenMed MLX manifest."""
+    if source_model_id is None:
+        return
+
+    output_dir = Path(output_dir)
+    tokenizer_files: list[str] = []
+
+    try:
+        from transformers import AutoTokenizer
+
+        tokenizer = AutoTokenizer.from_pretrained(source_model_id, cache_dir=cache_dir)
+        tokenizer.save_pretrained(output_dir)
+        tokenizer_files = find_tokenizer_files(output_dir)
+    except Exception as exc:
+        logger.warning(
+            "Could not save tokenizer assets for %s into %s: %s",
+            source_model_id,
+            output_dir,
+            exc,
+        )
+
+    write_manifest(
+        output_dir,
+        source_model_id=source_model_id,
+        config=config,
+        tokenizer_files=tokenizer_files,
+    )
 
 
 def convert(
@@ -385,14 +440,27 @@ def convert(
 
     try:
         import mlx.core  # noqa: F401
-        return save_mlx_model(weights, config, output_dir, quantize_bits)
+        return save_mlx_model(
+            weights,
+            config,
+            output_dir,
+            quantize_bits,
+            source_model_id=model_id,
+            cache_dir=cache_dir,
+        )
     except ImportError:
         if quantize_bits is not None:
             logger.warning(
                 "MLX not available — skipping quantization. "
                 "Install mlx for quantization support."
             )
-        return save_numpy_model(weights, config, output_dir)
+        return save_numpy_model(
+            weights,
+            config,
+            output_dir,
+            source_model_id=model_id,
+            cache_dir=cache_dir,
+        )
 
 
 def main():
