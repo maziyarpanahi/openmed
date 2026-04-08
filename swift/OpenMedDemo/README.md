@@ -1,15 +1,16 @@
 # OpenMed PII Demo (SwiftUI)
 
-A minimal SwiftUI app demonstrating on-device PII detection with OpenMed. It builds on both **macOS** and **iOS** today, and currently runs in **demo mode** unless you bundle a compatible OpenMed CoreML model.
+A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a searchable model picker. It runs in **demo mode** by default, and switches to real on-device inference as soon as you bundle one or more compatible OpenMed CoreML models.
 
 ![Demo Screenshot](screenshot.png)
 
 ## Current Status
 
 - Verified locally on macOS: the `OpenMedDemo` Xcode project builds successfully with `xcodebuild`
-- The app does **not** currently use an uploaded/published model artifact
-- The app falls back to mock detections unless `OpenMedPII.mlmodelc` and `id2label.json` are bundled into the app
-- The inline SwiftUI demo is **not yet wired** to the `OpenMedKit` package at runtime
+- The app is wired to **OpenMedKit** for real bundled CoreML inference
+- The app includes a searchable model picker so you can switch between bundled models and demo mode
+- Uploaded MLX repos are for **Python/macOS** workflows, not direct Swift loading
+- Swift apps still need bundled **CoreML** assets plus `id2label.json`
 
 ## Quick Start (Demo Mode)
 
@@ -22,25 +23,49 @@ The app works immediately in **demo mode** with mock entity detection — no mod
 
 You'll see highlighted PII entities (names, dates, phone numbers, SSNs) in the sample clinical note.
 
-This is useful for validating the macOS/iOS UI flow, but it is not a real CoreML inference path yet.
+This is useful for validating the macOS/iOS UI flow even before you bundle a real model.
 
-## Adding a Real CoreML Model
+## Adding Real Models
 
-To switch from demo mode to real on-device inference:
+The demo discovers bundled models in two ways.
 
-### Step 1: Prepare the app bundle
+### Option 1: Legacy single-model bundle
 
-When you have a compatible OpenMed CoreML package, place these assets into the Xcode project:
+If you want a single default model, add:
 
 1. Drag `OpenMedPII.mlpackage` into the Xcode project navigator
 2. Rename `OpenMedPII_id2label.json` to `id2label.json` and add it too
-3. Ensure both files have **Target Membership** checked for `OpenMedDemo`
+3. Optionally add a `TokenizerAssets/` folder for offline tokenization
+4. Ensure all of them have **Target Membership** checked for `OpenMedDemo`
 
-The broader cross-architecture Apple packaging workflow is still in progress, so this README intentionally focuses on the app-side integration contract rather than the converter internals.
+The model picker will show this as `Bundled OpenMedPII`.
+`OpenMedKit` compiles `.mlpackage` automatically on first load, so you do not need to precompile it to `.mlmodelc` unless you want to.
 
-### Step 2: Run
+### Option 2: Multi-model switcher
 
-The app auto-detects the bundled model and switches from demo mode to real inference.
+For multiple bundled models, create one folder per model in your Xcode project and add these files inside each folder:
+
+1. `openmed-model.json`
+2. your compiled model such as `OpenMedPII.mlmodelc`
+3. `id2label.json`
+4. optional tokenizer assets folder for offline tokenization
+
+Example `openmed-model.json`:
+
+```json
+{
+  "displayName": "ClinicalE5 Small",
+  "sourceModelId": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+  "tokenizerName": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+  "compiledModelName": "OpenMedPII",
+  "compiledModelExtension": "mlmodelc",
+  "id2labelFileName": "id2label.json",
+  "tokenizerFolderName": "TokenizerAssets",
+  "note": "Private CoreML packaging for Apple app validation."
+}
+```
+
+Once those resources are in the app target, the demo discovers them automatically and the searchable picker lets you switch models at runtime.
 
 ## Architecture
 
@@ -77,6 +102,18 @@ let openmed = try OpenMed(
 )
 let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
 ```
+
+That is also what the demo app now does internally for bundled models.
+
+## macOS vs iOS
+
+- **Python on macOS**: use the private/public MLX repos with `openmed[mlx]`
+- **Swift on macOS**: use `OpenMedKit` with bundled CoreML
+- **Swift on iOS**: use `OpenMedKit` with bundled CoreML
+
+The MLX artifacts you uploaded are great for Python on Apple Silicon Macs, but they are not loaded directly by Swift or iOS.
+
+Today, the smoothest validated Apple path is a BERT-family OpenMed model such as `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1`, bundled through CoreML plus `id2label.json`.
 
 ## Credits
 

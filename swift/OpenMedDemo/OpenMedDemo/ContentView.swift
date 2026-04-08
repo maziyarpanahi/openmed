@@ -1,17 +1,72 @@
-import SwiftUI
 import CoreML
+import OpenMedKit
+import SwiftUI
 
 struct ContentView: View {
     @State private var inputText = "Patient John Doe, DOB 1990-05-15, phone 555-123-4567, SSN 123-45-6789. Diagnosed with Type 2 diabetes."
+    @State private var availableModels: [DemoModelDescriptor] = []
+    @State private var selectedModelID = DemoModelDescriptor.demo.id
     @State private var entities: [DetectedEntity] = []
     @State private var isAnalyzing = false
+    @State private var isShowingModelPicker = false
     @State private var errorMessage: String?
     @State private var inferenceTime: Double?
+
+    private var selectedModel: DemoModelDescriptor {
+        availableModels.first(where: { $0.id == selectedModelID }) ?? .demo
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Input section
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("Model", systemImage: "shippingbox")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Choose Model") {
+                            isShowingModelPicker = true
+                        }
+                        .buttonStyle(.bordered)
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Text(selectedModel.displayName)
+                                .font(.title3.weight(.semibold))
+
+                            Text(selectedModel.badgeText)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(selectedModel.badgeColor.opacity(0.14))
+                                .foregroundStyle(selectedModel.badgeColor)
+                                .clipShape(Capsule())
+                        }
+
+                        Text(selectedModel.sourceModelID)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+
+                        Text(selectedModel.detailText)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.gray.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    if availableModels.filter(\.isBundled).isEmpty {
+                        Text("No bundled CoreML model was found in this app build, so the demo is running in mock mode. Uploaded MLX repos are for Python on macOS; Swift apps still need bundled CoreML models.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding()
+
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Clinical Note", systemImage: "doc.text")
                         .font(.headline)
@@ -26,7 +81,6 @@ struct ContentView: View {
                 }
                 .padding()
 
-                // Analyze button
                 Button(action: analyzeText) {
                     HStack {
                         if isAnalyzing {
@@ -44,7 +98,6 @@ struct ContentView: View {
                 .disabled(isAnalyzing || inputText.isEmpty)
                 .padding(.horizontal)
 
-                // Error message
                 if let error = errorMessage {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -56,7 +109,6 @@ struct ContentView: View {
                     .padding(.top, 8)
                 }
 
-                // Results
                 if !entities.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
@@ -71,13 +123,11 @@ struct ContentView: View {
                             }
                         }
 
-                        // Highlighted text
                         HighlightedTextView(text: inputText, entities: entities)
                             .padding(12)
                             .background(Color.gray.opacity(0.12))
                             .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                        // Entity list
                         ForEach(entities) { entity in
                             EntityRow(entity: entity)
                         }
@@ -92,6 +142,15 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
         }
+        .task {
+            refreshAvailableModels()
+        }
+        .sheet(isPresented: $isShowingModelPicker) {
+            ModelPickerSheet(
+                models: availableModels,
+                selectedModelID: $selectedModelID
+            )
+        }
     }
 
     private func analyzeText() {
@@ -103,9 +162,14 @@ struct ContentView: View {
             let start = CFAbsoluteTimeGetCurrent()
 
             do {
-                let result = try await runInference(text: inputText)
+                let result = try await runInference(text: inputText, model: selectedModel)
                 inferenceTime = CFAbsoluteTimeGetCurrent() - start
-                entities = result
+                entities = result.sorted { lhs, rhs in
+                    if lhs.start == rhs.start {
+                        return lhs.end < rhs.end
+                    }
+                    return lhs.start < rhs.start
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -113,36 +177,33 @@ struct ContentView: View {
             isAnalyzing = false
         }
     }
+
+    private func refreshAvailableModels() {
+        let discovered = DemoModelCatalog.discover(from: .main)
+        availableModels = discovered
+
+        let firstBundledID = discovered.first(where: \.isBundled)?.id
+
+        if selectedModelID == DemoModelDescriptor.demo.id, let firstBundledID {
+            selectedModelID = firstBundledID
+        } else if !discovered.contains(where: { $0.id == selectedModelID }) {
+            selectedModelID = firstBundledID ?? DemoModelDescriptor.demo.id
+        }
+    }
 }
 
-// MARK: - Inference
-
-private func runInference(text: String) async throws -> [DetectedEntity] {
-    // Try loading the bundled CoreML model
-    // The model must be added to the Xcode project as OpenMedPII.mlmodelc
-    guard let modelURL = Bundle.main.url(forResource: "OpenMedPII", withExtension: "mlmodelc") else {
-        // Fallback: demo mode with mock data when no model is bundled
+private func runInference(
+    text: String,
+    model: DemoModelDescriptor
+) async throws -> [DetectedEntity] {
+    switch model.runtimeKind {
+    case .demo:
         return mockEntities(for: text)
+    case .bundled:
+        return try await OpenMedRuntimeCache.shared.analyze(text: text, using: model)
     }
-
-    guard let labelsURL = Bundle.main.url(forResource: "id2label", withExtension: "json") else {
-        throw DemoError.missingFile("id2label.json")
-    }
-
-    // Verify the model loads (validates the .mlmodelc is valid)
-    _ = try MLModel(contentsOf: modelURL)
-    _ = try Data(contentsOf: labelsURL)
-
-    // TODO: Replace with real inference once OpenMedKit is wired up:
-    //   let openmed = try OpenMed(modelURL: modelURL, id2labelURL: labelsURL)
-    //   return try openmed.analyzeText(text).map { ... }
-    //
-    // For now, use mock entities to demonstrate the UI flow.
-    return mockEntities(for: text)
 }
 
-/// Demo entities for when no CoreML model is bundled.
-/// Replace with real inference once you've converted a model.
 private func mockEntities(for text: String) -> [DetectedEntity] {
     var found: [DetectedEntity] = []
 
@@ -157,14 +218,16 @@ private func mockEntities(for text: String) -> [DetectedEntity] {
         if let range = text.range(of: needle) {
             let start = text.distance(from: text.startIndex, to: range.lowerBound)
             let end = text.distance(from: text.startIndex, to: range.upperBound)
-            found.append(DetectedEntity(
-                label: label,
-                text: needle,
-                confidence: Float.random(in: 0.88...0.98),
-                start: start,
-                end: end,
-                category: category
-            ))
+            found.append(
+                DetectedEntity(
+                    label: label,
+                    text: needle,
+                    confidence: Float.random(in: 0.88...0.98),
+                    start: start,
+                    end: end,
+                    category: category
+                )
+            )
         }
     }
 
@@ -172,19 +235,17 @@ private func mockEntities(for text: String) -> [DetectedEntity] {
 }
 
 enum DemoError: LocalizedError {
-    case missingFile(String)
+    case invalidBundle(String)
 
     var errorDescription: String? {
         switch self {
-        case .missingFile(let name):
-            return "Missing required file: \(name). See README for setup instructions."
+        case .invalidBundle(let detail):
+            return "Bundled model is incomplete: \(detail)"
         }
     }
 }
 
-// MARK: - Data Model
-
-struct DetectedEntity: Identifiable {
+struct DetectedEntity: Identifiable, Sendable {
     let id = UUID()
     let label: String
     let text: String
@@ -205,7 +266,248 @@ struct DetectedEntity: Identifiable {
     }
 }
 
-// MARK: - Highlighted Text View
+private enum DemoModelRuntimeKind: String, Hashable, Sendable {
+    case demo
+    case bundled
+}
+
+private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
+    let id: String
+    let displayName: String
+    let sourceModelID: String
+    let tokenizerName: String
+    let modelURL: URL?
+    let id2labelURL: URL?
+    let tokenizerFolderURL: URL?
+    let runtimeKind: DemoModelRuntimeKind
+    let note: String
+
+    static let demo = DemoModelDescriptor(
+        id: "demo-mode",
+        displayName: "Demo Mode",
+        sourceModelID: "UI-only mock entities",
+        tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+        modelURL: nil,
+        id2labelURL: nil,
+        tokenizerFolderURL: nil,
+        runtimeKind: .demo,
+        note: "Works with no bundled model. Useful for validating macOS/iOS UI flow."
+    )
+
+    var isBundled: Bool { runtimeKind == .bundled }
+
+    var badgeText: String {
+        switch runtimeKind {
+        case .demo: return "Demo"
+        case .bundled: return "Bundled CoreML"
+        }
+    }
+
+    var badgeColor: Color {
+        switch runtimeKind {
+        case .demo: return .orange
+        case .bundled: return .green
+        }
+    }
+
+    var detailText: String {
+        switch runtimeKind {
+        case .demo:
+            return note
+        case .bundled:
+            if let tokenizerFolderURL {
+                return "Runs through OpenMedKit with bundled tokenizer assets at \(tokenizerFolderURL.lastPathComponent)."
+            }
+            return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
+        }
+    }
+
+    var searchText: String {
+        [displayName, sourceModelID, tokenizerName, note].joined(separator: " ").lowercased()
+    }
+}
+
+private struct BundledModelManifest: Decodable {
+    let displayName: String
+    let sourceModelID: String
+    let tokenizerName: String?
+    let tokenizerFolderName: String?
+    let compiledModelName: String?
+    let compiledModelExtension: String?
+    let id2labelFileName: String?
+    let note: String?
+
+    enum CodingKeys: String, CodingKey {
+        case displayName
+        case sourceModelID = "sourceModelId"
+        case tokenizerName
+        case tokenizerFolderName
+        case compiledModelName
+        case compiledModelExtension
+        case id2labelFileName
+        case note
+    }
+}
+
+private enum DemoModelCatalog {
+    static func discover(from bundle: Bundle) -> [DemoModelDescriptor] {
+        var discovered: [DemoModelDescriptor] = [.demo]
+
+        if let legacy = discoverLegacyBundle(from: bundle) {
+            discovered.append(legacy)
+        }
+
+        discovered.append(contentsOf: discoverManifestBundles(from: bundle))
+
+        var seen = Set<String>()
+        let unique = discovered.filter { seen.insert($0.id).inserted }
+        let demo = unique.filter { $0.runtimeKind == .demo }
+        let bundled = unique
+            .filter { $0.runtimeKind == .bundled }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+
+        return demo + bundled
+    }
+
+    private static func discoverLegacyBundle(from bundle: Bundle) -> DemoModelDescriptor? {
+        guard let resourceURL = bundle.resourceURL else {
+            return nil
+        }
+
+        let modelURL =
+            bundle.url(forResource: "OpenMedPII", withExtension: "mlmodelc") ??
+            bundle.url(forResource: "OpenMedPII", withExtension: "mlpackage")
+
+        guard let modelURL,
+              let labelsURL = bundle.url(forResource: "id2label", withExtension: "json") else {
+            return nil
+        }
+
+        let tokenizerFolder = resourceURL.appendingPathComponent("TokenizerAssets", isDirectory: true)
+
+        return DemoModelDescriptor(
+            id: "legacy-openmedpii",
+            displayName: "Bundled OpenMedPII",
+            sourceModelID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+            tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+            modelURL: modelURL,
+            id2labelURL: labelsURL,
+            tokenizerFolderURL: FileManager.default.fileExists(atPath: tokenizerFolder.path) ? tokenizerFolder : nil,
+            runtimeKind: .bundled,
+            note: "Legacy single-model bundle."
+        )
+    }
+
+    private static func discoverManifestBundles(from bundle: Bundle) -> [DemoModelDescriptor] {
+        guard let resourceURL = bundle.resourceURL else {
+            return []
+        }
+
+        guard let enumerator = FileManager.default.enumerator(
+            at: resourceURL,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var models: [DemoModelDescriptor] = []
+
+        for case let fileURL as URL in enumerator {
+            guard fileURL.lastPathComponent == "openmed-model.json" else {
+                continue
+            }
+
+            do {
+                let data = try Data(contentsOf: fileURL)
+                let manifest = try JSONDecoder().decode(BundledModelManifest.self, from: data)
+                let directoryURL = fileURL.deletingLastPathComponent()
+                let compiledName = manifest.compiledModelName ?? "OpenMedPII"
+                let compiledExt = manifest.compiledModelExtension ?? "mlmodelc"
+                let id2labelName = manifest.id2labelFileName ?? "id2label.json"
+
+                let modelURL = directoryURL.appendingPathComponent(compiledName).appendingPathExtension(compiledExt)
+                let labelsURL = directoryURL.appendingPathComponent(id2labelName)
+
+                guard FileManager.default.fileExists(atPath: modelURL.path) else {
+                    continue
+                }
+
+                guard FileManager.default.fileExists(atPath: labelsURL.path) else {
+                    continue
+                }
+
+                let tokenizerFolderURL: URL?
+                if let tokenizerFolderName = manifest.tokenizerFolderName {
+                    let candidate = directoryURL.appendingPathComponent(tokenizerFolderName, isDirectory: true)
+                    tokenizerFolderURL = FileManager.default.fileExists(atPath: candidate.path) ? candidate : nil
+                } else {
+                    tokenizerFolderURL = nil
+                }
+
+                models.append(
+                    DemoModelDescriptor(
+                        id: manifest.sourceModelID,
+                        displayName: manifest.displayName,
+                        sourceModelID: manifest.sourceModelID,
+                        tokenizerName: manifest.tokenizerName ?? manifest.sourceModelID,
+                        modelURL: modelURL,
+                        id2labelURL: labelsURL,
+                        tokenizerFolderURL: tokenizerFolderURL,
+                        runtimeKind: .bundled,
+                        note: manifest.note ?? "Bundle-discovered model."
+                    )
+                )
+            } catch {
+                continue
+            }
+        }
+
+        return models
+    }
+}
+
+private actor OpenMedRuntimeCache {
+    static let shared = OpenMedRuntimeCache()
+
+    private var runtimes: [String: OpenMed] = [:]
+
+    func analyze(text: String, using model: DemoModelDescriptor) throws -> [DetectedEntity] {
+        guard model.runtimeKind == .bundled,
+              let modelURL = model.modelURL,
+              let id2labelURL = model.id2labelURL else {
+            throw DemoError.invalidBundle("Model selection \(model.displayName) is not loadable.")
+        }
+
+        let runtime: OpenMed
+        if let cached = runtimes[model.id] {
+            runtime = cached
+        } else {
+            _ = try Data(contentsOf: id2labelURL)
+
+            let openmed = try OpenMed(
+                modelURL: modelURL,
+                id2labelURL: id2labelURL,
+                tokenizerName: model.tokenizerName,
+                tokenizerFolderURL: model.tokenizerFolderURL
+            )
+            runtimes[model.id] = openmed
+            runtime = openmed
+        }
+
+        let predictions = try runtime.analyzeText(text)
+        return predictions.map { prediction in
+            DetectedEntity(
+                label: prediction.label,
+                text: prediction.text,
+                confidence: prediction.confidence,
+                start: prediction.start,
+                end: prediction.end,
+                category: entityCategory(for: prediction.label)
+            )
+        }
+    }
+}
 
 struct HighlightedTextView: View {
     let text: String
@@ -219,8 +521,6 @@ struct HighlightedTextView: View {
 
     private func buildAttributedString() -> AttributedString {
         var attrStr = AttributedString(text)
-
-        // Sort entities by start position (reverse to avoid offset issues)
         let sorted = entities.sorted { $0.start > $1.start }
 
         for entity in sorted {
@@ -236,8 +536,6 @@ struct HighlightedTextView: View {
         return attrStr
     }
 }
-
-// MARK: - Entity Row
 
 struct EntityRow: View {
     let entity: DetectedEntity
@@ -268,6 +566,100 @@ struct EntityRow: View {
         .padding(.horizontal)
         .padding(.vertical, 4)
     }
+}
+
+private struct ModelPickerSheet: View {
+    let models: [DemoModelDescriptor]
+    @Binding var selectedModelID: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    private var filteredModels: [DemoModelDescriptor] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return models }
+        return models.filter { $0.searchText.contains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(filteredModels) { model in
+                Button {
+                    selectedModelID = model.id
+                    dismiss()
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.displayName)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(model.sourceModelID)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.leading)
+                            Text(model.detailText)
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                                .multilineTextAlignment(.leading)
+                        }
+
+                        Spacer()
+
+                        VStack(alignment: .trailing, spacing: 6) {
+                            Text(model.badgeText)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(model.badgeColor.opacity(0.14))
+                                .foregroundStyle(model.badgeColor)
+                                .clipShape(Capsule())
+
+                            if selectedModelID == model.id {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+            }
+            .searchable(text: $searchText, prompt: "Search bundled models or demo mode")
+            .navigationTitle("Choose Model")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private func entityCategory(for label: String) -> String {
+    let normalized = label.lowercased()
+
+    if normalized.contains("name") {
+        return "NAME"
+    }
+    if normalized.contains("date") || normalized.contains("dob") {
+        return "DATE"
+    }
+    if normalized.contains("phone") || normalized.contains("fax") {
+        return "PHONE"
+    }
+    if normalized.contains("ssn") {
+        return "SSN"
+    }
+    if normalized.contains("address") || normalized.contains("location") {
+        return "ADDRESS"
+    }
+
+    return normalized.uppercased()
 }
 
 #Preview {

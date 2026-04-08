@@ -18,7 +18,7 @@ public class NERPipeline {
     ///   - id2labelURL: Path to the `id2label.json` file mapping label IDs to names.
     ///   - maxSeqLength: Maximum input sequence length the model supports.
     public init(modelURL: URL, id2labelURL: URL, maxSeqLength: Int = 512) throws {
-        self.model = try MLModel(contentsOf: modelURL)
+        self.model = try MLModel(contentsOf: try Self.resolveModelURL(modelURL))
         self.maxSeqLength = maxSeqLength
 
         let data = try Data(contentsOf: id2labelURL)
@@ -26,6 +26,15 @@ public class NERPipeline {
         self.id2label = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in
             Int(k).map { ($0, v) }
         })
+    }
+
+    private static func resolveModelURL(_ modelURL: URL) throws -> URL {
+        switch modelURL.pathExtension.lowercased() {
+        case "mlpackage", "mlmodel":
+            return try MLModel.compileModel(at: modelURL)
+        default:
+            return modelURL
+        }
     }
 
     /// Run token classification on the given token IDs and offsets.

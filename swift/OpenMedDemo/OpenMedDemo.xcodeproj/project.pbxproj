@@ -10,6 +10,7 @@
 		A1000001 /* OpenMedDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* OpenMedDemoApp.swift */; };
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
 		A1000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000003 /* Assets.xcassets */; };
+		A1000004 /* OpenMedKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001 /* OpenMedKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000004 /* OpenMedKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -74,6 +76,9 @@
 			dependencies = (
 			);
 			name = OpenMedDemo;
+			packageProductDependencies = (
+				AA000001 /* OpenMedKit */,
+			);
 			productName = OpenMedDemo;
 			productReference = A2000010 /* OpenMedDemo.app */;
 			productType = "com.apple.product-type.application";
@@ -97,6 +102,9 @@
 				Base,
 			);
 			mainGroup = A4000001;
+			packageReferences = (
+				AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */,
+			);
 			productRefGroup = A4000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -128,6 +136,21 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../OpenMedKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001 /* OpenMedKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */;
+			productName = OpenMedKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A9000001 /* Debug */ = {
