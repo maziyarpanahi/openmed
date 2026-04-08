@@ -1,29 +1,44 @@
 # OpenMed PII Demo (SwiftUI)
 
-A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a searchable model picker. It runs in **demo mode** by default, and switches to real on-device inference as soon as you bundle one or more compatible OpenMed CoreML models.
+A minimal SwiftUI app demonstrating OpenMed on **macOS** and **iOS** with a searchable model picker. It supports:
+
+- real bundled CoreML inference through `OpenMedKit`
+- real MLX-backed inference through the OpenMed REST service
+- demo mode only when you explicitly choose it
 
 ![Demo Screenshot](screenshot.png)
 
 ## Current Status
 
 - Verified locally on macOS: the `OpenMedDemo` Xcode project builds successfully with `xcodebuild`
-- The app is wired to **OpenMedKit** for real bundled CoreML inference
-- The app includes a searchable model picker so you can switch between bundled models and demo mode
-- Uploaded MLX repos are for **Python/macOS** workflows, not direct Swift loading
-- Swift apps still need bundled **CoreML** assets plus `id2label.json`
+- The app is wired to **OpenMedKit** for bundled CoreML inference
+- The app can also call the **OpenMed REST service** backed by `openmed[mlx]`
+- The app includes a searchable model picker for bundled CoreML, uploaded MLX models, and demo mode
+- Uploaded MLX repos are still **not loaded directly** by Swift
 
-## Quick Start (Demo Mode)
+## Quick Start
 
-The app works immediately in **demo mode** with mock entity detection — no model download needed:
+The app opens immediately, and you can either use Demo Mode or connect it to a real OpenMed backend:
 
 1. Open `swift/OpenMedDemo/` in Xcode (File > Open)
 2. Select the `OpenMedDemo` scheme
 3. Choose a target: **My Mac** or **iPhone Simulator**
 4. Run (Cmd+R)
 
-You'll see highlighted PII entities (names, dates, phone numbers, SSNs) in the sample clinical note.
+## Using Real MLX Models
 
-This is useful for validating the macOS/iOS UI flow even before you bundle a real model.
+1. Start the OpenMed service on your Mac:
+
+   ```bash
+   uv pip install -e ".[hf,service,mlx]"
+   OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+   ```
+
+2. Launch the app
+3. Pick one of the uploaded OpenMed PII models
+4. Leave the service URL as `http://127.0.0.1:8080` for macOS or the iOS Simulator
+
+For a physical iPhone or iPad on the same network, replace `127.0.0.1` with your Mac's LAN IP.
 
 ## Adding Real Models
 
@@ -108,10 +123,10 @@ That is also what the demo app now does internally for bundled models.
 ## macOS vs iOS
 
 - **Python on macOS**: use the private/public MLX repos with `openmed[mlx]`
-- **Swift on macOS**: use `OpenMedKit` with bundled CoreML
-- **Swift on iOS**: use `OpenMedKit` with bundled CoreML
+- **Swift on macOS**: use `OpenMedKit` with bundled CoreML or the OpenMed MLX service
+- **Swift on iOS**: use `OpenMedKit` with bundled CoreML or the OpenMed MLX service
 
-The MLX artifacts you uploaded are great for Python on Apple Silicon Macs, but they are not loaded directly by Swift or iOS.
+The MLX artifacts you uploaded are great for Python on Apple Silicon Macs, and the demo can now use them through the OpenMed REST service. They are still not loaded directly by Swift or iOS.
 
 Today, the smoothest validated Apple path is a BERT-family OpenMed model such as `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1`, bundled through CoreML plus `id2label.json`.
 

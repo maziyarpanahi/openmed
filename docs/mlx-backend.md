@@ -73,3 +73,15 @@ OpenMed's MLX artifacts are for the **Python/macOS** runtime.
 - Use MLX when you are running OpenMed from Python on Apple Silicon.
 - Use CoreML + `OpenMedKit` when you are shipping a Swift app on macOS, iOS, or iPadOS.
 - Do not try to load MLX weight files such as `weights.safetensors` or `weights.npz` directly from Swift in 1.0.0.
+
+If you want a Swift app to use a real OpenMed MLX model today, run the OpenMed REST service on your Mac with MLX enabled and point the app at that service:
+
+```bash
+uv pip install -e ".[hf,service,mlx]"
+OPENMED_BACKEND=mlx uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+That works well for:
+- macOS Swift apps using `http://127.0.0.1:8080`
+- iOS Simulator builds on the same Mac
+- iPhone/iPad testing when you replace `127.0.0.1` with your Mac's LAN IP
