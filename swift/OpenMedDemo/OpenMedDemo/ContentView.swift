@@ -4,7 +4,7 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var inputText = "Patient John Doe, DOB 1990-05-15, phone 555-123-4567, SSN 123-45-6789. Diagnosed with Type 2 diabetes."
-    @State private var availableModels: [DemoModelDescriptor] = []
+    @State private var availableModels: [DemoModelDescriptor] = [.demo]
     @State private var selectedModelID = DemoModelDescriptor.demo.id
     @State private var entities: [DetectedEntity] = []
     @State private var isAnalyzing = false
@@ -26,6 +26,7 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button("Choose Model") {
+                            refreshAvailableModels()
                             isShowingModelPicker = true
                         }
                         .buttonStyle(.bordered)
@@ -142,12 +143,15 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
         }
+        .onAppear {
+            refreshAvailableModels()
+        }
         .task {
             refreshAvailableModels()
         }
         .sheet(isPresented: $isShowingModelPicker) {
             ModelPickerSheet(
-                models: availableModels,
+                models: availableModels.isEmpty ? [.demo] : availableModels,
                 selectedModelID: $selectedModelID
             )
         }
@@ -583,52 +587,75 @@ private struct ModelPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(filteredModels) { model in
-                Button {
-                    selectedModelID = model.id
-                    dismiss()
-                } label: {
-                    HStack(alignment: .top, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(model.displayName)
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text(model.sourceModelID)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.leading)
-                            Text(model.detailText)
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .multilineTextAlignment(.leading)
-                        }
+            Group {
+                if filteredModels.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text("No Matching Models")
+                            .font(.headline)
+                        Text("This demo only lists bundled CoreML models plus Demo Mode. Try a different search, or bundle a model into the app before launching it.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: 420)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding()
+                } else {
+                    List {
+                        ForEach(filteredModels) { model in
+                            Button {
+                                selectedModelID = model.id
+                                dismiss()
+                            } label: {
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(model.displayName)
+                                            .font(.body.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                        Text(model.sourceModelID)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .multilineTextAlignment(.leading)
+                                        Text(model.detailText)
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+                                            .multilineTextAlignment(.leading)
+                                    }
 
-                        Spacer()
+                                    Spacer()
 
-                        VStack(alignment: .trailing, spacing: 6) {
-                            Text(model.badgeText)
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 8)
+                                    VStack(alignment: .trailing, spacing: 6) {
+                                        Text(model.badgeText)
+                                            .font(.caption.weight(.semibold))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(model.badgeColor.opacity(0.14))
+                                            .foregroundStyle(model.badgeColor)
+                                            .clipShape(Capsule())
+
+                                        if selectedModelID == model.id {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
+                                        }
+                                    }
+                                }
+                                .contentShape(Rectangle())
                                 .padding(.vertical, 4)
-                                .background(model.badgeColor.opacity(0.14))
-                                .foregroundStyle(model.badgeColor)
-                                .clipShape(Capsule())
-
-                            if selectedModelID == model.id {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
                             }
+                            .buttonStyle(.plain)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
-                .buttonStyle(.plain)
             }
             .searchable(text: $searchText, prompt: "Search bundled models or demo mode")
             .navigationTitle("Choose Model")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            .frame(minWidth: 620, minHeight: 420)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
