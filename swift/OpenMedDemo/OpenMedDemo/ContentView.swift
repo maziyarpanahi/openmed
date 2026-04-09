@@ -12,6 +12,11 @@ struct ContentView: View {
     @State private var errorMessage: String?
     @State private var inferenceTime: Double?
 
+    private enum AnalysisInvalidationReason {
+        case textChanged
+        case modelChanged
+    }
+
     private var selectedModel: DemoModelDescriptor {
         availableModels.first(where: { $0.id == selectedModelID }) ?? .missingBundledModel
     }
@@ -199,6 +204,12 @@ struct ContentView: View {
         .task {
             refreshAvailableModels()
         }
+        .onChange(of: inputText) { _, _ in
+            invalidateAnalysisResults(reason: .textChanged)
+        }
+        .onChange(of: selectedModelID) { _, _ in
+            invalidateAnalysisResults(reason: .modelChanged)
+        }
         .sheet(isPresented: $isShowingModelPicker) {
             ModelPickerSheet(
                 models: availableModels.isEmpty ? [.missingBundledModel] : availableModels,
@@ -208,31 +219,62 @@ struct ContentView: View {
     }
 
     private func analyzeText() {
+        let analysisText = inputText
+        let analysisModel = selectedModel
+
         isAnalyzing = true
         errorMessage = nil
         entities = []
 
         Task {
             let start = CFAbsoluteTimeGetCurrent()
+            defer { isAnalyzing = false }
 
             do {
                 let result = try await runInference(
-                    text: inputText,
-                    model: selectedModel,
+                    text: analysisText,
+                    model: analysisModel,
                     authToken: huggingFaceToken
                 )
-                inferenceTime = CFAbsoluteTimeGetCurrent() - start
-                entities = result.sorted { lhs, rhs in
-                    if lhs.start == rhs.start {
-                        return lhs.end < rhs.end
-                    }
-                    return lhs.start < rhs.start
+
+                guard inputText == analysisText, selectedModelID == analysisModel.id else {
+                    return
                 }
+
+                inferenceTime = CFAbsoluteTimeGetCurrent() - start
+                entities = result
+                    .filter { entity in
+                        entity.start >= 0 &&
+                        entity.end >= 0 &&
+                        entity.start < entity.end &&
+                        entity.end <= analysisText.count
+                    }
+                    .sorted { lhs, rhs in
+                        if lhs.start == rhs.start {
+                            return lhs.end < rhs.end
+                        }
+                        return lhs.start < rhs.start
+                    }
+                errorMessage = nil
             } catch {
+                guard inputText == analysisText, selectedModelID == analysisModel.id else {
+                    return
+                }
                 errorMessage = error.localizedDescription
             }
+        }
+    }
 
-            isAnalyzing = false
+    private func invalidateAnalysisResults(reason: AnalysisInvalidationReason) {
+        if isAnalyzing {
+            return
+        }
+
+        inferenceTime = nil
+        entities = []
+
+        if case .modelChanged = reason {
+            errorMessage = nil
         }
     }
 
@@ -709,11 +751,19 @@ struct HighlightedTextView: View {
 
     private func buildAttributedString() -> AttributedString {
         var attrStr = AttributedString(text)
+        let textLength = text.count
         let sorted = entities.sorted { $0.start > $1.start }
 
         for entity in sorted {
-            let startIdx = attrStr.index(attrStr.startIndex, offsetByCharacters: entity.start)
-            let endIdx = attrStr.index(attrStr.startIndex, offsetByCharacters: min(entity.end, text.count))
+            let safeStart = min(max(entity.start, 0), textLength)
+            let safeEnd = min(max(entity.end, safeStart), textLength)
+
+            guard safeStart < safeEnd else {
+                continue
+            }
+
+            let startIdx = attrStr.index(attrStr.startIndex, offsetByCharacters: safeStart)
+            let endIdx = attrStr.index(attrStr.startIndex, offsetByCharacters: safeEnd)
             let range = startIdx..<endIdx
 
             attrStr[range].backgroundColor = entity.color.opacity(0.25)
