@@ -137,6 +137,32 @@ final class OpenMedMLXTests: XCTestCase {
         XCTAssertNil(patched)
     }
 
+    func testBuildOffsetsPrefersEarliestCaseInsensitiveMatch() {
+        let text = "my name is John, I am 89 years old and I live at 22 blbd asdad, 75015, paris."
+        let tokens = [
+            "[CLS]", "my", "name", "is", "john", ",", "i", "am", "89", "years", "old",
+            "and", "i", "live", "at", "22", "bl", "##bd", "asd", "##ad", ",", "750",
+            "##15", ",", "paris", ".", "[SEP]",
+        ]
+
+        let offsets = OpenMed.buildOffsets(tokens: tokens, in: text)
+
+        XCTAssertEqual(offsets[4].0, 11, "john should align to John")
+        XCTAssertEqual(offsets[4].1, 15, "john should align to John")
+        XCTAssertEqual(offsets[6].0, 17, "i should align to the uppercase I after John")
+        XCTAssertEqual(offsets[6].1, 18, "i should align to the uppercase I after John")
+        XCTAssertEqual(offsets[7].0, 19, "am should follow the same clause")
+        XCTAssertEqual(offsets[7].1, 21, "am should follow the same clause")
+        XCTAssertEqual(offsets[8].0, 22, "89 should keep its true numeric span")
+        XCTAssertEqual(offsets[8].1, 24, "89 should keep its true numeric span")
+        XCTAssertEqual(offsets[15].0, 49, "22 should still align after the earlier uppercase tokens")
+        XCTAssertEqual(offsets[15].1, 51, "22 should still align after the earlier uppercase tokens")
+        XCTAssertEqual(offsets[21].0, 64, "postcode should remain aligned")
+        XCTAssertEqual(offsets[21].1, 67, "postcode should remain aligned")
+        XCTAssertEqual(offsets[24].0, 71, "city should remain aligned")
+        XCTAssertEqual(offsets[24].1, 76, "city should remain aligned")
+    }
+
     func testPipelinePredictsEntitiesFromLocalArtifact() throws {
         try requireUsableMLXRuntime()
         let directory = try makeTinyArtifact()
@@ -181,6 +207,43 @@ final class OpenMedMLXTests: XCTestCase {
         let values = arrays["classifier.bias"]?.asArray(Float.self)
 
         XCTAssertEqual(values ?? [], [0, 1, 2, 3])
+    }
+
+    func testLocalSmokeArtifactPredictsExpectedBiomedElectraEntities() throws {
+        try requireUsableMLXRuntime()
+
+        let environment = ProcessInfo.processInfo.environment
+        guard let artifactPath = environment["OPENMED_LOCAL_MLX_ARTIFACT"], !artifactPath.isEmpty else {
+            throw XCTSkip("Set OPENMED_LOCAL_MLX_ARTIFACT to run local Swift MLX smoke tests.")
+        }
+
+        let text = "my name is John, I am 89 years old and I live at 22 blbd asdad, 75015, paris."
+        let openmed = try OpenMed(
+            backend: .mlx(modelDirectoryURL: URL(fileURLWithPath: artifactPath))
+        )
+
+        let entities = try openmed.analyzeText(text, confidenceThreshold: 0.0)
+
+        XCTAssertTrue(
+            entities.contains { $0.label == "first_name" && $0.text == "John" },
+            "Expected first_name=John in \(entities)"
+        )
+        XCTAssertTrue(
+            entities.contains { $0.label == "age" && $0.text == "89" },
+            "Expected age=89 in \(entities)"
+        )
+        XCTAssertTrue(
+            entities.contains { $0.label == "street_address" && $0.text.contains("22 blbd asdad") },
+            "Expected street_address in \(entities)"
+        )
+        XCTAssertTrue(
+            entities.contains { $0.label == "postcode" && $0.text == "750" },
+            "Expected postcode=750 in \(entities)"
+        )
+        XCTAssertTrue(
+            entities.contains { $0.label == "city" && $0.text.lowercased() == "paris" },
+            "Expected city=paris in \(entities)"
+        )
     }
 
     private func requireUsableMLXRuntime() throws {

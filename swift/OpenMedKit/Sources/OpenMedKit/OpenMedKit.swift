@@ -483,7 +483,7 @@ public final class OpenMed {
         return String(format: "%016llx", hash)
     }
 
-    private static func buildOffsets(
+    static func buildOffsets(
         tokens: [String],
         in text: String
     ) -> [(Int, Int)] {
@@ -511,11 +511,30 @@ public final class OpenMed {
                 }
             }
 
-            if let range = text[searchStart...].range(of: piece) ??
-                text[searchStart...].range(
-                    of: piece,
-                    options: [.caseInsensitive, .diacriticInsensitive]
-                ) {
+            let searchSlice = text[searchStart...]
+            let exactRange = searchSlice.range(of: piece)
+            let insensitiveRange = searchSlice.range(
+                of: piece,
+                options: [.caseInsensitive, .diacriticInsensitive]
+            )
+
+            let range: Range<String.Index>?
+            switch (exactRange, insensitiveRange) {
+            case let (exact?, insensitive?):
+                if exact.lowerBound <= insensitive.lowerBound {
+                    range = exact
+                } else {
+                    range = insensitive
+                }
+            case let (exact?, nil):
+                range = exact
+            case let (nil, insensitive?):
+                range = insensitive
+            case (nil, nil):
+                range = nil
+            }
+
+            if let range {
                 let start = text.distance(from: text.startIndex, to: range.lowerBound)
                 let end = text.distance(from: text.startIndex, to: range.upperBound)
                 offsets.append((start, end))
