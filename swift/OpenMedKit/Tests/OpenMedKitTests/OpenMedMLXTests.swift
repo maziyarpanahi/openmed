@@ -56,6 +56,28 @@ final class OpenMedMLXTests: XCTestCase {
         XCTAssertTrue(artifact.weightCandidateURLs.contains(directory.appending(path: "weights.safetensors")))
     }
 
+    func testLegacyArtifactIgnoresIncompleteLocalBPETokenizerAssets() throws {
+        let directory = try makeLegacyArtifactWithoutTokenizerAssets()
+        try "{}".write(
+            to: directory.appending(path: "tokenizer_config.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "{}".write(
+            to: directory.appending(path: "vocab.json"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+
+        XCTAssertNil(artifact.tokenizerDirectoryURL)
+        XCTAssertEqual(
+            artifact.tokenizerName,
+            "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1"
+        )
+    }
+
     func testPipelinePredictsEntitiesFromLocalArtifact() throws {
         try requireUsableMLXRuntime()
         let directory = try makeTinyArtifact()
