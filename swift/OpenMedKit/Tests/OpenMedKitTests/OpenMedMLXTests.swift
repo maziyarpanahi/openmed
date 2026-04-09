@@ -78,6 +78,65 @@ final class OpenMedMLXTests: XCTestCase {
         )
     }
 
+    func testPrepareTokenizerDirectoryAddsStubConfigForTokenizerOnlyFolder() throws {
+        let directory = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: FileManager.default.temporaryDirectory,
+            create: true
+        )
+
+        try makeTokenizerData(modelType: "BPE").write(
+            to: directory.appending(path: "tokenizer.json")
+        )
+        try makeTokenizerConfig(tokenizerClass: "RobertaTokenizer").write(
+            to: directory.appending(path: "tokenizer_config.json")
+        )
+
+        let preparedDirectory = try OpenMed.prepareTokenizerDirectory(directory)
+
+        XCTAssertNotEqual(preparedDirectory.standardizedFileURL, directory.standardizedFileURL)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: preparedDirectory.appending(path: "config.json").path
+            )
+        )
+    }
+
+    func testPrepareTokenizerDirectoryPatchesBigMedStyleUnigramTokenizer() throws {
+        let directory = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: FileManager.default.temporaryDirectory,
+            create: true
+        )
+
+        try makeTokenizerData(modelType: "Unigram").write(
+            to: directory.appending(path: "tokenizer.json")
+        )
+        try makeTokenizerConfig(tokenizerClass: "RobertaTokenizer").write(
+            to: directory.appending(path: "tokenizer_config.json")
+        )
+
+        let preparedDirectory = try OpenMed.prepareTokenizerDirectory(directory)
+        let preparedConfigData = try Data(
+            contentsOf: preparedDirectory.appending(path: "tokenizer_config.json")
+        )
+        let preparedConfig = try JSONSerialization.jsonObject(with: preparedConfigData)
+            as? [String: Any]
+
+        XCTAssertEqual(preparedConfig?["tokenizer_class"] as? String, "T5Tokenizer")
+    }
+
+    func testPatchTokenizerConfigDataLeavesBPEAlone() throws {
+        let patched = try OpenMed.patchTokenizerConfigDataIfNeeded(
+            tokenizerConfigData: makeTokenizerConfig(tokenizerClass: "RobertaTokenizer"),
+            tokenizerData: makeTokenizerData(modelType: "BPE")
+        )
+
+        XCTAssertNil(patched)
+    }
+
     func testPipelinePredictsEntitiesFromLocalArtifact() throws {
         try requireUsableMLXRuntime()
         let directory = try makeTinyArtifact()
@@ -295,5 +354,25 @@ final class OpenMedMLXTests: XCTestCase {
         data.append(headerData)
         data.append(body)
         return data
+    }
+
+    private func makeTokenizerData(modelType: String) throws -> Data {
+        try JSONSerialization.data(
+            withJSONObject: [
+                "model": [
+                    "type": modelType,
+                ],
+            ],
+            options: [.prettyPrinted]
+        )
+    }
+
+    private func makeTokenizerConfig(tokenizerClass: String) throws -> Data {
+        try JSONSerialization.data(
+            withJSONObject: [
+                "tokenizer_class": tokenizerClass,
+            ],
+            options: [.prettyPrinted]
+        )
     }
 }
