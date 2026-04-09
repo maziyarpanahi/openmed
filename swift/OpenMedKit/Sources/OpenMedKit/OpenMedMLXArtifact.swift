@@ -234,12 +234,21 @@ struct OpenMedMLXArtifact: Sendable {
         let discoveredTokenizerFiles = Self.discoverTokenizerFiles(in: tokenizerDirectoryURL)
 
         let resolvedTokenizerDirectoryURL: URL?
+        let hasUsableListedTokenizer = hasListedTokenizerAssets
+            && Self.hasUsableTokenizerAssets(listedTokenizerFiles)
+        let hasUsableDiscoveredTokenizer = Self.hasUsableTokenizerAssets(discoveredTokenizerFiles)
         if !listedTokenizerFiles.isEmpty {
             guard hasListedTokenizerAssets else {
                 throw OpenMedMLXArtifactError.missingTokenizerAssets(tokenizerDirectoryURL)
             }
-            resolvedTokenizerDirectoryURL = tokenizerDirectoryURL
-        } else if !discoveredTokenizerFiles.isEmpty {
+            if hasUsableListedTokenizer {
+                resolvedTokenizerDirectoryURL = tokenizerDirectoryURL
+            } else if configuration.sourceModelName != nil {
+                resolvedTokenizerDirectoryURL = nil
+            } else {
+                throw OpenMedMLXArtifactError.missingTokenizerAssets(tokenizerDirectoryURL)
+            }
+        } else if hasUsableDiscoveredTokenizer {
             resolvedTokenizerDirectoryURL = tokenizerDirectoryURL
         } else if configuration.sourceModelName != nil {
             resolvedTokenizerDirectoryURL = nil
@@ -278,6 +287,23 @@ struct OpenMedMLXArtifact: Sendable {
         knownTokenizerFiles.filter {
             FileManager.default.fileExists(atPath: directoryURL.appending(path: $0).path)
         }
+    }
+
+    private static func hasUsableTokenizerAssets(_ files: [String]) -> Bool {
+        let fileSet = Set(files)
+        if fileSet.contains("tokenizer.json") {
+            return true
+        }
+        if fileSet.contains("vocab.txt") {
+            return true
+        }
+        if fileSet.contains("vocab.json") && fileSet.contains("merges.txt") {
+            return true
+        }
+        if fileSet.contains("spm.model") || fileSet.contains("sentencepiece.bpe.model") {
+            return true
+        }
+        return false
     }
 
     private static func makeLegacyManifest(
