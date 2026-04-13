@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var selectedModelID = DemoModelDescriptor.missingBundledModel.id
     @State private var entities: [DetectedEntity] = []
     @State private var isAnalyzing = false
+    @State private var analysisStatus: DemoAnalysisStatus?
     @State private var isShowingModelPicker = false
     @State private var errorMessage: String?
     @State private var inferenceTime: Double?
@@ -27,7 +28,7 @@ struct ContentView: View {
 
     private var analyzeButtonTitle: String {
         if isAnalyzing {
-            return "Analyzing..."
+            return analysisStatus?.phase.buttonTitle ?? "Preparing Run..."
         }
         switch selectedModel.runtimeKind {
         case .bundled:
@@ -54,6 +55,7 @@ struct ContentView: View {
                             isShowingModelPicker = true
                         }
                         .buttonStyle(.bordered)
+                        .disabled(isAnalyzing)
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -127,6 +129,11 @@ struct ContentView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                if let analysisStatus {
+                    AnalysisStatusCard(status: analysisStatus)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
 
                 if let error = errorMessage {
                     HStack {
@@ -216,6 +223,7 @@ struct ContentView: View {
                 selectedModelID: $selectedModelID
             )
         }
+        .animation(.spring(response: 0.38, dampingFraction: 0.88), value: analysisStatus?.phase)
     }
 
     private func analyzeText() {
@@ -223,18 +231,28 @@ struct ContentView: View {
         let analysisModel = selectedModel
 
         isAnalyzing = true
+        analysisStatus = nil
         errorMessage = nil
+        inferenceTime = nil
         entities = []
 
         Task {
             let start = CFAbsoluteTimeGetCurrent()
-            defer { isAnalyzing = false }
+            defer {
+                isAnalyzing = false
+                analysisStatus = nil
+            }
 
             do {
                 let result = try await runInference(
                     text: analysisText,
                     model: analysisModel,
-                    authToken: huggingFaceToken
+                    authToken: huggingFaceToken,
+                    progress: { status in
+                        await MainActor.run {
+                            analysisStatus = status
+                        }
+                    }
                 )
 
                 guard inputText == analysisText, selectedModelID == analysisModel.id else {
@@ -270,6 +288,7 @@ struct ContentView: View {
             return
         }
 
+        analysisStatus = nil
         inferenceTime = nil
         entities = []
 
@@ -283,6 +302,9 @@ struct ContentView: View {
         availableModels = discovered
 
         let preferredID =
+            discovered.first {
+                $0.sourceModelID == DemoModelCatalog.preferredDefaultSourceModelID && $0.isRunnableInDemoApp
+            }?.id ??
             discovered.first(where: \.isRunnableInDemoApp)?.id ??
             discovered.first?.id ??
             DemoModelDescriptor.missingBundledModel.id
@@ -317,25 +339,477 @@ struct ContentView: View {
 private func runInference(
     text: String,
     model: DemoModelDescriptor,
-    authToken: String
+    authToken: String,
+    progress: @escaping @Sendable (DemoAnalysisStatus) async -> Void
 ) async throws -> [DetectedEntity] {
     switch model.runtimeKind {
     case .bundled:
         return try await OpenMedRuntimeCache.shared.analyze(
             text: text,
             using: model,
-            authToken: nil
+            authToken: nil,
+            progress: progress
         )
     case .mlx:
         return try await OpenMedRuntimeCache.shared.analyze(
             text: text,
             using: model,
-            authToken: authToken
+            authToken: authToken,
+            progress: progress
         )
     case .unavailable:
         throw DemoError.unavailableInSwift(
             "Select a bundled CoreML model or a supported MLX model before running inference."
         )
+    }
+}
+
+private enum DemoAnalysisPhase: Int, CaseIterable, Identifiable, Sendable {
+    case downloadingModel
+    case loadingModel
+    case inferencing
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .downloadingModel:
+            return "Download"
+        case .loadingModel:
+            return "Load"
+        case .inferencing:
+            return "Inference"
+        }
+    }
+
+    var buttonTitle: String {
+        switch self {
+        case .downloadingModel:
+            return "Downloading Model..."
+        case .loadingModel:
+            return "Loading Model..."
+        case .inferencing:
+            return "Running Inference..."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .downloadingModel:
+            return "arrow.down.circle.fill"
+        case .loadingModel:
+            return "shippingbox.fill"
+        case .inferencing:
+            return "waveform.path.ecg.rectangle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .downloadingModel:
+            return Color(red: 0.13, green: 0.42, blue: 0.85)
+        case .loadingModel:
+            return Color(red: 0.04, green: 0.60, blue: 0.66)
+        case .inferencing:
+            return Color(red: 0.12, green: 0.64, blue: 0.44)
+        }
+    }
+}
+
+private enum DemoAnalysisStageAvailability: Sendable {
+    case required
+    case cached
+    case notNeeded
+    case warm
+}
+
+private enum DemoAnalysisStageVisualState {
+    case active
+    case completed
+    case pending
+    case skipped
+
+    var tint: Color {
+        switch self {
+        case .active:
+            return Color.primary
+        case .completed:
+            return Color(red: 0.10, green: 0.52, blue: 0.50)
+        case .pending:
+            return Color.secondary
+        case .skipped:
+            return Color.secondary.opacity(0.85)
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .active:
+            return Color.white.opacity(0.88)
+        case .completed:
+            return Color.white.opacity(0.72)
+        case .pending:
+            return Color.white.opacity(0.50)
+        case .skipped:
+            return Color.white.opacity(0.42)
+        }
+    }
+
+    var border: Color {
+        switch self {
+        case .active:
+            return Color.white.opacity(0.95)
+        case .completed:
+            return Color.white.opacity(0.75)
+        case .pending:
+            return Color.white.opacity(0.55)
+        case .skipped:
+            return Color.white.opacity(0.45)
+        }
+    }
+}
+
+private struct DemoAnalysisStagePresentation {
+    let title: String
+    let systemImage: String
+    let badgeText: String
+    let caption: String
+    let visualState: DemoAnalysisStageVisualState
+    let accent: Color
+}
+
+private struct DemoAnalysisPlan: Sendable {
+    let downloadAvailability: DemoAnalysisStageAvailability
+    let loadAvailability: DemoAnalysisStageAvailability
+
+    func status(
+        for phase: DemoAnalysisPhase,
+        model: DemoModelDescriptor
+    ) -> DemoAnalysisStatus {
+        DemoAnalysisStatus(
+            phase: phase,
+            modelDisplayName: model.displayName,
+            runtimeKind: model.runtimeKind,
+            downloadAvailability: downloadAvailability,
+            loadAvailability: loadAvailability
+        )
+    }
+}
+
+private struct DemoAnalysisStatus: Sendable {
+    let phase: DemoAnalysisPhase
+    let modelDisplayName: String
+    let runtimeKind: DemoModelRuntimeKind
+    let downloadAvailability: DemoAnalysisStageAvailability
+    let loadAvailability: DemoAnalysisStageAvailability
+
+    var pipelineLabel: String {
+        switch runtimeKind {
+        case .bundled:
+            return "Bundled CoreML Pipeline"
+        case .mlx:
+            return "On-Device MLX Pipeline"
+        case .unavailable:
+            return "OpenMed Pipeline"
+        }
+    }
+
+    var headline: String {
+        switch phase {
+        case .downloadingModel:
+            return "Downloading \(modelDisplayName)"
+        case .loadingModel:
+            return "Loading \(modelDisplayName)"
+        case .inferencing:
+            return "Running PII Inference"
+        }
+    }
+
+    var detailText: String {
+        switch phase {
+        case .downloadingModel:
+            return "Fetching the MLX artifact from Hugging Face and storing it in the local OpenMed cache so future runs start faster."
+        case .loadingModel:
+            return "Preparing tokenizer assets and initializing the model runtime before the note can be analyzed."
+        case .inferencing:
+            return "Applying token classification and OpenMed's smart PII merging on-device so the entities are production-grade."
+        }
+    }
+
+    func presentation(for stage: DemoAnalysisPhase) -> DemoAnalysisStagePresentation {
+        switch stage {
+        case .downloadingModel:
+            return makeDownloadPresentation()
+        case .loadingModel:
+            return makeLoadPresentation()
+        case .inferencing:
+            return makeInferencePresentation()
+        }
+    }
+
+    private func makeDownloadPresentation() -> DemoAnalysisStagePresentation {
+        switch downloadAvailability {
+        case .required:
+            let isActive = phase == .downloadingModel
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.downloadingModel.title,
+                systemImage: DemoAnalysisPhase.downloadingModel.systemImage,
+                badgeText: isActive ? "Downloading" : "Ready",
+                caption: isActive
+                    ? "Fetching the MLX artifact and snapshot files."
+                    : "Artifact stored locally and ready for reuse.",
+                visualState: isActive ? .active : .completed,
+                accent: DemoAnalysisPhase.downloadingModel.tint
+            )
+        case .cached:
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.downloadingModel.title,
+                systemImage: DemoAnalysisPhase.downloadingModel.systemImage,
+                badgeText: "Cached",
+                caption: "Artifact already exists on this device.",
+                visualState: .completed,
+                accent: DemoAnalysisPhase.downloadingModel.tint
+            )
+        case .notNeeded:
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.downloadingModel.title,
+                systemImage: "tray.and.arrow.down.fill",
+                badgeText: "Bundled",
+                caption: "No download needed for bundled CoreML assets.",
+                visualState: .skipped,
+                accent: DemoAnalysisPhase.downloadingModel.tint
+            )
+        case .warm:
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.downloadingModel.title,
+                systemImage: DemoAnalysisPhase.downloadingModel.systemImage,
+                badgeText: "Warm",
+                caption: "Model files are already ready to go.",
+                visualState: .completed,
+                accent: DemoAnalysisPhase.downloadingModel.tint
+            )
+        }
+    }
+
+    private func makeLoadPresentation() -> DemoAnalysisStagePresentation {
+        switch loadAvailability {
+        case .warm:
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.loadingModel.title,
+                systemImage: "checkmark.circle.fill",
+                badgeText: "Warm",
+                caption: "Runtime is already initialized in memory.",
+                visualState: .completed,
+                accent: DemoAnalysisPhase.loadingModel.tint
+            )
+        case .required:
+            let state: DemoAnalysisStageVisualState
+            let badgeText: String
+            let caption: String
+
+            if phase == .loadingModel {
+                state = .active
+                badgeText = "Loading"
+                caption = "Creating tokenizer and model runtime."
+            } else if phase.rawValue > DemoAnalysisPhase.loadingModel.rawValue {
+                state = .completed
+                badgeText = "Ready"
+                caption = "Runtime is loaded and standing by."
+            } else {
+                state = .pending
+                badgeText = "Next"
+                caption = "Starts once the model files are ready."
+            }
+
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.loadingModel.title,
+                systemImage: DemoAnalysisPhase.loadingModel.systemImage,
+                badgeText: badgeText,
+                caption: caption,
+                visualState: state,
+                accent: DemoAnalysisPhase.loadingModel.tint
+            )
+        case .cached:
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.loadingModel.title,
+                systemImage: DemoAnalysisPhase.loadingModel.systemImage,
+                badgeText: "Cached",
+                caption: "Model resources are ready for initialization.",
+                visualState: .completed,
+                accent: DemoAnalysisPhase.loadingModel.tint
+            )
+        case .notNeeded:
+            return DemoAnalysisStagePresentation(
+                title: DemoAnalysisPhase.loadingModel.title,
+                systemImage: DemoAnalysisPhase.loadingModel.systemImage,
+                badgeText: "Skipped",
+                caption: "No runtime loading step was needed.",
+                visualState: .skipped,
+                accent: DemoAnalysisPhase.loadingModel.tint
+            )
+        }
+    }
+
+    private func makeInferencePresentation() -> DemoAnalysisStagePresentation {
+        let state: DemoAnalysisStageVisualState = phase == .inferencing ? .active : .pending
+        let badgeText = phase == .inferencing ? "Live" : "Next"
+        let caption =
+            phase == .inferencing
+            ? "Running token classification and smart PII merging."
+            : "Begins as soon as the runtime is ready."
+
+        return DemoAnalysisStagePresentation(
+            title: DemoAnalysisPhase.inferencing.title,
+            systemImage: DemoAnalysisPhase.inferencing.systemImage,
+            badgeText: badgeText,
+            caption: caption,
+            visualState: state,
+            accent: DemoAnalysisPhase.inferencing.tint
+        )
+    }
+}
+
+private struct AnalysisStatusCard: View {
+    let status: DemoAnalysisStatus
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.95, green: 0.98, blue: 0.99),
+                            Color(red: 0.94, green: 0.98, blue: 0.97),
+                            Color(red: 0.98, green: 0.99, blue: 1.00),
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .stroke(Color.white.opacity(0.92), lineWidth: 1)
+                )
+
+            Circle()
+                .fill(status.phase.tint.opacity(0.16))
+                .frame(width: 180, height: 180)
+                .blur(radius: 24)
+                .offset(x: 56, y: -56)
+
+            VStack(alignment: .leading, spacing: 18) {
+                HStack(alignment: .top, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label(status.pipelineLabel, systemImage: "bolt.shield")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                        Text(status.headline)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+
+                        Text(status.detailText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 16)
+
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(status.phase.tint)
+
+                        Text(status.phase.title.uppercased())
+                            .font(.caption.weight(.bold))
+                            .tracking(0.6)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(status.phase.tint.opacity(0.12))
+                            .foregroundStyle(status.phase.tint)
+                            .clipShape(Capsule())
+                    }
+                }
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        ForEach(DemoAnalysisPhase.allCases) { phase in
+                            AnalysisPhaseTile(presentation: status.presentation(for: phase))
+                        }
+                    }
+
+                    VStack(spacing: 12) {
+                        ForEach(DemoAnalysisPhase.allCases) { phase in
+                            AnalysisPhaseTile(presentation: status.presentation(for: phase))
+                        }
+                    }
+                }
+            }
+            .padding(18)
+        }
+        .shadow(color: status.phase.tint.opacity(0.10), radius: 18, x: 0, y: 10)
+    }
+}
+
+private struct AnalysisPhaseTile: View {
+    let presentation: DemoAnalysisStagePresentation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(presentation.accent.opacity(iconBackgroundOpacity))
+                        .frame(width: 34, height: 34)
+
+                    Image(systemName: presentation.systemImage)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(presentation.accent)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(presentation.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Text(presentation.badgeText)
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.5)
+                        .foregroundStyle(presentation.visualState.tint)
+                }
+
+                Spacer(minLength: 8)
+            }
+
+            Text(presentation.caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(presentation.visualState.background)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(presentation.visualState.border, lineWidth: 1)
+        )
+    }
+
+    private var iconBackgroundOpacity: Double {
+        switch presentation.visualState {
+        case .active:
+            return 0.18
+        case .completed:
+            return 0.14
+        case .pending:
+            return 0.10
+        case .skipped:
+            return 0.08
+        }
     }
 }
 
@@ -400,7 +874,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
         displayName: "No Supported Model",
         sourceModelID: "Add a bundled CoreML model or select a supported MLX artifact",
         artifactRepoID: nil,
-        tokenizerName: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+        tokenizerName: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
         modelURL: nil,
         id2labelURL: nil,
         tokenizerFolderURL: nil,
@@ -485,6 +959,8 @@ private struct BundledModelManifest: Decodable {
 }
 
 private enum DemoModelCatalog {
+    static let preferredDefaultSourceModelID = "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1"
+
     static func discover(from bundle: Bundle) -> [DemoModelDescriptor] {
         var discovered: [DemoModelDescriptor] = swiftMLXCatalog()
 
@@ -674,9 +1150,12 @@ private actor OpenMedRuntimeCache {
     func analyze(
         text: String,
         using model: DemoModelDescriptor,
-        authToken: String?
+        authToken: String?,
+        progress: @escaping @Sendable (DemoAnalysisStatus) async -> Void
     ) async throws -> [DetectedEntity] {
+        let plan = try analysisPlan(for: model)
         let runtime: OpenMed
+
         if let cached = runtimes[model.id] {
             runtime = cached
         } else {
@@ -688,6 +1167,7 @@ private actor OpenMedRuntimeCache {
                     throw DemoError.invalidBundle("Model selection \(model.displayName) is not loadable.")
                 }
 
+                await progress(plan.status(for: .loadingModel, model: model))
                 openmed = try OpenMed(
                     modelURL: modelURL,
                     id2labelURL: id2labelURL,
@@ -702,17 +1182,33 @@ private actor OpenMedRuntimeCache {
                     )
                 }
                 let normalizedToken = authToken?.trimmingCharacters(in: .whitespacesAndNewlines)
-                if model.requiresAuthToken && (normalizedToken?.isEmpty ?? true) {
+                if plan.downloadAvailability == .required && (normalizedToken?.isEmpty ?? true) {
                     throw DemoError.missingAuthToken(
                         "Enter a Hugging Face token before downloading \(artifactRepoID). The repo is private for now."
                     )
                 }
 
-                let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-                    repoID: artifactRepoID,
-                    authToken: normalizedToken,
-                    revision: "main"
-                )
+                let modelDirectory: URL
+                switch plan.downloadAvailability {
+                case .required:
+                    await progress(plan.status(for: .downloadingModel, model: model))
+                    modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+                        repoID: artifactRepoID,
+                        authToken: normalizedToken,
+                        revision: "main"
+                    )
+                case .cached, .warm:
+                    modelDirectory = try OpenMedModelStore.cachedMLXModelDirectory(
+                        repoID: artifactRepoID,
+                        revision: "main"
+                    )
+                case .notNeeded:
+                    throw DemoError.unavailableInSwift(
+                        "The selected MLX model cannot skip its download stage."
+                    )
+                }
+
+                await progress(plan.status(for: .loadingModel, model: model))
                 openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
 
             case .unavailable:
@@ -725,7 +1221,8 @@ private actor OpenMedRuntimeCache {
             runtime = openmed
         }
 
-        let predictions = try runtime.analyzeText(text)
+        await progress(plan.status(for: .inferencing, model: model))
+        let predictions = try runtime.extractPII(text)
         return predictions.map { prediction in
             DetectedEntity(
                 label: prediction.label,
@@ -734,6 +1231,39 @@ private actor OpenMedRuntimeCache {
                 start: prediction.start,
                 end: prediction.end,
                 category: entityCategory(for: prediction.label)
+            )
+        }
+    }
+
+    private func analysisPlan(for model: DemoModelDescriptor) throws -> DemoAnalysisPlan {
+        if runtimes[model.id] != nil {
+            return DemoAnalysisPlan(
+                downloadAvailability: model.runtimeKind == .mlx ? .cached : .notNeeded,
+                loadAvailability: .warm
+            )
+        }
+
+        switch model.runtimeKind {
+        case .bundled:
+            return DemoAnalysisPlan(downloadAvailability: .notNeeded, loadAvailability: .required)
+        case .mlx:
+            guard let artifactRepoID = model.artifactRepoID else {
+                throw DemoError.unavailableInSwift(
+                    "The selected MLX model does not define a Hugging Face artifact repo."
+                )
+            }
+
+            let isCached = try OpenMedModelStore.isMLXModelCached(
+                repoID: artifactRepoID,
+                revision: "main"
+            )
+            return DemoAnalysisPlan(
+                downloadAvailability: isCached ? .cached : .required,
+                loadAvailability: .required
+            )
+        case .unavailable:
+            throw DemoError.unavailableInSwift(
+                "The selected model cannot run in this app."
             )
         }
     }

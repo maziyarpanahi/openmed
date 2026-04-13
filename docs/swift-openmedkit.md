@@ -83,7 +83,7 @@ let openmed = try OpenMed(
     backend: .mlx(modelDirectoryURL: modelDirectory)
 )
 
-let entities = try openmed.analyzeText(
+let entities = try openmed.extractPII(
     "Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"
 )
 ```
@@ -122,7 +122,7 @@ let openmed = try OpenMed(
     )
 )
 
-let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
+let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
 ```
 
 The convenience initializer remains available:
@@ -212,10 +212,13 @@ public final class OpenMed {
 
     public func extractPII(
         _ text: String,
-        confidenceThreshold: Float = 0.5
+        confidenceThreshold: Float = 0.5,
+        useSmartMerging: Bool = true
     ) throws -> [EntityPrediction]
 }
 ```
+
+`extractPII(...)` now follows the Python PII path more closely by applying span repair plus semantic-unit merging for fragmented dates, SSNs, phone numbers, emails, and similar PII spans.
 
 ### `OpenMedModelStore`
 

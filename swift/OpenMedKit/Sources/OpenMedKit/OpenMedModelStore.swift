@@ -125,6 +125,35 @@ public enum OpenMedModelStore {
         return modelDirectory
     }
 
+    public static func cachedMLXModelDirectory(
+        repoID: String,
+        revision: String = "main",
+        cacheDirectory: URL? = nil
+    ) throws -> URL {
+        let cacheRoot = try cacheDirectory ?? defaultCacheDirectory()
+        return cacheRoot
+            .appending(path: sanitizedPathComponent(repoID), directoryHint: .isDirectory)
+            .appending(path: sanitizedPathComponent(revision), directoryHint: .isDirectory)
+    }
+
+    public static func isMLXModelCached(
+        repoID: String,
+        revision: String = "main",
+        cacheDirectory: URL? = nil
+    ) throws -> Bool {
+        let modelDirectory = try cachedMLXModelDirectory(
+            repoID: repoID,
+            revision: revision,
+            cacheDirectory: cacheDirectory
+        )
+
+        guard FileManager.default.fileExists(atPath: modelDirectory.path) else {
+            return false
+        }
+
+        return try hasCompleteArtifact(at: modelDirectory)
+    }
+
     private static func hasCompleteArtifact(at modelDirectory: URL) throws -> Bool {
         let manifestURL = modelDirectory.appending(path: "openmed-mlx.json")
         if !FileManager.default.fileExists(atPath: manifestURL.path) {
