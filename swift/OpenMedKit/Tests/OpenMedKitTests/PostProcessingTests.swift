@@ -83,4 +83,64 @@ final class PostProcessingTests: XCTestCase {
         let entities = PostProcessing.decodeEntities(tokens: tokens, text: text)
         XCTAssertTrue(entities.isEmpty)
     }
+
+    func testRepairEntitySpansExtendsTruncatedEnd() {
+        let text = "Patient Maria Garcia"
+        let entities = [
+            EntityPrediction(label: "NAME", text: "Mari", confidence: 0.9, start: 8, end: 12),
+        ]
+
+        let repaired = PostProcessing.repairEntitySpans(entities, text: text)
+
+        XCTAssertEqual(repaired.count, 1)
+        XCTAssertEqual(repaired[0].text, "Maria")
+        XCTAssertEqual(repaired[0].start, 8)
+        XCTAssertEqual(repaired[0].end, 13)
+    }
+
+    func testMergePIIEntitiesCombinesFragmentedSSN() {
+        let text = "Patient SSN: 123-45-6789"
+        let entities = [
+            EntityPrediction(label: "ssn", text: "123", confidence: 0.90, start: 13, end: 16),
+            EntityPrediction(label: "ssn", text: "45", confidence: 0.85, start: 17, end: 19),
+            EntityPrediction(label: "ssn", text: "6789", confidence: 0.88, start: 20, end: 24),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "ssn")
+        XCTAssertEqual(merged[0].text, "123-45-6789")
+        XCTAssertEqual(merged[0].start, 13)
+        XCTAssertEqual(merged[0].end, 24)
+        XCTAssertEqual(merged[0].confidence, 0.866, accuracy: 0.02)
+    }
+
+    func testMergePIIEntitiesPrefersSpecificDOBLabel() {
+        let text = "DOB: 01/15/1970"
+        let entities = [
+            EntityPrediction(label: "date", text: "01", confidence: 0.70, start: 5, end: 7),
+            EntityPrediction(label: "date_of_birth", text: "/15/1970", confidence: 0.90, start: 7, end: 15),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "date_of_birth")
+        XCTAssertEqual(merged[0].text, "01/15/1970")
+        XCTAssertEqual(merged[0].start, 5)
+        XCTAssertEqual(merged[0].end, 15)
+        XCTAssertEqual(merged[0].confidence, 0.84, accuracy: 0.03)
+    }
+
+    func testMergePIIEntitiesKeepsNonSemanticEntities() {
+        let text = "Patient John Doe arrived"
+        let entities = [
+            EntityPrediction(label: "first_name", text: "John Doe", confidence: 0.95, start: 8, end: 16),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged, entities)
+    }
 }

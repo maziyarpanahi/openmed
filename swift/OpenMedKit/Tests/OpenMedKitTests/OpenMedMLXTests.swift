@@ -20,6 +20,36 @@ final class OpenMedMLXTests: XCTestCase {
         XCTAssertEqual(artifact.id2label[1], "B-NAME")
     }
 
+    func testIsMLXModelCachedRecognizesCompleteCachedArtifact() throws {
+        let cacheRoot = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: FileManager.default.temporaryDirectory,
+            create: true
+        )
+        let repoID = "OpenMed/Test-Artifact"
+        let revision = "demo"
+        let cacheDirectory = try OpenMedModelStore.cachedMLXModelDirectory(
+            repoID: repoID,
+            revision: revision,
+            cacheDirectory: cacheRoot
+        )
+
+        try FileManager.default.createDirectory(
+            at: cacheDirectory,
+            withIntermediateDirectories: true
+        )
+        _ = try makeManifestOnlyArtifact(in: cacheDirectory)
+
+        XCTAssertTrue(
+            try OpenMedModelStore.isMLXModelCached(
+                repoID: repoID,
+                revision: revision,
+                cacheDirectory: cacheRoot
+            )
+        )
+    }
+
     func testArtifactRejectsUnsupportedArchitecture() throws {
         let directory = try makeManifestOnlyArtifact(family: "deberta-v2")
 
@@ -270,8 +300,11 @@ final class OpenMedMLXTests: XCTestCase {
         return false
     }
 
-    private func makeManifestOnlyArtifact(family: String = "bert") throws -> URL {
-        let directory = try FileManager.default.url(
+    private func makeManifestOnlyArtifact(
+        family: String = "bert",
+        in directory: URL? = nil
+    ) throws -> URL {
+        let directory = try directory ?? FileManager.default.url(
             for: .itemReplacementDirectory,
             in: .userDomainMask,
             appropriateFor: FileManager.default.temporaryDirectory,
@@ -336,6 +369,7 @@ final class OpenMedMLXTests: XCTestCase {
         ]
         try JSONSerialization.data(withJSONObject: manifestObject, options: [.prettyPrinted])
             .write(to: directory.appending(path: "openmed-mlx.json"))
+        try Data().write(to: directory.appending(path: "weights.safetensors"))
 
         return directory
     }

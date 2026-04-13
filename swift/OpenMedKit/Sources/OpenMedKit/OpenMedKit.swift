@@ -15,7 +15,7 @@ import Tokenizers
 ///     authToken: ProcessInfo.processInfo.environment["HF_TOKEN"]
 /// )
 /// let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
-/// let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
+/// let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
 /// for entity in entities {
 ///     print(entity)  // [first_name] "John Doe" (8:16) conf=0.95
 /// }
@@ -123,15 +123,29 @@ public final class OpenMed {
         return entities.filter { $0.confidence >= confidenceThreshold }
     }
 
-    /// Run PII detection on the given text.
+    /// Run PII detection on the given text with OpenMed's smart post-processing.
     ///
-    /// Alias for ``analyzeText(_:confidenceThreshold:)`` — the model must be
-    /// a PII-trained model for meaningful results.
+    /// This applies the same high-level PII cleanup used by the Python package:
+    /// grouped BIO spans, span repair, and semantic-unit merging for items such
+    /// as dates, SSNs, phone numbers, and emails.
     public func extractPII(
         _ text: String,
-        confidenceThreshold: Float = 0.5
+        confidenceThreshold: Float = 0.5,
+        useSmartMerging: Bool = true
     ) throws -> [EntityPrediction] {
-        return try analyzeText(text, confidenceThreshold: confidenceThreshold)
+        let entities = try analyzeText(text, confidenceThreshold: confidenceThreshold)
+        let repairedEntities = PostProcessing.repairEntitySpans(entities, text: text)
+
+        guard useSmartMerging else {
+            return repairedEntities
+        }
+
+        return PostProcessing.mergePIIEntities(
+            repairedEntities,
+            text: text,
+            useSemanticPatterns: true,
+            preferModelLabels: true
+        )
     }
 
     // MARK: - Private
