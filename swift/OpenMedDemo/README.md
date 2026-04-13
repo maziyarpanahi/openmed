@@ -78,9 +78,9 @@ Example `openmed-model.json`:
 
 ```json
 {
-  "displayName": "ClinicalE5 Small CoreML",
-  "sourceModelId": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
-  "tokenizerName": "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
+  "displayName": "LiteClinical Small CoreML",
+  "sourceModelId": "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
+  "tokenizerName": "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
   "compiledModelName": "OpenMedPII",
   "compiledModelExtension": "mlmodelc",
   "id2labelFileName": "id2label.json",
@@ -104,7 +104,7 @@ For production apps, use `OpenMedKit` directly:
 import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
+    repoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
     authToken: "<token-if-private>"
 )
 
