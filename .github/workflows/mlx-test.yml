@@ -43,12 +43,15 @@ jobs:
 
   mlx-integration:
     name: MLX integration (Apple Silicon)
-    runs-on: macos-latest
-    # Only run on Apple Silicon runners
-    if: runner.arch == 'ARM64'
+    # GitHub-hosted macOS 15 runners are Apple Silicon (arm64).
+    runs-on: macos-15
 
     steps:
     - uses: actions/checkout@v4
+
+    - name: Verify Apple Silicon runner
+      run: |
+        test "$(uname -m)" = "arm64"
 
     - name: Set up Python
       uses: actions/setup-python@v5

@@ -1,14 +1,20 @@
 # MLX Backend (Apple Silicon)
 
-OpenMed v1.0.0 introduces native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx). On Macs with M1/M2/M3/M4 chips, NER and PII inference runs directly on the GPU — up to 10x faster than CPU-only PyTorch.
+OpenMed v1.0.0 introduces native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
+
+That MLX story now has two surfaces:
+
+- **Python MLX** through `openmed[mlx]` on Apple Silicon Macs
+- **Swift MLX** through `OpenMedKit` on Apple Silicon macOS and real iPhone/iPad hardware
 
 ## Installation
 
 ```bash
-pip install "openmed[mlx]"
+# From the repository root
+pip install -e ".[mlx]"
 ```
 
-This installs `mlx`, `huggingface-hub`, `tokenizers`, and `safetensors`.
+This installs `mlx`, `huggingface-hub`, `transformers`, `tokenizers`, and `safetensors`.
 
 ## Quick Start
 
@@ -34,65 +40,73 @@ config = OpenMedConfig(backend=None)    # Auto-detect (default)
 
 ## How It Works
 
-1. **Auto-detection**: On Apple Silicon Macs with `mlx` installed, OpenMed automatically selects the MLX backend.
-2. **On-the-fly conversion**: The first time you use a model with MLX, it's automatically converted from HuggingFace format and cached in `~/.cache/openmed/mlx/`.
-3. **Identical output**: MLX produces the same entity format as the HuggingFace backend — all downstream processing (entity merging, quality gates, PII detection) works identically.
+1. **Auto-detection**: On Apple Silicon Macs with `mlx` installed, OpenMed automatically selects the Python MLX backend.
+2. **Artifact packaging**: Supported conversions now produce a self-contained MLX artifact with:
+   - `openmed-mlx.json`
+   - `config.json`
+   - `id2label.json`
+   - tokenizer assets
+   - `weights.safetensors` by default
+   - `weights.npz` as a fallback when needed
+3. **Shared contract**: That same MLX artifact shape is now the contract for both Python MLX and Swift MLX.
+4. **Identical output shape**: MLX produces the same entity format as the HuggingFace backend, so downstream entity merging and PII handling stay consistent.
 
-## Model Conversion
+The public runtime focuses on automatic preparation at first use. OpenMed's broader cross-architecture conversion work is still being generalized privately across the full model collection.
 
-### Automatic (recommended)
+## Architecture Coverage
 
-Models are converted automatically on first use. No manual step needed.
+As of April 8, 2026, the current public BERT-family MLX path covers these families:
 
-### Manual conversion
+- `bert`
+- `distilbert`
+- `roberta`
+- `xlm-roberta`
+- `electra`
 
-For pre-converting models (e.g., for offline deployment):
+Python MLX also has the DeBERTa-v2 / DeBERTa-v3 pilot path, but Swift MLX v1 is intentionally limited to the BERT-family encoder rollout above.
 
-```bash
-python -m openmed.mlx.convert \
-    --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-    --output ./mlx-models/pii-small
-```
+Architectures still in active rollout:
 
-With 8-bit quantization (reduces model size by ~4x):
+- `modernbert`
+- `longformer`
+- `eurobert`
+- `qwen3`
 
-```bash
-python -m openmed.mlx.convert \
-    --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-    --output ./mlx-models/pii-small-q8 \
-    --quantize 8
-```
-
-The output directory contains:
-- `weights.npz` — Model weights in MLX/NumPy format
-- `config.json` — Model architecture configuration
-- `id2label.json` — Label ID to entity name mapping
-
-## Supported Models
-
-Currently, the MLX backend supports **BERT-based** token classification models:
-
-| Model | Parameters | Status |
-|-------|-----------|--------|
-| OpenMed-PII-SuperClinical-Small-44M-v1 | 44M | Supported |
-| OpenMed-PII-SuperClinical-Base-110M-v1 | 110M | Supported |
-| Other BERT-based NER models | Varies | Supported |
-
-DeBERTa, ModernBERT, and ELECTRA architectures will be added in future releases.
+That rollout is about making the converter universal and repeatable across the whole OpenMed collection, not just a single pilot checkpoint.
 
 ## Fallback Behavior
 
 If MLX is not available (non-Apple hardware, or `mlx` not installed), OpenMed automatically falls back to the HuggingFace/PyTorch backend. No code changes required.
 
-## Conversion Without MLX
+## MLX and Swift Apps
 
-You can convert models on any machine (even Linux) — the converter falls back to NumPy format:
+OpenMedKit can now load supported OpenMed MLX artifacts directly in Swift.
 
-```bash
-# On Linux CI — produces NumPy .npz (no MLX needed for conversion)
-python -m openmed.mlx.convert \
-    --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-    --output ./mlx-models/pii-small
+- Use Python MLX when you are running OpenMed from Python on Apple Silicon.
+- Use Swift MLX when you want the same supported MLX artifact to run in an Apple app on:
+  - Apple Silicon macOS
+  - a real iPhone/iPad device
+- Use CoreML when you already have a bundled Apple model package or need a fallback path outside Swift MLX.
+
+Swift MLX does **not** target iOS Simulator.
+
+### Swift MLX Quick Start
+
+```swift
+import OpenMedKit
+
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
+    authToken: "<token-if-private>"
+)
+
+let openmed = try OpenMed(
+    backend: .mlx(modelDirectoryURL: modelDirectory)
+)
+
+let entities = try openmed.analyzeText(
+    "Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"
+)
 ```
 
-The NumPy `.npz` files are fully compatible with the MLX backend.
+See [OpenMedKit (Swift)](swift-openmedkit.md) for the full Swift setup flow.

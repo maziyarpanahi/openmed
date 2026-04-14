@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs</title>
+    <title>OpenMed — Clinical AI with Python MLX and Swift-native OpenMedKit</title>
     <meta name="description"
-        content="OpenMed provides open-source healthcare LLMs, biomedical NER, and clinical AI toolkits under Apache-2.0 for secure, production-ready medical NLP workflows." />
+        content="OpenMed 1.0.0 brings open-source healthcare NLP to Python MLX on Apple Silicon and Swift-native OpenMedKit for macOS and iOS apps, alongside production-ready clinical AI workflows." />
     <meta name="keywords"
         content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical natural language processing, healthcare machine learning, clinical NLP, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
     <meta name="author" content="Maziyar Panahi" />
@@ -15,15 +15,15 @@
 
     <!-- Open Graph / Twitter -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs" />
+    <meta property="og:title" content="OpenMed — Clinical AI with Python MLX and Swift-native OpenMedKit" />
     <meta property="og:description"
-        content="State-of-the-art LLMs for healthcare, biomedical NER and zero-shot clinical AI models. Free forever. Apache-2.0." />
+        content="OpenMed 1.0.0 adds Python MLX on Apple Silicon, Swift-native OpenMedKit, and open clinical NLP workflows for secure local healthcare AI." />
     <meta property="og:url" content="https://openmed.life/" />
     <meta property="og:image" content="https://openmed.life/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="OpenMed — State-of-the-Art Healthcare AI & Clinical LLMs" />
+    <meta name="twitter:title" content="OpenMed — Clinical AI with Python MLX and Swift-native OpenMedKit" />
     <meta name="twitter:description"
-        content="State-of-the-art LLMs for healthcare & clinical AI. SOTA biomedical NER & zero-shot models. Free forever." />
+        content="OpenMed 1.0.0 adds Python MLX, Swift-native OpenMedKit, and local-first healthcare NLP for Apple and cloud deployments." />
     <meta name="twitter:image" content="https://openmed.life/og.png" />
 
     <!-- Schema.org -->
@@ -50,9 +50,9 @@
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "OpenMed Clinical NLP Suite",
-    "operatingSystem": "Cloud, On-Premises",
+    "operatingSystem": "macOS, iOS, iPadOS, Cloud, On-Premises",
     "applicationCategory": "AIApplication",
-    "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, and deployment toolkits for compliant medical workflows.",
+    "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, Python MLX acceleration, and Swift-native deployment toolkits for compliant medical workflows.",
     "softwareVersion": "1.0.0",
     "url": "https://openmed.life/",
     "provider": {
@@ -136,27 +136,33 @@
             <div class="container">
                 <div class="hero-content">
                     <div class="hero-text">
-                        <span class="badge">State-of-the-Art Healthcare AI — Quick Start</span>
+                        <span class="badge">OpenMed 1.0.0 • Python MLX + OpenMedKit</span>
                         <h1 class="hero-title">
-                            State-of-the-Art <span class="primary">LLMs for Healthcare</span>, Free Forever.
+                            Clinical AI for <span class="primary">Python, Apple Silicon, and Native Apps</span>.
                         </h1>
                         <p class="hero-desc">
-                            OpenMed equips clinical engineering and data science teams with open-source LLMs, biomedical
-                            NER,
-                            and evaluation tooling to ship HIPAA-aware workflows faster—without vendor lock-in.
+                            OpenMed now ships the same local-first healthcare NLP story across Python MLX on Apple
+                            Silicon and Swift-native OpenMedKit, alongside the open clinical models and workflows teams
+                            already use for production.
                         </p>
                         <ul class="hero-benefits"
                             style="display: grid; gap: 0.35rem; margin: 1rem 0 1.5rem; padding-left: 1.25rem; color: hsl(var(--muted-foreground)); font-size: 0.95rem;">
-                            <li>Launch production SageMaker endpoints in under five minutes with managed packages.</li>
-                            <li>Reduce annotation and triage costs with 12 benchmark-proven entity extractors.</li>
-                            <li>Meet compliance goals with Apache-2.0 licensing and transparent training data.</li>
+                            <li>Run Python PII and clinical NLP on-device with MLX acceleration for Apple Silicon Macs.</li>
+                            <li>Ship the same MLX artifacts inside native macOS, iOS, and iPadOS apps with OpenMedKit.</li>
+                            <li>Keep broader production paths open with SageMaker deployment, Apache-2.0 licensing, and transparent model packaging.</li>
                         </ul>
                         <div class="hero-buttons">
                             <a href="https://github.com/maziyarpanahi/openmed" class="btn btn-primary btn-lg"
-                                target="_blank" rel="noopener">Get started</a>
+                                target="_blank" rel="noopener">View on GitHub</a>
                             <button class="btn btn-outline" onclick="copyInstall(this)"
-                                style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install "openmed[hf]"</button>
+                                style="font-size: 1.0rem; padding: 0.25rem 0.75rem;">uv pip install "openmed[mlx]"</button>
 
+                        </div>
+                        <div
+                            style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem; align-items: center;">
+                            <a href="https://openmed.life/docs/mlx-backend/" class="nav-pill">Explore MLX</a>
+                            <a href="https://openmed.life/docs/swift-openmedkit/" class="nav-pill">OpenMedKit</a>
+                            <a href="https://openmed.life/docs/coreml-export/" class="nav-pill">CoreML Export</a>
                         </div>
                         <div class="stats">
                             <div class="stat">
@@ -166,6 +172,10 @@
                             <div class="stat">
                                 <div class="stat-number">13</div>
                                 <div class="stat-label">Biomedical Categories</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-number">2</div>
+                                <div class="stat-label">Apple Runtime Paths</div>
                             </div>
                         </div>
                     </div>
@@ -179,7 +189,7 @@
                                     <div class="code-dot yellow"></div>
                                     <div class="code-dot green"></div>
                                 </div>
-                                <span class="code-title">State-of-the-Art Healthcare AI — Quick Start</span>
+                                <span class="code-title">OpenMed 1.0.0 launch quick start</span>
                             </div>
                             <!-- <button class="btn btn-outline" onclick="expandCode()"
                             style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">Expand</button> -->
@@ -188,7 +198,8 @@
                         <div class="code-tabs">
                             <button class="code-tab active" onclick="switchTab('python', this)">Python</button>
                             <button class="code-tab" onclick="switchTab('pii', this)">PII API</button>
-                            <button class="code-tab" onclick="switchTab('batch', this)">Batch API</button>
+                            <button class="code-tab" onclick="switchTab('mlx', this)">Apple MLX</button>
+                            <button class="code-tab" onclick="switchTab('swift', this)">Swift</button>
                         </div>
 
                         <div class="code-block">
@@ -244,7 +255,15 @@
                                     d="M5 13l4 4L19 7">
                                 </path>
                             </svg>
-                            <span>Python Package</span>
+                            <span>Python MLX</span>
+                        </div>
+                        <div class="platform-badge">
+                            <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5 13l4 4L19 7">
+                                </path>
+                            </svg>
+                            <span>OpenMedKit</span>
                         </div>
                         <div class="platform-badge">
                             <svg class="check-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -254,6 +273,76 @@
                             </svg>
                             <span>Apache-2.0</span>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="apple-runtime"
+            style="padding: 5rem 0; background: linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--muted) / 0.25) 100%);">
+            <div class="container">
+                <div style="text-align: center; margin-bottom: 3.5rem;">
+                    <span
+                        style="background: hsl(var(--primary) / 0.12); color: hsl(var(--primary)); padding: 0.5rem 1rem; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; display: inline-block; margin-bottom: 1.25rem;">Apple
+                        launch path</span>
+                    <h2 style="font-size: 2.6rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.15;">One MLX
+                        Story Across Python and Swift</h2>
+                    <p
+                        style="font-size: 1.15rem; color: hsl(var(--muted-foreground)); max-width: 52rem; margin: 0 auto; line-height: 1.75;">
+                        OpenMed 1.0.0 is no longer just a Python package story. Teams can prototype with Python MLX on
+                        Apple Silicon, then ship the same local-first PII and clinical NLP experience inside native
+                        Swift apps with OpenMedKit.
+                    </p>
+                </div>
+
+                <div
+                    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div
+                        style="background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--primary) / 0.03)); border: 1px solid hsl(214 32% 91%); border-radius: 1rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="display: inline-flex; align-items: center; gap: 0.5rem; background: hsl(var(--muted)); border-radius: 9999px; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;">
+                            Python MLX
+                        </div>
+                        <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.75rem;">Accelerated local
+                            workflows on Apple Silicon</h3>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.95rem; line-height: 1.75; margin-bottom: 1rem;">
+                            Install <code>openmed[mlx]</code> to run local inference, PII extraction, and benchmark
+                            workflows with Apple-native MLX acceleration on Mac.
+                        </p>
+                        <a href="https://openmed.life/docs/mlx-backend/" style="color: hsl(var(--primary)); font-weight: 600; text-decoration: none;">Read the MLX backend guide</a>
+                    </div>
+
+                    <div
+                        style="background: linear-gradient(180deg, hsl(var(--background)), hsl(142 76% 36% / 0.03)); border: 1px solid hsl(214 32% 91%); border-radius: 1rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="display: inline-flex; align-items: center; gap: 0.5rem; background: hsl(var(--muted)); border-radius: 9999px; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;">
+                            OpenMedKit
+                        </div>
+                        <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.75rem;">Swift-native PII and
+                            clinical NLP for Apple apps</h3>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.95rem; line-height: 1.75; margin-bottom: 1rem;">
+                            Bring detection, smart entity merging, and local model execution into macOS, iOS, and
+                            iPadOS apps without sending PHI off device.
+                        </p>
+                        <a href="https://openmed.life/docs/swift-openmedkit/" style="color: hsl(var(--primary)); font-weight: 600; text-decoration: none;">Explore OpenMedKit docs</a>
+                    </div>
+
+                    <div
+                        style="background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--primary) / 0.02)); border: 1px solid hsl(214 32% 91%); border-radius: 1rem; padding: 1.75rem; box-shadow: var(--shadow-medical);">
+                        <div
+                            style="display: inline-flex; align-items: center; gap: 0.5rem; background: hsl(var(--muted)); border-radius: 9999px; padding: 0.35rem 0.75rem; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;">
+                            Shared artifacts
+                        </div>
+                        <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 0.75rem;">Move from notebooks
+                            to native apps with less friction</h3>
+                        <p
+                            style="color: hsl(var(--muted-foreground)); font-size: 0.95rem; line-height: 1.75; margin-bottom: 1rem;">
+                            Reuse MLX model packaging and export workflows instead of maintaining separate launch tracks
+                            for Python and Swift clients.
+                        </p>
+                        <a href="https://openmed.life/docs/coreml-export/" style="color: hsl(var(--primary)); font-weight: 600; text-decoration: none;">See model export options</a>
                     </div>
                 </div>
             </div>

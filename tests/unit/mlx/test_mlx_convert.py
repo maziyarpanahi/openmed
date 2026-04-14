@@ -6,9 +6,26 @@ remapping and config extraction logic in isolation.
 
 from __future__ import annotations
 
+import json
+import sys
+import types
+from pathlib import Path
 import pytest
 
 from openmed.mlx.convert import remap_key
+
+
+def _module_importable(module_name: str) -> bool:
+    """Return True only when a module can actually be imported."""
+    try:
+        __import__(module_name)
+    except Exception:
+        return False
+    return True
+
+
+_NUMPY_AVAILABLE = _module_importable("numpy")
+_SAFETENSORS_NUMPY_AVAILABLE = _module_importable("safetensors.numpy")
 
 
 class TestWeightKeyRemapping:
@@ -78,36 +95,43 @@ class TestWeightKeyRemapping:
         result = remap_key("bert.pooler.dense.weight")
         assert result.startswith("_")  # pooler is skipped
 
+    def test_deberta_attention_output_remapped(self):
+        result = remap_key(
+            "deberta.encoder.layer.0.attention.output.dense.weight",
+            "deberta-v2",
+        )
+        assert result == "deberta.encoder.layer.0.attention.out_proj.weight"
 
-class TestConvertEndToEnd:
-    """High-level conversion tests (require transformers but not MLX)."""
+    def test_deberta_ffn_and_norm_remapped(self):
+        result = remap_key(
+            "deberta.encoder.layer.0.output.LayerNorm.weight",
+            "deberta-v2",
+        )
+        assert result == "deberta.encoder.layer.0.ln2.weight"
 
-    @pytest.fixture
-    def mock_hf_model(self):
-        """A minimal mock that simulates a HF model state dict."""
-        from unittest.mock import MagicMock, patch
-        import numpy as np
+    def test_roberta_prefixes_remapped(self):
+        result = remap_key(
+            "roberta.encoder.layer.0.attention.self.query.weight",
+            "roberta",
+        )
+        assert result == "encoder.layers.0.attention.query_proj.weight"
 
-        mock_config = MagicMock()
-        mock_config.num_labels = 3
-        mock_config.to_dict.return_value = {
-            "num_labels": 3,
-            "hidden_size": 64,
-            "id2label": {0: "O", 1: "B-NAME", 2: "I-NAME"},
-        }
+    def test_distilbert_keys_remapped(self):
+        result = remap_key(
+            "distilbert.transformer.layer.0.attention.q_lin.weight",
+            "distilbert",
+        )
+        assert result == "encoder.layers.0.attention.query_proj.weight"
 
-        import torch
-        mock_model = MagicMock()
-        mock_model.state_dict.return_value = {
-            "bert.encoder.layer.0.attention.self.query.weight": torch.randn(64, 64),
-            "bert.encoder.layer.0.intermediate.dense.weight": torch.randn(128, 64),
-            "classifier.weight": torch.randn(3, 64),
-            "classifier.bias": torch.randn(3),
-        }
+    def test_distilbert_norm_remapped(self):
+        result = remap_key(
+            "distilbert.transformer.layer.0.output_layer_norm.weight",
+            "distilbert",
+        )
+        assert result == "encoder.layers.0.ln2.weight"
 
-        return mock_config, mock_model
 
-    def test_remap_all_hf_keys(self, mock_hf_model):
+    def test_remap_all_hf_keys(self):
         """Verify that remap_key handles all common HF BERT keys."""
         hf_keys = [
             "bert.encoder.layer.0.attention.self.query.weight",
@@ -131,8 +155,12 @@ class TestConvertEndToEnd:
             )
 
 
+@pytest.mark.skipif(
+    not _NUMPY_AVAILABLE,
+    reason="numpy is required for NumPy save/load tests",
+)
 class TestSaveNumpyModel:
-    """Test the NumPy fallback save path (no MLX required)."""
+    """Test the NumPy fallback save path."""
 
     def test_saves_weights_and_config(self, tmp_path):
         import numpy as np
@@ -148,9 +176,19 @@ class TestSaveNumpyModel:
         }
 
         output = save_numpy_model(weights, config, tmp_path / "model")
-        assert (output / "weights.npz").exists()
+        expected_name = (
+            "weights.safetensors"
+            if _SAFETENSORS_NUMPY_AVAILABLE
+            else "weights.npz"
+        )
+        assert (output / expected_name).exists()
         assert (output / "config.json").exists()
         assert (output / "id2label.json").exists()
+
+        with open(output / "config.json") as f:
+            saved_config = json.load(f)
+        assert saved_config["num_labels"] == 3
+        assert saved_config["_mlx_weights_format"] in {"safetensors", "npz"}
 
     def test_weights_loadable(self, tmp_path):
         import numpy as np
@@ -161,5 +199,169 @@ class TestSaveNumpyModel:
         config = {"num_labels": 3}
 
         output = save_numpy_model(weights, config, tmp_path / "model")
-        loaded = np.load(str(output / "weights.npz"))
-        np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
+        if (output / "weights.safetensors").exists():
+            from safetensors.numpy import load_file
+
+            loaded = load_file(str(output / "weights.safetensors"))
+            np.testing.assert_array_almost_equal(
+                loaded["classifier.weight"],
+                original_w,
+            )
+        else:
+            loaded = np.load(str(output / "weights.npz"))
+            np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
+
+    def test_creates_parent_dirs(self, tmp_path):
+        import numpy as np
+        from openmed.mlx.convert import save_numpy_model
+
+        weights = {"w": np.array([1.0, 2.0], dtype=np.float32)}
+        config = {"num_labels": 1}
+
+        output = save_numpy_model(weights, config, tmp_path / "a" / "b" / "model")
+        assert (output / "weights.safetensors").exists() or (output / "weights.npz").exists()
+
+    def test_writes_manifest_and_tokenizer_assets_when_source_model_id_provided(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        import numpy as np
+        from openmed.mlx.convert import save_numpy_model
+
+        class FakeTokenizer:
+            def save_pretrained(self, output_dir):
+                Path(output_dir, "tokenizer.json").write_text("{}")
+                Path(output_dir, "tokenizer_config.json").write_text("{}")
+                Path(output_dir, "special_tokens_map.json").write_text("{}")
+
+        fake_transformers = types.ModuleType("transformers")
+        fake_transformers.AutoTokenizer = types.SimpleNamespace(
+            from_pretrained=lambda *args, **kwargs: FakeTokenizer()
+        )
+        monkeypatch.setitem(sys.modules, "transformers", fake_transformers)
+
+        output = save_numpy_model(
+            {"classifier.weight": np.random.randn(3, 64).astype(np.float32)},
+            {
+                "num_labels": 3,
+                "model_type": "bert",
+                "_mlx_model_type": "bert",
+                "max_position_embeddings": 128,
+            },
+            tmp_path / "model",
+            source_model_id="OpenMed/test-model",
+        )
+
+        manifest = json.loads((output / "openmed-mlx.json").read_text())
+        assert manifest["format"] == "openmed-mlx"
+        assert manifest["source_model_id"] == "OpenMed/test-model"
+        assert manifest["available_weights"]
+        assert manifest["tokenizer"]["files"] == [
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+        ]
+        assert (output / "tokenizer.json").exists()
+        assert (output / "tokenizer_config.json").exists()
+        assert (output / "special_tokens_map.json").exists()
+
+    @pytest.mark.skipif(
+        not _SAFETENSORS_NUMPY_AVAILABLE,
+        reason="safetensors is required for fallback test",
+    )
+    def test_falls_back_to_npz_when_safetensors_save_fails(self, tmp_path, monkeypatch):
+        import numpy as np
+        import safetensors.numpy as st_numpy
+        from openmed.mlx.convert import save_numpy_model
+
+        def raise_on_save(*args, **kwargs):
+            raise RuntimeError("forced safetensors failure")
+
+        monkeypatch.setattr(st_numpy, "save_file", raise_on_save)
+
+        output = save_numpy_model(
+            {"classifier.weight": np.random.randn(3, 64).astype(np.float32)},
+            {"num_labels": 3},
+            tmp_path / "model",
+        )
+
+        assert (output / "weights.npz").exists()
+        assert not (output / "weights.safetensors").exists()
+
+        with open(output / "config.json") as f:
+            saved_config = json.load(f)
+        assert saved_config["_mlx_weights_format"] == "npz"
+
+
+class TestModelTypeResolution:
+    """Test architecture selection for MLX model loading."""
+
+    def test_resolves_bert(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type("bert") == "bert"
+
+    def test_resolves_deberta_from_architecture(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type(
+            {"architectures": ["DebertaV2ForTokenClassification"]},
+        ) == "deberta-v2"
+
+    def test_resolves_roberta_to_bert_family(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type("roberta") == "bert"
+
+    def test_resolves_xlm_roberta_to_bert_family(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type({"model_type": "xlm-roberta"}) == "bert"
+
+    def test_resolves_distilbert_to_bert_family(self):
+        from openmed.mlx.models import resolve_model_type
+
+        assert resolve_model_type("distilbert") == "bert"
+
+
+class TestModelConfigNormalization:
+    """Test config aliasing for BERT-family architectures."""
+
+    def test_normalizes_distilbert_config(self):
+        from openmed.mlx.models import normalize_model_config
+
+        normalized = normalize_model_config(
+            {
+                "model_type": "distilbert",
+                "dim": 768,
+                "n_heads": 12,
+                "n_layers": 6,
+                "hidden_dim": 3072,
+                "dropout": 0.1,
+            }
+        )
+
+        assert normalized["hidden_size"] == 768
+        assert normalized["num_attention_heads"] == 12
+        assert normalized["num_hidden_layers"] == 6
+        assert normalized["intermediate_size"] == 3072
+        assert normalized["type_vocab_size"] == 0
+        assert normalized["_mlx_position_offset"] == 0
+
+    def test_normalizes_roberta_position_offset(self):
+        from openmed.mlx.models import normalize_model_config
+
+        normalized = normalize_model_config(
+            {
+                "model_type": "roberta",
+                "hidden_size": 768,
+                "num_attention_heads": 12,
+                "num_hidden_layers": 6,
+                "intermediate_size": 3072,
+                "pad_token_id": 1,
+            }
+        )
+
+        assert normalized["type_vocab_size"] == 1
+        assert normalized["_mlx_position_offset"] == 2

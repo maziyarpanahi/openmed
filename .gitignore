@@ -167,6 +167,12 @@ cython_debug/
 # VS Code
 .vscode/
 
+# Swift / Xcode local state
+.build/
+swift/OpenMedKit/.build/
+swift/OpenMedKit/Package.resolved
+swift/**/xcuserdata/
+
 # Model cache directories
 .cache/
 cache/

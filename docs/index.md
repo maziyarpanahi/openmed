@@ -4,11 +4,18 @@ OpenMed bundles curated biomedical models, advanced extraction utilities, and on
 clinical NLP workflows without wrangling infrastructure. This documentation keeps the most copied snippets and workflows
 close at hand—each section is Markdown-first, searchable, and optimized for quick scanning or copy/paste into notebooks.
 
+OpenMed `1.0.0` also introduces the new Apple story:
+
+- **Python MLX** on Apple Silicon Macs through `openmed[mlx]`
+- **OpenMedKit** for native macOS, iOS, and iPadOS apps
+- **Shared MLX artifacts** so Python and Swift can consume the same packaged model layout
+
 ## What you get
 
 - **Curated registries** – discoverable Hugging Face models with metadata (domain, size, device guidance).
 - **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for scripts, notebooks, or services.
 - **PII detection & de-identification** – HIPAA-compliant smart entity merging for production-ready de-identification.
+- **Apple Silicon acceleration** – MLX-backed Python inference plus Swift-native app integration through `OpenMedKit`.
 - **REST service MVP** – FastAPI endpoints for `/health`, `/analyze`, `/pii/extract`, and `/pii/deidentify`.
 - **Advanced NER post-processing** – score-aware grouping, PHI-friendly filtering, and CSV/JSON/HTML export helpers.
 - **Composable config** – `OpenMedConfig` reads YAML/ENV so deployments stay reproducible across laptops and clusters.
@@ -40,6 +47,13 @@ uv run python examples/pii_model_comparison.py
 
 The rest of the docs expand on this snippet—head to **Quick Start** for the end-to-end setup, then explore the guides for
 configuration, zero-shot GLiNER workflows, and advanced processing helpers.
+
+## 1.0.0 launch highlights
+
+- [MLX Backend](./mlx-backend.md) – Python MLX on Apple Silicon, shared artifact packaging, and backend auto-detection.
+- [OpenMedKit (Swift Package)](./swift-openmedkit.md) – native macOS/iOS/iPadOS integration with MLX and CoreML paths.
+- [CoreML Packaging](./coreml-export.md) – current status of the bundled Apple model route alongside the new MLX flow.
+- [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, and Apple runtimes.
 
 ## How these docs are structured
 

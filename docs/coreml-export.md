@@ -1,81 +1,63 @@
-# CoreML Export (iOS & macOS)
+# CoreML Packaging Status (iOS & macOS)
 
-OpenMed can export NER and PII models to Apple's [CoreML](https://developer.apple.com/documentation/coreml) format for deployment in iOS and macOS applications.
+Use CoreML when you need a bundled Apple model package for **Swift/iOS/macOS app integration**. If you want the shared OpenMed MLX artifact path, see the [MLX backend](mlx-backend.md) and [OpenMedKit Swift guide](swift-openmedkit.md).
 
-## Installation
+OpenMedKit is the public Swift runtime in `1.0.0`, and now supports both MLX and CoreML backends. The universal OpenMed-to-CoreML packaging workflow is still being generalized across the model collection, so conversion should be treated as **active platform work**, not a stable public release surface yet.
 
-```bash
-pip install "openmed[coreml]"
-```
+## Current Status
 
-This installs `coremltools`, `torch`, and `transformers`.
+As of April 4, 2026:
 
-## Converting a Model
+- the `OpenMedKit` Swift package builds and tests successfully
+- the `OpenMedDemo` Xcode project builds and launches on macOS
+- Swift MLX is the forward Apple Silicon path for supported BERT-family artifacts
+- MLX artifacts such as `weights.safetensors` or `weights.npz` are still separate from CoreML app bundles
+- a fresh DeBERTa-v2 pilot export is **not** yet release-ready in the current arm64 CoreML environment
 
-```bash
-python -m openmed.coreml.convert \
-    --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-    --output ./OpenMedPII.mlpackage
-```
+## What To Ship Today
 
-### Options
+When you already have a compatible CoreML bundle, the app-facing packaging contract is:
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--model` | Required | HuggingFace model ID |
-| `--output` | Required | Output `.mlpackage` path |
-| `--max-seq-length` | 512 | Maximum token sequence length |
-| `--precision` | float16 | `float16` (Neural Engine) or `float32` (CPU) |
-| `--cache-dir` | None | HuggingFace model cache directory |
+- `YourModel.mlmodelc` or `.mlpackage`
+- `id2label.json`
+- tokenizer assets if the app must run offline
 
-### Output Files
+That is the stable surface consumed by [OpenMedKit](swift-openmedkit.md).
 
-The converter produces:
-- `OpenMedPII.mlpackage` — CoreML model package
-- `OpenMedPII_id2label.json` — Label mapping (include this in your app bundle)
+## Architecture Rollout
 
-### Model Metadata
+OpenMed is actively working toward a universal Apple packaging path for:
 
-The CoreML model includes embedded metadata:
-- `id2label` — JSON string mapping label IDs to names
-- `num_labels` — Number of entity labels
-- `max_seq_length` — Maximum input length
-- `source_model` — Original HuggingFace model ID
+- BERT
+- DistilBERT
+- RoBERTa
+- XLM-RoBERTa
+- Longformer
+- ModernBERT
+- EuroBERT
+- Qwen3
 
-## Using in Swift
+The goal is one repeatable packaging story across the collection rather than a one-off converter for a single checkpoint.
 
-See the [OpenMedKit Swift Package](swift-openmedkit.md) documentation for using the converted model in iOS/macOS apps.
+## Manual CoreML Integration
 
-### Manual Integration
-
-If you prefer not to use OpenMedKit, you can integrate the CoreML model directly:
+If you already have a compatible CoreML model and prefer not to use OpenMedKit, you can integrate it directly:
 
 ```swift
 import CoreML
 
 let model = try MLModel(contentsOf: modelURL)
 
-// Prepare input
 let inputIds = try MLMultiArray(shape: [1, seqLen], dataType: .int32)
 let mask = try MLMultiArray(shape: [1, seqLen], dataType: .int32)
-// ... fill with token IDs from your tokenizer ...
 
 let input = try MLDictionaryFeatureProvider(dictionary: [
     "input_ids": MLFeatureValue(multiArray: inputIds),
     "attention_mask": MLFeatureValue(multiArray: mask),
 ])
 
-// Run inference
 let output = try model.prediction(from: input)
 let logits = output.featureValue(for: "logits")!.multiArrayValue!
-// ... apply softmax and decode BIO tags ...
 ```
 
-## GitHub Actions
-
-Use the `convert-models.yml` workflow to convert models in CI:
-
-1. Go to Actions > "Convert Models"
-2. Click "Run workflow"
-3. Enter the model ID and desired formats
-4. Download the converted model from the workflow artifacts
+For most apps, though, `OpenMedKit` is the simpler route.

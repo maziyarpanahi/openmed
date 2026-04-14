@@ -48,5 +48,5 @@ jobs:
       run: |
         xcodebuild build \
           -scheme OpenMedKit \
-          -destination 'platform=iOS Simulator,name=iPhone 15' \
+          -destination 'generic/platform=iOS Simulator' \
           -skipPackagePluginValidation

@@ -1,5 +1,5 @@
 site_name: OpenMed
-site_description: "Open-source healthcare NLP toolkit with curated models, advanced NER, and one-call orchestration."
+site_description: "Open-source healthcare NLP toolkit with curated models, Apple Silicon MLX acceleration, OpenMedKit for Swift apps, advanced NER, and one-call orchestration."
 site_url: https://openmed.life/docs/
 site_dir: site/docs
 repo_url: https://github.com/maziyarpanahi/openmed
@@ -31,7 +31,7 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
-      - CoreML Export: coreml-export.md
+      - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - Contributing & Releases: contributing.md

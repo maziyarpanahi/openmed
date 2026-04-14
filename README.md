@@ -42,12 +42,36 @@ for entity in result.entities:
 ### Installation
 
 ```bash
+# From a local checkout of this repo:
 # Install with Hugging Face support
-uv pip install "openmed[hf]"
+uv pip install -e ".[hf]"
 
 # Or include REST service dependencies
-uv pip install "openmed[hf,service]"
+uv pip install -e ".[hf,service]"
 ```
+
+Apple Silicon acceleration in Python:
+
+```bash
+uv pip install -e ".[mlx]"
+```
+
+Swift apps on macOS and iOS use `OpenMedKit`. In `1.0.0`, that means:
+
+- **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for the supported BERT-family OpenMed artifacts
+- **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
+
+Add the Swift package like this:
+
+```swift
+dependencies: [
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.0.0"),
+]
+```
+
+OpenMedKit is public in `1.0.0`. The universal OpenMed model-packaging flow for Apple platforms is still being hardened across BERT, DistilBERT, RoBERTa, XLM-R, Longformer, ModernBERT, and related families, so treat conversion as active work rather than a fully universal public release surface.
+
+After `1.0.0` is published to PyPI, the editable install examples above can be replaced with plain `uv pip install "openmed[...]"`.
 
 ### Three Ways to Use OpenMed
 
@@ -115,6 +139,8 @@ Quick links:
 
 - [Getting Started](https://openmed.life/docs/) — Installation and first analysis
 - [Analyze Text Helper](https://openmed.life/docs/analyze-text) — Python API reference
+- [MLX Backend](docs/mlx-backend.md) — Apple Silicon Python runtime
+- [OpenMedKit (Swift)](docs/swift-openmedkit.md) — Use OpenMed models in macOS and iOS apps
 - [PII Detection Guide](examples/notebooks/PII_Detection_Complete_Guide.ipynb) — Complete de-identification tutorial (v0.5.0)
 - [Batch Processing](https://openmed.life/docs/batch-processing) — Multi-text and multi-file workflows
 - [Configuration Profiles](https://openmed.life/docs/profiles) — Environment-specific presets
