@@ -21,6 +21,19 @@ uv pip install ".[hf,gliner]"      # add GLiNER + transformers
 uv pip install ".[dev]"            # pytest + coverage + linting
 ```
 
+On an Apple Silicon Mac, you can start directly on the new MLX path:
+
+```bash
+uv pip install ".[mlx]"            # Python MLX runtime + tokenizer/artifact deps
+uv run python -c "from openmed.core.backends import get_backend; print(type(get_backend()).__name__)"
+```
+
+If you want the full launch surface on one machine, combine them:
+
+```bash
+uv pip install ".[hf,mlx,docs]"
+```
+
 ## 2. Run `analyze_text`
 
 ```python
