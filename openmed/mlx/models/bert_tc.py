@@ -32,16 +32,22 @@ class BertEmbeddings(nn.Module):
 
     def __init__(self, config: dict) -> None:
         super().__init__()
+        layer_norm_eps = config.get("layer_norm_eps", 1e-12)
+        type_vocab_size = int(config.get("type_vocab_size", 2) or 0)
+
         self.word_embeddings = nn.Embedding(
             config["vocab_size"], config["hidden_size"],
         )
         self.position_embeddings = nn.Embedding(
             config["max_position_embeddings"], config["hidden_size"],
         )
-        self.token_type_embeddings = nn.Embedding(
-            config["type_vocab_size"], config["hidden_size"],
+        self.token_type_embeddings = (
+            nn.Embedding(type_vocab_size, config["hidden_size"])
+            if type_vocab_size > 0
+            else None
         )
-        self.norm = nn.LayerNorm(config["hidden_size"], eps=1e-12)
+        self.position_offset = int(config.get("_mlx_position_offset", 0))
+        self.norm = nn.LayerNorm(config["hidden_size"], eps=layer_norm_eps)
 
     def __call__(
         self,
@@ -49,16 +55,13 @@ class BertEmbeddings(nn.Module):
         token_type_ids: Optional[mx.array] = None,
     ) -> mx.array:
         seq_len = input_ids.shape[1]
-        position_ids = mx.arange(seq_len)
+        position_ids = mx.arange(seq_len, dtype=input_ids.dtype) + self.position_offset
 
-        if token_type_ids is None:
-            token_type_ids = mx.zeros_like(input_ids)
-
-        x = (
-            self.word_embeddings(input_ids)
-            + self.position_embeddings(position_ids)
-            + self.token_type_embeddings(token_type_ids)
-        )
+        x = self.word_embeddings(input_ids) + self.position_embeddings(position_ids)
+        if self.token_type_embeddings is not None:
+            if token_type_ids is None:
+                token_type_ids = mx.zeros_like(input_ids)
+            x = x + self.token_type_embeddings(token_type_ids)
         return self.norm(x)
 
 
@@ -103,9 +106,10 @@ class BertLayer(nn.Module):
 
     def __init__(self, config: dict) -> None:
         super().__init__()
+        layer_norm_eps = config.get("layer_norm_eps", 1e-12)
         self.attention = BertAttention(config)
-        self.ln1 = nn.LayerNorm(config["hidden_size"], eps=1e-12)
-        self.ln2 = nn.LayerNorm(config["hidden_size"], eps=1e-12)
+        self.ln1 = nn.LayerNorm(config["hidden_size"], eps=layer_norm_eps)
+        self.ln2 = nn.LayerNorm(config["hidden_size"], eps=layer_norm_eps)
         self.linear1 = nn.Linear(config["hidden_size"], config["intermediate_size"])
         self.linear2 = nn.Linear(config["intermediate_size"], config["hidden_size"])
 
@@ -175,8 +179,8 @@ class BertForTokenClassification(nn.Module):
 def load_model(model_path: str | Path) -> BertForTokenClassification:
     """Load a converted MLX BERT-TC model from *model_path*.
 
-    Expects the directory to contain ``config.json`` and ``weights.npz``
-    (or ``weights.safetensors``).
+    Expects the directory to contain ``config.json`` and MLX weights in
+    ``weights.safetensors`` or ``weights.npz``.
     """
     model_path = Path(model_path)
 
@@ -185,18 +189,23 @@ def load_model(model_path: str | Path) -> BertForTokenClassification:
 
     model = BertForTokenClassification(config)
 
+    preferred_format = config.get("_mlx_weights_format")
     weights_npz = model_path / "weights.npz"
     weights_sf = model_path / "weights.safetensors"
-    if weights_sf.exists():
-        from mlx.utils import load as mlx_load
-        weights = dict(mlx_load(str(weights_sf)))
-    elif weights_npz.exists():
-        weights = dict(mx.load(str(weights_npz)))
-    else:
+    candidate_paths = []
+    if preferred_format == "safetensors":
+        candidate_paths.append(weights_sf)
+    elif preferred_format == "npz":
+        candidate_paths.append(weights_npz)
+    candidate_paths.extend([weights_sf, weights_npz])
+
+    weights_path = next((path for path in candidate_paths if path.exists()), None)
+    if weights_path is None:
         raise FileNotFoundError(
             f"No weights found in {model_path}. "
-            "Expected weights.npz or weights.safetensors."
+            "Expected weights.safetensors or weights.npz."
         )
+    weights = dict(mx.load(str(weights_path)))
 
     model.load_weights(list(weights.items()))
     mx.eval(model.parameters())

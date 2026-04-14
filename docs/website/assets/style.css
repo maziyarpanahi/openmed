@@ -277,6 +277,7 @@ body {
 
 .stats {
     display: flex;
+    flex-wrap: wrap;
     gap: 2rem;
     padding-top: 1rem;
 }
@@ -342,6 +343,7 @@ body {
 
 .code-tabs {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
     padding: 0.25rem;
     background: hsl(var(--muted));
@@ -354,6 +356,7 @@ body {
     border-radius: 0.25rem;
     font-size: 0.875rem;
     font-weight: 500;
+    white-space: nowrap;
     border: none;
     background: transparent;
     cursor: pointer;

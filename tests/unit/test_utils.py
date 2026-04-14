@@ -103,6 +103,12 @@ class TestValidation:
         assert validate_model_name("org/model-name") == "org/model-name"
         assert validate_model_name("OpenMed/medical-ner") == "OpenMed/medical-ner"
 
+    def test_validate_model_name_local_path(self, tmp_path):
+        """Test validate_model_name accepts existing local paths."""
+        model_dir = tmp_path / "local-mlx-model"
+        model_dir.mkdir()
+        assert validate_model_name(str(model_dir)) == str(model_dir)
+
     def test_validate_model_name_invalid_type(self):
         """Test validate_model_name with invalid type."""
         with pytest.raises(ValueError, match="Model name must be a string"):
