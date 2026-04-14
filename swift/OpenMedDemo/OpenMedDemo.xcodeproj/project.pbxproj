@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -137,21 +137,6 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../OpenMedKit;
-		};
-/* End XCLocalSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		AA000001 /* OpenMedKit */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */;
-			productName = OpenMedKit;
-		};
-/* End XCSwiftPackageProductDependency section */
-
 /* Begin XCBuildConfiguration section */
 		A9000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -161,6 +146,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = G9KGF559KJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenMedDemo/Info.plist;
@@ -193,6 +179,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = G9KGF559KJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenMedDemo/Info.plist;
@@ -282,6 +269,20 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../OpenMedKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001 /* OpenMedKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */;
+			productName = OpenMedKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A8000001 /* Project object */;
 }
