@@ -22,12 +22,42 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
 
+## Apple Silicon & Swift recipes
+
+OpenMed `1.0.0` adds two release-critical Apple entry points:
+
+- [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs
+- [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps
+
+Python MLX quick check:
+
+```bash
+uv pip install ".[mlx]"
+uv run python -c "from openmed.core.backends import get_backend; print(type(get_backend()).__name__)"
+```
+
+Swift MLX quick check:
+
+```swift
+import OpenMedKit
+
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
+    authToken: "<token-if-private>"
+)
+
+let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
+let entities = try openmed.extractPII("Patient John Doe, DOB 1990-05-15")
+```
+
 ## Copy-ready snippets
 
 You can find these directly in the docs:
 
 - [Analyze Text Helper](./analyze-text.md) — dict/JSON/HTML/CSV outputs with metadata.
 - [REST Service (MVP)](./rest-service.md) — FastAPI endpoints and Docker runbook.
+- [MLX Backend](./mlx-backend.md) — Apple Silicon Python runtime and artifact packaging.
+- [OpenMedKit (Swift)](./swift-openmedkit.md) — native app runtime for macOS, iOS, and iPadOS.
 - [ModelLoader & Pipelines](./model-loader.md) — caching, token helpers, multi-model setups.
 - [Advanced NER & Output Formatting](./output-formatting.md) — span filtering and conversions.
 - [Zero-shot Toolkit](./zero-shot-ner.md) — indexing, label defaults, and inference APIs.
