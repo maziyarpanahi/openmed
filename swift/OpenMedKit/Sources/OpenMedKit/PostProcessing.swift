@@ -23,6 +23,7 @@ public enum PostProcessing {
         let regex: NSRegularExpression
         let entityType: String
         let priority: Int
+        let captureGroup: Int?
         let baseScore: Float
         let contextBoost: Float
         let contextWords: [String]
@@ -32,6 +33,7 @@ public enum PostProcessing {
             _ pattern: String,
             entityType: String,
             priority: Int = 0,
+            captureGroup: Int? = nil,
             options: NSRegularExpression.Options = [.caseInsensitive],
             baseScore: Float = 0.5,
             contextBoost: Float = 0.35,
@@ -45,6 +47,7 @@ public enum PostProcessing {
             }
             self.entityType = entityType
             self.priority = priority
+            self.captureGroup = captureGroup
             self.baseScore = baseScore
             self.contextBoost = contextBoost
             self.contextWords = contextWords
@@ -61,6 +64,150 @@ public enum PostProcessing {
     }
 
     static let defaultPIIPatterns: [SemanticUnitPattern] = [
+        .init(
+            #"\bPatient:\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+)\b"#,
+            entityType: "full_name",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["patient", "name"]
+        ),
+        .init(
+            #"\bEmergency Contact:\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+)\b"#,
+            entityType: "full_name",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["emergency contact", "contact"]
+        ),
+        .init(
+            #"\bDOB:\s*(\d{1,2}/\d{1,2}/\d{2,4})\b"#,
+            entityType: "date_of_birth",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["dob", "date of birth", "birthdate"]
+        ),
+        .init(
+            #"\bSSN:\s*(\d{3}-\d{2}-\d{4})\b"#,
+            entityType: "ssn",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["ssn", "social security", "social security number"]
+        ),
+        .init(
+            #"\bMRN:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "medical_record_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["mrn", "medical record", "record number"]
+        ),
+        .init(
+            #"\bAddress:\s*([^,\n]+(?:,\s*[^,\n]+)*?)(?=,\s*(?:Phone|Email|Insurance ID|Driver License|Passport|Emergency Contact|Employer|Employee ID|Bank Account|Routing):|$)"#,
+            entityType: "street_address",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["address", "street", "residence", "lives at"]
+        ),
+        .init(
+            #"\bPhone:\s*(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})\b"#,
+            entityType: "phone_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["phone", "telephone", "contact"]
+        ),
+        .init(
+            #"\bEmergency Contact:\s*[A-Za-z][A-Za-z\s'-]+,\s*(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})\b"#,
+            entityType: "phone_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["emergency contact", "contact", "phone"]
+        ),
+        .init(
+            #"\bEmail:\s*([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b"#,
+            entityType: "email",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["email", "e-mail", "mail"]
+        ),
+        .init(
+            #"\bInsurance ID:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "insurance_id",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["insurance", "policy", "coverage", "payer"]
+        ),
+        .init(
+            #"\bDriver License:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "driver_license",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["driver license", "license", "dl"]
+        ),
+        .init(
+            #"\bPassport:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "passport_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["passport", "travel document"]
+        ),
+        .init(
+            #"\bEmployer:\s*([^,\n]+)"#,
+            entityType: "organization",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.93,
+            contextBoost: 0.03,
+            contextWords: ["employer", "company", "organization", "work"]
+        ),
+        .init(
+            #"\bEmployee ID:\s*([A-Z0-9][A-Z0-9-]{3,})\b"#,
+            entityType: "employee_id",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["employee id", "employee", "staff id"]
+        ),
+        .init(
+            #"\bBank Account:\s*([A-Z0-9][A-Z0-9-]{5,})\b"#,
+            entityType: "account_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["bank account", "account", "banking"]
+        ),
+        .init(
+            #"\bRouting:\s*(\d{9})\b"#,
+            entityType: "routing_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["routing", "aba", "bank"]
+        ),
         .init(
             #"\b\d{4}-\d{2}-\d{2}\b"#,
             entityType: "date",
@@ -413,6 +560,17 @@ public enum PostProcessing {
             }
 
             guard !overlapping.isEmpty else {
+                if unit.score >= 0.55 {
+                    merged.append(
+                        EntityPrediction(
+                            label: unit.entityType,
+                            text: substring(text, start: unit.start, end: unit.end),
+                            confidence: unit.score,
+                            start: unit.start,
+                            end: unit.end
+                        )
+                    )
+                }
                 continue
             }
 
@@ -490,7 +648,18 @@ public enum PostProcessing {
             let matches = pattern.regex.matches(in: text, range: fullRange)
 
             for match in matches {
-                guard let range = Range(match.range, in: text) else {
+                let matchedRange: NSRange
+                if let captureGroup = pattern.captureGroup,
+                   captureGroup > 0,
+                   captureGroup < match.numberOfRanges
+                {
+                    matchedRange = match.range(at: captureGroup)
+                } else {
+                    matchedRange = match.range
+                }
+
+                guard matchedRange.location != NSNotFound,
+                      let range = Range(matchedRange, in: text) else {
                     continue
                 }
 
