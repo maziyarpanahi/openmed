@@ -2,8 +2,12 @@ import OpenMedKit
 import SwiftUI
 
 struct ContentView: View {
+    private static let showcaseSampleText = """
+    Patient: John Doe, DOB: 01/15/1970, SSN: 000-00-0000, MRN: MRN-TEST-88421, Address: 123 Example Street, Apt 4B, Springfield, CA 90000, Phone: (555) 010-2244, Email: john.doe@example.test, Insurance ID: TEST-POLICY-778291, Driver License: DLT-TEST-442190, Passport: P-TEST-998877, Emergency Contact: Jane Doe, (555) 010-7788, Employer: Example Manufacturing LLC, Employee ID: EMP-20481, Bank Account: ACCT-TEST-55667788, Routing: 000000000.
+    """
+
     @AppStorage("openmed.demo.hfToken") private var huggingFaceToken = ""
-    @State private var inputText = "Patient John Doe, DOB 1990-05-15, phone 555-123-4567, SSN 123-45-6789. Diagnosed with Type 2 diabetes."
+    @State private var inputText = Self.showcaseSampleText
     @State private var availableModels: [DemoModelDescriptor] = [.missingBundledModel]
     @State private var selectedModelID = DemoModelDescriptor.missingBundledModel.id
     @State private var entities: [DetectedEntity] = []
@@ -12,6 +16,7 @@ struct ContentView: View {
     @State private var isShowingModelPicker = false
     @State private var errorMessage: String?
     @State private var inferenceTime: Double?
+    @State private var didAutostartShowcase = false
 
     private enum AnalysisInvalidationReason {
         case textChanged
@@ -87,6 +92,32 @@ struct ContentView: View {
                         Text(selectedModel.detailText)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
+
+                        if selectedModel.requiresAuthToken {
+                            HStack(spacing: 8) {
+                                Image(systemName: huggingFaceToken.isEmpty ? "key.horizontal" : "checkmark.circle.fill")
+                                    .foregroundStyle(huggingFaceToken.isEmpty ? .orange : .green)
+
+                                Text(
+                                    huggingFaceToken.isEmpty
+                                        ? "Manage the private Hugging Face access token in Choose Model."
+                                        : "Private Hugging Face token is saved on this device."
+                                )
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 2)
+                        } else if selectedModel.runtimeKind == .mlx {
+                            HStack(spacing: 8) {
+                                Image(systemName: "globe.badge.chevron.backward")
+                                    .foregroundStyle(.mint)
+
+                                Text("Public Hugging Face artifact. No token required.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 2)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
@@ -94,27 +125,12 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
                     if availableModels.filter(\.isBundled).isEmpty {
-                        Text("This app build does not currently include a bundled CoreML model. You can still test the published OpenMed MLX artifacts on Apple Silicon macOS or a physical iPhone/iPad by selecting an MLX model below and providing a Hugging Face token while the repos remain private.")
+                        Text("This app build does not currently include a bundled CoreML model. You can still test the published OpenMed MLX artifacts on Apple Silicon macOS or a physical iPhone/iPad by selecting an MLX model below.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-
-                if selectedModel.runtimeKind == .mlx {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Hugging Face Token", systemImage: "key.horizontal")
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-
-                        huggingFaceTokenField
-
-                        Text("Required while these MLX repos are private. Once the repos are public, you can leave this blank.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
 
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Clinical Note", systemImage: "doc.text")
@@ -210,18 +226,25 @@ struct ContentView: View {
         }
         .task {
             refreshAvailableModels()
+            autostartShowcaseIfNeeded()
         }
         .onChange(of: inputText) { _, _ in
             invalidateAnalysisResults(reason: .textChanged)
         }
         .onChange(of: selectedModelID) { _, _ in
             invalidateAnalysisResults(reason: .modelChanged)
+            autostartShowcaseIfNeeded()
         }
         .sheet(isPresented: $isShowingModelPicker) {
             ModelPickerSheet(
                 models: availableModels.isEmpty ? [.missingBundledModel] : availableModels,
-                selectedModelID: $selectedModelID
+                selectedModelID: $selectedModelID,
+                huggingFaceToken: $huggingFaceToken
             )
+            #if os(iOS)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            #endif
         }
         .animation(.spring(response: 0.38, dampingFraction: 0.88), value: analysisStatus?.phase)
     }
@@ -316,23 +339,20 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
-    private var huggingFaceTokenField: some View {
-        #if os(iOS)
-        SecureField("hf_...", text: $huggingFaceToken)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .font(.body.monospaced())
-            .padding(12)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        #else
-        SecureField("hf_...", text: $huggingFaceToken)
-            .font(.body.monospaced())
-            .padding(12)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        #endif
+    private func autostartShowcaseIfNeeded() {
+        guard !didAutostartShowcase,
+              inputText == Self.showcaseSampleText,
+              entities.isEmpty,
+              !isAnalyzing,
+              canAnalyzeSelectedModel
+        else {
+            return
+        }
+
+        didAutostartShowcase = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            analyzeText()
+        }
     }
 }
 
@@ -846,6 +866,9 @@ struct DetectedEntity: Identifiable, Sendable {
         case "PHONE": return .green
         case "SSN": return .red
         case "ADDRESS": return .orange
+        case "EMAIL": return .mint
+        case "ID": return .pink
+        case "ORG": return .indigo
         default: return .gray
         }
     }
@@ -883,7 +906,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
     )
 
     var isBundled: Bool { runtimeKind == .bundled }
-    var requiresAuthToken: Bool { runtimeKind == .mlx && artifactRepoID != nil }
+    var requiresAuthToken: Bool { false }
     var isRunnableInDemoApp: Bool {
         switch runtimeKind {
         case .bundled:
@@ -922,7 +945,7 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
             return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
         case .mlx:
             if DemoPlatform.supportsOnDeviceMLX {
-                return "Downloads the MLX artifact from Hugging Face, caches it locally, and runs it on-device with OpenMedKit + MLX."
+                return "Downloads the public MLX artifact from Hugging Face, caches it locally, and runs it on-device with OpenMedKit + MLX."
             }
             return "This MLX model requires Apple Silicon macOS or a physical iPhone/iPad. iOS Simulator is not supported."
         }
@@ -1182,7 +1205,7 @@ private actor OpenMedRuntimeCache {
                     )
                 }
                 let normalizedToken = authToken?.trimmingCharacters(in: .whitespacesAndNewlines)
-                if plan.downloadAvailability == .required && (normalizedToken?.isEmpty ?? true) {
+                if model.requiresAuthToken && plan.downloadAvailability == .required && (normalizedToken?.isEmpty ?? true) {
                     throw DemoError.missingAuthToken(
                         "Enter a Hugging Face token before downloading \(artifactRepoID). The repo is private for now."
                     )
@@ -1339,6 +1362,7 @@ struct EntityRow: View {
 private struct ModelPickerSheet: View {
     let models: [DemoModelDescriptor]
     @Binding var selectedModelID: String
+    @Binding var huggingFaceToken: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -1349,77 +1373,89 @@ private struct ModelPickerSheet: View {
         return models.filter { $0.searchText.contains(query) }
     }
 
+    private var selectedModel: DemoModelDescriptor? {
+        models.first(where: { $0.id == selectedModelID })
+    }
+
+    private var showsTokenCard: Bool {
+        models.contains(where: \.requiresAuthToken)
+    }
+
     var body: some View {
         NavigationStack {
-            Group {
-                if filteredModels.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 28, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                        Text("No Matching Models")
-                            .font(.headline)
-                        Text("Search the bundled CoreML models and the Swift-MLX-compatible OpenMed model catalog.")
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Choose the runtime path for this demo")
+                            .font(.title3.weight(.semibold))
+                        Text("Browse bundled CoreML models and the OpenMed MLX catalog without losing space on the main note view.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 420)
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding()
-                } else {
-                    List {
-                        ForEach(filteredModels) { model in
-                            Button {
-                                selectedModelID = model.id
-                                dismiss()
-                            } label: {
-                                HStack(alignment: .top, spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(model.displayName)
-                                            .font(.body.weight(.semibold))
-                                            .foregroundStyle(.primary)
-                                        Text(model.sourceModelID)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                            .multilineTextAlignment(.leading)
-                                        Text(model.detailText)
-                                            .font(.caption)
-                                            .foregroundStyle(.tertiary)
-                                            .multilineTextAlignment(.leading)
-                                    }
 
-                                    Spacer()
+                    HStack(spacing: 10) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Search OpenMed models", text: $searchText)
+                            #if os(iOS)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #endif
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
 
-                                    VStack(alignment: .trailing, spacing: 6) {
-                                        Text(model.badgeText)
-                                            .font(.caption.weight(.semibold))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(model.badgeColor.opacity(0.14))
-                                            .foregroundStyle(model.badgeColor)
-                                            .clipShape(Capsule())
+                Divider()
 
-                                        if selectedModelID == model.id {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(.green)
-                                        }
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                                .padding(.vertical, 4)
-                            }
-                            .buttonStyle(.plain)
+                ScrollView {
+                    if filteredModels.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                            Text("No Matching Models")
+                                .font(.headline)
+                            Text("Try a model family, language, or runtime keyword like ClinicalE5, Dutch, or MLX.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 420)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 280)
+                        .padding(24)
+                    } else {
+                        LazyVStack(spacing: 14) {
+                            ForEach(filteredModels) { model in
+                                modelCard(for: model)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 18)
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Search OpenMed models")
+            .background(Color.gray.opacity(0.06))
+            .safeAreaInset(edge: .bottom) {
+                if showsTokenCard {
+                    tokenManagementCard
+                }
+            }
             .navigationTitle("Choose Model")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .frame(minWidth: 620, minHeight: 420)
+            #if os(macOS)
+            .frame(minWidth: 620, minHeight: 560)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close") {
@@ -1428,6 +1464,162 @@ private struct ModelPickerSheet: View {
                 }
             }
         }
+    }
+
+    private func modelCard(for model: DemoModelDescriptor) -> some View {
+        let isSelected = selectedModelID == model.id
+
+        return Button {
+            selectedModelID = model.id
+        } label: {
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(model.displayName)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(3)
+                            .layoutPriority(1)
+
+                        if isSelected {
+                            Text("Selected")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 4)
+                                .background(model.badgeColor.opacity(0.14))
+                                .foregroundStyle(model.badgeColor)
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    Text(model.sourceModelID)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+
+                    Text(model.detailText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+
+                    if model.requiresAuthToken {
+                        Label("Private Hugging Face artifact", systemImage: "lock.fill")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.orange)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                VStack(alignment: .trailing, spacing: 10) {
+                    Text(model.badgeText)
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(model.badgeColor.opacity(0.14))
+                        .foregroundStyle(model.badgeColor)
+                        .clipShape(Capsule())
+
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(isSelected ? model.badgeColor : Color.secondary.opacity(0.55))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(isSelected ? model.badgeColor.opacity(0.11) : Color.gray.opacity(0.09))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(
+                        isSelected ? model.badgeColor.opacity(0.42) : Color.primary.opacity(0.06),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            }
+            .shadow(
+                color: isSelected ? model.badgeColor.opacity(0.12) : .clear,
+                radius: 14,
+                x: 0,
+                y: 8
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var tokenManagementCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Private MLX Access", systemImage: "key.horizontal")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                if !huggingFaceToken.isEmpty {
+                    Label("Saved", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.green)
+                } else if selectedModel?.requiresAuthToken == true {
+                    Label("Needed for current pick", systemImage: "exclamationmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            tokenField
+
+            HStack(alignment: .top) {
+                Text("Only needed while the MLX repos stay private. Once the Hugging Face artifacts are public, you can leave this empty.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 12)
+
+                if !huggingFaceToken.isEmpty {
+                    Button("Clear") {
+                        huggingFaceToken = ""
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.borderless)
+                }
+            }
+
+            Text("Your model choice is saved immediately. Close this sheet when everything looks right.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 14)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    @ViewBuilder
+    private var tokenField: some View {
+        #if os(iOS)
+        SecureField("hf_...", text: $huggingFaceToken)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .font(.body.monospaced())
+            .padding(12)
+            .background(Color.gray.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        #else
+        SecureField("hf_...", text: $huggingFaceToken)
+            .font(.body.monospaced())
+            .padding(12)
+            .background(Color.gray.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        #endif
     }
 }
 
@@ -1458,8 +1650,35 @@ private func entityCategory(for label: String) -> String {
     if normalized.contains("ssn") {
         return "SSN"
     }
-    if normalized.contains("address") || normalized.contains("location") {
+    if normalized.contains("email") {
+        return "EMAIL"
+    }
+    if normalized.contains("address")
+        || normalized.contains("location")
+        || normalized.contains("city")
+        || normalized.contains("state")
+        || normalized.contains("postcode")
+        || normalized.contains("postal")
+    {
         return "ADDRESS"
+    }
+    if normalized.contains("organization")
+        || normalized.contains("employer")
+        || normalized.contains("company")
+    {
+        return "ORG"
+    }
+    if normalized.contains("record")
+        || normalized.contains("insurance")
+        || normalized.contains("license")
+        || normalized.contains("passport")
+        || normalized.contains("employee")
+        || normalized.contains("account")
+        || normalized.contains("routing")
+        || normalized.contains("policy")
+        || normalized.contains("id")
+    {
+        return "ID"
     }
 
     return normalized.uppercased()
