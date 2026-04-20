@@ -85,6 +85,8 @@ class TestNormalizeLabelIdempotency:
         "dni",
         "nie",
         "aadhaar",
+        "cpf",
+        "cnpj",
         "postcode",
         "zipcode",
         "zip",
@@ -128,7 +130,10 @@ class TestSpecificityHierarchy:
         "phone": ["phone_number", "fax_number", "mobile_number"],
         "address": ["street_address", "home_address", "billing_address"],
         "id": ["ssn", "medical_record_number", "account_number", "employee_id"],
-        "national_id": ["nir", "insee", "steuer_id", "steuernummer", "codice_fiscale"],
+        "national_id": [
+            "nir", "insee", "steuer_id", "steuernummer",
+            "codice_fiscale", "cpf", "cnpj",
+        ],
     }
 
     def test_specific_labels_resolve_to_canonical(self):
