@@ -281,6 +281,8 @@ class TestMultilingualPatterns:
         assert normalize_label('steuer_id') == 'national_id'
         assert normalize_label('steuernummer') == 'national_id'
         assert normalize_label('codice_fiscale') == 'national_id'
+        assert normalize_label('cpf') == 'national_id'
+        assert normalize_label('cnpj') == 'national_id'
 
     def test_normalize_label_postcode_variants(self):
         """Test normalize_label handles postcode variants."""
@@ -298,6 +300,8 @@ class TestMultilingualPatterns:
         assert is_more_specific('nir', 'national_id') is True
         assert is_more_specific('steuer_id', 'national_id') is True
         assert is_more_specific('codice_fiscale', 'national_id') is True
+        assert is_more_specific('cpf', 'national_id') is True
+        assert is_more_specific('cnpj', 'national_id') is True
         assert is_more_specific('national_id', 'nir') is False
 
     def test_french_date_pattern_with_context(self):
@@ -434,6 +438,36 @@ class TestMultilingualPatterns:
         assert len(units) >= 1
         matched_text = text[units[0][0]:units[0][1]]
         assert matched_text == "500001"
+
+    def test_portuguese_cpf_pattern(self):
+        """Test Portuguese CPF pattern detection."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "CPF: 123.456.789-09"
+        pt_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["pt"]
+            if p.entity_type == "national_id"
+        ]
+
+        units = find_semantic_units(text, pt_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert matched_text == "123.456.789-09"
+
+    def test_portuguese_phone_pattern(self):
+        """Test Portuguese phone pattern detection."""
+        from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
+
+        text = "Telefone: +351 912 345 678"
+        pt_patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["pt"]
+            if p.entity_type == "phone_number"
+        ]
+
+        units = find_semantic_units(text, pt_patterns)
+        assert len(units) >= 1
+        matched_text = text[units[0][0]:units[0][1]]
+        assert matched_text == "+351 912 345 678"
 
 
 if __name__ == '__main__':
