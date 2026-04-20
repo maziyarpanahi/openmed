@@ -764,7 +764,7 @@ def normalize_label(label: str) -> str:
     # Normalize national ID variants
     if label_lower in ('national_id', 'nir', 'insee', 'steuer_id',
                         'steuernummer', 'codice_fiscale',
-                        'bsn', 'dni', 'nie', 'aadhaar'):
+                        'bsn', 'dni', 'nie', 'aadhaar', 'cpf', 'cnpj'):
         return 'national_id'
 
     # Normalize postal code variants
@@ -811,7 +811,10 @@ def is_more_specific(label1: str, label2: str) -> bool:
         'phone': ['phone_number', 'fax_number', 'mobile_number'],
         'address': ['street_address', 'home_address', 'billing_address'],
         'id': ['ssn', 'medical_record_number', 'account_number', 'employee_id'],
-        'national_id': ['nir', 'insee', 'steuer_id', 'steuernummer', 'codice_fiscale'],
+        'national_id': [
+            'nir', 'insee', 'steuer_id', 'steuernummer',
+            'codice_fiscale', 'cpf', 'cnpj',
+        ],
     }
 
     for general, specific_list in specificity_hierarchy.items():
