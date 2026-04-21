@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenMed — Clinical AI with Python MLX and Swift-native OpenMedKit</title>
     <meta name="description"
-        content="OpenMed 1.0.0 brings open-source healthcare NLP to Python MLX on Apple Silicon and Swift-native OpenMedKit for macOS and iOS apps, alongside production-ready clinical AI workflows." />
+        content="OpenMed 1.1.0 brings Portuguese PII support, open-source healthcare NLP, Python MLX on Apple Silicon, and Swift-native OpenMedKit for macOS and iOS apps." />
     <meta name="keywords"
         content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical natural language processing, healthcare machine learning, clinical NLP, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
     <meta name="author" content="Maziyar Panahi" />
@@ -17,13 +17,13 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="OpenMed — Clinical AI with Python MLX and Swift-native OpenMedKit" />
     <meta property="og:description"
-        content="OpenMed 1.0.0 adds Python MLX on Apple Silicon, Swift-native OpenMedKit, and open clinical NLP workflows for secure local healthcare AI." />
+        content="OpenMed 1.1.0 adds Portuguese PII support, Python MLX on Apple Silicon, Swift-native OpenMedKit, and open clinical NLP workflows for secure local healthcare AI." />
     <meta property="og:url" content="https://openmed.life/" />
     <meta property="og:image" content="https://openmed.life/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="OpenMed — Clinical AI with Python MLX and Swift-native OpenMedKit" />
     <meta name="twitter:description"
-        content="OpenMed 1.0.0 adds Python MLX, Swift-native OpenMedKit, and local-first healthcare NLP for Apple and cloud deployments." />
+        content="OpenMed 1.1.0 adds Portuguese PII support, Python MLX, Swift-native OpenMedKit, and local-first healthcare NLP for Apple and cloud deployments." />
     <meta name="twitter:image" content="https://openmed.life/og.png" />
 
     <!-- Schema.org -->
@@ -53,7 +53,7 @@
     "operatingSystem": "macOS, iOS, iPadOS, Cloud, On-Premises",
     "applicationCategory": "AIApplication",
     "description": "OpenMed Clinical NLP Suite provides open-source healthcare language models, biomedical named-entity recognition, Python MLX acceleration, and Swift-native deployment toolkits for compliant medical workflows.",
-    "softwareVersion": "1.0.0",
+    "softwareVersion": "1.1.0",
     "url": "https://openmed.life/",
     "provider": {
       "@type": "Organization",
@@ -136,7 +136,7 @@
             <div class="container">
                 <div class="hero-content">
                     <div class="hero-text">
-                        <span class="badge">OpenMed 1.0.0 • Python MLX + OpenMedKit</span>
+                        <span class="badge">OpenMed 1.1.0 • Portuguese PII + Python MLX + OpenMedKit</span>
                         <h1 class="hero-title">
                             Clinical AI for <span class="primary">Python, Apple Silicon, and Native Apps</span>.
                         </h1>
@@ -189,7 +189,7 @@
                                     <div class="code-dot yellow"></div>
                                     <div class="code-dot green"></div>
                                 </div>
-                                <span class="code-title">OpenMed 1.0.0 launch quick start</span>
+                                <span class="code-title">OpenMed 1.1.0 quick start</span>
                             </div>
                             <!-- <button class="btn btn-outline" onclick="expandCode()"
                             style="font-size: 0.75rem; padding: 0.25rem 0.75rem;">Expand</button> -->
@@ -289,7 +289,7 @@
                         Story Across Python and Swift</h2>
                     <p
                         style="font-size: 1.15rem; color: hsl(var(--muted-foreground)); max-width: 52rem; margin: 0 auto; line-height: 1.75;">
-                        OpenMed 1.0.0 is no longer just a Python package story. Teams can prototype with Python MLX on
+                        OpenMed 1.1.0 is no longer just a Python package story. Teams can prototype with Python MLX on
                         Apple Silicon, then ship the same local-first PII and clinical NLP experience inside native
                         Swift apps with OpenMedKit.
                     </p>
@@ -393,7 +393,7 @@
                         </div>
                         <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">PII APIs</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.875rem; margin-bottom: 1rem;">
-                            `extract_pii` and `deidentify` support English plus Spanish, French, German, Italian, Dutch, Hindi, and Telugu PHI workflows.
+                            `extract_pii` and `deidentify` support English plus Spanish, French, German, Italian, Dutch, Hindi, Telugu, and Portuguese PHI workflows.
                         </p>
                         <code
                             style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">extract_pii(..., lang="es")</code>
@@ -477,7 +477,7 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         <span style="color: hsl(var(--primary));">Built for HIPAA & GDPR Compliance</span>
                     </h2>
                     <p style="font-size: 1.25rem; color: hsl(var(--muted-foreground)); max-width: 52rem; margin: 0 auto; line-height: 1.7;">
-                        De-identify clinical notes and medical records with language-aware PII models across English, Spanish, French, German, Italian, Dutch, Hindi, and Telugu.
+                        De-identify clinical notes and medical records with language-aware PII models across English, Spanish, French, German, Italian, Dutch, Hindi, Telugu, and Portuguese.
                         Process data locally—your PHI never leaves your environment. Open-source, auditable, and production-ready.
                     </p>
                 </div>
@@ -494,7 +494,7 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                     </div>
                     <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
                         <div style="font-size: 2.5rem; font-weight: 700; color: hsl(var(--primary)); margin-bottom: 0.5rem;">179</div>
-                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">PII Models Across 8 Languages</div>
+                        <div style="font-size: 0.875rem; color: hsl(var(--muted-foreground)); font-weight: 500;">PII Models Across 9 Languages</div>
                     </div>
                     <div style="background: hsl(var(--background)); border: 1px solid hsl(214 32% 91%); border-radius: 0.75rem; padding: 1.75rem; text-align: center; box-shadow: var(--shadow-medical);">
                         <div style="font-size: 2.5rem; font-weight: 700; color: hsl(142 76% 36%); margin-bottom: 0.5rem;">Apache-2.0</div>
@@ -531,7 +531,7 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         </div>
                         <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">Checksum & Format Validation</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
-                            Built-in validators reduce false positives across locales: French NIR/INSEE, German Steuer-ID, Italian Codice Fiscale, Spanish DNI/NIE, Dutch BSN, plus Luhn checks for cards and NPIs.
+                            Built-in validators reduce false positives across locales: French NIR/INSEE, German Steuer-ID, Italian Codice Fiscale, Spanish DNI/NIE, Dutch BSN, Portuguese CPF/CNPJ, plus Luhn checks for cards and NPIs.
                         </p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">NIR / Steuer-ID</span>
@@ -601,11 +601,11 @@ deid = <span style="color: #dcdcaa;">deidentify</span>(text, method=<span style=
                         </div>
                         <h3 style="font-size: 1.25rem; font-weight: 600; margin-bottom: 0.75rem;">HIPAA Safe Harbor Ready</h3>
                         <p style="color: hsl(var(--muted-foreground)); font-size: 0.9rem; line-height: 1.7; margin-bottom: 1rem;">
-                            Detects all 18 HIPAA Safe Harbor identifiers with multilingual date, phone, address, postcode, PIN-code, and national-ID patterns for English, Spanish, French, German, Italian, Dutch, Hindi, and Telugu clinical text.
+                            Detects all 18 HIPAA Safe Harbor identifiers with multilingual date, phone, address, postcode, PIN-code, and national-ID patterns for English, Spanish, French, German, Italian, Dutch, Hindi, Telugu, and Portuguese clinical text.
                         </p>
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">18+ Entity Types</span>
-                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">8 Languages</span>
+                            <span style="background: hsl(var(--muted)); padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem;">9 Languages</span>
                         </div>
                     </div>
                 </div>
