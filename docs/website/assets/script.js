@@ -85,7 +85,7 @@ function moonSVG() {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
 }
 
-/* ---------- PHI Demo (cycles through 6 languages OpenMed supports) ------ */
+/* ---------- PHI Demo (cycles through 7 of the 9 languages OpenMed supports) ------ */
 const PHI_SAMPLES = [
     {
         lang: "en",
@@ -180,6 +180,22 @@ const PHI_SAMPLES = [
             { t: "+31 6 12345678", k: "PHONE" },
             { t: ",\ngediagnosticeerd met " },
             { t: "multiple sclerose", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "pt",
+        parts: [
+            { t: "Paciente " },
+            { t: "Ana Silva Oliveira", k: "NAME" },
+            { t: ",\nnascida em " },
+            { t: "27/09/1988", k: "DATE" },
+            { t: ",\nCPF " },
+            { t: "123.456.789-09", k: "ID" },
+            { t: ",\ntel " },
+            { t: "+55 11 91234-5678", k: "PHONE" },
+            { t: ",\ndiagnosticada com " },
+            { t: "hipertensão arterial", k: "DISEASE" },
             { t: "." },
         ],
     },
