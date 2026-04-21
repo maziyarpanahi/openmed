@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Smoke example for Dutch, Hindi, and Telugu PII support."""
+"""Smoke example for recently added multilingual PII support."""
 
 from __future__ import annotations
 
 from collections import defaultdict
+import os
 
 from openmed import extract_pii, find_semantic_units, get_default_pii_model, get_pii_models_by_language
 from openmed.core.pii_i18n import get_patterns_for_language
+
+
+RUN_LIVE_EXTRACTION = os.getenv("OPENMED_RUN_LIVE_EXAMPLES") == "1"
 
 
 SAMPLES = {
@@ -35,6 +39,14 @@ SAMPLES = {
             "\u0c39\u0c48\u0c26\u0c30\u0c3e\u0c2c\u0c3e\u0c26\u0c4d 500001"
         ),
     },
+    "pt": {
+        "label": "Portuguese",
+        "text": (
+            "Paciente: Pedro Almeida, data de nascimento: 15 de mar\u00e7o de 1985, "
+            "CPF: 123.456.789-09, email: pedro@hospital.pt, telefone: +351 912 345 678, "
+            "endere\u00e7o: Rua das Flores 25, 1200-195 Lisboa"
+        ),
+    },
 }
 
 
@@ -48,7 +60,8 @@ def summarize_patterns(lang: str, text: str) -> None:
     patterns = get_patterns_for_language(lang)
     matches = find_semantic_units(text, patterns)
     grouped = defaultdict(list)
-    for start, end, entity_type, score, _ in matches:
+    for match in matches:
+        start, end, entity_type, score = match[:4]
         grouped[entity_type].append((text[start:end], score))
 
     print(f"Regex/semantic-unit matches for {lang}:")
@@ -82,7 +95,7 @@ def run_live_extraction(lang: str, text: str) -> None:
 
 
 def main() -> None:
-    print_header("Dutch, Hindi, and Telugu PII Smoke Demo")
+    print_header("New Multilingual PII Smoke Demo")
     for lang, payload in SAMPLES.items():
         label = payload["label"]
         text = payload["text"]
@@ -92,7 +105,10 @@ def main() -> None:
         print(f"Default model:    {get_default_pii_model(lang)}")
         print(f"Sample text:      {text}")
         summarize_patterns(lang, text)
-        run_live_extraction(lang, text)
+        if RUN_LIVE_EXTRACTION:
+            run_live_extraction(lang, text)
+        else:
+            print("Live extraction skipped (set OPENMED_RUN_LIVE_EXAMPLES=1 to run HF models).")
 
 
 if __name__ == "__main__":

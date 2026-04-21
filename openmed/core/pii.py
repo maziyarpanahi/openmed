@@ -132,7 +132,7 @@ class DeidentificationResult:
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te"})
+_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt"})
 
 
 def _strip_accents(text: str) -> str:
@@ -189,7 +189,7 @@ def extract_pii(
         confidence_threshold: Minimum confidence score (0-1)
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te). Controls which
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt). Controls which
             default model and regex patterns are used.
         normalize_accents: Strip diacritical marks before model inference so
             that models trained on accent-free text still detect accented
@@ -358,7 +358,7 @@ def deidentify(
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te). Controls model
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt). Controls model
             selection, regex patterns, and fake data for replacement.
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
@@ -555,6 +555,10 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "SSN": "ID_NUM",
     "national_id": "ID_NUM",
     "NATIONAL_ID": "ID_NUM",
+    "cpf": "ID_NUM",
+    "CPF": "ID_NUM",
+    "cnpj": "ID_NUM",
+    "CNPJ": "ID_NUM",
     "medical_record_number": "ID_NUM",
     "MEDICAL_RECORD_NUMBER": "ID_NUM",
 
@@ -616,7 +620,7 @@ def _parse_localized_month_date(
     month_alts = "|".join(re.escape(name) for name in month_names)
     text = date_str.strip()
 
-    if lang == "es":
+    if lang in {"es", "pt"}:
         pattern = rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$"
         style = "day_month_year_de"
     elif lang == "de":
