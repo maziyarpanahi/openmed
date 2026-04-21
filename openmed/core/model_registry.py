@@ -657,7 +657,7 @@ _LANGUAGE_CONFIG = {
     "it": {"name": "Italian", "prefix": "Italian-"},
     "es": {"name": "Spanish", "prefix": "Spanish-"},
 }
-_SPARSE_LANGUAGE_KEYS = {"nl", "hi", "te"}
+_SPARSE_LANGUAGE_KEYS = {"nl", "hi", "te", "pt"}
 
 # Keys to skip when generating multilingual variants
 # (pii_detection is a legacy alias for pii_superclinical_small)
@@ -761,6 +761,124 @@ OPENMED_MODELS.update({
         recommended_confidence=0.55,
     ),
 })
+
+
+# Portuguese release: explicit API-visible model map.
+# The collection currently advertises 35 models, but the Hub API returns these
+# 31 public entries; keep the registry aligned with public availability.
+_PORTUGUESE_PII_ENTITY_TYPES = [
+    "ACCOUNTNAME",
+    "AGE",
+    "AMOUNT",
+    "BANKACCOUNT",
+    "BIC",
+    "BITCOINADDRESS",
+    "BUILDINGNUMBER",
+    "CITY",
+    "COUNTY",
+    "CREDITCARD",
+    "CREDITCARDISSUER",
+    "CURRENCY",
+    "CURRENCYCODE",
+    "CURRENCYNAME",
+    "CURRENCYSYMBOL",
+    "CVV",
+    "DATE",
+    "DATEOFBIRTH",
+    "EMAIL",
+    "ETHEREUMADDRESS",
+    "EYECOLOR",
+    "FIRSTNAME",
+    "GENDER",
+    "GPSCOORDINATES",
+    "HEIGHT",
+    "IBAN",
+    "IMEI",
+    "IPADDRESS",
+    "JOBDEPARTMENT",
+    "JOBTITLE",
+    "LASTNAME",
+    "LITECOINADDRESS",
+    "MACADDRESS",
+    "MASKEDNUMBER",
+    "MIDDLENAME",
+    "OCCUPATION",
+    "ORDINALDIRECTION",
+    "ORGANIZATION",
+    "PASSWORD",
+    "PHONE",
+    "PIN",
+    "PREFIX",
+    "SECONDARYADDRESS",
+    "SEX",
+    "SSN",
+    "STATE",
+    "STREET",
+    "TIME",
+    "URL",
+    "USERAGENT",
+    "USERNAME",
+    "VIN",
+    "VRM",
+    "ZIPCODE",
+]
+
+_PORTUGUESE_PII_MODEL_SPECS = [
+    ("pii_pt_snowflake_med", "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1", "SnowflakeMed Large", "Large"),
+    ("pii_pt_clinical_bge_large_335m", "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-335M-v1", "ClinicalBGE Large 335M", "Large"),
+    ("pii_pt_clinical_bge_large_568m", "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-568M-v1", "ClinicalBGE Large 568M", "Large"),
+    ("pii_pt_bioclinical_bert", "OpenMed/OpenMed-PII-Portuguese-BioClinicalBERT-Base-110M-v1", "BioClinicalBERT Base", "Medium"),
+    ("pii_pt_clinic_discharge", "OpenMed/OpenMed-PII-Portuguese-ClinicDischarge-Base-110M-v1", "ClinicDischarge Base", "Medium"),
+    ("pii_pt_bioclinical_modern_base", "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Base-149M-v1", "BioClinicalModern Base", "Medium"),
+    ("pii_pt_bioclinical_modern_large", "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Large-395M-v1", "BioClinicalModern Large", "Large"),
+    ("pii_pt_biomed_bert_base", "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Base-110M-v1", "BiomedBERT Base", "Medium"),
+    ("pii_pt_biomed_bert_full", "OpenMed/OpenMed-PII-Portuguese-BiomedBERTFull-Base-110M-v1", "BiomedBERTFull Base", "Medium"),
+    ("pii_pt_biomed_bert_large", "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Large-340M-v1", "BiomedBERT Large", "Large"),
+    ("pii_pt_biomed_electra_base", "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Base-110M-v1", "BiomedELECTRA Base", "Medium"),
+    ("pii_pt_biomed_electra_large", "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Large-335M-v1", "BiomedELECTRA Large", "Large"),
+    ("pii_pt_clinical_longformer", "OpenMed/OpenMed-PII-Portuguese-ClinicalLongformer-Base-149M-v1", "ClinicalLongformer Base", "Medium"),
+    ("pii_pt_superclinical_base", "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Base-184M-v1", "SuperClinical Base", "Medium"),
+    ("pii_pt_superclinical_large", "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Large-434M-v1", "SuperClinical Large", "Large"),
+    ("pii_pt_superclinical_small", "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Small-44M-v1", "SuperClinical Small", "Small"),
+    ("pii_pt_lite_clinical", "OpenMed/OpenMed-PII-Portuguese-LiteClinical-Small-66M-v1", "LiteClinical Small", "Small"),
+    ("pii_pt_lite_clinical_u", "OpenMed/OpenMed-PII-Portuguese-LiteClinicalU-Small-66M-v1", "LiteClinicalU Small", "Small"),
+    ("pii_pt_mlite_clinical", "OpenMed/OpenMed-PII-Portuguese-mLiteClinical-Base-135M-v1", "mLiteClinical Base", "Medium"),
+    ("pii_pt_fast_clinical", "OpenMed/OpenMed-PII-Portuguese-FastClinical-Small-82M-v1", "FastClinical Small", "Small"),
+    ("pii_pt_clinical_e5_base", "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Base-109M-v1", "ClinicalE5 Base", "Medium"),
+    ("pii_pt_clinical_e5_large", "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Large-335M-v1", "ClinicalE5 Large", "Large"),
+    ("pii_pt_clinical_e5_small", "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Small-33M-v1", "ClinicalE5 Small", "Small"),
+    ("pii_pt_msuper_clinical", "OpenMed/OpenMed-PII-Portuguese-mSuperClinical-Large-279M-v1", "mSuperClinical Large", "Large"),
+    ("pii_pt_modern_med_base", "OpenMed/OpenMed-PII-Portuguese-ModernMed-Base-149M-v1", "ModernMed Base", "Medium"),
+    ("pii_pt_nomic_med", "OpenMed/OpenMed-PII-Portuguese-NomicMed-Large-395M-v1", "NomicMed Large", "Large"),
+    ("pii_pt_modern_med_large", "OpenMed/OpenMed-PII-Portuguese-ModernMed-Large-395M-v1", "ModernMed Large", "Large"),
+    ("pii_pt_qwen_med_xlarge", "OpenMed/OpenMed-PII-Portuguese-QwenMed-XLarge-600M-v1", "QwenMed XLarge", "XLarge"),
+    ("pii_pt_super_medical_base", "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Base-125M-v1", "SuperMedical Base", "Medium"),
+    ("pii_pt_super_medical_large", "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Large-355M-v1", "SuperMedical Large", "Large"),
+    ("pii_pt_big_med_large_278m", "OpenMed/OpenMed-PII-Portuguese-BigMed-Large-278M-v1", "BigMed Large 278M", "Large"),
+]
+
+
+def _build_portuguese_pii_models() -> Dict[str, ModelInfo]:
+    """Build Portuguese PII registry entries from the public collection map."""
+    return {
+        key: ModelInfo(
+            model_id=model_id,
+            display_name=f"PII Detection (Portuguese) - {display_name}",
+            category="Privacy",
+            specialization="Portuguese PII detection",
+            description=(
+                "Portuguese token-classification model for PII detection "
+                "and clinical de-identification"
+            ),
+            entity_types=list(_PORTUGUESE_PII_ENTITY_TYPES),
+            size_category=size_category,
+            recommended_confidence=0.55,
+        )
+        for key, model_id, display_name, size_category in _PORTUGUESE_PII_MODEL_SPECS
+    }
+
+
+OPENMED_MODELS.update(_build_portuguese_pii_models())
 
 
 # Category mappings for easy filtering
@@ -884,7 +1002,7 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
     """Return all PII models for a given language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt)
 
     Returns:
         Dict mapping registry keys to ModelInfo for that language.
@@ -906,7 +1024,7 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt)
 
     Returns:
         HuggingFace model ID string, or None if language unsupported.

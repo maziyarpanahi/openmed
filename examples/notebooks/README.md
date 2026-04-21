@@ -40,11 +40,11 @@ A comprehensive tutorial covering **everything** about PII functionality:
 
 ### 🌍 [Multilingual_PII_Detection_Guide.ipynb](./Multilingual_PII_Detection_Guide.ipynb)
 
-**Multilingual PII detection across 8 supported languages**
+**Multilingual PII detection across 9 supported languages**
 
 Walk through language-aware extraction and de-identification for:
 
-- English, French, German, Italian, and Spanish full multilingual support
+- English, French, German, Italian, Spanish, and Portuguese multilingual support
 - Dutch, Hindi, and Telugu flagship PII models
 - Locale-specific dates, phones, addresses, postcodes, and validators
 - Cross-language comparisons and custom model selection
