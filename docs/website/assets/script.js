@@ -1,264 +1,434 @@
-// Initialize theme functionality when DOM is loaded
+/* =============================================================================
+   OpenMed website — interactions.
+   Theme toggle · animated PHI demo · tabbed code playground · FAQ · copy.
+   ============================================================================= */
+
 document.addEventListener("DOMContentLoaded", () => {
-  const yearElement = document.getElementById("year");
-  if (yearElement) {
-    yearElement.textContent = new Date().getFullYear();
-  }
+    initYear();
+    initTheme();
+    initPHIDemo();
+    initCodePlayground();
+    initModelFilter();
+    initFAQ();
+    initCopyInstall();
+    initScrollSpy();
+    initGitHubStars();
+});
 
-  const themeToggle = document.getElementById("themeToggle");
-  const themeIcon = document.getElementById("themeIcon");
-  const root = document.documentElement;
-  const savedTheme = localStorage.getItem("theme") || "light";
+/* ---------- GitHub stars (live, with cache + graceful fallback) --------- */
+function initGitHubStars() {
+    const el = document.querySelector("[data-gh-count]");
+    if (!el) return;
 
-  const updateThemeIcon = (theme) => {
-    if (!themeIcon) return;
-    if (theme === "dark") {
-      themeIcon.innerHTML = `
-        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-      `;
-    } else {
-      themeIcon.innerHTML = `
-        <circle cx="12" cy="12" r="5"></circle>
-        <line x1="12" y1="1" x2="12" y2="3"></line>
-        <line x1="12" y1="21" x2="12" y2="23"></line>
-        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-        <line x1="1" y1="12" x2="3" y2="12"></line>
-        <line x1="21" y1="12" x2="23" y2="12"></line>
-        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-      `;
+    const REPO = "maziyarpanahi/openmed";
+    const KEY = "openmed-gh-stars";
+    const TTL = 60 * 60 * 1000; // 1 hour
+
+    function fmt(n) {
+        if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+        return String(n);
     }
-  };
 
-  if (savedTheme === "dark") {
-    root.classList.add("dark");
-  } else {
-    root.classList.remove("dark");
-  }
-  updateThemeIcon(savedTheme);
+    try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) {
+            const { count, at } = JSON.parse(raw);
+            if (count && Date.now() - at < TTL) {
+                el.textContent = fmt(count);
+                return;
+            }
+        }
+    } catch (e) {}
 
-  if (themeToggle) {
-    themeToggle.addEventListener("click", () => {
-      const nextTheme = root.classList.toggle("dark") ? "dark" : "light";
-      localStorage.setItem("theme", nextTheme);
-      updateThemeIcon(nextTheme);
-    });
-  }
+    fetch(`https://api.github.com/repos/${REPO}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+            if (!d || typeof d.stargazers_count !== "number") return;
+            el.textContent = fmt(d.stargazers_count);
+            try { localStorage.setItem(KEY, JSON.stringify({ count: d.stargazers_count, at: Date.now() })); } catch (e) {}
+        })
+        .catch(() => { el.textContent = "★"; });
+}
 
-  // Clean visual display with syntax highlighting
-  const codeContent = {
-    python: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> analyze_text
+/* ---------- Year --------------------------------------------------------- */
+function initYear() {
+    const el = document.getElementById("year");
+    if (el) el.textContent = new Date().getFullYear();
+}
 
-<span class="comment"># One-call clinical NLP from Python</span>
-<span class="variable">result</span> = <span class="function">analyze_text</span>(
-    <span class="string">"Metastatic breast cancer treated with trastuzumab."</span>,
-    model_name=<span class="string">"disease_detection_superclinical"</span>,
-)
+/* ---------- Theme -------------------------------------------------------- */
+function initTheme() {
+    const root = document.documentElement;
+    const btn = document.getElementById("themeToggle");
+    const stored = (() => { try { return localStorage.getItem("openmed-theme"); } catch (e) { return null; } })();
+    const initial = stored || "light";
+    applyTheme(initial);
 
-<span class="keyword">for</span> <span class="variable">entity</span> <span class="keyword">in</span> <span class="variable">result</span>.entities:
-    <span class="keyword">print</span>(<span class="variable">entity</span>.label, <span class="variable">entity</span>.text, <span class="variable">entity</span>.confidence)</code></pre>`,
+    if (btn) {
+        btn.addEventListener("click", () => {
+            const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+            applyTheme(next);
+            try { localStorage.setItem("openmed-theme", next); } catch (e) {}
+        });
+    }
 
-    pii: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> extract_pii, deidentify
+    function applyTheme(t) {
+        root.setAttribute("data-theme", t);
+        if (btn) btn.innerHTML = t === "dark" ? sunSVG() : moonSVG();
+    }
+}
 
-<span class="comment"># Smart merging keeps fragmented PHI spans together</span>
-<span class="variable">text</span> = <span class="string">"Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"</span>
-<span class="variable">result</span> = <span class="function">extract_pii</span>(
-    <span class="variable">text</span>,
-    use_smart_merging=<span class="keyword">True</span>,
-)
+function sunSVG() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>`;
+}
+function moonSVG() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
+}
 
-<span class="keyword">for</span> <span class="variable">entity</span> <span class="keyword">in</span> <span class="variable">result</span>.entities:
-    <span class="keyword">print</span>(<span class="variable">entity</span>.label, <span class="variable">entity</span>.text, <span class="variable">entity</span>.confidence)
+/* ---------- PHI Demo (cycles through 7 of the 9 languages OpenMed supports) ------ */
+const PHI_SAMPLES = [
+    {
+        lang: "en",
+        parts: [
+            { t: "Patient " },
+            { t: "John Doe", k: "NAME" },
+            { t: ",\nDOB " },
+            { t: "05/15/1990", k: "DATE" },
+            { t: ",\nSSN " },
+            { t: "123-45-6789", k: "ID" },
+            { t: ",\nphone " },
+            { t: "+1 (415) 555-0132", k: "PHONE" },
+            { t: ",\ndiagnosed with " },
+            { t: "acute pancreatitis", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "es",
+        parts: [
+            { t: "Paciente " },
+            { t: "Maria Garcia Lopez", k: "NAME" },
+            { t: ",\nFN " },
+            { t: "15/03/1985", k: "DATE" },
+            { t: ",\nDNI " },
+            { t: "12345678Z", k: "ID" },
+            { t: ",\ntel " },
+            { t: "+34 612 345 678", k: "PHONE" },
+            { t: ",\ndiagnosticado con " },
+            { t: "leucemia mieloide crónica", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "fr",
+        parts: [
+            { t: "Patient " },
+            { t: "Pierre Martin", k: "NAME" },
+            { t: ",\nné le " },
+            { t: "12/04/1982", k: "DATE" },
+            { t: ",\nNIR " },
+            { t: "1820475123456", k: "ID" },
+            { t: ",\ntél " },
+            { t: "+33 6 12 34 56 78", k: "PHONE" },
+            { t: ",\ndiagnostiqué avec " },
+            { t: "sclérose en plaques", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "de",
+        parts: [
+            { t: "Patientin " },
+            { t: "Anna Schmidt", k: "NAME" },
+            { t: ",\ngeb. " },
+            { t: "22.08.1978", k: "DATE" },
+            { t: ",\nSteuer-ID " },
+            { t: "12345678901", k: "ID" },
+            { t: ",\nTel " },
+            { t: "+49 30 12345678", k: "PHONE" },
+            { t: ",\ndiagnostiziert mit " },
+            { t: "Typ-2-Diabetes", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "it",
+        parts: [
+            { t: "Paziente " },
+            { t: "Luca Bianchi", k: "NAME" },
+            { t: ",\nnato il " },
+            { t: "03/11/1990", k: "DATE" },
+            { t: ",\nCF " },
+            { t: "BNCLCU90S03H501Z", k: "ID" },
+            { t: ",\ntel " },
+            { t: "+39 320 123 4567", k: "PHONE" },
+            { t: ",\ndiagnosticato con " },
+            { t: "morbo di Parkinson", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "nl",
+        parts: [
+            { t: "Patiënt " },
+            { t: "Jan de Vries", k: "NAME" },
+            { t: ",\ngeboren " },
+            { t: "18-07-1985", k: "DATE" },
+            { t: ",\nBSN " },
+            { t: "123456782", k: "ID" },
+            { t: ",\ntel " },
+            { t: "+31 6 12345678", k: "PHONE" },
+            { t: ",\ngediagnosticeerd met " },
+            { t: "multiple sclerose", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+    {
+        lang: "pt",
+        parts: [
+            { t: "Paciente " },
+            { t: "Ana Silva Oliveira", k: "NAME" },
+            { t: ",\nnascida em " },
+            { t: "27/09/1988", k: "DATE" },
+            { t: ",\nCPF " },
+            { t: "123.456.789-09", k: "ID" },
+            { t: ",\ntel " },
+            { t: "+55 11 91234-5678", k: "PHONE" },
+            { t: ",\ndiagnosticada com " },
+            { t: "hipertensão arterial", k: "DISEASE" },
+            { t: "." },
+        ],
+    },
+];
 
-<span class="keyword">print</span>(<span class="function">deidentify</span>(<span class="variable">text</span>, method=<span class="string">"mask"</span>).deidentified_text)</code></pre>`,
+function initPHIDemo() {
+    const card = document.querySelector("[data-phi]");
+    if (!card) return;
 
-    mlx: `<pre><code><span class="keyword">from</span> <span class="function">openmed</span> <span class="keyword">import</span> analyze_text
-<span class="keyword">from</span> <span class="function">openmed.core</span> <span class="keyword">import</span> OpenMedConfig
-<span class="keyword">from</span> <span class="function">openmed.core.backends</span> <span class="keyword">import</span> get_backend
+    const bodyEl = card.querySelector("[data-phi-body]");
+    const countEl = card.querySelector(".phi-count");
+    const langEl = card.querySelector("[data-phi-lang]");
+    const fnEl = card.querySelector("[data-phi-fn]");
+    if (!bodyEl) return;
 
-<span class="comment"># MLX is auto-selected on Apple Silicon, HF elsewhere</span>
-<span class="variable">config</span> = <span class="function">OpenMedConfig</span>()
-<span class="variable">backend</span> = <span class="function">get_backend</span>(config=<span class="variable">config</span>)
+    function render(sample) {
+        bodyEl.innerHTML = sample.parts.map(p => {
+            if (!p.k) return `<span>${escapeHTML(p.t)}</span>`;
+            return `<span class="phi-token" data-k="${p.k}">${escapeHTML(p.t)}<span class="sup">${p.k}</span></span>`;
+        }).join("");
+        if (langEl) langEl.textContent = `"${sample.lang}"`;
+        if (fnEl) fnEl.textContent = `pii_${sample.lang}.detect() · on-device`;
+    }
 
-<span class="variable">result</span> = <span class="function">analyze_text</span>(
-    <span class="string">"Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"</span>,
-    model_name=<span class="string">"pii_detection"</span>,
-    config=<span class="variable">config</span>,
-)
+    let sampleIdx = 0;
+    let step = 0;
+    render(PHI_SAMPLES[sampleIdx]);
+    const total = 5;
 
-<span class="keyword">print</span>(<span class="variable">backend</span>.__class__.__name__, <span class="variable">result</span>.entities)</code></pre>`,
+    function tick() {
+        const reveal = Math.min(step, total);
+        const tokens = bodyEl.querySelectorAll(".phi-token[data-k]");
+        tokens.forEach((t, i) => t.classList.toggle("revealed", i < reveal));
+        if (countEl) countEl.textContent = `${reveal}/${total} entities`;
 
-    swift: `<pre><code><span class="keyword">import</span> <span class="function">OpenMedKit</span>
+        if (step >= total) {
+            // fully revealed: pause one tick, then advance to next language
+            step = 0;
+            sampleIdx = (sampleIdx + 1) % PHI_SAMPLES.length;
+            setTimeout(() => render(PHI_SAMPLES[sampleIdx]), 100);
+        } else {
+            step += 1;
+        }
+    }
+    setInterval(tick, 1400);
+}
 
-<span class="keyword">let</span> <span class="variable">modelDirectory</span> = <span class="keyword">try</span> <span class="keyword">await</span> <span class="function">OpenMedModelStore.downloadMLXModel</span>(
-    repoID: <span class="string">"OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"</span>,
-    authToken: <span class="string">"&lt;token-if-private&gt;"</span>
-)
+function escapeHTML(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
-<span class="keyword">let</span> <span class="variable">openmed</span> = <span class="keyword">try</span> <span class="function">OpenMed</span>(
-    backend: .mlx(modelDirectoryURL: <span class="variable">modelDirectory</span>)
-)
+/* ---------- Code playground --------------------------------------------- */
+const CODE_SNIPPETS = {
+    Python: `from openmed import OpenMedConfig, analyze_text, deidentify
 
-<span class="keyword">let</span> <span class="variable">entities</span> = <span class="keyword">try</span> <span class="variable">openmed</span>.<span class="function">extractPII</span>(
-    <span class="string">"Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"</span>
-)</code></pre>`,
-  };
+config = OpenMedConfig.from_profile("prod")
 
-  // Full code for copying (includes installation and comments)
-  const codeText = {
-    python: `from openmed import analyze_text
-
-# One-call clinical NLP from Python
-result = analyze_text(
-    "Metastatic breast cancer treated with trastuzumab.",
-    model_name="disease_detection_superclinical",
-)
-
-for entity in result.entities:
-    print(entity.label, entity.text, entity.confidence)`,
-
-    pii: `from openmed import extract_pii, deidentify
-
-# Smart merging keeps fragmented PHI spans together
-text = "Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"
-result = extract_pii(
-    text,
-    use_smart_merging=True,
-)
+text = "Patient John Doe diagnosed with chronic myeloid leukemia."
+result = analyze_text(text, model_name="disease_detection_superclinical", config=config)
 
 for entity in result.entities:
     print(entity.label, entity.text, entity.confidence)
 
-print(deidentify(text, method="mask").deidentified_text)`,
+deid = deidentify(text, method="mask", config=config)
+print(deid.deidentified_text)`,
+    "PII API": `from openmed import extract_pii, deidentify
 
-    mlx: `from openmed import analyze_text
-from openmed.core import OpenMedConfig
-from openmed.core.backends import get_backend
+text = """Paciente: Maria Garcia Lopez
+Fecha de nacimiento: 15/03/1985
+DNI: 12345678Z"""
 
-# MLX is auto-selected on Apple Silicon, HF elsewhere
-config = OpenMedConfig()
-backend = get_backend(config=config)
+result = extract_pii(text, lang="es", use_smart_merging=True)
 
-result = analyze_text(
-    "Patient John Doe, DOB 1990-05-15, SSN 123-45-6789",
-    model_name="pii_detection",
-    config=config,
+for entity in result.entities:
+    print(entity.label, entity.text, entity.confidence)
+
+deid = deidentify(text, lang="es", method="mask")
+print(deid.deidentified_text)`,
+    "Apple MLX": `# uv pip install "openmed[mlx]"
+from openmed.mlx import MLXPipeline
+
+pipe = MLXPipeline.from_pretrained(
+    "OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M",
+    dtype="float16",
 )
 
-print(backend.__class__.__name__)
-print(result.entities)`,
+entities = pipe("Patient presents with acute pancreatitis and hypertension.")
+for e in entities:
+    print(f"{e.label:12} {e.text:40} conf={e.confidence:.2f}")`,
+    Swift: `import OpenMedKit
 
-    swift: `import OpenMedKit
-
-let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-    authToken: "<token-if-private>"
+let pipeline = try await OpenMedPipeline(
+    model: .diseaseDetect335M,
+    runtime: .coreML
 )
 
-let openmed = try OpenMed(
-    backend: .mlx(modelDirectoryURL: modelDirectory)
-)
+let text = "Patient presents with acute pancreatitis."
+let result = try await pipeline.analyze(text)
 
-let entities = try openmed.extractPII(
-    "Patient John Doe, DOB 1990-05-15, SSN 123-45-6789"
-)
+for entity in result.entities {
+    print(entity.label, entity.text, entity.confidence)
+}`,
+};
 
-print(entities)`,
-  };
+const PY_KEYWORDS = /\b(from|import|for|in|print|if|else|return|def|class|with|as|try|except|True|False|None)\b/g;
+const SWIFT_KEYWORDS = /\b(import|let|var|try|await|struct|class|func|if|else|return|guard)\b/g;
 
-  let currentTab = "python";
-  const codeContainer = document.getElementById("codeContent");
-  const codeTabs = document.querySelectorAll(".code-tab");
+function highlight(src, lang) {
+    const kwRe = lang === "Swift" ? SWIFT_KEYWORDS : PY_KEYWORDS;
+    return src
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|"""[\s\S]*?""")/g, '<span class="str">$1</span>')
+        .replace(/(#[^\n]*)/g, '<span class="cm">$1</span>')
+        .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="num">$1</span>')
+        .replace(kwRe, '<span class="kw">$1</span>');
+}
 
-  const setCodeContent = (tab) => {
-    if (!codeContainer || !codeContent[tab]) {
-      return;
-    }
-    currentTab = tab;
-    codeContainer.innerHTML = codeContent[tab];
-  };
+function initCodePlayground() {
+    const panel = document.querySelector("[data-playground]");
+    if (!panel) return;
 
-  window.switchTab = (tab, button) => {
-    if (!codeContent[tab]) {
-      return;
-    }
+    const tabsWrap = panel.querySelector(".code-tabs");
+    const body = panel.querySelector(".code-body");
+    const copyBtn = panel.querySelector(".code-copy");
 
-    codeTabs.forEach((tabButton) => {
-      tabButton.classList.remove("active");
+    const names = Object.keys(CODE_SNIPPETS);
+    tabsWrap.innerHTML = names.map((n, i) =>
+        `<button class="code-tab${i === 0 ? " active" : ""}" data-tab="${n}">${n}</button>`
+    ).join("");
+
+    let active = names[0];
+    render();
+
+    tabsWrap.addEventListener("click", (e) => {
+        const btn = e.target.closest(".code-tab");
+        if (!btn) return;
+        active = btn.dataset.tab;
+        tabsWrap.querySelectorAll(".code-tab").forEach(b => b.classList.toggle("active", b === btn));
+        render();
     });
 
-    if (button) {
-      button.classList.add("active");
+    if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(CODE_SNIPPETS[active]);
+                copyBtn.textContent = "copied ✓";
+                copyBtn.classList.add("copied");
+                setTimeout(() => {
+                    copyBtn.textContent = "copy";
+                    copyBtn.classList.remove("copied");
+                }, 1400);
+            } catch (err) {
+                copyBtn.textContent = "copy failed";
+                setTimeout(() => { copyBtn.textContent = "copy"; }, 1400);
+            }
+        });
     }
 
-    setCodeContent(tab);
-  };
-
-  const showCopyFeedback = (button) => {
-    if (!button) {
-      return;
+    function render() {
+        body.innerHTML = highlight(CODE_SNIPPETS[active], active);
     }
+}
 
-    if (button.classList.contains("copy-btn")) {
-      const originalTitle = button.getAttribute("title");
-      if (originalTitle !== null) {
-        button.dataset.originalTitle = originalTitle;
-      }
-      button.setAttribute("title", "Copied!");
-      button.classList.add("copied");
-      setTimeout(() => {
-        button.classList.remove("copied");
-        if (button.dataset.originalTitle) {
-          button.setAttribute("title", button.dataset.originalTitle);
-          delete button.dataset.originalTitle;
-        } else {
-          button.removeAttribute("title");
-        }
-      }, 2000);
-      return;
-    }
+/* ---------- Models filter ------------------------------------------------ */
+function initModelFilter() {
+    const chips = document.querySelectorAll("[data-model-filter] .chip");
+    const cells = document.querySelectorAll("[data-model-grid] .model-cell");
+    if (!chips.length) return;
 
-    const original = button.innerHTML;
-    button.classList.add("copied");
-    button.innerHTML = "Copied";
-    setTimeout(() => {
-      button.classList.remove("copied");
-      button.innerHTML = original;
-    }, 2000);
-  };
+    chips.forEach(chip => {
+        chip.addEventListener("click", () => {
+            chips.forEach(c => c.classList.toggle("active", c === chip));
+            const f = chip.dataset.filter;
+            cells.forEach(cell => {
+                const tags = (cell.dataset.tags || "").toLowerCase();
+                const match = f === "All" || tags.includes(f.toLowerCase());
+                cell.style.display = match ? "" : "none";
+            });
+        });
+    });
+}
 
-  window.copyCode = async (button) => {
-    const codeString = codeText[currentTab];
-    if (!codeString) {
-      console.warn(`No code snippet registered for tab: ${currentTab}`);
-      return;
-    }
+/* ---------- FAQ ---------------------------------------------------------- */
+function initFAQ() {
+    const items = document.querySelectorAll(".faq-item");
+    items.forEach((item, i) => {
+        if (i === 0) item.classList.add("open");
+        item.addEventListener("click", () => {
+            const wasOpen = item.classList.contains("open");
+            items.forEach(x => x.classList.remove("open"));
+            if (!wasOpen) item.classList.add("open");
+        });
+    });
+}
 
-    try {
-      await navigator.clipboard.writeText(codeString);
-      showCopyFeedback(button);
-    } catch (error) {
-      console.error("Failed to copy code snippet", error);
-      if (button) {
-        button.innerHTML = "Copy failed";
-      }
-    }
-  };
+/* ---------- Copy install command ---------------------------------------- */
+function initCopyInstall() {
+    const btn = document.querySelector("[data-copy-install]");
+    if (!btn) return;
+    btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        const cmd = btn.dataset.copyInstall || btn.textContent.trim();
+        try {
+            await navigator.clipboard.writeText(cmd);
+            const prev = btn.querySelector(".cmd").textContent;
+            btn.querySelector(".cmd").textContent = "copied ✓";
+            setTimeout(() => { btn.querySelector(".cmd").textContent = prev; }, 1400);
+        } catch (err) {}
+    });
+}
 
-  window.copyInstall = async (button) => {
-    const codeString = 'uv pip install "openmed[mlx]"';
+/* ---------- Scroll-spy nav underline ------------------------------------ */
+function initScrollSpy() {
+    const links = document.querySelectorAll(".nav-links a[href^='#']");
+    if (!links.length) return;
 
-    try {
-      await navigator.clipboard.writeText(codeString);
-      showCopyFeedback(button);
-    } catch (error) {
-      console.error("Failed to copy install snippet", error);
-      if (button) {
-        button.innerHTML = "Copy failed";
-      }
-    }
-  };
+    const map = new Map();
+    links.forEach(a => {
+        const id = a.getAttribute("href").slice(1);
+        const section = document.getElementById(id);
+        if (section) map.set(section, a);
+    });
 
-  setCodeContent(currentTab);
-});
+    const obs = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                links.forEach(l => l.classList.remove("active"));
+                map.get(entry.target)?.classList.add("active");
+            }
+        });
+    }, { rootMargin: "-40% 0px -55% 0px" });
+
+    map.forEach((_, section) => obs.observe(section));
+}
