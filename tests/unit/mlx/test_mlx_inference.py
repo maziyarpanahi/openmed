@@ -268,3 +268,147 @@ class TestMLXModelResolve:
         path, tok_name = _resolve_mlx_model(str(tmp_path))
         assert path == str(tmp_path)
         assert tok_name == str(tmp_path)
+
+
+class TestExperimentalMLXPipelineDispatch:
+    """Manifest-driven dispatch should return the right MLX runtime class."""
+
+    def test_dispatches_gliner_zero_shot_pipeline(self):
+        from openmed.mlx import inference
+
+        with patch.object(
+            inference,
+            "_resolve_mlx_model",
+            return_value=("/tmp/gliner-mlx", "urchade/gliner_multi_pii-v1"),
+        ), patch.object(
+            inference,
+            "load_artifact_config",
+            return_value=(
+                {
+                    "task": "zero-shot-ner",
+                    "family": "gliner-uni-encoder-span",
+                },
+                {},
+            ),
+        ), patch.object(
+            inference,
+            "GLiNERMLXPipeline",
+            return_value="gliner-pipeline",
+        ) as mock_ctor:
+            pipeline = inference.create_mlx_pipeline("urchade/gliner_multi_pii-v1")
+
+        assert pipeline == "gliner-pipeline"
+        mock_ctor.assert_called_once_with(
+            model_path="/tmp/gliner-mlx",
+            tokenizer_name="urchade/gliner_multi_pii-v1",
+        )
+
+    def test_dispatches_gliclass_pipeline(self):
+        from openmed.mlx import inference
+
+        with patch.object(
+            inference,
+            "_resolve_mlx_model",
+            return_value=("/tmp/gliclass-mlx", "knowledgator/gliclass-instruct-base-v1.0"),
+        ), patch.object(
+            inference,
+            "load_artifact_config",
+            return_value=(
+                {
+                    "task": "zero-shot-sequence-classification",
+                    "family": "gliclass-uni-encoder",
+                },
+                {},
+            ),
+        ), patch.object(
+            inference,
+            "GLiClassMLXPipeline",
+            return_value="gliclass-pipeline",
+        ) as mock_ctor:
+            pipeline = inference.create_mlx_pipeline("knowledgator/gliclass-instruct-base-v1.0")
+
+        assert pipeline == "gliclass-pipeline"
+        mock_ctor.assert_called_once_with(
+            model_path="/tmp/gliclass-mlx",
+            tokenizer_name="knowledgator/gliclass-instruct-base-v1.0",
+        )
+
+    def test_dispatches_gliner_relex_pipeline(self):
+        from openmed.mlx import inference
+
+        with patch.object(
+            inference,
+            "_resolve_mlx_model",
+            return_value=("/tmp/gliner-relex-mlx", "knowledgator/gliner-relex-base-v1.0"),
+        ), patch.object(
+            inference,
+            "load_artifact_config",
+            return_value=(
+                {
+                    "task": "zero-shot-relation-extraction",
+                    "family": "gliner-uni-encoder-token-relex",
+                },
+                {},
+            ),
+        ), patch.object(
+            inference,
+            "GLiNERRelexMLXPipeline",
+            return_value="gliner-relex-pipeline",
+        ) as mock_ctor:
+            pipeline = inference.create_mlx_pipeline("knowledgator/gliner-relex-base-v1.0")
+
+        assert pipeline == "gliner-relex-pipeline"
+        mock_ctor.assert_called_once_with(
+            model_path="/tmp/gliner-relex-mlx",
+            tokenizer_name="knowledgator/gliner-relex-base-v1.0",
+        )
+
+    def test_rejects_unknown_experimental_task(self):
+        from openmed.mlx import inference
+
+        with patch.object(
+            inference,
+            "_resolve_mlx_model",
+            return_value=("/tmp/unknown-mlx", "OpenMed/unknown"),
+        ), patch.object(
+            inference,
+            "load_artifact_config",
+            return_value=(
+                {"task": "zero-shot-telepathy", "family": "mystery-family"},
+                {},
+            ),
+        ):
+            with pytest.raises(ValueError, match="Unsupported MLX experimental task"):
+                inference.create_mlx_pipeline("OpenMed/unknown")
+
+
+class TestExperimentalGLiNERDecoding:
+    """Regression tests for GLiNER-family prompt and span decoding helpers."""
+
+    def test_gliner_word_splitter_matches_upstream_whitespace_splitter(self):
+        from openmed.mlx.inference import _split_words_with_offsets
+
+        words, offsets = _split_words_with_offsets("Aspirin treats headache.")
+
+        assert words == ["Aspirin", "treats", "headache", "."]
+        assert offsets == [(0, 7), (8, 14), (15, 23), (23, 24)]
+
+    def test_token_level_decoder_preserves_entity_class_and_direction_inputs(self):
+        from openmed.mlx.models.gliner_common import decode_token_level_spans
+
+        scores = [
+            [
+                [[0.99, 0.98, 0.97], [0.01, 0.01, 0.01]],
+                [[0.01, 0.01, 0.01], [0.01, 0.01, 0.01]],
+                [[0.01, 0.01, 0.01], [0.96, 0.95, 0.94]],
+                [[0.01, 0.01, 0.01], [0.01, 0.01, 0.01]],
+            ]
+        ]
+
+        result = decode_token_level_spans(scores, threshold=0.5)[0]
+
+        assert [(span.start, span.end, span.label_index, span.score) for span in result.spans] == [
+            (0, 0, 0, 0.97),
+            (2, 2, 1, 0.94),
+        ]
+        assert result.span_idx == [(0, 0), (2, 2)]
