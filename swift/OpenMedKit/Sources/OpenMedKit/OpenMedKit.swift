@@ -162,7 +162,7 @@ public final class OpenMed {
         return (inputIds, attentionMask, tokenTypeIDs, offsets)
     }
 
-    private static func loadTokenizer(
+    static func loadTokenizer(
         tokenizerName: String,
         tokenizerFolderURL: URL?
     ) throws -> any Tokenizer {
@@ -255,14 +255,26 @@ public final class OpenMed {
             || tokenizerClass == "RobertaTokenizerFast"
             || tokenizerClass == "XLMRobertaTokenizer"
             || tokenizerClass == "XLMRobertaTokenizerFast"
+            || tokenizerClass == "DebertaV2Tokenizer"
+            || tokenizerClass == "DebertaV2TokenizerFast"
             || tokenizerClass == "PreTrainedTokenizer"
 
-        guard shouldForceUnigram else {
+        let hasListShapedExtraSpecialTokens = tokenizerConfig["extra_special_tokens"] is [Any]
+
+        guard shouldForceUnigram || hasListShapedExtraSpecialTokens else {
             return nil
         }
 
         var patchedConfig = tokenizerConfig
-        patchedConfig["tokenizer_class"] = "T5Tokenizer"
+        if shouldForceUnigram {
+            patchedConfig["tokenizer_class"] = "T5Tokenizer"
+        }
+        if let extraSpecialTokens = tokenizerConfig["extra_special_tokens"] as? [Any] {
+            patchedConfig["extra_special_tokens"] = nil
+            if patchedConfig["additional_special_tokens"] == nil {
+                patchedConfig["additional_special_tokens"] = extraSpecialTokens
+            }
+        }
         return try JSONSerialization.data(
             withJSONObject: patchedConfig,
             options: [.prettyPrinted, .sortedKeys]
@@ -308,12 +320,14 @@ public final class OpenMed {
             if fileName == "tokenizer_config.json" {
                 continue
             }
-            try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            let fileData = try Data(contentsOf: sourceURL)
+            try fileData.write(to: destinationURL, options: .atomic)
         }
 
         let preparedModelConfigURL = preparedDirectory.appending(path: "config.json")
         if fileManager.fileExists(atPath: modelConfigURL.path) {
-            try fileManager.copyItem(at: modelConfigURL, to: preparedModelConfigURL)
+            let modelConfigData = try Data(contentsOf: modelConfigURL)
+            try modelConfigData.write(to: preparedModelConfigURL, options: .atomic)
         } else {
             try Data("{}".utf8).write(to: preparedModelConfigURL, options: .atomic)
         }
