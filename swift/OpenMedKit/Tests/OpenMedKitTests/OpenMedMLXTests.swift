@@ -1,7 +1,12 @@
 import Foundation
 import MLX
+import Tokenizers
 import XCTest
 import ZIPFoundation
+#if canImport(AppKit) && canImport(Vision)
+import AppKit
+import Vision
+#endif
 @testable import OpenMedKit
 
 final class OpenMedMLXTests: XCTestCase {
@@ -50,6 +55,76 @@ final class OpenMedMLXTests: XCTestCase {
         )
     }
 
+    func testMLXModelCacheStateRecognizesCompleteCachedArtifact() throws {
+        let cacheRoot = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: FileManager.default.temporaryDirectory,
+            create: true
+        )
+        let repoID = "OpenMed/Test-Ready-Artifact"
+        let revision = "demo"
+        let cacheDirectory = try OpenMedModelStore.cachedMLXModelDirectory(
+            repoID: repoID,
+            revision: revision,
+            cacheDirectory: cacheRoot
+        )
+
+        try FileManager.default.createDirectory(
+            at: cacheDirectory,
+            withIntermediateDirectories: true
+        )
+        _ = try makeManifestOnlyArtifact(in: cacheDirectory)
+
+        XCTAssertEqual(
+            try OpenMedModelStore.mlxModelCacheState(
+                repoID: repoID,
+                revision: revision,
+                cacheDirectory: cacheRoot
+            ),
+            .ready
+        )
+    }
+
+    func testMLXModelCacheStateRecognizesPartialArtifact() throws {
+        let cacheRoot = try FileManager.default.url(
+            for: .itemReplacementDirectory,
+            in: .userDomainMask,
+            appropriateFor: FileManager.default.temporaryDirectory,
+            create: true
+        )
+        let repoID = "OpenMed/Test-Partial-Artifact"
+        let revision = "demo"
+        let cacheDirectory = try OpenMedModelStore.cachedMLXModelDirectory(
+            repoID: repoID,
+            revision: revision,
+            cacheDirectory: cacheRoot
+        )
+
+        try FileManager.default.createDirectory(
+            at: cacheDirectory,
+            withIntermediateDirectories: true
+        )
+        _ = try makeManifestOnlyArtifact(in: cacheDirectory)
+        try FileManager.default.removeItem(at: cacheDirectory.appending(path: "weights.safetensors"))
+
+        XCTAssertEqual(
+            try OpenMedModelStore.mlxModelCacheState(
+                repoID: repoID,
+                revision: revision,
+                cacheDirectory: cacheRoot
+            ),
+            .partial
+        )
+        XCTAssertFalse(
+            try OpenMedModelStore.isMLXModelCached(
+                repoID: repoID,
+                revision: revision,
+                cacheDirectory: cacheRoot
+            )
+        )
+    }
+
     func testArtifactRejectsUnsupportedArchitecture() throws {
         let directory = try makeManifestOnlyArtifact(family: "deberta-v2")
 
@@ -58,6 +133,73 @@ final class OpenMedMLXTests: XCTestCase {
                 return XCTFail("Unexpected error: \(error)")
             }
             XCTAssertEqual(family, "deberta-v2")
+        }
+    }
+
+    func testArtifactAcceptsNativeGLiNERFamilies() throws {
+        let cases = [
+            (
+                task: "zero-shot-ner",
+                family: "gliner-uni-encoder-span",
+                promptSpec: [
+                    "kind": "gliner-words",
+                    "entity_token": "<<ENT>>",
+                    "separator_token": "<<SEP>>",
+                    "class_token_index": 128001,
+                ] as [String: Any]
+            ),
+            (
+                task: "zero-shot-sequence-classification",
+                family: "gliclass-uni-encoder",
+                promptSpec: [
+                    "kind": "gliclass-uni-encoder",
+                    "label_token": "<<LABEL>>",
+                    "separator_token": "<<SEP>>",
+                    "class_token_index": 128001,
+                    "text_token_index": 128002,
+                ] as [String: Any]
+            ),
+            (
+                task: "zero-shot-relation-extraction",
+                family: "gliner-uni-encoder-token-relex",
+                promptSpec: [
+                    "kind": "gliner-relex",
+                    "entity_token": "<<ENT>>",
+                    "relation_token": "<<REL>>",
+                    "separator_token": "<<SEP>>",
+                    "class_token_index": 128001,
+                    "rel_token_index": 128003,
+                ] as [String: Any]
+            ),
+        ]
+
+        for testCase in cases {
+            let directory = try makeManifestOnlyArtifact(
+                task: testCase.task,
+                family: testCase.family,
+                configModelType: "deberta-v2",
+                promptSpec: testCase.promptSpec
+            )
+            let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+
+            XCTAssertEqual(artifact.manifest.task, testCase.task)
+            XCTAssertEqual(artifact.manifest.family, testCase.family)
+            XCTAssertNotNil(artifact.manifest.promptSpec)
+        }
+    }
+
+    func testArtifactRejectsUnknownGLiNERVariant() throws {
+        let directory = try makeManifestOnlyArtifact(
+            task: "zero-shot-ner",
+            family: "gliner-bi-encoder-span",
+            configModelType: "deberta-v2"
+        )
+
+        XCTAssertThrowsError(try OpenMedMLXArtifact(modelDirectoryURL: directory)) { error in
+            guard case OpenMedMLXArtifactError.unsupportedArchitecture(let family) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(family, "gliner-bi-encoder-span")
         }
     }
 
@@ -165,6 +307,58 @@ final class OpenMedMLXTests: XCTestCase {
         )
 
         XCTAssertNil(patched)
+    }
+
+    func testPatchTokenizerConfigDataNormalizesListShapedExtraSpecialTokens() throws {
+        let tokenizerConfig = try JSONSerialization.data(
+            withJSONObject: [
+                "tokenizer_class": "DebertaV2Tokenizer",
+                "extra_special_tokens": ["<<ENT>>", "<<SEP>>"],
+            ],
+            options: [.prettyPrinted]
+        )
+
+        let patched = try OpenMed.patchTokenizerConfigDataIfNeeded(
+            tokenizerConfigData: tokenizerConfig,
+            tokenizerData: makeTokenizerData(modelType: "Unigram")
+        )
+
+        let patchedData = try XCTUnwrap(patched)
+        let object = try JSONSerialization.jsonObject(with: patchedData) as? [String: Any]
+        XCTAssertNil(object?["extra_special_tokens"])
+        XCTAssertEqual(object?["additional_special_tokens"] as? [String], ["<<ENT>>", "<<SEP>>"])
+        XCTAssertEqual(object?["tokenizer_class"] as? String, "T5Tokenizer")
+    }
+
+    func testGLiNERPromptEncoderBuildsWordMaskForFirstSubtokensOnly() {
+        let encoder = OpenMedGLiNERPromptEncoder(tokenizer: FakeTokenizer())
+        let encoded = encoder.encodeWords(
+            ["<<ENT>>", "symptom", "<<SEP>>", "headache", "follow-up", "."],
+            skipFirstWords: 3,
+            maxSeqLength: 16
+        )
+
+        XCTAssertEqual(encoded.inputIDs, [101, 9001, 10, 9002, 20, 21, 30, 31, 32, 33, 102])
+        XCTAssertEqual(encoded.attentionMask, Array(repeating: 1, count: encoded.inputIDs.count))
+        XCTAssertEqual(encoded.wordsMask, [0, 0, 0, 0, 1, 0, 2, 0, 0, 3, 0])
+    }
+
+    func testGLiNERSpanCandidateGenerationMatchesMaxWidthLayout() throws {
+        try requireUsableMLXRuntime()
+        let spans = OpenMedGLiNERPromptEncoder.buildCandidateSpanBatch(
+            wordCount: 3,
+            maxWidth: 2
+        )
+
+        XCTAssertEqual(spans.index.asArray(Int32.self).map(Int.init), [
+            0, 0,
+            0, 1,
+            1, 1,
+            1, 2,
+            2, 2,
+            2, 3,
+        ])
+        XCTAssertEqual(spans.mask.asArray(Bool.self), [true, true, true, true, true, false])
     }
 
     func testBuildOffsetsPrefersEarliestCaseInsensitiveMatch() {
@@ -276,13 +470,352 @@ final class OpenMedMLXTests: XCTestCase {
         )
     }
 
+    #if canImport(AppKit) && canImport(Vision)
+    func testSampleClinicalDocumentPIIEndToEnd() async throws {
+        try requireUsableMLXRuntime()
+
+        let repoID = "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
+        let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
+        guard cacheState == .ready else {
+            throw XCTSkip(
+                "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache to run this smoke test."
+            )
+        }
+
+        let ocrText = try Self.extractSampleClinicalDocumentOCRText()
+        let artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
+        let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: artifactURL))
+
+        let rawEntities = try openmed.analyzeText(ocrText, confidenceThreshold: 0.0)
+        let piiEntities = try openmed.extractPII(
+            ocrText,
+            confidenceThreshold: 0.0,
+            useSmartMerging: true
+        )
+
+        print("=== SAMPLE OCR TEXT ===")
+        print(ocrText)
+        print("=== SAMPLE RAW ENTITIES ===")
+        print(rawEntities.map(\.description).joined(separator: "\n"))
+        print("=== SAMPLE FINAL PII ENTITIES ===")
+        print(piiEntities.map(\.description).joined(separator: "\n"))
+
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "full_name" && $0.text == "Eleanor Ruiz" },
+            "Expected patient full name in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "phone_number" && $0.text == "(415) 555-0142" },
+            "Expected patient phone number in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "phone_number" && $0.text == "(415) 555-0199" },
+            "Expected emergency contact phone number in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "email" && $0.text == "eleanor.ruiz@sampleclinic.test" },
+            "Expected email in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "date_of_birth" && $0.text == "03/14/1981" },
+            "Expected DOB in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "medical_record_number" && $0.text == "MRN-448271" },
+            "Expected MRN in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "insurance_id" && $0.text == "HMO-99318442" },
+            "Expected insurance ID in \(piiEntities)"
+        )
+        XCTAssertTrue(
+            piiEntities.contains { $0.label == "street_address" && $0.text == "1942 Harbor View Drive, Marseille, CA 92111" },
+            "Expected street address in \(piiEntities)"
+        )
+    }
+
+    func testSampleClinicalDocumentGLiNERMedicationCoverageAtDemoThreshold() async throws {
+        try requireUsableMLXRuntime()
+
+        let repoID = "OpenMed/gliner-multi-pii-v1-mlx"
+        let artifactURL: URL
+        if let artifactPath = ProcessInfo.processInfo.environment["OPENMED_GLINER_SPAN_ARTIFACT"],
+           !artifactPath.isEmpty {
+            artifactURL = URL(fileURLWithPath: (artifactPath as NSString).expandingTildeInPath)
+        } else if let homeDirectory = FileManager.default.homeDirectoryForCurrentUser as URL? {
+            let localCacheArtifactURL = homeDirectory
+                .appending(path: ".cache")
+                .appending(path: "openmed-mlx")
+                .appending(path: "OpenMed")
+                .appending(path: "gliner-multi-pii-v1-mlx")
+                .appending(path: "main")
+            if FileManager.default.fileExists(
+                atPath: localCacheArtifactURL.appending(path: "openmed-mlx.json").path
+            ) {
+                artifactURL = localCacheArtifactURL
+            } else {
+                let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
+                guard cacheState == .ready else {
+                    throw XCTSkip(
+                        "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
+                    )
+                }
+                artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
+            }
+        } else {
+            let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
+            guard cacheState == .ready else {
+                throw XCTSkip(
+                    "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
+                )
+            }
+            artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
+        }
+
+        let labels = [
+            "symptom",
+            "condition",
+            "medical history",
+            "medication",
+            "dosage",
+            "allergy",
+            "treatment",
+            "procedure",
+            "follow-up plan",
+            "care plan",
+            "care setting",
+            "work status",
+        ]
+        let ocrText = try Self.extractSampleClinicalDocumentOCRText()
+        let pipeline = try OpenMedZeroShotNER(modelDirectoryURL: artifactURL)
+
+        // Characterize the current demo note so we can distinguish model windowing
+        // behavior from Swift runtime regressions.
+        let fullNoteEntities = try pipeline.extract(
+            ocrText,
+            labels: labels,
+            threshold: 0.6,
+            flatNER: true
+        )
+        let fullNoteMedications = fullNoteEntities
+            .filter { $0.label == "medication" }
+            .map { $0.text.lowercased() }
+
+        XCTAssertTrue(
+            fullNoteMedications.contains { $0.contains("metformin") },
+            "Expected metformin in \(fullNoteMedications)"
+        )
+        XCTAssertTrue(
+            fullNoteMedications.contains { $0.contains("lisinopril") },
+            "Expected lisinopril in \(fullNoteMedications)"
+        )
+        XCTAssertTrue(
+            fullNoteMedications.contains { $0.contains("sumatriptan") },
+            "Expected sumatriptan in \(fullNoteMedications)"
+        )
+        XCTAssertFalse(
+            fullNoteMedications.contains { $0.contains("atorvastatin") },
+            "The long OCR note currently drops atorvastatin at the demo threshold, which helps distinguish model-confidence issues from runtime regressions."
+        )
+        XCTAssertFalse(
+            fullNoteMedications.contains { $0.contains("ibuprofen") },
+            "The current long OCR note should drop later-plan medication mentions when they fall outside the GLiNER window."
+        )
+
+        let homeMedicationSnippet = """
+        HOME MEDICATIONS
+        Metformin 500 mg twice daily, lisinopril 10 mg daily, atorvastatin 20 mg nightly, and sumatriptan 50 mg as needed for migraine.
+        """
+        let homeMedicationEntities = try pipeline.extract(
+            homeMedicationSnippet,
+            labels: labels,
+            threshold: 0.6,
+            flatNER: true
+        )
+        let homeMedicationMatches = homeMedicationEntities
+            .filter { $0.label == "medication" }
+            .map { $0.text.lowercased() }
+
+        XCTAssertTrue(
+            homeMedicationMatches.contains { $0.contains("metformin") },
+            "Expected metformin in the focused medication snippet: \(homeMedicationMatches)"
+        )
+        XCTAssertTrue(
+            homeMedicationMatches.contains { $0.contains("lisinopril") },
+            "Expected lisinopril in the focused medication snippet: \(homeMedicationMatches)"
+        )
+        XCTAssertTrue(
+            homeMedicationMatches.contains { $0.contains("atorvastatin") },
+            "Expected atorvastatin in the focused medication snippet: \(homeMedicationMatches)"
+        )
+        XCTAssertTrue(
+            homeMedicationMatches.contains { $0.contains("sumatriptan") },
+            "Expected sumatriptan in the focused medication snippet: \(homeMedicationMatches)"
+        )
+
+        let planSnippet = """
+        Continue oral hydration, ibuprofen 400 mg every 6 hours as needed, ondansetron 4 mg every 8 hours as needed for nausea.
+        """
+        let planEntities = try pipeline.extract(
+            planSnippet,
+            labels: labels,
+            threshold: 0.6,
+            flatNER: true
+        )
+        let planMedications = planEntities
+            .filter { $0.label == "medication" }
+            .map { $0.text.lowercased() }
+
+        XCTAssertTrue(
+            planMedications.contains { $0.contains("ibuprofen") },
+            "Expected ibuprofen once the plan snippet fits in the model window: \(planMedications)"
+        )
+        XCTAssertTrue(
+            planMedications.contains { $0.contains("ondansetron") },
+            "Expected ondansetron once the plan snippet fits in the model window: \(planMedications)"
+        )
+    }
+    #endif
+
+    func testLocalGLiNERSpanArtifactRunsNativeNER() throws {
+        try requireUsableMLXRuntime()
+        let artifactURL = try localArtifactURL(from: "OPENMED_GLINER_SPAN_ARTIFACT")
+        let pipeline = try OpenMedZeroShotNER(modelDirectoryURL: artifactURL, maxSeqLength: 128)
+
+        let text = "John Doe was treated with metformin for diabetes."
+        let entities = try pipeline.extract(
+            text,
+            labels: ["person", "medication", "condition"],
+            threshold: 0.95
+        )
+
+        XCTAssertTrue(entities.allSatisfy { $0.start >= 0 && $0.end <= text.count && $0.start < $0.end })
+    }
+
+    func testLocalGLiClassArtifactRunsNativeClassification() throws {
+        try requireUsableMLXRuntime()
+        let artifactURL = try localArtifactURL(from: "OPENMED_GLICLASS_ARTIFACT")
+        let classifier = try OpenMedZeroShotClassifier(modelDirectoryURL: artifactURL, maxSeqLength: 128)
+
+        let classifications = try classifier.classify(
+            "The patient needs follow-up for diabetes and hypertension.",
+            labels: ["medical condition", "medication", "appointment"],
+            threshold: 0.0,
+            prompt: "Classify this clinical sentence."
+        )
+
+        XCTAssertEqual(Set(classifications.map(\.label)), ["medical condition", "medication", "appointment"])
+    }
+
+    func testLocalGLiNERRelexArtifactRunsNativeExtraction() throws {
+        try requireUsableMLXRuntime()
+        let artifactURL = try localArtifactURL(from: "OPENMED_GLINER_RELEX_ARTIFACT")
+        let extractor = try OpenMedRelationExtractor(modelDirectoryURL: artifactURL, maxSeqLength: 128)
+
+        let text = "John Doe takes metformin."
+        let result = try extractor.extract(
+            text,
+            entityLabels: ["person", "medication"],
+            relationLabels: ["takes"],
+            threshold: 0.0,
+            relationThreshold: 1.0
+        )
+
+        XCTAssertTrue(result.entities.allSatisfy { $0.start >= 0 && $0.end <= text.count && $0.start < $0.end })
+    }
+
     private func requireUsableMLXRuntime() throws {
+        guard !Self.isSwiftPMCLI else {
+            throw XCTSkip("MLX runtime resources are not loadable from the SwiftPM CLI test bundle.")
+        }
         guard Self.hasPackagedMetalLibrary else {
             throw XCTSkip("MLX runtime resources are not bundled in this swift test environment.")
         }
     }
 
+    private func localArtifactURL(from environmentKey: String) throws -> URL {
+        let environment = ProcessInfo.processInfo.environment
+        guard let artifactPath = environment[environmentKey], !artifactPath.isEmpty else {
+            throw XCTSkip("Set \(environmentKey) to run local private artifact smoke tests.")
+        }
+        return URL(fileURLWithPath: (artifactPath as NSString).expandingTildeInPath)
+    }
+
+    #if canImport(AppKit) && canImport(Vision)
+    private static func extractSampleClinicalDocumentOCRText() throws -> String {
+        let imageURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appending(path: "OpenMedScanDemo/OpenMedScanDemo/Assets.xcassets/SampleClinicalDocument.imageset/sample-clinical-document.png")
+
+        guard let image = NSImage(contentsOf: imageURL) else {
+            XCTFail("Missing sample clinical document image at \(imageURL.path)")
+            return ""
+        }
+
+        var rect = NSRect(origin: .zero, size: image.size)
+        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+            XCTFail("Unable to create CGImage for sample clinical document")
+            return ""
+        }
+
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.recognitionLanguages = ["en-US"]
+
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        try handler.perform([request])
+
+        let observations = (request.results ?? []).sorted(by: recognitionSort)
+        let lines = observations.compactMap { observation in
+            observation.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return lines
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    private static func recognitionSort(
+        lhs: VNRecognizedTextObservation,
+        rhs: VNRecognizedTextObservation
+    ) -> Bool {
+        let verticalDelta = lhs.boundingBox.maxY - rhs.boundingBox.maxY
+        if abs(verticalDelta) > 0.02 {
+            return verticalDelta > 0
+        }
+        return lhs.boundingBox.minX < rhs.boundingBox.minX
+    }
+    #endif
+
+    private static var isSwiftPMCLI: Bool {
+        Bundle(for: OpenMedMLXTests.self).bundlePath.contains("/.build/")
+    }
+
     private static var hasPackagedMetalLibrary: Bool {
+        for bundle in Bundle.allBundles + Bundle.allFrameworks {
+            guard let resourceURL = bundle.resourceURL else {
+                continue
+            }
+            if FileManager.default.fileExists(
+                atPath: resourceURL.appending(path: "default.metallib").path
+            ) {
+                return true
+            }
+            guard let enumerator = FileManager.default.enumerator(
+                at: resourceURL,
+                includingPropertiesForKeys: nil
+            ) else {
+                continue
+            }
+            for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "default.metallib" {
+                return true
+            }
+        }
+
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -301,7 +834,10 @@ final class OpenMedMLXTests: XCTestCase {
     }
 
     private func makeManifestOnlyArtifact(
+        task: String = "token-classification",
         family: String = "bert",
+        configModelType: String? = nil,
+        promptSpec: [String: Any]? = nil,
         in directory: URL? = nil
     ) throws -> URL {
         let directory = try directory ?? FileManager.default.url(
@@ -323,12 +859,15 @@ final class OpenMedMLXTests: XCTestCase {
             encoding: .utf8
         )
 
+        let modelType = configModelType ?? family
         let configObject: [String: Any] = [
-            "model_type": family,
-            "_mlx_model_type": family,
+            "model_type": modelType,
+            "_mlx_model_type": modelType,
             "_mlx_weights_format": "safetensors",
             "vocab_size": 32,
             "hidden_size": 8,
+            "encoder_hidden_size": 8,
+            "embedding_size": 8,
             "num_attention_heads": 2,
             "num_hidden_layers": 1,
             "intermediate_size": 16,
@@ -348,10 +887,10 @@ final class OpenMedMLXTests: XCTestCase {
             options: [.prettyPrinted]
         ).write(to: directory.appending(path: "id2label.json"))
 
-        let manifestObject: [String: Any] = [
+        var manifestObject: [String: Any] = [
             "format": "openmed-mlx",
             "format_version": 1,
-            "task": "token-classification",
+            "task": task,
             "family": family,
             "source_model_id": "OpenMed/Test-Model",
             "config_path": "config.json",
@@ -367,6 +906,9 @@ final class OpenMedMLXTests: XCTestCase {
                 "files": ["tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"],
             ],
         ]
+        if let promptSpec {
+            manifestObject["prompt_spec"] = promptSpec
+        }
         try JSONSerialization.data(withJSONObject: manifestObject, options: [.prettyPrinted])
             .write(to: directory.appending(path: "openmed-mlx.json"))
         try Data().write(to: directory.appending(path: "weights.safetensors"))
@@ -471,5 +1013,110 @@ final class OpenMedMLXTests: XCTestCase {
             ],
             options: [.prettyPrinted]
         )
+    }
+
+    private struct FakeTokenizer: Tokenizer {
+        let tokenMap: [String: [Int]] = [
+            "": [101, 102],
+            "<<ENT>>": [9001],
+            "<<SEP>>": [9002],
+            "symptom": [10],
+            "headache": [20, 21],
+            "follow-up": [30, 31, 32],
+            ".": [33],
+        ]
+
+        func tokenize(text: String) -> [String] {
+            [text]
+        }
+
+        func encode(text: String) -> [Int] {
+            encode(text: text, addSpecialTokens: true)
+        }
+
+        func encode(text: String, addSpecialTokens: Bool) -> [Int] {
+            if addSpecialTokens, text.isEmpty {
+                return [101, 102]
+            }
+            return tokenMap[text] ?? [999]
+        }
+
+        func decode(tokens: [Int]) -> String {
+            tokens.map(String.init).joined(separator: " ")
+        }
+
+        func decode(tokens: [Int], skipSpecialTokens: Bool) -> String {
+            decode(tokens: tokens)
+        }
+
+        func convertTokenToId(_ token: String) -> Int? {
+            tokenMap[token]?.first
+        }
+
+        func convertTokensToIds(_ tokens: [String]) -> [Int?] {
+            tokens.map(convertTokenToId)
+        }
+
+        func convertIdToToken(_ id: Int) -> String? {
+            tokenMap.first { $0.value.first == id }?.key
+        }
+
+        func convertIdsToTokens(_ ids: [Int]) -> [String?] {
+            ids.map(convertIdToToken)
+        }
+
+        var bosToken: String? { "[CLS]" }
+        var bosTokenId: Int? { 101 }
+        var eosToken: String? { "[SEP]" }
+        var eosTokenId: Int? { 102 }
+        var unknownToken: String? { "[UNK]" }
+        var unknownTokenId: Int? { 999 }
+
+        func applyChatTemplate(messages: [Message]) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
+
+        func applyChatTemplate(messages: [Message], tools: [ToolSpec]?) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
+
+        func applyChatTemplate(
+            messages: [Message],
+            tools: [ToolSpec]?,
+            additionalContext: [String: Any]?
+        ) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
+
+        func applyChatTemplate(messages: [Message], chatTemplate: ChatTemplateArgument) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
+
+        func applyChatTemplate(messages: [Message], chatTemplate: String) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
+
+        func applyChatTemplate(
+            messages: [Message],
+            chatTemplate: ChatTemplateArgument?,
+            addGenerationPrompt: Bool,
+            truncation: Bool,
+            maxLength: Int?,
+            tools: [ToolSpec]?
+        ) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
+
+        func applyChatTemplate(
+            messages: [Message],
+            chatTemplate: ChatTemplateArgument?,
+            addGenerationPrompt: Bool,
+            truncation: Bool,
+            maxLength: Int?,
+            tools: [ToolSpec]?,
+            additionalContext: [String: Any]?
+        ) throws -> [Int] {
+            throw TokenizerError.chatTemplate("FakeTokenizer does not support chat templates.")
+        }
     }
 }
