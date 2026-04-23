@@ -103,7 +103,7 @@ final class MLXTokenClassificationPipeline {
         )
     }
 
-    private static var isRuntimeSupported: Bool {
+    static var isRuntimeSupported: Bool {
         #if targetEnvironment(simulator)
         false
         #elseif arch(arm64) || arch(arm64e)
