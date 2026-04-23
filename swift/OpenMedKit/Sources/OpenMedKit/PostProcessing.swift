@@ -83,10 +83,50 @@ public enum PostProcessing {
             contextWords: ["emergency contact", "contact"]
         ),
         .init(
+            #"^PATIENT NAME\s*$\n([A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+)(?=\n|$)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["patient", "name"]
+        ),
+        .init(
+            #"^EMERGENCY CONTACT\s*$\n([A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+)(?:,\s*\(\d{3}\)\s*\d{3}[-.\s]?\d{4})?(?=\n|$)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["emergency contact", "contact"]
+        ),
+        .init(
+            #"^PRIMARY CLINIC(?:IAN|AN)\s*$\n((?:Dr\.\s+)?[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+(?:,\s*[A-Z.]+)?)(?=\n|$)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["clinician", "provider", "doctor", "physician"]
+        ),
+        .init(
             #"\bDOB:\s*(\d{1,2}/\d{1,2}/\d{2,4})\b"#,
             entityType: "date_of_birth",
             priority: 14,
             captureGroup: 1,
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["dob", "date of birth", "birthdate"]
+        ),
+        .init(
+            #"^DOB\s*$\n(\d{1,2}/\d{1,2}/\d{2,4})(?=\n|$)"#,
+            entityType: "date_of_birth",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
             baseScore: 0.97,
             contextBoost: 0.02,
             contextWords: ["dob", "date of birth", "birthdate"]
@@ -110,12 +150,32 @@ public enum PostProcessing {
             contextWords: ["mrn", "medical record", "record number"]
         ),
         .init(
+            #"^MRN\s*$\n([A-Z0-9][A-Z0-9-]{4,})(?=\n|$)"#,
+            entityType: "medical_record_number",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["mrn", "medical record", "record number"]
+        ),
+        .init(
             #"\bAddress:\s*([^,\n]+(?:,\s*[^,\n]+)*?)(?=,\s*(?:Phone|Email|Insurance ID|Driver License|Passport|Emergency Contact|Employer|Employee ID|Bank Account|Routing):|$)"#,
             entityType: "street_address",
             priority: 14,
             captureGroup: 1,
             baseScore: 0.95,
             contextBoost: 0.03,
+            contextWords: ["address", "street", "residence", "lives at"]
+        ),
+        .init(
+            #"^ADDRESS\s*$\n([^\n]+)(?=\n|$)"#,
+            entityType: "street_address",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
             contextWords: ["address", "street", "residence", "lives at"]
         ),
         .init(
@@ -128,12 +188,32 @@ public enum PostProcessing {
             contextWords: ["phone", "telephone", "contact"]
         ),
         .init(
+            #"^PHONE\s*$\n(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})(?=\n|$)"#,
+            entityType: "phone_number",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["phone", "telephone", "contact"]
+        ),
+        .init(
             #"\bEmergency Contact:\s*[A-Za-z][A-Za-z\s'-]+,\s*(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})\b"#,
             entityType: "phone_number",
             priority: 14,
             captureGroup: 1,
             baseScore: 0.95,
             contextBoost: 0.03,
+            contextWords: ["emergency contact", "contact", "phone"]
+        ),
+        .init(
+            #"^EMERGENCY CONTACT\s*$\n[A-Za-z][A-Za-z\s'-]+,\s*(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})(?=\n|$)"#,
+            entityType: "phone_number",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
             contextWords: ["emergency contact", "contact", "phone"]
         ),
         .init(
@@ -146,12 +226,52 @@ public enum PostProcessing {
             contextWords: ["email", "e-mail", "mail"]
         ),
         .init(
+            #"^EMAIL\s*$\n([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})(?=\n|$)"#,
+            entityType: "email",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["email", "e-mail", "mail"]
+        ),
+        .init(
+            #"^([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\s*$\nEMAIL(?:\n|$)"#,
+            entityType: "email",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["email", "e-mail", "mail"]
+        ),
+        .init(
             #"\bInsurance ID:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
             entityType: "insurance_id",
             priority: 14,
             captureGroup: 1,
             baseScore: 0.95,
             contextBoost: 0.03,
+            contextWords: ["insurance", "policy", "coverage", "payer"]
+        ),
+        .init(
+            #"^INSURANCE ID\s*$\n([A-Z0-9][A-Z0-9-]{4,})(?=\n|$)"#,
+            entityType: "insurance_id",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["insurance", "policy", "coverage", "payer"]
+        ),
+        .init(
+            #"^([A-Z0-9][A-Z0-9-]{4,})\s*$\nINSURANCE ID(?:\n|$)"#,
+            entityType: "insurance_id",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
             contextWords: ["insurance", "policy", "coverage", "payer"]
         ),
         .init(
@@ -178,6 +298,16 @@ public enum PostProcessing {
             priority: 14,
             captureGroup: 1,
             baseScore: 0.93,
+            contextBoost: 0.03,
+            contextWords: ["employer", "company", "organization", "work"]
+        ),
+        .init(
+            #"^EMPLOYER\s*$\n([^\n]+)(?=\n|$)"#,
+            entityType: "organization",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.94,
             contextBoost: 0.03,
             contextWords: ["employer", "company", "organization", "work"]
         ),
@@ -579,7 +709,9 @@ public enum PostProcessing {
 
             let finalLabel: String
             if preferModelLabels {
-                if normalizeLabel(dominantLabel) == normalizeLabel(unit.entityType)
+                if isMoreSpecific(label: unit.entityType, than: dominantLabel) {
+                    finalLabel = unit.entityType
+                } else if normalizeLabel(dominantLabel) == normalizeLabel(unit.entityType)
                     || isMoreSpecific(label: dominantLabel, than: unit.entityType)
                 {
                     finalLabel = dominantLabel
