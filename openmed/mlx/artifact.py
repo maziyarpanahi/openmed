@@ -8,7 +8,7 @@ from typing import Any
 
 MANIFEST_FILENAME = "openmed-mlx.json"
 MANIFEST_FORMAT = "openmed-mlx"
-MANIFEST_VERSION = 1
+MANIFEST_VERSION = 2
 
 _KNOWN_TOKENIZER_FILES = (
     "tokenizer.json",
@@ -158,12 +158,18 @@ def write_manifest(
     available_weights = [name for name in (preferred_weights, *fallback_weights) if (model_dir / name).exists()]
 
     tokenizer_files = tokenizer_files or find_tokenizer_files(model_dir)
-    family = config.get("_mlx_model_type") or config.get("model_type") or "unknown"
+    family = (
+        config.get("_mlx_family")
+        or config.get("_mlx_model_type")
+        or config.get("model_type")
+        or "unknown"
+    )
+    task = config.get("_mlx_task", "token-classification")
 
     manifest = {
         "format": MANIFEST_FORMAT,
         "format_version": MANIFEST_VERSION,
-        "task": "token-classification",
+        "task": task,
         "family": family,
         "source_model_id": source_model_id,
         "config_path": "config.json",
@@ -179,6 +185,14 @@ def write_manifest(
             "files": tokenizer_files,
         },
     }
+
+    prompt_spec = config.get("_mlx_prompt_spec")
+    if prompt_spec:
+        manifest["prompt_spec"] = prompt_spec
+
+    runtime = config.get("_mlx_runtime")
+    if runtime:
+        manifest["runtime"] = runtime
 
     manifest_path = model_dir / MANIFEST_FILENAME
     with open(manifest_path, "w") as f:
