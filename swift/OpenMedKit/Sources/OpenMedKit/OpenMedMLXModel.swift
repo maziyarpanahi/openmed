@@ -159,10 +159,14 @@ final class OpenMedBertForTokenClassification: Module {
 }
 
 enum OpenMedMLXModelLoader {
+    private static func loadedWeights(for artifact: OpenMedMLXArtifact) throws -> [String: MLXArray] {
+        try OpenMedMLXWeightArchive.loadWeights(from: artifact.weightCandidateURLs)
+    }
+
     static func loadTokenClassifier(
         from artifact: OpenMedMLXArtifact
     ) throws -> OpenMedBertForTokenClassification {
-        var weights = try OpenMedMLXWeightArchive.loadWeights(from: artifact.weightCandidateURLs)
+        var weights = try loadedWeights(for: artifact)
         let model = OpenMedBertForTokenClassification(artifact.configuration)
         weights = model.sanitize(weights: weights)
 
@@ -176,6 +180,39 @@ enum OpenMedMLXModelLoader {
             }
         }
 
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
+    static func loadGLiNERSpanModel(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedGLiNERSpanModel {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedGLiNERSpanModel(artifact.configuration)
+        weights = model.sanitize(weights: weights)
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
+    static func loadGLiClassUniEncoderModel(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedGLiClassUniEncoderModel {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedGLiClassUniEncoderModel(artifact.configuration)
+        weights = model.sanitize(weights: weights)
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
+    static func loadGLiNERRelexModel(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedGLiNERRelexModel {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedGLiNERRelexModel(artifact.configuration)
+        weights = model.sanitize(weights: weights)
         try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
         eval(model)
         return model
