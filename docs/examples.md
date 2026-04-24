@@ -42,8 +42,7 @@ Swift MLX quick check:
 import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
-    authToken: "<token-if-private>"
+    repoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
 )
 
 let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
