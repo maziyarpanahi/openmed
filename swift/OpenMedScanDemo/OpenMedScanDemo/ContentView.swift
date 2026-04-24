@@ -1109,7 +1109,7 @@ struct ContentView: View {
                     .foregroundStyle(.teal)
             }
 
-            Text("Compare OpenMed PII and OpenAI Privacy Filter on the same scanned note. GLiNER is reserved for the clinical extraction stage.")
+            Text("Compare OpenMed PII and OpenAI Privacy Filter 8-bit on the same scanned note. GLiNER is reserved for the clinical extraction stage.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -2157,7 +2157,7 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         case .openMed:
             return "OpenMed PII"
         case .privacyFilter:
-            return "OpenAI PII"
+            return "OpenAI PII 8-bit"
         }
     }
 
@@ -2166,7 +2166,7 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         case .openMed:
             return "OpenMed"
         case .privacyFilter:
-            return "OpenAI"
+            return "OpenAI q8"
         }
     }
 
@@ -2175,7 +2175,7 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         case .openMed:
             return "Dedicated PII extractor"
         case .privacyFilter:
-            return "Privacy Filter runtime"
+            return "Privacy Filter 8-bit runtime"
         }
     }
 
@@ -2184,7 +2184,7 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         case .openMed:
             return "Runs the OpenMed token-classification model plus the semantic merge rules used for production-style masking."
         case .privacyFilter:
-            return "Runs the OpenAI Privacy Filter MLX artifact with native tiktoken tokenization and BIOES decoding."
+            return "Runs the 8-bit OpenAI Privacy Filter MLX artifact with native tiktoken tokenization and BIOES decoding."
         }
     }
 
@@ -2235,10 +2235,10 @@ private struct ScanDemoModelDescriptor: Sendable {
     )
 
     static let privacyFilter = ScanDemoModelDescriptor(
-        displayName: "OpenAI Privacy Filter",
+        displayName: "OpenAI Privacy Filter 8-bit",
         sourceModelID: "openai/privacy-filter",
-        artifactRepoID: "OpenMed/privacy-filter-mlx",
-        note: "OpenAI Privacy Filter artifact loaded through native OpenMedKit MLX support."
+        artifactRepoID: "OpenMed/privacy-filter-mlx-8bit",
+        note: "8-bit OpenAI Privacy Filter artifact loaded through native OpenMedKit MLX support."
     )
 }
 
@@ -2478,7 +2478,7 @@ private struct ModelSetupSheet: View {
 
                     VStack(spacing: 10) {
                         cacheRow(title: "OpenMed PII model", state: openMedPIICacheState, tint: .teal)
-                        cacheRow(title: "OpenAI Privacy Filter", state: privacyFilterCacheState, tint: .indigo)
+                        cacheRow(title: "OpenAI Privacy Filter 8-bit", state: privacyFilterCacheState, tint: .indigo)
                         cacheRow(title: "Clinical model", state: glinerCacheState, tint: .blue)
                     }
 
@@ -2677,7 +2677,7 @@ private actor ScanDemoRuntime {
             await progress(
                 PipelineStatus(
                     phase: .inferencing,
-                    detail: "Running OpenAI Privacy Filter with native tiktoken tokenization and BIOES decoding on-device."
+                    detail: "Running OpenAI Privacy Filter 8-bit with native tiktoken tokenization and BIOES decoding on-device."
                 )
             )
 
@@ -2792,7 +2792,7 @@ private actor ScanDemoRuntime {
             await progress(
                 PipelineStatus(
                     phase: .inferencing,
-                    detail: "Running OpenAI Privacy Filter with native tiktoken tokenization and BIOES decoding on-device."
+                    detail: "Running OpenAI Privacy Filter 8-bit with native tiktoken tokenization and BIOES decoding on-device."
                 )
             )
 
