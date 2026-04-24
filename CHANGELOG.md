@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-04-24
+## [1.2.0] - 2026-04-24
 
 ### Added
 
@@ -40,6 +40,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added Python unit coverage for MLX custom-task dispatch, Privacy Filter inference/decoding, artifact loading, and PII privacy-filter post-processing.
 - Added Swift unit coverage for MLX artifact validation, DeBERTa/GLiNER-family runtime setup, Privacy Filter decoding, sample OCR assets, and post-processing behavior.
+
+## [1.1.0] - 2026-04-20
+
+### Added
+
+- **Portuguese PII and de-identification support** via `lang="pt"`
+  - Registered 31 API-visible Portuguese PII checkpoints from the OpenMed Hugging Face collection
+  - Default Portuguese model: `OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1`
+  - Added Portuguese regex/semantic patterns for dates, phones, CPF, CNPJ, street addresses, and postcodes
+  - Added CPF and CNPJ checksum validators, Portuguese fake replacement data, and localized date shifting
+- **Portuguese docs and examples**
+  - Updated multilingual PII documentation from 8 to 9 languages and from 179 to 210 PII models
+  - Added a Portuguese model-card/README one-liner and smoke-example coverage
+
+### Changed
+
+- Expanded PII label normalization and replacement mapping for CPF/CNPJ and Portuguese model labels.
 
 ## [1.0.0] - 2026-04-03
 

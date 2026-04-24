@@ -2,7 +2,7 @@
 
 OpenMedKit is the Swift package for running OpenMed models in **macOS**, **iOS**, and **iPadOS** apps.
 
-In `1.1.0`, OpenMedKit supports two Apple backends:
+In `1.2.0`, OpenMedKit supports two Apple backends:
 
 - **MLX** for Apple Silicon Macs and real iPhone/iPad devices
 - **CoreML** for bundled Apple model packages
@@ -54,7 +54,7 @@ iOS Simulator is **not** a Swift MLX validation target.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.1.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.2.0"),
 ]
 ```
 

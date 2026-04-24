@@ -189,6 +189,8 @@ class TestNormalizeLabelExpansion:
         ("dni", "national_id"),
         ("nie", "national_id"),
         ("aadhaar", "national_id"),
+        ("cpf", "national_id"),
+        ("cnpj", "national_id"),
         ("medical_record_number", "medical_record"),
         ("mrn", "medical_record"),
         ("account_number", "account"),
@@ -200,7 +202,7 @@ class TestNormalizeLabelExpansion:
         assert normalize_label(label) == expected
 
     @pytest.mark.parametrize("label", [
-        "bsn", "dni", "nie", "aadhaar",
+        "bsn", "dni", "nie", "aadhaar", "cpf", "cnpj",
         "medical_record_number", "mrn", "medical_record",
         "account_number", "account",
         "credit_debit_card", "credit_card", "debit_card", "payment_card",
