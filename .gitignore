@@ -218,6 +218,10 @@ logs/
 
 # Local development files
 local_config.py
+
+# Personal release/announcement drafts
+/RELEASE_NOTES*.md
+/ANNOUNCEMENT*.md
 local_settings.py
 dev_config.json
 
