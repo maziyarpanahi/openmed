@@ -224,4 +224,36 @@ final class PostProcessingTests: XCTestCase {
         XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(415) 555-0142" })
         XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Dr. Maya Shah, MD" })
     }
+
+    func testMergePIIEntitiesCanDisableSemanticOnlyMatches() {
+        let text = "Patient SSN: 123-45-6789"
+
+        let merged = PostProcessing.mergePIIEntities(
+            [],
+            text: text,
+            allowSemanticOnlyMatches: false
+        )
+
+        XCTAssertTrue(merged.isEmpty)
+    }
+
+    func testMergePIIEntitiesCanPreserveModelLabelTaxonomy() {
+        let text = "DOB: 01/15/1970"
+        let entities = [
+            EntityPrediction(label: "private_date", text: "/15/1970", confidence: 0.92, start: 7, end: 15),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(
+            entities,
+            text: text,
+            preferModelLabels: true,
+            allowSemanticLabelExpansion: false
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "private_date")
+        XCTAssertEqual(merged[0].text, "01/15/1970")
+        XCTAssertEqual(merged[0].start, 5)
+        XCTAssertEqual(merged[0].end, 15)
+    }
 }
