@@ -149,6 +149,94 @@ class PrivacyFilterExpertLinear(nn.Module):
         out = mx.matmul(x[..., None, :].astype(weight.dtype), weight).squeeze(-2)
         return out + bias
 
+    def to_quantized(
+        self,
+        group_size: int | None = None,
+        bits: int | None = None,
+        mode: str = "affine",
+    ) -> "PrivacyFilterQuantizedExpertLinear":
+        return PrivacyFilterQuantizedExpertLinear.from_expert_linear(
+            self,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+        )
+
+
+class PrivacyFilterQuantizedExpertLinear(nn.Module):
+    """Quantized expert linear layer using packed ``[experts, out, in]`` weights."""
+
+    def __init__(
+        self,
+        num_experts: int,
+        in_features: int,
+        out_features: int,
+        *,
+        group_size: int | None = None,
+        bits: int | None = None,
+        mode: str = "affine",
+    ) -> None:
+        super().__init__()
+        self.group_size = 64 if group_size is None else int(group_size)
+        self.bits = 4 if bits is None else int(bits)
+        self.mode = mode
+        packed_features = (in_features * self.bits) // 32
+        scale_groups = in_features // self.group_size
+        self.weight = mx.zeros((num_experts, out_features, packed_features), dtype=mx.uint32)
+        self.scales = mx.ones((num_experts, out_features, scale_groups), dtype=mx.float16)
+        self.biases = mx.zeros((num_experts, out_features, scale_groups), dtype=mx.float16)
+        self.bias = mx.zeros((num_experts, out_features), dtype=mx.float16)
+        self.freeze()
+
+    def __call__(self, x: mx.array, expert_indices: mx.array) -> mx.array:
+        input_shape = x.shape
+        flat_x = x.reshape(-1, 1, input_shape[-1])
+        flat_indices = expert_indices.reshape(-1).astype(mx.int32)
+        out = mx.gather_qmm(
+            flat_x,
+            self["weight"],
+            self["scales"],
+            self.get("biases"),
+            rhs_indices=flat_indices,
+            transpose=True,
+            group_size=self.group_size,
+            bits=self.bits,
+            mode=self.mode,
+            sorted_indices=False,
+        ).squeeze(-2)
+        if "bias" in self:
+            out = out + mx.take(self["bias"], flat_indices, axis=0)
+        return out.reshape(*input_shape[:-1], out.shape[-1])
+
+    @classmethod
+    def from_expert_linear(
+        cls,
+        expert_layer: PrivacyFilterExpertLinear,
+        *,
+        group_size: int | None = None,
+        bits: int | None = None,
+        mode: str = "affine",
+    ) -> "PrivacyFilterQuantizedExpertLinear":
+        num_experts, in_features, out_features = expert_layer.weight.shape
+        quantized = cls(
+            num_experts,
+            in_features,
+            out_features,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+        )
+        transposed_weight = mx.swapaxes(expert_layer.weight, -1, -2)
+        quantized.weight, quantized.scales, *biases = mx.quantize(
+            transposed_weight,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+        )
+        quantized.biases = biases[0] if biases else None
+        quantized.bias = expert_layer.bias
+        return quantized
+
 
 def _as_bool_attention_mask(attention_mask: Optional[mx.array], shape: tuple[int, int]) -> Optional[mx.array]:
     if attention_mask is None:
@@ -322,12 +410,12 @@ class PrivacyFilterMLPBlock(nn.Module):
         expert_values, expert_indices = _topk(gate_logits, self.experts_per_token)
         expert_weights = mx.softmax(expert_values, axis=-1) / float(self.experts_per_token)
         expanded = mx.broadcast_to(
-            t.astype(self.swiglu.weight.dtype)[:, None, :],
+            _linear_input(t, self.swiglu)[:, None, :],
             (t.shape[0], self.experts_per_token, hidden_size),
         )
         hidden = self.swiglu(expanded, expert_indices).astype(mx.float32)
         hidden = _swiglu(hidden, limit=self.swiglu_limit)
-        out = self.out(hidden.astype(self.out.weight.dtype), expert_indices).astype(mx.float32)
+        out = self.out(_linear_input(hidden, self.out), expert_indices).astype(mx.float32)
         out = mx.sum(out * expert_weights[..., None], axis=1) * float(self.experts_per_token)
         return x + out.reshape(*batch_shape, hidden_size).astype(x.dtype)
 
