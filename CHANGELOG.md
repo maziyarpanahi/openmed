@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-24
+
+### Added
+
+- **Expanded Python MLX runtime support** for OpenMed MLX artifacts beyond classic token classification, including GLiNER span NER, GLiClass zero-shot classification, GLiNER-Relex relation extraction, and OpenAI Privacy Filter artifacts.
+- **Native OpenAI Privacy Filter MLX pipeline** with tiktoken-compatible tokenization, byte-offset reconstruction, BIOES/Viterbi decoding, model-led span repair, and support for the public `OpenMed/privacy-filter-mlx` and `OpenMed/privacy-filter-mlx-8bit` artifacts.
+- **Native Swift OpenMedKit GLiNER-family APIs**:
+  - `OpenMedZeroShotNER`
+  - `OpenMedZeroShotClassifier`
+  - `OpenMedRelationExtractor`
+- **Native Swift MLX DeBERTa-v2/v3 and Privacy Filter runtimes** for local inference on Apple Silicon macOS and physical iPhone/iPad devices.
+- **Self-contained OpenMed MLX artifact handling** for `task`/`family` manifests, tokenizer assets, `weights.safetensors`, and `weights.npz` fallback paths.
+- **OpenMed Scan Demo**: a guided iPhone workflow for document capture/sample loading, OCR review, PII de-identification, clinical extraction, summary review, model preparation, and PII engine comparison.
+- **OpenMedDemo Privacy Filter option** so macOS/iOS users can test the public OpenAI Privacy Filter MLX artifact alongside OpenMed PII models.
+- **App privacy readiness assets** for the scan demo, including a privacy manifest and camera usage copy for local document scanning.
+
+### Changed
+
+- Improved Apple model download/caching behavior so MLX artifacts are prepared once and reused offline from cache.
+- Removed Hugging Face token UI and token persistence from demo flows now that release artifacts are public.
+- Updated PII post-processing so Privacy Filter regex logic repairs model-predicted spans without inventing unsupported semantic labels.
+- Refreshed OpenMedKit documentation and examples for native MLX artifacts, Swift package usage, and on-device Apple workflows.
+
+### Fixed
+
+- Reduced iOS memory pressure in the Privacy Filter MLX loader by tightening the Swift model loading path.
+- Fixed local MLX artifact loading and model-store readiness checks for public Hub artifacts.
+- Tightened PII entity merging and privacy-filtering tests around model/pattern span interactions.
+
+### Tests
+
+- Added Python unit coverage for MLX custom-task dispatch, Privacy Filter inference/decoding, artifact loading, and PII privacy-filter post-processing.
+- Added Swift unit coverage for MLX artifact validation, DeBERTa/GLiNER-family runtime setup, Privacy Filter decoding, sample OCR assets, and post-processing behavior.
+
 ## [1.0.0] - 2026-04-03
 
 ### Added
