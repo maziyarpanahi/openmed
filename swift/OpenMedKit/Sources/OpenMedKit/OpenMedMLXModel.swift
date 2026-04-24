@@ -2,6 +2,13 @@ import Foundation
 import MLX
 import MLXNN
 
+private func openMedMLXQuantizationMode(_ value: String) -> QuantizationMode {
+    switch value.lowercased() {
+    default:
+        return .affine
+    }
+}
+
 private final class OpenMedBertEmbeddings: Module {
     private let typeVocabularySize: Int
     private let positionOffset: Int
@@ -171,9 +178,11 @@ enum OpenMedMLXModelLoader {
         weights = model.sanitize(weights: weights)
 
         if let bits = artifact.configuration.quantizationBits {
+            let groupSize = artifact.configuration.quantizationGroupSize
+            let mode = openMedMLXQuantizationMode(artifact.configuration.quantizationMode)
             quantize(model: model) { path, _ in
                 if weights["\(path).scales"] != nil {
-                    return (64, bits, .affine)
+                    return (groupSize, bits, mode)
                 } else {
                     return nil
                 }
@@ -191,6 +200,19 @@ enum OpenMedMLXModelLoader {
         var weights = try loadedWeights(for: artifact)
         let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
         weights = model.sanitize(weights: weights)
+
+        if let bits = artifact.configuration.quantizationBits {
+            let groupSize = artifact.configuration.quantizationGroupSize
+            let mode = openMedMLXQuantizationMode(artifact.configuration.quantizationMode)
+            quantize(model: model) { path, _ in
+                if weights["\(path).scales"] != nil {
+                    return (groupSize, bits, mode)
+                } else {
+                    return nil
+                }
+            }
+        }
+
         try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
         eval(model)
         return model
