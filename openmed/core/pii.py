@@ -37,10 +37,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Optional, Literal, TYPE_CHECKING
 from datetime import datetime, timedelta
+from functools import lru_cache
 import hashlib
+import json
 import random
 import re
 import unicodedata
+from pathlib import Path
 
 from .config import OpenMedConfig
 from ..processing.outputs import EntityPrediction
@@ -133,6 +136,58 @@ _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt"})
+_PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
+
+
+def _normalize_model_family(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return value.strip().lower().replace("_", "-")
+
+
+def _looks_like_privacy_filter_identifier(value: Optional[str]) -> bool:
+    normalized = _normalize_model_family(value)
+    return bool(normalized) and (
+        normalized in _PRIVACY_FILTER_FAMILY_ALIASES or "privacy-filter" in normalized
+    )
+
+
+@lru_cache(maxsize=32)
+def _is_privacy_filter_artifact_path(model_name: str) -> bool:
+    path = Path(model_name).expanduser()
+    if path.is_file():
+        path = path.parent
+
+    if not path.exists() or not path.is_dir():
+        return False
+
+    for file_name in ("openmed-mlx.json", "config.json"):
+        candidate = path / file_name
+        if not candidate.is_file():
+            continue
+
+        try:
+            payload = json.loads(candidate.read_text())
+        except (OSError, json.JSONDecodeError):
+            continue
+
+        for key in ("family", "_mlx_family", "_mlx_model_type", "model_type", "source_model_id", "_name_or_path"):
+            if _looks_like_privacy_filter_identifier(payload.get(key)):
+                return True
+
+    return False
+
+
+def _uses_model_led_pii_merging(*model_identifiers: Optional[str]) -> bool:
+    for identifier in model_identifiers:
+        if _looks_like_privacy_filter_identifier(identifier):
+            return True
+
+    for identifier in model_identifiers:
+        if identifier and _is_privacy_filter_artifact_path(identifier):
+            return True
+
+    return False
 
 
 def _strip_accents(text: str) -> str:
@@ -283,6 +338,11 @@ def extract_pii(
             for e in result.entities
         ]
 
+        model_led_merging = _uses_model_led_pii_merging(
+            effective_model,
+            getattr(result, "model_name", None),
+        )
+
         # Merge using semantic patterns
         # IMPORTANT: Use result.text (validated/processed text) not original text
         # because entity positions are based on the processed text
@@ -291,7 +351,9 @@ def extract_pii(
             result.text,
             patterns=lang_patterns,
             use_semantic_patterns=True,
-            prefer_model_labels=True  # Prefer model's more specific labels
+            prefer_model_labels=True,  # Prefer model's more specific labels
+            allow_semantic_only_matches=not model_led_merging,
+            allow_label_expansion=not model_led_merging,
         )
 
         # Convert back to EntityPrediction objects

@@ -19,32 +19,33 @@ iOS Simulator is not a Swift MLX target, so the app will tell you that directly 
 
 ## Quick Start
 
-1. Open [`swift/OpenMedDemo/OpenMedDemo.xcodeproj`](/Users/maziyar/Desktop/Work/openmed-release-1.0.0/swift/OpenMedDemo/OpenMedDemo.xcodeproj) in Xcode.
+1. Open [`swift/OpenMedDemo/OpenMedDemo.xcodeproj`](/Users/maziyar/Developer/openmed/swift/OpenMedDemo/OpenMedDemo.xcodeproj) in Xcode.
 2. Select the `OpenMedDemo` scheme.
 3. Choose:
    - `My Mac` for Apple Silicon macOS MLX testing, or
    - a real iPhone/iPad for on-device MLX testing
 4. Run the app.
 5. Choose one of the published OpenMed MLX models in the picker.
-6. Paste a Hugging Face token while the repos remain private.
-7. Run inference.
+6. Run inference.
 
 The app downloads the artifact, caches it locally, and then runs it through `OpenMedKit`.
 
-If a private MLX repo was uploaded before the new manifest/tokenizer packaging, the demo still falls back to the legacy layout and uses the source Hugging Face tokenizer reference when needed.
+If an older MLX repo was uploaded before the new manifest/tokenizer packaging, the demo still falls back to the legacy layout and uses the source Hugging Face tokenizer reference when needed.
 
 ## Published Swift-MLX-Compatible Models
 
-The demo currently hardcodes the supported OpenMed PII models already uploaded in MLX form:
+The demo currently hardcodes the supported OpenMed PII and Privacy Filter models already uploaded in MLX form:
 
+- `OpenMed/privacy-filter-mlx-8bit`
 - `OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx`
 - `OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx`
 - `OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx`
 - `OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1-mlx`
 - `OpenMed/OpenMed-PII-BigMed-Large-278M-v1-mlx`
 
-These map to the first Swift MLX rollout families:
+These map to the Swift MLX runtime families:
 
+- OpenAI Privacy Filter 8-bit
 - BERT
 - DistilBERT
 - RoBERTa
@@ -91,8 +92,7 @@ Example `openmed-model.json`:
 
 ## Notes
 
-- While the MLX repos are private, the demo needs a Hugging Face token.
-- Once the repos are public, the same app flow can download them without a token.
+- The demo uses public OpenMed MLX artifacts and does not require account setup.
 - The demo does not route MLX through a Python service and does not use mock inference.
 - The app uses `OpenMedKit` directly for both MLX and CoreML runtime paths.
 
@@ -104,15 +104,14 @@ For production apps, use `OpenMedKit` directly:
 import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
-    authToken: "<token-if-private>"
+    repoID: "OpenMed/privacy-filter-mlx-8bit"
 )
 
 let openmed = try OpenMed(
     backend: .mlx(modelDirectoryURL: modelDirectory)
 )
 
-let entities = try openmed.analyzeText("Patient John Doe, SSN 123-45-6789")
+let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
 ```
 
-For the full Apple setup guide, see [OpenMedKit docs](/Users/maziyar/Desktop/Work/openmed-release-1.0.0/docs/swift-openmedkit.md).
+For the full Apple setup guide, see [OpenMedKit docs](/Users/maziyar/Developer/openmed/docs/swift-openmedkit.md).

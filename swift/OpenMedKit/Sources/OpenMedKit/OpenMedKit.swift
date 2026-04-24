@@ -11,8 +11,7 @@ import Tokenizers
 ///
 /// ```swift
 /// let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-///     repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-///     authToken: ProcessInfo.processInfo.environment["HF_TOKEN"]
+///     repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
 /// )
 /// let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
 /// let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
@@ -24,10 +23,11 @@ public final class OpenMed {
     private enum Runtime {
         case coreML(NERPipeline)
         case mlx(MLXTokenClassificationPipeline)
+        case privacyFilter(OpenMedPrivacyFilterPipeline)
     }
 
     private let runtime: Runtime
-    private let tokenizer: any Tokenizer
+    private let tokenizer: (any Tokenizer)?
     private let maxSeqLength: Int
 
     /// Initialize OpenMed with an explicit backend.
@@ -50,16 +50,27 @@ public final class OpenMed {
             self.maxSeqLength = maxSeqLength
 
         case .mlx(let modelDirectoryURL):
-            let pipeline = try MLXTokenClassificationPipeline(
-                modelDirectoryURL: modelDirectoryURL,
-                maxSeqLength: maxSeqLength
-            )
-            self.runtime = .mlx(pipeline)
-            self.tokenizer = try Self.loadTokenizer(
-                tokenizerName: pipeline.tokenizerName ?? modelDirectoryURL.path,
-                tokenizerFolderURL: pipeline.tokenizerDirectoryURL
-            )
-            self.maxSeqLength = pipeline.resolvedMaxSequenceLength
+            let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
+            if artifact.family == .openaiPrivacyFilter {
+                let pipeline = try OpenMedPrivacyFilterPipeline(
+                    artifact: artifact,
+                    maxSeqLength: maxSeqLength
+                )
+                self.runtime = .privacyFilter(pipeline)
+                self.tokenizer = nil
+                self.maxSeqLength = pipeline.resolvedMaxSequenceLength
+            } else {
+                let pipeline = try MLXTokenClassificationPipeline(
+                    modelDirectoryURL: modelDirectoryURL,
+                    maxSeqLength: maxSeqLength
+                )
+                self.runtime = .mlx(pipeline)
+                self.tokenizer = try Self.loadTokenizer(
+                    tokenizerName: pipeline.tokenizerName ?? modelDirectoryURL.path,
+                    tokenizerFolderURL: pipeline.tokenizerDirectoryURL
+                )
+                self.maxSeqLength = pipeline.resolvedMaxSequenceLength
+            }
         }
     }
 
@@ -99,11 +110,10 @@ public final class OpenMed {
         _ text: String,
         confidenceThreshold: Float = 0.5
     ) throws -> [EntityPrediction] {
-        let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
-
         let entities: [EntityPrediction]
         switch runtime {
         case .coreML(let pipeline):
+            let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
             entities = try pipeline.predict(
                 inputIds: inputIDs,
                 attentionMask: attentionMask,
@@ -111,6 +121,7 @@ public final class OpenMed {
                 text: text
             )
         case .mlx(let pipeline):
+            let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
             entities = try pipeline.predict(
                 inputIDs: inputIDs,
                 attentionMask: attentionMask,
@@ -118,6 +129,8 @@ public final class OpenMed {
                 offsets: offsets,
                 text: text
             )
+        case .privacyFilter(let pipeline):
+            entities = try pipeline.predict(text)
         }
 
         return entities.filter { $0.confidence >= confidenceThreshold }
@@ -140,12 +153,24 @@ public final class OpenMed {
             return repairedEntities
         }
 
-        return PostProcessing.mergePIIEntities(
-            repairedEntities,
-            text: text,
-            useSemanticPatterns: true,
-            preferModelLabels: true
-        )
+        switch runtime {
+        case .privacyFilter:
+            return PostProcessing.mergePIIEntities(
+                repairedEntities,
+                text: text,
+                useSemanticPatterns: true,
+                preferModelLabels: true,
+                allowSemanticOnlyMatches: false,
+                allowSemanticLabelExpansion: false
+            )
+        case .coreML, .mlx:
+            return PostProcessing.mergePIIEntities(
+                repairedEntities,
+                text: text,
+                useSemanticPatterns: true,
+                preferModelLabels: true
+            )
+        }
     }
 
     // MARK: - Private
@@ -153,6 +178,9 @@ public final class OpenMed {
     private func tokenize(_ text: String) throws -> ([Int], [Int], [Int], [(Int, Int)]) {
         // Use swift-transformers for tokenization
         // This ensures token IDs match the Python HuggingFace tokenizer
+        guard let tokenizer else {
+            throw TokenizerError.missingConfig
+        }
         let inputIds = Array(tokenizer(text, addSpecialTokens: true).prefix(maxSeqLength))
         let tokens = tokenizer.convertIdsToTokens(inputIds).map { $0 ?? "" }
         let attentionMask = Array(repeating: 1, count: inputIds.count)
@@ -162,7 +190,7 @@ public final class OpenMed {
         return (inputIds, attentionMask, tokenTypeIDs, offsets)
     }
 
-    private static func loadTokenizer(
+    static func loadTokenizer(
         tokenizerName: String,
         tokenizerFolderURL: URL?
     ) throws -> any Tokenizer {
@@ -255,14 +283,26 @@ public final class OpenMed {
             || tokenizerClass == "RobertaTokenizerFast"
             || tokenizerClass == "XLMRobertaTokenizer"
             || tokenizerClass == "XLMRobertaTokenizerFast"
+            || tokenizerClass == "DebertaV2Tokenizer"
+            || tokenizerClass == "DebertaV2TokenizerFast"
             || tokenizerClass == "PreTrainedTokenizer"
 
-        guard shouldForceUnigram else {
+        let hasListShapedExtraSpecialTokens = tokenizerConfig["extra_special_tokens"] is [Any]
+
+        guard shouldForceUnigram || hasListShapedExtraSpecialTokens else {
             return nil
         }
 
         var patchedConfig = tokenizerConfig
-        patchedConfig["tokenizer_class"] = "T5Tokenizer"
+        if shouldForceUnigram {
+            patchedConfig["tokenizer_class"] = "T5Tokenizer"
+        }
+        if let extraSpecialTokens = tokenizerConfig["extra_special_tokens"] as? [Any] {
+            patchedConfig["extra_special_tokens"] = nil
+            if patchedConfig["additional_special_tokens"] == nil {
+                patchedConfig["additional_special_tokens"] = extraSpecialTokens
+            }
+        }
         return try JSONSerialization.data(
             withJSONObject: patchedConfig,
             options: [.prettyPrinted, .sortedKeys]
@@ -308,12 +348,14 @@ public final class OpenMed {
             if fileName == "tokenizer_config.json" {
                 continue
             }
-            try fileManager.copyItem(at: sourceURL, to: destinationURL)
+            let fileData = try Data(contentsOf: sourceURL)
+            try fileData.write(to: destinationURL, options: .atomic)
         }
 
         let preparedModelConfigURL = preparedDirectory.appending(path: "config.json")
         if fileManager.fileExists(atPath: modelConfigURL.path) {
-            try fileManager.copyItem(at: modelConfigURL, to: preparedModelConfigURL)
+            let modelConfigData = try Data(contentsOf: modelConfigURL)
+            try modelConfigData.write(to: preparedModelConfigURL, options: .atomic)
         } else {
             try Data("{}".utf8).write(to: preparedModelConfigURL, options: .atomic)
         }

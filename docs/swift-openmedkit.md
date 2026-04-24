@@ -2,20 +2,22 @@
 
 OpenMedKit is the Swift package for running OpenMed models in **macOS**, **iOS**, and **iPadOS** apps.
 
-In `1.1.0`, OpenMedKit supports two Apple backends:
+In `1.2.0`, OpenMedKit supports two Apple backends:
 
 - **MLX** for Apple Silicon Macs and real iPhone/iPad devices
 - **CoreML** for bundled Apple model packages
 
-The first Swift MLX milestone is intentionally focused on the BERT-family encoder path:
+Swift MLX supports the first OpenMed artifact families used by the public Apple demos:
 
 - `bert`
 - `distilbert`
 - `roberta`
 - `xlm-roberta`
 - `electra`
+- `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
+- `openai-privacy-filter`
 
-DeBERTa-v2/v3, ModernBERT, Longformer, EuroBERT, and Qwen3 are still part of the broader rollout work.
+ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families are still part of the broader rollout work.
 
 ## Requirements
 
@@ -52,7 +54,7 @@ iOS Simulator is **not** a Swift MLX validation target.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.1.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.2.0"),
 ]
 ```
 
@@ -75,8 +77,7 @@ This is the new on-device path for supported OpenMed MLX artifacts.
 import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-    authToken: "<hugging-face-token-while-private>"
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
 )
 
 let openmed = try OpenMed(
@@ -142,7 +143,6 @@ OpenMedKit includes a built-in downloader and local cache for Hub-hosted MLX art
 ```swift
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
     repoID: "OpenMed/OpenMed-PII-FastClinical-Small-82M-v1-mlx",
-    authToken: "<token-if-private>",
     revision: "main"
 )
 ```
@@ -155,8 +155,6 @@ Behavior:
 - returns a local directory URL ready for `OpenMedBackend.mlx`
 
 If a repo predates the manifest rollout, OpenMedKit falls back to the legacy layout and downloads the available config, labels, weights, and any bundled tokenizer files it can find.
-
-While the repos remain private, pass a Hugging Face token. Once they are public, `authToken` can be `nil`.
 
 ## Offline Tokenizer Assets
 
@@ -226,7 +224,6 @@ public final class OpenMed {
 public enum OpenMedModelStore {
     public static func downloadMLXModel(
         repoID: String,
-        authToken: String? = nil,
         revision: String = "main",
         cacheDirectory: URL? = nil
     ) async throws -> URL
@@ -251,7 +248,7 @@ The demo app in [`swift/OpenMedDemo/`](https://github.com/maziyarpanahi/openmed/
 
 - bundled CoreML models discovered from the app target
 - a searchable catalog of Swift-MLX-compatible OpenMed PII models
-- Hugging Face token entry for the current private MLX repos
+- public OpenMed MLX artifact download, local caching, and offline reuse
 
 On Apple Silicon macOS or a physical iPhone/iPad, the demo can download a supported MLX artifact and run it locally through OpenMedKit.
 

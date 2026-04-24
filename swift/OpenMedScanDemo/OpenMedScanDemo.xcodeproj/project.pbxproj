@@ -1,0 +1,568 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000004 /* OpenMedKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA000001 /* OpenMedKit */; };
+		B1000001 /* OpenMedScanDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001 /* OpenMedScanDemoApp.swift */; };
+		B1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000002 /* ContentView.swift */; };
+		B1000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2000003 /* Assets.xcassets */; };
+		B1000004 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B2000005 /* PrivacyInfo.xcprivacy */; };
+		B1000005 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000006 /* DesignTokens.swift */; };
+		B1000006 /* OMColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000007 /* OMColor.swift */; };
+		B1000007 /* OMTypography.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000008 /* OMTypography.swift */; };
+		B1000008 /* OMShadow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000009 /* OMShadow.swift */; };
+		B1000009 /* OMMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000010 /* OMMotion.swift */; };
+		B1000010 /* OMPrimaryButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000011 /* OMPrimaryButtonStyle.swift */; };
+		B1000011 /* OMSecondaryButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000012 /* OMSecondaryButtonStyle.swift */; };
+		B1000012 /* OMGhostButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000013 /* OMGhostButtonStyle.swift */; };
+		B1000013 /* OMCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000014 /* OMCard.swift */; };
+		B1000014 /* OMChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000015 /* OMChip.swift */; };
+		B1000015 /* OMDisplayHeadline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000016 /* OMDisplayHeadline.swift */; };
+		B1000016 /* OMRule.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000017 /* OMRule.swift */; };
+		B1000017 /* OMBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000018 /* OMBadge.swift */; };
+		B1000018 /* OMProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000019 /* OMProgressBar.swift */; };
+		B1000019 /* OMPhaseIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000020 /* OMPhaseIndicator.swift */; };
+		B1000020 /* OMLogoMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000021 /* OMLogoMark.swift */; };
+		B1000021 /* OMWorkflowIndicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000022 /* OMWorkflowIndicator.swift */; };
+		B1000022 /* OMDownloadRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000023 /* OMDownloadRow.swift */; };
+		B1000023 /* OMEntityHighlight.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000024 /* OMEntityHighlight.swift */; };
+		B1000024 /* OMLabelChipGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000025 /* OMLabelChipGrid.swift */; };
+		B1000025 /* OMEnginePickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000026 /* OMEnginePickerCard.swift */; };
+		B1000026 /* ScanStage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000027 /* ScanStage.swift */; };
+		B1000027 /* DetectedEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000028 /* DetectedEntity.swift */; };
+		B1000028 /* ClinicalPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000029 /* ClinicalPreset.swift */; };
+		B1000029 /* ModelDownloadEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000030 /* ModelDownloadEvent.swift */; };
+		B1000030 /* PipelinePhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000031 /* PipelinePhase.swift */; };
+		B1000031 /* ByteFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000032 /* ByteFormatter.swift */; };
+		B1000032 /* EntityGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000033 /* EntityGrouping.swift */; };
+		B1000033 /* EngineDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000034 /* EngineDiff.swift */; };
+		B1000034 /* HapticsCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000035 /* HapticsCenter.swift */; };
+		B1000035 /* ClinicalPresetsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000036 /* ClinicalPresetsStore.swift */; };
+		B1000036 /* ModelDownloadManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000037 /* ModelDownloadManager.swift */; };
+		B1000037 /* StreamingModelDownloader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000038 /* StreamingModelDownloader.swift */; };
+		B1000038 /* OMPipelineRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000039 /* OMPipelineRuntime.swift */; };
+		B1000039 /* ScanFlowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000040 /* ScanFlowViewModel.swift */; };
+		B1000040 /* ScanScreenChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000041 /* ScanScreenChrome.swift */; };
+		B1000041 /* SampleClinicalText.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000042 /* SampleClinicalText.swift */; };
+		B1000042 /* InputScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000043 /* InputScreen.swift */; };
+		B1000043 /* ReviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000044 /* ReviewScreen.swift */; };
+		B1000044 /* DeIDScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000045 /* DeIDScreen.swift */; };
+		B1000045 /* ClinicalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000046 /* ClinicalScreen.swift */; };
+		B1000046 /* SummaryScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000047 /* SummaryScreen.swift */; };
+		B1000047 /* ScannerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000048 /* ScannerSheet.swift */; };
+		B1000048 /* ModelDownloadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000049 /* ModelDownloadSheet.swift */; };
+		B1000049 /* LabelEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000050 /* LabelEditorSheet.swift */; };
+		B1000050 /* PIIComparisonSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000051 /* PIIComparisonSheet.swift */; };
+		B1000051 /* Newsreader.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000052 /* Newsreader.ttf */; };
+		B1000052 /* Newsreader-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000053 /* Newsreader-Italic.ttf */; };
+		B1000053 /* InterTight.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000054 /* InterTight.ttf */; };
+		B1000054 /* InterTight-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000055 /* InterTight-Italic.ttf */; };
+		B1000055 /* JetBrainsMono.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000056 /* JetBrainsMono.ttf */; };
+		B1000056 /* JetBrainsMono-Italic.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B2000057 /* JetBrainsMono-Italic.ttf */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		B2000001 /* OpenMedScanDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenMedScanDemoApp.swift; sourceTree = "<group>"; };
+		B2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		B2000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B2000004 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B2000005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B2000006 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		B2000007 /* OMColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMColor.swift; sourceTree = "<group>"; };
+		B2000008 /* OMTypography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMTypography.swift; sourceTree = "<group>"; };
+		B2000009 /* OMShadow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMShadow.swift; sourceTree = "<group>"; };
+		B2000010 /* OMMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMMotion.swift; sourceTree = "<group>"; };
+		B2000011 /* OMPrimaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMPrimaryButtonStyle.swift; sourceTree = "<group>"; };
+		B2000012 /* OMSecondaryButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMSecondaryButtonStyle.swift; sourceTree = "<group>"; };
+		B2000013 /* OMGhostButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMGhostButtonStyle.swift; sourceTree = "<group>"; };
+		B2000014 /* OMCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMCard.swift; sourceTree = "<group>"; };
+		B2000015 /* OMChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMChip.swift; sourceTree = "<group>"; };
+		B2000016 /* OMDisplayHeadline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMDisplayHeadline.swift; sourceTree = "<group>"; };
+		B2000017 /* OMRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMRule.swift; sourceTree = "<group>"; };
+		B2000018 /* OMBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMBadge.swift; sourceTree = "<group>"; };
+		B2000019 /* OMProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMProgressBar.swift; sourceTree = "<group>"; };
+		B2000020 /* OMPhaseIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMPhaseIndicator.swift; sourceTree = "<group>"; };
+		B2000021 /* OMLogoMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMLogoMark.swift; sourceTree = "<group>"; };
+		B2000022 /* OMWorkflowIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMWorkflowIndicator.swift; sourceTree = "<group>"; };
+		B2000023 /* OMDownloadRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMDownloadRow.swift; sourceTree = "<group>"; };
+		B2000024 /* OMEntityHighlight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMEntityHighlight.swift; sourceTree = "<group>"; };
+		B2000025 /* OMLabelChipGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMLabelChipGrid.swift; sourceTree = "<group>"; };
+		B2000026 /* OMEnginePickerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMEnginePickerCard.swift; sourceTree = "<group>"; };
+		B2000027 /* ScanStage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanStage.swift; sourceTree = "<group>"; };
+		B2000028 /* DetectedEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectedEntity.swift; sourceTree = "<group>"; };
+		B2000029 /* ClinicalPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalPreset.swift; sourceTree = "<group>"; };
+		B2000030 /* ModelDownloadEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadEvent.swift; sourceTree = "<group>"; };
+		B2000031 /* PipelinePhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelinePhase.swift; sourceTree = "<group>"; };
+		B2000032 /* ByteFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteFormatter.swift; sourceTree = "<group>"; };
+		B2000033 /* EntityGrouping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EntityGrouping.swift; sourceTree = "<group>"; };
+		B2000034 /* EngineDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineDiff.swift; sourceTree = "<group>"; };
+		B2000035 /* HapticsCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticsCenter.swift; sourceTree = "<group>"; };
+		B2000036 /* ClinicalPresetsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalPresetsStore.swift; sourceTree = "<group>"; };
+		B2000037 /* ModelDownloadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadManager.swift; sourceTree = "<group>"; };
+		B2000038 /* StreamingModelDownloader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingModelDownloader.swift; sourceTree = "<group>"; };
+		B2000039 /* OMPipelineRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OMPipelineRuntime.swift; sourceTree = "<group>"; };
+		B2000040 /* ScanFlowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanFlowViewModel.swift; sourceTree = "<group>"; };
+		B2000041 /* ScanScreenChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanScreenChrome.swift; sourceTree = "<group>"; };
+		B2000042 /* SampleClinicalText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleClinicalText.swift; sourceTree = "<group>"; };
+		B2000043 /* InputScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputScreen.swift; sourceTree = "<group>"; };
+		B2000044 /* ReviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewScreen.swift; sourceTree = "<group>"; };
+		B2000045 /* DeIDScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeIDScreen.swift; sourceTree = "<group>"; };
+		B2000046 /* ClinicalScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClinicalScreen.swift; sourceTree = "<group>"; };
+		B2000047 /* SummaryScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SummaryScreen.swift; sourceTree = "<group>"; };
+		B2000048 /* ScannerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerSheet.swift; sourceTree = "<group>"; };
+		B2000049 /* ModelDownloadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelDownloadSheet.swift; sourceTree = "<group>"; };
+		B2000050 /* LabelEditorSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelEditorSheet.swift; sourceTree = "<group>"; };
+		B2000051 /* PIIComparisonSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PIIComparisonSheet.swift; sourceTree = "<group>"; };
+		B2000052 /* Newsreader.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader.ttf; sourceTree = "<group>"; };
+		B2000053 /* Newsreader-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Newsreader-Italic.ttf; sourceTree = "<group>"; };
+		B2000054 /* InterTight.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterTight.ttf; sourceTree = "<group>"; };
+		B2000055 /* InterTight-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = InterTight-Italic.ttf; sourceTree = "<group>"; };
+		B2000056 /* JetBrainsMono.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = JetBrainsMono.ttf; sourceTree = "<group>"; };
+		B2000057 /* JetBrainsMono-Italic.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = JetBrainsMono-Italic.ttf; sourceTree = "<group>"; };
+		A2000010 /* OpenMedScanDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenMedScanDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A3000001 /* Frameworks */ = {
+		isa = PBXFrameworksBuildPhase;
+		buildActionMask = 2147483647;
+		files = (
+			A1000004 /* OpenMedKit in Frameworks */,
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A4000001 = {
+		isa = PBXGroup;
+		children = (
+			A4000002 /* OpenMedScanDemo */,
+			A4000003 /* Products */,
+		);
+		sourceTree = "<group>";
+		};
+		A4000002 /* OpenMedScanDemo */ = {
+		isa = PBXGroup;
+		children = (
+			B2000001 /* OpenMedScanDemoApp.swift */,
+			B2000002 /* ContentView.swift */,
+			B2000003 /* Assets.xcassets */,
+			B2000004 /* Info.plist */,
+			B2000005 /* PrivacyInfo.xcprivacy */,
+			B4000001 /* DesignSystem */,
+			B4000002 /* Components */,
+			B4000003 /* Model */,
+			B4000004 /* Utilities */,
+			B4000005 /* ViewModel */,
+			B4000006 /* Screens */,
+			B4000007 /* Sheets */,
+			B4000008 /* Fonts */,
+		);
+		path = OpenMedScanDemo;
+		sourceTree = "<group>";
+		};
+		A4000003 /* Products */ = {
+		isa = PBXGroup;
+		children = (
+			A2000010 /* OpenMedScanDemo.app */,
+		);
+		name = Products;
+		sourceTree = "<group>";
+		};
+		B4000001 /* DesignSystem */ = {
+		isa = PBXGroup;
+		children = (
+			B2000006 /* DesignTokens.swift */,
+			B2000007 /* OMColor.swift */,
+			B2000008 /* OMTypography.swift */,
+			B2000009 /* OMShadow.swift */,
+			B2000010 /* OMMotion.swift */,
+		);
+		path = DesignSystem;
+		sourceTree = "<group>";
+		};
+		B4000002 /* Components */ = {
+		isa = PBXGroup;
+		children = (
+			B2000011 /* OMPrimaryButtonStyle.swift */,
+			B2000012 /* OMSecondaryButtonStyle.swift */,
+			B2000013 /* OMGhostButtonStyle.swift */,
+			B2000014 /* OMCard.swift */,
+			B2000015 /* OMChip.swift */,
+			B2000016 /* OMDisplayHeadline.swift */,
+			B2000017 /* OMRule.swift */,
+			B2000018 /* OMBadge.swift */,
+			B2000019 /* OMProgressBar.swift */,
+			B2000020 /* OMPhaseIndicator.swift */,
+			B2000021 /* OMLogoMark.swift */,
+			B2000022 /* OMWorkflowIndicator.swift */,
+			B2000023 /* OMDownloadRow.swift */,
+			B2000024 /* OMEntityHighlight.swift */,
+			B2000025 /* OMLabelChipGrid.swift */,
+			B2000026 /* OMEnginePickerCard.swift */,
+		);
+		path = Components;
+		sourceTree = "<group>";
+		};
+		B4000003 /* Model */ = {
+		isa = PBXGroup;
+		children = (
+			B2000027 /* ScanStage.swift */,
+			B2000028 /* DetectedEntity.swift */,
+			B2000029 /* ClinicalPreset.swift */,
+			B2000030 /* ModelDownloadEvent.swift */,
+			B2000031 /* PipelinePhase.swift */,
+		);
+		path = Model;
+		sourceTree = "<group>";
+		};
+		B4000004 /* Utilities */ = {
+		isa = PBXGroup;
+		children = (
+			B2000032 /* ByteFormatter.swift */,
+			B2000033 /* EntityGrouping.swift */,
+			B2000034 /* EngineDiff.swift */,
+		);
+		path = Utilities;
+		sourceTree = "<group>";
+		};
+		B4000005 /* ViewModel */ = {
+		isa = PBXGroup;
+		children = (
+			B2000035 /* HapticsCenter.swift */,
+			B2000036 /* ClinicalPresetsStore.swift */,
+			B2000037 /* ModelDownloadManager.swift */,
+			B2000038 /* StreamingModelDownloader.swift */,
+			B2000039 /* OMPipelineRuntime.swift */,
+			B2000040 /* ScanFlowViewModel.swift */,
+		);
+		path = ViewModel;
+		sourceTree = "<group>";
+		};
+		B4000006 /* Screens */ = {
+		isa = PBXGroup;
+		children = (
+			B2000041 /* ScanScreenChrome.swift */,
+			B2000042 /* SampleClinicalText.swift */,
+			B2000043 /* InputScreen.swift */,
+			B2000044 /* ReviewScreen.swift */,
+			B2000045 /* DeIDScreen.swift */,
+			B2000046 /* ClinicalScreen.swift */,
+			B2000047 /* SummaryScreen.swift */,
+		);
+		path = Screens;
+		sourceTree = "<group>";
+		};
+		B4000007 /* Sheets */ = {
+		isa = PBXGroup;
+		children = (
+			B2000048 /* ScannerSheet.swift */,
+			B2000049 /* ModelDownloadSheet.swift */,
+			B2000050 /* LabelEditorSheet.swift */,
+			B2000051 /* PIIComparisonSheet.swift */,
+		);
+		path = Sheets;
+		sourceTree = "<group>";
+		};
+		B4000008 /* Fonts */ = {
+		isa = PBXGroup;
+		children = (
+			B2000052 /* Newsreader.ttf */,
+			B2000053 /* Newsreader-Italic.ttf */,
+			B2000054 /* InterTight.ttf */,
+			B2000055 /* InterTight-Italic.ttf */,
+			B2000056 /* JetBrainsMono.ttf */,
+			B2000057 /* JetBrainsMono-Italic.ttf */,
+		);
+		path = Fonts;
+		sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A5000001 /* OpenMedScanDemo */ = {
+		isa = PBXNativeTarget;
+		buildConfigurationList = A7000001 /* Build configuration list for PBXNativeTarget "OpenMedScanDemo" */;
+		buildPhases = (
+			A6000001 /* Sources */,
+			A3000001 /* Frameworks */,
+			A6000002 /* Resources */,
+		);
+		buildRules = (
+		);
+		dependencies = (
+		);
+		name = OpenMedScanDemo;
+		packageProductDependencies = (
+			AA000001 /* OpenMedKit */,
+		);
+		productName = OpenMedScanDemo;
+		productReference = A2000010 /* OpenMedScanDemo.app */;
+		productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A8000001 /* Project object */ = {
+		isa = PBXProject;
+		attributes = {
+			BuildIndependentTargetsInParallel = 1;
+			LastSwiftUpdateCheck = 1500;
+			LastUpgradeCheck = 1500;
+		};
+		buildConfigurationList = A7000002 /* Build configuration list for PBXProject "OpenMedScanDemo" */;
+		compatibilityVersion = "Xcode 14.0";
+		developmentRegion = en;
+		hasScannedForEncodings = 0;
+		knownRegions = (
+			en,
+			Base,
+		);
+		mainGroup = A4000001;
+		packageReferences = (
+			AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */,
+		);
+		productRefGroup = A4000003 /* Products */;
+		projectDirPath = "";
+		projectRoot = "";
+		targets = (
+			A5000001 /* OpenMedScanDemo */,
+		);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A6000002 /* Resources */ = {
+		isa = PBXResourcesBuildPhase;
+		buildActionMask = 2147483647;
+		files = (
+			B1000003 /* Assets.xcassets in Resources */,
+			B1000004 /* PrivacyInfo.xcprivacy in Resources */,
+			B1000051 /* Newsreader.ttf in Resources */,
+			B1000052 /* Newsreader-Italic.ttf in Resources */,
+			B1000053 /* InterTight.ttf in Resources */,
+			B1000054 /* InterTight-Italic.ttf in Resources */,
+			B1000055 /* JetBrainsMono.ttf in Resources */,
+			B1000056 /* JetBrainsMono-Italic.ttf in Resources */,
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A6000001 /* Sources */ = {
+		isa = PBXSourcesBuildPhase;
+		buildActionMask = 2147483647;
+		files = (
+			B1000001 /* OpenMedScanDemoApp.swift in Sources */,
+			B1000002 /* ContentView.swift in Sources */,
+			B1000005 /* DesignTokens.swift in Sources */,
+			B1000006 /* OMColor.swift in Sources */,
+			B1000007 /* OMTypography.swift in Sources */,
+			B1000008 /* OMShadow.swift in Sources */,
+			B1000009 /* OMMotion.swift in Sources */,
+			B1000010 /* OMPrimaryButtonStyle.swift in Sources */,
+			B1000011 /* OMSecondaryButtonStyle.swift in Sources */,
+			B1000012 /* OMGhostButtonStyle.swift in Sources */,
+			B1000013 /* OMCard.swift in Sources */,
+			B1000014 /* OMChip.swift in Sources */,
+			B1000015 /* OMDisplayHeadline.swift in Sources */,
+			B1000016 /* OMRule.swift in Sources */,
+			B1000017 /* OMBadge.swift in Sources */,
+			B1000018 /* OMProgressBar.swift in Sources */,
+			B1000019 /* OMPhaseIndicator.swift in Sources */,
+			B1000020 /* OMLogoMark.swift in Sources */,
+			B1000021 /* OMWorkflowIndicator.swift in Sources */,
+			B1000022 /* OMDownloadRow.swift in Sources */,
+			B1000023 /* OMEntityHighlight.swift in Sources */,
+			B1000024 /* OMLabelChipGrid.swift in Sources */,
+			B1000025 /* OMEnginePickerCard.swift in Sources */,
+			B1000026 /* ScanStage.swift in Sources */,
+			B1000027 /* DetectedEntity.swift in Sources */,
+			B1000028 /* ClinicalPreset.swift in Sources */,
+			B1000029 /* ModelDownloadEvent.swift in Sources */,
+			B1000030 /* PipelinePhase.swift in Sources */,
+			B1000031 /* ByteFormatter.swift in Sources */,
+			B1000032 /* EntityGrouping.swift in Sources */,
+			B1000033 /* EngineDiff.swift in Sources */,
+			B1000034 /* HapticsCenter.swift in Sources */,
+			B1000035 /* ClinicalPresetsStore.swift in Sources */,
+			B1000036 /* ModelDownloadManager.swift in Sources */,
+			B1000037 /* StreamingModelDownloader.swift in Sources */,
+			B1000038 /* OMPipelineRuntime.swift in Sources */,
+			B1000039 /* ScanFlowViewModel.swift in Sources */,
+			B1000040 /* ScanScreenChrome.swift in Sources */,
+			B1000041 /* SampleClinicalText.swift in Sources */,
+			B1000042 /* InputScreen.swift in Sources */,
+			B1000043 /* ReviewScreen.swift in Sources */,
+			B1000044 /* DeIDScreen.swift in Sources */,
+			B1000045 /* ClinicalScreen.swift in Sources */,
+			B1000046 /* SummaryScreen.swift in Sources */,
+			B1000047 /* ScannerSheet.swift in Sources */,
+			B1000048 /* ModelDownloadSheet.swift in Sources */,
+			B1000049 /* LabelEditorSheet.swift in Sources */,
+			B1000050 /* PIIComparisonSheet.swift in Sources */,
+		);
+		runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A9000001 /* Debug */ = {
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			DEVELOPMENT_ASSET_PATHS = "";
+			DEVELOPMENT_TEAM = G9KGF559KJ;
+			ENABLE_PREVIEWS = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_FILE = OpenMedScanDemo/Info.plist;
+			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+			LD_RUNPATH_SEARCH_PATHS = (
+				"$(inherited)",
+				"@executable_path/Frameworks",
+			);
+			MACOSX_DEPLOYMENT_TARGET = 14.0;
+			MARKETING_VERSION = 1.2.0;
+			PRODUCT_BUNDLE_IDENTIFIER = life.openmed.scandemo;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			SUPPORTS_MACCATALYST = NO;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) INTERNAL";
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		};
+		name = Debug;
+		};
+		A9000002 /* Release */ = {
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+			ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			CODE_SIGN_STYLE = Automatic;
+			CURRENT_PROJECT_VERSION = 1;
+			DEVELOPMENT_ASSET_PATHS = "";
+			DEVELOPMENT_TEAM = G9KGF559KJ;
+			ENABLE_PREVIEWS = YES;
+			GENERATE_INFOPLIST_FILE = YES;
+			INFOPLIST_FILE = OpenMedScanDemo/Info.plist;
+			INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+			INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+			INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+			IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+			LD_RUNPATH_SEARCH_PATHS = (
+				"$(inherited)",
+				"@executable_path/Frameworks",
+			);
+			MACOSX_DEPLOYMENT_TARGET = 14.0;
+			MARKETING_VERSION = 1.2.0;
+			PRODUCT_BUNDLE_IDENTIFIER = life.openmed.scandemo;
+			PRODUCT_NAME = "$(TARGET_NAME)";
+			SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+			SUPPORTS_MACCATALYST = NO;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) APPSTORE";
+			SWIFT_EMIT_LOC_STRINGS = YES;
+			SWIFT_VERSION = 5.0;
+			TARGETED_DEVICE_FAMILY = "1,2";
+		};
+		name = Release;
+		};
+		A9000003 /* Debug */ = {
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			ALWAYS_SEARCH_USER_PATHS = NO;
+			CLANG_ANALYZER_NONNULL = YES;
+			CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			COPY_PHASE_STRIP = NO;
+			DEBUG_INFORMATION_FORMAT = dwarf;
+			ENABLE_STRICT_OBJC_MSGSEND = YES;
+			ENABLE_TESTABILITY = YES;
+			GCC_OPTIMIZATION_LEVEL = 0;
+			GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+			GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+			MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+			ONLY_ACTIVE_ARCH = YES;
+			SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+		};
+		name = Debug;
+		};
+		A9000004 /* Release */ = {
+		isa = XCBuildConfiguration;
+		buildSettings = {
+			ALWAYS_SEARCH_USER_PATHS = NO;
+			CLANG_ANALYZER_NONNULL = YES;
+			CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+			CLANG_ENABLE_MODULES = YES;
+			CLANG_ENABLE_OBJC_ARC = YES;
+			COPY_PHASE_STRIP = NO;
+			DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+			ENABLE_NS_ASSERTIONS = NO;
+			ENABLE_STRICT_OBJC_MSGSEND = YES;
+			GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+			GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+			MTL_ENABLE_DEBUG_INFO = NO;
+			SWIFT_COMPILATION_MODE = wholemodule;
+			SWIFT_OPTIMIZATION_LEVEL = "-O";
+		};
+		name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A7000001 /* Build configuration list for PBXNativeTarget "OpenMedScanDemo" */ = {
+		isa = XCConfigurationList;
+		buildConfigurations = (
+			A9000001 /* Debug */,
+			A9000002 /* Release */,
+		);
+		defaultConfigurationIsVisible = 0;
+		defaultConfigurationName = Release;
+		};
+		A7000002 /* Build configuration list for PBXProject "OpenMedScanDemo" */ = {
+		isa = XCConfigurationList;
+		buildConfigurations = (
+			A9000003 /* Debug */,
+			A9000004 /* Release */,
+		);
+		defaultConfigurationIsVisible = 0;
+		defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */ = {
+		isa = XCLocalSwiftPackageReference;
+		relativePath = ../OpenMedKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA000001 /* OpenMedKit */ = {
+		isa = XCSwiftPackageProductDependency;
+		package = AA000002 /* XCLocalSwiftPackageReference "../OpenMedKit" */;
+		productName = OpenMedKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A8000001 /* Project object */;
+}

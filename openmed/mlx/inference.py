@@ -7,10 +7,13 @@ unchanged.
 
 from __future__ import annotations
 
+import math
 import json
 import logging
+import re
+from bisect import bisect_left, bisect_right
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.mlx.artifact import (
     MANIFEST_FILENAME,
@@ -27,6 +30,81 @@ try:
     MLX_AVAILABLE = True
 except ImportError:
     MLX_AVAILABLE = False
+
+
+def _tokenizer_has_list_extra_special_tokens(reference: str | Path) -> bool:
+    """Return True for local tokenizer configs with legacy list-shaped extras."""
+    tokenizer_dir = Path(reference)
+    if not tokenizer_dir.exists() or not tokenizer_dir.is_dir():
+        return False
+
+    tokenizer_config = tokenizer_dir / "tokenizer_config.json"
+    if not tokenizer_config.exists():
+        return False
+
+    try:
+        with open(tokenizer_config) as f:
+            config = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    return isinstance(config.get("extra_special_tokens"), list)
+
+
+def _load_auto_tokenizer(reference: str | Path) -> Any:
+    """Load a tokenizer, tolerating older exported tokenizer metadata."""
+    from transformers import AutoTokenizer
+
+    def _from_pretrained(**kwargs: Any) -> Any:
+        try:
+            return AutoTokenizer.from_pretrained(
+                reference,
+                fix_mistral_regex=True,
+                **kwargs,
+            )
+        except TypeError as exc:
+            if "fix_mistral_regex" not in str(exc):
+                raise
+            return AutoTokenizer.from_pretrained(reference, **kwargs)
+
+    try:
+        return _from_pretrained()
+    except AttributeError as exc:
+        if (
+            "'list' object has no attribute 'keys'" not in str(exc)
+            or not _tokenizer_has_list_extra_special_tokens(reference)
+        ):
+            raise
+        return _from_pretrained(extra_special_tokens={})
+
+
+def _resolve_model_max_length(tokenizer: Any, config: dict[str, Any]) -> int | None:
+    """Resolve a practical tokenizer max length from artifact metadata."""
+    candidates = (
+        config.get("max_position_embeddings"),
+        config.get("model_max_length"),
+        getattr(tokenizer, "model_max_length", None),
+    )
+    for value in candidates:
+        try:
+            max_length = int(value)
+        except (TypeError, ValueError):
+            continue
+        if 0 < max_length < 1_000_000:
+            return max_length
+    return None
+
+
+def _tokenize_with_optional_max_length(
+    tokenizer: Any,
+    max_length: int | None,
+    *args: Any,
+    **kwargs: Any,
+) -> Any:
+    """Call a tokenizer while avoiding truncation warnings for local artifacts."""
+    if max_length is not None and kwargs.get("truncation"):
+        kwargs.setdefault("max_length", max_length)
+    return tokenizer(*args, **kwargs)
 
 
 class MLXTokenClassificationPipeline:
@@ -66,13 +144,13 @@ class MLXTokenClassificationPipeline:
 
         # Load HuggingFace tokenizer (framework-agnostic)
         try:
-            from transformers import AutoTokenizer
             tok_name = tokenizer_name or resolve_tokenizer_reference(
                 self.model_path,
                 config=config,
                 manifest=manifest,
             )
-            self.tokenizer = AutoTokenizer.from_pretrained(tok_name)
+            self.tokenizer = _load_auto_tokenizer(tok_name)
+            self.max_length = _resolve_model_max_length(self.tokenizer, config)
         except ImportError:
             raise ImportError(
                 "HuggingFace tokenizers is required for MLX inference. "
@@ -104,7 +182,9 @@ class MLXTokenClassificationPipeline:
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
         """Run token classification for a single input string."""
         # 1. Tokenize
-        encoding = self.tokenizer(
+        encoding = _tokenize_with_optional_max_length(
+            self.tokenizer,
+            self.max_length,
             text,
             return_offsets_mapping=True,
             return_tensors=None,  # plain Python lists
@@ -236,11 +316,893 @@ class MLXTokenClassificationPipeline:
         return entities
 
 
+def _split_boundary_label(label: str) -> tuple[str, str]:
+    if len(label) > 2 and label[1] == "-" and label[0] in {"B", "I", "E", "S"}:
+        return label[0], label[2:]
+    return "B", label
+
+
+class _TokenLabelInfo:
+    def __init__(self, class_names: Sequence[str]) -> None:
+        self.span_class_names: list[str] = ["O"]
+        self.span_label_lookup: dict[str, int] = {"O": 0}
+        self.token_to_span_label: dict[int, int] = {}
+        self.token_boundary_tags: dict[int, str | None] = {}
+        self.background_token_label = 0
+        self.background_span_label = 0
+
+        for index, label in enumerate(class_names):
+            if label == "O":
+                self.background_token_label = index
+                self.token_to_span_label[index] = self.background_span_label
+                self.token_boundary_tags[index] = None
+                continue
+
+            boundary, base_label = _split_boundary_label(label)
+            span_label = self.span_label_lookup.get(base_label)
+            if span_label is None:
+                span_label = len(self.span_class_names)
+                self.span_class_names.append(base_label)
+                self.span_label_lookup[base_label] = span_label
+            self.token_to_span_label[index] = span_label
+            self.token_boundary_tags[index] = boundary
+
+
+def _build_label_info(id2label: dict[int, str]) -> _TokenLabelInfo:
+    class_names = [id2label[index] for index in sorted(id2label)]
+    return _TokenLabelInfo(class_names)
+
+
+_NEG_INF = -1e9
+_VITERBI_BIAS_KEYS = (
+    "transition_bias_background_stay",
+    "transition_bias_background_to_start",
+    "transition_bias_inside_to_continue",
+    "transition_bias_inside_to_end",
+    "transition_bias_end_to_background",
+    "transition_bias_end_to_start",
+)
+
+
+def _zero_viterbi_biases() -> dict[str, float]:
+    return {key: 0.0 for key in _VITERBI_BIAS_KEYS}
+
+
+def _transition_bias(
+    *,
+    previous_tag: str | None,
+    previous_span: int | None,
+    next_tag: str | None,
+    next_span: int | None,
+    background_token_idx: int,
+    background_span_idx: int,
+    previous_idx: int,
+    next_idx: int,
+    biases: dict[str, float],
+) -> float:
+    previous_is_background = (
+        previous_span == background_span_idx or previous_idx == background_token_idx
+    )
+    next_is_background = next_span == background_span_idx or next_idx == background_token_idx
+
+    if previous_is_background:
+        if next_is_background:
+            return biases["transition_bias_background_stay"]
+        if next_tag in {"B", "S"}:
+            return biases["transition_bias_background_to_start"]
+        return 0.0
+
+    if previous_tag in {"B", "I"}:
+        if next_tag == "I" and previous_span == next_span:
+            return biases["transition_bias_inside_to_continue"]
+        if next_tag == "E" and previous_span == next_span:
+            return biases["transition_bias_inside_to_end"]
+        return 0.0
+
+    if previous_tag in {"E", "S"}:
+        if next_is_background:
+            return biases["transition_bias_end_to_background"]
+        if next_tag in {"B", "S"}:
+            return biases["transition_bias_end_to_start"]
+        return 0.0
+
+    return 0.0
+
+
+def _is_valid_transition(
+    *,
+    previous_tag: str | None,
+    previous_span: int | None,
+    next_tag: str | None,
+    next_span: int | None,
+    background_token_idx: int,
+    background_span_idx: int,
+    next_idx: int,
+) -> bool:
+    next_is_background = next_span == background_span_idx or next_idx == background_token_idx
+    if (next_span is None or next_tag is None) and not next_is_background:
+        return False
+
+    if previous_span is None or previous_tag is None:
+        return next_is_background or next_tag in {"B", "S"}
+
+    previous_is_background = previous_span == background_span_idx
+    if previous_is_background:
+        return next_is_background or next_tag in {"B", "S"}
+    if previous_tag in {"E", "S"}:
+        return next_is_background or next_tag in {"B", "S"}
+    if previous_tag in {"B", "I"}:
+        return previous_span == next_span and next_tag in {"I", "E"}
+    return False
+
+
+def _build_viterbi_scores(
+    label_info: _TokenLabelInfo,
+    biases: dict[str, float],
+) -> tuple[list[float], list[float], list[list[float]]]:
+    num_classes = len(label_info.token_to_span_label)
+    start_scores = [_NEG_INF] * num_classes
+    end_scores = [_NEG_INF] * num_classes
+    transition_scores = [[_NEG_INF] * num_classes for _ in range(num_classes)]
+
+    background_token_idx = label_info.background_token_label
+    background_span_idx = label_info.background_span_label
+    for previous_idx in range(num_classes):
+        previous_tag = label_info.token_boundary_tags.get(previous_idx)
+        previous_span = label_info.token_to_span_label.get(previous_idx)
+        if previous_tag in {"B", "S"} or previous_idx == background_token_idx:
+            start_scores[previous_idx] = 0.0
+        if previous_tag in {"E", "S"} or previous_idx == background_token_idx:
+            end_scores[previous_idx] = 0.0
+
+        for next_idx in range(num_classes):
+            next_tag = label_info.token_boundary_tags.get(next_idx)
+            next_span = label_info.token_to_span_label.get(next_idx)
+            if _is_valid_transition(
+                previous_tag=previous_tag,
+                previous_span=previous_span,
+                next_tag=next_tag,
+                next_span=next_span,
+                background_token_idx=background_token_idx,
+                background_span_idx=background_span_idx,
+                next_idx=next_idx,
+            ):
+                transition_scores[previous_idx][next_idx] = _transition_bias(
+                    previous_tag=previous_tag,
+                    previous_span=previous_span,
+                    next_tag=next_tag,
+                    next_span=next_span,
+                    background_token_idx=background_token_idx,
+                    background_span_idx=background_span_idx,
+                    previous_idx=previous_idx,
+                    next_idx=next_idx,
+                    biases=biases,
+                )
+    return start_scores, end_scores, transition_scores
+
+
+def _viterbi_decode(
+    token_logprobs: list[list[float]],
+    *,
+    label_info: _TokenLabelInfo,
+    biases: dict[str, float],
+) -> list[int]:
+    if not token_logprobs:
+        return []
+
+    resolved_biases = _zero_viterbi_biases()
+    resolved_biases.update({key: float(value) for key, value in biases.items() if key in resolved_biases})
+    start_scores, end_scores, transition_scores = _build_viterbi_scores(
+        label_info,
+        resolved_biases,
+    )
+
+    num_classes = len(label_info.token_to_span_label)
+    if any(len(row) < num_classes for row in token_logprobs):
+        raise ValueError("token_logprobs has fewer classes than the configured label space")
+    scores = [token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)]
+    backpointers: list[list[int]] = []
+
+    for token_scores in token_logprobs[1:]:
+        next_scores: list[float] = []
+        paths: list[int] = []
+        for next_idx in range(num_classes):
+            best_idx = 0
+            best_score = -math.inf
+            for previous_idx, previous_score in enumerate(scores):
+                score = previous_score + transition_scores[previous_idx][next_idx]
+                if score > best_score:
+                    best_score = score
+                    best_idx = previous_idx
+            next_scores.append(best_score + token_scores[next_idx])
+            paths.append(best_idx)
+        scores = next_scores
+        backpointers.append(paths)
+
+    final_scores = [score + end_scores[idx] for idx, score in enumerate(scores)]
+    if not any(math.isfinite(score) for score in final_scores):
+        return [max(range(num_classes), key=lambda idx: row[idx]) for row in token_logprobs]
+
+    last_label = max(range(num_classes), key=lambda idx: final_scores[idx])
+    path = [last_label]
+    for paths in reversed(backpointers):
+        last_label = paths[last_label]
+        path.append(last_label)
+    path.reverse()
+    return path
+
+
+def _labels_to_token_spans(
+    labels_by_index: dict[int, int],
+    label_info: _TokenLabelInfo,
+) -> list[tuple[int, int, int]]:
+    spans: list[tuple[int, int, int]] = []
+    current_label: int | None = None
+    start_idx: int | None = None
+    previous_idx: int | None = None
+
+    for token_idx in sorted(labels_by_index):
+        label_id = labels_by_index[token_idx]
+        span_label = label_info.token_to_span_label.get(label_id)
+        boundary_tag = label_info.token_boundary_tags.get(label_id)
+
+        if previous_idx is not None and token_idx != previous_idx + 1:
+            if current_label is not None and start_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            current_label = None
+            start_idx = None
+
+        if span_label is None:
+            previous_idx = token_idx
+            continue
+
+        if span_label == label_info.background_span_label:
+            if current_label is not None and start_idx is not None:
+                spans.append((current_label, start_idx, token_idx))
+            current_label = None
+            start_idx = None
+            previous_idx = token_idx
+            continue
+
+        if boundary_tag == "S":
+            if current_label is not None and start_idx is not None and previous_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            spans.append((span_label, token_idx, token_idx + 1))
+            current_label = None
+            start_idx = None
+        elif boundary_tag == "B":
+            if current_label is not None and start_idx is not None and previous_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            current_label = span_label
+            start_idx = token_idx
+        elif boundary_tag == "I":
+            if current_label is None or current_label != span_label:
+                if current_label is not None and start_idx is not None and previous_idx is not None:
+                    spans.append((current_label, start_idx, previous_idx + 1))
+                current_label = span_label
+                start_idx = token_idx
+        elif boundary_tag == "E":
+            if current_label is None or current_label != span_label or start_idx is None:
+                if current_label is not None and start_idx is not None and previous_idx is not None:
+                    spans.append((current_label, start_idx, previous_idx + 1))
+                spans.append((span_label, token_idx, token_idx + 1))
+                current_label = None
+                start_idx = None
+            else:
+                spans.append((current_label, start_idx, token_idx + 1))
+                current_label = None
+                start_idx = None
+
+        previous_idx = token_idx
+
+    if current_label is not None and start_idx is not None and previous_idx is not None:
+        spans.append((current_label, start_idx, previous_idx + 1))
+    return spans
+
+
+def _decode_tiktoken_offsets(token_ids: Sequence[int], encoding: Any) -> tuple[str, list[int], list[int]]:
+    token_bytes = [encoding.decode_single_token_bytes(int(token_id)) for token_id in token_ids]
+    decoded_text = b"".join(token_bytes).decode("utf-8", errors="replace")
+    if not token_bytes:
+        return decoded_text, [], []
+
+    char_byte_starts: list[int] = []
+    char_byte_ends: list[int] = []
+    byte_cursor = 0
+    for char in decoded_text:
+        char_byte_starts.append(byte_cursor)
+        byte_cursor += len(char.encode("utf-8"))
+        char_byte_ends.append(byte_cursor)
+
+    char_starts: list[int] = []
+    char_ends: list[int] = []
+    token_byte_cursor = 0
+    for raw_bytes in token_bytes:
+        token_byte_start = token_byte_cursor
+        token_byte_end = token_byte_start + len(raw_bytes)
+        token_byte_cursor = token_byte_end
+        start_idx = bisect_right(char_byte_ends, token_byte_start)
+        end_idx = bisect_left(char_byte_starts, token_byte_end)
+        if end_idx < start_idx:
+            end_idx = start_idx
+        char_starts.append(start_idx)
+        char_ends.append(end_idx)
+
+    return decoded_text, char_starts, char_ends
+
+
+def _trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+_PRIVACY_FILTER_SPAN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
+    ("url", re.compile(r"\b(?:https?://|www\.)[^\s,;)\]]+")),
+    ("phone", re.compile(r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}")),
+)
+
+
+def _refine_privacy_filter_span(
+    label: str,
+    start: int,
+    end: int,
+    text: str,
+) -> tuple[int, int]:
+    """Tighten obvious structured PII spans when the model absorbs glue words."""
+    start, end = _trim_span_whitespace(start, end, text)
+    span_text = text[start:end]
+    normalized = label.lower()
+
+    for label_hint, pattern in _PRIVACY_FILTER_SPAN_PATTERNS:
+        if label_hint not in normalized:
+            continue
+        match = pattern.search(span_text)
+        if match:
+            return start + match.start(), start + match.end()
+
+    for suffix in (" and", " or"):
+        if span_text.lower().endswith(suffix):
+            end -= len(suffix)
+            break
+    return _trim_span_whitespace(start, end, text)
+
+
+class PrivacyFilterMLXPipeline:
+    """OpenAI Privacy Filter inference with tiktoken offsets and BIOES Viterbi."""
+
+    def __init__(
+        self,
+        model_path: str | Path,
+        tokenizer_name: Optional[str] = None,
+        aggregation_strategy: Optional[str] = "simple",
+    ) -> None:
+        if not MLX_AVAILABLE:
+            raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
+
+        from openmed.mlx.models import load_model
+
+        self.model_path = Path(model_path)
+        self.model = load_model(self.model_path)
+        self.aggregation_strategy = aggregation_strategy
+        self.manifest, self.config = load_artifact_config(self.model_path)
+        self.id2label: dict[int, str] = {
+            int(key): value for key, value in self.config.get("id2label", {}).items()
+        }
+        self.label_info = _build_label_info(self.id2label)
+        self.viterbi_biases = self.config.get("_mlx_viterbi_biases") or {}
+
+        try:
+            import tiktoken
+        except ImportError as exc:
+            raise ImportError(
+                "tiktoken is required for Privacy Filter MLX inference. "
+                "Install with: pip install tiktoken"
+            ) from exc
+
+        encoding_name = self.config.get("encoding", "o200k_base")
+        self.encoding = tiktoken.get_encoding(encoding_name)
+        self.tokenizer_name = tokenizer_name
+
+    def __call__(
+        self,
+        text: str | list[str],
+        **kwargs: Any,
+    ) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
+        if isinstance(text, (list, tuple)):
+            return [self._predict_single(item) for item in text]
+        return self._predict_single(text)
+
+    def _predict_single(self, text: str) -> List[Dict[str, Any]]:
+        token_ids = [int(token_id) for token_id in self.encoding.encode(text, allowed_special="all")]
+        if not token_ids:
+            return []
+
+        input_ids = mx.array([token_ids], dtype=mx.int32)
+        attention_mask = mx.ones(input_ids.shape, dtype=mx.bool_)
+        logits = self.model(input_ids, attention_mask=attention_mask)
+        mx.eval(logits)
+
+        logits = logits.astype(mx.float32)
+        log_probs = (logits - mx.logsumexp(logits, axis=-1, keepdims=True))[0]
+        probs = mx.exp(log_probs)
+        log_probs_py = log_probs.tolist()
+        probs_py = probs.tolist()
+        pred_ids = _viterbi_decode(
+            log_probs_py,
+            label_info=self.label_info,
+            biases=self.viterbi_biases,
+        )
+
+        decoded_text, char_starts, char_ends = _decode_tiktoken_offsets(token_ids, self.encoding)
+        source_text = decoded_text if decoded_text != text else text
+
+        if self.aggregation_strategy is None:
+            return self._decode_raw(pred_ids, probs_py, char_starts, char_ends, source_text)
+        return self._decode_grouped(pred_ids, probs_py, char_starts, char_ends, source_text)
+
+    def _decode_raw(
+        self,
+        pred_ids: list[int],
+        probs: list[list[float]],
+        char_starts: list[int],
+        char_ends: list[int],
+        text: str,
+    ) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        for index, label_id in enumerate(pred_ids):
+            label = self.id2label.get(label_id, f"LABEL_{label_id}")
+            if label == "O":
+                continue
+            start, end = char_starts[index], char_ends[index]
+            start, end = _refine_privacy_filter_span(label, start, end, text)
+            if end <= start:
+                continue
+            results.append(
+                {
+                    "entity": label,
+                    "score": probs[index][label_id],
+                    "word": text[start:end],
+                    "start": start,
+                    "end": end,
+                    "index": index,
+                }
+            )
+        return results
+
+    def _decode_grouped(
+        self,
+        pred_ids: list[int],
+        probs: list[list[float]],
+        char_starts: list[int],
+        char_ends: list[int],
+        text: str,
+    ) -> list[dict[str, Any]]:
+        labels_by_index = {index: int(label_id) for index, label_id in enumerate(pred_ids)}
+        token_spans = _labels_to_token_spans(labels_by_index, self.label_info)
+
+        entities: list[dict[str, Any]] = []
+        for span_label, token_start, token_end in token_spans:
+            if not (0 <= token_start < token_end <= len(char_starts)):
+                continue
+            start = char_starts[token_start]
+            end = char_ends[token_end - 1]
+            start, end = _trim_span_whitespace(start, end, text)
+            if end <= start:
+                continue
+            label = (
+                self.label_info.span_class_names[span_label]
+                if 0 <= span_label < len(self.label_info.span_class_names)
+                else f"label_{span_label}"
+            )
+            token_scores = [
+                probs[index][pred_ids[index]]
+                for index in range(token_start, token_end)
+                if 0 <= index < len(probs)
+            ]
+            start, end = _refine_privacy_filter_span(label, start, end, text)
+            if end <= start:
+                continue
+            score = sum(token_scores) / len(token_scores) if token_scores else 0.0
+            entities.append(
+                {
+                    "entity_group": label,
+                    "score": score,
+                    "word": text[start:end],
+                    "start": start,
+                    "end": end,
+                }
+            )
+        return entities
+
+
+def _sigmoid(logits: mx.array) -> mx.array:
+    return 1.0 / (1.0 + mx.exp(-logits))
+
+
+def _split_words_with_offsets(text: str) -> tuple[list[str], list[tuple[int, int]]]:
+    words: list[str] = []
+    offsets: list[tuple[int, int]] = []
+    for match in re.finditer(r"\w+(?:[-_]\w+)*|\S", text):
+        words.append(match.group(0))
+        offsets.append((match.start(), match.end()))
+    return words, offsets
+
+
+def _prepare_word_mask(
+    tokenized_inputs: Any,
+    *,
+    skip_first_words: int,
+) -> list[int]:
+    mask: list[int] = []
+    seen_words = 0
+    previous_word_id: int | None = None
+    for word_id in tokenized_inputs.word_ids(0):
+        if word_id is None:
+            mask.append(0)
+        elif word_id != previous_word_id:
+            seen_words += 1
+            if seen_words <= skip_first_words:
+                mask.append(0)
+            else:
+                mask.append(seen_words - skip_first_words)
+        else:
+            mask.append(0)
+        previous_word_id = word_id
+    return mask
+
+
+def _as_batched_lists(values: Any) -> list[list[int]]:
+    if values and isinstance(values[0], list):
+        return values
+    return [values]
+
+
+def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.array, mx.array]:
+    max_spans = max((len(sample) for sample in spans), default=0)
+    max_spans = max(max_spans, 1)
+    padded_spans = [
+        [[start, end] for start, end in sample] + [[0, 0]] * (max_spans - len(sample))
+        for sample in spans
+    ]
+    padded_mask = [
+        [True] * len(sample) + [False] * (max_spans - len(sample))
+        for sample in spans
+    ]
+    return (
+        mx.array(padded_spans, dtype=mx.int32),
+        mx.array(padded_mask, dtype=mx.bool_),
+    )
+
+
+def _suppress_overlaps(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = []
+    for entity in sorted(entities, key=lambda item: (-item["score"], item["start"], item["end"])):
+        overlaps = any(
+            not (entity["end"] <= current["start"] or entity["start"] >= current["end"])
+            for current in selected
+        )
+        if not overlaps:
+            selected.append(entity)
+    return sorted(selected, key=lambda item: (item["start"], item["end"], item["label"]))
+
+
+class _BaseExperimentalMLXPipeline:
+    """Shared loader/tokenizer plumbing for experimental MLX tasks."""
+
+    expected_task: str | None = None
+    expected_family: str | None = None
+
+    def __init__(self, model_path: str | Path, tokenizer_name: Optional[str] = None) -> None:
+        if not MLX_AVAILABLE:
+            raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
+
+        from openmed.mlx.models import load_model
+
+        self.model_path = Path(model_path)
+        self.model = load_model(self.model_path)
+        self.manifest, self.config = load_artifact_config(self.model_path)
+        self.task = (self.manifest or {}).get("task") or self.config.get("_mlx_task")
+        self.family = (self.manifest or {}).get("family") or self.config.get("_mlx_family")
+
+        if self.expected_task is not None and self.task != self.expected_task:
+            raise ValueError(
+                f"Expected MLX task {self.expected_task!r}, got {self.task!r} from {self.model_path}."
+            )
+        if self.expected_family is not None and self.family != self.expected_family:
+            raise ValueError(
+                f"Expected MLX family {self.expected_family!r}, got {self.family!r} from {self.model_path}."
+            )
+
+        tok_name = tokenizer_name or resolve_tokenizer_reference(
+            self.model_path,
+            config=self.config,
+            manifest=self.manifest,
+        )
+        try:
+            self.tokenizer = _load_auto_tokenizer(tok_name)
+        except ImportError:
+            raise ImportError(
+                "HuggingFace tokenizers is required for MLX inference. "
+                "Install with: pip install tokenizers transformers"
+            )
+        self.max_length = _resolve_model_max_length(self.tokenizer, self.config)
+        self.prompt_spec = (self.manifest or {}).get("prompt_spec") or self.config.get("_mlx_prompt_spec") or {}
+
+
+class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
+    """Experimental MLX zero-shot NER pipeline for GLiNER span checkpoints."""
+
+    expected_task = "zero-shot-ner"
+    expected_family = "gliner-uni-encoder-span"
+
+    def predict_entities(
+        self,
+        text: str,
+        labels: Sequence[str],
+        *,
+        threshold: float = 0.5,
+        flat_ner: bool = True,
+    ) -> list[dict[str, Any]]:
+        if not labels:
+            return []
+
+        from openmed.mlx.models.gliner_common import build_candidate_span_indices
+
+        words, word_offsets = _split_words_with_offsets(text)
+        if not words:
+            return []
+
+        entity_token = self.prompt_spec.get("entity_token", "<<ENT>>")
+        separator_token = self.prompt_spec.get("separator_token", "<<SEP>>")
+        prompt_words: list[str] = []
+        for label in labels:
+            prompt_words.extend([entity_token, str(label)])
+        prompt_words.append(separator_token)
+
+        tokenized = _tokenize_with_optional_max_length(
+            self.tokenizer,
+            self.max_length,
+            [prompt_words + words],
+            is_split_into_words=True,
+            return_tensors=None,
+            truncation=True,
+            padding=False,
+        )
+        words_mask = _prepare_word_mask(tokenized, skip_first_words=len(prompt_words))
+        span_idx, span_mask = build_candidate_span_indices([len(words)], self.config.get("max_width", 12))
+
+        outputs = self.model(
+            input_ids=mx.array(_as_batched_lists(tokenized["input_ids"]), dtype=mx.int32),
+            attention_mask=mx.array(_as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32),
+            words_mask=mx.array([words_mask], dtype=mx.int32),
+            span_idx=span_idx,
+            span_mask=span_mask,
+        )
+
+        scores = _sigmoid(outputs["logits"])[0].tolist()
+        valid_prompt_count = min(len(labels), int(mx.sum(outputs["prompt_mask"][0].astype(mx.int32)).item()))
+        candidate_spans = outputs["span_idx"][0].tolist()
+        candidate_mask = outputs["span_mask"][0].tolist()
+
+        entities: list[dict[str, Any]] = []
+        for span_index, is_valid in enumerate(candidate_mask):
+            if not is_valid:
+                continue
+            start_word, end_word = candidate_spans[span_index]
+            if end_word >= len(word_offsets):
+                continue
+            start_char = word_offsets[start_word][0]
+            end_char = word_offsets[end_word][1]
+            for label_index in range(valid_prompt_count):
+                score = float(scores[span_index][label_index])
+                if score < threshold:
+                    continue
+                entities.append(
+                    {
+                        "text": text[start_char:end_char],
+                        "label": str(labels[label_index]),
+                        "score": score,
+                        "start": start_char,
+                        "end": end_char,
+                    }
+                )
+
+        if flat_ner:
+            return _suppress_overlaps(entities)
+
+        return sorted(entities, key=lambda item: (item["start"], item["end"], item["label"]))
+
+
+class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
+    """Experimental MLX zero-shot classification pipeline for GLiClass."""
+
+    expected_task = "zero-shot-sequence-classification"
+    expected_family = "gliclass-uni-encoder"
+
+    def classify(
+        self,
+        text: str,
+        labels: Sequence[str],
+        *,
+        threshold: float = 0.5,
+        prompt: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if not labels:
+            return []
+
+        label_token = self.prompt_spec.get("label_token", "<<LABEL>>")
+        separator_token = self.prompt_spec.get("separator_token", "<<SEP>>")
+        prompt_first = bool(self.prompt_spec.get("prompt_first", True))
+
+        prompt_parts = [f"{label_token}{label}" for label in labels]
+        prompt_parts.append(separator_token)
+        if prompt:
+            prompt_parts.append(prompt)
+
+        if prompt_first:
+            input_text = "".join(prompt_parts) + text
+        else:
+            input_text = text + "".join(prompt_parts)
+
+        tokenized = _tokenize_with_optional_max_length(
+            self.tokenizer,
+            self.max_length,
+            input_text,
+            truncation=True,
+            padding=False,
+            return_tensors=None,
+        )
+        outputs = self.model(
+            input_ids=mx.array([tokenized["input_ids"]], dtype=mx.int32),
+            attention_mask=mx.array([tokenized["attention_mask"]], dtype=mx.float32),
+        )
+
+        scores = _sigmoid(outputs["logits"])[0].tolist()
+        valid_labels = min(len(labels), int(mx.sum(outputs["classes_mask"][0].astype(mx.int32)).item()))
+        predictions = []
+        for index in range(valid_labels):
+            score = float(scores[index])
+            if score >= threshold:
+                predictions.append({"label": str(labels[index]), "score": score})
+        return sorted(predictions, key=lambda item: item["score"], reverse=True)
+
+
+class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
+    """Experimental MLX relation-extraction pipeline for GLiNER relex checkpoints."""
+
+    expected_task = "zero-shot-relation-extraction"
+    expected_family = "gliner-uni-encoder-token-relex"
+
+    def inference(
+        self,
+        text: str,
+        labels: Sequence[str],
+        relations: Sequence[str],
+        *,
+        threshold: float = 0.5,
+        relation_threshold: float = 0.5,
+        flat_ner: bool = True,
+        multi_label: bool = False,
+    ) -> dict[str, list[dict[str, Any]]]:
+        if not labels:
+            return {"entities": [], "relations": []}
+
+        from openmed.mlx.models.gliner_common import decode_token_level_spans
+
+        words, word_offsets = _split_words_with_offsets(text)
+        if not words:
+            return {"entities": [], "relations": []}
+
+        entity_token = self.prompt_spec.get("entity_token", "<<ENT>>")
+        relation_token = self.prompt_spec.get("relation_token", "<<REL>>")
+        separator_token = self.prompt_spec.get("separator_token", "<<SEP>>")
+
+        prompt_words: list[str] = []
+        for label in labels:
+            prompt_words.extend([entity_token, str(label)])
+        prompt_words.append(separator_token)
+        for relation in relations:
+            prompt_words.extend([relation_token, str(relation)])
+        prompt_words.append(separator_token)
+
+        tokenized = _tokenize_with_optional_max_length(
+            self.tokenizer,
+            self.max_length,
+            [prompt_words + words],
+            is_split_into_words=True,
+            return_tensors=None,
+            truncation=True,
+            padding=False,
+        )
+        words_mask = _prepare_word_mask(tokenized, skip_first_words=len(prompt_words))
+        encoded = self.model.encode(
+            input_ids=mx.array(_as_batched_lists(tokenized["input_ids"]), dtype=mx.int32),
+            attention_mask=mx.array(_as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32),
+            words_mask=mx.array([words_mask], dtype=mx.int32),
+        )
+        entity_scores = _sigmoid(self.model.entity_scores(encoded))
+        entity_prompt_count = min(
+            len(labels),
+            int(mx.sum(encoded["entity_prompt_mask"][0].astype(mx.int32)).item()),
+        )
+        decoded_result = decode_token_level_spans(
+            entity_scores.tolist(),
+            threshold=threshold,
+            flat_ner=flat_ner,
+            multi_label=multi_label,
+        )[0]
+        decoded_spans = [
+            span for span in decoded_result.spans
+            if span.label_index < entity_prompt_count
+        ]
+        span_idx, span_mask = _build_ragged_span_batch([
+            [(span.start, span.end) for span in decoded_spans]
+        ])
+        relation_outputs = self.model.relation_scores(encoded, span_idx, span_mask)
+
+        relation_prompt_count = min(
+            len(relations),
+            int(mx.sum(relation_outputs["relation_prompt_mask"][0].astype(mx.int32)).item()),
+        )
+
+        entities: list[dict[str, Any]] = []
+        for entity_index, span in enumerate(decoded_spans):
+            start_word = span.start
+            end_word = span.end
+            if end_word >= len(word_offsets):
+                continue
+            start_char = word_offsets[start_word][0]
+            end_char = word_offsets[end_word][1]
+
+            entities.append(
+                {
+                    "id": entity_index,
+                    "text": text[start_char:end_char],
+                    "label": str(labels[span.label_index]),
+                    "score": span.score,
+                    "start": start_char,
+                    "end": end_char,
+                }
+            )
+
+        pair_scores = _sigmoid(relation_outputs["pair_scores"])[0].tolist()
+        pair_idx = relation_outputs["pair_idx"][0].tolist()
+        pair_mask = relation_outputs["pair_mask"][0].tolist()
+
+        extracted_relations: list[dict[str, Any]] = []
+        for pair_index, is_valid in enumerate(pair_mask):
+            if not is_valid:
+                continue
+            head_index, tail_index = pair_idx[pair_index]
+            if head_index >= len(entities) or tail_index >= len(entities):
+                continue
+            for relation_index in range(relation_prompt_count):
+                score = float(pair_scores[pair_index][relation_index])
+                if score < relation_threshold:
+                    continue
+                extracted_relations.append(
+                    {
+                        "label": str(relations[relation_index]),
+                        "score": score,
+                        "head": entities[head_index],
+                        "tail": entities[tail_index],
+                    }
+                )
+
+        return {
+            "entities": entities,
+            "relations": extracted_relations,
+        }
+
+
 # -- MLX model registry -------------------------------------------------------
 
 _MLX_MODEL_MAP: Dict[str, str] = {
-    # Public runtime defaults currently prefer local/on-the-fly conversion.
-    # Private pre-converted snapshots can be wired here later if needed.
+    "OpenMed/privacy-filter-mlx": "OpenMed/privacy-filter-mlx",
 }
 
 
@@ -358,14 +1320,50 @@ def create_mlx_pipeline(
     aggregation_strategy: Optional[str] = "simple",
     config: Any = None,
     **kwargs: Any,
-) -> MLXTokenClassificationPipeline:
+) -> Any:
     """Create an MLX inference pipeline for *model_name*.
 
     This is the entry point called by :class:`openmed.core.backends.MLXBackend`.
     """
     model_path, tokenizer_name = _resolve_mlx_model(model_name, config)
-    return MLXTokenClassificationPipeline(
-        model_path=model_path,
-        tokenizer_name=tokenizer_name,
-        aggregation_strategy=aggregation_strategy,
+    manifest, artifact_config = load_artifact_config(model_path)
+    from openmed.mlx.models import resolve_artifact_family
+
+    task = (manifest or {}).get("task") or artifact_config.get("_mlx_task", "token-classification")
+    raw_family = (manifest or {}).get("family") or artifact_config.get("_mlx_family")
+    try:
+        family = resolve_artifact_family(artifact_config, manifest=manifest)
+    except ValueError:
+        family = raw_family
+
+    if family == "openai-privacy-filter":
+        return PrivacyFilterMLXPipeline(
+            model_path=model_path,
+            tokenizer_name=tokenizer_name,
+            aggregation_strategy=aggregation_strategy,
+        )
+    if task == "token-classification":
+        return MLXTokenClassificationPipeline(
+            model_path=model_path,
+            tokenizer_name=tokenizer_name,
+            aggregation_strategy=aggregation_strategy,
+        )
+    if task == "zero-shot-ner" or family == "gliner-uni-encoder-span":
+        return GLiNERMLXPipeline(
+            model_path=model_path,
+            tokenizer_name=tokenizer_name,
+        )
+    if task == "zero-shot-sequence-classification" or family == "gliclass-uni-encoder":
+        return GLiClassMLXPipeline(
+            model_path=model_path,
+            tokenizer_name=tokenizer_name,
+        )
+    if task == "zero-shot-relation-extraction" or family == "gliner-uni-encoder-token-relex":
+        return GLiNERRelexMLXPipeline(
+            model_path=model_path,
+            tokenizer_name=tokenizer_name,
+        )
+
+    raise ValueError(
+        f"Unsupported MLX experimental task {task!r} for family {family!r} at {model_path}."
     )

@@ -20,8 +20,16 @@ public enum OpenMedModelStoreError: LocalizedError {
     }
 }
 
+public enum OpenMedMLXModelCacheState: String, Sendable {
+    case missing
+    case partial
+    case ready
+}
+
 /// Download and cache OpenMed MLX model snapshots from the Hugging Face Hub.
 public enum OpenMedModelStore {
+    private static let readyMarkerFileName = ".openmed-artifact-ready"
+
     private static let legacyTokenizerFiles = [
         "tokenizer.json",
         "tokenizer_config.json",
@@ -36,7 +44,6 @@ public enum OpenMedModelStore {
 
     public static func downloadMLXModel(
         repoID: String,
-        authToken: String? = nil,
         revision: String = "main",
         cacheDirectory: URL? = nil
     ) async throws -> URL {
@@ -49,18 +56,19 @@ public enum OpenMedModelStore {
             withIntermediateDirectories: true
         )
 
-        let manifestURL = modelDirectory.appending(path: "openmed-mlx.json")
-        if FileManager.default.fileExists(atPath: manifestURL.path),
-            try hasCompleteArtifact(at: modelDirectory)
-        {
+        if try mlxModelCacheState(
+            repoID: repoID,
+            revision: revision,
+            cacheDirectory: cacheDirectory
+        ) == .ready {
             return modelDirectory
         }
 
+        let manifestURL = modelDirectory.appending(path: "openmed-mlx.json")
         let hasManifest = try await downloadOptionalFile(
             repoID: repoID,
             revision: revision,
             relativePath: "openmed-mlx.json",
-            authToken: authToken,
             destinationURL: manifestURL
         )
 
@@ -68,9 +76,9 @@ public enum OpenMedModelStore {
             try await downloadLegacyArtifact(
                 repoID: repoID,
                 revision: revision,
-                authToken: authToken,
                 into: modelDirectory
             )
+            try markArtifactReadyIfComplete(at: modelDirectory)
             return modelDirectory
         }
 
@@ -83,7 +91,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: relativePath)
             )
         }
@@ -96,7 +103,6 @@ public enum OpenMedModelStore {
                     repoID: repoID,
                     revision: revision,
                     relativePath: weightPath,
-                    authToken: authToken,
                     destinationURL: destinationURL
                 )
                 downloadedWeights = true
@@ -117,11 +123,11 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: relativePath)
             )
         }
 
+        try markArtifactReadyIfComplete(at: modelDirectory)
         return modelDirectory
     }
 
@@ -141,6 +147,18 @@ public enum OpenMedModelStore {
         revision: String = "main",
         cacheDirectory: URL? = nil
     ) throws -> Bool {
+        try mlxModelCacheState(
+            repoID: repoID,
+            revision: revision,
+            cacheDirectory: cacheDirectory
+        ) == .ready
+    }
+
+    public static func mlxModelCacheState(
+        repoID: String,
+        revision: String = "main",
+        cacheDirectory: URL? = nil
+    ) throws -> OpenMedMLXModelCacheState {
         let modelDirectory = try cachedMLXModelDirectory(
             repoID: repoID,
             revision: revision,
@@ -148,10 +166,34 @@ public enum OpenMedModelStore {
         )
 
         guard FileManager.default.fileExists(atPath: modelDirectory.path) else {
-            return false
+            return .missing
         }
 
-        return try hasCompleteArtifact(at: modelDirectory)
+        return try cacheState(at: modelDirectory)
+    }
+
+    private static func cacheState(at modelDirectory: URL) throws -> OpenMedMLXModelCacheState {
+        let fileManager = FileManager.default
+        let readyMarkerURL = readyMarkerURL(for: modelDirectory)
+        let isComplete = try hasCompleteArtifact(at: modelDirectory)
+
+        if isComplete {
+            if !fileManager.fileExists(atPath: readyMarkerURL.path) {
+                try writeReadyMarker(to: readyMarkerURL)
+            }
+            return .ready
+        }
+
+        if fileManager.fileExists(atPath: readyMarkerURL.path) {
+            try? fileManager.removeItem(at: readyMarkerURL)
+        }
+
+        let contents = try fileManager.contentsOfDirectory(
+            at: modelDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        return contents.isEmpty ? .missing : .partial
     }
 
     private static func hasCompleteArtifact(at modelDirectory: URL) throws -> Bool {
@@ -181,17 +223,22 @@ public enum OpenMedModelStore {
         }
     }
 
+    private static func markArtifactReadyIfComplete(at modelDirectory: URL) throws {
+        guard try hasCompleteArtifact(at: modelDirectory) else {
+            return
+        }
+        try writeReadyMarker(to: readyMarkerURL(for: modelDirectory))
+    }
+
     private static func downloadLegacyArtifact(
         repoID: String,
         revision: String,
-        authToken: String?,
         into modelDirectory: URL
     ) async throws {
         try await downloadFile(
             repoID: repoID,
             revision: revision,
             relativePath: "config.json",
-            authToken: authToken,
             destinationURL: modelDirectory.appending(path: "config.json")
         )
 
@@ -199,7 +246,6 @@ public enum OpenMedModelStore {
             repoID: repoID,
             revision: revision,
             relativePath: "id2label.json",
-            authToken: authToken,
             destinationURL: modelDirectory.appending(path: "id2label.json")
         )
 
@@ -209,7 +255,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: fileName,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: fileName)
             )
             hasWeights = hasWeights || didDownload || FileManager.default.fileExists(
@@ -225,7 +270,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: fileName,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: fileName)
             )
         }
@@ -248,7 +292,6 @@ public enum OpenMedModelStore {
         repoID: String,
         revision: String,
         relativePath: String,
-        authToken: String?,
         destinationURL: URL
     ) async throws {
         if FileManager.default.fileExists(atPath: destinationURL.path) {
@@ -258,9 +301,6 @@ public enum OpenMedModelStore {
         let remoteURL = try resolveHubURL(repoID: repoID, revision: revision, relativePath: relativePath)
         var request = URLRequest(url: remoteURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
-        if let authToken, !authToken.isEmpty {
-            request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -282,7 +322,6 @@ public enum OpenMedModelStore {
         repoID: String,
         revision: String,
         relativePath: String,
-        authToken: String?,
         destinationURL: URL
     ) async throws -> Bool {
         do {
@@ -290,7 +329,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                authToken: authToken,
                 destinationURL: destinationURL
             )
             return FileManager.default.fileExists(atPath: destinationURL.path)
@@ -338,5 +376,18 @@ public enum OpenMedModelStore {
             return fileName
         }
         return "\(basePath)/\(fileName)"
+    }
+
+    private static func readyMarkerURL(for modelDirectory: URL) -> URL {
+        modelDirectory.appending(path: readyMarkerFileName)
+    }
+
+    private static func writeReadyMarker(to url: URL) throws {
+        let marker = [
+            "state": OpenMedMLXModelCacheState.ready.rawValue,
+            "completed_at": ISO8601DateFormatter().string(from: Date()),
+        ]
+        let data = try JSONSerialization.data(withJSONObject: marker, options: [.prettyPrinted])
+        try data.write(to: url, options: .atomic)
     }
 }

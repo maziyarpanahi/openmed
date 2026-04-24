@@ -2,6 +2,13 @@ import Foundation
 import MLX
 import MLXNN
 
+private func openMedMLXQuantizationMode(_ value: String) -> QuantizationMode {
+    switch value.lowercased() {
+    default:
+        return .affine
+    }
+}
+
 private final class OpenMedBertEmbeddings: Module {
     private let typeVocabularySize: Int
     private let positionOffset: Int
@@ -159,23 +166,85 @@ final class OpenMedBertForTokenClassification: Module {
 }
 
 enum OpenMedMLXModelLoader {
+    private static func loadedWeights(for artifact: OpenMedMLXArtifact) throws -> [String: MLXArray] {
+        try OpenMedMLXWeightArchive.loadWeights(from: artifact.weightCandidateURLs)
+    }
+
     static func loadTokenClassifier(
         from artifact: OpenMedMLXArtifact
     ) throws -> OpenMedBertForTokenClassification {
-        var weights = try OpenMedMLXWeightArchive.loadWeights(from: artifact.weightCandidateURLs)
+        var weights = try loadedWeights(for: artifact)
         let model = OpenMedBertForTokenClassification(artifact.configuration)
         weights = model.sanitize(weights: weights)
 
         if let bits = artifact.configuration.quantizationBits {
+            let groupSize = artifact.configuration.quantizationGroupSize
+            let mode = openMedMLXQuantizationMode(artifact.configuration.quantizationMode)
             quantize(model: model) { path, _ in
                 if weights["\(path).scales"] != nil {
-                    return (64, bits, .affine)
+                    return (groupSize, bits, mode)
                 } else {
                     return nil
                 }
             }
         }
 
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
+    static func loadPrivacyFilter(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedPrivacyFilterForTokenClassification {
+        let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
+        var weights = model.sanitize(weights: try loadedWeights(for: artifact))
+
+        if let bits = artifact.configuration.quantizationBits {
+            let groupSize = artifact.configuration.quantizationGroupSize
+            let mode = openMedMLXQuantizationMode(artifact.configuration.quantizationMode)
+            model.installQuantizedPlaceholders(
+                where: { weights["\($0).scales"] != nil },
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode
+            )
+        }
+
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        weights.removeAll(keepingCapacity: false)
+        eval(model.parameters())
+        return model
+    }
+
+    static func loadGLiNERSpanModel(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedGLiNERSpanModel {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedGLiNERSpanModel(artifact.configuration)
+        weights = model.sanitize(weights: weights)
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
+    static func loadGLiClassUniEncoderModel(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedGLiClassUniEncoderModel {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedGLiClassUniEncoderModel(artifact.configuration)
+        weights = model.sanitize(weights: weights)
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
+    static func loadGLiNERRelexModel(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedGLiNERRelexModel {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedGLiNERRelexModel(artifact.configuration)
+        weights = model.sanitize(weights: weights)
         try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
         eval(model)
         return model
