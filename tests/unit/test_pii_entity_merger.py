@@ -390,6 +390,38 @@ class TestMultilingualPatterns:
         assert len(merged) == 1
         assert merged[0]['entity_type'] == 'national_id'
 
+    def test_merge_can_disable_semantic_only_matches(self):
+        """Semantic regex should not invent entities when disabled."""
+        text = "Patient SSN: 123-45-6789"
+
+        merged = merge_entities_with_semantic_units(
+            [],
+            text,
+            allow_semantic_only_matches=False,
+        )
+
+        assert merged == []
+
+    def test_merge_can_preserve_model_label_taxonomy(self):
+        """Regex may expand spans without upgrading to a new label family."""
+        text = "DOB: 01/15/1970"
+        entities = [
+            {'entity_type': 'private_date', 'score': 0.92, 'start': 8, 'end': 15, 'word': '/15/1970'},
+        ]
+
+        merged = merge_entities_with_semantic_units(
+            entities,
+            text,
+            prefer_model_labels=True,
+            allow_label_expansion=False,
+        )
+
+        assert len(merged) == 1
+        assert merged[0]['entity_type'] == 'private_date'
+        assert merged[0]['word'] == '01/15/1970'
+        assert merged[0]['start'] == 5
+        assert merged[0]['end'] == 15
+
     def test_dutch_bsn_pattern(self):
         """Test Dutch BSN pattern detection."""
         from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
