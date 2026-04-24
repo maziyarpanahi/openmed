@@ -213,6 +213,9 @@ final class OpenMedMLXTests: XCTestCase {
         XCTAssertEqual(config.ropeTheta, 150_000)
         XCTAssertEqual(config.ropeScalingFactor, 1.0)
         XCTAssertEqual(config.parameterDType, "float32")
+        XCTAssertEqual(config.quantizationBits, 8)
+        XCTAssertEqual(config.quantizationGroupSize, 32)
+        XCTAssertEqual(config.quantizationMode, "affine")
         XCTAssertEqual(config.viterbiBiases["transition_bias_background_stay"], 0.0)
     }
 
@@ -1068,6 +1071,11 @@ final class OpenMedMLXTests: XCTestCase {
             "rope_ntk_alpha": 1.0,
             "rope_ntk_beta": 32.0,
             "param_dtype": "float32",
+            "_mlx_quantization": [
+                "bits": 8,
+                "group_size": 32,
+                "mode": "affine",
+            ],
             "rms_norm_eps": 1e-5,
             "swiglu_limit": 7.0,
             "num_labels": 5,
