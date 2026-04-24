@@ -21,10 +21,10 @@ class TestRegistryCompleteness:
     """Verify all multilingual PII models are registered."""
 
     def test_total_pii_model_count(self):
-        """All PII models including sparse locales should total 179."""
+        """All PII models including Portuguese should total 210."""
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
-        # 36 English + 35x4 dense languages + 3 sparse languages = 179
-        assert len(pii_keys) == 179
+        # 36 English + 35x4 dense languages + 3 sparse + 31 Portuguese = 210
+        assert len(pii_keys) == 210
 
     def test_english_pii_model_count(self):
         """English has 35 PII models + 1 legacy alias = 36."""
@@ -65,6 +65,49 @@ class TestRegistryCompleteness:
         """Telugu currently has one public flagship model."""
         te_models = get_pii_models_by_language("te")
         assert len(te_models) == 1
+
+    def test_portuguese_pii_model_count(self):
+        """Portuguese has 31 API-visible public models."""
+        pt_models = get_pii_models_by_language("pt")
+        assert len(pt_models) == 31
+
+    def test_portuguese_api_visible_model_ids(self):
+        """Portuguese registry should match the public collection API list."""
+        expected_ids = {
+            "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-335M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-568M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BioClinicalBERT-Base-110M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicDischarge-Base-110M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Base-149M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Large-395M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Base-110M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BiomedBERTFull-Base-110M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Large-340M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Base-110M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Large-335M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicalLongformer-Base-149M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Base-184M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Large-434M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Small-44M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-LiteClinical-Small-66M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-LiteClinicalU-Small-66M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-mLiteClinical-Base-135M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-FastClinical-Small-82M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Base-109M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Large-335M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Small-33M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-mSuperClinical-Large-279M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ModernMed-Base-149M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-NomicMed-Large-395M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-ModernMed-Large-395M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-QwenMed-XLarge-600M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Base-125M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Large-355M-v1",
+            "OpenMed/OpenMed-PII-Portuguese-BigMed-Large-278M-v1",
+        }
+        actual_ids = {info.model_id for info in get_pii_models_by_language("pt").values()}
+        assert actual_ids == expected_ids
 
     def test_privacy_category_includes_all(self):
         """Privacy category should list all PII model keys."""
@@ -109,6 +152,14 @@ class TestModelNaming:
                 f"Spanish model {key} missing 'Spanish-' in model_id: {info.model_id}"
             )
 
+    def test_portuguese_model_ids_contain_portuguese(self):
+        pt_models = get_pii_models_by_language("pt")
+        assert len(pt_models) == 31
+        for key, info in pt_models.items():
+            assert "Portuguese-" in info.model_id, (
+                f"Portuguese model {key} missing 'Portuguese-' in model_id: {info.model_id}"
+            )
+
     def test_sparse_locale_model_ids_contain_language_prefix(self):
         for lang, token in (("nl", "Dutch-"), ("hi", "Hindi-"), ("te", "Telugu-")):
             models = get_pii_models_by_language(lang)
@@ -121,7 +172,10 @@ class TestModelNaming:
     def test_english_model_ids_no_language_prefix(self):
         en_models = get_pii_models_by_language("en")
         for key, info in en_models.items():
-            for prefix in ("French-", "German-", "Italian-", "Spanish-", "Dutch-", "Hindi-", "Telugu-"):
+            for prefix in (
+                "French-", "German-", "Italian-", "Spanish-", "Dutch-",
+                "Hindi-", "Telugu-", "Portuguese-",
+            ):
                 assert prefix not in info.model_id, (
                     f"English model {key} has unexpected prefix in: {info.model_id}"
                 )
@@ -142,7 +196,7 @@ class TestModelNaming:
 
     def test_generated_keys_follow_pattern(self):
         """Generated keys should be pii_{lang}_{architecture}."""
-        for lang in ("fr", "de", "it", "es", "nl", "hi", "te"):
+        for lang in ("fr", "de", "it", "es", "nl", "hi", "te", "pt"):
             lang_models = get_pii_models_by_language(lang)
             for key in lang_models:
                 assert key.startswith(f"pii_{lang}_"), (
@@ -233,6 +287,12 @@ class TestHelperFunctions:
         model_id = get_default_pii_model("te")
         assert model_id == DEFAULT_PII_MODELS["te"]
         assert "Telugu-" in model_id
+
+    def test_get_default_pii_model_pt(self):
+        model_id = get_default_pii_model("pt")
+        assert model_id == DEFAULT_PII_MODELS["pt"]
+        assert "Portuguese-" in model_id
+        assert "SnowflakeMed-Large-568M" in model_id
 
     def test_get_default_pii_model_unsupported(self):
         result = get_default_pii_model("ja")

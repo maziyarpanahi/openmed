@@ -18,13 +18,13 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 | Path | What it does |
 | --- | --- |
 | `examples/pii_model_comparison.py` | Compares multiple PII models across shared sample text and summarizes extraction quality. |
-| `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, and Telugu registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
+| `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, and Portuguese registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.1.0` adds release-critical Apple entry points:
+OpenMed `1.2.0` adds release-critical Apple entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

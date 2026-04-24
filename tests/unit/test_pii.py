@@ -851,6 +851,22 @@ class TestMultilingualPII:
         assert "Telugu" in call_args[1]["model_name"]
 
     @patch("openmed.analyze_text")
+    def test_extract_pii_portuguese_uses_portuguese_model(self, mock_analyze):
+        """Test that lang='pt' auto-resolves to Portuguese default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Nascimento 15/03/1985",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Nascimento 15/03/1985", lang="pt")
+
+        call_args = mock_analyze.call_args
+        assert "Portuguese" in call_args[1]["model_name"]
+        assert "SnowflakeMed-Large-568M" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
     def test_extract_pii_english_backward_compat(self, mock_analyze):
         """Test that lang='en' (default) uses English model."""
         mock_analyze.return_value = PredictionResult(
@@ -953,6 +969,18 @@ class TestMultilingualPII:
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
         assert result in LANGUAGE_FAKE_DATA["te"]["NAME"]
 
+    def test_generate_fake_pii_portuguese(self):
+        """Test fake PII generation with Portuguese locale."""
+        result = _generate_fake_pii("NAME", lang="pt")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["pt"]["NAME"]
+
+    def test_generate_fake_pii_portuguese_cpf(self):
+        """Test CPF labels use Portuguese fake ID data."""
+        result = _generate_fake_pii("cpf", lang="pt")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["pt"]["ID_NUM"]
+
     def test_generate_fake_pii_fallback_to_english(self):
         """Test fake PII falls back to English for missing types."""
         result = _generate_fake_pii("USERNAME", lang="fr")
@@ -1000,6 +1028,11 @@ class TestMultilingualPII:
         result = _shift_date("15/01/2020", 30, lang="te")
         assert result == "14/02/2020"
 
+    def test_shift_date_portuguese_format(self):
+        """Test date shifting with Portuguese DD/MM/YYYY format."""
+        result = _shift_date("15/01/2020", 30, lang="pt")
+        assert result == "14/02/2020"
+
     def test_shift_date_dutch_month_name_format(self):
         """Test Dutch month-name date shifting."""
         result = _shift_date("15 januari 2020", 30, lang="nl")
@@ -1014,6 +1047,11 @@ class TestMultilingualPII:
         """Test Telugu month-name date shifting."""
         result = _shift_date("15 జనవరి 2020", 30, lang="te")
         assert result == "14 ఫిబ్రవరి 2020"
+
+    def test_shift_date_portuguese_month_name_format(self):
+        """Test Portuguese month-name date shifting."""
+        result = _shift_date("15 de janeiro de 2020", 30, lang="pt")
+        assert result == "14 de fevereiro de 2020"
 
     def test_shift_date_localized_month_name_without_dateutil(self, monkeypatch):
         """Localized month-name shifting should not depend on python-dateutil."""

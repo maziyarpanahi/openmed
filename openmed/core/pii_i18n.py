@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Set
 # Constants
 # ---------------------------------------------------------------------------
 
-SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it", "es", "nl", "hi", "te"}
+SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -24,6 +24,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "nl": "Dutch",
     "hi": "Hindi",
     "te": "Telugu",
+    "pt": "Portuguese",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -35,6 +36,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "nl": "Dutch-",
     "hi": "Hindi-",
     "te": "Telugu-",
+    "pt": "Portuguese-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -46,6 +48,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "nl": "OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
+    "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
 }
 
 
@@ -287,6 +290,77 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
+def validate_portuguese_cpf(text: str) -> bool:
+    """Validate Brazilian CPF number.
+
+    CPF is an 11-digit taxpayer identifier. The final two digits are
+    check digits calculated from the first nine and ten digits.
+
+    Args:
+        text: CPF string (may contain dots and hyphen)
+
+    Returns:
+        True if the CPF passes format and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+    if len(set(digits)) == 1:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+
+    first_sum = sum(numbers[i] * (10 - i) for i in range(9))
+    first_check = (first_sum * 10) % 11
+    if first_check == 10:
+        first_check = 0
+
+    second_sum = sum(numbers[i] * (11 - i) for i in range(10))
+    second_check = (second_sum * 10) % 11
+    if second_check == 10:
+        second_check = 0
+
+    return numbers[9] == first_check and numbers[10] == second_check
+
+
+def validate_portuguese_cnpj(text: str) -> bool:
+    """Validate Brazilian CNPJ number.
+
+    CNPJ is a 14-digit business identifier. The final two digits use the
+    standard weighted modulo-11 checksum.
+
+    Args:
+        text: CNPJ string (may contain dots, slash, and hyphen)
+
+    Returns:
+        True if the CNPJ passes format and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 14:
+        return False
+    if len(set(digits)) == 1:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+
+    def calculate_check(values: List[int], weights: List[int]) -> int:
+        remainder = sum(value * weight for value, weight in zip(values, weights)) % 11
+        return 0 if remainder < 2 else 11 - remainder
+
+    first_check = calculate_check(
+        numbers[:12],
+        [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+    )
+    second_check = calculate_check(
+        numbers[:13],
+        [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2],
+    )
+
+    return numbers[12] == first_check and numbers[13] == second_check
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -311,6 +385,10 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
     "es": [
         "enero", "febrero", "marzo", "abril", "mayo", "junio",
         "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+    ],
+    "pt": [
+        "janeiro", "fevereiro", "mar\u00e7o", "abril", "maio", "junho",
+        "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
     ],
     "nl": [
         "januari", "februari", "maart", "april", "mei", "juni",
@@ -669,6 +747,98 @@ _SPANISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
+    # Portuguese dates DD/MM/YYYY and DD-MM-YYYY
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "nascido", "nascida", "nascimento", "data de nascimento",
+            "internado", "internada", "admiss\u00e3o", "alta", "falecimento",
+        ],
+        context_boost=0.3,
+    ),
+    # Portuguese dates with month names: 15 de mar\u00e7o de 1985
+    PIIPattern(
+        r"\b\d{1,2}\s+de\s+(?:janeiro|fevereiro|mar\u00e7o|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\s+de\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "nascido", "nascida", "nascimento", "data de nascimento",
+            "internado", "internada", "admiss\u00e3o", "alta",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Portugal and Brazil phone numbers.
+    PIIPattern(
+        r"(?<!\w)(?:(?:\+351\s?)?9[1236]\d(?:[\s.-]?\d{3}){2}|(?:\+55\s?)?(?:\(?\d{2}\)?[\s.-]?)?9?\d{4}[\s.-]?\d{4})\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telefone", "tel", "telem\u00f3vel", "telemovel", "celular",
+            "n\u00famero", "numero", "contato", "contacto", "fax",
+        ],
+        context_boost=0.35,
+    ),
+    # Brazilian CPF (11 digits)
+    PIIPattern(
+        r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "cpf", "cadastro de pessoas f\u00edsicas",
+            "cadastro de pessoas fisicas", "identifica\u00e7\u00e3o",
+            "identificacao",
+        ],
+        context_boost=0.45,
+        validator=validate_portuguese_cpf,
+    ),
+    # Brazilian CNPJ (14 digits)
+    PIIPattern(
+        r"\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "cnpj", "cadastro nacional", "empresa",
+            "pessoa jur\u00eddica", "pessoa juridica",
+        ],
+        context_boost=0.45,
+        validator=validate_portuguese_cnpj,
+    ),
+    # Portuguese street addresses
+    PIIPattern(
+        r"\b(?:rua|avenida|av\.?|travessa|pra\u00e7a|praca|alameda|estrada|rodovia|largo)\s+(?:[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]+|d[aeo]s?)(?:\s+(?:[A-Z\u00c0-\u00ff][a-z\u00e0-\u00ff]+|d[aeo]s?))*\s*,?\s*\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.7,
+        context_words=[
+            "endere\u00e7o", "endereco", "morada", "resid\u00eancia",
+            "residencia", "domic\u00edlio", "domicilio",
+        ],
+        context_boost=0.2,
+        flags=re.IGNORECASE,
+    ),
+    # Portugal postcode (1200-195) and Brazil CEP (01310-100)
+    PIIPattern(
+        r"\b(?:\d{4}-\d{3}|\d{5}-?\d{3})\b",
+        "postcode",
+        priority=6,
+        base_score=0.35,
+        context_words=[
+            "c\u00f3digo postal", "codigo postal", "cep",
+            "endere\u00e7o", "endereco", "morada",
+        ],
+        context_boost=0.45,
+    ),
+]
+
 _DUTCH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
@@ -883,6 +1053,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "de": _GERMAN_PII_PATTERNS,
     "it": _ITALIAN_PII_PATTERNS,
     "es": _SPANISH_PII_PATTERNS,
+    "pt": _PORTUGUESE_PII_PATTERNS,
     "nl": _DUTCH_PII_PATTERNS,
     "hi": _HINDI_PII_PATTERNS,
     "te": _TELUGU_PII_PATTERNS,
@@ -968,6 +1139,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Madrid", "Barcelona", "Sevilla"],
         "ZIPCODE": ["28001", "08001", "41001"],
+    },
+    "pt": {
+        "NAME": ["Ana Silva", "Pedro Almeida", "Mariana Costa", "Jo\u00e3o Santos"],
+        "FIRST_NAME": ["Ana", "Pedro", "Mariana", "Jo\u00e3o"],
+        "LAST_NAME": ["Silva", "Almeida", "Costa", "Santos"],
+        "EMAIL": ["paciente@exemplo.pt", "contato@exemplo.org"],
+        "PHONE": ["+351 912 345 678", "+55 11 91234-5678"],
+        "ID_NUM": ["123.456.789-09", "11.222.333/0001-81"],
+        "STREET_ADDRESS": ["Rua das Flores 25", "Avenida da Liberdade 42"],
+        "URL_PERSONAL": ["https://exemplo.pt"],
+        "USERNAME": ["usuario123", "paciente456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Lisboa", "Porto", "S\u00e3o Paulo"],
+        "ZIPCODE": ["1200-195", "1250-096", "01310-100"],
     },
     "nl": {
         "NAME": ["Sanne de Vries", "Daan Jansen", "Lotte Bakker", "Milan Visser"],
@@ -1073,7 +1259,7 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt)
 
     Returns:
         List of PIIPattern instances for the language

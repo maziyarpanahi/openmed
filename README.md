@@ -56,7 +56,7 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS use `OpenMedKit`. In `1.1.0`, that means:
+Swift apps on macOS and iOS use `OpenMedKit`. In `1.2.0`, that means:
 
 - **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for supported OpenMed PII, OpenAI Privacy Filter, and experimental GLiNER-family artifacts
 - **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
@@ -65,7 +65,7 @@ Add the Swift package like this:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.1.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.2.0"),
 ]
 ```
 
@@ -121,7 +121,7 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v1.1.0)
+### Production Tools (v1.2.0)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
@@ -176,8 +176,8 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ### Run with Docker
 
 ```bash
-docker build -t openmed:1.1.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.1.0
+docker build -t openmed:1.2.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.2.0
 ```
 
 ### Example request
@@ -254,13 +254,24 @@ shifted = deidentify(text, method="shift_dates", date_shift_days=180)
 
 [📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Documentation](docs/pii-smart-merging.md)
 
-### Multilingual PII (8 Languages)
+### Multilingual PII (9 Languages)
 
-OpenMed now supports multilingual PII extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, and `te`.
-French, German, Italian, and Spanish expose the full 35-model family; Dutch, Hindi, and Telugu currently ship one flagship public model each, bringing the total PII catalog to **179 models**.
+OpenMed now supports multilingual PII extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, and `pt`.
+French, German, Italian, and Spanish expose the full 35-model family; Portuguese ships 31 public API-visible models; Dutch, Hindi, and Telugu currently ship one flagship public model each, bringing the total PII catalog to **210 models**.
+
+```bash
+uv pip install "openmed[hf]" && python -c "from openmed import extract_pii; print([(e.label,e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt, tel: +351 912 345 678', lang='pt').entities])"
+```
 
 ```python
 from openmed import extract_pii
+
+portuguese = extract_pii(
+    "Paciente: Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt, telefone: +351 912 345 678",
+    lang="pt",
+    model_name="OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
+    use_smart_merging=True,
+)
 
 dutch = extract_pii(
     "Patiënt: Eva de Vries, geboortedatum: 15 januari 1984, BSN: 123456782, telefoon: +31 6 12345678",
@@ -283,6 +294,7 @@ telugu = extract_pii(
     use_smart_merging=True,
 )
 
+print([(e.label, e.text) for e in portuguese.entities])
 print([(e.label, e.text) for e in dutch.entities])
 print([(e.label, e.text) for e in hindi.entities])
 print([(e.label, e.text) for e in telugu.entities])
