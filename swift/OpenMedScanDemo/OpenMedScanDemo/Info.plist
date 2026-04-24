@@ -20,5 +20,14 @@
     <string>13.0</string>
     <key>UILaunchScreen</key>
     <dict/>
+    <key>UIAppFonts</key>
+    <array>
+        <string>Newsreader.ttf</string>
+        <string>Newsreader-Italic.ttf</string>
+        <string>InterTight.ttf</string>
+        <string>InterTight-Italic.ttf</string>
+        <string>JetBrainsMono.ttf</string>
+        <string>JetBrainsMono-Italic.ttf</string>
+    </array>
 </dict>
 </plist>
