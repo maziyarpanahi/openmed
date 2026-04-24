@@ -197,24 +197,23 @@ enum OpenMedMLXModelLoader {
     static func loadPrivacyFilter(
         from artifact: OpenMedMLXArtifact
     ) throws -> OpenMedPrivacyFilterForTokenClassification {
-        var weights = try loadedWeights(for: artifact)
         let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
-        weights = model.sanitize(weights: weights)
+        var weights = model.sanitize(weights: try loadedWeights(for: artifact))
 
         if let bits = artifact.configuration.quantizationBits {
             let groupSize = artifact.configuration.quantizationGroupSize
             let mode = openMedMLXQuantizationMode(artifact.configuration.quantizationMode)
-            quantize(model: model) { path, _ in
-                if weights["\(path).scales"] != nil {
-                    return (groupSize, bits, mode)
-                } else {
-                    return nil
-                }
-            }
+            model.installQuantizedPlaceholders(
+                where: { weights["\($0).scales"] != nil },
+                groupSize: groupSize,
+                bits: bits,
+                mode: mode
+            )
         }
 
         try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
-        eval(model)
+        weights.removeAll(keepingCapacity: false)
+        eval(model.parameters())
         return model
     }
 
