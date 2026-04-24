@@ -56,22 +56,22 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS use `OpenMedKit`. In `1.0.0`, that means:
+Swift apps on macOS and iOS use `OpenMedKit`. In `1.1.0`, that means:
 
-- **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for the supported BERT-family OpenMed artifacts
+- **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for supported OpenMed PII, OpenAI Privacy Filter, and experimental GLiNER-family artifacts
 - **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
 
 Add the Swift package like this:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.0.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.1.0"),
 ]
 ```
 
-OpenMedKit is public in `1.0.0`. The universal OpenMed model-packaging flow for Apple platforms is still being hardened across BERT, DistilBERT, RoBERTa, XLM-R, Longformer, ModernBERT, and related families, so treat conversion as active work rather than a fully universal public release surface.
+OpenMedKit is public and now supports native MLX runtime paths for PII token classification, Privacy Filter, and experimental GLiNER-family zero-shot tasks. The broader OpenMed model-packaging flow is still being hardened across the full collection, so treat conversion as active work rather than a fully universal public release surface.
 
-After `1.0.0` is published to PyPI, the editable install examples above can be replaced with plain `uv pip install "openmed[...]"`.
+For published releases, the editable install examples above can be replaced with plain `uv pip install "openmed[...]"`.
 
 ### Three Ways to Use OpenMed
 
@@ -121,7 +121,7 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v1.0.0)
+### Production Tools (v1.1.0)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
@@ -150,7 +150,7 @@ Quick links:
 
 ---
 
-## REST API (v1.0.0)
+## REST API
 
 OpenMed includes a Docker-friendly FastAPI service with reliability hardening:
 
@@ -176,8 +176,8 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ### Run with Docker
 
 ```bash
-docker build -t openmed:1.0.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.0.0
+docker build -t openmed:1.1.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.1.0
 ```
 
 ### Example request
