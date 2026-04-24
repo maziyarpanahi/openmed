@@ -152,7 +152,7 @@ private func privacyFilterSwiGLU(
     return (glu / (1.0 + exp(-alpha * glu))) * (linear + 1.0)
 }
 
-private class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
+fileprivate class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
     fileprivate let numExperts: Int
     fileprivate let inputSize: Int
     fileprivate let outputSize: Int
@@ -165,17 +165,34 @@ private class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
         self.inputSize = inputSize
         self.outputSize = outputSize
         _weight.wrappedValue =
-            MLXArray.zeros([numExperts, inputSize, outputSize], type: Float.self).asType(dtype)
+            MLXArray.zeros([numExperts, inputSize, outputSize], dtype: dtype)
         _bias.wrappedValue =
-            MLXArray.zeros([numExperts, outputSize], type: Float.self).asType(dtype)
+            MLXArray.zeros([numExperts, outputSize], dtype: dtype)
+        super.init()
+    }
+
+    fileprivate init(
+        numExperts: Int,
+        inputSize: Int,
+        outputSize: Int,
+        weight: MLXArray,
+        bias: MLXArray
+    ) {
+        self.numExperts = numExperts
+        self.inputSize = inputSize
+        self.outputSize = outputSize
+        _weight.wrappedValue = weight
+        _bias.wrappedValue = bias
         super.init()
     }
 
     func callAsFunction(_ input: MLXArray, expertIndices: MLXArray) -> MLXArray {
-        let selectedWeight = weight.take(expertIndices, axis: 0)
-        let selectedBias = bias.take(expertIndices, axis: 0)
-        return einsum("tki,tkio->tko", input.asType(selectedWeight.dtype), selectedWeight)
-            + selectedBias
+        let inputShape = input.shape
+        let flatInput = input.reshaped(-1, 1, input.dim(-1)).asType(weight.dtype)
+        let flatIndices = expertIndices.reshaped(-1).asType(.int32)
+        var output = gatherMM(flatInput, weight, rhsIndices: flatIndices).squeezed(axis: -2)
+        output = output + bias.take(flatIndices, axis: 0)
+        return output.reshaped(Array(inputShape.dropLast()) + [outputSize])
     }
 
     func toQuantized(groupSize: Int, bits: Int, mode: QuantizationMode) -> Module {
@@ -188,7 +205,7 @@ private class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
     }
 }
 
-private final class OpenMedPrivacyFilterQuantizedExpertLinear:
+fileprivate final class OpenMedPrivacyFilterQuantizedExpertLinear:
     OpenMedPrivacyFilterExpertLinear, Quantized
 {
     let groupSize: Int
@@ -219,10 +236,42 @@ private final class OpenMedPrivacyFilterQuantizedExpertLinear:
             numExperts: other.numExperts,
             inputSize: other.inputSize,
             outputSize: other.outputSize,
-            dtype: other.weight.dtype
+            weight: quantizedWeights.wq,
+            bias: other.bias
         )
-        self.weight = quantizedWeights.wq
-        self.bias = other.bias
+        freeze()
+    }
+
+    /// Shape-only placeholder init used by the quantized loader path. Allocates
+    /// empty tensors with the right dtypes/shapes so `update(parameters:)` can
+    /// fill them in — avoiding the wasteful quantization of dummy zero weights
+    /// that the `init(_ other:)` path performs.
+    init(
+        numExperts: Int,
+        inputSize: Int,
+        outputSize: Int,
+        groupSize: Int,
+        bits: Int,
+        mode: QuantizationMode,
+        dtype: DType
+    ) {
+        self.groupSize = groupSize
+        self.bits = bits
+        self.mode = mode
+        let packedFeatures = (inputSize * bits) / 32
+        let scaleGroups = inputSize / groupSize
+        self.scales = MLXArray.zeros(
+            [numExperts, outputSize, scaleGroups], dtype: dtype)
+        self.biases = MLXArray.zeros(
+            [numExperts, outputSize, scaleGroups], dtype: dtype)
+        super.init(
+            numExperts: numExperts,
+            inputSize: inputSize,
+            outputSize: outputSize,
+            weight: MLXArray.zeros(
+                [numExperts, outputSize, packedFeatures], dtype: .uint32),
+            bias: MLXArray.zeros([numExperts, outputSize], dtype: dtype)
+        )
         freeze()
     }
 
@@ -505,5 +554,45 @@ final class OpenMedPrivacyFilterForTokenClassification: Module {
 
     func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
         weights.filter { key, _ in !key.hasPrefix("_") }
+    }
+
+    /// Install quantized-module placeholders for every path flagged by
+    /// ``hasScales``. Custom MoE expert modules use a shape-only placeholder
+    /// (no `MLX.quantized` on dummy zero weights); standard `Linear`/`Embedding`
+    /// layers fall through to MLX's default `quantizeSingle`. Real tensors are
+    /// loaded afterwards via `update(parameters:)`.
+    func installQuantizedPlaceholders(
+        where hasScales: (String) -> Bool,
+        groupSize: Int,
+        bits: Int,
+        mode: QuantizationMode
+    ) {
+        quantize(
+            model: self,
+            filter: { path, _ in
+                hasScales(path) ? (groupSize, bits, mode) : nil
+            },
+            apply: { layer, groupSize, bits, mode in
+                if let expert = layer as? OpenMedPrivacyFilterExpertLinear,
+                   !(expert is OpenMedPrivacyFilterQuantizedExpertLinear)
+                {
+                    return OpenMedPrivacyFilterQuantizedExpertLinear(
+                        numExperts: expert.numExperts,
+                        inputSize: expert.inputSize,
+                        outputSize: expert.outputSize,
+                        groupSize: groupSize,
+                        bits: bits,
+                        mode: mode,
+                        dtype: expert.weight.dtype
+                    )
+                }
+                return quantizeSingle(
+                    layer: layer,
+                    groupSize: groupSize,
+                    bits: bits,
+                    mode: mode
+                )
+            }
+        )
     }
 }
