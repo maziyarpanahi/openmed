@@ -21,6 +21,21 @@ def _param_dtype(config: dict) -> mx.Dtype:
     return mx.float32
 
 
+def _linear_input(x: mx.array, layer: nn.Module) -> mx.array:
+    """Cast inputs for normal Linear layers, but not for quantized weights.
+
+    MLX quantized linear weights are packed ``uint32`` arrays. Casting
+    activations to that storage dtype silently breaks inference, so quantized
+    modules must receive floating-point inputs.
+    """
+    if hasattr(layer, "scales"):
+        return x
+    weight = getattr(layer, "weight", None)
+    if weight is None:
+        return x
+    return x.astype(weight.dtype)
+
+
 class PrivacyFilterRMSNorm(nn.Module):
     """RMSNorm with the original ``scale`` parameter name."""
 
@@ -243,7 +258,7 @@ class PrivacyFilterAttentionBlock(nn.Module):
 
     def __call__(self, x: mx.array, *, attention_mask: Optional[mx.array] = None) -> mx.array:
         batch_size, num_tokens, _ = x.shape
-        t = self.norm(x).astype(self.qkv.weight.dtype)
+        t = _linear_input(self.norm(x), self.qkv)
         qkv = self.qkv(t)
         q_end = self.num_attention_heads * self.head_dim
         k_end = q_end + self.num_key_value_heads * self.head_dim
@@ -268,7 +283,7 @@ class PrivacyFilterAttentionBlock(nn.Module):
             right_context=self.right_context,
             attention_mask=attention_mask,
         )
-        return x + self.out(attn_out.astype(self.out.weight.dtype)).astype(x.dtype)
+        return x + self.out(_linear_input(attn_out, self.out)).astype(x.dtype)
 
 
 class PrivacyFilterMLPBlock(nn.Module):
@@ -303,7 +318,7 @@ class PrivacyFilterMLPBlock(nn.Module):
         batch_shape = x.shape[:-1]
         hidden_size = x.shape[-1]
         t = self.norm(x).reshape(-1, hidden_size)
-        gate_logits = self.gate(t.astype(self.gate.weight.dtype)).astype(mx.float32)
+        gate_logits = self.gate(_linear_input(t, self.gate)).astype(mx.float32)
         expert_values, expert_indices = _topk(gate_logits, self.experts_per_token)
         expert_weights = mx.softmax(expert_values, axis=-1) / float(self.experts_per_token)
         expanded = mx.broadcast_to(
@@ -372,4 +387,4 @@ class OpenAIPrivacyFilterForTokenClassification(nn.Module):
         for block in self.block:
             x = block(x, attention_mask=attention_mask)
         x = self.norm(x)
-        return self.unembedding(x.astype(self.unembedding.weight.dtype))
+        return self.unembedding(_linear_input(x, self.unembedding))
