@@ -15,6 +15,13 @@ private func privacyFilterScalar(_ value: Float, like array: MLXArray) -> MLXArr
     MLXArray(value).asType(array.dtype)
 }
 
+private func privacyFilterLinearInput(_ input: MLXArray, for linear: Linear) -> MLXArray {
+    if linear is Quantized {
+        return input
+    }
+    return input.asType(linear.weight.dtype)
+}
+
 private final class OpenMedPrivacyFilterRMSNorm: Module {
     private let eps: Float
 
@@ -298,7 +305,7 @@ private final class OpenMedPrivacyFilterAttentionBlock: Module {
             rightContext: rightContext,
             attentionMask: attentionMask
         )
-        return input + out(attentionOutput.asType(out.weight.dtype)).asType(input.dtype)
+        return input + out(privacyFilterLinearInput(attentionOutput, for: out)).asType(input.dtype)
     }
 }
 
@@ -339,7 +346,7 @@ private final class OpenMedPrivacyFilterMLPBlock: Module {
         let batchShape = Array(input.shape.dropLast())
         let hiddenSize = input.dim(-1)
         let normalized = norm(input).reshaped(-1, hiddenSize)
-        let gateLogits = gate(normalized.asType(gate.weight.dtype)).asType(.float32)
+        let gateLogits = gate(privacyFilterLinearInput(normalized, for: gate)).asType(.float32)
         let (expertValues, expertIndices) = privacyFilterTopK(gateLogits, k: expertsPerToken)
         let expertWeights = softmax(expertValues, axis: -1) / Float(expertsPerToken)
         let expandedInput = broadcast(
@@ -406,7 +413,7 @@ final class OpenMedPrivacyFilterForTokenClassification: Module {
             hiddenStates = layer(hiddenStates, attentionMask: resolvedAttentionMask)
         }
         hiddenStates = norm(hiddenStates)
-        return unembedding(hiddenStates.asType(unembedding.weight.dtype))
+        return unembedding(privacyFilterLinearInput(hiddenStates, for: unembedding))
     }
 
     func sanitize(weights: [String: MLXArray]) -> [String: MLXArray] {
