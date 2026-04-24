@@ -185,6 +185,17 @@ enum OpenMedMLXModelLoader {
         return model
     }
 
+    static func loadPrivacyFilter(
+        from artifact: OpenMedMLXArtifact
+    ) throws -> OpenMedPrivacyFilterForTokenClassification {
+        var weights = try loadedWeights(for: artifact)
+        let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
+        weights = model.sanitize(weights: weights)
+        try model.update(parameters: ModuleParameters.unflattened(weights), verify: [.all])
+        eval(model)
+        return model
+    }
+
     static func loadGLiNERSpanModel(
         from artifact: OpenMedMLXArtifact
     ) throws -> OpenMedGLiNERSpanModel {
