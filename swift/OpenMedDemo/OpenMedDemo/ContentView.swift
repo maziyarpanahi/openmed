@@ -906,7 +906,9 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
     )
 
     var isBundled: Bool { runtimeKind == .bundled }
-    var requiresAuthToken: Bool { false }
+    var requiresAuthToken: Bool {
+        artifactRepoID == "OpenMed/privacy-filter-mlx"
+    }
     var isRunnableInDemoApp: Bool {
         switch runtimeKind {
         case .bundled:
@@ -945,6 +947,9 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
             return "Runs through OpenMedKit and uses tokenizerName \(tokenizerName)."
         case .mlx:
             if DemoPlatform.supportsOnDeviceMLX {
+                if requiresAuthToken {
+                    return "Downloads the private MLX artifact from Hugging Face, caches it locally, and runs it on-device with OpenMedKit + MLX."
+                }
                 return "Downloads the public MLX artifact from Hugging Face, caches it locally, and runs it on-device with OpenMedKit + MLX."
             }
             return "This MLX model requires Apple Silicon macOS or a physical iPhone/iPad. iOS Simulator is not supported."
@@ -1002,6 +1007,18 @@ private enum DemoModelCatalog {
 
     private static func swiftMLXCatalog() -> [DemoModelDescriptor] {
         [
+            DemoModelDescriptor(
+                id: "mlx-openai-privacy-filter",
+                displayName: "OpenAI Privacy Filter",
+                sourceModelID: "openai/privacy-filter",
+                artifactRepoID: "OpenMed/privacy-filter-mlx",
+                tokenizerName: "o200k_base",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "OpenAI Privacy Filter artifact with native Swift MLX runtime, o200k_base tokenization, BIOES/Viterbi decoding, and smart OpenMed PII merging."
+            ),
             DemoModelDescriptor(
                 id: "mlx-clinicale5-small",
                 displayName: "ClinicalE5 Small",
