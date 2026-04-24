@@ -7,9 +7,11 @@ unchanged.
 
 from __future__ import annotations
 
+import math
 import json
 import logging
 import re
+from bisect import bisect_left, bisect_right
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
@@ -311,6 +313,509 @@ class MLXTokenClassificationPipeline:
             else:  # "simple" / "average"
                 ent["score"] = sum(scores) / len(scores)
 
+        return entities
+
+
+def _split_boundary_label(label: str) -> tuple[str, str]:
+    if len(label) > 2 and label[1] == "-" and label[0] in {"B", "I", "E", "S"}:
+        return label[0], label[2:]
+    return "B", label
+
+
+class _TokenLabelInfo:
+    def __init__(self, class_names: Sequence[str]) -> None:
+        self.span_class_names: list[str] = ["O"]
+        self.span_label_lookup: dict[str, int] = {"O": 0}
+        self.token_to_span_label: dict[int, int] = {}
+        self.token_boundary_tags: dict[int, str | None] = {}
+        self.background_token_label = 0
+        self.background_span_label = 0
+
+        for index, label in enumerate(class_names):
+            if label == "O":
+                self.background_token_label = index
+                self.token_to_span_label[index] = self.background_span_label
+                self.token_boundary_tags[index] = None
+                continue
+
+            boundary, base_label = _split_boundary_label(label)
+            span_label = self.span_label_lookup.get(base_label)
+            if span_label is None:
+                span_label = len(self.span_class_names)
+                self.span_class_names.append(base_label)
+                self.span_label_lookup[base_label] = span_label
+            self.token_to_span_label[index] = span_label
+            self.token_boundary_tags[index] = boundary
+
+
+def _build_label_info(id2label: dict[int, str]) -> _TokenLabelInfo:
+    class_names = [id2label[index] for index in sorted(id2label)]
+    return _TokenLabelInfo(class_names)
+
+
+_NEG_INF = -1e9
+_VITERBI_BIAS_KEYS = (
+    "transition_bias_background_stay",
+    "transition_bias_background_to_start",
+    "transition_bias_inside_to_continue",
+    "transition_bias_inside_to_end",
+    "transition_bias_end_to_background",
+    "transition_bias_end_to_start",
+)
+
+
+def _zero_viterbi_biases() -> dict[str, float]:
+    return {key: 0.0 for key in _VITERBI_BIAS_KEYS}
+
+
+def _transition_bias(
+    *,
+    previous_tag: str | None,
+    previous_span: int | None,
+    next_tag: str | None,
+    next_span: int | None,
+    background_token_idx: int,
+    background_span_idx: int,
+    previous_idx: int,
+    next_idx: int,
+    biases: dict[str, float],
+) -> float:
+    previous_is_background = (
+        previous_span == background_span_idx or previous_idx == background_token_idx
+    )
+    next_is_background = next_span == background_span_idx or next_idx == background_token_idx
+
+    if previous_is_background:
+        if next_is_background:
+            return biases["transition_bias_background_stay"]
+        if next_tag in {"B", "S"}:
+            return biases["transition_bias_background_to_start"]
+        return 0.0
+
+    if previous_tag in {"B", "I"}:
+        if next_tag == "I" and previous_span == next_span:
+            return biases["transition_bias_inside_to_continue"]
+        if next_tag == "E" and previous_span == next_span:
+            return biases["transition_bias_inside_to_end"]
+        return 0.0
+
+    if previous_tag in {"E", "S"}:
+        if next_is_background:
+            return biases["transition_bias_end_to_background"]
+        if next_tag in {"B", "S"}:
+            return biases["transition_bias_end_to_start"]
+        return 0.0
+
+    return 0.0
+
+
+def _is_valid_transition(
+    *,
+    previous_tag: str | None,
+    previous_span: int | None,
+    next_tag: str | None,
+    next_span: int | None,
+    background_token_idx: int,
+    background_span_idx: int,
+    next_idx: int,
+) -> bool:
+    next_is_background = next_span == background_span_idx or next_idx == background_token_idx
+    if (next_span is None or next_tag is None) and not next_is_background:
+        return False
+
+    if previous_span is None or previous_tag is None:
+        return next_is_background or next_tag in {"B", "S"}
+
+    previous_is_background = previous_span == background_span_idx
+    if previous_is_background:
+        return next_is_background or next_tag in {"B", "S"}
+    if previous_tag in {"E", "S"}:
+        return next_is_background or next_tag in {"B", "S"}
+    if previous_tag in {"B", "I"}:
+        return previous_span == next_span and next_tag in {"I", "E"}
+    return False
+
+
+def _build_viterbi_scores(
+    label_info: _TokenLabelInfo,
+    biases: dict[str, float],
+) -> tuple[list[float], list[float], list[list[float]]]:
+    num_classes = len(label_info.token_to_span_label)
+    start_scores = [_NEG_INF] * num_classes
+    end_scores = [_NEG_INF] * num_classes
+    transition_scores = [[_NEG_INF] * num_classes for _ in range(num_classes)]
+
+    background_token_idx = label_info.background_token_label
+    background_span_idx = label_info.background_span_label
+    for previous_idx in range(num_classes):
+        previous_tag = label_info.token_boundary_tags.get(previous_idx)
+        previous_span = label_info.token_to_span_label.get(previous_idx)
+        if previous_tag in {"B", "S"} or previous_idx == background_token_idx:
+            start_scores[previous_idx] = 0.0
+        if previous_tag in {"E", "S"} or previous_idx == background_token_idx:
+            end_scores[previous_idx] = 0.0
+
+        for next_idx in range(num_classes):
+            next_tag = label_info.token_boundary_tags.get(next_idx)
+            next_span = label_info.token_to_span_label.get(next_idx)
+            if _is_valid_transition(
+                previous_tag=previous_tag,
+                previous_span=previous_span,
+                next_tag=next_tag,
+                next_span=next_span,
+                background_token_idx=background_token_idx,
+                background_span_idx=background_span_idx,
+                next_idx=next_idx,
+            ):
+                transition_scores[previous_idx][next_idx] = _transition_bias(
+                    previous_tag=previous_tag,
+                    previous_span=previous_span,
+                    next_tag=next_tag,
+                    next_span=next_span,
+                    background_token_idx=background_token_idx,
+                    background_span_idx=background_span_idx,
+                    previous_idx=previous_idx,
+                    next_idx=next_idx,
+                    biases=biases,
+                )
+    return start_scores, end_scores, transition_scores
+
+
+def _viterbi_decode(
+    token_logprobs: list[list[float]],
+    *,
+    label_info: _TokenLabelInfo,
+    biases: dict[str, float],
+) -> list[int]:
+    if not token_logprobs:
+        return []
+
+    resolved_biases = _zero_viterbi_biases()
+    resolved_biases.update({key: float(value) for key, value in biases.items() if key in resolved_biases})
+    start_scores, end_scores, transition_scores = _build_viterbi_scores(
+        label_info,
+        resolved_biases,
+    )
+
+    num_classes = len(label_info.token_to_span_label)
+    if any(len(row) < num_classes for row in token_logprobs):
+        raise ValueError("token_logprobs has fewer classes than the configured label space")
+    scores = [token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)]
+    backpointers: list[list[int]] = []
+
+    for token_scores in token_logprobs[1:]:
+        next_scores: list[float] = []
+        paths: list[int] = []
+        for next_idx in range(num_classes):
+            best_idx = 0
+            best_score = -math.inf
+            for previous_idx, previous_score in enumerate(scores):
+                score = previous_score + transition_scores[previous_idx][next_idx]
+                if score > best_score:
+                    best_score = score
+                    best_idx = previous_idx
+            next_scores.append(best_score + token_scores[next_idx])
+            paths.append(best_idx)
+        scores = next_scores
+        backpointers.append(paths)
+
+    final_scores = [score + end_scores[idx] for idx, score in enumerate(scores)]
+    if not any(math.isfinite(score) for score in final_scores):
+        return [max(range(num_classes), key=lambda idx: row[idx]) for row in token_logprobs]
+
+    last_label = max(range(num_classes), key=lambda idx: final_scores[idx])
+    path = [last_label]
+    for paths in reversed(backpointers):
+        last_label = paths[last_label]
+        path.append(last_label)
+    path.reverse()
+    return path
+
+
+def _labels_to_token_spans(
+    labels_by_index: dict[int, int],
+    label_info: _TokenLabelInfo,
+) -> list[tuple[int, int, int]]:
+    spans: list[tuple[int, int, int]] = []
+    current_label: int | None = None
+    start_idx: int | None = None
+    previous_idx: int | None = None
+
+    for token_idx in sorted(labels_by_index):
+        label_id = labels_by_index[token_idx]
+        span_label = label_info.token_to_span_label.get(label_id)
+        boundary_tag = label_info.token_boundary_tags.get(label_id)
+
+        if previous_idx is not None and token_idx != previous_idx + 1:
+            if current_label is not None and start_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            current_label = None
+            start_idx = None
+
+        if span_label is None:
+            previous_idx = token_idx
+            continue
+
+        if span_label == label_info.background_span_label:
+            if current_label is not None and start_idx is not None:
+                spans.append((current_label, start_idx, token_idx))
+            current_label = None
+            start_idx = None
+            previous_idx = token_idx
+            continue
+
+        if boundary_tag == "S":
+            if current_label is not None and start_idx is not None and previous_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            spans.append((span_label, token_idx, token_idx + 1))
+            current_label = None
+            start_idx = None
+        elif boundary_tag == "B":
+            if current_label is not None and start_idx is not None and previous_idx is not None:
+                spans.append((current_label, start_idx, previous_idx + 1))
+            current_label = span_label
+            start_idx = token_idx
+        elif boundary_tag == "I":
+            if current_label is None or current_label != span_label:
+                if current_label is not None and start_idx is not None and previous_idx is not None:
+                    spans.append((current_label, start_idx, previous_idx + 1))
+                current_label = span_label
+                start_idx = token_idx
+        elif boundary_tag == "E":
+            if current_label is None or current_label != span_label or start_idx is None:
+                if current_label is not None and start_idx is not None and previous_idx is not None:
+                    spans.append((current_label, start_idx, previous_idx + 1))
+                spans.append((span_label, token_idx, token_idx + 1))
+                current_label = None
+                start_idx = None
+            else:
+                spans.append((current_label, start_idx, token_idx + 1))
+                current_label = None
+                start_idx = None
+
+        previous_idx = token_idx
+
+    if current_label is not None and start_idx is not None and previous_idx is not None:
+        spans.append((current_label, start_idx, previous_idx + 1))
+    return spans
+
+
+def _decode_tiktoken_offsets(token_ids: Sequence[int], encoding: Any) -> tuple[str, list[int], list[int]]:
+    token_bytes = [encoding.decode_single_token_bytes(int(token_id)) for token_id in token_ids]
+    decoded_text = b"".join(token_bytes).decode("utf-8", errors="replace")
+    if not token_bytes:
+        return decoded_text, [], []
+
+    char_byte_starts: list[int] = []
+    char_byte_ends: list[int] = []
+    byte_cursor = 0
+    for char in decoded_text:
+        char_byte_starts.append(byte_cursor)
+        byte_cursor += len(char.encode("utf-8"))
+        char_byte_ends.append(byte_cursor)
+
+    char_starts: list[int] = []
+    char_ends: list[int] = []
+    token_byte_cursor = 0
+    for raw_bytes in token_bytes:
+        token_byte_start = token_byte_cursor
+        token_byte_end = token_byte_start + len(raw_bytes)
+        token_byte_cursor = token_byte_end
+        start_idx = bisect_right(char_byte_ends, token_byte_start)
+        end_idx = bisect_left(char_byte_starts, token_byte_end)
+        if end_idx < start_idx:
+            end_idx = start_idx
+        char_starts.append(start_idx)
+        char_ends.append(end_idx)
+
+    return decoded_text, char_starts, char_ends
+
+
+def _trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    return start, end
+
+
+_PRIVACY_FILTER_SPAN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
+    ("url", re.compile(r"\b(?:https?://|www\.)[^\s,;)\]]+")),
+    ("phone", re.compile(r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}")),
+)
+
+
+def _refine_privacy_filter_span(
+    label: str,
+    start: int,
+    end: int,
+    text: str,
+) -> tuple[int, int]:
+    """Tighten obvious structured PII spans when the model absorbs glue words."""
+    start, end = _trim_span_whitespace(start, end, text)
+    span_text = text[start:end]
+    normalized = label.lower()
+
+    for label_hint, pattern in _PRIVACY_FILTER_SPAN_PATTERNS:
+        if label_hint not in normalized:
+            continue
+        match = pattern.search(span_text)
+        if match:
+            return start + match.start(), start + match.end()
+
+    for suffix in (" and", " or"):
+        if span_text.lower().endswith(suffix):
+            end -= len(suffix)
+            break
+    return _trim_span_whitespace(start, end, text)
+
+
+class PrivacyFilterMLXPipeline:
+    """OpenAI Privacy Filter inference with tiktoken offsets and BIOES Viterbi."""
+
+    def __init__(
+        self,
+        model_path: str | Path,
+        tokenizer_name: Optional[str] = None,
+        aggregation_strategy: Optional[str] = "simple",
+    ) -> None:
+        if not MLX_AVAILABLE:
+            raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
+
+        from openmed.mlx.models import load_model
+
+        self.model_path = Path(model_path)
+        self.model = load_model(self.model_path)
+        self.aggregation_strategy = aggregation_strategy
+        self.manifest, self.config = load_artifact_config(self.model_path)
+        self.id2label: dict[int, str] = {
+            int(key): value for key, value in self.config.get("id2label", {}).items()
+        }
+        self.label_info = _build_label_info(self.id2label)
+        self.viterbi_biases = self.config.get("_mlx_viterbi_biases") or {}
+
+        try:
+            import tiktoken
+        except ImportError as exc:
+            raise ImportError(
+                "tiktoken is required for Privacy Filter MLX inference. "
+                "Install with: pip install tiktoken"
+            ) from exc
+
+        encoding_name = self.config.get("encoding", "o200k_base")
+        self.encoding = tiktoken.get_encoding(encoding_name)
+        self.tokenizer_name = tokenizer_name
+
+    def __call__(
+        self,
+        text: str | list[str],
+        **kwargs: Any,
+    ) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
+        if isinstance(text, (list, tuple)):
+            return [self._predict_single(item) for item in text]
+        return self._predict_single(text)
+
+    def _predict_single(self, text: str) -> List[Dict[str, Any]]:
+        token_ids = [int(token_id) for token_id in self.encoding.encode(text, allowed_special="all")]
+        if not token_ids:
+            return []
+
+        input_ids = mx.array([token_ids], dtype=mx.int32)
+        attention_mask = mx.ones(input_ids.shape, dtype=mx.bool_)
+        logits = self.model(input_ids, attention_mask=attention_mask)
+        mx.eval(logits)
+
+        logits = logits.astype(mx.float32)
+        log_probs = (logits - mx.logsumexp(logits, axis=-1, keepdims=True))[0]
+        probs = mx.exp(log_probs)
+        log_probs_py = log_probs.tolist()
+        probs_py = probs.tolist()
+        pred_ids = _viterbi_decode(
+            log_probs_py,
+            label_info=self.label_info,
+            biases=self.viterbi_biases,
+        )
+
+        decoded_text, char_starts, char_ends = _decode_tiktoken_offsets(token_ids, self.encoding)
+        source_text = decoded_text if decoded_text != text else text
+
+        if self.aggregation_strategy is None:
+            return self._decode_raw(pred_ids, probs_py, char_starts, char_ends, source_text)
+        return self._decode_grouped(pred_ids, probs_py, char_starts, char_ends, source_text)
+
+    def _decode_raw(
+        self,
+        pred_ids: list[int],
+        probs: list[list[float]],
+        char_starts: list[int],
+        char_ends: list[int],
+        text: str,
+    ) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        for index, label_id in enumerate(pred_ids):
+            label = self.id2label.get(label_id, f"LABEL_{label_id}")
+            if label == "O":
+                continue
+            start, end = char_starts[index], char_ends[index]
+            start, end = _refine_privacy_filter_span(label, start, end, text)
+            if end <= start:
+                continue
+            results.append(
+                {
+                    "entity": label,
+                    "score": probs[index][label_id],
+                    "word": text[start:end],
+                    "start": start,
+                    "end": end,
+                    "index": index,
+                }
+            )
+        return results
+
+    def _decode_grouped(
+        self,
+        pred_ids: list[int],
+        probs: list[list[float]],
+        char_starts: list[int],
+        char_ends: list[int],
+        text: str,
+    ) -> list[dict[str, Any]]:
+        labels_by_index = {index: int(label_id) for index, label_id in enumerate(pred_ids)}
+        token_spans = _labels_to_token_spans(labels_by_index, self.label_info)
+
+        entities: list[dict[str, Any]] = []
+        for span_label, token_start, token_end in token_spans:
+            if not (0 <= token_start < token_end <= len(char_starts)):
+                continue
+            start = char_starts[token_start]
+            end = char_ends[token_end - 1]
+            start, end = _trim_span_whitespace(start, end, text)
+            if end <= start:
+                continue
+            label = (
+                self.label_info.span_class_names[span_label]
+                if 0 <= span_label < len(self.label_info.span_class_names)
+                else f"label_{span_label}"
+            )
+            token_scores = [
+                probs[index][pred_ids[index]]
+                for index in range(token_start, token_end)
+                if 0 <= index < len(probs)
+            ]
+            start, end = _refine_privacy_filter_span(label, start, end, text)
+            if end <= start:
+                continue
+            score = sum(token_scores) / len(token_scores) if token_scores else 0.0
+            entities.append(
+                {
+                    "entity_group": label,
+                    "score": score,
+                    "word": text[start:end],
+                    "start": start,
+                    "end": end,
+                }
+            )
         return entities
 
 
@@ -697,8 +1202,7 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
 # -- MLX model registry -------------------------------------------------------
 
 _MLX_MODEL_MAP: Dict[str, str] = {
-    # Public runtime defaults currently prefer local/on-the-fly conversion.
-    # Private pre-converted snapshots can be wired here later if needed.
+    "OpenMed/privacy-filter-mlx": "OpenMed/privacy-filter-mlx",
 }
 
 
@@ -823,9 +1327,21 @@ def create_mlx_pipeline(
     """
     model_path, tokenizer_name = _resolve_mlx_model(model_name, config)
     manifest, artifact_config = load_artifact_config(model_path)
-    task = (manifest or {}).get("task") or artifact_config.get("_mlx_task", "token-classification")
-    family = (manifest or {}).get("family") or artifact_config.get("_mlx_family")
+    from openmed.mlx.models import resolve_artifact_family
 
+    task = (manifest or {}).get("task") or artifact_config.get("_mlx_task", "token-classification")
+    raw_family = (manifest or {}).get("family") or artifact_config.get("_mlx_family")
+    try:
+        family = resolve_artifact_family(artifact_config, manifest=manifest)
+    except ValueError:
+        family = raw_family
+
+    if family == "openai-privacy-filter":
+        return PrivacyFilterMLXPipeline(
+            model_path=model_path,
+            tokenizer_name=tokenizer_name,
+            aggregation_strategy=aggregation_strategy,
+        )
     if task == "token-classification":
         return MLXTokenClassificationPipeline(
             model_path=model_path,
