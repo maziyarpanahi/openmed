@@ -22,6 +22,16 @@ private func privacyFilterLinearInput(_ input: MLXArray, for linear: Linear) -> 
     return input.asType(linear.weight.dtype)
 }
 
+private func privacyFilterExpertInput(
+    _ input: MLXArray,
+    for expert: OpenMedPrivacyFilterExpertLinear
+) -> MLXArray {
+    if expert is Quantized {
+        return input
+    }
+    return input.asType(expert.weight.dtype)
+}
+
 private final class OpenMedPrivacyFilterRMSNorm: Module {
     private let eps: Float
 
@@ -142,11 +152,18 @@ private func privacyFilterSwiGLU(
     return (glu / (1.0 + exp(-alpha * glu))) * (linear + 1.0)
 }
 
-private final class OpenMedPrivacyFilterExpertLinear: Module {
+private class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
+    fileprivate let numExperts: Int
+    fileprivate let inputSize: Int
+    fileprivate let outputSize: Int
+
     @ParameterInfo(key: "weight") var weight: MLXArray
     @ParameterInfo(key: "bias") var bias: MLXArray
 
     init(numExperts: Int, inputSize: Int, outputSize: Int, dtype: DType) {
+        self.numExperts = numExperts
+        self.inputSize = inputSize
+        self.outputSize = outputSize
         _weight.wrappedValue =
             MLXArray.zeros([numExperts, inputSize, outputSize], type: Float.self).asType(dtype)
         _bias.wrappedValue =
@@ -159,6 +176,73 @@ private final class OpenMedPrivacyFilterExpertLinear: Module {
         let selectedBias = bias.take(expertIndices, axis: 0)
         return einsum("tki,tkio->tko", input.asType(selectedWeight.dtype), selectedWeight)
             + selectedBias
+    }
+
+    func toQuantized(groupSize: Int, bits: Int, mode: QuantizationMode) -> Module {
+        OpenMedPrivacyFilterQuantizedExpertLinear(
+            self,
+            groupSize: groupSize,
+            bits: bits,
+            mode: mode
+        )
+    }
+}
+
+private final class OpenMedPrivacyFilterQuantizedExpertLinear:
+    OpenMedPrivacyFilterExpertLinear, Quantized
+{
+    let groupSize: Int
+    let bits: Int
+    let mode: QuantizationMode
+    let scales: MLXArray
+    let biases: MLXArray?
+
+    init(
+        _ other: OpenMedPrivacyFilterExpertLinear,
+        groupSize: Int,
+        bits: Int,
+        mode: QuantizationMode
+    ) {
+        self.groupSize = groupSize
+        self.bits = bits
+        self.mode = mode
+        let transposedWeight = other.weight.swappedAxes(-1, -2)
+        let quantizedWeights = MLX.quantized(
+            transposedWeight,
+            groupSize: groupSize,
+            bits: bits,
+            mode: mode
+        )
+        self.scales = quantizedWeights.scales
+        self.biases = quantizedWeights.biases
+        super.init(
+            numExperts: other.numExperts,
+            inputSize: other.inputSize,
+            outputSize: other.outputSize,
+            dtype: other.weight.dtype
+        )
+        self.weight = quantizedWeights.wq
+        self.bias = other.bias
+        freeze()
+    }
+
+    override func callAsFunction(_ input: MLXArray, expertIndices: MLXArray) -> MLXArray {
+        let inputShape = input.shape
+        let flatInput = input.reshaped(-1, 1, input.dim(-1))
+        let flatIndices = expertIndices.reshaped(-1).asType(.int32)
+        var output = gatherQuantizedMM(
+            flatInput,
+            weight,
+            scales: scales,
+            biases: biases,
+            rhsIndices: flatIndices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: mode
+        ).squeezed(axis: -2)
+        output = output + bias.take(flatIndices, axis: 0)
+        return output.reshaped(Array(inputShape.dropLast()) + [outputSize])
     }
 }
 
@@ -350,12 +434,15 @@ private final class OpenMedPrivacyFilterMLPBlock: Module {
         let (expertValues, expertIndices) = privacyFilterTopK(gateLogits, k: expertsPerToken)
         let expertWeights = softmax(expertValues, axis: -1) / Float(expertsPerToken)
         let expandedInput = broadcast(
-            normalized.asType(swiglu.weight.dtype).expandedDimensions(axis: 1),
+            privacyFilterExpertInput(normalized, for: swiglu).expandedDimensions(axis: 1),
             to: [normalized.dim(0), expertsPerToken, hiddenSize]
         )
         var hidden = swiglu(expandedInput, expertIndices: expertIndices).asType(.float32)
         hidden = privacyFilterSwiGLU(hidden, limit: swigluLimit)
-        let output = out(hidden.asType(out.weight.dtype), expertIndices: expertIndices).asType(.float32)
+        let output = out(
+            privacyFilterExpertInput(hidden, for: out),
+            expertIndices: expertIndices
+        ).asType(.float32)
         let mixed = sum(output * expertWeights.expandedDimensions(axis: -1), axis: 1)
             * Float(expertsPerToken)
         return input + mixed.reshaped(batchShape + [hiddenSize]).asType(input.dtype)
