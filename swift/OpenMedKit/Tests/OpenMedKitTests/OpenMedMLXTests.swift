@@ -188,6 +188,100 @@ final class OpenMedMLXTests: XCTestCase {
         }
     }
 
+    func testArtifactAcceptsPrivacyFilterFamily() throws {
+        let directory = try makePrivacyFilterManifestOnlyArtifact()
+        let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+
+        XCTAssertEqual(artifact.task, .tokenClassification)
+        XCTAssertEqual(artifact.family, .openaiPrivacyFilter)
+        XCTAssertEqual(artifact.manifest.family, "openai-privacy-filter")
+    }
+
+    func testPrivacyFilterConfigDecodesArchitectureFields() throws {
+        let directory = try makePrivacyFilterManifestOnlyArtifact()
+        let config = try OpenMedMLXArtifact(modelDirectoryURL: directory).configuration
+
+        XCTAssertEqual(config.modelType, "openai-privacy-filter")
+        XCTAssertEqual(config.encoding, "o200k_base")
+        XCTAssertEqual(config.headDim, 4)
+        XCTAssertEqual(config.numKeyValueHeads, 1)
+        XCTAssertEqual(config.numExperts, 4)
+        XCTAssertEqual(config.expertsPerToken, 2)
+        XCTAssertEqual(config.bidirectionalLeftContext, 1)
+        XCTAssertEqual(config.bidirectionalRightContext, 1)
+        XCTAssertEqual(config.initialContextLength, 64)
+        XCTAssertEqual(config.ropeTheta, 150_000)
+        XCTAssertEqual(config.ropeScalingFactor, 1.0)
+        XCTAssertEqual(config.parameterDType, "float32")
+        XCTAssertEqual(config.viterbiBiases["transition_bias_background_stay"], 0.0)
+    }
+
+    func testPrivacyFilterTokenizerMatchesTiktokenGoldens() throws {
+        let directory = try localArtifactURL(from: "OPENMED_PRIVACY_FILTER_MLX_ARTIFACT")
+        let tokenizer = try OpenMedPrivacyFilterTokenizer(directoryURL: directory)
+
+        let encoded = try tokenizer.encode(
+            "My name is Alice Smith and my email is alice.smith@example.com.",
+            maxTokens: 128
+        )
+
+        XCTAssertEqual(encoded.tokenIDs, [
+            5444, 1308, 382, 44045, 16627, 326, 922, 3719, 382, 134271, 640, 68671,
+            81309, 1136, 13,
+        ])
+        let tokenPieces = encoded.charStarts.indices.map { index in
+            let lower = encoded.decodedText.index(
+                encoded.decodedText.startIndex,
+                offsetBy: encoded.charStarts[index]
+            )
+            let upper = encoded.decodedText.index(
+                encoded.decodedText.startIndex,
+                offsetBy: encoded.charEnds[index]
+            )
+            return String(encoded.decodedText[lower..<upper])
+        }
+        XCTAssertEqual(tokenPieces, [
+            "My", " name", " is", " Alice", " Smith", " and", " my", " email",
+            " is", " alice", ".s", "mith", "@example", ".com", ".",
+        ])
+    }
+
+    func testPrivacyFilterViterbiRejectsInvalidInsideStart() {
+        let labelInfo = OpenMedPrivacyFilterLabelInfo(id2label: [
+            0: "O",
+            1: "B-private_person",
+            2: "I-private_person",
+            3: "E-private_person",
+            4: "S-private_email",
+        ])
+
+        let path = OpenMedPrivacyFilterViterbi.decode(
+            tokenLogProbabilities: [
+                [-10.0, -9.0, 0.0, -9.0, -8.0],
+                [-10.0, -9.0, -8.0, 0.0, -8.0],
+            ],
+            labelInfo: labelInfo,
+            biases: [:]
+        )
+
+        XCTAssertEqual(path, [1, 3])
+    }
+
+    func testTinyPrivacyFilterModelForwardShape() throws {
+        try requireUsableMLXRuntime()
+        let directory = try makePrivacyFilterManifestOnlyArtifact()
+        let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+        let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
+
+        let logits = model(
+            MLXArray([Int32(1), Int32(2), Int32(3), Int32(4)], [1, 4]),
+            attentionMask: MLXArray.ones([1, 4], type: Bool.self)
+        )
+        eval(logits)
+
+        XCTAssertEqual(logits.shape, [1, 4, artifact.configuration.numLabels])
+    }
+
     func testArtifactRejectsUnknownGLiNERVariant() throws {
         let directory = try makeManifestOnlyArtifact(
             task: "zero-shot-ner",
@@ -467,6 +561,33 @@ final class OpenMedMLXTests: XCTestCase {
         XCTAssertTrue(
             entities.contains { $0.label == "city" && $0.text.lowercased() == "paris" },
             "Expected city=paris in \(entities)"
+        )
+    }
+
+    func testLocalPrivacyFilterArtifactRunsNativePII() throws {
+        try requireUsableMLXRuntime()
+        let artifactURL = try localArtifactURL(from: "OPENMED_PRIVACY_FILTER_MLX_ARTIFACT")
+        let openmed = try OpenMed(
+            backend: .mlx(modelDirectoryURL: artifactURL),
+            maxSeqLength: 256
+        )
+
+        let entities = try openmed.extractPII(
+            "My name is Alice Smith, call 415-555-0101 or email alice.smith@example.com.",
+            confidenceThreshold: 0.0
+        )
+
+        XCTAssertTrue(
+            entities.contains { $0.label == "private_person" && $0.text.contains("Alice") },
+            "Expected private_person in \(entities)"
+        )
+        XCTAssertTrue(
+            entities.contains { $0.label == "private_email" && $0.text.contains("@example.com") },
+            "Expected private_email in \(entities)"
+        )
+        XCTAssertTrue(
+            entities.contains { $0.label == "private_phone" && $0.text.contains("415") },
+            "Expected private_phone in \(entities)"
         )
     }
 
@@ -913,6 +1034,71 @@ final class OpenMedMLXTests: XCTestCase {
             .write(to: directory.appending(path: "openmed-mlx.json"))
         try Data().write(to: directory.appending(path: "weights.safetensors"))
 
+        return directory
+    }
+
+    private func makePrivacyFilterManifestOnlyArtifact() throws -> URL {
+        let directory = try makeManifestOnlyArtifact(
+            task: "token-classification",
+            family: "openai-privacy-filter",
+            configModelType: "openai_privacy_filter"
+        )
+
+        let configObject: [String: Any] = [
+            "model_type": "openai_privacy_filter",
+            "_mlx_model_type": "openai-privacy-filter",
+            "_mlx_weights_format": "safetensors",
+            "_name_or_path": "openai/privacy-filter",
+            "encoding": "o200k_base",
+            "vocab_size": 32,
+            "hidden_size": 8,
+            "intermediate_size": 8,
+            "head_dim": 4,
+            "num_attention_heads": 2,
+            "num_key_value_heads": 1,
+            "num_hidden_layers": 1,
+            "num_experts": 4,
+            "experts_per_token": 2,
+            "bidirectional_left_context": 1,
+            "bidirectional_right_context": 1,
+            "initial_context_length": 64,
+            "max_position_embeddings": 128,
+            "rope_theta": 150_000,
+            "rope_scaling_factor": 1.0,
+            "rope_ntk_alpha": 1.0,
+            "rope_ntk_beta": 32.0,
+            "param_dtype": "float32",
+            "rms_norm_eps": 1e-5,
+            "swiglu_limit": 7.0,
+            "num_labels": 5,
+            "id2label": [
+                "0": "O",
+                "1": "B-private_person",
+                "2": "I-private_person",
+                "3": "E-private_person",
+                "4": "S-private_email",
+            ],
+            "_mlx_viterbi_biases": [
+                "transition_bias_background_stay": 0.0,
+                "transition_bias_background_to_start": 0.0,
+                "transition_bias_inside_to_continue": 0.0,
+                "transition_bias_inside_to_end": 0.0,
+                "transition_bias_end_to_background": 0.0,
+                "transition_bias_end_to_start": 0.0,
+            ],
+        ]
+        try JSONSerialization.data(withJSONObject: configObject, options: [.prettyPrinted])
+            .write(to: directory.appending(path: "config.json"))
+        try JSONSerialization.data(
+            withJSONObject: [
+                "0": "O",
+                "1": "B-private_person",
+                "2": "I-private_person",
+                "3": "E-private_person",
+                "4": "S-private_email",
+            ],
+            options: [.prettyPrinted]
+        ).write(to: directory.appending(path: "id2label.json"))
         return directory
     }
 
