@@ -65,6 +65,7 @@ mlx = [
   "transformers>=4.50",
   "tokenizers>=0.15",
   "safetensors>=0.4",
+  "tiktoken>=0.7",
 ]
 
 coreml = [
