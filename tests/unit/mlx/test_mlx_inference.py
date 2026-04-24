@@ -16,6 +16,17 @@ from unittest.mock import patch, MagicMock
 # The actual MLX model calls are mocked.
 
 
+def _module_importable(module_name: str) -> bool:
+    try:
+        __import__(module_name)
+    except Exception:
+        return False
+    return True
+
+
+_MLX_AVAILABLE = _module_importable("mlx.core")
+
+
 class TestMLXPipelineOutputFormat:
     """Verify MLX pipeline produces HF-compatible output dicts."""
 
@@ -393,6 +404,10 @@ class TestExperimentalGLiNERDecoding:
         assert words == ["Aspirin", "treats", "headache", "."]
         assert offsets == [(0, 7), (8, 14), (15, 23), (23, 24)]
 
+    @pytest.mark.skipif(
+        not _MLX_AVAILABLE,
+        reason="MLX is required for token-level GLiNER decoder helpers",
+    )
     def test_token_level_decoder_preserves_entity_class_and_direction_inputs(self):
         from openmed.mlx.models.gliner_common import decode_token_level_spans
 
