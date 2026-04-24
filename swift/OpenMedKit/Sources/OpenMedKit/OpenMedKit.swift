@@ -11,8 +11,7 @@ import Tokenizers
 ///
 /// ```swift
 /// let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-///     repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-///     authToken: ProcessInfo.processInfo.environment["HF_TOKEN"]
+///     repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
 /// )
 /// let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
 /// let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
