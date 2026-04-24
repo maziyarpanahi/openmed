@@ -6,7 +6,6 @@ struct ContentView: View {
     Patient: John Doe, DOB: 01/15/1970, SSN: 000-00-0000, MRN: MRN-TEST-88421, Address: 123 Example Street, Apt 4B, Springfield, CA 90000, Phone: (555) 010-2244, Email: john.doe@example.test, Insurance ID: TEST-POLICY-778291, Driver License: DLT-TEST-442190, Passport: P-TEST-998877, Emergency Contact: Jane Doe, (555) 010-7788, Employer: Example Manufacturing LLC, Employee ID: EMP-20481, Bank Account: ACCT-TEST-55667788, Routing: 000000000.
     """
 
-    @AppStorage("openmed.demo.hfToken") private var huggingFaceToken = ""
     @State private var inputText = Self.showcaseSampleText
     @State private var availableModels: [DemoModelDescriptor] = [.missingBundledModel]
     @State private var selectedModelID = DemoModelDescriptor.missingBundledModel.id
@@ -93,26 +92,12 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.tertiary)
 
-                        if selectedModel.requiresAuthToken {
-                            HStack(spacing: 8) {
-                                Image(systemName: huggingFaceToken.isEmpty ? "key.horizontal" : "checkmark.circle.fill")
-                                    .foregroundStyle(huggingFaceToken.isEmpty ? .orange : .green)
-
-                                Text(
-                                    huggingFaceToken.isEmpty
-                                        ? "Manage the private Hugging Face access token in Choose Model."
-                                        : "Private Hugging Face token is saved on this device."
-                                )
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            }
-                            .padding(.top, 2)
-                        } else if selectedModel.runtimeKind == .mlx {
+                        if selectedModel.runtimeKind == .mlx {
                             HStack(spacing: 8) {
                                 Image(systemName: "globe.badge.chevron.backward")
                                     .foregroundStyle(.mint)
 
-                                Text("Public Hugging Face artifact. No token required.")
+                                Text("Public Hugging Face artifact. Downloads once, then runs from local cache.")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -238,8 +223,7 @@ struct ContentView: View {
         .sheet(isPresented: $isShowingModelPicker) {
             ModelPickerSheet(
                 models: availableModels.isEmpty ? [.missingBundledModel] : availableModels,
-                selectedModelID: $selectedModelID,
-                huggingFaceToken: $huggingFaceToken
+                selectedModelID: $selectedModelID
             )
             #if os(iOS)
             .presentationDetents([.large])
@@ -270,7 +254,6 @@ struct ContentView: View {
                 let result = try await runInference(
                     text: analysisText,
                     model: analysisModel,
-                    authToken: huggingFaceToken,
                     progress: { status in
                         await MainActor.run {
                             analysisStatus = status
