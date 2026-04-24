@@ -95,6 +95,7 @@ enum OpenMedMLXFamily: String, Sendable {
     case xlmRoberta = "xlm-roberta"
     case electra
     case debertaV2 = "deberta-v2"
+    case openaiPrivacyFilter = "openai-privacy-filter"
     case glinerUniEncoderSpan = "gliner-uni-encoder-span"
     case gliclassUniEncoder = "gliclass-uni-encoder"
     case glinerUniEncoderTokenRelex = "gliner-uni-encoder-token-relex"
@@ -169,6 +170,22 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
     let embedEntityToken: Bool
     let embedClassToken: Bool
     let embedRelationToken: Bool?
+    let headDim: Int
+    let numKeyValueHeads: Int
+    let numExperts: Int
+    let expertsPerToken: Int
+    let bidirectionalLeftContext: Int
+    let bidirectionalRightContext: Int
+    let initialContextLength: Int
+    let ropeTheta: Float
+    let ropeScalingFactor: Float
+    let ropeNTKAlpha: Float
+    let ropeNTKBeta: Float
+    let parameterDType: String
+    let encoding: String?
+    let rmsNormEps: Float
+    let swigluLimit: Float
+    let viterbiBiases: [String: Float]
 
     enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
@@ -206,6 +223,25 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
         case embedEntityToken = "embed_ent_token"
         case embedClassToken = "embed_class_token"
         case embedRelationToken = "embed_rel_token"
+        case headDim = "head_dim"
+        case numKeyValueHeads = "num_key_value_heads"
+        case numExperts = "num_experts"
+        case expertsPerToken = "experts_per_token"
+        case numLocalExperts = "num_local_experts"
+        case numExpertsPerToken = "num_experts_per_tok"
+        case bidirectionalLeftContext = "bidirectional_left_context"
+        case bidirectionalRightContext = "bidirectional_right_context"
+        case slidingWindow = "sliding_window"
+        case initialContextLength = "initial_context_length"
+        case ropeTheta = "rope_theta"
+        case ropeScalingFactor = "rope_scaling_factor"
+        case ropeNTKAlpha = "rope_ntk_alpha"
+        case ropeNTKBeta = "rope_ntk_beta"
+        case parameterDType = "param_dtype"
+        case encoding
+        case rmsNormEps = "rms_norm_eps"
+        case swigluLimit = "swiglu_limit"
+        case viterbiBiases = "_mlx_viterbi_biases"
         case numLabels = "num_labels"
         case positionOffset = "_mlx_position_offset"
         case weightsFormat = "_mlx_weights_format"
@@ -284,6 +320,46 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
         embedClassToken =
             try container.decodeIfPresent(Bool.self, forKey: .embedClassToken) ?? true
         embedRelationToken = try container.decodeIfPresent(Bool.self, forKey: .embedRelationToken)
+        headDim = try container.decodeIfPresent(Int.self, forKey: .headDim) ?? 64
+        let configuredNumKeyValueHeads =
+            try container.decodeIfPresent(Int.self, forKey: .numKeyValueHeads)
+        let configuredNumAttentionHeads =
+            try container.decodeIfPresent(Int.self, forKey: .numAttentionHeads)
+        numKeyValueHeads = configuredNumKeyValueHeads ?? configuredNumAttentionHeads ?? 12
+
+        let configuredNumExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts)
+        let configuredNumLocalExperts =
+            try container.decodeIfPresent(Int.self, forKey: .numLocalExperts)
+        numExperts = configuredNumExperts ?? configuredNumLocalExperts ?? 1
+
+        let configuredExpertsPerToken =
+            try container.decodeIfPresent(Int.self, forKey: .expertsPerToken)
+        let configuredNumExpertsPerToken =
+            try container.decodeIfPresent(Int.self, forKey: .numExpertsPerToken)
+        expertsPerToken = configuredExpertsPerToken ?? configuredNumExpertsPerToken ?? 1
+        let slidingWindow = try container.decodeIfPresent(Int.self, forKey: .slidingWindow)
+        bidirectionalLeftContext =
+            try container.decodeIfPresent(Int.self, forKey: .bidirectionalLeftContext)
+            ?? slidingWindow.map { max(0, ($0 - 1) / 2) }
+            ?? 0
+        bidirectionalRightContext =
+            try container.decodeIfPresent(Int.self, forKey: .bidirectionalRightContext)
+            ?? slidingWindow.map { max(0, ($0 - 1) / 2) }
+            ?? 0
+        initialContextLength =
+            try container.decodeIfPresent(Int.self, forKey: .initialContextLength) ?? 4096
+        ropeTheta = try container.decodeIfPresent(Float.self, forKey: .ropeTheta) ?? 150_000.0
+        ropeScalingFactor =
+            try container.decodeIfPresent(Float.self, forKey: .ropeScalingFactor) ?? 1.0
+        ropeNTKAlpha = try container.decodeIfPresent(Float.self, forKey: .ropeNTKAlpha) ?? 1.0
+        ropeNTKBeta = try container.decodeIfPresent(Float.self, forKey: .ropeNTKBeta) ?? 32.0
+        parameterDType =
+            try container.decodeIfPresent(String.self, forKey: .parameterDType) ?? "bfloat16"
+        encoding = try container.decodeIfPresent(String.self, forKey: .encoding)
+        rmsNormEps = try container.decodeIfPresent(Float.self, forKey: .rmsNormEps) ?? 1e-5
+        swigluLimit = try container.decodeIfPresent(Float.self, forKey: .swigluLimit) ?? 7.0
+        viterbiBiases =
+            try container.decodeIfPresent([String: Float].self, forKey: .viterbiBiases) ?? [:]
 
         let normalized = rawModelType.replacingOccurrences(of: "_", with: "-").lowercased()
         let resolvedPositionOffset: Int
@@ -476,7 +552,8 @@ struct OpenMedMLXArtifact: Sendable {
              (.tokenClassification, .distilbert),
              (.tokenClassification, .roberta),
              (.tokenClassification, .xlmRoberta),
-             (.tokenClassification, .electra):
+             (.tokenClassification, .electra),
+             (.tokenClassification, .openaiPrivacyFilter):
             return true
         case (.zeroShotNER, .glinerUniEncoderSpan),
              (.zeroShotSequenceClassification, .gliclassUniEncoder),
