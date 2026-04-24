@@ -40,14 +40,24 @@ The bump script updates only `openmed/__about__.py`.
 ## Tag-driven CI publish (recommended)
 
 1. Update changelog and commit.
-2. Push a release tag:
+2. Run the release preflight for the exact tag you plan to publish:
 
 ```bash
-git tag v0.6.0
-git push origin v0.6.0
+VERSION=$(python3 -c "from openmed import __version__; print(__version__)")
+python3 scripts/release/check_release_version.py --version "$VERSION"
 ```
 
-3. `.github/workflows/publish.yml` builds and publishes to PyPI.
+This confirms that `openmed.__version__`, the top changelog entry, public docs, and Swift app versions all agree, and
+that the release tag is not already used locally or on `origin`.
+
+3. Push the matching release tag:
+
+```bash
+git tag "v$VERSION"
+git push origin "v$VERSION"
+```
+
+4. `.github/workflows/publish.yml` builds and publishes to PyPI.
 
 ## Manual local publish
 
