@@ -663,6 +663,8 @@ public enum PostProcessing {
         text: String,
         useSemanticPatterns: Bool = true,
         preferModelLabels: Bool = true,
+        allowSemanticOnlyMatches: Bool = true,
+        allowSemanticLabelExpansion: Bool = true,
         patterns: [SemanticUnitPattern] = defaultPIIPatterns
     ) -> [EntityPrediction] {
         let sortedEntities = entities.sorted {
@@ -690,7 +692,7 @@ public enum PostProcessing {
             }
 
             guard !overlapping.isEmpty else {
-                if unit.score >= 0.55 {
+                if allowSemanticOnlyMatches && unit.score >= 0.55 {
                     merged.append(
                         EntityPrediction(
                             label: unit.entityType,
@@ -708,7 +710,9 @@ public enum PostProcessing {
             let (dominantLabel, modelAverageConfidence) = calculateDominantLabel(in: overlappingEntities)
 
             let finalLabel: String
-            if preferModelLabels {
+            if !allowSemanticLabelExpansion {
+                finalLabel = dominantLabel
+            } else if preferModelLabels {
                 if isMoreSpecific(label: unit.entityType, than: dominantLabel) {
                     finalLabel = unit.entityType
                 } else if normalizeLabel(dominantLabel) == normalizeLabel(unit.entityType)
