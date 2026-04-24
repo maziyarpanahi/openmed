@@ -10,13 +10,20 @@ import VisionKit
 struct ContentView: View {
     private let pipeline = ScanDemoPipelineDescriptor.defaultPipeline
 
-    @State private var huggingFaceToken = ScanDemoSecrets.huggingFaceToken
+    @State private var workflowStage: ScanDemoWorkflowStage = .input
     @State private var piiEngine: ScanDemoPIIEngine = .openMed
+    @State private var clinicalPreset: ClinicalTaskPreset = .clinicalSummary
+    @State private var customClinicalLabelsText = ClinicalTaskPreset.clinicalSummary.labels.joined(separator: ", ")
+    @State private var clinicalThreshold = 0.6
+    @State private var showAdvancedClinicalLabels = false
     @State private var documentImages: [UIImage] = []
     @State private var extractedText = ""
     @State private var entities: [DetectedEntity] = []
     @State private var focusEntities: [DetectedEntity] = []
     @State private var focusSourceText = ""
+    @State private var piiResult: PIIResult?
+    @State private var clinicalResult: ClinicalResult?
+    @State private var piiComparisons: [ScanDemoPIIEngine: PIIResult] = [:]
     @State private var status: PipelineStatus?
     @State private var errorMessage: String?
     @State private var isShowingScanner = false
@@ -36,8 +43,15 @@ struct ContentView: View {
         extractedText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var trimmedToken: String {
-        huggingFaceToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var documentInput: DocumentInput {
+        DocumentInput(
+            images: documentImages,
+            source: lastSource,
+            ocrText: extractedText,
+            editedText: trimmedText,
+            needsOCR: needsDocumentOCR,
+            pageCount: scannedPageCount
+        )
     }
 
     private var isBusy: Bool {
@@ -48,16 +62,23 @@ struct ContentView: View {
         !documentImages.isEmpty
     }
 
-    private var glinerCacheState: OpenMedMLXModelCacheState {
+    private var openMedPIICacheState: OpenMedMLXModelCacheState {
         (try? OpenMedModelStore.mlxModelCacheState(
-            repoID: glinerModel.artifactRepoID,
+            repoID: pipeline.piiModel.artifactRepoID,
             revision: "main"
         )) ?? .missing
     }
 
-    private var piiCacheState: OpenMedMLXModelCacheState {
+    private var privacyFilterCacheState: OpenMedMLXModelCacheState {
         (try? OpenMedModelStore.mlxModelCacheState(
-            repoID: piiModel.artifactRepoID,
+            repoID: pipeline.privacyFilterModel.artifactRepoID,
+            revision: "main"
+        )) ?? .missing
+    }
+
+    private var glinerCacheState: OpenMedMLXModelCacheState {
+        (try? OpenMedModelStore.mlxModelCacheState(
+            repoID: glinerModel.artifactRepoID,
             revision: "main"
         )) ?? .missing
     }
@@ -69,8 +90,16 @@ struct ContentView: View {
         return !trimmedText.isEmpty
     }
 
+    private var modelReadiness: ModelReadiness {
+        ModelReadiness(
+            openMedPII: openMedPIICacheState,
+            privacyFilter: privacyFilterCacheState,
+            gliner: glinerCacheState
+        )
+    }
+
     private var canAnalyze: Bool {
-        hasRunnableInput && !isBusy && !isPreparingModels && DemoPlatform.supportsOnDeviceMLX && canRunClinicalExtractor
+        hasRunnableInput && !isBusy && !isPreparingModels && DemoPlatform.supportsOnDeviceMLX
     }
 
     private var hasResults: Bool {
@@ -78,15 +107,47 @@ struct ContentView: View {
     }
 
     private var modelsAreOfflineReady: Bool {
-        piiCacheState == .ready && glinerCacheState == .ready
+        openMedPIICacheState == .ready &&
+        privacyFilterCacheState == .ready &&
+        glinerCacheState == .ready
+    }
+
+    private var clinicalModelIsAvailableInThisBuild: Bool {
+        true
     }
 
     private var canRunClinicalExtractor: Bool {
-        glinerCacheState == .ready || !trimmedToken.isEmpty
+        clinicalModelIsAvailableInThisBuild && canRun(model: glinerModel)
     }
 
-    private var piiModel: ScanDemoModelDescriptor {
-        pipeline.piiModel
+    private var canRunSelectedPIIModel: Bool {
+        canRun(model: selectedPIIModel)
+    }
+
+    private var clinicalLabels: [String] {
+        if showAdvancedClinicalLabels {
+            let parsed = customClinicalLabelsText
+                .split { character in
+                    character == "," || character == "\n"
+                }
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            if !parsed.isEmpty {
+                return parsed
+            }
+        }
+
+        return clinicalPreset.labels
+    }
+
+    private var selectedPIIModel: ScanDemoModelDescriptor {
+        switch piiEngine {
+        case .openMed:
+            return pipeline.piiModel
+        case .privacyFilter:
+            return pipeline.privacyFilterModel
+        }
     }
 
     private var glinerModel: ScanDemoModelDescriptor {
@@ -102,12 +163,39 @@ struct ContentView: View {
             return "Running OCR..."
         }
         if isAnalyzing {
-            return "Running \(piiEngine.title) + GLiNER..."
+            return status?.phase == .inferencing ? "Running On Device..." : "Preparing..."
         }
-        if needsDocumentOCR && hasDocumentSource {
-            return "Run OCR + De-identify + Extract"
+
+        switch workflowStage {
+        case .input:
+            return hasRunnableInput ? "Review Document" : "Add Document or Text"
+        case .review:
+            if needsDocumentOCR && hasDocumentSource {
+                return "Run OCR"
+            }
+            return trimmedText.isEmpty ? "Review Text" : "Continue to De-ID"
+        case .deidentify:
+            if piiResult?.engine == piiEngine {
+                return "Continue to Clinical"
+            }
+            if !canRunSelectedPIIModel {
+                return "Prepare Model"
+            }
+            return "Run De-ID"
+        case .clinical:
+            if clinicalResult != nil {
+                return "Review Summary"
+            }
+            if !clinicalModelIsAvailableInThisBuild {
+                return "Review Summary"
+            }
+            if !canRunClinicalExtractor {
+                return "Prepare Clinical Model"
+            }
+            return "Extract Clinical Entities"
+        case .summary:
+            return "Start New Scan"
         }
-        return "De-identify + Extract On Device"
     }
 
     private var actionHint: String {
@@ -120,27 +208,63 @@ struct ContentView: View {
         if isPreparingModels {
             return "Preparing the local model cache for offline demo runs."
         }
-        if hasResults {
-            return "Results are ready. Edit the transcript or load another note to rerun."
+
+        switch workflowStage {
+        case .input:
+            return hasRunnableInput ? "The source is staged. Move to review before anything leaves this screen." : "Start with a scan, the sample note, or pasted clinical text."
+        case .review:
+            if needsDocumentOCR && hasDocumentSource {
+                return "Run OCR first, then review and correct the transcript before masking."
+            }
+            return trimmedText.isEmpty ? "Paste text or go back to add a document." : "Edit OCR mistakes here. De-identification starts on the next step."
+        case .deidentify:
+            if !canRunSelectedPIIModel {
+                return "This PII engine needs its artifact cached before the local run."
+            }
+            return piiResult?.engine == piiEngine ? "PII masking is ready. You can switch engines and rerun to compare." : "Choose a PII model and run local de-identification."
+        case .clinical:
+            if !clinicalModelIsAvailableInThisBuild {
+                return "Clinical extraction is unavailable in this version, so the next step reviews the de-identified note."
+            }
+            if !canRunClinicalExtractor {
+                return "The clinical extractor needs its model cached once before it can run offline."
+            }
+            return clinicalResult == nil ? "Run GLiNER Relex on the safe note using the selected task preset." : "Clinical entities are ready for review."
+        case .summary:
+            return "Export the de-identified result, compare engines, or restart the workflow."
         }
-        if needsDocumentOCR && hasDocumentSource {
-            return "Document staged. Start the full local pipeline when you are ready."
+    }
+
+    private var canPerformPrimaryAction: Bool {
+        guard !isBusy && !isPreparingModels else {
+            return false
         }
-        if !hasRunnableInput {
-            return "Start with the sample clinical note or scan a real document."
+
+        switch workflowStage {
+        case .input:
+            return hasDocumentSource || !trimmedText.isEmpty
+        case .review:
+            return (needsDocumentOCR && hasDocumentSource) || !trimmedText.isEmpty
+        case .deidentify:
+            if piiResult?.engine == piiEngine {
+                return true
+            }
+            return DemoPlatform.supportsOnDeviceMLX && !trimmedText.isEmpty
+        case .clinical:
+            if clinicalResult != nil {
+                return true
+            }
+            return DemoPlatform.supportsOnDeviceMLX && !focusSourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .summary:
+            return true
         }
-        if !canRunClinicalExtractor {
-            return "Model setup is needed before the local run. Use the small Setup control in the label pack."
-        }
-        return "Ready to run \(piiEngine.title) for de-identification, then GLiNER for clinical extraction."
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    heroCard
-                    pipelineStoryCard
+                    workflowHero
 
                     if let status {
                         PipelineStatusCard(status: status, pipeline: pipeline)
@@ -150,30 +274,7 @@ struct ContentView: View {
                         errorCard(errorMessage)
                     }
 
-                    if hasDocumentSource {
-                        documentPreviewCard
-                    }
-
-                    if !trimmedText.isEmpty {
-                        extractedTextCard
-                    }
-
-                    piiEngineCard
-                    glinerConfigurationCard
-
-                    if !entities.isEmpty {
-                        maskedOutputCard
-                        entityListCard
-                    } else if hasRunAnalysis && !isBusy && errorMessage == nil && !trimmedText.isEmpty {
-                        noEntityCard
-                    }
-
-                    if !focusEntities.isEmpty {
-                        clinicalHighlightsCard
-                        clinicalEntityListCard
-                    } else if hasRunAnalysis && !isBusy && errorMessage == nil && !trimmedText.isEmpty {
-                        noClinicalEntityCard
-                    }
+                    workflowContent
                 }
                 .padding()
                 .padding(.bottom, 104)
@@ -194,8 +295,8 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isShowingModelSetup) {
             ModelSetupSheet(
-                token: $huggingFaceToken,
-                piiCacheState: piiCacheState,
+                openMedPIICacheState: openMedPIICacheState,
+                privacyFilterCacheState: privacyFilterCacheState,
                 glinerCacheState: glinerCacheState,
                 isPreparing: isPreparingModels,
                 message: modelSetupMessage,
@@ -212,9 +313,439 @@ struct ContentView: View {
             clearAnalysisState(keepError: false)
         }
         .onChange(of: piiEngine) { _, _ in
-            clearAnalysisState(keepError: false)
+            clearPIIState(keepError: false)
+        }
+        .onChange(of: clinicalPreset) { _, newPreset in
+            customClinicalLabelsText = newPreset.labels.joined(separator: ", ")
+            clearClinicalState()
+        }
+        .onChange(of: clinicalThreshold) { _, _ in
+            clearClinicalState()
         }
     }
+
+    private var workflowHero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center) {
+                Label("OpenMed Scan", systemImage: "cross.case.fill")
+                    .font(.headline.weight(.black))
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Text(DemoPlatform.supportsOnDeviceMLX ? "ON DEVICE" : "PREVIEW")
+                    .font(.caption.weight(.black))
+                    .foregroundStyle(Color(red: 0.04, green: 0.29, blue: 0.27))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.white.opacity(0.88), in: Capsule())
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text(workflowStage.title)
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(workflowStage.subtitle)
+                    .font(.system(.body, design: .rounded).weight(.medium))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(red: 0.02, green: 0.25, blue: 0.24),
+                    Color(red: 0.05, green: 0.42, blue: 0.39),
+                    Color(red: 0.10, green: 0.50, blue: 0.46),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+        )
+        .shadow(color: Color(red: 0.02, green: 0.22, blue: 0.22).opacity(0.18), radius: 18, x: 0, y: 12)
+    }
+
+    @ViewBuilder
+    private var workflowContent: some View {
+        switch workflowStage {
+        case .input:
+            inputStageView
+        case .review:
+            reviewStageView
+        case .deidentify:
+            deidentificationStageView
+        case .clinical:
+            clinicalStageView
+        case .summary:
+            summaryStageView
+        }
+    }
+
+    private var inputStageView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            workflowCard(systemImage: "doc.viewfinder", title: "Choose an input") {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Start with a document image or plain text. The app waits for you at each step, so OCR review, masking, and clinical extraction never happen before you ask.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    VStack(spacing: 10) {
+                        Button {
+                            isShowingScanner = true
+                        } label: {
+                            Label(scanButtonTitle, systemImage: "camera.viewfinder")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .buttonBorderShape(.roundedRectangle(radius: 10))
+                        .tint(Color(red: 0.02, green: 0.38, blue: 0.35))
+                        .disabled(isBusy || !DocumentScannerSupport.isSupported)
+
+                        HStack(spacing: 10) {
+                            Button {
+                                loadSampleDocument()
+                            } label: {
+                                Label("Try Sample", systemImage: "doc.richtext")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.roundedRectangle(radius: 10))
+                            .disabled(isBusy)
+
+                            Button {
+                                pasteTextFromClipboard()
+                            } label: {
+                                Label("Paste Text", systemImage: "doc.on.clipboard")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.roundedRectangle(radius: 10))
+                            .disabled(isBusy)
+                        }
+                    }
+                }
+            }
+
+            firstRunSetupCard
+
+            if hasDocumentSource {
+                documentPreviewCard
+            }
+
+            if !trimmedText.isEmpty {
+                extractedTextCard
+            }
+        }
+    }
+
+    private var reviewStageView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if hasDocumentSource {
+                documentPreviewCard
+            }
+
+            if !trimmedText.isEmpty {
+                extractedTextCard
+            } else {
+                workflowCard(systemImage: "text.viewfinder", title: needsDocumentOCR ? "OCR needed" : "No transcript yet") {
+                    Text(needsDocumentOCR ? "Run OCR from the bottom action before moving to de-identification." : "Go back to add text or scan a document.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private var deidentificationStageView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            piiEngineCard
+            modelReadinessCard(for: selectedPIIModel, title: "\(piiEngine.title) readiness")
+
+            if let piiResult, piiResult.engine == piiEngine {
+                maskedOutputCard
+                entityListCard
+            } else if hasRunAnalysis && errorMessage == nil {
+                noEntityCard
+            } else {
+                workflowCard(systemImage: "shield.lefthalf.filled", title: "Run de-identification") {
+                    Text("The transcript is ready. Pick the PII model you want to compare, then run masking on-device.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !piiComparisons.isEmpty {
+                piiComparisonCard
+            }
+        }
+    }
+
+    private var clinicalStageView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if clinicalModelIsAvailableInThisBuild {
+                clinicalPresetCard
+                modelReadinessCard(for: glinerModel, title: "Clinical extractor readiness")
+
+                if !focusEntities.isEmpty {
+                    clinicalHighlightsCard
+                    clinicalEntityListCard
+                } else if clinicalResult != nil && errorMessage == nil {
+                    noClinicalEntityCard
+                } else {
+                    workflowCard(systemImage: "sparkles.rectangle.stack.fill", title: "Extract from the safe note") {
+                        Text("GLiNER Relex runs after PII masking, using the de-identified note and the selected clinical task preset.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else {
+                workflowCard(systemImage: "sparkles.rectangle.stack.fill", title: "Clinical extraction") {
+                    Text("Clinical entity extraction is not included in this version yet. You can still review and export the de-identified note.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private var summaryStageView: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            summaryActionsCard
+
+            if piiResult != nil {
+                maskedOutputCard
+                entityListCard
+            }
+
+            if clinicalResult != nil {
+                clinicalHighlightsCard
+                clinicalEntityListCard
+            }
+
+            if !piiComparisons.isEmpty {
+                piiComparisonCard
+            }
+        }
+    }
+
+    private func workflowCard<Content: View>(
+        systemImage: String,
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: systemImage)
+                .font(.headline.weight(.bold))
+
+            content()
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.white.opacity(0.84), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(.white.opacity(0.72), lineWidth: 1)
+        )
+    }
+
+    private var firstRunSetupCard: some View {
+        workflowCard(systemImage: modelsAreOfflineReady ? "checkmark.shield.fill" : "arrow.down.circle.fill", title: modelsAreOfflineReady ? "Offline ready" : "Prepare models") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(modelsAreOfflineReady ? "The required artifacts are cached on this device. Inference can run without a network connection." : "Download model artifacts once, then scan, mask, and extract locally from the device cache.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 8) {
+                    readinessPill("OpenMed", state: openMedPIICacheState, tint: .teal)
+                    readinessPill("OpenAI", state: privacyFilterCacheState, tint: .indigo)
+                    readinessPill("Clinical", state: glinerCacheState, tint: .blue)
+                }
+
+                Button {
+                    isShowingModelSetup = true
+                } label: {
+                    Label(modelsAreOfflineReady ? "Manage Cache" : "Prepare Models", systemImage: "shippingbox.and.arrow.backward.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.roundedRectangle(radius: 10))
+            }
+        }
+    }
+
+    private func readinessPill(
+        _ title: String,
+        state: OpenMedMLXModelCacheState,
+        tint: Color
+    ) -> some View {
+        Label(state == .ready ? title : "\(title) needed", systemImage: state == .ready ? "checkmark.circle.fill" : "arrow.down.circle")
+            .font(.caption2.weight(.bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background((state == .ready ? tint : Color.secondary).opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .foregroundStyle(state == .ready ? tint : .secondary)
+    }
+
+    private func modelReadinessCard(
+        for model: ScanDemoModelDescriptor,
+        title: String
+    ) -> some View {
+        let cacheState = cacheState(for: model)
+        let canRunModel = canRun(model: model)
+
+        return workflowCard(systemImage: canRunModel ? "checkmark.shield.fill" : "shippingbox.fill", title: title) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(model.note)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    readinessPill(model.displayName, state: cacheState, tint: .teal)
+
+                    if !canRunModel {
+                        Button {
+                            isShowingModelSetup = true
+                        } label: {
+                            Label("Prepare", systemImage: "arrow.down.circle.fill")
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.roundedRectangle(radius: 10))
+                    }
+                }
+            }
+        }
+    }
+
+    private var clinicalPresetCard: some View {
+        workflowCard(systemImage: "waveform.path.ecg.text.page.fill", title: "Clinical task") {
+            VStack(alignment: .leading, spacing: 14) {
+                Picker("Clinical task", selection: $clinicalPreset) {
+                    ForEach(ClinicalTaskPreset.allCases) { preset in
+                        Text(preset.title).tag(preset)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Text(clinicalPreset.summary)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 106), spacing: 8)], spacing: 8) {
+                    ForEach(clinicalLabels, id: \.self) { label in
+                        Text(label)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(colorForEntityKey(entityCategory(for: label)).opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .foregroundStyle(colorForEntityKey(entityCategory(for: label)))
+                    }
+                }
+
+                DisclosureGroup(isExpanded: $showAdvancedClinicalLabels) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        TextEditor(text: $customClinicalLabelsText)
+                            .font(.caption.monospaced())
+                            .frame(minHeight: 92)
+                            .padding(10)
+                            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .scrollContentBackground(.hidden)
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("Confidence")
+                                Spacer()
+                                Text("\(Int(clinicalThreshold * 100))%")
+                                    .monospacedDigit()
+                            }
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+
+                            Slider(value: $clinicalThreshold, in: 0.3...0.9, step: 0.05)
+                        }
+                    }
+                    .padding(.top, 8)
+                } label: {
+                    Label("Advanced labels", systemImage: "slider.horizontal.3")
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+        }
+    }
+
+    private var piiComparisonCard: some View {
+        workflowCard(systemImage: "chart.bar.xaxis", title: "PII comparison") {
+            VStack(spacing: 10) {
+                ForEach(ScanDemoPIIEngine.availableCases) { engine in
+                    HStack(spacing: 12) {
+                        Image(systemName: engine.systemImage)
+                            .foregroundStyle(engine.tint)
+                            .frame(width: 30, height: 30)
+                            .background(engine.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(engine.title)
+                                .font(.subheadline.weight(.semibold))
+                            Text(piiComparisons[engine].map { "\($0.entities.count) spans, \(Int($0.inferenceTime * 1000)) ms" } ?? "Not run")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color.black.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                }
+            }
+        }
+    }
+
+    private var summaryActionsCard: some View {
+        workflowCard(systemImage: "square.and.arrow.up", title: "Review and export") {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("The safe note and entity lists are ready. You can export the de-identified result or rerun de-identification with another engine from the De-ID step.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    ShareLink(item: exportPayload) {
+                        Label("Share JSON", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 10))
+
+                    Button {
+                        UIPasteboard.general.string = piiResult?.maskedText ?? focusSourceText
+                    } label: {
+                        Label("Copy Safe Note", systemImage: "doc.on.doc")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 10))
+                }
+            }
+        }
+    }
+
 
     private var demoBackground: some View {
         ZStack {
@@ -267,7 +798,7 @@ struct ContentView: View {
                     .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Scan a document, mask patient identifiers locally, then extract clinical signals with native GLiNER over the safe note.")
+                Text("Scan a document, mask patient identifiers locally, then extract clinical signals with native GLiNER Relex over the safe note.")
                     .font(.system(.body, design: .rounded).weight(.medium))
                     .foregroundStyle(.white.opacity(0.82))
                     .fixedSize(horizontal: false, vertical: true)
@@ -275,7 +806,7 @@ struct ContentView: View {
 
             HStack(spacing: 8) {
                 heroBadge(title: "Privacy", value: "PII masked", tint: .white)
-                heroBadge(title: "Clinical AI", value: "GLiNER labels", tint: .white)
+                heroBadge(title: "Clinical AI", value: "GLiNER Relex", tint: .white)
                 heroBadge(title: "Runtime", value: "Offline MLX", tint: .white)
             }
         }
@@ -359,14 +890,14 @@ struct ContentView: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
                     pipelineStep(index: "1", title: "Scan", subtitle: "Vision OCR", icon: "doc.viewfinder", tint: .orange)
-                    pipelineStep(index: "2", title: "De-ID", subtitle: piiModel.displayName, icon: "shield.lefthalf.filled", tint: .teal)
-                    pipelineStep(index: "3", title: "Extract", subtitle: "GLiNER clinical labels", icon: "sparkles", tint: .blue)
+                    pipelineStep(index: "2", title: "De-ID", subtitle: selectedPIIModel.displayName, icon: "shield.lefthalf.filled", tint: piiEngine.tint)
+                    pipelineStep(index: "3", title: "Extract", subtitle: "GLiNER Relex entities", icon: "sparkles", tint: .blue)
                 }
 
                 VStack(spacing: 10) {
                     pipelineStep(index: "1", title: "Scan", subtitle: "Vision OCR", icon: "doc.viewfinder", tint: .orange)
-                    pipelineStep(index: "2", title: "De-ID", subtitle: piiModel.displayName, icon: "shield.lefthalf.filled", tint: .teal)
-                    pipelineStep(index: "3", title: "Extract", subtitle: "GLiNER clinical labels", icon: "sparkles", tint: .blue)
+                    pipelineStep(index: "2", title: "De-ID", subtitle: selectedPIIModel.displayName, icon: "shield.lefthalf.filled", tint: piiEngine.tint)
+                    pipelineStep(index: "3", title: "Extract", subtitle: "GLiNER Relex entities", icon: "sparkles", tint: .blue)
                 }
             }
         }
@@ -578,14 +1109,14 @@ struct ContentView: View {
                     .foregroundStyle(.teal)
             }
 
-            Text("Compare the dedicated OpenMed PII model against the GLiNER PII span model on the same scanned note.")
+            Text("Compare OpenMed PII and OpenAI Privacy Filter on the same scanned note. GLiNER is reserved for the clinical extraction stage.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Picker("PII engine", selection: $piiEngine) {
-                ForEach(ScanDemoPIIEngine.allCases) { engine in
-                    Text(engine.title).tag(engine)
+                ForEach(ScanDemoPIIEngine.availableCases) { engine in
+                    Text(engine.pickerTitle).tag(engine)
                 }
             }
             .pickerStyle(.segmented)
@@ -646,7 +1177,7 @@ struct ContentView: View {
                     .clipShape(Capsule())
             }
 
-            Text("After masking, GLiNER searches the safe note for clinical concepts that make the demo useful: symptoms, conditions, medications, plans, and follow-up context.")
+            Text("After masking, GLiNER Relex searches the safe note for clinical concepts that make the demo useful: symptoms, conditions, medications, plans, and follow-up context.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -666,7 +1197,7 @@ struct ContentView: View {
             }
 
             if glinerCacheState == .ready {
-                Label("GLiNER is cached. The second stage can run offline.", systemImage: "checkmark.shield.fill")
+                Label("GLiNER Relex is cached. The second stage can run offline.", systemImage: "checkmark.shield.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.teal)
                     .padding(.vertical, 6)
@@ -755,7 +1286,7 @@ struct ContentView: View {
                     .clipShape(Capsule())
             }
 
-            Text("GLiNER runs on the de-identified note, proving the clinical extraction stage still works after direct identifiers are removed.")
+            Text("GLiNER Relex runs on the de-identified note, proving the clinical extraction stage still works after direct identifiers are removed.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -800,11 +1331,11 @@ struct ContentView: View {
 
     private var noClinicalEntityCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("No GLiNER Matches", systemImage: "sparkles.slash")
+            Label("No GLiNER Relex Matches", systemImage: "sparkles.slash")
                 .font(.headline)
                 .foregroundStyle(.secondary)
 
-            Text("The native GLiNER pass completed on the masked note, but none of the predefined labels cleared the confidence threshold.")
+            Text("The native GLiNER Relex pass completed on the masked note, but none of the predefined labels cleared the confidence threshold.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -839,6 +1370,8 @@ struct ContentView: View {
 
     private var actionBar: some View {
         VStack(spacing: 10) {
+            WorkflowStepIndicator(currentStage: workflowStage)
+
             Text(actionHint)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -846,7 +1379,7 @@ struct ContentView: View {
                 .frame(maxWidth: .infinity)
 
             Button {
-                analyzeExtractedText()
+                performPrimaryAction()
             } label: {
                 HStack(spacing: 10) {
                     if isBusy {
@@ -866,28 +1399,32 @@ struct ContentView: View {
             .buttonStyle(.borderedProminent)
             .buttonBorderShape(.capsule)
             .tint(Color(red: 0.02, green: 0.38, blue: 0.35))
-            .disabled(!canAnalyze)
+            .disabled(!canPerformPrimaryAction)
 
-            HStack(spacing: 10) {
-                Button {
-                    isShowingScanner = true
-                } label: {
-                    Label(scanButtonTitle, systemImage: "doc.viewfinder")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .disabled(isBusy || !DocumentScannerSupport.isSupported)
+            if workflowStage != .input {
+                HStack(spacing: 10) {
+                    Button {
+                        moveToPreviousStage()
+                    } label: {
+                        Label("Back", systemImage: "chevron.left")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .disabled(isBusy)
 
-                Button {
-                    loadSampleDocument()
-                } label: {
-                    Label("Try Sample", systemImage: "doc.richtext")
-                        .frame(maxWidth: .infinity)
+                    if workflowStage == .deidentify || workflowStage == .summary {
+                        Button {
+                            isShowingModelSetup = true
+                        } label: {
+                            Label("Models", systemImage: "shippingbox")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .disabled(isBusy)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.capsule)
-                .disabled(isBusy)
             }
         }
         .padding(.horizontal)
@@ -897,6 +1434,82 @@ struct ContentView: View {
         .overlay(alignment: .top) {
             Divider()
         }
+    }
+
+    private func performPrimaryAction() {
+        switch workflowStage {
+        case .input:
+            workflowStage = .review
+        case .review:
+            if needsDocumentOCR && hasDocumentSource {
+                runOCRReview()
+            } else if !trimmedText.isEmpty {
+                workflowStage = .deidentify
+            }
+        case .deidentify:
+            if piiResult?.engine == piiEngine {
+                workflowStage = .clinical
+            } else if canRunSelectedPIIModel {
+                runPIIStage()
+            } else {
+                isShowingModelSetup = true
+            }
+        case .clinical:
+            if clinicalResult != nil || !clinicalModelIsAvailableInThisBuild {
+                workflowStage = .summary
+            } else if canRunClinicalExtractor {
+                runClinicalStage()
+            } else {
+                isShowingModelSetup = true
+            }
+        case .summary:
+            resetWorkflowForNewScan()
+        }
+    }
+
+    private func moveToPreviousStage() {
+        guard let previous = workflowStage.previous else {
+            return
+        }
+        workflowStage = previous
+    }
+
+    private func canRun(model: ScanDemoModelDescriptor) -> Bool {
+        guard DemoPlatform.supportsOnDeviceMLX else {
+            return false
+        }
+
+        if cacheState(for: model) == .ready {
+            return true
+        }
+
+        return true
+    }
+
+    private func cacheState(for model: ScanDemoModelDescriptor) -> OpenMedMLXModelCacheState {
+        (try? OpenMedModelStore.mlxModelCacheState(
+            repoID: model.artifactRepoID,
+            revision: "main"
+        )) ?? .missing
+    }
+
+    private var exportPayload: String {
+        let piiItems = entities.map { entity in
+            #"{"label":"\#(jsonEscape(entity.label))","text":"\#(jsonEscape(entity.text))","confidence":\#(String(format: "%.4f", entity.confidence))}"#
+        }
+        let clinicalItems = focusEntities.map { entity in
+            #"{"label":"\#(jsonEscape(entity.label))","text":"\#(jsonEscape(entity.text))","confidence":\#(String(format: "%.4f", entity.confidence))}"#
+        }
+
+        return """
+        {
+          "pii_engine": "\(jsonEscape(piiEngine.title))",
+          "clinical_preset": "\(jsonEscape(clinicalPreset.title))",
+          "safe_note": "\(jsonEscape(piiResult?.maskedText ?? focusSourceText))",
+          "pii_entities": [\(piiItems.joined(separator: ","))],
+          "clinical_entities": [\(clinicalItems.joined(separator: ","))]
+        }
+        """
     }
 
     private var sourceSummary: String? {
@@ -922,6 +1535,7 @@ struct ContentView: View {
         scannedPageCount = 1
         lastSource = .sample
         needsDocumentOCR = true
+        workflowStage = .input
         clearAnalysisState(keepError: false)
     }
 
@@ -937,6 +1551,7 @@ struct ContentView: View {
         scannedPageCount = images.count
         lastSource = .camera
         needsDocumentOCR = true
+        workflowStage = .input
         errorMessage = nil
         status = nil
         clearAnalysisState(keepError: false)
@@ -945,6 +1560,26 @@ struct ContentView: View {
     private func handleScannerError(_ error: Error) {
         isShowingScanner = false
         errorMessage = error.localizedDescription
+    }
+
+    private func pasteTextFromClipboard() {
+        #if canImport(UIKit)
+        let pasted = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !pasted.isEmpty else {
+            errorMessage = "Clipboard does not contain text to analyze."
+            return
+        }
+
+        documentImages = []
+        extractedText = pasted
+        scannedPageCount = 0
+        lastSource = nil
+        needsDocumentOCR = false
+        workflowStage = .review
+        clearAnalysisState(keepError: false)
+        #else
+        errorMessage = "Clipboard paste is available on iOS."
+        #endif
     }
 
     private func prepareOfflineModels() {
@@ -956,13 +1591,11 @@ struct ContentView: View {
         modelSetupMessage = nil
         modelSetupError = nil
         isPreparingModels = true
-        let setupToken = trimmedToken
 
         Task(priority: .utility) {
             do {
                 try await ScanDemoRuntime.shared.prepareForOfflineUse(
                     pipeline: pipeline,
-                    authToken: setupToken,
                     progress: { newStatus in
                         await MainActor.run {
                             modelSetupMessage = newStatus.detail
@@ -972,13 +1605,187 @@ struct ContentView: View {
 
                 await MainActor.run {
                     isPreparingModels = false
-                    huggingFaceToken = ""
                     modelSetupMessage = "Models are cached and ready for offline demo runs."
                 }
             } catch {
                 await MainActor.run {
                     isPreparingModels = false
                     modelSetupError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func runOCRReview() {
+        guard hasDocumentSource else {
+            return
+        }
+
+        let sourceImages = documentImages
+        errorMessage = nil
+        status = PipelineStatus(
+            phase: .recognizing,
+            detail: "Running Vision OCR on \(sourceImages.count) \(sourceImages.count == 1 ? "document" : "document pages")."
+        )
+        isRecognizingText = true
+
+        Task(priority: .userInitiated) {
+            do {
+                let recognitionResult = try await ScanDemoRuntime.shared.recognizeText(from: sourceImages)
+                let recognizedText = recognitionResult.text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard !recognizedText.isEmpty else {
+                    throw ScanDemoError.emptyRecognizedText
+                }
+
+                await MainActor.run {
+                    extractedText = recognizedText
+                    scannedPageCount = recognitionResult.pageCount
+                    needsDocumentOCR = false
+                    isRecognizingText = false
+                    status = nil
+                    workflowStage = .review
+                }
+            } catch {
+                await MainActor.run {
+                    isRecognizingText = false
+                    status = nil
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func runPIIStage() {
+        guard DemoPlatform.supportsOnDeviceMLX else {
+            errorMessage = ScanDemoError.unsupportedDevice.errorDescription
+            return
+        }
+
+        let analysisText = trimmedText
+        guard !analysisText.isEmpty else {
+            return
+        }
+
+        errorMessage = nil
+        inferenceTime = nil
+        isAnalyzing = true
+        clearPIIState(keepError: true)
+        hasRunAnalysis = true
+
+        Task(priority: .utility) {
+            let start = CFAbsoluteTimeGetCurrent()
+
+            do {
+                let result = try await ScanDemoRuntime.shared.runPII(
+                    text: analysisText,
+                    pipeline: pipeline,
+                    piiEngine: piiEngine,
+                    progress: { newStatus in
+                        await MainActor.run {
+                            status = newStatus
+                        }
+                    }
+                )
+
+                await MainActor.run {
+                    isAnalyzing = false
+                    status = nil
+                    let elapsed = CFAbsoluteTimeGetCurrent() - start
+                    inferenceTime = elapsed
+
+                    let sortedEntities = result.piiEntities
+                        .filter { entity in
+                            entity.start >= 0 &&
+                            entity.end > entity.start &&
+                            entity.end <= analysisText.count
+                        }
+                        .sorted { lhs, rhs in
+                            if lhs.start == rhs.start {
+                                return lhs.end > rhs.end
+                            }
+                            return lhs.start < rhs.start
+                        }
+
+                    entities = sortedEntities
+                    focusSourceText = result.maskedText
+                    let piiStageResult = PIIResult(
+                        engine: piiEngine,
+                        maskedText: result.maskedText,
+                        entities: sortedEntities,
+                        inferenceTime: elapsed
+                    )
+                    piiResult = piiStageResult
+                    piiComparisons[piiEngine] = piiStageResult
+                }
+            } catch {
+                await MainActor.run {
+                    isAnalyzing = false
+                    status = nil
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func runClinicalStage() {
+        let maskedText = focusSourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !maskedText.isEmpty else {
+            workflowStage = .deidentify
+            return
+        }
+
+        errorMessage = nil
+        isAnalyzing = true
+        clearClinicalState()
+
+        Task(priority: .utility) {
+            let start = CFAbsoluteTimeGetCurrent()
+
+            do {
+                let result = try await ScanDemoRuntime.shared.runClinicalExtraction(
+                    maskedText: maskedText,
+                    pipeline: pipeline,
+                    labels: clinicalLabels,
+                    threshold: Float(clinicalThreshold),
+                    progress: { newStatus in
+                        await MainActor.run {
+                            status = newStatus
+                        }
+                    }
+                )
+
+                await MainActor.run {
+                    isAnalyzing = false
+                    status = nil
+
+                    let sortedEntities = result.focusEntities
+                        .filter { entity in
+                            entity.start >= 0 &&
+                            entity.end > entity.start &&
+                            entity.end <= maskedText.count
+                        }
+                        .sorted { lhs, rhs in
+                            if lhs.start == rhs.start {
+                                return lhs.end > rhs.end
+                            }
+                            return lhs.start < rhs.start
+                        }
+
+                    focusEntities = sortedEntities
+                    clinicalResult = ClinicalResult(
+                        preset: clinicalPreset,
+                        labels: clinicalLabels,
+                        threshold: Float(clinicalThreshold),
+                        entities: sortedEntities,
+                        inferenceTime: CFAbsoluteTimeGetCurrent() - start
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    isAnalyzing = false
+                    status = nil
+                    errorMessage = error.localizedDescription
                 }
             }
         }
@@ -1046,7 +1853,6 @@ struct ContentView: View {
                     text: analysisText,
                     pipeline: pipeline,
                     piiEngine: piiEngine,
-                    authToken: trimmedToken,
                     progress: { newStatus in
                         await MainActor.run {
                             status = newStatus
@@ -1109,9 +1915,18 @@ struct ContentView: View {
     private func clearAnalysisState(keepError: Bool) {
         guard !isAnalyzing else { return }
 
+        clearPIIState(keepError: true)
+        piiComparisons = [:]
+
+        if !keepError {
+            errorMessage = nil
+        }
+    }
+
+    private func clearPIIState(keepError: Bool) {
         entities = []
-        focusEntities = []
-        focusSourceText = ""
+        piiResult = nil
+        clearClinicalState()
         inferenceTime = nil
         status = nil
         hasRunAnalysis = false
@@ -1120,20 +1935,238 @@ struct ContentView: View {
             errorMessage = nil
         }
     }
+
+    private func clearClinicalState() {
+        focusEntities = []
+        clinicalResult = nil
+        if piiResult == nil {
+            focusSourceText = ""
+        }
+    }
+
+    private func resetWorkflowForNewScan() {
+        documentImages = []
+        extractedText = ""
+        entities = []
+        focusEntities = []
+        focusSourceText = ""
+        piiResult = nil
+        clinicalResult = nil
+        piiComparisons = [:]
+        status = nil
+        errorMessage = nil
+        inferenceTime = nil
+        scannedPageCount = 0
+        lastSource = nil
+        hasRunAnalysis = false
+        needsDocumentOCR = false
+        workflowStage = .input
+    }
 }
 
-private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
-    case openMed
-    case gliner
+private enum ScanDemoWorkflowStage: Int, CaseIterable, Identifiable, Sendable {
+    case input
+    case review
+    case deidentify
+    case clinical
+    case summary
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .input:
+            return "Start with a note"
+        case .review:
+            return "Review the transcript"
+        case .deidentify:
+            return "Remove identifiers"
+        case .clinical:
+            return "Extract clinical signals"
+        case .summary:
+            return "Review the safe output"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .input:
+            return "Input"
+        case .review:
+            return "Review"
+        case .deidentify:
+            return "De-ID"
+        case .clinical:
+            return "Clinical"
+        case .summary:
+            return "Summary"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .input:
+            return "Scan, load the sample document, or paste text."
+        case .review:
+            return "Run OCR and correct the transcript before masking."
+        case .deidentify:
+            return "Choose a PII model and run local de-identification."
+        case .clinical:
+            return "Run GLiNER Relex over the safe note with a task preset."
+        case .summary:
+            return "Export results or compare another PII engine."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .input:
+            return "doc.viewfinder"
+        case .review:
+            return "text.viewfinder"
+        case .deidentify:
+            return "shield.lefthalf.filled"
+        case .clinical:
+            return "waveform.path.ecg.text.page.fill"
+        case .summary:
+            return "checkmark.seal.fill"
+        }
+    }
+
+    var previous: ScanDemoWorkflowStage? {
+        ScanDemoWorkflowStage(rawValue: rawValue - 1)
+    }
+}
+
+private struct WorkflowStepIndicator: View {
+    let currentStage: ScanDemoWorkflowStage
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(ScanDemoWorkflowStage.allCases) { stage in
+                VStack(spacing: 4) {
+                    Image(systemName: stage.rawValue < currentStage.rawValue ? "checkmark.circle.fill" : stage.systemImage)
+                        .font(.caption.weight(.bold))
+                    Text(stage.shortTitle)
+                        .font(.caption2.weight(.bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .foregroundStyle(stage == currentStage ? Color(red: 0.02, green: 0.38, blue: 0.35) : .secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+                .background(
+                    (stage == currentStage ? Color.teal.opacity(0.12) : Color.clear),
+                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                )
+            }
+        }
+    }
+}
+
+private struct DocumentInput: Sendable {
+    let images: [UIImage]
+    let source: ScanSource?
+    let ocrText: String
+    let editedText: String
+    let needsOCR: Bool
+    let pageCount: Int
+}
+
+private struct ModelReadiness: Sendable {
+    let openMedPII: OpenMedMLXModelCacheState
+    let privacyFilter: OpenMedMLXModelCacheState
+    let gliner: OpenMedMLXModelCacheState
+}
+
+private struct PIIResult: Sendable {
+    let engine: ScanDemoPIIEngine
+    let maskedText: String
+    let entities: [DetectedEntity]
+    let inferenceTime: Double
+}
+
+private struct ClinicalResult: Sendable {
+    let preset: ClinicalTaskPreset
+    let labels: [String]
+    let threshold: Float
+    let entities: [DetectedEntity]
+    let inferenceTime: Double
+}
+
+private enum ClinicalTaskPreset: String, CaseIterable, Identifiable, Sendable {
+    case clinicalSummary
+    case medicationReview
+    case edFollowUp
+    case carePlan
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .clinicalSummary:
+            return "Clinical Summary"
+        case .medicationReview:
+            return "Medication Review"
+        case .edFollowUp:
+            return "ED Follow-up"
+        case .carePlan:
+            return "Care Plan"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .clinicalSummary:
+            return "Broad clinical concepts for a quick overview of the note."
+        case .medicationReview:
+            return "Medication names, doses, allergies, and treatment context."
+        case .edFollowUp:
+            return "Symptoms, diagnoses, return precautions, and follow-up needs."
+        case .carePlan:
+            return "Care instructions, planned tests, referrals, and next steps."
+        }
+    }
+
+    var labels: [String] {
+        switch self {
+        case .clinicalSummary:
+            return ["condition", "symptom", "medication", "dosage", "procedure", "test", "allergy", "follow-up", "care plan"]
+        case .medicationReview:
+            return ["medication", "dosage", "frequency", "allergy", "adverse reaction", "treatment", "pharmacy instruction"]
+        case .edFollowUp:
+            return ["chief concern", "symptom", "diagnosis", "test", "return precaution", "follow-up", "care setting"]
+        case .carePlan:
+            return ["care plan", "procedure", "test", "referral", "follow-up", "work status", "patient instruction"]
+        }
+    }
+}
+
+private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
+    case openMed
+    case privacyFilter
+
+    var id: String { rawValue }
+
+    static var availableCases: [ScanDemoPIIEngine] {
+        allCases
+    }
+
+    var title: String {
+        switch self {
         case .openMed:
             return "OpenMed PII"
-        case .gliner:
-            return "GLiNER PII"
+        case .privacyFilter:
+            return "OpenAI PII"
+        }
+    }
+
+    var pickerTitle: String {
+        switch self {
+        case .openMed:
+            return "OpenMed"
+        case .privacyFilter:
+            return "OpenAI"
         }
     }
 
@@ -1141,8 +2174,8 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .openMed:
             return "Dedicated PII extractor"
-        case .gliner:
-            return "Zero-shot PII span model"
+        case .privacyFilter:
+            return "Privacy Filter runtime"
         }
     }
 
@@ -1150,8 +2183,8 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .openMed:
             return "Runs the OpenMed token-classification model plus the semantic merge rules used for production-style masking."
-        case .gliner:
-            return "Runs the GLiNER PII model with predefined identifier labels at 60%+ confidence before masking."
+        case .privacyFilter:
+            return "Runs the OpenAI Privacy Filter MLX artifact with native tiktoken tokenization and BIOES decoding."
         }
     }
 
@@ -1159,8 +2192,8 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .openMed:
             return "checkmark.shield.fill"
-        case .gliner:
-            return "sparkles.rectangle.stack.fill"
+        case .privacyFilter:
+            return "lock.document.fill"
         }
     }
 
@@ -1168,8 +2201,8 @@ private enum ScanDemoPIIEngine: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .openMed:
             return .teal
-        case .gliner:
-            return .blue
+        case .privacyFilter:
+            return .indigo
         }
     }
 }
@@ -1179,56 +2212,48 @@ private struct ScanDemoModelDescriptor: Sendable {
     let sourceModelID: String
     let artifactRepoID: String
     let note: String
-    let requiresAuthToken: Bool
 
     static let liteClinical = ScanDemoModelDescriptor(
         displayName: "LiteClinical Small",
         sourceModelID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
         artifactRepoID: "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx",
-        note: "DistilBERT-family OpenMed PII model used here for a small, native on-device demo.",
-        requiresAuthToken: false
+        note: "DistilBERT-family OpenMed PII model used here for a small, native on-device demo."
     )
 
-    static let glinerMultiPII = ScanDemoModelDescriptor(
-        displayName: "GLiNER Multi PII v1",
-        sourceModelID: "urchade/gliner_multi_pii-v1",
-        artifactRepoID: "OpenMed/gliner-multi-pii-v1-mlx",
-        note: "Zero-shot GLiNER span model used here for optional PII masking and second-stage clinical extraction.",
-        requiresAuthToken: true
+    static let glinerRelex = ScanDemoModelDescriptor(
+        displayName: "GLiNER Relex Base",
+        sourceModelID: "knowledgator/gliner-relex-base-v1.0",
+        artifactRepoID: "OpenMed/gliner-relex-base-v1.0-mlx",
+        note: "OpenMed GLiNER-family relation extraction artifact used here for clinical entity extraction on de-identified notes."
+    )
+
+    static let gliClassInstruct = ScanDemoModelDescriptor(
+        displayName: "GLiClass Instruct",
+        sourceModelID: "knowledgator/gliclass-instruct-base-v1.0",
+        artifactRepoID: "OpenMed/gliclass-instruct-base-v1.0-mlx",
+        note: "OpenMed GLiClass artifact for zero-shot note classification; not used as an NER extractor."
+    )
+
+    static let privacyFilter = ScanDemoModelDescriptor(
+        displayName: "OpenAI Privacy Filter",
+        sourceModelID: "openai/privacy-filter",
+        artifactRepoID: "OpenMed/privacy-filter-mlx",
+        note: "OpenAI Privacy Filter artifact loaded through native OpenMedKit MLX support."
     )
 }
 
 private struct ScanDemoPipelineDescriptor: Sendable {
     let piiModel: ScanDemoModelDescriptor
+    let privacyFilterModel: ScanDemoModelDescriptor
     let glinerModel: ScanDemoModelDescriptor
-    let piiLabels: [String]
-    let piiGlinerThreshold: Float
     let focusLabels: [String]
+    let relationLabels: [String]
     let glinerThreshold: Float
 
     static let defaultPipeline = ScanDemoPipelineDescriptor(
         piiModel: .liteClinical,
-        glinerModel: .glinerMultiPII,
-        piiLabels: [
-            "person",
-            "patient name",
-            "doctor name",
-            "organization",
-            "hospital",
-            "location",
-            "address",
-            "phone number",
-            "email",
-            "date",
-            "date of birth",
-            "age",
-            "medical record number",
-            "patient id",
-            "insurance id",
-            "account number",
-            "social security number",
-        ],
-        piiGlinerThreshold: 0.6,
+        privacyFilterModel: .privacyFilter,
+        glinerModel: .glinerRelex,
         focusLabels: [
             "symptom",
             "condition",
@@ -1243,6 +2268,16 @@ private struct ScanDemoPipelineDescriptor: Sendable {
             "care setting",
             "work status",
         ],
+        relationLabels: [
+            "has symptom",
+            "diagnosed with",
+            "treated with",
+            "takes medication",
+            "allergic to",
+            "requires test",
+            "follow-up for",
+            "care plan includes",
+        ],
         glinerThreshold: 0.6
     )
 }
@@ -1250,6 +2285,15 @@ private struct ScanDemoPipelineDescriptor: Sendable {
 private struct ScanDemoAnalysisResult: Sendable {
     let piiEntities: [DetectedEntity]
     let maskedText: String
+    let focusEntities: [DetectedEntity]
+}
+
+private struct ScanDemoPIIAnalysisResult: Sendable {
+    let piiEntities: [DetectedEntity]
+    let maskedText: String
+}
+
+private struct ScanDemoClinicalAnalysisResult: Sendable {
     let focusEntities: [DetectedEntity]
 }
 
@@ -1283,7 +2327,7 @@ private enum PipelinePhase: Int, CaseIterable, Identifiable, Sendable {
         case .loading:
             return "Loading the local MLX runtimes"
         case .inferencing:
-            return "Running de-identification and GLiNER"
+            return "Running de-identification and GLiNER Relex"
         }
     }
 
@@ -1406,25 +2450,16 @@ private struct PipelineStatusCard: View {
 private struct ModelSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    @Binding var token: String
-
-    let piiCacheState: OpenMedMLXModelCacheState
+    let openMedPIICacheState: OpenMedMLXModelCacheState
+    let privacyFilterCacheState: OpenMedMLXModelCacheState
     let glinerCacheState: OpenMedMLXModelCacheState
     let isPreparing: Bool
     let message: String?
     let errorMessage: String?
     let onPrepare: () -> Void
 
-    private var trimmedToken: String {
-        token.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var needsAccessToken: Bool {
-        glinerCacheState != .ready
-    }
-
     private var canPrepare: Bool {
-        !isPreparing && (!needsAccessToken || !trimmedToken.isEmpty)
+        !isPreparing
     }
 
     var body: some View {
@@ -1435,40 +2470,16 @@ private struct ModelSetupSheet: View {
                         Label("Offline model setup", systemImage: "shippingbox.and.arrow.backward.fill")
                             .font(.title3.weight(.bold))
 
-                        Text("Use this once before filming. It prepares the local model cache so the visible demo can stay clean and run without network after setup.")
+                        Text("Use this once before a demo. It prepares the local model cache so the visible workflow can run without network after setup.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
                     VStack(spacing: 10) {
-                        cacheRow(title: "OpenMed PII model", state: piiCacheState, tint: .teal)
-                        cacheRow(title: "GLiNER model", state: glinerCacheState, tint: .blue)
-                    }
-
-                    if needsAccessToken {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Access token")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.secondary)
-
-                            SecureField("hf_...", text: $token)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .privacySensitive()
-                                .font(.caption.monospaced())
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 12)
-                                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(Color.black.opacity(0.06), lineWidth: 1)
-                                )
-
-                            Text("Kept only for this app session. Once the artifacts are cached, you can run the demo offline without entering it again.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        cacheRow(title: "OpenMed PII model", state: openMedPIICacheState, tint: .teal)
+                        cacheRow(title: "OpenAI Privacy Filter", state: privacyFilterCacheState, tint: .indigo)
+                        cacheRow(title: "Clinical model", state: glinerCacheState, tint: .blue)
                     }
 
                     if let message {
@@ -1596,11 +2607,10 @@ private actor ScanDemoRuntime {
         qos: .utility
     )
     private var piiRuntimes: [String: OpenMed] = [:]
-    private var glinerRuntimes: [String: OpenMedZeroShotNER] = [:]
+    private var glinerRelexRuntimes: [String: OpenMedRelationExtractor] = [:]
 
     func prepareForOfflineUse(
         pipeline: ScanDemoPipelineDescriptor,
-        authToken: String?,
         progress: @escaping @Sendable (PipelineStatus) async -> Void
     ) async throws {
         guard DemoPlatform.supportsOnDeviceMLX else {
@@ -1608,30 +2618,35 @@ private actor ScanDemoRuntime {
         }
 
         _ = try await loadPIIRuntime(model: pipeline.piiModel, progress: progress)
-        _ = try await loadGLiNERRuntime(
+        _ = try await loadPIIRuntime(model: pipeline.privacyFilterModel, progress: progress)
+        _ = try await loadGLiNERRelexRuntime(
             model: pipeline.glinerModel,
-            authToken: authToken,
             progress: progress
         )
     }
 
-    func analyze(
+    func recognizeText(from images: [UIImage]) async throws -> DocumentRecognitionResult {
+        try await DocumentTextRecognizer.extractText(from: images)
+    }
+
+    func runPII(
         text: String,
         pipeline: ScanDemoPipelineDescriptor,
         piiEngine: ScanDemoPIIEngine,
-        authToken: String?,
         progress: @escaping @Sendable (PipelineStatus) async -> Void
-    ) async throws -> ScanDemoAnalysisResult {
+    ) async throws -> ScanDemoPIIAnalysisResult {
         guard DemoPlatform.supportsOnDeviceMLX else {
             throw ScanDemoError.unsupportedDevice
         }
 
-        var glinerForClinicalStage: OpenMedZeroShotNER?
         let piiEntities: [DetectedEntity]
 
         switch piiEngine {
         case .openMed:
-            let openmed = try await loadPIIRuntime(model: pipeline.piiModel, progress: progress)
+            let openmed = try await loadPIIRuntime(
+                model: pipeline.piiModel,
+                progress: progress
+            )
 
             await progress(
                 PipelineStatus(
@@ -1653,63 +2668,167 @@ private actor ScanDemoRuntime {
                 }
             }
 
-        case .gliner:
-            let gliner = try await loadGLiNERRuntime(
-                model: pipeline.glinerModel,
-                authToken: authToken,
+        case .privacyFilter:
+            let openmed = try await loadPIIRuntime(
+                model: pipeline.privacyFilterModel,
                 progress: progress
             )
-            glinerForClinicalStage = gliner
 
             await progress(
                 PipelineStatus(
                     phase: .inferencing,
-                    detail: "Running GLiNER PII zero-shot extraction on the original note at 60%+ confidence."
+                    detail: "Running OpenAI Privacy Filter with native tiktoken tokenization and BIOES decoding on-device."
                 )
             )
 
-            let glinerPIIEntities = try await extractChunkedGLiNEREntities(
-                from: text,
-                labels: pipeline.piiLabels,
-                threshold: pipeline.piiGlinerThreshold,
-                gliner: gliner
-            ).map { entity in
-                DetectedEntity(
-                    label: entity.label,
-                    text: entity.text,
-                    confidence: entity.score,
-                    start: entity.start,
-                    end: entity.end,
-                    category: entityCategory(for: entity.label)
-                )
+            piiEntities = try await runBlockingWork {
+                try openmed.extractPII(text).map { prediction in
+                    DetectedEntity(
+                        label: prediction.label,
+                        text: prediction.text,
+                        confidence: prediction.confidence,
+                        start: prediction.start,
+                        end: prediction.end,
+                        category: entityCategory(for: prediction.label)
+                    )
+                }
             }
-            piiEntities = suppressOverlappingPIIEntities(glinerPIIEntities)
         }
 
-        let maskedText = maskedTextByReplacingEntities(in: text, entities: piiEntities)
-        let gliner: OpenMedZeroShotNER
-        if let glinerForClinicalStage {
-            gliner = glinerForClinicalStage
-        } else {
-            gliner = try await loadGLiNERRuntime(
-                model: pipeline.glinerModel,
-                authToken: authToken,
-                progress: progress
-            )
+        return ScanDemoPIIAnalysisResult(
+            piiEntities: piiEntities,
+            maskedText: maskedTextByReplacingEntities(in: text, entities: piiEntities)
+        )
+    }
+
+    func runClinicalExtraction(
+        maskedText: String,
+        pipeline: ScanDemoPipelineDescriptor,
+        labels: [String],
+        threshold: Float,
+        progress: @escaping @Sendable (PipelineStatus) async -> Void
+    ) async throws -> ScanDemoClinicalAnalysisResult {
+        guard DemoPlatform.supportsOnDeviceMLX else {
+            throw ScanDemoError.unsupportedDevice
         }
+
+        let extractor = try await loadGLiNERRelexRuntime(
+            model: pipeline.glinerModel,
+            progress: progress
+        )
 
         await progress(
             PipelineStatus(
                 phase: .inferencing,
-                detail: "Running native GLiNER zero-shot NER on the masked note with section-aware chunks to recover more clinical signals."
+                detail: "Running native GLiNER Relex clinical NER on the masked note with section-aware chunks."
             )
         )
 
-        let focusEntities = try await extractChunkedGLiNEREntities(
+        let focusEntities = try await extractChunkedRelexEntities(
+            from: maskedText,
+            labels: labels,
+            threshold: threshold,
+            relationLabels: pipeline.relationLabels,
+            extractor: extractor
+        ).map { entity in
+            DetectedEntity(
+                label: entity.label,
+                text: entity.text,
+                confidence: entity.score,
+                start: entity.start,
+                end: entity.end,
+                category: entityCategory(for: entity.label)
+            )
+        }
+
+        return ScanDemoClinicalAnalysisResult(focusEntities: focusEntities)
+    }
+
+    func analyze(
+        text: String,
+        pipeline: ScanDemoPipelineDescriptor,
+        piiEngine: ScanDemoPIIEngine,
+        progress: @escaping @Sendable (PipelineStatus) async -> Void
+    ) async throws -> ScanDemoAnalysisResult {
+        guard DemoPlatform.supportsOnDeviceMLX else {
+            throw ScanDemoError.unsupportedDevice
+        }
+
+        let piiEntities: [DetectedEntity]
+
+        switch piiEngine {
+        case .openMed:
+            let openmed = try await loadPIIRuntime(
+                model: pipeline.piiModel,
+                progress: progress
+            )
+
+            await progress(
+                PipelineStatus(
+                    phase: .inferencing,
+                    detail: "Running OpenMed token classification and semantic PII merging on-device."
+                )
+            )
+
+            piiEntities = try await runBlockingWork {
+                try openmed.extractPII(text).map { prediction in
+                    DetectedEntity(
+                        label: prediction.label,
+                        text: prediction.text,
+                        confidence: prediction.confidence,
+                        start: prediction.start,
+                        end: prediction.end,
+                        category: entityCategory(for: prediction.label)
+                    )
+                }
+            }
+
+        case .privacyFilter:
+            let openmed = try await loadPIIRuntime(
+                model: pipeline.privacyFilterModel,
+                progress: progress
+            )
+
+            await progress(
+                PipelineStatus(
+                    phase: .inferencing,
+                    detail: "Running OpenAI Privacy Filter with native tiktoken tokenization and BIOES decoding on-device."
+                )
+            )
+
+            piiEntities = try await runBlockingWork {
+                try openmed.extractPII(text).map { prediction in
+                    DetectedEntity(
+                        label: prediction.label,
+                        text: prediction.text,
+                        confidence: prediction.confidence,
+                        start: prediction.start,
+                        end: prediction.end,
+                        category: entityCategory(for: prediction.label)
+                    )
+                }
+            }
+        }
+
+        let maskedText = maskedTextByReplacingEntities(in: text, entities: piiEntities)
+        let extractor = try await loadGLiNERRelexRuntime(
+            model: pipeline.glinerModel,
+            progress: progress
+        )
+
+        await progress(
+            PipelineStatus(
+                phase: .inferencing,
+                detail: "Running native GLiNER Relex clinical NER on the masked note with section-aware chunks to recover more clinical signals."
+            )
+        )
+
+        let focusEntities = try await extractChunkedRelexEntities(
             from: maskedText,
             labels: pipeline.focusLabels,
             threshold: pipeline.glinerThreshold,
-            gliner: gliner
+            relationLabels: pipeline.relationLabels,
+            extractor: extractor
         ).map { entity in
             DetectedEntity(
                 label: entity.label,
@@ -1738,7 +2857,6 @@ private actor ScanDemoRuntime {
 
         let preparedArtifact = try await prepareModelDirectory(
             model: model,
-            authToken: nil,
             progress: progress
         )
         await progress(
@@ -1756,61 +2874,53 @@ private actor ScanDemoRuntime {
         return runtime
     }
 
-    private func loadGLiNERRuntime(
+    private func loadGLiNERRelexRuntime(
         model: ScanDemoModelDescriptor,
-        authToken: String?,
         progress: @escaping @Sendable (PipelineStatus) async -> Void
-    ) async throws -> OpenMedZeroShotNER {
-        if let glinerRuntime = glinerRuntimes[model.artifactRepoID] {
-            return glinerRuntime
-        }
-
-        let normalizedToken = authToken?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let cacheState = try OpenMedModelStore.mlxModelCacheState(
-            repoID: model.artifactRepoID,
-            revision: "main"
-        )
-        if model.requiresAuthToken && cacheState != .ready && (normalizedToken?.isEmpty ?? true) {
-            throw ScanDemoError.missingAuthToken(model.artifactRepoID)
+    ) async throws -> OpenMedRelationExtractor {
+        if let runtime = glinerRelexRuntimes[model.artifactRepoID] {
+            return runtime
         }
 
         let preparedArtifact = try await prepareModelDirectory(
             model: model,
-            authToken: normalizedToken,
             progress: progress
         )
         await progress(
             PipelineStatus(
                 phase: .loading,
                 detail: preparedArtifact.downloadedNow
-                    ? "Preparing tokenizer assets and initializing the native GLiNER runtime in OpenMedKit."
-                    : "Using the cached \(model.displayName) artifact and initializing the native GLiNER runtime."
+                    ? "Preparing tokenizer assets and initializing the native GLiNER Relex runtime in OpenMedKit."
+                    : "Using the cached \(model.displayName) artifact and initializing the native GLiNER Relex runtime."
             )
         )
         let runtime = try await runBlockingWork {
-            try OpenMedZeroShotNER(modelDirectoryURL: preparedArtifact.directory)
+            try OpenMedRelationExtractor(modelDirectoryURL: preparedArtifact.directory)
         }
-        glinerRuntimes[model.artifactRepoID] = runtime
+        glinerRelexRuntimes[model.artifactRepoID] = runtime
         return runtime
     }
 
-    private func extractChunkedGLiNEREntities(
+    private func extractChunkedRelexEntities(
         from text: String,
         labels: [String],
         threshold: Float,
-        gliner: OpenMedZeroShotNER
+        relationLabels: [String],
+        extractor: OpenMedRelationExtractor
     ) async throws -> [OpenMedZeroShotEntity] {
         let chunks = makeGLiNERChunks(from: text)
         var mergedEntities: [ChunkedGLiNEREntityKey: OpenMedZeroShotEntity] = [:]
 
         for chunk in chunks {
             let predictions = try await runBlockingWork {
-                try gliner.extract(
+                try extractor.extract(
                     chunk.text,
-                    labels: labels,
+                    entityLabels: labels,
+                    relationLabels: relationLabels,
                     threshold: threshold,
+                    relationThreshold: 0.9,
                     flatNER: true
-                )
+                ).entities
             }
 
             for prediction in predictions {
@@ -1838,43 +2948,6 @@ private actor ScanDemoRuntime {
         }
 
         return suppressOverlappingChunkedEntities(Array(mergedEntities.values))
-    }
-
-    private func suppressOverlappingPIIEntities(
-        _ entities: [DetectedEntity]
-    ) -> [DetectedEntity] {
-        let sorted = entities.sorted { lhs, rhs in
-            if lhs.confidence != rhs.confidence {
-                return lhs.confidence > rhs.confidence
-            }
-            let lhsLength = lhs.end - lhs.start
-            let rhsLength = rhs.end - rhs.start
-            if lhsLength != rhsLength {
-                return lhsLength > rhsLength
-            }
-            if lhs.start != rhs.start {
-                return lhs.start < rhs.start
-            }
-            return lhs.end < rhs.end
-        }
-
-        var kept = [DetectedEntity]()
-
-        for entity in sorted {
-            let overlapsExisting = kept.contains { existing in
-                max(existing.start, entity.start) < min(existing.end, entity.end)
-            }
-            if !overlapsExisting {
-                kept.append(entity)
-            }
-        }
-
-        return kept.sorted { lhs, rhs in
-            if lhs.start == rhs.start {
-                return lhs.end > rhs.end
-            }
-            return lhs.start < rhs.start
-        }
     }
 
     private func runBlockingWork<T>(
@@ -1940,7 +3013,6 @@ private actor ScanDemoRuntime {
 
     private func prepareModelDirectory(
         model: ScanDemoModelDescriptor,
-        authToken: String?,
         progress: @escaping @Sendable (PipelineStatus) async -> Void
     ) async throws -> PreparedArtifact {
         let cacheState = try OpenMedModelStore.mlxModelCacheState(
@@ -1977,7 +3049,6 @@ private actor ScanDemoRuntime {
         return PreparedArtifact(
             directory: try await OpenMedModelStore.downloadMLXModel(
                 repoID: model.artifactRepoID,
-                authToken: authToken,
                 revision: "main"
             ),
             downloadedNow: true
@@ -2082,7 +3153,6 @@ private enum ScanDemoError: LocalizedError {
     case invalidScanImage
     case emptyRecognizedText
     case missingSampleDocument
-    case missingAuthToken(String)
 
     var errorDescription: String? {
         switch self {
@@ -2094,29 +3164,7 @@ private enum ScanDemoError: LocalizedError {
             return "The document loaded correctly, but Vision did not extract readable text from it."
         case .missingSampleDocument:
             return "The bundled sample document asset could not be loaded."
-        case .missingAuthToken(_):
-            return "Model setup is not complete on this device yet. Cache the GLiNER artifact once before recording, then the demo can run offline."
         }
-    }
-}
-
-private enum ScanDemoSecrets {
-    static var huggingFaceToken: String {
-        let candidates = [
-            "OPENMED_HF_TOKEN",
-            "OPENMED_HUGGINGFACE_TOKEN",
-            "HF_TOKEN",
-            "HUGGINGFACE_HUB_TOKEN",
-        ]
-
-        for name in candidates {
-            let token = ProcessInfo.processInfo.environment[name]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if !token.isEmpty {
-                return token
-            }
-        }
-
-        return ""
     }
 }
 
@@ -2396,6 +3444,14 @@ private func maskedTextByReplacingEntities(in text: String, entities: [DetectedE
 
     output += text.substring(from: cursor, to: text.count)
     return output
+}
+
+private func jsonEscape(_ value: String) -> String {
+    value
+        .replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "\"", with: "\\\"")
+        .replacingOccurrences(of: "\n", with: "\\n")
+        .replacingOccurrences(of: "\r", with: "\\r")
 }
 
 private func makeGLiNERChunks(from text: String) -> [GLiNERTextChunk] {
