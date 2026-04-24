@@ -255,6 +255,58 @@ class TestExtractPII:
 
         assert mock_analyze.call_args.kwargs["loader"] is loader
 
+    @patch("openmed.analyze_text")
+    def test_extract_pii_privacy_filter_uses_model_led_merging(self, mock_analyze):
+        """Privacy Filter should not let regex invent unsupported labels."""
+        mock_analyze.return_value = PredictionResult(
+            text="Patient SSN: 123-45-6789",
+            entities=[],
+            model_name="OpenMed/privacy-filter-mlx",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        with patch(
+            "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
+            return_value=[],
+        ) as mock_merge:
+            extract_pii(
+                "Patient SSN: 123-45-6789",
+                model_name="OpenMed/privacy-filter-mlx",
+                use_smart_merging=True,
+            )
+
+        assert mock_merge.call_args.kwargs["allow_semantic_only_matches"] is False
+        assert mock_merge.call_args.kwargs["allow_label_expansion"] is False
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_local_privacy_filter_artifact_uses_model_led_merging(self, mock_analyze, tmp_path):
+        """Local MLX artifacts should be detected from manifest metadata, not folder names."""
+        artifact_dir = tmp_path / "artifact"
+        artifact_dir.mkdir()
+        (artifact_dir / "openmed-mlx.json").write_text(
+            '{"task":"token-classification","family":"openai-privacy-filter"}'
+        )
+
+        mock_analyze.return_value = PredictionResult(
+            text="Patient MRN: ABC-123",
+            entities=[],
+            model_name=str(artifact_dir),
+            timestamp=datetime.now().isoformat(),
+        )
+
+        with patch(
+            "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
+            return_value=[],
+        ) as mock_merge:
+            extract_pii(
+                "Patient MRN: ABC-123",
+                model_name=str(artifact_dir),
+                use_smart_merging=True,
+            )
+
+        assert mock_merge.call_args.kwargs["allow_semantic_only_matches"] is False
+        assert mock_merge.call_args.kwargs["allow_label_expansion"] is False
+
 
 # ---------------------------------------------------------------------------
 # deidentify Tests
