@@ -92,8 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
     swift: `<pre><code><span class="keyword">import</span> <span class="function">OpenMedKit</span>
 
 <span class="keyword">let</span> <span class="variable">modelDirectory</span> = <span class="keyword">try</span> <span class="keyword">await</span> <span class="function">OpenMedModelStore.downloadMLXModel</span>(
-    repoID: <span class="string">"OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"</span>,
-    authToken: <span class="string">"&lt;token-if-private&gt;"</span>
+    repoID: <span class="string">"OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"</span>
 )
 
 <span class="keyword">let</span> <span class="variable">openmed</span> = <span class="keyword">try</span> <span class="function">OpenMed</span>(
@@ -152,8 +151,7 @@ print(result.entities)`,
     swift: `import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-    authToken: "<token-if-private>"
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
 )
 
 let openmed = try OpenMed(
