@@ -64,7 +64,7 @@ def _privacy_quant_config() -> dict:
         {
             "vocab_size": 64,
             "hidden_size": 32,
-            "intermediate_size": 16,
+            "intermediate_size": 32,
             "head_dim": 8,
             "_mlx_quantization": {
                 "bits": 8,
@@ -161,6 +161,8 @@ def test_privacy_filter_q8_loader_matches_bf16_fixture(tmp_path):
     q8_model.load_weights(list(weights.items()))
     nn.quantize(q8_model, group_size=32, bits=8, mode="affine")
     q8_weights = dict(tree_flatten(q8_model.parameters()))
+    assert "block.0.mlp.swiglu.scales" in q8_weights
+    assert "block.0.mlp.out.scales" in q8_weights
     _write_mlx_artifact(tmp_path / "q8", q8_config, q8_weights)
 
     bf16_model = load_model(tmp_path / "bf16")
