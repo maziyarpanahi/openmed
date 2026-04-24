@@ -44,7 +44,6 @@ public enum OpenMedModelStore {
 
     public static func downloadMLXModel(
         repoID: String,
-        authToken: String? = nil,
         revision: String = "main",
         cacheDirectory: URL? = nil
     ) async throws -> URL {
@@ -70,7 +69,6 @@ public enum OpenMedModelStore {
             repoID: repoID,
             revision: revision,
             relativePath: "openmed-mlx.json",
-            authToken: authToken,
             destinationURL: manifestURL
         )
 
@@ -78,7 +76,6 @@ public enum OpenMedModelStore {
             try await downloadLegacyArtifact(
                 repoID: repoID,
                 revision: revision,
-                authToken: authToken,
                 into: modelDirectory
             )
             try markArtifactReadyIfComplete(at: modelDirectory)
@@ -94,7 +91,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: relativePath)
             )
         }
@@ -107,7 +103,6 @@ public enum OpenMedModelStore {
                     repoID: repoID,
                     revision: revision,
                     relativePath: weightPath,
-                    authToken: authToken,
                     destinationURL: destinationURL
                 )
                 downloadedWeights = true
@@ -128,7 +123,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: relativePath)
             )
         }
@@ -239,14 +233,12 @@ public enum OpenMedModelStore {
     private static func downloadLegacyArtifact(
         repoID: String,
         revision: String,
-        authToken: String?,
         into modelDirectory: URL
     ) async throws {
         try await downloadFile(
             repoID: repoID,
             revision: revision,
             relativePath: "config.json",
-            authToken: authToken,
             destinationURL: modelDirectory.appending(path: "config.json")
         )
 
@@ -254,7 +246,6 @@ public enum OpenMedModelStore {
             repoID: repoID,
             revision: revision,
             relativePath: "id2label.json",
-            authToken: authToken,
             destinationURL: modelDirectory.appending(path: "id2label.json")
         )
 
@@ -264,7 +255,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: fileName,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: fileName)
             )
             hasWeights = hasWeights || didDownload || FileManager.default.fileExists(
@@ -280,7 +270,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: fileName,
-                authToken: authToken,
                 destinationURL: modelDirectory.appending(path: fileName)
             )
         }
@@ -303,7 +292,6 @@ public enum OpenMedModelStore {
         repoID: String,
         revision: String,
         relativePath: String,
-        authToken: String?,
         destinationURL: URL
     ) async throws {
         if FileManager.default.fileExists(atPath: destinationURL.path) {
@@ -313,9 +301,6 @@ public enum OpenMedModelStore {
         let remoteURL = try resolveHubURL(repoID: repoID, revision: revision, relativePath: relativePath)
         var request = URLRequest(url: remoteURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
-        if let authToken, !authToken.isEmpty {
-            request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -337,7 +322,6 @@ public enum OpenMedModelStore {
         repoID: String,
         revision: String,
         relativePath: String,
-        authToken: String?,
         destinationURL: URL
     ) async throws -> Bool {
         do {
@@ -345,7 +329,6 @@ public enum OpenMedModelStore {
                 repoID: repoID,
                 revision: revision,
                 relativePath: relativePath,
-                authToken: authToken,
                 destinationURL: destinationURL
             )
             return FileManager.default.fileExists(atPath: destinationURL.path)
