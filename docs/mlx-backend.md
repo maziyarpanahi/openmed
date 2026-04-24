@@ -96,8 +96,7 @@ Swift MLX does **not** target iOS Simulator.
 import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-    authToken: "<token-if-private>"
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
 )
 
 let openmed = try OpenMed(
