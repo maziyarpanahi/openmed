@@ -11,6 +11,7 @@ from openmed.mlx.inference import (
     GLiNERMLXPipeline,
     GLiNERRelexMLXPipeline,
     MLXTokenClassificationPipeline,
+    PrivacyFilterMLXPipeline,
     create_mlx_pipeline,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "GLiNERMLXPipeline",
     "GLiClassMLXPipeline",
     "GLiNERRelexMLXPipeline",
+    "PrivacyFilterMLXPipeline",
     "create_mlx_pipeline",
 ]
