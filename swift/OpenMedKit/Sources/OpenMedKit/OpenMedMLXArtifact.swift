@@ -8,6 +8,14 @@ struct OpenMedMLXManifest: Decodable, Sendable {
 
     struct Quantization: Decodable, Sendable {
         let bits: Int
+        let groupSize: Int?
+        let mode: String?
+
+        enum CodingKeys: String, CodingKey {
+            case bits
+            case groupSize = "group_size"
+            case mode
+        }
     }
 
     struct PromptSpec: Decodable, Sendable {
@@ -142,6 +150,8 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
     let positionOffset: Int
     let weightsFormat: String?
     let quantizationBits: Int?
+    let quantizationGroupSize: Int
+    let quantizationMode: String
     let id2label: [Int: String]
     let sourceModelName: String?
     let encoderHiddenSize: Int
@@ -260,6 +270,14 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
 
     struct Quantization: Decodable, Sendable {
         let bits: Int
+        let groupSize: Int?
+        let mode: String?
+
+        enum CodingKeys: String, CodingKey {
+            case bits
+            case groupSize = "group_size"
+            case mode
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -276,8 +294,10 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
             try container.decodeIfPresent(Int.self, forKey: .maxPositionEmbeddings) ?? 512
         layerNormEps = try container.decodeIfPresent(Float.self, forKey: .layerNormEps) ?? 1e-12
         weightsFormat = try container.decodeIfPresent(String.self, forKey: .weightsFormat)
-        quantizationBits =
-            try container.decodeIfPresent(Quantization.self, forKey: .quantization)?.bits
+        let quantization = try container.decodeIfPresent(Quantization.self, forKey: .quantization)
+        quantizationBits = quantization?.bits
+        quantizationGroupSize = quantization?.groupSize ?? 64
+        quantizationMode = quantization?.mode ?? "affine"
         sourceModelName = try container.decodeIfPresent(String.self, forKey: .sourceModelName)
         let configuredHiddenDropout =
             try container.decodeIfPresent(Float.self, forKey: .hiddenDropoutProb)
@@ -596,7 +616,13 @@ struct OpenMedMLXArtifact: Sendable {
             fallbackWeights: availableWeights.filter { $0 != preferredWeights },
             availableWeights: availableWeights,
             weightsFormat: configuration.weightsFormat ?? "safetensors",
-            quantization: configuration.quantizationBits.map(OpenMedMLXManifest.Quantization.init),
+            quantization: configuration.quantizationBits.map {
+                OpenMedMLXManifest.Quantization(
+                    bits: $0,
+                    groupSize: configuration.quantizationGroupSize,
+                    mode: configuration.quantizationMode
+                )
+            },
             maxSequenceLength: configuration.maxPositionEmbeddings,
             promptSpec: nil,
             tokenizer: .init(
