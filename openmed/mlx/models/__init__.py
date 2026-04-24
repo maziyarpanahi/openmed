@@ -11,6 +11,8 @@ _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES = {
     "bert": "bert",
     "distilbert": "bert",
     "electra": "bert",
+    "openai-privacy-filter": "openai-privacy-filter",
+    "privacy-filter": "openai-privacy-filter",
     "roberta": "bert",
     "xlm-roberta": "bert",
     "xlm_roberta": "bert",
@@ -71,12 +73,18 @@ def resolve_artifact_family(
         family = normalize_model_type(manifest.get("family"))
         if family in _CUSTOM_FAMILIES:
             return family
+        resolved_family = _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+        if resolved_family is not None:
+            return resolved_family
 
     model_type: str | None = None
     if isinstance(config, dict):
         family = normalize_model_type(config.get("_mlx_family"))
         if family in _CUSTOM_FAMILIES:
             return family
+        resolved_family = _SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES.get(family)
+        if resolved_family is not None:
+            return resolved_family
 
         model_type = config.get("_mlx_model_type") or config.get("model_type")
         if model_type is None:
@@ -171,6 +179,37 @@ def normalize_model_config(
     elif source_model_type in {"roberta", "xlm-roberta"}:
         normalized.setdefault("type_vocab_size", 1)
         normalized.setdefault("_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1)
+    elif family == "openai-privacy-filter":
+        normalized.setdefault("num_experts", normalized.get("num_local_experts", 128))
+        normalized.setdefault("experts_per_token", normalized.get("num_experts_per_tok", 4))
+        normalized.setdefault("swiglu_limit", normalized.get("swiglu_limit", 7.0))
+        normalized.setdefault("rms_norm_eps", normalized.get("rms_norm_eps", 1e-5))
+        rope_parameters = normalized.get("rope_parameters") or {}
+        normalized.setdefault("rope_theta", rope_parameters.get("rope_theta", 150000.0))
+        normalized.setdefault("rope_scaling_factor", rope_parameters.get("factor", 1.0))
+        normalized.setdefault("rope_ntk_alpha", rope_parameters.get("beta_slow", 1.0))
+        normalized.setdefault("rope_ntk_beta", rope_parameters.get("beta_fast", 32.0))
+        normalized.setdefault(
+            "initial_context_length",
+            rope_parameters.get(
+                "original_max_position_embeddings",
+                normalized.get("initial_context_length", 4096),
+            ),
+        )
+        sliding_window = normalized.get("sliding_window")
+        default_context = (
+            max(0, (int(sliding_window) - 1) // 2)
+            if sliding_window is not None
+            else 128
+        )
+        normalized.setdefault(
+            "bidirectional_left_context",
+            normalized.get("bidirectional_left_context", default_context),
+        )
+        normalized.setdefault(
+            "bidirectional_right_context",
+            normalized.get("bidirectional_right_context", default_context),
+        )
     else:
         normalized.setdefault("type_vocab_size", normalized.get("type_vocab_size", 2))
         normalized.setdefault("_mlx_position_offset", 0)
@@ -195,6 +234,11 @@ def build_model(
         from openmed.mlx.models.deberta_v2_tc import DebertaV2ForTokenClassification
 
         return DebertaV2ForTokenClassification(config)
+
+    if family == "openai-privacy-filter":
+        from openmed.mlx.models.privacy_filter import OpenAIPrivacyFilterForTokenClassification
+
+        return OpenAIPrivacyFilterForTokenClassification(config)
 
     if family == "gliner-uni-encoder-span":
         from openmed.mlx.models.gliner_span import GLiNERSpanModel
