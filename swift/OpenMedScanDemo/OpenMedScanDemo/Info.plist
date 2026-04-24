@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>OpenMed Scan Demo</string>
+    <key>CFBundleIdentifier</key>
+    <string>life.openmed.scandemo</string>
+    <key>NSCameraUsageDescription</key>
+    <string>OpenMed Scan Demo uses the camera to scan clinical documents before running local PII masking.</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.2.0</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UIAppFonts</key>
+    <array>
+        <string>Newsreader.ttf</string>
+        <string>Newsreader-Italic.ttf</string>
+        <string>InterTight.ttf</string>
+        <string>InterTight-Italic.ttf</string>
+        <string>JetBrainsMono.ttf</string>
+        <string>JetBrainsMono-Italic.ttf</string>
+    </array>
+</dict>
+</plist>

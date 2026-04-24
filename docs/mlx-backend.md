@@ -1,6 +1,6 @@
 # MLX Backend (Apple Silicon)
 
-OpenMed v1.0.0 introduces native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
+OpenMed v1.2.0 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
 
 That MLX story now has two surfaces:
 
@@ -55,15 +55,17 @@ The public runtime focuses on automatic preparation at first use. OpenMed's broa
 
 ## Architecture Coverage
 
-As of April 8, 2026, the current public BERT-family MLX path covers these families:
+As of April 24, 2026, the current public MLX path covers these families:
 
 - `bert`
 - `distilbert`
 - `roberta`
 - `xlm-roberta`
 - `electra`
+- `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
+- `openai-privacy-filter`
 
-Python MLX also has the DeBERTa-v2 / DeBERTa-v3 pilot path, but Swift MLX v1 is intentionally limited to the BERT-family encoder rollout above.
+Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, and experimental GLiNER-family tasks.
 
 Architectures still in active rollout:
 
@@ -96,8 +98,7 @@ Swift MLX does **not** target iOS Simulator.
 import OpenMedKit
 
 let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
-    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx",
-    authToken: "<token-if-private>"
+    repoID: "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-mlx"
 )
 
 let openmed = try OpenMed(

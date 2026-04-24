@@ -6,7 +6,6 @@ struct ContentView: View {
     Patient: John Doe, DOB: 01/15/1970, SSN: 000-00-0000, MRN: MRN-TEST-88421, Address: 123 Example Street, Apt 4B, Springfield, CA 90000, Phone: (555) 010-2244, Email: john.doe@example.test, Insurance ID: TEST-POLICY-778291, Driver License: DLT-TEST-442190, Passport: P-TEST-998877, Emergency Contact: Jane Doe, (555) 010-7788, Employer: Example Manufacturing LLC, Employee ID: EMP-20481, Bank Account: ACCT-TEST-55667788, Routing: 000000000.
     """
 
-    @AppStorage("openmed.demo.hfToken") private var huggingFaceToken = ""
     @State private var inputText = Self.showcaseSampleText
     @State private var availableModels: [DemoModelDescriptor] = [.missingBundledModel]
     @State private var selectedModelID = DemoModelDescriptor.missingBundledModel.id
@@ -93,26 +92,12 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundStyle(.tertiary)
 
-                        if selectedModel.requiresAuthToken {
-                            HStack(spacing: 8) {
-                                Image(systemName: huggingFaceToken.isEmpty ? "key.horizontal" : "checkmark.circle.fill")
-                                    .foregroundStyle(huggingFaceToken.isEmpty ? .orange : .green)
-
-                                Text(
-                                    huggingFaceToken.isEmpty
-                                        ? "Manage the private Hugging Face access token in Choose Model."
-                                        : "Private Hugging Face token is saved on this device."
-                                )
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            }
-                            .padding(.top, 2)
-                        } else if selectedModel.runtimeKind == .mlx {
+                        if selectedModel.runtimeKind == .mlx {
                             HStack(spacing: 8) {
                                 Image(systemName: "globe.badge.chevron.backward")
                                     .foregroundStyle(.mint)
 
-                                Text("Public Hugging Face artifact. No token required.")
+                                Text("Public Hugging Face artifact. Downloads once, then runs from local cache.")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -238,8 +223,7 @@ struct ContentView: View {
         .sheet(isPresented: $isShowingModelPicker) {
             ModelPickerSheet(
                 models: availableModels.isEmpty ? [.missingBundledModel] : availableModels,
-                selectedModelID: $selectedModelID,
-                huggingFaceToken: $huggingFaceToken
+                selectedModelID: $selectedModelID
             )
             #if os(iOS)
             .presentationDetents([.large])
@@ -270,7 +254,6 @@ struct ContentView: View {
                 let result = try await runInference(
                     text: analysisText,
                     model: analysisModel,
-                    authToken: huggingFaceToken,
                     progress: { status in
                         await MainActor.run {
                             analysisStatus = status
@@ -359,7 +342,6 @@ struct ContentView: View {
 private func runInference(
     text: String,
     model: DemoModelDescriptor,
-    authToken: String,
     progress: @escaping @Sendable (DemoAnalysisStatus) async -> Void
 ) async throws -> [DetectedEntity] {
     switch model.runtimeKind {
@@ -367,14 +349,12 @@ private func runInference(
         return try await OpenMedRuntimeCache.shared.analyze(
             text: text,
             using: model,
-            authToken: nil,
             progress: progress
         )
     case .mlx:
         return try await OpenMedRuntimeCache.shared.analyze(
             text: text,
             using: model,
-            authToken: authToken,
             progress: progress
         )
     case .unavailable:
@@ -835,15 +815,12 @@ private struct AnalysisPhaseTile: View {
 
 enum DemoError: LocalizedError {
     case invalidBundle(String)
-    case missingAuthToken(String)
     case unavailableInSwift(String)
 
     var errorDescription: String? {
         switch self {
         case .invalidBundle(let detail):
             return "Bundled model is incomplete: \(detail)"
-        case .missingAuthToken(let detail):
-            return detail
         case .unavailableInSwift(let detail):
             return detail
         }
@@ -906,7 +883,6 @@ private struct DemoModelDescriptor: Identifiable, Hashable, Sendable {
     )
 
     var isBundled: Bool { runtimeKind == .bundled }
-    var requiresAuthToken: Bool { false }
     var isRunnableInDemoApp: Bool {
         switch runtimeKind {
         case .bundled:
@@ -1002,6 +978,18 @@ private enum DemoModelCatalog {
 
     private static func swiftMLXCatalog() -> [DemoModelDescriptor] {
         [
+            DemoModelDescriptor(
+                id: "mlx-openai-privacy-filter-q8",
+                displayName: "OpenAI Privacy Filter 8-bit",
+                sourceModelID: "openai/privacy-filter",
+                artifactRepoID: "OpenMed/privacy-filter-mlx-8bit",
+                tokenizerName: "o200k_base",
+                modelURL: nil,
+                id2labelURL: nil,
+                tokenizerFolderURL: nil,
+                runtimeKind: .mlx,
+                note: "8-bit OpenAI Privacy Filter artifact with native Swift MLX runtime, o200k_base tokenization, BIOES/Viterbi decoding, and smart OpenMed PII merging."
+            ),
             DemoModelDescriptor(
                 id: "mlx-clinicale5-small",
                 displayName: "ClinicalE5 Small",
@@ -1173,7 +1161,6 @@ private actor OpenMedRuntimeCache {
     func analyze(
         text: String,
         using model: DemoModelDescriptor,
-        authToken: String?,
         progress: @escaping @Sendable (DemoAnalysisStatus) async -> Void
     ) async throws -> [DetectedEntity] {
         let plan = try analysisPlan(for: model)
@@ -1204,20 +1191,12 @@ private actor OpenMedRuntimeCache {
                         "The selected MLX model does not define a Hugging Face artifact repo."
                     )
                 }
-                let normalizedToken = authToken?.trimmingCharacters(in: .whitespacesAndNewlines)
-                if model.requiresAuthToken && plan.downloadAvailability == .required && (normalizedToken?.isEmpty ?? true) {
-                    throw DemoError.missingAuthToken(
-                        "Enter a Hugging Face token before downloading \(artifactRepoID). The repo is private for now."
-                    )
-                }
-
                 let modelDirectory: URL
                 switch plan.downloadAvailability {
                 case .required:
                     await progress(plan.status(for: .downloadingModel, model: model))
                     modelDirectory = try await OpenMedModelStore.downloadMLXModel(
                         repoID: artifactRepoID,
-                        authToken: normalizedToken,
                         revision: "main"
                     )
                 case .cached, .warm:
@@ -1362,7 +1341,6 @@ struct EntityRow: View {
 private struct ModelPickerSheet: View {
     let models: [DemoModelDescriptor]
     @Binding var selectedModelID: String
-    @Binding var huggingFaceToken: String
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -1371,14 +1349,6 @@ private struct ModelPickerSheet: View {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !query.isEmpty else { return models }
         return models.filter { $0.searchText.contains(query) }
-    }
-
-    private var selectedModel: DemoModelDescriptor? {
-        models.first(where: { $0.id == selectedModelID })
-    }
-
-    private var showsTokenCard: Bool {
-        models.contains(where: \.requiresAuthToken)
     }
 
     var body: some View {
@@ -1444,11 +1414,6 @@ private struct ModelPickerSheet: View {
                 }
             }
             .background(Color.gray.opacity(0.06))
-            .safeAreaInset(edge: .bottom) {
-                if showsTokenCard {
-                    tokenManagementCard
-                }
-            }
             .navigationTitle("Choose Model")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -1505,11 +1470,6 @@ private struct ModelPickerSheet: View {
                         .multilineTextAlignment(.leading)
                         .lineLimit(3)
 
-                    if model.requiresAuthToken {
-                        Label("Private Hugging Face artifact", systemImage: "lock.fill")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.orange)
-                    }
                 }
 
                 Spacer(minLength: 12)
@@ -1550,76 +1510,6 @@ private struct ModelPickerSheet: View {
             .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
-    }
-
-    private var tokenManagementCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("Private MLX Access", systemImage: "key.horizontal")
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                if !huggingFaceToken.isEmpty {
-                    Label("Saved", systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
-                } else if selectedModel?.requiresAuthToken == true {
-                    Label("Needed for current pick", systemImage: "exclamationmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
-                }
-            }
-
-            tokenField
-
-            HStack(alignment: .top) {
-                Text("Only needed while the MLX repos stay private. Once the Hugging Face artifacts are public, you can leave this empty.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer(minLength: 12)
-
-                if !huggingFaceToken.isEmpty {
-                    Button("Clear") {
-                        huggingFaceToken = ""
-                    }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.borderless)
-                }
-            }
-
-            Text("Your model choice is saved immediately. Close this sheet when everything looks right.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 14)
-        .background(.ultraThinMaterial)
-        .overlay(alignment: .top) {
-            Divider()
-        }
-    }
-
-    @ViewBuilder
-    private var tokenField: some View {
-        #if os(iOS)
-        SecureField("hf_...", text: $huggingFaceToken)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .font(.body.monospaced())
-            .padding(12)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        #else
-        SecureField("hf_...", text: $huggingFaceToken)
-            .font(.body.monospaced())
-            .padding(12)
-            .background(Color.gray.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        #endif
     }
 }
 

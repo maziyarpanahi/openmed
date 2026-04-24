@@ -275,27 +275,29 @@ for entity in result.entities:
 deid = deidentify(text, lang="es", method="mask")
 print(deid.deidentified_text)`,
     "Apple MLX": `# uv pip install "openmed[mlx]"
-from openmed.mlx import MLXPipeline
+from huggingface_hub import snapshot_download
+from openmed.mlx.inference import create_mlx_pipeline
 
-pipe = MLXPipeline.from_pretrained(
-    "OpenMed/OpenMed-NER-DiseaseDetect-BioMed-335M",
-    dtype="float16",
-)
+model_dir = snapshot_download("OpenMed/privacy-filter-mlx-8bit")
+pipe = create_mlx_pipeline(model_dir)
 
-entities = pipe("Patient presents with acute pancreatitis and hypertension.")
+entities = pipe("Patient John Doe, DOB 1990-05-15, email john@example.org")
 for e in entities:
-    print(f"{e.label:12} {e.text:40} conf={e.confidence:.2f}")`,
+    print(f"{e['entity_group']:16} {e['word']:32} score={e['score']:.2f}")`,
     Swift: `import OpenMedKit
 
-let pipeline = try await OpenMedPipeline(
-    model: .diseaseDetect335M,
-    runtime: .coreML
+let modelDirectory = try await OpenMedModelStore.downloadMLXModel(
+    repoID: "OpenMed/privacy-filter-mlx-8bit"
 )
 
-let text = "Patient presents with acute pancreatitis."
-let result = try await pipeline.analyze(text)
+let openmed = try OpenMed(
+    backend: .mlx(modelDirectoryURL: modelDirectory)
+)
 
-for entity in result.entities {
+let text = "Patient John Doe, DOB 1990-05-15, email john@example.org"
+let entities = try openmed.extractPII(text)
+
+for entity in entities {
     print(entity.label, entity.text, entity.confidence)
 }`,
 };

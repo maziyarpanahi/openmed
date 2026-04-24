@@ -1,12 +1,4 @@
-"""Convert HuggingFace token-classification models to MLX format.
-
-Usage::
-
-    python3 -m openmed.mlx.convert \\
-        --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \\
-        --output ./mlx-models/pii-small \\
-        --quantize 8
-"""
+"""Convert Hugging Face token-classification models to OpenMed MLX artifacts."""
 
 from __future__ import annotations
 
@@ -14,7 +6,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Any, Dict, Tuple
 
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
@@ -29,28 +21,20 @@ logger = logging.getLogger(__name__)
 # ---- Weight key remapping ---------------------------------------------------
 
 _BERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
-    # Attention projections
     (".attention.self.query.", ".attention.query_proj."),
     (".attention.self.key.", ".attention.key_proj."),
     (".attention.self.value.", ".attention.value_proj."),
     (".attention.output.dense.", ".attention.out_proj."),
-    # Attention LayerNorm → ln1
     (".attention.output.LayerNorm.", ".ln1."),
-    # Feed-forward
     (".intermediate.dense.", ".linear1."),
     (".output.dense.", ".linear2."),
-    # Output LayerNorm → ln2
     (".output.LayerNorm.", ".ln2."),
-    # Encoder layers
     ("bert.encoder.layer.", "encoder.layers."),
-    # Embeddings
     ("bert.embeddings.word_embeddings.", "embeddings.word_embeddings."),
     ("bert.embeddings.position_embeddings.", "embeddings.position_embeddings."),
     ("bert.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
     ("bert.embeddings.LayerNorm.", "embeddings.norm."),
-    # Classification head (keep as-is)
     ("classifier.", "classifier."),
-    # Pooler (not needed for TC, but remap to avoid warnings)
     ("bert.pooler.", "_pooler."),
 ]
 
@@ -63,10 +47,8 @@ _DEBERTA_V2_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
 ]
 
 _ROBERTA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
-    # Encoder layers
     ("roberta.encoder.layer.", "encoder.layers."),
     ("xlm_roberta.encoder.layer.", "encoder.layers."),
-    # Embeddings
     ("roberta.embeddings.word_embeddings.", "embeddings.word_embeddings."),
     ("roberta.embeddings.position_embeddings.", "embeddings.position_embeddings."),
     ("roberta.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
@@ -75,58 +57,43 @@ _ROBERTA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("xlm_roberta.embeddings.position_embeddings.", "embeddings.position_embeddings."),
     ("xlm_roberta.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
     ("xlm_roberta.embeddings.LayerNorm.", "embeddings.norm."),
-    # Pooler
     ("roberta.pooler.", "_pooler."),
     ("xlm_roberta.pooler.", "_pooler."),
 ]
 
 _DISTILBERT_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
-    # Attention projections
     (".attention.q_lin.", ".attention.query_proj."),
     (".attention.k_lin.", ".attention.key_proj."),
     (".attention.v_lin.", ".attention.value_proj."),
     (".attention.out_lin.", ".attention.out_proj."),
-    # Norms
     (".sa_layer_norm.", ".ln1."),
     (".output_layer_norm.", ".ln2."),
-    # Feed-forward
     (".ffn.lin1.", ".linear1."),
     (".ffn.lin2.", ".linear2."),
-    # Encoder layers
     ("distilbert.transformer.layer.", "encoder.layers."),
-    # Embeddings
     ("distilbert.embeddings.word_embeddings.", "embeddings.word_embeddings."),
     ("distilbert.embeddings.position_embeddings.", "embeddings.position_embeddings."),
     ("distilbert.embeddings.LayerNorm.", "embeddings.norm."),
 ]
 
 _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
-    # Attention projections
     (".attention.self.query.", ".attention.query_proj."),
     (".attention.self.key.", ".attention.key_proj."),
     (".attention.self.value.", ".attention.value_proj."),
     (".attention.output.dense.", ".attention.out_proj."),
-    # Attention LayerNorm → ln1
     (".attention.output.LayerNorm.", ".ln1."),
-    # Feed-forward
     (".intermediate.dense.", ".linear1."),
     (".output.dense.", ".linear2."),
-    # Output LayerNorm → ln2
     (".output.LayerNorm.", ".ln2."),
-    # Encoder layers
     ("electra.encoder.layer.", "encoder.layers."),
-    # Embeddings
     ("electra.embeddings.word_embeddings.", "embeddings.word_embeddings."),
     ("electra.embeddings.position_embeddings.", "embeddings.position_embeddings."),
     ("electra.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
     ("electra.embeddings.LayerNorm.", "embeddings.norm."),
-    # Classification head (keep as-is)
     ("classifier.", "classifier."),
 ]
 
-
 def _infer_source_model_type(key: str, model_type: str | None) -> str:
-    """Infer the original HF model type for key remapping purposes."""
     normalized = normalize_model_type(model_type)
     if normalized is not None:
         return normalized
@@ -163,13 +130,17 @@ def remap_key(key: str, model_type: str | None = None) -> str:
     return key
 
 
-def convert_weights(model_id: str, cache_dir: str | None = None) -> Tuple[Dict, dict]:
-    """Load HF weights and config, remap keys for MLX.
+def _to_numpy(tensor: Any) -> Any:
+    if hasattr(tensor, "detach"):
+        return tensor.detach().cpu().numpy()
+    return tensor
 
-    Returns:
-        ``(weights_dict, config_dict)`` where *weights_dict* maps MLX key
-        names to numpy arrays.
-    """
+
+def convert_weights(
+    model_id: str,
+    cache_dir: str | None = None,
+) -> Tuple[Dict[str, Any], dict[str, Any]]:
+    """Load HF token-classification weights and config, then remap for MLX."""
     try:
         from transformers import AutoConfig, AutoModelForTokenClassification
     except ImportError:
@@ -178,14 +149,14 @@ def convert_weights(model_id: str, cache_dir: str | None = None) -> Tuple[Dict, 
             "Install with: pip install transformers"
         )
 
-    logger.info("Loading HuggingFace model %s ...", model_id)
+    logger.info("Loading Hugging Face token-classification model %s ...", model_id)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
     model = AutoModelForTokenClassification.from_pretrained(
-        model_id, cache_dir=cache_dir,
+        model_id,
+        cache_dir=cache_dir,
     )
 
     source_model_type = normalize_model_type(config.model_type)
-    resolved_model_type = resolve_model_type(config.to_dict())
     state_dict = model.state_dict()
     mlx_weights = {}
     skipped = []
@@ -195,38 +166,27 @@ def convert_weights(model_id: str, cache_dir: str | None = None) -> Tuple[Dict, 
         if mlx_key.startswith("_"):
             skipped.append(hf_key)
             continue
-        mlx_weights[mlx_key] = tensor.detach().cpu().numpy()
+        mlx_weights[mlx_key] = _to_numpy(tensor)
 
     if skipped:
         logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
 
     config_dict = normalize_model_config(config.to_dict())
-    config_dict["_mlx_model_type"] = resolved_model_type
-    # Ensure num_labels is present
+    config_dict["_mlx_model_type"] = resolve_model_type(config_dict)
+    config_dict["_mlx_task"] = "token-classification"
     config_dict.setdefault("num_labels", config.num_labels)
-
     return mlx_weights, config_dict
 
 
 def save_mlx_model(
-    weights: Dict,
-    config: dict,
+    weights: Dict[str, Any],
+    config: dict[str, Any],
     output_dir: str | Path,
     quantize_bits: int | None = None,
     source_model_id: str | None = None,
     cache_dir: str | None = None,
 ) -> Path:
-    """Save converted weights and config to *output_dir*.
-
-    Args:
-        weights: Remapped weight dict (key → numpy array).
-        config: Model config dict.
-        output_dir: Destination directory.
-        quantize_bits: If set (4 or 8), quantize weights.
-
-    Returns:
-        Path to the output directory.
-    """
+    """Save converted weights and config to *output_dir*."""
     try:
         import mlx.core as mx
         import mlx.nn as nn
@@ -238,7 +198,6 @@ def save_mlx_model(
     output_dir.mkdir(parents=True, exist_ok=True)
     config_to_save = dict(config)
 
-    # Convert numpy arrays to MLX arrays
     mlx_weights = {k: mx.array(v) for k, v in weights.items()}
 
     if quantize_bits is not None:
@@ -246,29 +205,25 @@ def save_mlx_model(
         model = build_model(config)
         model.load_weights(list(mlx_weights.items()))
         nn.quantize(model, bits=quantize_bits)
-        # Re-extract weights after quantization (tree_flatten returns flat list)
         mlx_weights = dict(tree_flatten(model.parameters()))
         config_to_save["_mlx_quantization"] = {"bits": quantize_bits}
     else:
         config_to_save.pop("_mlx_quantization", None)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
-        for candidate in (
-            output_dir / "weights.safetensors",
-            output_dir / "weights.npz",
-        ):
+        for candidate in (output_dir / "weights.safetensors", output_dir / "weights.npz"):
             if candidate != keep_path and candidate.exists():
                 candidate.unlink()
 
     weights_format = "npz"
     weights_path = output_dir / "weights.npz"
+    metadata = {
+        "format": "mlx",
+        "openmed_task": config_to_save.get("_mlx_task", "token-classification"),
+    }
     try:
         weights_path = output_dir / "weights.safetensors"
-        mx.save_safetensors(
-            weights_path,
-            mlx_weights,
-            metadata={"format": "mlx", "openmed": "token-classification"},
-        )
+        mx.save_safetensors(weights_path, mlx_weights, metadata=metadata)
         weights_format = "safetensors"
     except Exception as exc:
         logger.warning(
@@ -282,15 +237,11 @@ def save_mlx_model(
     _cleanup_other_weight_files(weights_path)
     config_to_save["_mlx_weights_format"] = weights_format
 
-    # Save config
-    config_path = output_dir / "config.json"
-    with open(config_path, "w") as f:
+    with open(output_dir / "config.json", "w") as f:
         json.dump(config_to_save, f, indent=2)
 
-    # Save id2label if present
     if "id2label" in config_to_save:
-        id2label_path = output_dir / "id2label.json"
-        with open(id2label_path, "w") as f:
+        with open(output_dir / "id2label.json", "w") as f:
             json.dump(config_to_save["id2label"], f, indent=2)
 
     _finalize_artifact(
@@ -305,18 +256,13 @@ def save_mlx_model(
 
 
 def save_numpy_model(
-    weights: Dict,
-    config: dict,
+    weights: Dict[str, Any],
+    config: dict[str, Any],
     output_dir: str | Path,
     source_model_id: str | None = None,
     cache_dir: str | None = None,
 ) -> Path:
-    """Save converted weights without MLX, preferring ``.safetensors``.
-
-    This fallback is useful when converting on a machine without MLX
-    (e.g., Linux CI).  The resulting files are identical in structure to
-    :func:`save_mlx_model` and can be loaded by the MLX backend.
-    """
+    """Save converted weights without MLX, preferring ``.safetensors``."""
     import numpy as np
 
     output_dir = Path(output_dir)
@@ -324,25 +270,22 @@ def save_numpy_model(
     config_to_save = dict(config)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
-        for candidate in (
-            output_dir / "weights.safetensors",
-            output_dir / "weights.npz",
-        ):
+        for candidate in (output_dir / "weights.safetensors", output_dir / "weights.npz"):
             if candidate != keep_path and candidate.exists():
                 candidate.unlink()
 
     weights_format = "npz"
     weights_path = output_dir / "weights.npz"
+    metadata = {
+        "format": "mlx",
+        "openmed_task": config_to_save.get("_mlx_task", "token-classification"),
+    }
     try:
         from safetensors.numpy import save_file
 
         weights_path = output_dir / "weights.safetensors"
         safe_weights = {k: np.ascontiguousarray(v) for k, v in weights.items()}
-        save_file(
-            safe_weights,
-            str(weights_path),
-            metadata={"format": "mlx", "openmed": "token-classification"},
-        )
+        save_file(safe_weights, str(weights_path), metadata=metadata)
         weights_format = "safetensors"
     except Exception as exc:
         logger.warning(
@@ -356,13 +299,11 @@ def save_numpy_model(
     _cleanup_other_weight_files(weights_path)
     config_to_save["_mlx_weights_format"] = weights_format
 
-    config_path = output_dir / "config.json"
-    with open(config_path, "w") as f:
+    with open(output_dir / "config.json", "w") as f:
         json.dump(config_to_save, f, indent=2)
 
     if "id2label" in config_to_save:
-        id2label_path = output_dir / "id2label.json"
-        with open(id2label_path, "w") as f:
+        with open(output_dir / "id2label.json", "w") as f:
             json.dump(config_to_save["id2label"], f, indent=2)
 
     _finalize_artifact(
@@ -384,10 +325,9 @@ def _finalize_artifact(
     output_dir: str | Path,
     *,
     source_model_id: str | None,
-    config: dict,
+    config: dict[str, Any],
     cache_dir: str | None,
 ) -> None:
-    """Copy tokenizer assets and emit the shared OpenMed MLX manifest."""
     if source_model_id is None:
         return
 
@@ -422,20 +362,7 @@ def convert(
     quantize_bits: int | None = None,
     cache_dir: str | None = None,
 ) -> Path:
-    """End-to-end: download HF model → remap → save MLX format.
-
-    If MLX is installed, uses MLX for saving (and optional quantization).
-    Otherwise, falls back to plain NumPy format (no quantization).
-
-    Args:
-        model_id: HuggingFace model identifier.
-        output_dir: Destination directory for MLX model.
-        quantize_bits: Optional quantization (4 or 8 bits, requires MLX).
-        cache_dir: HuggingFace cache directory.
-
-    Returns:
-        Path to the output directory.
-    """
+    """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
 
     try:
@@ -463,25 +390,31 @@ def convert(
         )
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Convert a HuggingFace token-classification model to MLX format",
+        description="Convert a Hugging Face token-classification model to OpenMed MLX format",
     )
     parser.add_argument(
-        "--model", required=True,
-        help="HuggingFace model ID (e.g. OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1)",
+        "--model",
+        required=True,
+        help="Source model ID or local directory",
     )
     parser.add_argument(
-        "--output", required=True,
+        "--output",
+        required=True,
         help="Output directory for MLX model files",
     )
     parser.add_argument(
-        "--quantize", type=int, choices=[4, 8], default=None,
+        "--quantize",
+        type=int,
+        choices=[4, 8],
+        default=None,
         help="Quantize weights to N bits (4 or 8)",
     )
     parser.add_argument(
-        "--cache-dir", default=None,
-        help="HuggingFace model cache directory",
+        "--cache-dir",
+        default=None,
+        help="Hugging Face cache directory",
     )
     args = parser.parse_args()
 

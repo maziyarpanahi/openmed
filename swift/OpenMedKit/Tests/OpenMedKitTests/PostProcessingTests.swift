@@ -133,6 +133,19 @@ final class PostProcessingTests: XCTestCase {
         XCTAssertEqual(merged[0].confidence, 0.876, accuracy: 0.03)
     }
 
+    func testMergePIIEntitiesUpgradesGenericDateToDOBWhenSemanticMatchIsSpecific() {
+        let text = "DOB\n03/14/1981"
+        let entities = [
+            EntityPrediction(label: "date", text: "03/14/1981", confidence: 0.91, start: 4, end: 14),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(entities, text: text)
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "date_of_birth")
+        XCTAssertEqual(merged[0].text, "03/14/1981")
+    }
+
     func testMergePIIEntitiesKeepsNonSemanticEntities() {
         let text = "Patient John Doe arrived"
         let entities = [
@@ -166,5 +179,81 @@ final class PostProcessingTests: XCTestCase {
         XCTAssertTrue(merged.contains { $0.label == "employee_id" && $0.text == "EMP-20481" })
         XCTAssertTrue(merged.contains { $0.label == "account_number" && $0.text == "ACCT-TEST-55667788" })
         XCTAssertTrue(merged.contains { $0.label == "routing_number" && $0.text == "000000000" })
+    }
+
+    func testMergePIIEntitiesRecoversStructuredOCRHeaderFields() {
+        let text = """
+        OM
+        OpenMed Bayview Outpatient Center
+        390 Harbor Clinical Plaza • San Diego, CA 92111 • (415) 555-0100|
+        Emeraencv Department Follow-Up
+        Visit Date: 04/16/2026
+        PATIENT NAME
+        Eleanor Ruiz
+        eleanor.ruiz@sampleclinic.test
+        EMAIL
+        DOB
+        03/14/1981
+        HMO-99318442
+        INSURANCE ID
+        MRN
+        MRN-448271
+        EMPLOYER
+        Blue Harbor Foods
+        ADDRESS
+        1942 Harbor View Drive, Marseille, CA 92111
+        EMERGENCY CONTACT
+        Martin Ruiz, (415) 555-0199
+        PHONE
+        (415) 555-0142
+        PRIMARY CLINICAN
+        Dr. Maya Shah, MD
+        """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Eleanor Ruiz" })
+        XCTAssertTrue(merged.contains { $0.label == "email" && $0.text == "eleanor.ruiz@sampleclinic.test" })
+        XCTAssertTrue(merged.contains { $0.label == "date_of_birth" && $0.text == "03/14/1981" })
+        XCTAssertTrue(merged.contains { $0.label == "insurance_id" && $0.text == "HMO-99318442" })
+        XCTAssertTrue(merged.contains { $0.label == "medical_record_number" && $0.text == "MRN-448271" })
+        XCTAssertTrue(merged.contains { $0.label == "organization" && $0.text == "Blue Harbor Foods" })
+        XCTAssertTrue(merged.contains { $0.label == "street_address" && $0.text == "1942 Harbor View Drive, Marseille, CA 92111" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Martin Ruiz" })
+        XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(415) 555-0199" })
+        XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(415) 555-0142" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Dr. Maya Shah, MD" })
+    }
+
+    func testMergePIIEntitiesCanDisableSemanticOnlyMatches() {
+        let text = "Patient SSN: 123-45-6789"
+
+        let merged = PostProcessing.mergePIIEntities(
+            [],
+            text: text,
+            allowSemanticOnlyMatches: false
+        )
+
+        XCTAssertTrue(merged.isEmpty)
+    }
+
+    func testMergePIIEntitiesCanPreserveModelLabelTaxonomy() {
+        let text = "DOB: 01/15/1970"
+        let entities = [
+            EntityPrediction(label: "private_date", text: "/15/1970", confidence: 0.92, start: 7, end: 15),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(
+            entities,
+            text: text,
+            preferModelLabels: true,
+            allowSemanticLabelExpansion: false
+        )
+
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].label, "private_date")
+        XCTAssertEqual(merged[0].text, "01/15/1970")
+        XCTAssertEqual(merged[0].start, 5)
+        XCTAssertEqual(merged[0].end, 15)
     }
 }
