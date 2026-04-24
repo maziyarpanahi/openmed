@@ -8,6 +8,8 @@
     <string>life.openmed.scandemo</string>
     <key>NSCameraUsageDescription</key>
     <string>OpenMed Scan Demo uses the camera to scan clinical documents before running local PII masking.</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
