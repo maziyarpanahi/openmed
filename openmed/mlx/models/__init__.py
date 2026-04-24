@@ -275,6 +275,8 @@ def _quantize_model_for_weights(
     candidate_bits = []
 
     bits = quantization.get("bits")
+    group_size = int(quantization.get("group_size", 64))
+    mode = str(quantization.get("mode", "affine"))
     if bits is not None:
         candidate_bits.append(bits)
 
@@ -285,7 +287,7 @@ def _quantize_model_for_weights(
     last_error: Exception | None = None
     for bits in candidate_bits:
         model = build_model(config, manifest=manifest)
-        nn.quantize(model, bits=bits)
+        nn.quantize(model, group_size=group_size, bits=bits, mode=mode)
         try:
             model.load_weights(list(weights.items()))
             return model
