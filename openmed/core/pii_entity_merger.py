@@ -617,7 +617,9 @@ def merge_entities_with_semantic_units(
     text: str,
     use_semantic_patterns: bool = True,
     patterns: Optional[List[PIIPattern]] = None,
-    prefer_model_labels: bool = False
+    prefer_model_labels: bool = False,
+    allow_semantic_only_matches: bool = True,
+    allow_label_expansion: bool = True,
 ) -> List[Dict[str, Any]]:
     """Merge entity predictions using semantic unit patterns.
 
@@ -630,6 +632,8 @@ def merge_entities_with_semantic_units(
         use_semantic_patterns: Whether to use regex patterns for semantic units
         patterns: Optional custom patterns (uses PII_PATTERNS if None)
         prefer_model_labels: If True, prefer model's label over pattern's label
+        allow_semantic_only_matches: If False, regex-only matches are not added
+        allow_label_expansion: If False, keep the model label taxonomy unchanged
 
     Returns:
         List of merged entity dicts
@@ -679,7 +683,9 @@ def merge_entities_with_semantic_units(
             dominant_label, model_avg_confidence = calculate_dominant_label(overlapping_entities)
 
             # Decide which label to use
-            if prefer_model_labels:
+            if not allow_label_expansion:
+                final_label = dominant_label
+            elif prefer_model_labels:
                 if (
                     normalize_label(dominant_label) == normalize_label(unit_type)
                     or is_more_specific(dominant_label, unit_type)
@@ -721,6 +727,15 @@ def merge_entities_with_semantic_units(
             # Mark entities as used
             for i, _ in overlapping:
                 used_entities.add(i)
+        elif allow_semantic_only_matches:
+            merged.append({
+                'entity_type': unit_type,
+                'score': unit_score,
+                'start': unit_start,
+                'end': unit_end,
+                'word': text[unit_start:unit_end],
+                'merged_from': 0
+            })
 
     # Add non-overlapping entities as-is
     for i, entity in enumerate(entities):
