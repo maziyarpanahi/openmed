@@ -287,7 +287,15 @@ def _quantize_model_for_weights(
     last_error: Exception | None = None
     for bits in candidate_bits:
         model = build_model(config, manifest=manifest)
-        nn.quantize(model, group_size=group_size, bits=bits, mode=mode)
+        nn.quantize(
+            model,
+            group_size=group_size,
+            bits=bits,
+            mode=mode,
+            class_predicate=lambda path, module: (
+                hasattr(module, "to_quantized") and f"{path}.scales" in weights
+            ),
+        )
         try:
             model.load_weights(list(weights.items()))
             return model
