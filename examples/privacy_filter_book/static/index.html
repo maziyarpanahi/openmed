@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMed Privacy Filter Book</title>
+    <link rel="icon" href="/static/assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Application controls">
+        <a class="brand" href="/" aria-label="OpenMed Privacy Filter Book">
+          <img src="/static/assets/logo.svg" alt="" class="brand-mark" />
+          <span class="brand-word">open<span>med</span></span>
+          <span class="brand-rule" aria-hidden="true"></span>
+          <span class="brand-title">Privacy Filter Field Book</span>
+        </a>
+
+        <div class="toolbar">
+          <button class="icon-button" id="prevPage" type="button" aria-label="Previous page">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="folio" aria-live="polite">
+            <span id="folioNow">1</span>
+            <span aria-hidden="true">/</span>
+            <span id="folioTotal">3</span>
+          </div>
+          <button class="icon-button" id="nextPage" type="button" aria-label="Next page">
+            <i data-lucide="chevron-right"></i>
+          </button>
+
+          <label class="download-toggle">
+            <input id="allowDownloads" type="checkbox" />
+            <span>Allow Downloads</span>
+          </label>
+
+          <button class="run-button" id="runButton" type="button">
+            <i data-lucide="scan-line"></i>
+            <span>Run Redaction</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="book-stage">
+        <div class="desk-caption">
+          <span>OpenAI's privacy-filter MLX</span>
+          <span>versus</span>
+          <span>OpenAI's privacy-filter CPU</span>
+        </div>
+
+        <section class="book" id="book" aria-label="Side by side privacy filter comparison">
+          <div class="book-cover left-cover" aria-hidden="true">
+            <span>close folder</span>
+          </div>
+
+          <article class="page-panel mlx-panel" aria-labelledby="mlxTitle">
+            <div class="stat-strip" id="mlxStats">
+              <div>
+                <span class="stat-label">tokens/s</span>
+                <strong>--</strong>
+              </div>
+              <span class="status-pill pending">Ready</span>
+            </div>
+
+            <div class="page-paper" id="mlxPage">
+              <div class="scan-line" aria-hidden="true"></div>
+              <header class="document-head">
+                <div class="document-ledger">
+                  <span>File</span><strong id="docCodeMlx">OPF</strong>
+                  <span>Date</span><strong id="docDateMlx">--</strong>
+                  <span>Class</span><strong id="docClassMlx">--</strong>
+                </div>
+                <div class="document-title">
+                  <p id="mlxTitle">OpenAI's privacy-filter MLX</p>
+                  <h1 id="docTitleMlx">Loading</h1>
+                  <span id="docLangMlx">--</span>
+                </div>
+                <div class="stamp" aria-hidden="true">Redacted</div>
+              </header>
+              <div class="rule"></div>
+              <div class="document-copy" id="mlxCopy" aria-live="polite"></div>
+              <footer class="signature">Reviewing Officer</footer>
+            </div>
+          </article>
+
+          <div class="book-gutter" aria-hidden="true"></div>
+
+          <article class="page-panel cpu-panel" aria-labelledby="cpuTitle">
+            <div class="stat-strip" id="cpuStats">
+              <div>
+                <span class="stat-label">tokens/s</span>
+                <strong>--</strong>
+              </div>
+              <span class="status-pill pending">Ready</span>
+            </div>
+
+            <div class="page-paper" id="cpuPage">
+              <div class="scan-line" aria-hidden="true"></div>
+              <header class="document-head">
+                <div class="document-ledger">
+                  <span>File</span><strong id="docCodeCpu">OPF</strong>
+                  <span>Date</span><strong id="docDateCpu">--</strong>
+                  <span>Class</span><strong id="docClassCpu">--</strong>
+                </div>
+                <div class="document-title">
+                  <p id="cpuTitle">OpenAI's privacy-filter CPU</p>
+                  <h1 id="docTitleCpu">Loading</h1>
+                  <span id="docLangCpu">--</span>
+                </div>
+                <div class="stamp" aria-hidden="true">Redacted</div>
+              </header>
+              <div class="rule"></div>
+              <div class="document-copy" id="cpuCopy" aria-live="polite"></div>
+              <footer class="signature">Reviewing Officer</footer>
+            </div>
+          </article>
+
+          <div class="book-cover right-cover" aria-hidden="true">
+            <span>next folder</span>
+          </div>
+          <div class="turn-leaf" aria-hidden="true"></div>
+        </section>
+
+        <section class="entity-ledger" aria-label="Detected entity classes">
+          <div>
+            <span class="ledger-label">MLX model</span>
+            <strong id="mlxModel">OpenMed/privacy-filter-mlx-8bit</strong>
+          </div>
+          <div>
+            <span class="ledger-label">CPU model</span>
+            <strong id="cpuModel">openai/privacy-filter</strong>
+          </div>
+          <div>
+            <span class="ledger-label">labels</span>
+            <strong>person, date, address, email, phone, url, account, secret</strong>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>
