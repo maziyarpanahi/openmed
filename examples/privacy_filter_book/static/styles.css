@@ -43,6 +43,48 @@
   --radius-lg: 14px;
   --shadow-2: 0 12px 32px -12px rgba(14, 17, 22, 0.12), 0 2px 4px rgba(14, 17, 22, 0.04);
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --desk-bg: var(--ink);
+  --desk-grid: rgba(247, 244, 236, 0.03);
+  --chrome-bg: rgba(14, 17, 22, 0.88);
+  --chrome-fg: var(--paper);
+  --chrome-muted: rgba(247, 244, 236, 0.72);
+  --chrome-border: rgba(247, 244, 236, 0.16);
+  --chrome-control-bg: rgba(247, 244, 236, 0.06);
+  --chrome-control-hover-bg: rgba(247, 244, 236, 0.11);
+  --chrome-control-border: rgba(247, 244, 236, 0.18);
+  --chrome-control-hover-border: rgba(247, 244, 236, 0.3);
+  --caption-fg: rgba(247, 244, 236, 0.62);
+  --caption-accent: var(--teal-100);
+  --book-frame-border: rgba(247, 244, 236, 0.15);
+  --book-frame-shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+  --brand-mark-bg: var(--paper);
+  --ledger-frame: rgba(247, 244, 236, 0.14);
+  --ledger-cell: rgba(14, 17, 22, 0.72);
+  --ledger-strong: rgba(247, 244, 236, 0.84);
+  --ledger-label: rgba(247, 244, 236, 0.45);
+}
+
+[data-theme="light"] {
+  --desk-bg: var(--paper);
+  --desk-grid: rgba(14, 17, 22, 0.045);
+  --chrome-bg: rgba(247, 244, 236, 0.88);
+  --chrome-fg: var(--ink);
+  --chrome-muted: rgba(14, 17, 22, 0.66);
+  --chrome-border: rgba(14, 17, 22, 0.14);
+  --chrome-control-bg: rgba(14, 17, 22, 0.04);
+  --chrome-control-hover-bg: rgba(14, 17, 22, 0.08);
+  --chrome-control-border: rgba(14, 17, 22, 0.16);
+  --chrome-control-hover-border: rgba(14, 17, 22, 0.28);
+  --caption-fg: rgba(14, 17, 22, 0.62);
+  --caption-accent: var(--accent);
+  --book-frame-border: rgba(14, 17, 22, 0.16);
+  --book-frame-shadow: 0 28px 70px rgba(84, 80, 66, 0.24);
+  --brand-mark-bg: #ffffff;
+  --ledger-frame: rgba(14, 17, 22, 0.14);
+  --ledger-cell: rgba(247, 244, 236, 0.82);
+  --ledger-strong: var(--ink);
+  --ledger-label: rgba(14, 17, 22, 0.5);
 }
 
 *,
@@ -59,7 +101,7 @@ body {
 
 body {
   color: var(--fg);
-  background: var(--ink);
+  background: var(--desk-bg);
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
@@ -85,9 +127,9 @@ button:disabled {
 .app-shell {
   min-height: 100vh;
   background:
-    linear-gradient(to right, rgba(247, 244, 236, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(247, 244, 236, 0.03) 1px, transparent 1px),
-    var(--ink);
+    linear-gradient(to right, var(--desk-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--desk-grid) 1px, transparent 1px),
+    var(--desk-bg);
   background-size: 44px 44px;
 }
 
@@ -98,9 +140,9 @@ button:disabled {
   justify-content: space-between;
   gap: var(--space-4);
   padding: 10px 24px;
-  border-bottom: 1px solid rgba(247, 244, 236, 0.16);
-  color: var(--paper);
-  background: rgba(14, 17, 22, 0.88);
+  border-bottom: 1px solid var(--chrome-border);
+  color: var(--chrome-fg);
+  background: var(--chrome-bg);
   backdrop-filter: blur(14px);
   position: sticky;
   top: 0;
@@ -120,12 +162,12 @@ button:disabled {
   width: 32px;
   height: 32px;
   flex: 0 0 auto;
-  background: var(--paper);
+  background: var(--brand-mark-bg);
   border-radius: var(--radius-md);
 }
 
 .brand-word {
-  color: var(--paper);
+  color: var(--chrome-fg);
   font-family: var(--font-display);
   font-size: 22px;
   font-style: italic;
@@ -136,13 +178,13 @@ button:disabled {
 }
 
 .brand-word span {
-  color: var(--teal-100);
+  color: var(--caption-accent);
 }
 
 .brand-rule {
   width: 1px;
   height: 24px;
-  background: rgba(247, 244, 236, 0.24);
+  background: var(--chrome-border);
 }
 
 .brand-title {
@@ -150,7 +192,7 @@ button:disabled {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: rgba(247, 244, 236, 0.72);
+  color: var(--chrome-muted);
   white-space: nowrap;
 }
 
@@ -166,9 +208,9 @@ button:disabled {
 .run-button,
 .download-toggle {
   min-height: 38px;
-  border: 1px solid rgba(247, 244, 236, 0.18);
-  color: var(--paper);
-  background: rgba(247, 244, 236, 0.06);
+  border: 1px solid var(--chrome-control-border);
+  color: var(--chrome-fg);
+  background: var(--chrome-control-bg);
   border-radius: var(--radius-md);
 }
 
@@ -196,8 +238,8 @@ button:disabled {
 
 .icon-button:hover,
 .download-toggle:hover {
-  background: rgba(247, 244, 236, 0.11);
-  border-color: rgba(247, 244, 236, 0.3);
+  background: var(--chrome-control-hover-bg);
+  border-color: var(--chrome-control-hover-border);
 }
 
 .run-button:hover {
@@ -224,11 +266,11 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  color: rgba(247, 244, 236, 0.75);
+  color: var(--chrome-muted);
   font-family: var(--font-mono);
   font-size: 12px;
-  border-top: 1px solid rgba(247, 244, 236, 0.12);
-  border-bottom: 1px solid rgba(247, 244, 236, 0.12);
+  border-top: 1px solid var(--chrome-border);
+  border-bottom: 1px solid var(--chrome-border);
 }
 
 .download-toggle {
@@ -238,7 +280,7 @@ button:disabled {
   padding: 0 12px;
   font-family: var(--font-mono);
   font-size: 12px;
-  color: rgba(247, 244, 236, 0.78);
+  color: var(--chrome-muted);
 }
 
 .download-toggle input {
@@ -259,7 +301,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  color: rgba(247, 244, 236, 0.62);
+  color: var(--caption-fg);
   font-family: var(--font-mono);
   font-size: 12px;
   text-transform: uppercase;
@@ -267,7 +309,7 @@ button:disabled {
 }
 
 .desk-caption span:nth-child(2) {
-  color: var(--teal-100);
+  color: var(--caption-accent);
 }
 
 .book {
@@ -280,10 +322,10 @@ button:disabled {
   gap: 0;
   position: relative;
   perspective: 1800px;
-  border: 1px solid rgba(247, 244, 236, 0.15);
+  border: 1px solid var(--book-frame-border);
   border-radius: var(--radius-lg);
   background: #2a2418;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.34);
+  box-shadow: var(--book-frame-shadow);
   overflow: hidden;
 }
 
@@ -641,20 +683,20 @@ button:disabled {
   display: grid;
   grid-template-columns: 1fr 1fr 1.2fr;
   gap: 1px;
-  border: 1px solid rgba(247, 244, 236, 0.14);
-  background: rgba(247, 244, 236, 0.14);
+  border: 1px solid var(--ledger-frame);
+  background: var(--ledger-frame);
 }
 
 .entity-ledger > div {
   min-width: 0;
   padding: 12px 14px;
-  background: rgba(14, 17, 22, 0.72);
+  background: var(--ledger-cell);
 }
 
 .entity-ledger strong {
   display: block;
   overflow: hidden;
-  color: rgba(247, 244, 236, 0.84);
+  color: var(--ledger-strong);
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
@@ -663,7 +705,7 @@ button:disabled {
 }
 
 .ledger-label {
-  color: rgba(247, 244, 236, 0.45);
+  color: var(--ledger-label);
 }
 
 @keyframes scanUp {

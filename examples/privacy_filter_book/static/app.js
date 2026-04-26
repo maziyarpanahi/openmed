@@ -4,6 +4,7 @@ const state = {
   latestResults: null,
   redacted: false,
   busy: false,
+  theme: "dark",
 };
 
 const els = {
@@ -11,6 +12,7 @@ const els = {
   prev: document.querySelector("#prevPage"),
   next: document.querySelector("#nextPage"),
   run: document.querySelector("#runButton"),
+  themeToggle: document.querySelector("#themeToggle"),
   allowDownloads: document.querySelector("#allowDownloads"),
   folioNow: document.querySelector("#folioNow"),
   folioTotal: document.querySelector("#folioTotal"),
@@ -45,6 +47,39 @@ const formatNumber = (value) => {
   if (!Number.isFinite(value)) return "--";
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 };
+
+function getSavedTheme() {
+  try {
+    const saved = window.localStorage.getItem("privacy-filter-book-theme");
+    return saved === "light" || saved === "dark" ? saved : "dark";
+  } catch {
+    return "dark";
+  }
+}
+
+function setTheme(theme) {
+  state.theme = theme;
+  document.documentElement.dataset.theme = theme;
+
+  try {
+    window.localStorage.setItem("privacy-filter-book-theme", theme);
+  } catch {
+    // Storage can be disabled in private contexts; theme still applies in memory.
+  }
+
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  els.themeToggle.setAttribute("aria-label", `Switch to ${nextTheme} theme`);
+  els.themeToggle.setAttribute("title", `Switch to ${nextTheme} theme`);
+  els.themeToggle.innerHTML = `<i data-lucide="${theme === "dark" ? "sun" : "moon"}"></i>`;
+
+  if (window.lucide) {
+    window.lucide.createIcons();
+  }
+}
+
+function toggleTheme() {
+  setTheme(state.theme === "dark" ? "light" : "dark");
+}
 
 const escapeHtml = (value) =>
   value
@@ -215,6 +250,8 @@ function turnPage(direction) {
 }
 
 async function boot() {
+  setTheme(getSavedTheme());
+
   const response = await fetch("/api/documents");
   const payload = await response.json();
   state.documents = payload.documents;
@@ -226,6 +263,7 @@ async function boot() {
   els.prev.addEventListener("click", () => turnPage(-1));
   els.next.addEventListener("click", () => turnPage(1));
   els.run.addEventListener("click", runRedaction);
+  els.themeToggle.addEventListener("click", toggleTheme);
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "ArrowLeft") turnPage(-1);
