@@ -43,10 +43,14 @@ dev = [
 ]
 
 hf = [
-  "transformers>=4.50",
+  # Transformers 5.x needs PyTorch >=2.4; macOS Intel PyPI wheels stop around torch 2.2.x — cap TF to 4.x only there.
+  'transformers>=4.50,<5; sys_platform == "darwin" and platform_machine == "x86_64"',
+  'transformers>=4.50; sys_platform != "darwin" or platform_machine != "x86_64"',
+  # Those Intel torch wheels target NumPy 1.x ABI; NumPy 2 makes torch report "Numpy is not available" for .numpy().
+  'numpy>=1.26,<2; sys_platform == "darwin" and platform_machine == "x86_64"',
   "huggingface-hub>=0.30",
   "accelerate>=0.29",
-  "tokenizers>=0.15"
+  "tokenizers>=0.15",
 ]
 
 service = [
@@ -56,13 +60,17 @@ service = [
 
 gliner = [
   "gliner[tokenizers]>=0.2.0",
-  "torch>=2.0"
+  "torch>=2.0",
+  'numpy>=1.26,<2; sys_platform == "darwin" and platform_machine == "x86_64"',
 ]
 
 mlx = [
-  "mlx>=0.22",
+  # MLX wheels: Apple Silicon macOS and Linux (not macOS Intel or Windows).
+  'mlx>=0.22; (sys_platform == "darwin" and platform_machine == "arm64") or sys_platform == "linux"',
   "huggingface-hub>=0.30",
-  "transformers>=4.50",
+  'transformers>=4.50,<5; sys_platform == "darwin" and platform_machine == "x86_64"',
+  'transformers>=4.50; sys_platform != "darwin" or platform_machine != "x86_64"',
+  'numpy>=1.26,<2; sys_platform == "darwin" and platform_machine == "x86_64"',
   "tokenizers>=0.15",
   "safetensors>=0.4",
   "tiktoken>=0.7",
@@ -72,6 +80,7 @@ coreml = [
   "coremltools>=8.0",
   "torch>=2.0",
   "transformers>=4.50",
+  'numpy>=1.26,<2; sys_platform == "darwin" and platform_machine == "x86_64"',
 ]
 
 docs = [
