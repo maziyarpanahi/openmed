@@ -112,7 +112,7 @@ if PYDANTIC_V2:
         model_name: str = _DEFAULT_PII_MODEL
         confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te"] = "en"
+        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
 
         @field_validator("text", mode="before")
@@ -145,7 +145,7 @@ if PYDANTIC_V2:
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te"] = "en"
+        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
 
         @field_validator("text", mode="before")
@@ -207,7 +207,7 @@ else:
         model_name: str = _DEFAULT_PII_MODEL
         confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te"] = "en"
+        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
 
         @validator("text", pre=True)
@@ -237,7 +237,7 @@ else:
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te"] = "en"
+        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
 
         @validator("text", pre=True)
