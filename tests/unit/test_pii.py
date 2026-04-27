@@ -256,56 +256,60 @@ class TestExtractPII:
         assert mock_analyze.call_args.kwargs["loader"] is loader
 
     @patch("openmed.analyze_text")
-    def test_extract_pii_privacy_filter_uses_model_led_merging(self, mock_analyze):
-        """Privacy Filter should not let regex invent unsupported labels."""
-        mock_analyze.return_value = PredictionResult(
-            text="Patient SSN: 123-45-6789",
-            entities=[],
-            model_name="OpenMed/privacy-filter-mlx",
-            timestamp=datetime.now().isoformat(),
-        )
-
-        with patch(
-            "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
-            return_value=[],
-        ) as mock_merge:
-            extract_pii(
+    def test_extract_pii_privacy_filter_routes_through_dispatcher(self, mock_analyze):
+        """Privacy-filter models route through ``create_privacy_filter_pipeline``
+        rather than ``analyze_text``, and skip the regex smart-merging layer
+        entirely (the model already does Viterbi-constrained span construction).
+        """
+        with patch("openmed.core.backends.create_privacy_filter_pipeline") as mock_be, \
+             patch(
+                 "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
+                 return_value=[],
+             ) as mock_merge:
+            mock_be.return_value = lambda text: [
+                {"entity_group": "SSN", "score": 0.95, "word": "123-45-6789",
+                 "start": 13, "end": 24}
+            ]
+            result = extract_pii(
                 "Patient SSN: 123-45-6789",
                 model_name="OpenMed/privacy-filter-mlx",
                 use_smart_merging=True,
             )
 
-        assert mock_merge.call_args.kwargs["allow_semantic_only_matches"] is False
-        assert mock_merge.call_args.kwargs["allow_label_expansion"] is False
+        # analyze_text bypassed entirely
+        mock_analyze.assert_not_called()
+        # Smart merging skipped
+        mock_merge.assert_not_called()
+        # Backend dispatcher invoked with the requested model name
+        mock_be.assert_called_once_with("OpenMed/privacy-filter-mlx")
+        # Pipeline output preserved
+        assert len(result.entities) == 1
+        assert result.entities[0].label == "SSN"
 
     @patch("openmed.analyze_text")
-    def test_extract_pii_local_privacy_filter_artifact_uses_model_led_merging(self, mock_analyze, tmp_path):
-        """Local MLX artifacts should be detected from manifest metadata, not folder names."""
+    def test_extract_pii_local_privacy_filter_artifact_routes_through_dispatcher(self, mock_analyze, tmp_path):
+        """Local MLX artifacts identified by manifest also bypass smart merging."""
         artifact_dir = tmp_path / "artifact"
         artifact_dir.mkdir()
         (artifact_dir / "openmed-mlx.json").write_text(
             '{"task":"token-classification","family":"openai-privacy-filter"}'
         )
 
-        mock_analyze.return_value = PredictionResult(
-            text="Patient MRN: ABC-123",
-            entities=[],
-            model_name=str(artifact_dir),
-            timestamp=datetime.now().isoformat(),
-        )
-
-        with patch(
-            "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
-            return_value=[],
-        ) as mock_merge:
+        with patch("openmed.core.backends.create_privacy_filter_pipeline") as mock_be, \
+             patch(
+                 "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
+                 return_value=[],
+             ) as mock_merge:
+            mock_be.return_value = lambda text: []
             extract_pii(
                 "Patient MRN: ABC-123",
                 model_name=str(artifact_dir),
                 use_smart_merging=True,
             )
 
-        assert mock_merge.call_args.kwargs["allow_semantic_only_matches"] is False
-        assert mock_merge.call_args.kwargs["allow_label_expansion"] is False
+        mock_analyze.assert_not_called()
+        mock_merge.assert_not_called()
+        mock_be.assert_called_once_with(str(artifact_dir))
 
 
 # ---------------------------------------------------------------------------
@@ -919,8 +923,13 @@ class TestMultilingualPII:
         assert call_args[1]["lang"] == "fr"
 
     @patch("openmed.core.pii.extract_pii")
-    def test_deidentify_replace_uses_lang_fake_data(self, mock_extract):
-        """Test replace method uses language-appropriate fake data."""
+    def test_deidentify_replace_uses_locale_aware_surrogates(self, mock_extract):
+        """``method='replace'`` produces Faker-backed locale-appropriate surrogates.
+
+        With ``consistent=True, seed=...`` we can assert exact equality across
+        runs. The surrogate must be (a) non-empty, (b) different from the
+        original, and (c) repeatable for the same seed.
+        """
         mock_extract.return_value = PredictionResult(
             text="Patient Marie Dupont",
             entities=[
@@ -932,12 +941,26 @@ class TestMultilingualPII:
             timestamp=datetime.now().isoformat(),
         )
 
-        result = deidentify("Patient Marie Dupont", method="replace", lang="fr")
+        r1 = deidentify(
+            "Patient Marie Dupont",
+            method="replace",
+            lang="fr",
+            consistent=True,
+            seed=42,
+        )
+        r2 = deidentify(
+            "Patient Marie Dupont",
+            method="replace",
+            lang="fr",
+            consistent=True,
+            seed=42,
+        )
 
-        # Should use French fake names
-        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
-        french_names = LANGUAGE_FAKE_DATA["fr"]["NAME"]
-        assert result.pii_entities[0].redacted_text in french_names
+        surrogate = r1.pii_entities[0].redacted_text
+        assert surrogate
+        assert surrogate != "Marie Dupont"
+        # Determinism: same seed -> identical surrogate
+        assert r1.pii_entities[0].redacted_text == r2.pii_entities[0].redacted_text
 
     def test_generate_fake_pii_french(self):
         """Test fake PII generation with French locale."""
