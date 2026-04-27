@@ -329,25 +329,18 @@ def _load_mlx_pipeline(download: bool) -> tuple[Any, float]:
 @lru_cache(maxsize=1)
 def _load_cpu_pipeline(download: bool) -> tuple[Any, Any, float]:
     started = time.perf_counter()
-    from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline
+    from transformers import AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(
+    from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+
+    classifier = PrivacyFilterTorchPipeline(
         CPU_MODEL_ID,
-        local_files_only=not download,
-    )
-    model = AutoModelForTokenClassification.from_pretrained(
-        CPU_MODEL_ID,
-        local_files_only=not download,
-    )
-    model.to("cpu")
-    model.eval()
-    classifier = pipeline(
-        task="token-classification",
-        model=model,
-        tokenizer=tokenizer,
+        device="cpu",
         aggregation_strategy="simple",
-        device=-1,
+        local_files_only=not download,
     )
+    # Expose the tokenizer separately for the token-count UI metric.
+    tokenizer = classifier.tokenizer
     return classifier, tokenizer, time.perf_counter() - started
 
 
