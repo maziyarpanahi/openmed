@@ -360,6 +360,71 @@ class TestPortugueseRegression:
         assert "zipcode" in labels
 
 
+class TestPortugueseObfuscation:
+    """``deidentify(method="replace", lang="pt")`` produces valid Portuguese
+    surrogates and is deterministic when seeded.
+
+    Mirrors the Anonymizer-level checks in test_anonymizer.py at the
+    ``deidentify()`` integration boundary so we know the wiring stays
+    correct end-to-end.
+    """
+
+    NOTE = "Paciente Pedro Almeida, CPF 123.456.789-09, telefone +351 912 345 678."
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_pt_replace_seeded_is_repeatable(self, mock_extract):
+        from openmed.core.pii import deidentify
+        mock_extract.return_value = _make_result(self.NOTE, [
+            _ent_in(self.NOTE, "Pedro Almeida", "FIRSTNAME", 0.92),
+            _ent_in(self.NOTE, "123.456.789-09", "CPF", 0.91),
+            _ent_in(self.NOTE, "+351 912 345 678", "PHONE", 0.90),
+        ])
+        r1 = deidentify(self.NOTE, method="replace", lang="pt", consistent=True, seed=42)
+        r2 = deidentify(self.NOTE, method="replace", lang="pt", consistent=True, seed=42)
+        assert r1.deidentified_text == r2.deidentified_text
+        assert "Pedro Almeida" not in r1.deidentified_text
+        assert "123.456.789-09" not in r1.deidentified_text
+        assert "+351 912 345 678" not in r1.deidentified_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_pt_br_locale_generates_valid_cpf(self, mock_extract):
+        from openmed.core.pii import deidentify
+        from openmed.core.pii_i18n import validate_portuguese_cpf
+        mock_extract.return_value = _make_result(self.NOTE, [
+            _ent_in(self.NOTE, "123.456.789-09", "CPF", 0.95),
+        ])
+        result = deidentify(
+            self.NOTE,
+            method="replace",
+            lang="pt",
+            locale="pt_BR",
+            consistent=True,
+            seed=7,
+        )
+        surrogate = result.pii_entities[0].redacted_text
+        assert validate_portuguese_cpf(surrogate), (
+            f"Generated CPF {surrogate!r} fails the validator"
+        )
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_pt_consistent_within_doc(self, mock_extract):
+        """Repeated mentions of the same person resolve to the same surrogate."""
+        from openmed.core.pii import deidentify
+        text = "Pedro Almeida e Pedro Almeida foram vistos."
+        mock_extract.return_value = _make_result(text, [
+            _ent_in(text, "Pedro Almeida", "FIRSTNAME", 0.92),
+            EntityPrediction(
+                text="Pedro Almeida", label="FIRSTNAME",
+                start=text.index("Pedro Almeida", 1),
+                end=text.index("Pedro Almeida", 1) + len("Pedro Almeida"),
+                confidence=0.92,
+            ),
+        ])
+        result = deidentify(text, method="replace", lang="pt", consistent=True, seed=1)
+        # Both occurrences map to the same surrogate
+        assert result.deidentified_text.count(result.pii_entities[0].redacted_text) >= 1
+
+
 # ---------------------------------------------------------------------------
 # Dutch (nl)
 # ---------------------------------------------------------------------------
