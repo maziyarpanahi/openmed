@@ -180,7 +180,7 @@ def test_privacy_filter_q8_loader_matches_bf16_fixture(tmp_path):
 
 
 def test_viterbi_rejects_invalid_inside_start():
-    from openmed.mlx.inference import _build_label_info, _viterbi_decode
+    from openmed.core.decoding import build_label_info, viterbi_decode
 
     id2label = {
         0: "O",
@@ -189,8 +189,8 @@ def test_viterbi_rejects_invalid_inside_start():
         3: "E-private_person",
         4: "S-private_person",
     }
-    label_info = _build_label_info(id2label)
-    decoded = _viterbi_decode(
+    label_info = build_label_info(id2label)
+    decoded = viterbi_decode(
         [[-10.0, -10.0, 0.0, -10.0, -0.1]],
         label_info=label_info,
         biases={},
@@ -200,7 +200,8 @@ def test_viterbi_rejects_invalid_inside_start():
 
 
 def test_privacy_filter_grouped_decode_handles_bioes():
-    from openmed.mlx.inference import PrivacyFilterMLXPipeline, _build_label_info
+    from openmed.core.decoding import build_label_info
+    from openmed.mlx.inference import PrivacyFilterMLXPipeline
 
     pipeline = PrivacyFilterMLXPipeline.__new__(PrivacyFilterMLXPipeline)
     pipeline.id2label = {
@@ -210,7 +211,7 @@ def test_privacy_filter_grouped_decode_handles_bioes():
         3: "E-private_person",
         4: "S-private_email",
     }
-    pipeline.label_info = _build_label_info(pipeline.id2label)
+    pipeline.label_info = build_label_info(pipeline.id2label)
 
     probs = [
         [0.0, 0.9, 0.0, 0.0, 0.0],
