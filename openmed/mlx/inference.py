@@ -1203,6 +1203,7 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
 
 _MLX_MODEL_MAP: Dict[str, str] = {
     "OpenMed/privacy-filter-mlx": "OpenMed/privacy-filter-mlx",
+    "OpenMed/privacy-filter-mlx-8bit": "OpenMed/privacy-filter-mlx-8bit",
 }
 
 
