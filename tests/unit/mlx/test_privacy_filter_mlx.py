@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from unittest.mock import patch
 
 import pytest
@@ -10,10 +12,16 @@ import pytest
 
 def _module_importable(module_name: str) -> bool:
     try:
-        __import__(module_name)
+        completed = subprocess.run(
+            [sys.executable, "-c", f"import {module_name}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
     except Exception:
         return False
-    return True
+    return completed.returncode == 0
 
 
 _MLX_AVAILABLE = _module_importable("mlx.core")
@@ -112,6 +120,7 @@ def _write_mlx_artifact(path, config: dict, weights: dict) -> None:
     mx.save_safetensors(path / "weights.safetensors", weights)
 
 
+@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for model resolver tests")
 def test_resolves_privacy_filter_model_family():
     from openmed.mlx.models import resolve_model_type
 
@@ -199,6 +208,7 @@ def test_viterbi_rejects_invalid_inside_start():
     assert decoded == [4]
 
 
+@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests")
 def test_privacy_filter_grouped_decode_handles_bioes():
     from openmed.core.decoding import build_label_info
     from openmed.mlx.inference import PrivacyFilterMLXPipeline
@@ -246,6 +256,7 @@ def test_privacy_filter_grouped_decode_handles_bioes():
     ]
 
 
+@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline dispatch tests")
 def test_dispatches_privacy_filter_pipeline(tmp_path):
     from openmed.mlx import inference
 
