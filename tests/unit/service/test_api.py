@@ -236,7 +236,7 @@ def test_pii_extract_accepts_new_langs(client, monkeypatch, fake_loader_cls, lan
 def test_pii_extract_invalid_lang_returns_validation_error(client):
     response = client.post(
         "/pii/extract",
-        json={"text": "Paciente: Maria Garcia", "lang": "pt"},
+        json={"text": "Paciente: Maria Garcia", "lang": "xx"},
     )
 
     payload = _assert_error_payload(response, 422, "validation_error")
