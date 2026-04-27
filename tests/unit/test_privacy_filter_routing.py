@@ -13,6 +13,8 @@ We mock both pipelines so the tests pass without downloading either model.
 
 from __future__ import annotations
 
+import sys
+import types
 import warnings
 from typing import Any, List
 from unittest.mock import MagicMock, patch
@@ -91,11 +93,20 @@ class TestResolvePrivacyFilterModel:
 class TestCreatePrivacyFilterPipeline:
     def test_mlx_route_calls_create_mlx_pipeline(self):
         from openmed.core.backends import create_privacy_filter_pipeline
+
+        fake_mlx = types.ModuleType("openmed.mlx")
+        fake_mlx.__path__ = []
+        fake_inference = types.ModuleType("openmed.mlx.inference")
+        fake_inference.create_mlx_pipeline = MagicMock(return_value=_fake_pipeline([]))
+        fake_mlx.inference = fake_inference
+
         with patch("openmed.core.backends.MLXBackend.is_available", return_value=True), \
-             patch("openmed.mlx.inference.create_mlx_pipeline") as mock_mlx:
-            mock_mlx.return_value = _fake_pipeline([])
+             patch.dict(sys.modules, {
+                 "openmed.mlx": fake_mlx,
+                 "openmed.mlx.inference": fake_inference,
+             }):
             pipeline = create_privacy_filter_pipeline("OpenMed/privacy-filter-mlx-8bit")
-            mock_mlx.assert_called_once_with("OpenMed/privacy-filter-mlx-8bit")
+            fake_inference.create_mlx_pipeline.assert_called_once_with("OpenMed/privacy-filter-mlx-8bit")
             assert pipeline("hello") == []
 
     def test_torch_route_constructs_torch_pipeline(self):
