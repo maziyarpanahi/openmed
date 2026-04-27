@@ -243,16 +243,25 @@ result = extract_pii(
 # De-identify with multiple methods
 masked = deidentify(text, method="mask")        # [NAME], [DATE]
 removed = deidentify(text, method="remove")     # Complete removal
-replaced = deidentify(text, method="replace")   # Synthetic data
+replaced = deidentify(text, method="replace")   # Faker-backed locale-aware fakes
 hashed = deidentify(text, method="hash")        # Cryptographic hashing
 shifted = deidentify(text, method="shift_dates", date_shift_days=180)
+
+# Deterministic obfuscation: same input -> same surrogate within doc
+deidentify(text, method="replace", lang="pt", locale="pt_BR",
+           consistent=True, seed=42)
+
+# Privacy filter family (auto MLX on Apple Silicon, PyTorch elsewhere)
+deidentify(text, model_name="OpenMed/privacy-filter-mlx-8bit", method="mask")
 ```
 
 **Smart Entity Merging** (NEW in v0.5.0): Fixes tokenization fragmentation by merging split entities like dates (`01/15/1970` instead of `01` + `/15/1970`), ensuring production-ready de-identification.
 
+**Faker-backed obfuscation** (`feature/obfuscation-pii`): `method="replace"` now uses [Faker](https://faker.readthedocs.io/) with custom providers for clinical IDs (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI). Surrogates are locale-aware, format-preserving, and optionally deterministic. See [Anonymization Guide](docs/anonymization.md).
+
 **HIPAA Compliance**: Covers all 18 Safe Harbor identifiers with configurable confidence thresholds.
 
-[📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Documentation](docs/pii-smart-merging.md)
+[📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Smart Merging](docs/pii-smart-merging.md) | [📖 Anonymization](docs/anonymization.md)
 
 ### Multilingual PII (9 Languages)
 
