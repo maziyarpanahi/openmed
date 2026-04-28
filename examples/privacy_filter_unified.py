@@ -90,6 +90,12 @@ def run_deidentification(text: str, model_name: str) -> None:
     print()
 
 
+MODEL_IDS = (
+    ("OpenAI Privacy Filter (8-bit MLX)", "OpenMed/privacy-filter-mlx-8bit"),
+    ("Nemotron Privacy Filter (8-bit MLX)", "OpenMed/privacy-filter-nemotron-mlx-8bit"),
+)
+
+
 def main() -> None:
     if os.environ.get("OPENMED_PRIVACY_FILTER_DOWNLOAD", "").lower() not in {"1", "true", "yes"}:
         print("WARNING: OPENMED_PRIVACY_FILTER_DOWNLOAD is not set.")
@@ -98,21 +104,26 @@ def main() -> None:
         print()
 
     # The API accepts either the MLX artifact name (auto-substituted on
-    # non-Mac) or the PyTorch model name directly.
-    model_id = "OpenMed/privacy-filter-mlx-8bit"
-
-    for title, text in SAMPLE_TEXTS:
-        print("=" * 76)
-        print(title)
-        print("=" * 76)
-        announce_backend(model_id)
-        try:
-            run_extraction(text, model_id)
-            run_deidentification(text, model_id)
-        except Exception as exc:  # noqa: BLE001 - demo runs in many environments
-            print(f"  Skipped: {type(exc).__name__}: {exc}")
-            print(f"  (Likely the model is not yet downloaded.)")
-            print()
+    # non-Mac) or the PyTorch model name directly. The fallback is
+    # family-aware: a Nemotron MLX request on Linux substitutes
+    # OpenMed/privacy-filter-nemotron, not openai/privacy-filter.
+    for family_label, model_id in MODEL_IDS:
+        print()
+        print("#" * 76)
+        print(f"# {family_label}")
+        print("#" * 76)
+        for title, text in SAMPLE_TEXTS:
+            print("=" * 76)
+            print(title)
+            print("=" * 76)
+            announce_backend(model_id)
+            try:
+                run_extraction(text, model_id)
+                run_deidentification(text, model_id)
+            except Exception as exc:  # noqa: BLE001 - demo runs in many environments
+                print(f"  Skipped: {type(exc).__name__}: {exc}")
+                print(f"  (Likely the model is not yet downloaded.)")
+                print()
 
 
 if __name__ == "__main__":
