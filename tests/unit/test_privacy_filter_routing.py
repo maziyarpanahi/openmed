@@ -58,6 +58,25 @@ class TestSelectPrivacyFilterBackend:
         with patch("openmed.core.backends.MLXBackend.is_available", return_value=False):
             assert select_privacy_filter_backend("openai/privacy-filter") == "torch"
 
+    def test_nemotron_mlx_artifact_on_mac_with_mlx(self):
+        from openmed.core.backends import select_privacy_filter_backend
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=True):
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron-mlx") == "mlx"
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron-mlx-8bit") == "mlx"
+
+    def test_nemotron_mlx_artifact_on_linux_falls_back_to_torch(self):
+        from openmed.core.backends import select_privacy_filter_backend
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=False):
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron-mlx") == "torch"
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron-mlx-8bit") == "torch"
+
+    def test_nemotron_torch_artifact_always_uses_torch(self):
+        from openmed.core.backends import select_privacy_filter_backend
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=True):
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron") == "torch"
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=False):
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron") == "torch"
+
 
 class TestResolvePrivacyFilterModel:
     def test_mlx_keeps_name(self):
@@ -84,6 +103,39 @@ class TestResolvePrivacyFilterModel:
     def test_torch_keeps_native_torch_name(self):
         from openmed.core.backends import resolve_privacy_filter_model
         assert resolve_privacy_filter_model("openai/privacy-filter", "torch") == "openai/privacy-filter"
+
+    def test_nemotron_mlx_substitutes_to_nemotron_torch_repo(self):
+        """An MLX-only Nemotron request must fall back to the Nemotron PyTorch
+        repo (NOT the unrelated default ``openai/privacy-filter``)."""
+        from openmed.core.backends import resolve_privacy_filter_model
+        from openmed.core import backends
+        backends._warned_substitutions.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            actual = resolve_privacy_filter_model(
+                "OpenMed/privacy-filter-nemotron-mlx-8bit", "torch",
+            )
+        assert actual == "OpenMed/privacy-filter-nemotron"
+        # And it warns once.
+        assert any(
+            issubclass(w.category, UserWarning)
+            and "OpenMed/privacy-filter-nemotron" in str(w.message)
+            for w in caught
+        )
+
+    def test_nemotron_torch_repo_keeps_name(self):
+        from openmed.core.backends import resolve_privacy_filter_model
+        assert (
+            resolve_privacy_filter_model("OpenMed/privacy-filter-nemotron", "torch")
+            == "OpenMed/privacy-filter-nemotron"
+        )
+
+    def test_torch_fallback_for_helper(self):
+        """The substring matcher picks the right family fallback."""
+        from openmed.core.backends import _torch_fallback_for, PRIVACY_FILTER_TORCH_FALLBACK
+        assert _torch_fallback_for("OpenMed/privacy-filter-nemotron-mlx") == "OpenMed/privacy-filter-nemotron"
+        assert _torch_fallback_for("OpenMed/privacy-filter-mlx") == PRIVACY_FILTER_TORCH_FALLBACK
+        assert _torch_fallback_for("openai/privacy-filter") == PRIVACY_FILTER_TORCH_FALLBACK
 
 
 # ---------------------------------------------------------------------------
