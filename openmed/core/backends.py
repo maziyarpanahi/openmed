@@ -154,12 +154,33 @@ def get_backend(
 
 # -- Privacy-filter routing ------------------------------------------------
 
-# The MLX-only artifacts (``OpenMed/privacy-filter-mlx``,
-# ``OpenMed/privacy-filter-mlx-8bit``) cannot run on non-Apple-Silicon
-# machines. When a user passes one of these IDs from Linux/Windows we
-# silently fall back to the upstream PyTorch model and emit a one-time
-# warning so they understand the substitution.
+# Default Torch fallback for the original OpenAI Privacy Filter MLX artifacts
+# (``OpenMed/privacy-filter-mlx``, ``OpenMed/privacy-filter-mlx-8bit``). When
+# a user passes one of these IDs on a non-Apple-Silicon host we silently fall
+# back to the upstream PyTorch model and emit a one-time warning so they
+# understand the substitution.
 PRIVACY_FILTER_TORCH_FALLBACK = "openai/privacy-filter"
+
+
+# Family-aware Torch fallbacks. Order matters: the first matching marker
+# wins. Add new privacy-filter families here as they're introduced so an
+# MLX-only request from Linux falls back to the same family's PyTorch model
+# (not the unrelated default).
+_TORCH_FALLBACK_BY_FAMILY: tuple[tuple[str, str], ...] = (
+    ("nemotron", "OpenMed/privacy-filter-nemotron"),
+)
+
+
+def _torch_fallback_for(model_name: str) -> str:
+    """Pick the Torch fallback that matches ``model_name``'s family.
+
+    Substring-based to keep adding new families a one-line change.
+    """
+    name_lc = (model_name or "").lower()
+    for marker, repo in _TORCH_FALLBACK_BY_FAMILY:
+        if marker in name_lc:
+            return repo
+    return PRIVACY_FILTER_TORCH_FALLBACK
 
 
 def select_privacy_filter_backend(
@@ -206,17 +227,18 @@ def resolve_privacy_filter_model(
         return model_name
 
     if "mlx" in (model_name or "").lower():
+        target = _torch_fallback_for(model_name)
         if model_name not in _warned_substitutions:
             warnings.warn(
                 f"OpenMed: {model_name!r} is an MLX-only artifact and "
                 f"cannot run on this host. Substituting "
-                f"{PRIVACY_FILTER_TORCH_FALLBACK!r} via Transformers. "
+                f"{target!r} via Transformers. "
                 "To silence, request the PyTorch model directly.",
                 UserWarning,
                 stacklevel=3,
             )
             _warned_substitutions.add(model_name)
-        return PRIVACY_FILTER_TORCH_FALLBACK
+        return target
     return model_name
 
 
