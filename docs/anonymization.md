@@ -126,19 +126,35 @@ register_label_generator("FIRST_NAME", my_first_name)
 
 ## Privacy-filter family
 
-The MLX-only artifacts `OpenMed/privacy-filter-mlx` and
-`OpenMed/privacy-filter-mlx-8bit` route through `extract_pii()` /
-`deidentify()` like any other model:
+OpenMed ships two privacy-filter checkpoints, both **the same OpenAI
+Privacy Filter architecture** (gpt-oss-style sparse-MoE transformer with
+local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
+only in their training data:
+
+| Variant                   | Trained on                  | PyTorch artifact                     | MLX (full)                                  | MLX (8-bit)                                       |
+| ------------------------- | --------------------------- | ------------------------------------ | ------------------------------------------- | ------------------------------------------------- |
+| OpenAI Privacy Filter     | OpenAI's PII training set   | `openai/privacy-filter`              | `OpenMed/privacy-filter-mlx`                | `OpenMed/privacy-filter-mlx-8bit`                 |
+| Nemotron-PII fine-tune    | Nemotron PII dataset        | `OpenMed/privacy-filter-nemotron`    | `OpenMed/privacy-filter-nemotron-mlx`       | `OpenMed/privacy-filter-nemotron-mlx-8bit`        |
+
+Both run through the same `extract_pii()` / `deidentify()` API — only the
+weights differ:
 
 ```python
 extract_pii(text, model_name="OpenMed/privacy-filter-mlx-8bit")
-deidentify(text, model_name="OpenMed/privacy-filter-mlx-8bit",
+extract_pii(text, model_name="OpenMed/privacy-filter-nemotron-mlx-8bit")
+
+deidentify(text, model_name="OpenMed/privacy-filter-nemotron",
            method="replace", consistent=True, seed=42)
 ```
 
-On Apple Silicon with MLX importable, this runs the MLX pipeline.
-Elsewhere, the call substitutes `openai/privacy-filter` via
-`transformers` and emits a one-time `UserWarning` explaining the swap.
+**Backend selection.** On Apple Silicon with MLX importable, the MLX
+artifact runs natively via `PrivacyFilterMLXPipeline`. Elsewhere, the
+call substitutes the corresponding PyTorch model via `transformers` and
+emits a one-time `UserWarning` explaining the swap. The fallback is
+**family-aware** — an MLX-only Nemotron request on Linux substitutes
+`OpenMed/privacy-filter-nemotron` (not the unrelated `openai/privacy-filter`),
+so the user gets the same training distribution they asked for.
+
 Either way the output entity dicts have the same shape so the rest of
 the pipeline behaves identically. Smart-merging (regex-based span
 construction) is skipped for this family — the model already does
@@ -146,6 +162,12 @@ Viterbi-constrained BIOES decoding internally.
 
 The dispatch lives in
 [`openmed.core.backends.create_privacy_filter_pipeline`](../openmed/core/backends.py).
+To register a new fine-tune that should fall back to its own PyTorch repo
+on non-Mac hosts, add a row to `_TORCH_FALLBACK_BY_FAMILY` in that module.
+If a fine-tune introduces a genuinely different *architecture* (not just
+new weights), it would also need a new MLX model class and family branch
+in `openmed.mlx.models.build_model` — but a same-architecture fine-tune
+needs neither.
 
 ## Backwards compatibility
 
