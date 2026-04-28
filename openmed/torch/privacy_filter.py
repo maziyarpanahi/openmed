@@ -40,6 +40,12 @@ class PrivacyFilterTorchPipeline:
             output shape.
         local_files_only: When True, never download from the Hub — only
             use a cached copy. Mirrors the demo's offline-first default.
+        trust_remote_code: The OpenAI Privacy Filter family ships with
+            custom modeling code (``modeling_openai_privacy_filter.py``) in
+            the model repo, which transformers needs permission to import.
+            Defaults to ``True`` because this pipeline is *specifically*
+            for that family — set to ``False`` to opt out (and accept that
+            loading will fail without an upstream registration).
     """
 
     DEFAULT_MODEL_ID = "openai/privacy-filter"
@@ -52,6 +58,7 @@ class PrivacyFilterTorchPipeline:
         dtype: Optional[str] = None,
         aggregation_strategy: str = "simple",
         local_files_only: bool = False,
+        trust_remote_code: bool = True,
     ) -> None:
         try:
             import torch
@@ -73,14 +80,19 @@ class PrivacyFilterTorchPipeline:
         if resolved_device is None:
             resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        load_kwargs: Dict[str, Any] = {"local_files_only": local_files_only}
+        load_kwargs: Dict[str, Any] = {
+            "local_files_only": local_files_only,
+            "trust_remote_code": trust_remote_code,
+        }
         if dtype is not None:
             torch_dtype = getattr(torch, dtype, None)
             if torch_dtype is not None:
                 load_kwargs["torch_dtype"] = torch_dtype
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name, local_files_only=local_files_only,
+            model_name,
+            local_files_only=local_files_only,
+            trust_remote_code=trust_remote_code,
         )
         self.model = AutoModelForTokenClassification.from_pretrained(
             model_name, **load_kwargs,
