@@ -257,7 +257,18 @@ def test_privacy_filter_grouped_decode_handles_bioes():
 
 
 @pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline dispatch tests")
-def test_dispatches_privacy_filter_pipeline(tmp_path):
+@pytest.mark.parametrize(
+    "manifest_family,source_model_id",
+    [
+        ("openai-privacy-filter", "openai/privacy-filter"),
+        # The Nemotron-PII fine-tune is the SAME architecture, just trained
+        # on a different dataset. Either alias must dispatch to the existing
+        # PrivacyFilterMLXPipeline (no separate Nemotron pipeline class).
+        ("privacy-filter-nemotron", "OpenMed/privacy-filter-nemotron"),
+        ("nemotron-privacy-filter", "OpenMed/privacy-filter-nemotron"),
+    ],
+)
+def test_dispatches_privacy_filter_pipeline(tmp_path, manifest_family, source_model_id):
     from openmed.mlx import inference
 
     config = _privacy_config()
@@ -268,8 +279,8 @@ def test_dispatches_privacy_filter_pipeline(tmp_path):
                 "format": "openmed-mlx",
                 "format_version": 2,
                 "task": "token-classification",
-                "family": "openai-privacy-filter",
-                "source_model_id": "openai/privacy-filter",
+                "family": manifest_family,
+                "source_model_id": source_model_id,
                 "config_path": "config.json",
                 "label_map_path": None,
                 "preferred_weights": "weights.safetensors",
