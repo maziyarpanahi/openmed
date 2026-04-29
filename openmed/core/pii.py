@@ -49,6 +49,7 @@ from .config import OpenMedConfig
 from ..processing.outputs import EntityPrediction
 
 if TYPE_CHECKING:
+    from .anonymizer import Anonymizer
     from .models import ModelLoader
 
 # Type alias for de-identification methods
@@ -190,6 +191,56 @@ def _uses_model_led_pii_merging(*model_identifiers: Optional[str]) -> bool:
     return False
 
 
+def _extract_pii_via_privacy_filter(
+    text: str,
+    *,
+    model_name: str,
+    confidence_threshold: float,
+    original_text: str,
+    do_normalize: bool,
+):
+    """Run privacy-filter inference via the MLX/Torch backend dispatcher.
+
+    Returns a ``PredictionResult`` with the same shape callers expect from
+    ``analyze_text``. Confidence filtering is applied here since the
+    privacy-filter pipelines don't know the user's threshold.
+    """
+    from .backends import create_privacy_filter_pipeline
+    from ..processing.outputs import EntityPrediction, PredictionResult
+
+    pipeline = create_privacy_filter_pipeline(model_name)
+    raw = pipeline(text)
+
+    entities: list[EntityPrediction] = []
+    for item in raw:
+        score = float(item.get("score", 0.0))
+        if score < confidence_threshold:
+            continue
+        label = item.get("entity_group") or item.get("entity") or ""
+        start = int(item.get("start", 0))
+        end = int(item.get("end", 0))
+        # When accent normalization happened upstream, span indices match
+        # the stripped text. The pipeline ran on ``text`` so spans align
+        # with ``text``; remap to ``original_text`` if they're equal-length.
+        span_text = (original_text if do_normalize else text)[start:end] if end > start else item.get("word", "")
+        entities.append(
+            EntityPrediction(
+                text=span_text,
+                label=label,
+                start=start,
+                end=end,
+                confidence=score,
+            )
+        )
+
+    return PredictionResult(
+        text=original_text if do_normalize else text,
+        entities=entities,
+        model_name=model_name,
+        timestamp=datetime.now().isoformat(),
+    )
+
+
 def _strip_accents(text: str) -> str:
     """Remove combining diacritical marks from *text*.
 
@@ -290,6 +341,20 @@ def extract_pii(
     original_text = text
     if do_normalize:
         text = _strip_accents(text)
+
+    # Privacy-filter family routes through a dedicated dispatcher that picks
+    # MLX (Apple Silicon) or PyTorch (everywhere else). Smart merging is
+    # skipped because the model already does Viterbi-constrained span
+    # construction internally — running regex merging on top would just
+    # introduce noise.
+    if _looks_like_privacy_filter_identifier(effective_model) or _is_privacy_filter_artifact_path(effective_model):
+        return _extract_pii_via_privacy_filter(
+            text,
+            model_name=effective_model,
+            confidence_threshold=confidence_threshold,
+            original_text=original_text,
+            do_normalize=do_normalize,
+        )
 
     # Import here to avoid circular dependency
     from .. import analyze_text
@@ -394,6 +459,9 @@ def deidentify(
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     *,
+    consistent: bool = False,
+    seed: Optional[int] = None,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
 ) -> DeidentificationResult:
     """De-identify text by detecting and redacting PII with intelligent merging.
@@ -425,6 +493,14 @@ def deidentify(
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
         loader: Optional shared model loader to reuse warmed pipelines.
+        consistent: When ``method="replace"``, generate stable surrogates
+            (same input -> same surrogate within the call). Lets repeated
+            mentions of the same name resolve to one fake identity instead
+            of a different one each time.
+        seed: Optional integer seed for cross-run reproducibility of
+            ``consistent=True`` replacements. Implies ``consistent=True``.
+        locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
+            ``method="replace"``. When ``None``, derived from ``lang``.
 
     Returns:
         DeidentificationResult with original and de-identified text
@@ -439,6 +515,8 @@ def deidentify(
         Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
 
         >>> result = deidentify(text, method="replace", lang="de")
+        >>> result = deidentify(text, method="replace", lang="pt",
+        ...                    locale="pt_BR", consistent=True, seed=42)
     """
     # Strip to align with validate_input() inside analyze_text()
     text = text.strip()
@@ -481,6 +559,20 @@ def deidentify(
     if effective_method == "shift_dates" and date_shift_days is None:
         date_shift_days = random.randint(-365, 365)
 
+    # Build a single Anonymizer for the whole document so deterministic
+    # mode produces consistent surrogates across all entities.
+    anonymizer = None
+    if effective_method == "replace":
+        from .anonymizer import Anonymizer
+        # Passing a non-None seed implies consistent=True.
+        effective_consistent = consistent or seed is not None
+        anonymizer = Anonymizer(
+            lang=lang,
+            locale=locale,
+            consistent=effective_consistent,
+            seed=seed,
+        )
+
     # Apply de-identification
     deidentified = text
     mapping = {} if keep_mapping else None
@@ -492,6 +584,7 @@ def deidentify(
             keep_year=keep_year,
             date_shift_days=date_shift_days if effective_method == "shift_dates" else None,
             lang=lang,
+            anonymizer=anonymizer,
         )
         entity.redacted_text = redacted
 
@@ -520,6 +613,7 @@ def _redact_entity(
     keep_year: bool = True,
     date_shift_days: Optional[int] = None,
     lang: str = "en",
+    anonymizer: Optional["Anonymizer"] = None,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -529,6 +623,9 @@ def _redact_entity(
         keep_year: Keep year in dates
         date_shift_days: Days to shift dates
         lang: Language code for fake data and date formatting
+        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
+            When ``None``, a fresh per-call instance is built using the
+            language default (random, non-deterministic).
 
     Returns:
         Redacted text replacement
@@ -542,7 +639,12 @@ def _redact_entity(
         return ""
 
     elif method == "replace":
-        # Replace with fake but realistic data
+        if anonymizer is not None:
+            return anonymizer.surrogate(
+                entity.original_text or entity.text,
+                entity.entity_type,
+                lang=lang,
+            )
         return _generate_fake_pii(entity.entity_type, lang=lang)
 
     elif method == "hash":
@@ -641,6 +743,48 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
 }
 
 
+# Map canonical taxonomy (from openmed.core.labels) to LANGUAGE_FAKE_DATA keys.
+# Canonical labels that don't have a fake-data key fall through to the
+# placeholder, the same as labels that aren't mapped at all.
+_CANONICAL_TO_FAKE_KEY: Dict[str, str] = {
+    "PERSON": "NAME",
+    "FIRST_NAME": "FIRST_NAME",
+    "LAST_NAME": "LAST_NAME",
+    "MIDDLE_NAME": "FIRST_NAME",
+    "EMAIL": "EMAIL",
+    "PHONE": "PHONE",
+    "LOCATION": "LOCATION",
+    "STREET_ADDRESS": "STREET_ADDRESS",
+    "DATE": "DATE",
+    "DATE_OF_BIRTH": "DATE",
+    "ID_NUM": "ID_NUM",
+    "SSN": "ID_NUM",
+    "ACCOUNT_NUMBER": "ID_NUM",
+    "AGE": "AGE",
+    "USERNAME": "USERNAME",
+    "URL": "URL_PERSONAL",
+    "ZIPCODE": "ZIPCODE",
+}
+
+
+def _resolve_fake_data_key(entity_type: str, lang: str = "en") -> str:
+    """Resolve a model entity label to a LANGUAGE_FAKE_DATA key.
+
+    Tries the legacy ``_LABEL_TO_FAKE_KEY`` table first to preserve exact
+    behavior for labels it already covers. Labels outside the legacy table
+    fall through to the canonical taxonomy in :mod:`openmed.core.labels`,
+    which covers Portuguese UPPERCASE labels and BIOES-tagged privacy-filter
+    labels too.
+    """
+    direct = _LABEL_TO_FAKE_KEY.get(entity_type)
+    if direct is not None:
+        return direct
+
+    from .labels import normalize_label
+    canonical = normalize_label(entity_type, lang)
+    return _CANONICAL_TO_FAKE_KEY.get(canonical, entity_type.upper())
+
+
 def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
     """Generate fake but realistic PII data.
 
@@ -654,9 +798,7 @@ def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
     from .pii_i18n import LANGUAGE_FAKE_DATA
 
     fake_data = LANGUAGE_FAKE_DATA.get(lang, LANGUAGE_FAKE_DATA["en"])
-
-    # Resolve the model label to a fake-data key
-    key = _LABEL_TO_FAKE_KEY.get(entity_type, entity_type.upper())
+    key = _resolve_fake_data_key(entity_type, lang)
 
     if key in fake_data:
         return random.choice(fake_data[key])

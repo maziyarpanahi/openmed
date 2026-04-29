@@ -27,6 +27,7 @@ keywords = [
 ]
 dependencies = [
   "pysbd>=0.3.4,<0.4",
+  "faker>=22.0",
 ]
 
 authors = [

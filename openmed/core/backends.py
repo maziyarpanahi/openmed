@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import logging
 import platform
-from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
+import warnings
+from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
+_warned_substitutions: set[str] = set()
 
 
 @runtime_checkable
@@ -148,3 +150,111 @@ def get_backend(
         "No inference backend available. "
         "Install at least one: pip install openmed[hf] or pip install openmed[mlx]"
     )
+
+
+# -- Privacy-filter routing ------------------------------------------------
+
+# Default Torch fallback for the original OpenAI Privacy Filter MLX artifacts
+# (``OpenMed/privacy-filter-mlx``, ``OpenMed/privacy-filter-mlx-8bit``). When
+# a user passes one of these IDs on a non-Apple-Silicon host we silently fall
+# back to the upstream PyTorch model and emit a one-time warning so they
+# understand the substitution.
+PRIVACY_FILTER_TORCH_FALLBACK = "openai/privacy-filter"
+
+
+# Family-aware Torch fallbacks. Order matters: the first matching marker
+# wins. Add new privacy-filter families here as they're introduced so an
+# MLX-only request from Linux falls back to the same family's PyTorch model
+# (not the unrelated default).
+_TORCH_FALLBACK_BY_FAMILY: tuple[tuple[str, str], ...] = (
+    ("nemotron", "OpenMed/privacy-filter-nemotron"),
+)
+
+
+def _torch_fallback_for(model_name: str) -> str:
+    """Pick the Torch fallback that matches ``model_name``'s family.
+
+    Substring-based to keep adding new families a one-line change.
+    """
+    name_lc = (model_name or "").lower()
+    for marker, repo in _TORCH_FALLBACK_BY_FAMILY:
+        if marker in name_lc:
+            return repo
+    return PRIVACY_FILTER_TORCH_FALLBACK
+
+
+def select_privacy_filter_backend(
+    model_name: str,
+) -> Literal["mlx", "torch"]:
+    """Pick MLX or Torch for a privacy-filter-family ``model_name``.
+
+    Returns ``"mlx"`` only when (a) MLX is importable on the current
+    machine, and (b) the requested model is itself an MLX artifact
+    (its name contains ``"mlx"`` or its on-disk metadata identifies as
+    one). Otherwise returns ``"torch"`` — including when an MLX-only
+    model name is requested on a non-Mac host, in which case the caller
+    should substitute :data:`PRIVACY_FILTER_TORCH_FALLBACK` for the
+    actual download.
+    """
+    name_lc = (model_name or "").lower()
+    is_mlx_artifact = "mlx" in name_lc
+
+    if not is_mlx_artifact:
+        # Some artifacts identify as MLX only via their on-disk metadata.
+        try:
+            from .pii import _is_privacy_filter_artifact_path
+            is_mlx_artifact = _is_privacy_filter_artifact_path(model_name)
+        except ImportError:  # pragma: no cover
+            is_mlx_artifact = False
+
+    if is_mlx_artifact and MLXBackend().is_available():
+        return "mlx"
+    return "torch"
+
+
+def resolve_privacy_filter_model(
+    model_name: str,
+    backend: Literal["mlx", "torch"],
+) -> str:
+    """Map a privacy-filter ``model_name`` to the actual artifact for ``backend``.
+
+    On Linux/Windows where MLX is unavailable, an ``OpenMed/privacy-filter-mlx*``
+    request needs to download the upstream PyTorch model instead. This
+    helper performs that substitution and emits a one-time UserWarning
+    so the user understands the swap.
+    """
+    if backend == "mlx":
+        return model_name
+
+    if "mlx" in (model_name or "").lower():
+        target = _torch_fallback_for(model_name)
+        if model_name not in _warned_substitutions:
+            warnings.warn(
+                f"OpenMed: {model_name!r} is an MLX-only artifact and "
+                f"cannot run on this host. Substituting "
+                f"{target!r} via Transformers. "
+                "To silence, request the PyTorch model directly.",
+                UserWarning,
+                stacklevel=3,
+            )
+            _warned_substitutions.add(model_name)
+        return target
+    return model_name
+
+
+def create_privacy_filter_pipeline(model_name: str) -> Callable:
+    """Build a privacy-filter pipeline appropriate for the host.
+
+    Returns a callable ``pipeline(text) -> List[Dict]`` whose output
+    schema matches the HuggingFace ``token-classification`` pipeline so
+    downstream OpenMed code is backend-agnostic.
+    """
+    backend = select_privacy_filter_backend(model_name)
+    actual_model = resolve_privacy_filter_model(model_name, backend)
+
+    if backend == "mlx":
+        from openmed.mlx.inference import create_mlx_pipeline
+        return create_mlx_pipeline(actual_model)
+
+    from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+    return PrivacyFilterTorchPipeline(actual_model)
