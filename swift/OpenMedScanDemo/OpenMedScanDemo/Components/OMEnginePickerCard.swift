@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Two-column picker: each column represents a PII engine (OpenMed or OpenAI)
+/// Two-column picker: each column represents a PII engine (OpenMed or OpenAI Nemotron)
 /// and shows its download state. Tapping an engine selects it; tapping its
 /// download button starts the download. Exists to make the choice explicit
 /// up-front instead of burying it on the De-identification screen.
@@ -74,7 +74,7 @@ public struct OMEnginePickerCard: View {
                                 .strokeBorder(Color.omBorderStrong, lineWidth: OM.Stroke.hairline)
                                 .frame(width: 12, height: 12)
                         }
-                        Text(engine == .openMed ? "OPENMED" : "OPENAI")
+                        Text(engine == .openMed ? "OPENMED" : "OPENAI NEMOTRON")
                             .omMonoTag(size: 10)
                             .foregroundStyle(isSelected ? Color.omTealAccent : Color.omFgMuted)
                     }
@@ -185,7 +185,7 @@ extension ScanFlowViewModel.PIIEngine {
     var shortTitle: String {
         switch self {
         case .openMed:       return "OpenMed PII LiteClinical"
-        case .privacyFilter: return "OpenAI Privacy Filter"
+        case .privacyFilter: return "OpenAI Nemotron Privacy Filter"
         }
     }
 
@@ -194,7 +194,7 @@ extension ScanFlowViewModel.PIIEngine {
         case .openMed:
             return "66M-param DistilBERT trained for clinical PII. Fast, balanced precision/recall."
         case .privacyFilter:
-            return "OpenAI's 8-bit Privacy Filter with BIOES decoding. Broad coverage, slightly heavier."
+            return "OpenAI Nemotron 8-bit Privacy Filter with BIOES decoding. Broad coverage, slightly heavier."
         }
     }
 

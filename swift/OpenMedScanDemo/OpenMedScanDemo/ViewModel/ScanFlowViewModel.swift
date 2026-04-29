@@ -67,10 +67,10 @@ public final class ScanFlowViewModel: ObservableObject {
             self == .openMed ? .piiLiteClinical : .openaiPrivacyFilter
         }
         public var displayName: String {
-            self == .openMed ? "OpenMed PII" : "OpenAI Privacy Filter"
+            self == .openMed ? "OpenMed PII" : "OpenAI Nemotron Privacy Filter"
         }
         public var eyebrow: String {
-            self == .openMed ? "OPENMED · LOCAL" : "OPENAI · LOCAL"
+            self == .openMed ? "OPENMED · LOCAL" : "OPENAI NEMOTRON · LOCAL"
         }
     }
 

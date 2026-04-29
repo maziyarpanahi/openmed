@@ -11,7 +11,7 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
     public var displayName: String {
         switch self {
         case .piiLiteClinical:     return "OpenMed PII"
-        case .openaiPrivacyFilter: return "OpenAI Privacy"
+        case .openaiPrivacyFilter: return "OpenAI Nemotron Privacy"
         case .glinerRelex:         return "GLiNER Clinical"
         }
     }
