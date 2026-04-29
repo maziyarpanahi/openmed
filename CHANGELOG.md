@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Examples**:
   - `examples/obfuscation_demo.py` — random vs deterministic surrogates, locale walkthrough, format-preserving phone numbers, pt_BR CPF generation with checksum verification.
   - `examples/privacy_filter_unified.py` — same `extract_pii()` / `deidentify()` call works on Apple Silicon (MLX) and Linux (PyTorch); compares the OpenAI baseline against the Nemotron-PII fine-tune side-by-side.
+  - `examples/privacy_filter_studio/` — interactive FastAPI + static web studio for two-pane PII masking/randomization with sample clinical notes, highlighted entities, backend/model status, and an explicit first-run download toggle.
 - **Nemotron-PII fine-tune of the OpenAI Privacy Filter**, registered as three new model IDs that route through the existing privacy-filter pipeline (same architecture, different training data):
   - `OpenMed/privacy-filter-nemotron` — PyTorch / Transformers (CPU + CUDA).
   - `OpenMed/privacy-filter-nemotron-mlx` — MLX full-precision (Apple Silicon).
@@ -47,12 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `_TORCH_FALLBACK_BY_FAMILY` table and `_torch_fallback_for()` helper.
   - An MLX-only Nemotron request on a non-Apple-Silicon host now substitutes `OpenMed/privacy-filter-nemotron` instead of the unrelated default `openai/privacy-filter`, so the user gets the training distribution they asked for. A one-time `UserWarning` names the substitute.
   - Adding a future fine-tune that should fall back to its own PyTorch repo is a one-line addition to `_TORCH_FALLBACK_BY_FAMILY`.
+- **Nemotron MLX classifier-head bias support**: `OpenAIPrivacyFilterForTokenClassification` now honors `classifier_bias` / `unembedding_bias` in artifact configs, while keeping the original OpenAI checkpoint bias-less by default.
 
 ### Changed
 
 - **`method="replace"` upgraded in place** to use the new Faker-backed `Anonymizer`. Surrogates are now locale-aware (e.g. German names for `lang="de"`, Portuguese phones for `lang="pt"`), format-preserving, and optionally deterministic. The previous tiny static `LANGUAGE_FAKE_DATA` lists are kept as a deprecated fallback used only when a Faker locale is unavailable.
 - **Privacy filter book demo** (`examples/privacy_filter_book/app.py`) migrated to `PrivacyFilterTorchPipeline` for the CPU side, replacing the inline `AutoTokenizer`/`AutoModelForTokenClassification`/`pipeline` triple.
 - **MLX inference module** trimmed: BIOES Viterbi (≈280 lines) and span-refinement helpers moved to `openmed.core.decoding`. Behavior unchanged.
+- **Privacy Filter Studio** keeps model loading cache-only unless downloads are explicitly allowed, then restores the caller's Hugging Face offline environment after loading.
 
 ### Breaking Changes
 
