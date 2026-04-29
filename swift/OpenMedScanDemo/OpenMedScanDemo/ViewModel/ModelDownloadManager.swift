@@ -214,7 +214,7 @@ public extension ScanModelID {
     var artifactRepoID: String {
         switch self {
         case .piiLiteClinical:     return "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
-        case .openaiPrivacyFilter: return "OpenMed/privacy-filter-mlx-8bit"
+        case .openaiPrivacyFilter: return "OpenMed/privacy-filter-nemotron-mlx-8bit"
         case .glinerRelex:         return "OpenMed/gliner-relex-base-v1.0-mlx"
         }
     }

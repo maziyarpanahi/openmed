@@ -74,6 +74,14 @@ from .core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
     get_patterns_for_language,
 )
+from .core.labels import CANONICAL_LABELS, normalize_label
+from .core.anonymizer import (
+    Anonymizer,
+    AnonymizerConfig,
+    LANG_TO_LOCALE,
+    register_clinical_provider,
+    register_label_generator,
+)
 
 _PLACEHOLDER_SEGMENT_PATTERN = re.compile(
     r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE
@@ -569,4 +577,13 @@ __all__ = [
     "DEFAULT_PII_MODELS",
     "LANGUAGE_PII_PATTERNS",
     "get_patterns_for_language",
+    # Canonical label taxonomy
+    "CANONICAL_LABELS",
+    "normalize_label",
+    # Anonymization engine
+    "Anonymizer",
+    "AnonymizerConfig",
+    "LANG_TO_LOCALE",
+    "register_clinical_provider",
+    "register_label_generator",
 ]

@@ -450,12 +450,21 @@ class OpenAIPrivacyFilterForTokenClassification(nn.Module):
             int(config["hidden_size"]),
             eps=float(config.get("rms_norm_eps", 1e-5)),
         )
+        # The original openai/privacy-filter has a bias-less classifier head
+        # (``classifier_bias: false``); the Nemotron-PII fine-tune adds bias
+        # to the 221-class head (``classifier_bias: true``). Honor whichever
+        # the config requests; default to ``False`` for back-compat.
+        classifier_bias = bool(
+            config.get("classifier_bias", config.get("unembedding_bias", False))
+        )
         self.unembedding = nn.Linear(
             int(config["hidden_size"]),
             int(config["num_labels"]),
-            bias=False,
+            bias=classifier_bias,
         )
         self.unembedding.weight = self.unembedding.weight.astype(dtype)
+        if classifier_bias:
+            self.unembedding.bias = self.unembedding.bias.astype(dtype)
 
     def __call__(
         self,

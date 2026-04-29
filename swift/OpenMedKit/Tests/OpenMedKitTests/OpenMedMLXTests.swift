@@ -217,6 +217,31 @@ final class OpenMedMLXTests: XCTestCase {
         XCTAssertEqual(config.quantizationGroupSize, 32)
         XCTAssertEqual(config.quantizationMode, "affine")
         XCTAssertEqual(config.viterbiBiases["transition_bias_background_stay"], 0.0)
+        // The original openai/privacy-filter has a bias-less classifier head;
+        // the manifest-only fixture omits ``classifier_bias`` so the default
+        // (``false``) must propagate.
+        XCTAssertFalse(config.classifierBias)
+    }
+
+    func testPrivacyFilterConfigDecodesNemotronClassifierBias() throws {
+        // Nemotron-PII fine-tunes ship with ``classifier_bias: true`` so the
+        // 221-class head can fit a learned bias. The Swift loader must respect
+        // it — otherwise ``OpenMedPrivacyFilterForTokenClassification`` builds
+        // a bias-less ``Linear`` and the safetensors load fails with
+        // "Unable to set unembedding.bias on ... Linear: none not compatible".
+        let directory = try makePrivacyFilterManifestOnlyArtifact(classifierBias: true)
+        let config = try OpenMedMLXArtifact(modelDirectoryURL: directory).configuration
+        XCTAssertTrue(config.classifierBias)
+    }
+
+    func testPrivacyFilterConfigAcceptsUnembeddingBiasAlias() throws {
+        // ``unembedding_bias`` is accepted as a fallback alias in case a
+        // future repo ships the field under that name.
+        let directory = try makePrivacyFilterManifestOnlyArtifact(
+            extraConfig: ["unembedding_bias": true]
+        )
+        let config = try OpenMedMLXArtifact(modelDirectoryURL: directory).configuration
+        XCTAssertTrue(config.classifierBias)
     }
 
     func testPrivacyFilterTokenizerMatchesTiktokenGoldens() throws {
@@ -283,6 +308,59 @@ final class OpenMedMLXTests: XCTestCase {
         eval(logits)
 
         XCTAssertEqual(logits.shape, [1, 4, artifact.configuration.numLabels])
+    }
+
+    func testTinyPrivacyFilterNemotronModelForwardShape() throws {
+        // Nemotron-PII fine-tunes set ``classifier_bias: true`` so the
+        // unembedding ``Linear`` ships with a learned bias parameter. This
+        // test mirrors the OpenAI baseline shape test but with the bias
+        // enabled — a regression that breaks the Nemotron loader (see the
+        // ``unembedding.bias`` weight in ``OpenMed/privacy-filter-nemotron-mlx-8bit``)
+        // would surface here as a parameter-count mismatch.
+        try requireUsableMLXRuntime()
+        let directory = try makePrivacyFilterManifestOnlyArtifact(classifierBias: true)
+        let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+        XCTAssertTrue(artifact.configuration.classifierBias)
+
+        let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
+
+        // The unembedding Linear must expose a ``bias`` parameter slot when
+        // ``classifier_bias: true`` is set. With the slot present, MLX's
+        // ``update(parameters:)`` can land the safetensors ``unembedding.bias``
+        // tensor; without it (the prior bug), the loader raises
+        // "Unable to set unembedding.bias on Linear: none not compatible".
+        let parameters = model.parameters().flattened().map(\.0)
+        XCTAssertTrue(
+            parameters.contains("unembedding.bias"),
+            "Expected unembedding.bias slot when classifier_bias=true; got \(parameters)"
+        )
+
+        let logits = model(
+            MLXArray([Int32(1), Int32(2), Int32(3), Int32(4)], [1, 4]),
+            attentionMask: MLXArray.ones([1, 4], type: Bool.self)
+        )
+        eval(logits)
+
+        XCTAssertEqual(logits.shape, [1, 4, artifact.configuration.numLabels])
+    }
+
+    func testTinyPrivacyFilterBaselineHasNoUnembeddingBiasSlot() throws {
+        // The original OpenAI baseline (and any future fine-tune that omits
+        // ``classifier_bias``) must NOT allocate a bias parameter on the
+        // unembedding head — otherwise loading ``OpenMed/privacy-filter-mlx-8bit``
+        // would attempt to assign ``unembedding.bias`` from a checkpoint that
+        // does not contain it.
+        try requireUsableMLXRuntime()
+        let directory = try makePrivacyFilterManifestOnlyArtifact()
+        let artifact = try OpenMedMLXArtifact(modelDirectoryURL: directory)
+        XCTAssertFalse(artifact.configuration.classifierBias)
+
+        let model = OpenMedPrivacyFilterForTokenClassification(artifact.configuration)
+        let parameters = model.parameters().flattened().map(\.0)
+        XCTAssertFalse(
+            parameters.contains("unembedding.bias"),
+            "Did not expect unembedding.bias slot when classifier_bias=false; got \(parameters)"
+        )
     }
 
     func testArtifactRejectsUnknownGLiNERVariant() throws {
@@ -1040,14 +1118,17 @@ final class OpenMedMLXTests: XCTestCase {
         return directory
     }
 
-    private func makePrivacyFilterManifestOnlyArtifact() throws -> URL {
+    private func makePrivacyFilterManifestOnlyArtifact(
+        classifierBias: Bool? = nil,
+        extraConfig: [String: Any] = [:]
+    ) throws -> URL {
         let directory = try makeManifestOnlyArtifact(
             task: "token-classification",
             family: "openai-privacy-filter",
             configModelType: "openai_privacy_filter"
         )
 
-        let configObject: [String: Any] = [
+        var configObject: [String: Any] = [
             "model_type": "openai_privacy_filter",
             "_mlx_model_type": "openai-privacy-filter",
             "_mlx_weights_format": "safetensors",
@@ -1095,6 +1176,12 @@ final class OpenMedMLXTests: XCTestCase {
                 "transition_bias_end_to_start": 0.0,
             ],
         ]
+        if let classifierBias {
+            configObject["classifier_bias"] = classifierBias
+        }
+        for (key, value) in extraConfig {
+            configObject[key] = value
+        }
         try JSONSerialization.data(withJSONObject: configObject, options: [.prettyPrinted])
             .write(to: directory.appending(path: "config.json"))
         try JSONSerialization.data(

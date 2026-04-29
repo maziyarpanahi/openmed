@@ -243,16 +243,96 @@ result = extract_pii(
 # De-identify with multiple methods
 masked = deidentify(text, method="mask")        # [NAME], [DATE]
 removed = deidentify(text, method="remove")     # Complete removal
-replaced = deidentify(text, method="replace")   # Synthetic data
+replaced = deidentify(text, method="replace")   # Faker-backed locale-aware fakes
 hashed = deidentify(text, method="hash")        # Cryptographic hashing
 shifted = deidentify(text, method="shift_dates", date_shift_days=180)
+
+# Deterministic obfuscation: same input -> same surrogate within doc
+deidentify(text, method="replace", lang="pt", locale="pt_BR",
+           consistent=True, seed=42)
 ```
 
 **Smart Entity Merging** (NEW in v0.5.0): Fixes tokenization fragmentation by merging split entities like dates (`01/15/1970` instead of `01` + `/15/1970`), ensuring production-ready de-identification.
 
+**Faker-backed obfuscation** (v1.3.0): `method="replace"` uses [Faker](https://faker.readthedocs.io/) with custom providers for clinical IDs (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI). Surrogates are locale-aware, format-preserving, and optionally deterministic. See [Anonymization Guide](docs/anonymization.md).
+
 **HIPAA Compliance**: Covers all 18 Safe Harbor identifiers with configurable confidence thresholds.
 
-[📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Documentation](docs/pii-smart-merging.md)
+[📓 Complete PII Notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [📖 Smart Merging](docs/pii-smart-merging.md) | [📖 Anonymization](docs/anonymization.md)
+
+### Privacy Filter Family (Public)
+
+OpenMed ships **two checkpoints** of the OpenAI Privacy Filter architecture — same model code (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base` tokenization), different training data:
+
+| Variant                | Trained on                                                                         | PyTorch (CPU + CUDA)                  | MLX full (Apple Silicon)                          | MLX 8-bit (Apple Silicon)                              |
+| ---------------------- | ---------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| OpenAI Privacy Filter  | OpenAI's PII training set                                                          | [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)              | [`OpenMed/privacy-filter-mlx`](https://huggingface.co/OpenMed/privacy-filter-mlx)                | [`OpenMed/privacy-filter-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-mlx-8bit)                |
+| Nemotron-PII fine-tune | [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)     | [`OpenMed/privacy-filter-nemotron`](https://huggingface.co/OpenMed/privacy-filter-nemotron)     | [`OpenMed/privacy-filter-nemotron-mlx`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx)       | [`OpenMed/privacy-filter-nemotron-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx-8bit)       |
+
+All model IDs above route through the **same** `extract_pii()` / `deidentify()` API — only the `model_name=` argument changes.
+
+#### Install
+
+The PyTorch path runs anywhere (Linux, macOS, Windows; CPU or CUDA):
+
+```bash
+pip install "openmed[hf]"
+```
+
+The MLX path adds Apple Silicon acceleration on top of `[hf]`:
+
+```bash
+pip install "openmed[mlx]"          # MLX runtime + tiktoken + huggingface-hub
+```
+
+`tiktoken` (the OpenAI Privacy Filter tokenizer) ships in the `[mlx]` extra.
+
+#### Use it (PyTorch — Linux / Windows / non-Apple-Silicon macOS)
+
+```python
+from openmed import extract_pii, deidentify
+
+text = ("Patient Sarah Connor (DOB: 03/15/1985) at MRN 4471882. "
+        "Email: sarah.connor@example.com, phone (415) 555-7012.")
+
+# OpenAI baseline — runs on CPU/CUDA via Transformers
+result = extract_pii(text, model_name="openai/privacy-filter")
+
+# Nemotron-PII fine-tune — same code path, different weights
+result = extract_pii(text, model_name="OpenMed/privacy-filter-nemotron")
+
+# De-identify with any method
+deidentify(text, model_name="OpenMed/privacy-filter-nemotron", method="mask")
+deidentify(text, model_name="OpenMed/privacy-filter-nemotron",
+           method="replace", consistent=True, seed=42)
+```
+
+#### Use it (MLX — Apple Silicon)
+
+```python
+from openmed import extract_pii, deidentify
+
+text = "Patient Sarah Connor born on 03/15/1985, MRN 4471882."
+
+# OpenAI baseline (full / 8-bit MLX artifacts)
+extract_pii(text, model_name="OpenMed/privacy-filter-mlx")
+extract_pii(text, model_name="OpenMed/privacy-filter-mlx-8bit")
+
+# Nemotron-PII fine-tune (full / 8-bit MLX artifacts)
+extract_pii(text, model_name="OpenMed/privacy-filter-nemotron-mlx")
+extract_pii(text, model_name="OpenMed/privacy-filter-nemotron-mlx-8bit")
+```
+
+#### Cross-platform note
+
+The MLX artifact names work everywhere — on a non-Apple-Silicon host (or anywhere MLX isn't installed) the request is **automatically substituted** with the matching PyTorch model and a one-time `UserWarning` names the substitution. The substitution is **family-aware**:
+
+- `OpenMed/privacy-filter-mlx*` ⇒ falls back to `openai/privacy-filter`
+- `OpenMed/privacy-filter-nemotron-mlx*` ⇒ falls back to `OpenMed/privacy-filter-nemotron`
+
+So your code can ship an MLX model name and run on any host without changes — Apple Silicon users get MLX speed, everyone else gets the same family's PyTorch checkpoint.
+
+[📖 Privacy Filter Architecture & Backend Routing](docs/anonymization.md#privacy-filter-family) | [▶ Side-by-side example](examples/privacy_filter_unified.py) | [▶ Faker obfuscation demo](examples/obfuscation_demo.py)
 
 ### Multilingual PII (9 Languages)
 
@@ -351,6 +431,18 @@ print(profiler.summary())  # Inference time, bottlenecks, recommendations
 We welcome contributions! Whether it's bug reports, feature requests, or pull requests.
 
 - 🐛 **Found a bug?** [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
+
+---
+
+## Credits & Acknowledgements
+
+OpenMed builds on excellent open-source work from the community. Particular thanks to:
+
+- **OpenAI** for open-sourcing the [Privacy Filter](https://huggingface.co/openai/privacy-filter) model. The OpenAI Privacy Filter architecture (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base` tokenization) is the foundation of OpenMed's privacy-filter family — both the upstream baseline and our Nemotron-PII fine-tunes share this architecture.
+- **NVIDIA** for releasing the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1), which we used to fine-tune the OpenAI Privacy Filter weights into the [`OpenMed/privacy-filter-nemotron`](https://huggingface.co/OpenMed/privacy-filter-nemotron) family ([MLX](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx), [MLX 8-bit](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx-8bit)).
+- **HuggingFace** for `transformers`, `tokenizers`, `huggingface_hub`, and the broader model-distribution ecosystem.
+- **Apple** for [MLX](https://github.com/ml-explore/mlx), which powers OpenMed's Apple Silicon acceleration.
+- **The Faker maintainers** for [Faker](https://faker.readthedocs.io/) and its community-contributed locale providers, which power OpenMed's locale-aware obfuscation engine.
 
 ---
 

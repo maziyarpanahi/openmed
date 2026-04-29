@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-04-27
+
+### Added
+
+- **Faker-backed PII anonymization engine** (`openmed.core.anonymizer`):
+  - `Anonymizer` class with cached per-locale Faker instances, deterministic seeding (`hashlib.blake2b`), and label-keyed generator dispatch.
+  - `AnonymizerConfig` dataclass for advanced configuration.
+  - Locale resolution map (`LANG_TO_LOCALE`) covering all nine OpenMed languages; Telugu falls back to `en_IN` with a one-time `UserWarning`.
+  - Format-preserving helpers for phone numbers (digit-group lengths preserved), dates (separator/ordering preserved), emails (domain preserved), and generic IDs.
+  - Custom Faker providers for clinical/national IDs where Faker's built-ins are missing or incorrect: `AadhaarProvider` (Verhoeff checksum), `GermanSteuerIdProvider`, `MedicalRecordNumberProvider`, `NPIProvider`. Faker's built-ins are reused for `pt_BR.cpf`/`cnpj`, `nl_NL.ssn` (BSN), `fr_FR.ssn` (NIR), `it_IT.ssn` (Codice Fiscale), and `es_ES.nie` after empirical verification against OpenMed's existing checksum validators.
+  - `register_clinical_provider()` and `register_label_generator()` for extending coverage.
+- **Canonical PII label taxonomy** (`openmed.core.labels`):
+  - `CANONICAL_LABELS` set with 47 canonical labels in `UPPER_SNAKE_CASE`.
+  - `normalize_label()` maps English lowercase, the 52 Portuguese UPPERCASE labels, BIOES-tagged variants (`B-NAME`, `I-DATE`), and arbitrary mixed-case forms to a single canonical form.
+- **Unified privacy-filter dispatch** (`openmed.core.backends`):
+  - `select_privacy_filter_backend()`, `resolve_privacy_filter_model()`, and `create_privacy_filter_pipeline()` route privacy-filter requests to MLX on Apple Silicon and PyTorch elsewhere with a one-time `UserWarning` when an MLX-only artifact name (`OpenMed/privacy-filter-mlx*`) is substituted with `openai/privacy-filter` on non-Mac hosts.
+  - `extract_pii()` and `deidentify()` now route privacy-filter models through this dispatcher, skipping regex smart-merging since the model already does Viterbi-constrained BIOES decoding.
+- **PyTorch privacy-filter wrapper** (`openmed.torch.PrivacyFilterTorchPipeline`):
+  - Loads `openai/privacy-filter` (or any compatible HuggingFace fine-tune) via `transformers.AutoModelForTokenClassification` with auto device selection (CUDA → CPU).
+  - Output entity-dict shape matches the MLX pipeline so the rest of OpenMed is backend-agnostic.
+- **Shared decoding utilities** (`openmed.core.decoding`):
+  - `TokenLabelInfo`, `build_label_info`, `viterbi_decode`, `labels_to_token_spans`, `zero_viterbi_biases`, `VITERBI_BIAS_KEYS` extracted from the MLX pipeline so the Torch wrapper reuses the same BIOES Viterbi decoder.
+  - `trim_span_whitespace`, `refine_privacy_filter_span` for span post-processing across both backends.
+- **`deidentify()` keyword arguments**: `consistent: bool`, `seed: Optional[int]`, `locale: Optional[str]` for deterministic, locale-overridable obfuscation. Passing `seed=` alone implies `consistent=True`.
+- **Portuguese (`pt`) accepted by REST API schemas** in `openmed/service/schemas.py` (was previously library-only despite full core support).
+- **Documentation**: new [Anonymization Guide](docs/anonymization.md) covering the Faker engine, locale table, determinism modes, format preservation, clinical-ID checksum sources, and the privacy-filter family.
+- **Examples**:
+  - `examples/obfuscation_demo.py` — random vs deterministic surrogates, locale walkthrough, format-preserving phone numbers, pt_BR CPF generation with checksum verification.
+  - `examples/privacy_filter_unified.py` — same `extract_pii()` / `deidentify()` call works on Apple Silicon (MLX) and Linux (PyTorch); compares the OpenAI baseline against the Nemotron-PII fine-tune side-by-side.
+  - `examples/privacy_filter_studio/` — interactive FastAPI + static web studio for two-pane PII masking/randomization with sample clinical notes, highlighted entities, backend/model status, and an explicit first-run download toggle.
+- **Nemotron-PII fine-tune of the OpenAI Privacy Filter**, registered as three new model IDs that route through the existing privacy-filter pipeline (same architecture, different training data):
+  - `OpenMed/privacy-filter-nemotron` — PyTorch / Transformers (CPU + CUDA).
+  - `OpenMed/privacy-filter-nemotron-mlx` — MLX full-precision (Apple Silicon).
+  - `OpenMed/privacy-filter-nemotron-mlx-8bit` — MLX 8-bit quantized (Apple Silicon).
+  These checkpoints **are** the OpenAI Privacy Filter architecture (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`) fine-tuned on the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1). They reuse `OpenAIPrivacyFilterForTokenClassification` and `PrivacyFilterMLXPipeline` unchanged — no new architecture code needed.
+- **`_MLX_MODEL_MAP` entries** for the two new Nemotron MLX repo IDs in `openmed.mlx.inference`.
+- **Aliases for the new family in `_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES`** (`privacy-filter-nemotron`, `nemotron-privacy-filter`) — both resolve to the existing `openai-privacy-filter` family so a Nemotron-fine-tune MLX artifact can ship with either family identifier in its manifest and still dispatch correctly.
+- **Family-aware Torch fallback** in `openmed.core.backends`:
+  - New `_TORCH_FALLBACK_BY_FAMILY` table and `_torch_fallback_for()` helper.
+  - An MLX-only Nemotron request on a non-Apple-Silicon host now substitutes `OpenMed/privacy-filter-nemotron` instead of the unrelated default `openai/privacy-filter`, so the user gets the training distribution they asked for. A one-time `UserWarning` names the substitute.
+  - Adding a future fine-tune that should fall back to its own PyTorch repo is a one-line addition to `_TORCH_FALLBACK_BY_FAMILY`.
+- **Nemotron MLX classifier-head bias support**: `OpenAIPrivacyFilterForTokenClassification` now honors `classifier_bias` / `unembedding_bias` in artifact configs, while keeping the original OpenAI checkpoint bias-less by default.
+- **Swift OpenMedKit privacy-filter classifier-head bias support**: the native MLX artifact loader now decodes `classifier_bias` / `unembedding_bias` and builds the Privacy Filter head with a learned bias when Nemotron-PII artifacts require it.
+
+### Changed
+
+- **`method="replace"` upgraded in place** to use the new Faker-backed `Anonymizer`. Surrogates are now locale-aware (e.g. German names for `lang="de"`, Portuguese phones for `lang="pt"`), format-preserving, and optionally deterministic. The previous tiny static `LANGUAGE_FAKE_DATA` lists are kept as a deprecated fallback used only when a Faker locale is unavailable.
+- **Privacy filter book demo** (`examples/privacy_filter_book/app.py`) migrated to `PrivacyFilterTorchPipeline` for the CPU side, replacing the inline `AutoTokenizer`/`AutoModelForTokenClassification`/`pipeline` triple.
+- **MLX inference module** trimmed: BIOES Viterbi (≈280 lines) and span-refinement helpers moved to `openmed.core.decoding`. Behavior unchanged.
+- **Privacy Filter Studio** keeps model loading cache-only unless downloads are explicitly allowed, then restores the caller's Hugging Face offline environment after loading.
+- **OpenMed Scan Demo privacy-filter option** now points at `OpenMed/privacy-filter-nemotron-mlx-8bit` and labels the engine as OpenAI Nemotron Privacy Filter throughout the picker, download events, and README.
+
+### Breaking Changes
+
+- **`faker>=22.0` is now a required core dependency**. Slim installs that skip the ML extras will still pull Faker (~3 MB).
+- **`method="replace"` outputs no longer come from the prior hardcoded list** (`["Jane Smith", "John Doe", "Alex Johnson", "Sam Taylor"]`, etc.). Any test or downstream code asserting on those exact strings must either pass `consistent=True, seed=<value>` and update expected output, or assert non-equality with the original. All other methods (`mask`, `remove`, `hash`, `shift_dates`) are unchanged.
+- **Privacy-filter routing through `extract_pii()`** skips regex smart-merging by design. Users who previously chained the low-level MLX pipeline with `merge_entities_with_semantic_units()` manually may see different entity counts; the new path produces cleaner spans because the model's Viterbi decoder already enforces BIOES validity.
+
+### Tests
+
+- New tests across `tests/unit/core/test_labels.py` (102), `tests/unit/core/test_anonymizer.py` (171, includes per-locale checksum validation across 100s of generated IDs), `tests/unit/test_privacy_filter_routing.py` (22 — backend selection, family-aware Torch fallback, dispatch, integration), Nemotron parametrisation of the existing privacy-filter MLX dispatch test (`tests/unit/mlx/test_privacy_filter_mlx.py::test_dispatches_privacy_filter_pipeline`), and Portuguese obfuscation regressions in `tests/unit/test_pii_multilingual_regression.py` (3).
+- Swift OpenMedKit coverage for `classifier_bias` / `unembedding_bias` config decoding, Nemotron-biased Privacy Filter forward shape, and the baseline bias-less head.
+- Focused privacy/anonymization suite: 458 passed, 6 skipped, 11 pre-existing span-validation warnings.
+
 ## [1.2.0] - 2026-04-24
 
 ### Added
