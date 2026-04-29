@@ -23,8 +23,8 @@ checkpoint (`OpenMed/privacy-filter-nemotron`) with a one-time
 From the repository root:
 
 ```bash
-pip install -U "openmed[mlx]"        # or "openmed[hf]" off Apple Silicon
-uvicorn examples.privacy_filter_studio.app:app --reload --port 8770
+pip install -e ".[mlx,service]"      # or ".[hf,service]" off Apple Silicon
+python -m uvicorn examples.privacy_filter_studio.app:app --reload --port 8770
 ```
 
 Open http://127.0.0.1:8770
@@ -37,7 +37,7 @@ toggle in the UI) to allow the fetch; subsequent runs are cache-only.
 
 ```bash
 OPENMED_STUDIO_MODEL=OpenMed/privacy-filter-nemotron-mlx-8bit \
-  uvicorn examples.privacy_filter_studio.app:app --port 8770
+  python -m uvicorn examples.privacy_filter_studio.app:app --port 8770
 ```
 
 Any name accepted by `extract_pii(model_name=...)` works — including the
