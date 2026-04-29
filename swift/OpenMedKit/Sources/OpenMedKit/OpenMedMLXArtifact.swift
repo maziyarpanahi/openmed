@@ -196,6 +196,12 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
     let rmsNormEps: Float
     let swigluLimit: Float
     let viterbiBiases: [String: Float]
+    /// Whether the token-classification head ships with a learned bias.
+    /// The original ``openai/privacy-filter`` checkpoint sets this to false
+    /// (bias-less linear); the Nemotron-PII fine-tunes set it to true so the
+    /// 221-class head can fit the additional categories. Defaults to false
+    /// so back-compat with the OpenAI baseline is preserved.
+    let classifierBias: Bool
 
     enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
@@ -252,6 +258,8 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
         case rmsNormEps = "rms_norm_eps"
         case swigluLimit = "swiglu_limit"
         case viterbiBiases = "_mlx_viterbi_biases"
+        case classifierBias = "classifier_bias"
+        case unembeddingBias = "unembedding_bias"
         case numLabels = "num_labels"
         case positionOffset = "_mlx_position_offset"
         case weightsFormat = "_mlx_weights_format"
@@ -380,6 +388,11 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
         swigluLimit = try container.decodeIfPresent(Float.self, forKey: .swigluLimit) ?? 7.0
         viterbiBiases =
             try container.decodeIfPresent([String: Float].self, forKey: .viterbiBiases) ?? [:]
+        let configuredClassifierBias =
+            try container.decodeIfPresent(Bool.self, forKey: .classifierBias)
+        let configuredUnembeddingBias =
+            try container.decodeIfPresent(Bool.self, forKey: .unembeddingBias)
+        classifierBias = configuredClassifierBias ?? configuredUnembeddingBias ?? false
 
         let normalized = rawModelType.replacingOccurrences(of: "_", with: "-").lowercased()
         let resolvedPositionOffset: Int

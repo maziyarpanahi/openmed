@@ -534,7 +534,14 @@ final class OpenMedPrivacyFilterForTokenClassification: Module {
             hiddenSize: configuration.hiddenSize,
             eps: configuration.rmsNormEps
         )
-        _unembedding.wrappedValue = Linear(configuration.hiddenSize, configuration.numLabels, bias: false)
+        // The original openai/privacy-filter has a bias-less classifier head;
+        // the Nemotron-PII fine-tunes (`classifier_bias: true`) ship with a
+        // learned bias. Honor whichever the config requests.
+        _unembedding.wrappedValue = Linear(
+            configuration.hiddenSize,
+            configuration.numLabels,
+            bias: configuration.classifierBias
+        )
         super.init()
     }
 
