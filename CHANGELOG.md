@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - An MLX-only Nemotron request on a non-Apple-Silicon host now substitutes `OpenMed/privacy-filter-nemotron` instead of the unrelated default `openai/privacy-filter`, so the user gets the training distribution they asked for. A one-time `UserWarning` names the substitute.
   - Adding a future fine-tune that should fall back to its own PyTorch repo is a one-line addition to `_TORCH_FALLBACK_BY_FAMILY`.
 - **Nemotron MLX classifier-head bias support**: `OpenAIPrivacyFilterForTokenClassification` now honors `classifier_bias` / `unembedding_bias` in artifact configs, while keeping the original OpenAI checkpoint bias-less by default.
+- **Swift OpenMedKit privacy-filter classifier-head bias support**: the native MLX artifact loader now decodes `classifier_bias` / `unembedding_bias` and builds the Privacy Filter head with a learned bias when Nemotron-PII artifacts require it.
 
 ### Changed
 
@@ -56,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Privacy filter book demo** (`examples/privacy_filter_book/app.py`) migrated to `PrivacyFilterTorchPipeline` for the CPU side, replacing the inline `AutoTokenizer`/`AutoModelForTokenClassification`/`pipeline` triple.
 - **MLX inference module** trimmed: BIOES Viterbi (≈280 lines) and span-refinement helpers moved to `openmed.core.decoding`. Behavior unchanged.
 - **Privacy Filter Studio** keeps model loading cache-only unless downloads are explicitly allowed, then restores the caller's Hugging Face offline environment after loading.
+- **OpenMed Scan Demo privacy-filter option** now points at `OpenMed/privacy-filter-nemotron-mlx-8bit` and labels the engine as OpenAI Nemotron Privacy Filter throughout the picker, download events, and README.
 
 ### Breaking Changes
 
@@ -66,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 
 - New tests across `tests/unit/core/test_labels.py` (102), `tests/unit/core/test_anonymizer.py` (171, includes per-locale checksum validation across 100s of generated IDs), `tests/unit/test_privacy_filter_routing.py` (22 — backend selection, family-aware Torch fallback, dispatch, integration), Nemotron parametrisation of the existing privacy-filter MLX dispatch test (`tests/unit/mlx/test_privacy_filter_mlx.py::test_dispatches_privacy_filter_pipeline`), and Portuguese obfuscation regressions in `tests/unit/test_pii_multilingual_regression.py` (3).
+- Swift OpenMedKit coverage for `classifier_bias` / `unembedding_bias` config decoding, Nemotron-biased Privacy Filter forward shape, and the baseline bias-less head.
 - Focused privacy/anonymization suite: 458 passed, 6 skipped, 11 pre-existing span-validation warnings.
 
 ## [1.2.0] - 2026-04-24
