@@ -28,6 +28,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
   - PII & De-identification:
+      - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
