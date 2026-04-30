@@ -11,15 +11,16 @@ PII entities:
 | `hash`        | `NAME_a1b2c3d4` (entity-typed digest)   | You need consistent linking across docs. |
 | `shift_dates` | Dates only — shifted by N days          | You want to preserve relative time.      |
 
-This document focuses on `replace`, which was upgraded in the
-`feature/obfuscation-pii` line to a full Faker-backed obfuscation engine.
+This document focuses on `replace`, which was upgraded in v1.3.0 to a full
+Faker-backed obfuscation engine.
 
 ## The new `replace` engine
 
 `method="replace"` no longer picks from a small hardcoded list. It builds
-a per-document `Anonymizer` (see [`openmed.core.anonymizer`](../openmed/core/anonymizer))
-that delegates to [Faker](https://faker.readthedocs.io/) with custom
-providers for clinical IDs.
+a per-document `Anonymizer` (see
+[`openmed.core.anonymizer`](https://github.com/maziyarpanahi/openmed/tree/master/openmed/core/anonymizer))
+that delegates to [Faker](https://faker.readthedocs.io/) with custom providers
+for clinical IDs.
 
 ```python
 from openmed import deidentify
@@ -88,8 +89,8 @@ deidentify("Email: john@hospital.org", method="replace", lang="en")
 ### Clinical ID checksums
 
 OpenMed reuses the existing checksum validators in
-[`openmed.core.pii_i18n`](../openmed/core/pii_i18n.py) so every surrogate
-ID passes the same validator that detection uses:
+[`openmed.core.pii_i18n`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/pii_i18n.py)
+so every surrogate ID passes the same validator that detection uses:
 
 | Locale  | ID type             | Provider                                               |
 | ------- | ------------------- | ------------------------------------------------------ |
@@ -161,7 +162,7 @@ construction) is skipped for this family — the model already does
 Viterbi-constrained BIOES decoding internally.
 
 The dispatch lives in
-[`openmed.core.backends.create_privacy_filter_pipeline`](../openmed/core/backends.py).
+[`openmed.core.backends.create_privacy_filter_pipeline`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/backends.py).
 To register a new fine-tune that should fall back to its own PyTorch repo
 on non-Mac hosts, add a row to `_TORCH_FALLBACK_BY_FAMILY` in that module.
 If a fine-tune introduces a genuinely different *architecture* (not just
