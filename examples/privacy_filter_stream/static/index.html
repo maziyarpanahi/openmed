@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMed Privacy Filter Stream</title>
+    <link rel="icon" href="/static/assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Application controls">
+        <a class="brand" href="/" aria-label="OpenMed Privacy Filter Stream">
+          <img src="/static/assets/logo.svg" alt="" class="brand-mark" />
+          <span class="brand-word">open<span>med</span></span>
+          <span class="brand-rule" aria-hidden="true"></span>
+          <span class="brand-title">Privacy Filter Stream</span>
+        </a>
+
+        <div class="toolbar">
+          <div class="mode-switch" role="group" aria-label="Redaction mode">
+            <button type="button" class="mode-button" data-mode="mask">
+              <i data-lucide="square-asterisk"></i>
+              <span>Mask</span>
+            </button>
+            <button type="button" class="mode-button is-active" data-mode="replace">
+              <i data-lucide="dices"></i>
+              <span>Fake</span>
+            </button>
+          </div>
+
+          <button class="ghost-button" id="resetButton" type="button">
+            <i data-lucide="rotate-ccw"></i>
+            <span>Reset</span>
+          </button>
+
+          <button class="run-button" id="startButton" type="button">
+            <i data-lucide="radio"></i>
+            <span>Start Stream</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="stream-stage">
+        <section class="control-band" aria-label="Stream settings">
+          <div class="scenario-strip" id="scenarioStrip"></div>
+          <div class="range-controls">
+            <label class="range-control">
+              <span>Delay</span>
+              <input id="delayRange" type="range" min="250" max="4000" step="250" value="1000" />
+              <strong id="delayValue">1.0s</strong>
+            </label>
+            <label class="range-control">
+              <span>Speed</span>
+              <input id="speedRange" type="range" min="20" max="220" step="10" value="80" />
+              <strong id="speedValue">80ms</strong>
+            </label>
+          </div>
+        </section>
+
+        <section class="metrics-row" aria-label="Stream metrics">
+          <div class="metric">
+            <span>raw chars</span>
+            <strong id="rawChars">0</strong>
+          </div>
+          <div class="metric">
+            <span>shared chars</span>
+            <strong id="sharedChars">0</strong>
+          </div>
+          <div class="metric">
+            <span>redactions</span>
+            <strong id="entityCount">0</strong>
+          </div>
+          <div class="metric">
+            <span>lag</span>
+            <strong id="lagLabel">1.0s</strong>
+          </div>
+          <div class="status-pill" id="statusPill">Ready</div>
+        </section>
+
+        <section class="stream-grid" aria-label="Raw and redacted trace streams">
+          <article class="stream-pane" aria-labelledby="rawTitle">
+            <header class="pane-head">
+              <div class="pane-title">
+                <p>Input Stream</p>
+                <h1 id="rawTitle">Raw agent trace</h1>
+              </div>
+              <span class="live-dot" id="rawLiveDot" aria-hidden="true"></span>
+            </header>
+            <div class="paper-frame">
+              <pre id="rawStream" class="trace-output" aria-live="polite"></pre>
+            </div>
+          </article>
+
+          <article class="stream-pane" aria-labelledby="safeTitle">
+            <header class="pane-head">
+              <div class="pane-title">
+                <p>Share Stream</p>
+                <h1 id="safeTitle">Redacted trace</h1>
+              </div>
+              <span class="live-dot safe" id="safeLiveDot" aria-hidden="true"></span>
+            </header>
+            <div class="paper-frame">
+              <pre id="safeStream" class="trace-output trace-output--safe" aria-live="polite"></pre>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>
