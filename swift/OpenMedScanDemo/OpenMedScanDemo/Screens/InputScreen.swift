@@ -10,6 +10,7 @@ public struct InputScreen: View {
     public let onShowModelSheet: () -> Void
 
     @State private var pasteBuffer: String = ""
+    @State private var selectedSampleLanguage: SampleClinicalText.Language = .en
     @FocusState private var pasteFocused: Bool
 
     public init(
@@ -232,18 +233,30 @@ public struct InputScreen: View {
             HStack(alignment: .top, spacing: OM.Space.s4) {
                 VStack(alignment: .leading, spacing: OM.Space.s2) {
                     Text("SAMPLE").omEyebrow()
-                    Text("Try the bundled note")
+                    Text("Try a multilingual note")
                         .font(.om.heading(19))
                         .foregroundStyle(Color.omInk)
-                    Text("A short follow-up note with synthetic identifiers — useful for a 30-second demo.")
+                    Text("Synthetic EN, FR, and AR documents with names, IDs, addresses, phones, email, insurance, employer, and emergency contacts.")
                         .font(.om.body(15))
                         .foregroundStyle(Color.omFgMuted)
 
-                    Button("Use sample note") {
-                        flow.useSample(text: SampleClinicalText.note)
-                        HapticsCenter.notify(.success)
+                    HStack(spacing: OM.Space.s2) {
+                        ForEach(SampleClinicalText.Language.allCases) { language in
+                            OMChip(
+                                language.buttonTitle,
+                                tone: selectedSampleLanguage == language ? .ink : .neutral,
+                                leadingSystemImage: "doc.text",
+                                action: {
+                                    selectedSampleLanguage = language
+                                    flow.useSample(text: language.note)
+                                    HapticsCenter.notify(.success)
+                                }
+                            )
+                            .frame(minWidth: 62)
+                            .accessibilityLabel("Use \(language.displayName) sample")
+                        }
                     }
-                    .buttonStyle(.omSecondary(.sm))
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -255,7 +268,7 @@ public struct InputScreen: View {
     @ViewBuilder
     private var sampleThumbnail: some View {
         #if canImport(UIKit)
-        if let image = UIImage(named: "SampleClinicalDocument") {
+        if let image = UIImage(named: selectedSampleLanguage.assetName) {
             Image(uiImage: image)
                 .resizable()
                 .interpolation(.high)
