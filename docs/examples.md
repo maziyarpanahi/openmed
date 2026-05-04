@@ -24,9 +24,9 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.2.0` adds release-critical Apple entry points:
+OpenMed `1.4.0` includes release-critical Apple entry points:
 
-- [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter and experimental GLiNER-family artifacts
+- [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps
 
 Python MLX quick check:
