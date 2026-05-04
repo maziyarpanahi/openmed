@@ -71,9 +71,9 @@ public struct PIIComparisonSheet: View {
             HStack {
                 statCell("AGREE", value: "\(diff.summary.agreements)", tone: .omTealAccent)
                 Divider().frame(height: 32).background(Color.omBorder)
-                statCell("ONLY OPENMED", value: "\(diff.summary.onlyLeft)", tone: .omInk)
+                statCell("ONLY \(leftEngine.toggleTitle.uppercased())", value: "\(diff.summary.onlyLeft)", tone: .omInk)
                 Divider().frame(height: 32).background(Color.omBorder)
-                statCell("ONLY OPENAI", value: "\(diff.summary.onlyRight)", tone: .omInk)
+                statCell("ONLY \(rightEngine.toggleTitle.uppercased())", value: "\(diff.summary.onlyRight)", tone: .omInk)
             }
         }
     }
@@ -112,8 +112,8 @@ public struct PIIComparisonSheet: View {
                         .foregroundStyle(Color.omInk)
                     HStack(spacing: 6) {
                         OMBadge(originBadge(for: row.origin), tone: originTone(row.origin))
-                        if let l = row.leftLabel { Text("OM: \(l)").font(.om.mono(10)).foregroundStyle(Color.omFgMuted) }
-                        if let r = row.rightLabel { Text("AI: \(r)").font(.om.mono(10)).foregroundStyle(Color.omFgMuted) }
+                        if let l = row.leftLabel { Text("\(leftEngine.toggleTitle): \(l)").font(.om.mono(10)).foregroundStyle(Color.omFgMuted) }
+                        if let r = row.rightLabel { Text("\(rightEngine.toggleTitle): \(r)").font(.om.mono(10)).foregroundStyle(Color.omFgMuted) }
                     }
                 }
 
@@ -125,8 +125,8 @@ public struct PIIComparisonSheet: View {
     private func originBadge(for origin: EngineDiff.Row.Origin) -> String {
         switch origin {
         case .both:  return "BOTH"
-        case .left:  return "OM ONLY"
-        case .right: return "AI ONLY"
+        case .left:  return "\(leftEngine.toggleTitle.uppercased()) ONLY"
+        case .right: return "\(rightEngine.toggleTitle.uppercased()) ONLY"
         }
     }
 
