@@ -56,16 +56,16 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS use `OpenMedKit`. In `1.2.0`, that means:
+Swift apps on macOS and iOS use `OpenMedKit`. As of `1.4.0`, that means:
 
-- **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for supported OpenMed PII, OpenAI Privacy Filter, and experimental GLiNER-family artifacts
+- **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for supported OpenMed PII, OpenAI Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
 
 Add the Swift package like this:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.2.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.4.0"),
 ]
 ```
 
@@ -121,7 +121,7 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v1.2.0)
+### Production Tools (v1.4.0)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
@@ -176,8 +176,8 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ### Run with Docker
 
 ```bash
-docker build -t openmed:1.2.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.2.0
+docker build -t openmed:1.4.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.4.0
 ```
 
 ### Example request
@@ -262,14 +262,17 @@ deidentify(text, method="replace", lang="pt", locale="pt_BR",
 
 ### Privacy Filter Family (Public)
 
-OpenMed ships **two checkpoints** of the OpenAI Privacy Filter architecture — same model code (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base` tokenization), different training data:
+OpenMed ships **three Privacy Filter families** on the OpenAI Privacy Filter architecture — same model code (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base` tokenization), different training data:
 
-| Variant                | Trained on                                                                         | PyTorch (CPU + CUDA)                  | MLX full (Apple Silicon)                          | MLX 8-bit (Apple Silicon)                              |
-| ---------------------- | ---------------------------------------------------------------------------------- | ------------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
-| OpenAI Privacy Filter  | OpenAI's PII training set                                                          | [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)              | [`OpenMed/privacy-filter-mlx`](https://huggingface.co/OpenMed/privacy-filter-mlx)                | [`OpenMed/privacy-filter-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-mlx-8bit)                |
-| Nemotron-PII fine-tune | [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)     | [`OpenMed/privacy-filter-nemotron`](https://huggingface.co/OpenMed/privacy-filter-nemotron)     | [`OpenMed/privacy-filter-nemotron-mlx`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx)       | [`OpenMed/privacy-filter-nemotron-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx-8bit)       |
+| Variant                              | Trained on                                                                     | PyTorch (CPU + CUDA)                                                     | [MLX full (OpenMedKit + Apple Silicon)](swift/OpenMedKit)                             | [MLX 8-bit (OpenMedKit + Apple Silicon)](swift/OpenMedKit)                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| OpenAI Privacy Filter                | OpenAI's PII training set                                                      | [`openai/privacy-filter`](https://huggingface.co/openai/privacy-filter)  | [`OpenMed/privacy-filter-mlx`](https://huggingface.co/OpenMed/privacy-filter-mlx)     | [`OpenMed/privacy-filter-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-mlx-8bit) |
+| Nemotron-PII fine-tune               | [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1) | [`OpenMed/privacy-filter-nemotron`](https://huggingface.co/OpenMed/privacy-filter-nemotron) | [`OpenMed/privacy-filter-nemotron-mlx`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx) | [`OpenMed/privacy-filter-nemotron-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-nemotron-mlx-8bit) |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus with official support for 16 languages         | [`OpenMed/privacy-filter-multilingual`](https://huggingface.co/OpenMed/privacy-filter-multilingual) | [`OpenMed/privacy-filter-multilingual-mlx`](https://huggingface.co/OpenMed/privacy-filter-multilingual-mlx) | [`OpenMed/privacy-filter-multilingual-mlx-8bit`](https://huggingface.co/OpenMed/privacy-filter-multilingual-mlx-8bit) |
 
 All model IDs above route through the **same** `extract_pii()` / `deidentify()` API — only the `model_name=` argument changes.
+
+The MLX artifacts above use the OpenMed MLX artifact layout consumed by [OpenMedKit](swift/OpenMedKit) for native macOS, iOS, and iPadOS apps.
 
 #### Install
 
@@ -321,6 +324,10 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx-8bit")
 # Nemotron-PII fine-tune (full / 8-bit MLX artifacts)
 extract_pii(text, model_name="OpenMed/privacy-filter-nemotron-mlx")
 extract_pii(text, model_name="OpenMed/privacy-filter-nemotron-mlx-8bit")
+
+# OpenMed Multilingual Privacy Filter (full / 8-bit MLX artifacts)
+extract_pii(text, model_name="OpenMed/privacy-filter-multilingual-mlx")
+extract_pii(text, model_name="OpenMed/privacy-filter-multilingual-mlx-8bit")
 ```
 
 #### Cross-platform note
@@ -329,6 +336,7 @@ The MLX artifact names work everywhere — on a non-Apple-Silicon host (or anywh
 
 - `OpenMed/privacy-filter-mlx*` ⇒ falls back to `openai/privacy-filter`
 - `OpenMed/privacy-filter-nemotron-mlx*` ⇒ falls back to `OpenMed/privacy-filter-nemotron`
+- `OpenMed/privacy-filter-multilingual-mlx*` ⇒ falls back to `OpenMed/privacy-filter-multilingual`
 
 So your code can ship an MLX model name and run on any host without changes — Apple Silicon users get MLX speed, everyone else gets the same family's PyTorch checkpoint.
 
