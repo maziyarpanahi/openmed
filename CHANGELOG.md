@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-04
+
+### Added
+
+- **OpenMed Multilingual Privacy Filter family**, registered across PyTorch and MLX:
+  - `OpenMed/privacy-filter-multilingual` — PyTorch / Transformers (CPU + CUDA).
+  - `OpenMed/privacy-filter-multilingual-mlx` — MLX full-precision (Apple Silicon).
+  - `OpenMed/privacy-filter-multilingual-mlx-8bit` — MLX 8-bit quantized (Apple Silicon and OpenMedKit demos).
+  These artifacts use the OpenAI Privacy Filter architecture and officially support 16 languages through the OpenMed multilingual PII corpus.
+- **Python MLX routing for multilingual Privacy Filter artifacts**:
+  - `_MLX_MODEL_MAP` entries for the full and 8-bit multilingual MLX repo IDs.
+  - `privacy-filter-multilingual` and `multilingual-privacy-filter` MLX family aliases, both resolving to the existing OpenAI Privacy Filter model class and BIOES decoder.
+  - Family-aware Torch fallback so multilingual MLX model names substitute `OpenMed/privacy-filter-multilingual` on non-MLX hosts instead of the OpenAI baseline.
+- **Multilingual Privacy Filter Studio** in `examples/privacy_filter_multilingual_studio/`, a web demo comparing the OpenAI baseline, OpenAI Nemotron Privacy Filter, and OpenMed Multilingual Privacy Filter with English, French, and Arabic examples.
+- **OpenMed Scan Demo multilingual mode** with `OpenMed/privacy-filter-multilingual-mlx-8bit`, a three-engine picker, EN/FR/AR sample buttons, and new French/Arabic scanned demo documents for screenshot-ready flows.
+- **Release notes** for v1.4.0 in `RELEASE_NOTES_v1.4.0.md`.
+
+### Changed
+
+- Privacy Filter docs and README now describe three Privacy Filter families and label the multilingual model as **OpenMed Multilingual Privacy Filter**.
+- OpenMedKit and demo version surfaces now point at `1.4.0`.
+- The scan demo clears previous annotation windows whenever the language/sample changes, avoiding stale entities from earlier model runs.
+- The multilingual web studio scan animation now performs a single top-to-bottom pass while redacting line by line, matching the stronger visual rhythm of the original Privacy Filter Studio.
+
+### Fixed
+
+- Improved Swift model-download handling so stale cached 401/404 responses cannot masquerade as `openmed-mlx.json` manifests after a public model becomes available.
+- Tightened stale-result invalidation in iOS and web demo flows so slower previous model runs cannot overwrite a newly selected language/sample.
+
+### Tests
+
+- Added Python unit coverage for multilingual MLX backend selection, family-aware Torch fallback, and MLX Privacy Filter family dispatch aliases.
+- Rebuilt the OpenMed Scan Demo after the multilingual 8-bit integration.
+
 ## [1.3.0] - 2026-04-27
 
 ### Added
