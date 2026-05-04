@@ -22,6 +22,26 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
 
+## International Pharmaceutical NER (i18n)
+
+OpenMed now supports localized pharmaceutical entity recognition (NER) for specific countries, enabling high-precision drug detection using verified national lexicons.
+
+### Turkish Pharmaceutical NER (drugbase-tr)
+
+The Turkish module supports over 700 pharmaceutical brands and 300 active substances with full morphological support for Turkish suffixes (e.g., "lidokain", "lidokainin", "lidokaine").
+
+```python
+from openmed.core.pharma_i18n import extract_turkish_drug_entities
+
+text = "Hasta atorvastatin ve amlodipin tedavisine başladı. Ayrıca NORVASC dozajı kontrol edildi."
+entities = extract_turkish_drug_entities(text)
+
+for entity in entities:
+    print(f"Found: {entity['text']} -> Canonical: {entity['canonical']} ({entity['type']})")
+```
+
+See `examples/pharma_turkish_example.py` for the full implementation.
+
 ## Apple Silicon & Swift recipes
 
 OpenMed `1.2.0` adds release-critical Apple entry points:
