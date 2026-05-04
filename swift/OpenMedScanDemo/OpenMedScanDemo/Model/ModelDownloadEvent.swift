@@ -1,9 +1,10 @@
 import Foundation
 
-/// Identity of the three on-device models the demo uses.
+/// Identity of the on-device models the demo uses.
 public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable {
     case piiLiteClinical
     case openaiPrivacyFilter
+    case multilingualPrivacyFilter
     case glinerRelex
 
     public var id: String { rawValue }
@@ -11,7 +12,8 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
     public var displayName: String {
         switch self {
         case .piiLiteClinical:     return "OpenMed PII"
-        case .openaiPrivacyFilter: return "OpenAI Nemotron Privacy"
+        case .openaiPrivacyFilter: return "OpenAI Nemotron Privacy Filter"
+        case .multilingualPrivacyFilter: return "OpenMed Multilingual Privacy Filter"
         case .glinerRelex:         return "GLiNER Clinical"
         }
     }
@@ -22,7 +24,8 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
     public var estimatedSizeLabel: String {
         switch self {
         case .piiLiteClinical:     return "~265 MB"
-        case .openaiPrivacyFilter: return "~180 MB"
+        case .openaiPrivacyFilter: return "~1.5 GB"
+        case .multilingualPrivacyFilter: return "~1.5 GB"
         case .glinerRelex:         return "~220 MB"
         }
     }
@@ -31,6 +34,7 @@ public enum ScanModelID: String, CaseIterable, Hashable, Sendable, Identifiable 
         switch self {
         case .piiLiteClinical:     return "PII"
         case .openaiPrivacyFilter: return "PRIVACY"
+        case .multilingualPrivacyFilter: return "MULTI"
         case .glinerRelex:         return "CLINICAL"
         }
     }
