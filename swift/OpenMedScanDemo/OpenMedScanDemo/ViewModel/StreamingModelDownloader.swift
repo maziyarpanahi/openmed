@@ -55,12 +55,16 @@ public actor StreamingModelDownloader {
         )
 
         var aggregate: Int64 = sizeOf(manifestURL)
+        let manifest = try await decodeManifestIfPresent(
+            repoID: repoID,
+            revision: revision,
+            manifestURL: manifestURL,
+            manifestExists: manifestExists
+        )
 
         // 2. Either manifest-driven or legacy layout.
-        let filesToDownload: [(path: String, optional: Bool)] = try await {
-            if manifestExists {
-                let data = try Data(contentsOf: manifestURL)
-                let manifest = try JSONDecoder().decode(MLXManifest.self, from: data)
+        let filesToDownload: [(path: String, optional: Bool)] = {
+            if let manifest {
                 var list: [(String, Bool)] = []
                 list.append((manifest.configPath, false))
                 if let labelMap = manifest.labelMapPath { list.append((labelMap, true)) }
@@ -154,7 +158,8 @@ public actor StreamingModelDownloader {
         let request = URLRequest(url: url)
         do {
             let (tempURL, response) = try await session.download(for: request, delegate: delegate)
-            if let http = response as? HTTPURLResponse, let required = requiredStatusCodes {
+            if let http = response as? HTTPURLResponse {
+                let required = requiredStatusCodes ?? Set(200..<300)
                 guard required.contains(http.statusCode) else {
                     try? FileManager.default.removeItem(at: tempURL)
                     if http.statusCode == 404 { return false }
@@ -175,6 +180,41 @@ public actor StreamingModelDownloader {
         } catch let error as NSError where error.code == NSURLErrorCancelled {
             throw CancellationError()
         }
+    }
+
+    private func decodeManifestIfPresent(
+        repoID: String,
+        revision: String,
+        manifestURL: URL,
+        manifestExists: Bool
+    ) async throws -> MLXManifest? {
+        guard manifestExists else { return nil }
+        do {
+            return try decodeManifest(at: manifestURL)
+        } catch {
+            // A previous private/gated attempt may have cached the 401 body at
+            // openmed-mlx.json. Remove it once, re-fetch, then decode again.
+            try? FileManager.default.removeItem(at: manifestURL)
+            let refetched = try await downloadFileIfMissing(
+                repoID: repoID,
+                revision: revision,
+                relativePath: manifestURL.lastPathComponent,
+                destination: manifestURL,
+                requiredStatusCodes: nil,
+                progress: { _, _, _, _ in }
+            )
+            guard refetched else { return nil }
+            do {
+                return try decodeManifest(at: manifestURL)
+            } catch {
+                throw DownloaderError.invalidManifest(manifestURL.lastPathComponent, error.localizedDescription)
+            }
+        }
+    }
+
+    private func decodeManifest(at url: URL) throws -> MLXManifest {
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(MLXManifest.self, from: data)
     }
 
     private func buildHubURL(repoID: String, revision: String, relativePath: String) throws -> URL {
@@ -205,6 +245,7 @@ public enum DownloaderError: LocalizedError {
     case httpStatus(URL, Int)
     case missingFile(String)
     case invalidURL(String, String)
+    case invalidManifest(String, String)
 
     public var errorDescription: String? {
         switch self {
@@ -214,6 +255,8 @@ public enum DownloaderError: LocalizedError {
             return "Required file missing: \(path)"
         case .invalidURL(let repo, let path):
             return "Invalid URL for \(repo)/\(path)"
+        case .invalidManifest(let path, let reason):
+            return "Invalid MLX manifest \(path): \(reason)"
         }
     }
 }
