@@ -24,7 +24,9 @@ print(result[:200])  # JSON string in this configuration
 
 ### Key arguments
 
-- `model_name`: registry alias or full Hugging Face id. Use `openmed.list_models()` if you need auto-discovery.
+- `model_name`: registry alias, full Hugging Face id, or local model directory. Use `openmed.list_models()` if you need
+  auto-discovery.
+- `model_id`: alias for `model_name`, supported for API-style callers that use model-id terminology.
 - `aggregation_strategy`: forwarded to the HF pipeline. `simple` (default) yields grouped tokens; `None` keeps raw tokens.
 - `output_format`: `"dict"` (default, returns `PredictionResult`), `"json"`, `"html"`, or `"csv"`.
 - `include_confidence` & `confidence_threshold`: control the final payload; defaults keep all scores.
@@ -54,6 +56,31 @@ When you need full-control over tokenizer behaviour:
   constructor.
 - Enable medical token remapping with `OpenMedConfig(use_medical_tokenizer=True)` to group outputs onto clinical-friendly
   tokens without changing the model tokenizer.
+
+## Loading from a local path
+
+Pass an existing model directory to `model_name` or `model_id` when the model files are already present on disk:
+
+```python
+import os
+from openmed import OpenMedConfig, analyze_text
+
+local_path = os.path.abspath("./models/OpenMed-NER-DiseaseDetect-SuperClinical-434M")
+config = OpenMedConfig(device="cpu")
+
+result = analyze_text(
+    "Patient presents with chronic myeloid leukemia and Type 2 diabetes.",
+    model_id=local_path,
+    config=config,
+)
+
+for entity in result.entities:
+    print(entity.text, entity.label)
+```
+
+When the identifier points to an existing local path, OpenMed asks Transformers to load with `local_files_only=True` by
+default. That keeps air-gapped deployments from validating or downloading the model from the Hugging Face Hub. If any
+required tokenizer, config, or weight file is missing, loading fails locally with the underlying Transformers error.
 
 ## Streaming multiple texts
 
