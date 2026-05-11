@@ -86,6 +86,25 @@ result = analyze_text(
 )
 ```
 
+Local model directories are supported for offline and air-gapped deployments:
+
+```python
+import os
+from openmed import OpenMedConfig, analyze_text
+
+local_path = os.path.abspath("./models/OpenMed-NER-DiseaseDetect-SuperClinical-434M")
+config = OpenMedConfig(device="cpu")
+
+result = analyze_text(
+    "Patient presents with chronic myeloid leukemia and Type 2 diabetes.",
+    model_id=local_path,  # `model_name=local_path` is equivalent
+    config=config,
+)
+```
+
+When `model_name` or `model_id` points to an existing local path, OpenMed loads it locally and asks Transformers not to
+contact the Hugging Face Hub.
+
 **2️⃣ REST API Service** — FastAPI endpoints for app backends
 
 ```bash
