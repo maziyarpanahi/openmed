@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMed Privacy Filter — Multilingual Comparison</title>
+    <link rel="icon" href="/static/assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar" aria-label="Application controls">
+        <a class="brand" href="/" aria-label="OpenMed Privacy Filter Multilingual Studio">
+          <img src="/static/assets/logo.svg" alt="" class="brand-mark" />
+          <span class="brand-word">open<span>med</span></span>
+          <span class="brand-rule" aria-hidden="true"></span>
+          <span class="brand-title">Privacy Filter · Multilingual Comparison</span>
+        </a>
+
+        <div class="toolbar">
+          <div class="mode-switch" role="group" aria-label="Output mode">
+            <button type="button" class="mode-button is-active" data-mode="mask">
+              <i data-lucide="square-asterisk"></i>
+              <span>Mask</span>
+            </button>
+            <button type="button" class="mode-button" data-mode="randomize">
+              <i data-lucide="dices"></i>
+              <span>Randomize</span>
+            </button>
+          </div>
+
+          <label class="download-toggle" title="Allow first-run model download from Hugging Face">
+            <input id="allowDownloads" type="checkbox" />
+            <span>Allow Downloads</span>
+          </label>
+
+          <button class="icon-button" id="themeToggle" type="button" aria-label="Switch theme">
+            <i data-lucide="sun"></i>
+          </button>
+
+          <button class="run-button" id="runButton" type="button">
+            <i data-lucide="scan-line"></i>
+            <span>Run Comparison</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="studio-stage">
+        <section class="lang-strip" aria-label="Language picker">
+          <span class="strip-label">Language</span>
+          <div class="lang-tabs" id="langTabs" role="tablist"></div>
+        </section>
+
+        <section class="examples-strip" aria-label="Pre-defined examples for the chosen language">
+          <span class="strip-label">Try an example</span>
+          <div class="example-chips" id="exampleChips"></div>
+        </section>
+
+        <section class="editor-row" aria-label="Editor">
+          <article class="editor-pane" aria-labelledby="editorTitle">
+            <header class="pane-head">
+              <div class="pane-title">
+                <p>Input</p>
+                <h2 id="editorTitle">Paste or write text</h2>
+              </div>
+              <div class="pane-meta">
+                <span class="meta-item">
+                  <span class="meta-label">chars</span>
+                  <strong id="charCount">0</strong>
+                </span>
+                <span class="meta-item">
+                  <span class="meta-label">tokens (approx.)</span>
+                  <strong id="tokenCount">0</strong>
+                </span>
+                <button class="ghost-button" id="clearButton" type="button">
+                  <i data-lucide="eraser"></i>
+                  <span>Clear</span>
+                </button>
+              </div>
+            </header>
+
+            <div class="paper-frame">
+              <div class="scan-line" aria-hidden="true"></div>
+              <textarea
+                id="inputText"
+                spellcheck="false"
+                placeholder="Pick a language above to load an example, then press Run Comparison."
+              ></textarea>
+            </div>
+          </article>
+        </section>
+
+        <section class="results-grid" aria-label="Side-by-side model output">
+          <article class="result-pane" data-side="openmed" aria-labelledby="openmedTitle">
+            <header class="pane-head">
+              <div class="pane-title">
+                <p class="model-eyebrow">OpenMed · 16-language multilingual filter</p>
+                <h2 id="openmedTitle"><span id="openmedModelLabel">OpenMed/privacy-filter-multilingual-mlx</span></h2>
+              </div>
+              <div class="pane-meta">
+                <span class="meta-item">
+                  <span class="meta-label">entities</span>
+                  <strong id="openmedEntityCount">0</strong>
+                </span>
+                <span class="meta-item">
+                  <span class="meta-label">latency</span>
+                  <strong id="openmedLatency">--</strong>
+                </span>
+                <span class="status-pill" id="openmedStatusPill">Ready</span>
+              </div>
+            </header>
+
+            <div class="paper-frame paper-frame--result">
+              <div class="scan-line" aria-hidden="true"></div>
+              <div
+                id="openmedResultText"
+                class="result-text"
+                aria-live="polite"
+                aria-atomic="false"
+              >
+                <p class="result-empty">Press <strong>Run Comparison</strong> to populate this side.</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="result-pane" data-side="baseline" aria-labelledby="baselineTitle">
+            <header class="pane-head">
+              <div class="pane-title">
+                <p class="model-eyebrow">Upstream baseline · 8 coarse PII categories</p>
+                <h2 id="baselineTitle"><span id="baselineModelLabel">openai/privacy-filter</span></h2>
+              </div>
+              <div class="pane-meta">
+                <span class="meta-item">
+                  <span class="meta-label">entities</span>
+                  <strong id="baselineEntityCount">0</strong>
+                </span>
+                <span class="meta-item">
+                  <span class="meta-label">latency</span>
+                  <strong id="baselineLatency">--</strong>
+                </span>
+                <span class="status-pill" id="baselineStatusPill">Ready</span>
+              </div>
+            </header>
+
+            <div class="paper-frame paper-frame--result">
+              <div class="scan-line" aria-hidden="true"></div>
+              <div
+                id="baselineResultText"
+                class="result-text"
+                aria-live="polite"
+                aria-atomic="false"
+              >
+                <p class="result-empty">Press <strong>Run Comparison</strong> to populate this side.</p>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <footer class="comparison-footer">
+          <span id="comparisonNote" class="comparison-note">Pick a language and an example to begin.</span>
+        </footer>
+      </main>
+    </div>
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

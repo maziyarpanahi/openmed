@@ -2,7 +2,7 @@
 
 OpenMedKit is the Swift package for running OpenMed models in **macOS**, **iOS**, and **iPadOS** apps.
 
-In `1.2.0`, OpenMedKit supports two Apple backends:
+As of `1.4.0`, OpenMedKit supports two Apple backends:
 
 - **MLX** for Apple Silicon Macs and real iPhone/iPad devices
 - **CoreML** for bundled Apple model packages
@@ -16,6 +16,7 @@ Swift MLX supports the first OpenMed artifact families used by the public Apple 
 - `electra`
 - `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
 - `openai-privacy-filter`
+- `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
 
 ModernBERT, Longformer, EuroBERT, Qwen3, and additional architecture families are still part of the broader rollout work.
 
@@ -54,7 +55,7 @@ iOS Simulator is **not** a Swift MLX validation target.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.2.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.4.0"),
 ]
 ```
 
