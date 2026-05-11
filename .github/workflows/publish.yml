@@ -33,7 +33,7 @@ jobs:
       - name: Verify version matches tag
         if: github.event_name == 'push'
         run: |
-          VERSION=$(python -c "from openmed import __version__; print(__version__)")
+          VERSION=$(python -c "import pathlib, re; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")
           TAG=${GITHUB_REF#refs/tags/v}
           if [ "$VERSION" != "$TAG" ]; then
             echo "Version mismatch: package version $VERSION != tag version $TAG"
