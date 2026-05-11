@@ -167,6 +167,7 @@ PRIVACY_FILTER_TORCH_FALLBACK = "openai/privacy-filter"
 # MLX-only request from Linux falls back to the same family's PyTorch model
 # (not the unrelated default).
 _TORCH_FALLBACK_BY_FAMILY: tuple[tuple[str, str], ...] = (
+    ("multilingual", "OpenMed/privacy-filter-multilingual"),
     ("nemotron", "OpenMed/privacy-filter-nemotron"),
 )
 

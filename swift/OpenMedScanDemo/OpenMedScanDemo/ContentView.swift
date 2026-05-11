@@ -63,7 +63,9 @@ struct ContentView: View {
             PIIComparisonSheet(
                 sourceText: flow.trimmedText,
                 leftOutput: flow.openMedPIIOutput,
-                rightOutput: flow.privacyFilterPIIOutput
+                rightOutput: flow.multilingualPIIOutput ?? flow.privacyFilterPIIOutput,
+                leftEngine: .openMed,
+                rightEngine: flow.multilingualPIIOutput == nil ? .privacyFilter : .multilingual
             )
         }
         .alert(
@@ -150,7 +152,7 @@ struct ContentView: View {
         case .input:      return flow.hasText ? "Review document" : "Add document or text"
         case .review:     return flow.needsOCR ? "Run OCR" : "Continue to de-identification"
         case .deidentify:
-            if flow.currentPIIOutput == nil { return "Run \(flow.piiEngine.displayName)" }
+            if flow.currentPIIOutput == nil { return "Run PII redaction" }
             return "Continue to clinical"
         case .clinical:
             if flow.clinicalOutput == nil { return "Extract clinical signals" }
@@ -198,7 +200,7 @@ struct ContentView: View {
             }
         case .deidentify:
             if flow.currentPIIOutput == nil {
-                await flow.runPIIForCurrentEngine()
+                await flow.runPIIForAllEngines()
             } else {
                 flow.advance()
             }

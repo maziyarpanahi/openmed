@@ -20,7 +20,7 @@ public struct DeIDScreen: View {
             ScanStageHeader(
                 eyebrow: ScanStage.deidentify.eyebrow,
                 spans: [.plain("Redact, then "), .accent("compare"), .plain(".")],
-                subhead: "Two independent engines mask the same note. Yellow = detected PHI.",
+                subhead: "Three local PII engines mask the same note. Yellow = detected PHI.",
                 scale: .lg
             )
 
@@ -28,19 +28,15 @@ public struct DeIDScreen: View {
 
             modelGate
 
-            outputPanel(
-                engine: .openMed,
-                output: flow.openMedPIIOutput,
-                eyebrow: ScanFlowViewModel.PIIEngine.openMed.eyebrow
-            )
+            ForEach(ScanFlowViewModel.PIIEngine.allCases) { engine in
+                outputPanel(
+                    engine: engine,
+                    output: flow.output(for: engine),
+                    eyebrow: engine.eyebrow
+                )
+            }
 
-            outputPanel(
-                engine: .privacyFilter,
-                output: flow.privacyFilterPIIOutput,
-                eyebrow: ScanFlowViewModel.PIIEngine.privacyFilter.eyebrow
-            )
-
-            if flow.openMedPIIOutput != nil && flow.privacyFilterPIIOutput != nil {
+            if completedEngineCount >= 2 {
                 comparisonRow
             }
         }
@@ -48,19 +44,20 @@ public struct DeIDScreen: View {
 
     private var engineToggle: some View {
         OMCard(padding: OM.Space.s3) {
-            HStack(spacing: OM.Space.s3) {
+            VStack(alignment: .leading, spacing: OM.Space.s2) {
                 Text("ENGINE").omEyebrow()
-                Spacer()
-                OMChip(
-                    ScanFlowViewModel.PIIEngine.openMed.displayName,
-                    tone: flow.piiEngine == .openMed ? .ink : .neutral,
-                    action: { flow.piiEngine = .openMed; HapticsCenter.selection() }
-                )
-                OMChip(
-                    ScanFlowViewModel.PIIEngine.privacyFilter.displayName,
-                    tone: flow.piiEngine == .privacyFilter ? .ink : .neutral,
-                    action: { flow.piiEngine = .privacyFilter; HapticsCenter.selection() }
-                )
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: OM.Space.s2) {
+                        ForEach(ScanFlowViewModel.PIIEngine.allCases) { engine in
+                            OMChip(
+                                engine.toggleTitle,
+                                tone: flow.piiEngine == engine ? .ink : .neutral,
+                                action: { flow.piiEngine = engine; HapticsCenter.selection() }
+                            )
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
             }
         }
     }
@@ -107,18 +104,26 @@ public struct DeIDScreen: View {
         }
     }
 
+    private var completedEngineCount: Int {
+        ScanFlowViewModel.PIIEngine.allCases
+            .filter { flow.output(for: $0) != nil }
+            .count
+    }
+
     private var comparisonRow: some View {
         let diff = EngineDiff.build(
             left: flow.openMedPIIOutput?.entities ?? [],
-            right: flow.privacyFilterPIIOutput?.entities ?? [],
+            right: (flow.multilingualPIIOutput ?? flow.privacyFilterPIIOutput)?.entities ?? [],
             leftLabel: ScanFlowViewModel.PIIEngine.openMed.displayName,
-            rightLabel: ScanFlowViewModel.PIIEngine.privacyFilter.displayName
+            rightLabel: flow.multilingualPIIOutput == nil
+                ? ScanFlowViewModel.PIIEngine.privacyFilter.displayName
+                : ScanFlowViewModel.PIIEngine.multilingual.displayName
         ).summary
 
         return OMCard(padding: OM.Space.s4) {
             HStack(alignment: .center, spacing: OM.Space.s3) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(diff.agreements) AGREE · \(diff.onlyLeft) ONLY OPENMED · \(diff.onlyRight) ONLY OPENAI")
+                    Text("\(diff.agreements) AGREE · \(diff.onlyLeft) ONLY OPENMED · \(diff.onlyRight) ONLY OTHER")
                         .omMonoTag(size: 10)
                         .foregroundStyle(Color.omFgMuted)
                     Text("Compare side by side")

@@ -151,6 +151,7 @@ public struct OMDownloadRow: View {
         switch modelID {
         case .piiLiteClinical:     return "shield.lefthalf.filled"
         case .openaiPrivacyFilter: return "lock.shield.fill"
+        case .multilingualPrivacyFilter: return "globe.europe.africa.fill"
         case .glinerRelex:         return "sparkles"
         }
     }

@@ -1,6 +1,6 @@
 # MLX Backend (Apple Silicon)
 
-OpenMed v1.2.0 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
+OpenMed v1.4.0 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
 
 That MLX story now has two surfaces:
 
@@ -55,7 +55,7 @@ The public runtime focuses on automatic preparation at first use. OpenMed's broa
 
 ## Architecture Coverage
 
-As of April 24, 2026, the current public MLX path covers these families:
+As of May 4, 2026, the current public MLX path covers these families:
 
 - `bert`
 - `distilbert`
@@ -64,8 +64,9 @@ As of April 24, 2026, the current public MLX path covers these families:
 - `electra`
 - `deberta-v2` / DeBERTa-v3-backed experimental GLiNER-family artifacts
 - `openai-privacy-filter`
+- `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
 
-Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, and experimental GLiNER-family tasks.
+Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family tasks.
 
 Architectures still in active rollout:
 

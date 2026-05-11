@@ -127,24 +127,28 @@ register_label_generator("FIRST_NAME", my_first_name)
 
 ## Privacy-filter family
 
-OpenMed ships two privacy-filter checkpoints, both **the same OpenAI
+OpenMed ships three privacy-filter families, all **the same OpenAI
 Privacy Filter architecture** (gpt-oss-style sparse-MoE transformer with
 local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
-| Variant                   | Trained on                  | PyTorch artifact                     | MLX (full)                                  | MLX (8-bit)                                       |
-| ------------------------- | --------------------------- | ------------------------------------ | ------------------------------------------- | ------------------------------------------------- |
-| OpenAI Privacy Filter     | OpenAI's PII training set   | `openai/privacy-filter`              | `OpenMed/privacy-filter-mlx`                | `OpenMed/privacy-filter-mlx-8bit`                 |
-| Nemotron-PII fine-tune    | Nemotron PII dataset        | `OpenMed/privacy-filter-nemotron`    | `OpenMed/privacy-filter-nemotron-mlx`       | `OpenMed/privacy-filter-nemotron-mlx-8bit`        |
+| Variant                              | Trained on                                      | PyTorch artifact                         | MLX (full)                                      | MLX (8-bit)                                           |
+| ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
+| OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
+| OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus, 16 languages   | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
-Both run through the same `extract_pii()` / `deidentify()` API — only the
+All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:
 
 ```python
 extract_pii(text, model_name="OpenMed/privacy-filter-mlx-8bit")
 extract_pii(text, model_name="OpenMed/privacy-filter-nemotron-mlx-8bit")
+extract_pii(text, model_name="OpenMed/privacy-filter-multilingual-mlx-8bit")
 
 deidentify(text, model_name="OpenMed/privacy-filter-nemotron",
+           method="replace", consistent=True, seed=42)
+deidentify(text, model_name="OpenMed/privacy-filter-multilingual",
            method="replace", consistent=True, seed=42)
 ```
 
@@ -153,8 +157,9 @@ artifact runs natively via `PrivacyFilterMLXPipeline`. Elsewhere, the
 call substitutes the corresponding PyTorch model via `transformers` and
 emits a one-time `UserWarning` explaining the swap. The fallback is
 **family-aware** — an MLX-only Nemotron request on Linux substitutes
-`OpenMed/privacy-filter-nemotron` (not the unrelated `openai/privacy-filter`),
-so the user gets the same training distribution they asked for.
+`OpenMed/privacy-filter-nemotron`, and an MLX-only multilingual request
+substitutes `OpenMed/privacy-filter-multilingual`, so the user gets the same
+training distribution they asked for.
 
 Either way the output entity dicts have the same shape so the rest of
 the pipeline behaves identically. Smart-merging (regex-based span

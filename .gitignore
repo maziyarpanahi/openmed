@@ -221,6 +221,7 @@ local_config.py
 
 # Personal release/announcement drafts
 /RELEASE_NOTES*.md
+!/RELEASE_NOTES_v1.4.0.md
 /ANNOUNCEMENT*.md
 local_settings.py
 dev_config.json
