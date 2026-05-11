@@ -19,6 +19,7 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 | --- | --- |
 | `examples/pii_model_comparison.py` | Compares multiple PII models across shared sample text and summarizes extraction quality. |
 | `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, and Portuguese registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
+| `examples/privacy_filter_stream/` | Web demo that streams raw agent traces beside a delayed, redacted or Faker-obfuscated shareable stream. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
 
