@@ -127,6 +127,7 @@ def analyze_text(
     text: str,
     model_name: str = "disease_detection_superclinical",
     *,
+    model_id: Optional[str] = None,
     config: Optional[OpenMedConfig] = None,
     loader: Optional[ModelLoader] = None,
     aggregation_strategy: Optional[str] = "simple",
@@ -147,7 +148,10 @@ def analyze_text(
 
     Args:
         text: Clinical or biomedical text to analyse.
-        model_name: Registry key or fully-qualified Hugging Face model id.
+        model_name: Registry key, fully-qualified Hugging Face model id, or
+            local model path.
+        model_id: Alias for ``model_name``. Useful for APIs and examples that
+            name model identifiers as ``model_id``.
         config: Optional :class:`~openmed.core.config.OpenMedConfig` instance.
         loader: Reuse an existing :class:`~openmed.core.models.ModelLoader`.
         aggregation_strategy: Hugging Face aggregation strategy (``"simple"`` by
@@ -173,7 +177,11 @@ def analyze_text(
     """
 
     validated_text = validate_input(text)
-    validated_model = validate_model_name(model_name)
+    selected_model = model_id if model_id is not None else model_name
+    if model_id is not None and model_name != "disease_detection_superclinical":
+        raise ValueError("Pass only one of model_name or model_id")
+
+    validated_model = validate_model_name(selected_model)
 
     loader = loader or ModelLoader(config)
 
