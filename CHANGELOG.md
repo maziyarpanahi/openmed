@@ -5,7 +5,18 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - 2026-04-14
+
+### Added 
+
+- **Intel_x86_64 support** for PyPI wheels
+  - Added `numpy>=1.26,<2; sys_platform == "darwin" and platform_machine == "x86_64"` to `pyproject.toml`
+  - Added `transformers>=4.50,<5; sys_platform == "darwin" and platform_machine == "x86_64"` to `pyproject.toml`
+  - Added `transformers>=4.50; sys_platform != "darwin" or platform_machine != "x86_64"` to `pyproject.toml`
+  - Added `mlx>=0.22; (sys_platform == "darwin" and platform_machine == "arm64") or sys_platform == "linux"` to `pyproject.toml`
+  - Added `transformers>=4.50,<5; sys_platform == "darwin" and platform_machine == "x86_64"` to `pyproject.toml`
+  - Added `transformers>=4.50; sys_platform != "darwin" or platform_machine != "x86_64"` to `pyproject.toml`
+  - Added `mlx>=0.22; (sys_platform == "darwin" and platform_machine == "arm64") or sys_platform == "linux"` to `pyproject.toml`
 
 ## [1.4.0] - 2026-05-04
 
