@@ -211,7 +211,10 @@ public final class OpenMed {
         }
 
         semaphore.wait()
-        return try result!.get()
+        guard let unwrapped = result else {
+            throw TokenizerError.missingConfig
+        }
+        return try unwrapped.get()
     }
 
     private static func loadTokenizerAsync(
@@ -397,7 +400,10 @@ public final class OpenMed {
         }
 
         semaphore.wait()
-        return try result!.get()
+        guard let unwrapped = result else {
+            throw TokenizerError.missingConfig
+        }
+        return try unwrapped.get()
     }
 
     private static func ensureTokenizerAssets(modelID: String) async throws -> URL {
@@ -520,7 +526,10 @@ public final class OpenMed {
         }
 
         semaphore.wait()
-        return try result!.get()
+        guard let unwrapped = result else {
+            throw TokenizerError.missingConfig
+        }
+        return try unwrapped.get()
     }
 
     private static func sanitizedCacheComponent(_ value: String) -> String {

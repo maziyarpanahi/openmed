@@ -131,7 +131,13 @@ def _count_tokens(text: str) -> int:
 
         encoding = tiktoken.get_encoding("o200k_base")
         return len(encoding.encode(text, allowed_special="all"))
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
+        return max(1, len(re.findall(r"\S+", text)))
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning(
+            "tiktoken token counting failed, falling back to word count: %s", exc
+        )
         return max(1, len(re.findall(r"\S+", text)))
 
 

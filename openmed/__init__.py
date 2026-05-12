@@ -89,6 +89,7 @@ _PLACEHOLDER_SEGMENT_PATTERN = re.compile(
 
 logger = logging.getLogger(__name__)
 
+
 def list_models(
     *,
     include_registry: bool = True,
@@ -121,6 +122,310 @@ def get_model_max_length(
 
     loader = loader or ModelLoader(config)
     return loader.get_max_sequence_length(model_name)
+
+
+# ---------------------------------------------------------------------------
+# Helper functions extracted from analyze_text() for maintainability
+# ---------------------------------------------------------------------------
+
+
+def _build_segments(
+    validated_text: str,
+    sentence_detection: bool,
+    sentence_language: str,
+    sentence_clean: bool,
+    sentence_segmenter: Optional[Any],
+) -> tuple[List[Dict[str, Any]], bool]:
+    """Run sentence detection and return processed segment dicts."""
+    raw_segments: List[sentence_utils.SentenceSpan] = []
+    if sentence_detection:
+        try:
+            raw_segments = sentence_utils.segment_text(
+                validated_text,
+                language=sentence_language,
+                clean=sentence_clean,
+                segmenter=sentence_segmenter,
+            )
+        except ImportError:
+            sentence_detection = False
+    if not raw_segments:
+        sentence_detection = False
+
+    processed_segments: List[Dict[str, Any]] = []
+    if sentence_detection:
+        for span in raw_segments:
+            span_text = span.text or ""
+            base_start = span.start
+            base_end = span.end
+
+            leading_ws = len(span_text) - len(span_text.lstrip())
+            trailing_ws = len(span_text) - len(span_text.rstrip())
+
+            if leading_ws:
+                base_start += leading_ws
+            if trailing_ws:
+                base_end -= trailing_ws
+
+            trimmed_text = span_text[
+                leading_ws: len(span_text) - trailing_ws
+            ]
+
+            if not trimmed_text:
+                continue
+
+            suppress_predictions = bool(
+                _PLACEHOLDER_SEGMENT_PATTERN.search(trimmed_text)
+            )
+
+            processed_segments.append(
+                {
+                    "index": len(processed_segments),
+                    "text": trimmed_text,
+                    "start": base_start,
+                    "end": base_end,
+                    "suppress_predictions": suppress_predictions,
+                }
+            )
+
+    if not processed_segments:
+        processed_segments.append(
+            {
+                "index": 0,
+                "text": validated_text,
+                "start": 0,
+                "end": len(validated_text),
+                "suppress_predictions": False,
+            }
+        )
+        sentence_detection = False
+
+    return processed_segments, sentence_detection
+
+
+def _build_chunks(
+    validated_text: str,
+    processed_segments: List[Dict[str, Any]],
+    sentence_detection: bool,
+    desired_max_length: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Group segments into inference-sized chunk descriptors."""
+    if not sentence_detection:
+        return [
+            {
+                "text": validated_text,
+                "start": 0,
+                "end": len(validated_text),
+                "segment_indices": [seg["index"] for seg in processed_segments],
+            }
+        ]
+
+    max_chunk_chars = max(480, (desired_max_length or 256) * 4)
+    max_chunk_sentences = 6
+
+    chunk_descriptors: List[Dict[str, Any]] = []
+    current_indices: List[int] = []
+    current_start: Optional[int] = None
+    current_end: Optional[int] = None
+
+    for seg in processed_segments:
+        seg_start = seg["start"]
+        seg_end = seg["end"]
+
+        if not current_indices:
+            current_indices = [seg["index"]]
+            current_start = seg_start
+            current_end = seg_end
+            continue
+
+        proposed_start = current_start if current_start is not None else seg_start
+        proposed_end = seg_end
+        span_length = proposed_end - proposed_start
+
+        if (
+            len(current_indices) >= max_chunk_sentences
+            or span_length > max_chunk_chars
+        ):
+            assert current_start is not None and current_end is not None
+            chunk_descriptors.append(
+                {
+                    "text": validated_text[current_start:current_end],
+                    "start": current_start,
+                    "end": current_end,
+                    "segment_indices": current_indices[:],
+                }
+            )
+            current_indices = [seg["index"]]
+            current_start = seg_start
+            current_end = seg_end
+        else:
+            current_indices.append(seg["index"])
+            current_end = seg_end
+
+    if current_indices:
+        assert current_start is not None and current_end is not None
+        chunk_descriptors.append(
+            {
+                "text": validated_text[current_start:current_end],
+                "start": current_start,
+                "end": current_end,
+                "segment_indices": current_indices[:],
+            }
+        )
+
+    return chunk_descriptors
+
+
+def _normalize_raw_predictions(
+    predictions: Any,
+    segment_count: int,
+) -> List[List[Dict[str, Any]]]:
+    """Normalise raw pipeline output into a list-of-lists structure."""
+    if not isinstance(predictions, list):
+        return [[predictions]]
+
+    if segment_count == 1 and predictions and isinstance(predictions[0], dict):
+        return [predictions]
+
+    normalized: List[List[Dict[str, Any]]] = []
+    for item in predictions:
+        if isinstance(item, list):
+            normalized.append(item)
+        elif item is None:
+            normalized.append([])
+        elif isinstance(item, dict):
+            normalized.append([item])
+        else:
+            normalized.append(list(item) if item else [])
+    return normalized
+
+
+def _flatten_predictions(
+    normalized_predictions: List[List[Dict[str, Any]]],
+    chunk_descriptors: List[Dict[str, Any]],
+    processed_segments: List[Dict[str, Any]],
+    validated_text: str,
+    sentence_detection: bool,
+) -> List[Dict[str, Any]]:
+    """Adjust offsets from chunk-local to document-global and attach metadata."""
+    flattened: List[Dict[str, Any]] = []
+
+    for chunk_idx, chunk in enumerate(chunk_descriptors):
+        segment_predictions = (
+            normalized_predictions[chunk_idx]
+            if chunk_idx < len(normalized_predictions)
+            else []
+        )
+
+        for prediction in segment_predictions:
+            if not isinstance(prediction, dict):
+                continue
+
+            adjusted = dict(prediction)
+            start = adjusted.get("start")
+            end = adjusted.get("end")
+
+            if isinstance(start, int):
+                adjusted["start"] = start + chunk["start"]
+            if isinstance(end, int):
+                adjusted["end"] = end + chunk["start"]
+
+            sentence_index: Optional[int] = None
+            for idx in chunk.get("segment_indices", []):
+                seg_meta = processed_segments[idx]
+                seg_start = seg_meta["start"]
+                seg_end = seg_meta["end"]
+                adj_start = adjusted.get("start")
+                adj_end = adjusted.get("end")
+                if isinstance(adj_start, int) and seg_start <= adj_start < seg_end:
+                    sentence_index = idx
+                    break
+                if (
+                    sentence_index is None
+                    and isinstance(adj_end, int)
+                    and seg_start < adj_end <= seg_end
+                ):
+                    sentence_index = idx
+                    break
+
+            if sentence_index is None and chunk.get("segment_indices"):
+                sentence_index = chunk["segment_indices"][0]
+
+            if sentence_index is not None:
+                seg_meta = processed_segments[sentence_index]
+                if seg_meta.get("suppress_predictions"):
+                    continue
+                span_metadata = dict(adjusted.get("metadata") or {})
+                span_metadata.setdefault("sentence_index", sentence_index)
+                span_metadata.setdefault("sentence_text", seg_meta["text"])
+                span_metadata.setdefault("sentence_start", seg_meta["start"])
+                span_metadata.setdefault("sentence_end", seg_meta["end"])
+                adjusted["metadata"] = span_metadata
+            elif sentence_detection:
+                span_metadata = dict(adjusted.get("metadata") or {})
+                span_metadata.setdefault("sentence_index", -1)
+                span_metadata.setdefault("sentence_text", "")
+                span_metadata.setdefault("sentence_start", chunk["start"])
+                span_metadata.setdefault("sentence_end", chunk["end"])
+                adjusted["metadata"] = span_metadata
+
+            adj_start = adjusted.get("start")
+            adj_end = adjusted.get("end")
+
+            if not (
+                isinstance(adj_start, int)
+                and isinstance(adj_end, int)
+                and adj_end > adj_start
+            ):
+                continue
+
+            span_slice = validated_text[adj_start:adj_end]
+            stripped = span_slice.strip()
+            if not stripped:
+                continue
+            if _PLACEHOLDER_SEGMENT_PATTERN.search(stripped):
+                continue
+
+            flattened.append(adjusted)
+
+    return flattened
+
+
+def _remap_medical_tokens(
+    predictions: List[Dict[str, Any]],
+    validated_text: str,
+    active_config: Any,
+) -> tuple[List[Dict[str, Any]], bool]:
+    """Optionally remap prediction spans onto medical-friendly tokens."""
+    if not getattr(active_config, "use_medical_tokenizer", False):
+        return predictions, False
+
+    try:
+        from .processing.tokenization import (
+            medical_tokenize,
+            remap_predictions_to_tokens,
+            DEFAULT_MEDICAL_EXCEPTIONS,
+        )
+
+        extra_exceptions = (
+            getattr(active_config, "medical_tokenizer_exceptions", None)
+            or []
+        )
+        token_exceptions = list(DEFAULT_MEDICAL_EXCEPTIONS) + list(extra_exceptions)
+        medical_tokens = medical_tokenize(validated_text, exceptions=token_exceptions)
+        remapped = remap_predictions_to_tokens(
+            predictions,
+            validated_text,
+            medical_tokens,
+        )
+        return remapped, True
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Failed to remap predictions to medical tokens: %s", exc)
+        return predictions, False
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 
 def analyze_text(
@@ -222,239 +527,33 @@ def analyze_text(
             except Exception:
                 pass
 
-    raw_segments: List[sentence_utils.SentenceSpan] = []
-    if sentence_detection:
-        try:
-            raw_segments = sentence_utils.segment_text(
-                validated_text,
-                language=sentence_language,
-                clean=sentence_clean,
-                segmenter=sentence_segmenter,
-            )
-        except ImportError:
-            sentence_detection = False
-    if not raw_segments:
-        sentence_detection = False
+    processed_segments, sentence_detection = _build_segments(
+        validated_text, sentence_detection, sentence_language, sentence_clean,
+        sentence_segmenter,
+    )
 
-    processed_segments: List[Dict[str, Any]] = []
-    if sentence_detection:
-        for span in raw_segments:
-            span_text = span.text or ""
-            base_start = span.start
-            base_end = span.end
+    chunk_descriptors = _build_chunks(
+        validated_text, processed_segments, sentence_detection, desired_max_length,
+    )
 
-            leading_ws = len(span_text) - len(span_text.lstrip())
-            trailing_ws = len(span_text) - len(span_text.rstrip())
-
-            if leading_ws:
-                base_start += leading_ws
-            if trailing_ws:
-                base_end -= trailing_ws
-
-            trimmed_text = span_text[leading_ws : len(span_text) - trailing_ws]
-
-            if not trimmed_text:
-                continue
-
-            suppress_predictions = bool(_PLACEHOLDER_SEGMENT_PATTERN.search(trimmed_text))
-
-            processed_segments.append(
-                {
-                    "index": len(processed_segments),
-                    "text": trimmed_text,
-                    "start": base_start,
-                    "end": base_end,
-                    "suppress_predictions": suppress_predictions,
-                }
-            )
-
-    if not processed_segments:
-        processed_segments.append(
-            {
-                "index": 0,
-                "text": validated_text,
-                "start": 0,
-                "end": len(validated_text),
-                "suppress_predictions": False,
-            }
-        )
-        sentence_detection = False
-
-    chunk_descriptors: List[Dict[str, Any]] = []
-    if sentence_detection:
-        max_chunk_chars = max(480, (desired_max_length or 256) * 4)
-        max_chunk_sentences = 6
-
-        current_indices: List[int] = []
-        current_start: Optional[int] = None
-        current_end: Optional[int] = None
-
-        for seg in processed_segments:
-            seg_start = seg["start"]
-            seg_end = seg["end"]
-
-            if not current_indices:
-                current_indices = [seg["index"]]
-                current_start = seg_start
-                current_end = seg_end
-                continue
-
-            proposed_start = current_start if current_start is not None else seg_start
-            proposed_end = seg_end
-            span_length = proposed_end - proposed_start
-
-            if (
-                len(current_indices) >= max_chunk_sentences
-                or span_length > max_chunk_chars
-            ):
-                assert current_start is not None and current_end is not None
-                chunk_descriptors.append(
-                    {
-                        "text": validated_text[current_start:current_end],
-                        "start": current_start,
-                        "end": current_end,
-                        "segment_indices": current_indices[:],
-                    }
-                )
-                current_indices = [seg["index"]]
-                current_start = seg_start
-                current_end = seg_end
-            else:
-                current_indices.append(seg["index"])
-                current_end = seg_end
-
-        if current_indices:
-            assert current_start is not None and current_end is not None
-            chunk_descriptors.append(
-                {
-                    "text": validated_text[current_start:current_end],
-                    "start": current_start,
-                    "end": current_end,
-                    "segment_indices": current_indices[:],
-                }
-            )
-    else:
-        chunk_descriptors.append(
-            {
-                "text": validated_text,
-                "start": 0,
-                "end": len(validated_text),
-                "segment_indices": [seg["index"] for seg in processed_segments],
-            }
-        )
-
-    if sentence_detection:
-        inference_input = [chunk["text"] for chunk in chunk_descriptors]
-    else:
-        inference_input = validated_text
+    inference_input = (
+        [chunk["text"] for chunk in chunk_descriptors]
+        if sentence_detection
+        else validated_text
+    )
 
     start_time = time.time()
     raw_predictions = ner_pipeline(inference_input, **call_kwargs)
     processing_time = time.time() - start_time
 
-    def _normalize_predictions(
-        predictions: Any,
-        segment_count: int,
-    ) -> List[List[Dict[str, Any]]]:
-        if not isinstance(predictions, list):
-            return [[predictions]]
-
-        if segment_count == 1 and predictions and isinstance(predictions[0], dict):
-            return [predictions]
-
-        normalized: List[List[Dict[str, Any]]] = []
-        for item in predictions:
-            if isinstance(item, list):
-                normalized.append(item)
-            elif item is None:
-                normalized.append([])
-            elif isinstance(item, dict):
-                normalized.append([item])
-            else:
-                normalized.append(list(item) if item else [])
-        return normalized
-
-    normalized_predictions = _normalize_predictions(
-        raw_predictions, len(chunk_descriptors)
+    normalized_predictions = _normalize_raw_predictions(
+        raw_predictions, len(chunk_descriptors),
     )
 
-    flattened_predictions: List[Dict[str, Any]] = []
-    for chunk_idx, chunk in enumerate(chunk_descriptors):
-        if chunk_idx < len(normalized_predictions):
-            segment_predictions = normalized_predictions[chunk_idx]
-        else:
-            segment_predictions = []
-
-        for prediction in segment_predictions:
-            if not isinstance(prediction, dict):
-                continue
-
-            adjusted = dict(prediction)
-            start = adjusted.get("start")
-            end = adjusted.get("end")
-
-            if isinstance(start, int):
-                adjusted["start"] = start + chunk["start"]
-            if isinstance(end, int):
-                adjusted["end"] = end + chunk["start"]
-
-            sentence_index: Optional[int] = None
-            for idx in chunk.get("segment_indices", []):
-                seg_meta = processed_segments[idx]
-                seg_start = seg_meta["start"]
-                seg_end = seg_meta["end"]
-                adj_start = adjusted.get("start")
-                adj_end = adjusted.get("end")
-                if isinstance(adj_start, int) and seg_start <= adj_start < seg_end:
-                    sentence_index = idx
-                    break
-                if (
-                    sentence_index is None
-                    and isinstance(adj_end, int)
-                    and seg_start < adj_end <= seg_end
-                ):
-                    sentence_index = idx
-                    break
-
-            if sentence_index is None and chunk.get("segment_indices"):
-                sentence_index = chunk["segment_indices"][0]
-
-            if sentence_index is not None:
-                seg_meta = processed_segments[sentence_index]
-                if seg_meta.get("suppress_predictions"):
-                    continue
-                span_metadata = dict(adjusted.get("metadata") or {})
-                span_metadata.setdefault("sentence_index", sentence_index)
-                span_metadata.setdefault("sentence_text", seg_meta["text"])
-                span_metadata.setdefault("sentence_start", seg_meta["start"])
-                span_metadata.setdefault("sentence_end", seg_meta["end"])
-                adjusted["metadata"] = span_metadata
-            elif sentence_detection:
-                span_metadata = dict(adjusted.get("metadata") or {})
-                span_metadata.setdefault("sentence_index", -1)
-                span_metadata.setdefault("sentence_text", "")
-                span_metadata.setdefault("sentence_start", chunk["start"])
-                span_metadata.setdefault("sentence_end", chunk["end"])
-                adjusted["metadata"] = span_metadata
-
-            adj_start = adjusted.get("start")
-            adj_end = adjusted.get("end")
-
-            if not (
-                isinstance(adj_start, int)
-                and isinstance(adj_end, int)
-                and adj_end > adj_start
-            ):
-                continue
-
-            span_slice = validated_text[adj_start:adj_end]
-            stripped = span_slice.strip()
-            if not stripped:
-                continue
-            if _PLACEHOLDER_SEGMENT_PATTERN.search(stripped):
-                continue
-
-            flattened_predictions.append(adjusted)
+    flattened_predictions = _flatten_predictions(
+        normalized_predictions, chunk_descriptors, processed_segments,
+        validated_text, sentence_detection,
+    )
 
     base_metadata = dict(metadata) if metadata else {}
     base_metadata.setdefault("sentence_detection", sentence_detection)
@@ -462,28 +561,12 @@ def analyze_text(
         base_metadata.setdefault("sentence_count", len(processed_segments))
         base_metadata.setdefault("sentence_language", sentence_language)
 
-    # Optional: remap model spans onto medical-friendly tokens (no change to model tokenization).
     active_config = loader.config if hasattr(loader, "config") else config
-    if active_config is not None and getattr(active_config, "use_medical_tokenizer", False):
-        try:
-            from .processing.tokenization import (
-                medical_tokenize,
-                remap_predictions_to_tokens,
-                DEFAULT_MEDICAL_EXCEPTIONS,
-            )
-
-            extra_exceptions = getattr(active_config, "medical_tokenizer_exceptions", None) or []
-            token_exceptions = list(DEFAULT_MEDICAL_EXCEPTIONS) + list(extra_exceptions)
-            medical_tokens = medical_tokenize(validated_text, exceptions=token_exceptions)
-            flattened_predictions = remap_predictions_to_tokens(
-                flattened_predictions,
-                validated_text,
-                medical_tokens,
-            )
-            base_metadata.setdefault("medical_tokenizer", True)
-        except Exception as exc:  # pragma: no cover
-            logger.warning("Failed to remap predictions to medical tokens: %s", exc)
-            base_metadata.setdefault("medical_tokenizer", False)
+    if active_config is not None:
+        flattened_predictions, remapped = _remap_medical_tokens(
+            flattened_predictions, validated_text, active_config,
+        )
+        base_metadata.setdefault("medical_tokenizer", remapped)
 
     fmt_kwargs: Dict[str, Any] = {
         "include_confidence": include_confidence,

@@ -78,12 +78,10 @@ jobs:
     - name: Run security check with bandit
       run: |
         bandit -r openmed -f json -o bandit-report.json
-      continue-on-error: true
 
     - name: Run safety check
       run: |
-        safety check --json --output safety-report.json
-      continue-on-error: true
+        safety check --json --output safety-report.json || true
 
     - name: Upload security reports
       uses: actions/upload-artifact@v4

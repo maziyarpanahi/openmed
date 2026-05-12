@@ -109,7 +109,7 @@ class DeidentificationResult:
         Returns:
             Dictionary with all result fields and metadata
         """
-        return {
+        result = {
             "original_text": self.original_text,
             "deidentified_text": self.deidentified_text,
             "pii_entities": [
@@ -128,6 +128,9 @@ class DeidentificationResult:
             "timestamp": self.timestamp.isoformat(),
             "num_entities_redacted": len(self.pii_entities),
         }
+        if self.mapping is not None:
+            result["mapping"] = self.mapping
+        return result
 
 
 # Languages whose PII models were trained on accent-free text.
@@ -1113,9 +1116,25 @@ def reidentify(
         Only works if keep_mapping=True was used during de-identification.
         Requires proper authorization and audit logging in production.
     """
-    result = deidentified_text
-
+    # Collect all (start, end, original) tuples by finding every occurrence
+    # of each redacted placeholder, then apply replacements in reverse
+    # offset order to avoid index shifts.
+    replacements: list[tuple[int, int, str]] = []
     for redacted, original in mapping.items():
-        result = result.replace(redacted, original)
+        search_start = 0
+        while True:
+            idx = deidentified_text.find(redacted, search_start)
+            if idx == -1:
+                break
+            replacements.append((idx, idx + len(redacted), original))
+            search_start = idx + len(redacted)
+
+    # Sort by start position descending so later replacements don't
+    # invalidate earlier offsets.
+    replacements.sort(key=lambda t: t[0], reverse=True)
+
+    result = deidentified_text
+    for start, end, original in replacements:
+        result = result[:start] + original + result[end:]
 
     return result
