@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-05-17
+
+### Added
+
+- **Release notes** for v1.4.1 in `RELEASE_NOTES_v1.4.1.md`.
+
+### Changed
+
+- README, docs, website, and Apple demo version surfaces now point at `1.4.1`.
+
+### Fixed
+
+- `ModelLoader` now resolves existing filesystem paths before prepending the default Hugging Face org, so local model directories load correctly.
+- Local model paths now set `local_files_only=True` across config, tokenizer, model, pipeline, and max-length probing to keep offline and air-gapped inference fully local.
+- `analyze_text()` now accepts `model_id` as an alias for `model_name`, including local directory paths.
+
+### Tests
+
+- Added unit coverage for local path resolution, local-only loading, and `model_id` alias handling.
+
 ## [1.4.0] - 2026-05-04
 
 ### Added

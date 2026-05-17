@@ -4,7 +4,7 @@ OpenMed bundles curated biomedical models, advanced extraction utilities, and on
 clinical NLP workflows without wrangling infrastructure. This documentation keeps the most copied snippets and workflows
 close at hand—each section is Markdown-first, searchable, and optimized for quick scanning or copy/paste into notebooks.
 
-OpenMed `1.4.0` expands the Apple story:
+OpenMed `1.4.1` expands the Apple story:
 
 - **Python MLX** on Apple Silicon Macs through `openmed[mlx]`
 - **OpenMedKit** for native macOS, iOS, and iPadOS apps
@@ -49,7 +49,7 @@ uv run python examples/pii_model_comparison.py
 The rest of the docs expand on this snippet—head to **Quick Start** for the end-to-end setup, then explore the guides for
 configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
-## 1.4.0 release highlights
+## 1.4.1 release highlights
 
 - [MLX Backend](./mlx-backend.md) – Python MLX on Apple Silicon, Privacy Filter family support, shared artifact packaging, and backend auto-detection.
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) – native macOS/iOS/iPadOS integration with MLX, CoreML, Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family APIs.
