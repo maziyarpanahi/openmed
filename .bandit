@@ -1,0 +1,10 @@
+# Bandit security linter configuration
+# https://bandit.readthedocs.io/
+
+# Known-acceptable findings for this project:
+# B101: assert_used — internal helper assertions (not test code)
+# B105: hardcoded_password_string — false positive on empty string defaults
+# B110: try_except_pass — defensive error recovery paths
+# B311: random — used for PII date-shifting, not cryptographic purposes
+# B615: huggingface_unsafe_download — model loading is the core feature of this library
+skips: ['B101', 'B105', 'B110', 'B311', 'B615']
