@@ -7,7 +7,22 @@ on:
     branches: [ main, master, develop ]
 
 jobs:
+  repo-policy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Enforce repo file policy
+      run: |
+        python scripts/release/check_repo_policy.py
+
   test:
+    needs: repo-policy
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -61,6 +76,7 @@ jobs:
         fail_ci_if_error: false
 
   security:
+    needs: repo-policy
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -95,7 +111,7 @@ jobs:
       if: always()
 
   build:
-    needs: [test, security]
+    needs: [repo-policy, test, security]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
