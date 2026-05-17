@@ -9,10 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.4.1] - 2026-05-17
 
-### Added
-
-- **Release notes** for v1.4.1 in `RELEASE_NOTES_v1.4.1.md`.
-
 ### Changed
 
 - README, docs, website, and Apple demo version surfaces now point at `1.4.1`.
@@ -42,8 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Family-aware Torch fallback so multilingual MLX model names substitute `OpenMed/privacy-filter-multilingual` on non-MLX hosts instead of the OpenAI baseline.
 - **Multilingual Privacy Filter Studio** in `examples/privacy_filter_multilingual_studio/`, a web demo comparing the OpenAI baseline, OpenAI Nemotron Privacy Filter, and OpenMed Multilingual Privacy Filter with English, French, and Arabic examples.
 - **OpenMed Scan Demo multilingual mode** with `OpenMed/privacy-filter-multilingual-mlx-8bit`, a three-engine picker, EN/FR/AR sample buttons, and new French/Arabic scanned demo documents for screenshot-ready flows.
-- **Release notes** for v1.4.0 in `RELEASE_NOTES_v1.4.0.md`.
-
 ### Changed
 
 - Privacy Filter docs and README now describe three Privacy Filter families and label the multilingual model as **OpenMed Multilingual Privacy Filter**.
