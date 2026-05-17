@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **CRITICAL**: `reidentify()` now uses position-based replacement instead of
+  naive `str.replace()`, preventing data corruption when duplicate or overlapping
+  placeholders exist in HIPAA-sensitive de-identification workflows.
+- **CI security scanning** now blocks merges on bandit findings (`continue-on-error`
+  removed from the security job in `.github/workflows/ci.yml`).
+- `analyze_text()` decomposed from a 340-line god function into five focused helpers
+  (`_build_segments`, `_build_chunks`, `_normalize_raw_predictions`,
+  `_flatten_predictions`, `_remap_medical_tokens`) for maintainability.
+- Bare `except Exception` in `examples/privacy_filter_book/app.py` replaced with
+  specific exception types and logged fallback.
+- Global `_config` in `openmed/core/config.py` now protected by `threading.Lock`
+  for thread-safe access from FastAPI request handlers.
+- Custom TOML parser replaced with `tomllib` (stdlib 3.11+) / `tomli` (backport),
+  with the original parser retained as a fallback.
+- `DeidentificationResult.to_dict()` now includes the `mapping` field when present,
+  enabling reidentification from persisted/serialized results.
+- Three `result!.get()` force-unwraps in `OpenMedKit.swift` replaced with
+  `guard let` + meaningful error throw to prevent runtime crashes.
+
 ## [1.4.0] - 2026-05-04
 
 ### Added

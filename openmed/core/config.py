@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Dict, Any, Union, List
 import os
+import threading
 
 # Environment variable used to override the config file location
 CONFIG_ENV_VAR = "OPENMED_CONFIG"
@@ -195,17 +196,20 @@ class OpenMedConfig:
 
 # Global configuration instance
 _config = OpenMedConfig()
+_config_lock = threading.Lock()
 
 
 def get_config() -> OpenMedConfig:
     """Get the global configuration instance."""
-    return _config
+    with _config_lock:
+        return _config
 
 
 def set_config(config: OpenMedConfig) -> None:
     """Set the global configuration instance."""
     global _config
-    _config = config
+    with _config_lock:
+        _config = config
 
 
 def resolve_config_path(path: Optional[Union[str, Path]] = None) -> Path:
@@ -261,6 +265,19 @@ def _format_value(value: Any) -> str:
 
 
 def _load_toml(path: Path) -> Dict[str, Any]:
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return _load_toml_fallback(path)
+
+    with path.open("rb") as f:
+        return tomllib.load(f)
+
+
+def _load_toml_fallback(path: Path) -> Dict[str, Any]:
     data: Dict[str, Any] = {}
     with path.open("r", encoding="utf-8") as handle:
         for raw_line in handle:
