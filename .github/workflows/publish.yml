@@ -30,6 +30,11 @@ jobs:
         run: |
           pip uninstall openmed -y || true
           rm -rf ~/.cache/pip || true
+
+      - name: Enforce repo file policy
+        run: |
+          python scripts/release/check_repo_policy.py
+
       - name: Verify version matches tag
         if: github.event_name == 'push'
         run: |
