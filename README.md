@@ -56,7 +56,7 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS use `OpenMedKit`. As of `1.4.0`, that means:
+Swift apps on macOS and iOS use `OpenMedKit`. As of `1.4.1`, that means:
 
 - **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for supported OpenMed PII, OpenAI Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
@@ -65,7 +65,7 @@ Add the Swift package like this:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.4.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.4.1"),
 ]
 ```
 
@@ -140,7 +140,7 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v1.4.0)
+### Production Tools (v1.4.1)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
@@ -195,8 +195,8 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ### Run with Docker
 
 ```bash
-docker build -t openmed:1.4.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.4.0
+docker build -t openmed:1.4.1 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.4.1
 ```
 
 ### Example request
