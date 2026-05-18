@@ -1310,7 +1310,17 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         # Latin Extended-A (\u0100-\u017f) covers Turkish-specific letters
         # (\u015e \u015f \u011e \u011f \u0130 \u0131) that fall outside Latin-1 Supplement.
-        r"\b(?:cadde|cad\.|sokak|sok\.|mahalle|mah\.|bulvar|bulv\.|apartman|apt\.)\s+[A-Z\u00c0-\u00ff\u0100-\u017f][A-Za-z\u00c0-\u00ff\u0100-\u017f\s.-]{2,50}\s+\d{1,5}[A-Za-z]?\b",
+        (
+            r"\b(?:"
+            r"(?:cadde|cad\.|sokak|sok\.|mahalle|mah\.|bulvar|bulv\.|apartman|apt\.)"
+            r"\s+[A-Z\u00c0-\u00ff\u0100-\u017f][A-Za-z\u00c0-\u00ff\u0100-\u017f\s.-]{2,50}"
+            r"\s+\d{1,5}[A-Za-z]?"
+            r"|[A-Z\u00c0-\u00ff\u0100-\u017f][A-Za-z\u00c0-\u00ff\u0100-\u017f\s.-]{2,50}"
+            r"\s+(?:caddesi|cadde|cad\.|soka\u011f\u0131|sokak|sok\.|mahallesi|mahalle|mah\."
+            r"|bulvar\u0131|bulvar|bulv\.|apartman\u0131|apartman|apt\.)"
+            r"\s+\d{1,5}[A-Za-z]?"
+            r")\b"
+        ),
         "street_address",
         priority=7,
         base_score=0.65,

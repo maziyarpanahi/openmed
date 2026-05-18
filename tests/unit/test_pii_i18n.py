@@ -652,6 +652,8 @@ class TestLanguagePIIPatterns:
             "Cadde Şehit Pilot 5",   # "Şehit"
             "Sokak İnönü 12",  # "İnönü"
             "Mahalle Yıldız 3",  # "Yıldız"
+            "Atatürk Caddesi 12",
+            "İstiklal Sokak 45",
         ]
         for text in samples:
             matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
