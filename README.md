@@ -56,7 +56,7 @@ Apple Silicon acceleration in Python:
 uv pip install -e ".[mlx]"
 ```
 
-Swift apps on macOS and iOS use `OpenMedKit`. As of `1.4.1`, that means:
+Swift apps on macOS and iOS use `OpenMedKit`. As of `1.5.0`, that means:
 
 - **MLX** on Apple Silicon macOS and real iPhone/iPad hardware for supported OpenMed PII, OpenAI Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - **CoreML** when you already have a bundled Apple model package or want the fallback Apple path
@@ -65,7 +65,7 @@ Add the Swift package like this:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.4.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.0"),
 ]
 ```
 
@@ -140,7 +140,7 @@ result = processor.process_texts([
 - **Advanced NER Processing**: Confidence filtering, entity grouping, and span alignment
 - **Multiple Output Formats**: Dict, JSON, HTML, CSV for any downstream system
 
-### Production Tools (v1.4.1)
+### Production Tools (v1.5.0)
 
 - **Batch Processing**: Multi-text and multi-file workflows with progress tracking
 - **Configuration Profiles**: `dev`/`prod`/`test`/`fast` presets with flexible overrides
@@ -195,8 +195,8 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ### Run with Docker
 
 ```bash
-docker build -t openmed:1.4.1 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.4.1
+docker build -t openmed:1.5.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.0
 ```
 
 ### Example request
@@ -361,10 +361,10 @@ So your code can ship an MLX model name and run on any host without changes — 
 
 [📖 Privacy Filter Architecture & Backend Routing](docs/anonymization.md#privacy-filter-family) | [▶ Side-by-side example](examples/privacy_filter_unified.py) | [▶ Faker obfuscation demo](examples/obfuscation_demo.py)
 
-### Multilingual PII (9 Languages)
+### Multilingual PII (12 Languages)
 
-OpenMed now supports multilingual PII extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, and `pt`.
-French, German, Italian, and Spanish expose the full 35-model family; Portuguese ships 31 public API-visible models; Dutch, Hindi, and Telugu currently ship one flagship public model each, bringing the total PII catalog to **210 models**.
+OpenMed now supports multilingual PII extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja`, and `tr`.
+French, German, Italian, and Spanish expose the full 35-model family; Portuguese ships 31 public API-visible models; Dutch, Hindi, and Telugu currently ship one flagship public model each; Arabic, Japanese, and Turkish add 37 more API-visible PII checkpoints, bringing the total PII catalog to **247 models**.
 
 ```bash
 uv pip install "openmed[hf]" && python -c "from openmed import extract_pii; print([(e.label,e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt, tel: +351 912 345 678', lang='pt').entities])"
@@ -401,10 +401,31 @@ telugu = extract_pii(
     use_smart_merging=True,
 )
 
+arabic = extract_pii(
+    "المريضة ليلى حسن، تاريخ الميلاد 15/03/1985، الهاتف +20 10 1234 5678، الرقم القومي 29801011234567.",
+    lang="ar",
+    use_smart_merging=True,
+)
+
+japanese = extract_pii(
+    "患者 佐藤 花子、生年月日 1985年3月15日、電話 +81 90 1234 5678、マイナンバー 1234 5678 9012.",
+    lang="ja",
+    use_smart_merging=True,
+)
+
+turkish = extract_pii(
+    "Hasta Ayşe Yılmaz, doğum tarihi 15.03.1985, telefon +90 532 123 45 67, TCKN 10000000146.",
+    lang="tr",
+    use_smart_merging=True,
+)
+
 print([(e.label, e.text) for e in portuguese.entities])
 print([(e.label, e.text) for e in dutch.entities])
 print([(e.label, e.text) for e in hindi.entities])
 print([(e.label, e.text) for e in telugu.entities])
+print([(e.label, e.text) for e in arabic.entities])
+print([(e.label, e.text) for e in japanese.entities])
+print([(e.label, e.text) for e in turkish.entities])
 ```
 
 ### Batch Processing
