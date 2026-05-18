@@ -136,7 +136,7 @@ class DeidentificationResult:
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt"})
+_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"})
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
 
@@ -295,7 +295,8 @@ def extract_pii(
         confidence_threshold: Minimum confidence score (0-1)
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt). Controls which
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
+            ar, ja, tr). Controls which
             default model and regex patterns are used.
         normalize_accents: Strip diacritical marks before model inference so
             that models trained on accent-free text still detect accented
@@ -488,7 +489,8 @@ def deidentify(
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt). Controls model
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
+            ar, ja, tr). Controls model
             selection, regex patterns, and fake data for replacement.
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
@@ -965,6 +967,13 @@ def _shift_date_basic(
             (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
             (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
+        ]
+    elif lang == "ja":
+        # Japanese: YYYY/MM/DD (kanji-form 年月日 is handled by the
+        # JAPANESE_PII_PATTERNS regex, not here).
+        patterns = [
+            (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
         ]
     else:
         # US/English: MM/DD/YYYY first
