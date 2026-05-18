@@ -1,6 +1,6 @@
 # MLX Backend (Apple Silicon)
 
-OpenMed v1.4.0 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
+OpenMed v1.4.1 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
 
 That MLX story now has two surfaces:
 

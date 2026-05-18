@@ -119,6 +119,82 @@ class TestModelLoader:
         mock_list_models.assert_not_called()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
+    def test_resolve_model_name_preserves_local_directory_without_separator(
+        self,
+        tmp_path,
+        monkeypatch,
+    ):
+        """Relative local dirs should not be expanded to the default org."""
+        model_dir = tmp_path / "local_model"
+        model_dir.mkdir()
+        monkeypatch.chdir(tmp_path)
+
+        loader = ModelLoader()
+
+        assert loader._resolve_model_name("local_model") == "local_model"
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.AutoConfig')
+    @patch('openmed.core.models.AutoTokenizer')
+    @patch('openmed.core.models.AutoModelForTokenClassification')
+    def test_load_model_uses_local_files_only_for_local_path(
+        self,
+        mock_model_class,
+        mock_tokenizer_class,
+        mock_config_class,
+        tmp_path,
+    ):
+        """Local model loading should not probe the Hugging Face Hub."""
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+        (model_dir / "config.json").write_text("{}")
+
+        mock_config = Mock()
+        mock_config.num_labels = 5
+        mock_config.problem_type = "token_classification"
+        mock_config.architectures = ["BertForTokenClassification"]
+        mock_config_class.from_pretrained.return_value = mock_config
+
+        mock_model = Mock()
+        mock_model.config = mock_config
+        mock_model_class.from_pretrained.return_value = mock_model
+
+        loader = ModelLoader()
+        loader.load_model(str(model_dir))
+
+        assert (
+            mock_config_class.from_pretrained.call_args.kwargs["local_files_only"]
+            is True
+        )
+        assert (
+            mock_tokenizer_class.from_pretrained.call_args.kwargs["local_files_only"]
+            is True
+        )
+        assert (
+            mock_model_class.from_pretrained.call_args.kwargs["local_files_only"]
+            is True
+        )
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.pipeline')
+    def test_create_pipeline_uses_local_files_only_for_local_path(
+        self,
+        mock_pipeline,
+        tmp_path,
+    ):
+        """HF pipeline construction should stay local for filesystem paths."""
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+        (model_dir / "config.json").write_text("{}")
+
+        loader = ModelLoader(OpenMedConfig(backend="hf"))
+        loader.create_pipeline(str(model_dir))
+
+        kwargs = mock_pipeline.call_args.kwargs
+        assert kwargs["model"] == str(model_dir)
+        assert kwargs["local_files_only"] is True
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.AutoTokenizer')
     def test_get_max_sequence_length_from_tokenizer(
         self,
@@ -135,6 +211,33 @@ class TestModelLoader:
         max_len = loader.get_max_sequence_length("test-model")
 
         assert max_len == 384
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch('openmed.core.models.AutoTokenizer')
+    def test_get_max_sequence_length_uses_local_files_only_for_local_path(
+        self,
+        mock_auto_tokenizer,
+        tmp_path,
+    ):
+        """Tokenizer max-length probing should stay local for path models."""
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+        (model_dir / "config.json").write_text("{}")
+
+        tokenizer = Mock()
+        tokenizer.model_max_length = 384
+        tokenizer.init_kwargs = {}
+        tokenizer.config = None
+        mock_auto_tokenizer.from_pretrained.return_value = tokenizer
+
+        loader = ModelLoader()
+        max_len = loader.get_max_sequence_length(str(model_dir))
+
+        assert max_len == 384
+        assert (
+            mock_auto_tokenizer.from_pretrained.call_args.kwargs["local_files_only"]
+            is True
+        )
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.AutoTokenizer')
@@ -176,6 +279,52 @@ class TestGetModelMaxLengthFunction:
 
 class TestAnalyzeTextBehaviour:
     """Behavioural tests for the public analyze_text helper."""
+
+    @patch('openmed.ModelLoader')
+    def test_analyze_text_accepts_model_id_alias_for_local_path(
+        self,
+        mock_loader_cls,
+        tmp_path,
+    ):
+        """model_id should select the model, not leak into pipeline kwargs."""
+        model_dir = tmp_path / "local-model"
+        model_dir.mkdir()
+        (model_dir / "config.json").write_text("{}")
+
+        loader = Mock()
+        loader.config = OpenMedConfig(use_medical_tokenizer=False)
+        pipeline = Mock(return_value=[])
+        pipeline.tokenizer = Mock()
+        loader.create_pipeline.return_value = pipeline
+        loader.get_max_sequence_length.return_value = 256
+        mock_loader_cls.return_value = loader
+
+        from openmed import analyze_text
+
+        result = analyze_text(
+            "Patient has diabetes.",
+            model_id=str(model_dir),
+            sentence_detection=False,
+        )
+
+        loader.create_pipeline.assert_called_once_with(
+            str(model_dir),
+            task="token-classification",
+            aggregation_strategy="simple",
+            use_fast_tokenizer=True,
+        )
+        assert result.model_name == str(model_dir)
+
+    def test_analyze_text_rejects_model_name_and_model_id_together(self):
+        """Ambiguous model selection should fail before loading anything."""
+        from openmed import analyze_text
+
+        with pytest.raises(ValueError, match="Pass only one of model_name or model_id"):
+            analyze_text(
+                "Patient has diabetes.",
+                model_name="OpenMed/some-model",
+                model_id="OpenMed/other-model",
+            )
 
     @patch('openmed.processing.sentences.segment_text')
     @patch('openmed.format_predictions')
