@@ -19,7 +19,7 @@ from openmed.core.labels import normalize_label
 
 class TestLocaleResolution:
     def test_lang_to_locale_covers_all_supported_languages(self):
-        for lang in ("en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"):
+        for lang in ("en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"):
             assert lang in LANG_TO_LOCALE
 
     def test_locale_override_per_call(self):
