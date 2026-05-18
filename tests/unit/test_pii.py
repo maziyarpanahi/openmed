@@ -762,7 +762,7 @@ class TestMultilingualPII:
     def test_extract_pii_unsupported_language_raises(self):
         """Test that unsupported language raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported language"):
-            extract_pii("test", lang="ja")
+            extract_pii("test", lang="ko")
 
     @patch("openmed.analyze_text")
     def test_extract_pii_french_uses_french_model(self, mock_analyze):
@@ -871,6 +871,54 @@ class TestMultilingualPII:
         assert "SnowflakeMed-Large-568M" in call_args[1]["model_name"]
 
     @patch("openmed.analyze_text")
+    def test_extract_pii_arabic_uses_arabic_model(self, mock_analyze):
+        """Test that lang='ar' auto-resolves to Arabic default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f 15/03/1985",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f 15/03/1985", lang="ar")
+
+        call_args = mock_analyze.call_args
+        assert "Arabic" in call_args[1]["model_name"]
+        assert "SnowflakeMed-Large-568M" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_japanese_uses_japanese_model(self, mock_analyze):
+        """Test that lang='ja' auto-resolves to Japanese default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="\u751f\u5e74\u6708\u65e5 1985\u5e743\u670815\u65e5",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("\u751f\u5e74\u6708\u65e5 1985\u5e743\u670815\u65e5", lang="ja")
+
+        call_args = mock_analyze.call_args
+        assert "Japanese" in call_args[1]["model_name"]
+        assert "BigMed-Large-560M" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
+    def test_extract_pii_turkish_uses_turkish_model(self, mock_analyze):
+        """Test that lang='tr' auto-resolves to Turkish default model."""
+        mock_analyze.return_value = PredictionResult(
+            text="Do\u011fum tarihi 15.03.1985",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        extract_pii("Do\u011fum tarihi 15.03.1985", lang="tr")
+
+        call_args = mock_analyze.call_args
+        assert "Turkish" in call_args[1]["model_name"]
+        assert "SuperClinical-Small-44M" in call_args[1]["model_name"]
+
+    @patch("openmed.analyze_text")
     def test_extract_pii_english_backward_compat(self, mock_analyze):
         """Test that lang='en' (default) uses English model."""
         mock_analyze.return_value = PredictionResult(
@@ -887,6 +935,9 @@ class TestMultilingualPII:
         assert "French" not in model_name
         assert "German" not in model_name
         assert "Italian" not in model_name
+        assert "Arabic" not in model_name
+        assert "Japanese" not in model_name
+        assert "Turkish" not in model_name
 
     @patch("openmed.analyze_text")
     def test_extract_pii_custom_model_overrides_lang(self, mock_analyze):
@@ -997,6 +1048,24 @@ class TestMultilingualPII:
         result = _generate_fake_pii("NAME", lang="pt")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
         assert result in LANGUAGE_FAKE_DATA["pt"]["NAME"]
+
+    def test_generate_fake_pii_arabic(self):
+        """Test fake PII generation with Arabic locale."""
+        result = _generate_fake_pii("NAME", lang="ar")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["ar"]["NAME"]
+
+    def test_generate_fake_pii_japanese(self):
+        """Test fake PII generation with Japanese locale."""
+        result = _generate_fake_pii("NAME", lang="ja")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["ja"]["NAME"]
+
+    def test_generate_fake_pii_turkish(self):
+        """Test fake PII generation with Turkish locale."""
+        result = _generate_fake_pii("NAME", lang="tr")
+        from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+        assert result in LANGUAGE_FAKE_DATA["tr"]["NAME"]
 
     def test_generate_fake_pii_portuguese_cpf(self):
         """Test CPF labels use Portuguese fake ID data."""
