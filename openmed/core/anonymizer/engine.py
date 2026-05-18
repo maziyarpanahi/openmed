@@ -107,7 +107,16 @@ class Anonymizer:
                 "Install with `pip install faker` (or upgrade openmed)."
             ) from exc
 
-        faker = Faker(locale)
+        try:
+            faker = Faker(locale)
+        except (AttributeError, KeyError):
+            warnings.warn(
+                f"OpenMed: Faker locale {locale!r} is unavailable; "
+                "falling back to 'en_US'. Pass locale=... to override.",
+                UserWarning,
+                stacklevel=2,
+            )
+            faker = Faker("en_US")
         register_clinical_providers(faker)
         for provider in self.config.custom_providers:
             faker.add_provider(provider)
