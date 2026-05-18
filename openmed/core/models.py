@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
 
 
@@ -150,12 +151,14 @@ class ModelLoader:
             logger.info(f"Loading model: {full_model_name}")
 
             auth_kwargs = self._hub_auth_kwargs()
+            local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
+            pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
 
             # Load config first to verify it's a token classification model
             config = AutoConfig.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
-                **auth_kwargs,
+                **pretrained_kwargs,
             )
 
             # Verify model type
@@ -176,14 +179,14 @@ class ModelLoader:
             tokenizer = AutoTokenizer.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
-                **auth_kwargs,
+                **pretrained_kwargs,
             )
 
             # Note: medical tokenization (if enabled) is applied at the output remapping layer,
             # not by modifying the model tokenizer/vocabulary.
 
             # Load model
-            model_kwargs = {**auth_kwargs, **kwargs}
+            model_kwargs = {**pretrained_kwargs, **kwargs}
             model = AutoModelForTokenClassification.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
@@ -297,6 +300,7 @@ class ModelLoader:
                 "use_fast": use_fast_tokenizer,
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
+            pipeline_kwargs.update(self._local_loading_kwargs(full_model_name, kwargs))
             pipeline_kwargs.update(kwargs)
 
             ner_pipeline = pipeline(task, **pipeline_kwargs)
@@ -338,6 +342,8 @@ class ModelLoader:
 
         full_model_name = self._resolve_model_name(model_name)
         auth_kwargs = self._hub_auth_kwargs()
+        local_loading_kwargs = self._local_loading_kwargs(full_model_name)
+        pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
 
         if tokenizer is None:
             try:
@@ -345,7 +351,7 @@ class ModelLoader:
                     full_model_name,
                     cache_dir=self.config.cache_dir,
                     use_fast=True,
-                    **auth_kwargs,
+                    **pretrained_kwargs,
                 )
             except Exception as exc:
                 logger.debug(
@@ -364,7 +370,7 @@ class ModelLoader:
             config = AutoConfig.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
-                **auth_kwargs,
+                **pretrained_kwargs,
             )
             for attr in ("max_position_embeddings", "n_positions", "seq_length"):
                 value = getattr(config, attr, None)
@@ -381,6 +387,10 @@ class ModelLoader:
 
     def _resolve_model_name(self, model_name: str) -> str:
         """Resolve model name from registry key or return full model name."""
+        local_path = self._as_existing_local_path(model_name)
+        if local_path is not None:
+            return str(local_path)
+
         # Check if it's a registry key
         registry_info = get_model_info(model_name)
         if registry_info:
@@ -456,6 +466,32 @@ class ModelLoader:
         """Return authentication kwargs for Hugging Face Hub calls."""
         if getattr(self.config, "hf_token", None):
             return {"token": self.config.hf_token}
+        return {}
+
+    def _as_existing_local_path(self, model_name: str) -> Optional[Path]:
+        """Return a filesystem path when ``model_name`` points to local files."""
+        try:
+            path = Path(model_name).expanduser()
+        except (TypeError, ValueError, OSError):
+            return None
+
+        try:
+            if path.exists():
+                return path
+        except OSError:
+            return None
+        return None
+
+    def _local_loading_kwargs(
+        self,
+        model_name: str,
+        kwargs: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Force local-only Hub loading for filesystem-backed model names."""
+        if kwargs and "local_files_only" in kwargs:
+            return {"local_files_only": kwargs["local_files_only"]}
+        if self._as_existing_local_path(model_name) is not None:
+            return {"local_files_only": True}
         return {}
 
     def _build_pipeline_cache_key(

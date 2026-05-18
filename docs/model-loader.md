@@ -37,6 +37,30 @@ raw = pipeline("Administered paclitaxel alongside trastuzumab.")
 - Tokens are cached per model/config combination; repeated calls reuse the same HF objects.
 - `ModelLoader.get_max_sequence_length(model_name)` infers tokenizer limits when you need manual truncation logic.
 
+## Local model directories
+
+If a model has already been downloaded or vendored into your runtime image, pass the directory path directly:
+
+```python
+from pathlib import Path
+from openmed.core import ModelLoader, OpenMedConfig
+
+model_dir = Path("./models/OpenMed-NER-DiseaseDetect-SuperClinical-434M").resolve()
+loader = ModelLoader(OpenMedConfig(device="cpu"))
+
+pipeline = loader.create_pipeline(
+    str(model_dir),
+    task="token-classification",
+    aggregation_strategy="simple",
+)
+
+raw = pipeline("Patient has chronic myeloid leukemia.")
+```
+
+Existing filesystem paths are preserved as local paths rather than expanded to the default OpenMed organization. For
+Hugging Face / PyTorch loading, OpenMed also sets `local_files_only=True` by default for those paths so the loader does
+not contact the Hub in air-gapped or firewalled environments.
+
 ## Discovery helpers
 
 ```python
@@ -55,7 +79,8 @@ pre-flight deployments before running inference.
 - **CPU-only** deployments: leave `device="cpu"` and skip installing GPU runtimes. Transformers will use `torch` CPU wheels.
 - **GPU** deployments: set `device="cuda"` or `cuda:1`, and optionally configure `torch_dtype="auto"` via
   `OpenMedConfig.pipeline`.
-- **Air-gapped** or repeated builds: point `cache_dir` at a persistent volume; ModelLoader instructs HF to reuse it.
+- **Air-gapped** or repeated builds: pass an existing local model directory, or point `cache_dir` at a persistent volume
+  after prefetching the model. Local directories are loaded with `local_files_only=True` by default.
 - Provide `hf_token` when you consume gated models, or rely on `HfFolder` credentials.
 
 ## Token helpers
