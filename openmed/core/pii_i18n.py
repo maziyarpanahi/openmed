@@ -13,7 +13,9 @@ from typing import Dict, List, Optional, Set
 # Constants
 # ---------------------------------------------------------------------------
 
-SUPPORTED_LANGUAGES: Set[str] = {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"}
+SUPPORTED_LANGUAGES: Set[str] = {
+    "en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr",
+}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -25,6 +27,9 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "hi": "Hindi",
     "te": "Telugu",
     "pt": "Portuguese",
+    "ar": "Arabic",
+    "ja": "Japanese",
+    "tr": "Turkish",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -37,6 +42,9 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "hi": "Hindi-",
     "te": "Telugu-",
     "pt": "Portuguese-",
+    "ar": "Arabic-",
+    "ja": "Japanese-",
+    "tr": "Turkish-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -49,6 +57,9 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "hi": "OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
+    "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
+    "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
 }
 
 
@@ -361,6 +372,35 @@ def validate_portuguese_cnpj(text: str) -> bool:
     return numbers[12] == first_check and numbers[13] == second_check
 
 
+def validate_turkish_tckn(text: str) -> bool:
+    """Validate Turkish T.C. Kimlik No (TCKN).
+
+    The Turkish national identity number is 11 digits. The first digit cannot
+    be zero; digit 10 and digit 11 are checksum digits derived from the first
+    nine and first ten digits.
+
+    Args:
+        text: TCKN string (may contain spaces)
+
+    Returns:
+        True if the TCKN passes format and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+    if digits[0] == "0":
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    odd_sum = sum(numbers[i] for i in (0, 2, 4, 6, 8))
+    even_sum = sum(numbers[i] for i in (1, 3, 5, 7))
+    tenth = ((odd_sum * 7) - even_sum) % 10
+    eleventh = sum(numbers[:10]) % 10
+
+    return numbers[9] == tenth and numbers[10] == eleventh
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -421,6 +461,28 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0c05\u0c15\u0c4d\u0c1f\u0c4b\u0c2c\u0c30\u0c4d",
         "\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d",
         "\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d",
+    ],
+    "ar": [
+        "\u064a\u0646\u0627\u064a\u0631",
+        "\u0641\u0628\u0631\u0627\u064a\u0631",
+        "\u0645\u0627\u0631\u0633",
+        "\u0623\u0628\u0631\u064a\u0644",
+        "\u0645\u0627\u064a\u0648",
+        "\u064a\u0648\u0646\u064a\u0648",
+        "\u064a\u0648\u0644\u064a\u0648",
+        "\u0623\u063a\u0633\u0637\u0633",
+        "\u0633\u0628\u062a\u0645\u0628\u0631",
+        "\u0623\u0643\u062a\u0648\u0628\u0631",
+        "\u0646\u0648\u0641\u0645\u0628\u0631",
+        "\u062f\u064a\u0633\u0645\u0628\u0631",
+    ],
+    "ja": [
+        "1\u6708", "2\u6708", "3\u6708", "4\u6708", "5\u6708", "6\u6708",
+        "7\u6708", "8\u6708", "9\u6708", "10\u6708", "11\u6708", "12\u6708",
+    ],
+    "tr": [
+        "Ocak", "\u015eubat", "Mart", "Nisan", "May\u0131s", "Haziran",
+        "Temmuz", "A\u011fustos", "Eyl\u00fcl", "Ekim", "Kas\u0131m", "Aral\u0131k",
     ],
 }
 
@@ -1048,6 +1110,229 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_ARABIC_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u062a\u0627\u0631\u064a\u062e", "\u0645\u064a\u0644\u0627\u062f",
+            "\u0627\u0644\u0645\u064a\u0644\u0627\u062f", "\u0648\u0644\u062f",
+            "\u0627\u0644\u062f\u062e\u0648\u0644", "\u062e\u0631\u0648\u062c",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:\u064a\u0646\u0627\u064a\u0631|\u0641\u0628\u0631\u0627\u064a\u0631|\u0645\u0627\u0631\u0633|\u0623\u0628\u0631\u064a\u0644|\u0627\u0628\u0631\u064a\u0644|\u0645\u0627\u064a\u0648|\u064a\u0648\u0646\u064a\u0648|\u064a\u0648\u0644\u064a\u0648|\u0623\u063a\u0633\u0637\u0633|\u0627\u063a\u0633\u0637\u0633|\u0633\u0628\u062a\u0645\u0628\u0631|\u0623\u0643\u062a\u0648\u0628\u0631|\u0627\u0643\u062a\u0648\u0628\u0631|\u0646\u0648\u0641\u0645\u0628\u0631|\u062f\u064a\u0633\u0645\u0628\u0631)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "\u062a\u0627\u0631\u064a\u062e", "\u0645\u064a\u0644\u0627\u062f",
+            "\u0627\u0644\u0645\u064a\u0644\u0627\u062f", "\u0648\u0644\u062f",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        # Require either an international prefix (+CC) or a leading 0 so the
+        # pattern doesn't fire on every 5–13-digit number string (e.g. the
+        # 14-digit national-ID format in the same clinical note).
+        r"(?<!\w)(?:\+(?:20|966|971|962|961|212|216|213|964|965|974|968|973)[\s.-]?|0)\d{1,3}(?:[\s.-]?\d{2,4}){2,3}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.45,
+        context_words=[
+            "\u0647\u0627\u062a\u0641", "\u062c\u0648\u0627\u0644",
+            "\u0645\u0648\u0628\u0627\u064a\u0644", "\u062a\u0644\u064a\u0641\u0648\u0646",
+            "\u0631\u0642\u0645", "\u0627\u062a\u0635\u0627\u0644",
+        ],
+        context_boost=0.4,
+    ),
+    PIIPattern(
+        # Egyptian 14-digit national ID (starts with 2 or 3 for the
+        # century digit). Other Arabic locales have different ID formats
+        # (e.g. Saudi 10 digits starting 1/2, UAE 15 digits starting 784)
+        # and are not currently matched here.
+        r"\b[23]\d{13}\b",
+        "national_id",
+        priority=9,
+        base_score=0.35,
+        context_words=[
+            "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a",
+            "\u0628\u0637\u0627\u0642\u0629", "\u0647\u0648\u064a\u0629",
+            "\u0631\u0642\u0645 \u0627\u0644\u0647\u0648\u064a\u0629",
+        ],
+        context_boost=0.5,
+    ),
+    PIIPattern(
+        r"\b(?:\u0634\u0627\u0631\u0639|\u0637\u0631\u064a\u0642|\u062d\u064a|\u0645\u064a\u062f\u0627\u0646|\u062c\u0627\u062f\u0629)\s+[\u0600-\u06FF0-9\s]{3,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\u0639\u0646\u0648\u0627\u0646", "\u0627\u0644\u0639\u0646\u0648\u0627\u0646",
+            "\u0633\u0643\u0646", "\u064a\u0642\u064a\u0645",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "\u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0628\u0631\u064a\u062f\u064a",
+            "\u0631\u0645\u0632 \u0628\u0631\u064a\u062f\u064a",
+            "\u0639\u0646\u0648\u0627\u0646",
+        ],
+        context_boost=0.5,
+    ),
+]
+
+_JAPANESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u751f\u5e74\u6708\u65e5", "\u8a95\u751f\u65e5",
+            "\u751f\u307e\u308c", "\u5165\u9662", "\u9000\u9662",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{4}\u5e74\d{1,2}\u6708\d{1,2}\u65e5\b",
+        "date",
+        priority=9,
+        base_score=0.7,
+        context_words=[
+            "\u751f\u5e74\u6708\u65e5", "\u8a95\u751f\u65e5",
+            "\u751f\u307e\u308c", "\u5165\u9662", "\u9000\u9662",
+        ],
+        context_boost=0.25,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+81[\s-]?)?(?:0\d{1,4}|\d{1,4})[\s-]?\d{1,4}[\s-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "\u96fb\u8a71", "\u643a\u5e2f", "\u756a\u53f7",
+            "\u9023\u7d61", "\u30d5\u30a1\u30c3\u30af\u30b9",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"\b\d{4}\s?\d{4}\s?\d{4}\b",
+        "national_id",
+        priority=9,
+        base_score=0.35,
+        context_words=[
+            "\u30de\u30a4\u30ca\u30f3\u30d0\u30fc",
+            "\u500b\u4eba\u756a\u53f7",
+            "\u8eab\u5206\u8a3c", "\u756a\u53f7",
+        ],
+        context_boost=0.5,
+    ),
+    PIIPattern(
+        r"\b(?:\d{3}-\d{4}|\u3012\d{3}-\d{4})\b",
+        "postcode",
+        priority=6,
+        base_score=0.45,
+        context_words=[
+            "\u90f5\u4fbf\u756a\u53f7", "\u4f4f\u6240",
+        ],
+        context_boost=0.45,
+    ),
+    PIIPattern(
+        r"\b[\u4e00-\u9fff]{2,12}(?:\u90fd|\u9053|\u5e9c|\u770c)[\u4e00-\u9fff0-9\u4e01\u76ee\u756a\u5730\u53f7\s-]{3,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\u4f4f\u6240", "\u6240\u5728\u5730", "\u81ea\u5b85",
+        ],
+        context_boost=0.25,
+    ),
+]
+
+_TURKISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "do\u011fum", "do\u011fum tarihi", "tarih", "yat\u0131\u015f",
+            "\u00e7\u0131k\u0131\u015f", "taburcu",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:Ocak|\u015eubat|Subat|Mart|Nisan|May\u0131s|Mayis|Haziran|Temmuz|A\u011fustos|Agustos|Eyl\u00fcl|Eylul|Ekim|Kas\u0131m|Kasim|Aral\u0131k|Aralik)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "do\u011fum", "do\u011fum tarihi", "tarih", "yat\u0131\u015f",
+            "\u00e7\u0131k\u0131\u015f",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+90\s?)?(?:5\d{2}|0\d{3})[\s.-]?\d{3}[\s.-]?\d{2}[\s.-]?\d{2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "telefon", "tel", "cep", "mobil", "numara",
+            "ileti\u015fim", "faks",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b[1-9]\d{10}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "tc kimlik", "t.c. kimlik", "kimlik no",
+            "tckn", "vatanda\u015fl\u0131k",
+        ],
+        context_boost=0.4,
+        validator=validate_turkish_tckn,
+    ),
+    PIIPattern(
+        # Latin Extended-A (\u0100-\u017f) covers Turkish-specific letters
+        # (\u015e \u015f \u011e \u011f \u0130 \u0131) that fall outside Latin-1 Supplement.
+        r"\b(?:cadde|cad\.|sokak|sok\.|mahalle|mah\.|bulvar|bulv\.|apartman|apt\.)\s+[A-Z\u00c0-\u00ff\u0100-\u017f][A-Za-z\u00c0-\u00ff\u0100-\u017f\s.-]{2,50}\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adres", "ikamet", "oturuyor", "mahallesi",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "posta kodu", "pk", "adres",
+        ],
+        context_boost=0.5,
+        flags=re.IGNORECASE,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -1057,6 +1342,9 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "nl": _DUTCH_PII_PATTERNS,
     "hi": _HINDI_PII_PATTERNS,
     "te": _TELUGU_PII_PATTERNS,
+    "ar": _ARABIC_PII_PATTERNS,
+    "ja": _JAPANESE_PII_PATTERNS,
+    "tr": _TURKISH_PII_PATTERNS,
 }
 
 
@@ -1244,6 +1532,95 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         ],
         "ZIPCODE": ["500001", "520001", "522001"],
     },
+    "ar": {
+        "NAME": [
+            "\u0644\u064a\u0644\u0649 \u062d\u0633\u0646",
+            "\u0623\u062d\u0645\u062f \u0639\u0644\u064a",
+            "\u0645\u0631\u064a\u0645 \u0645\u062d\u0645\u0648\u062f",
+            "\u064a\u0648\u0633\u0641 \u0625\u0628\u0631\u0627\u0647\u064a\u0645",
+        ],
+        "FIRST_NAME": [
+            "\u0644\u064a\u0644\u0649",
+            "\u0623\u062d\u0645\u062f",
+            "\u0645\u0631\u064a\u0645",
+            "\u064a\u0648\u0633\u0641",
+        ],
+        "LAST_NAME": [
+            "\u062d\u0633\u0646",
+            "\u0639\u0644\u064a",
+            "\u0645\u062d\u0645\u0648\u062f",
+            "\u0625\u0628\u0631\u0627\u0647\u064a\u0645",
+        ],
+        "EMAIL": ["patient@example.eg", "contact@example.org"],
+        "PHONE": ["+20 10 1234 5678", "+966 50 123 4567"],
+        "ID_NUM": ["29801011234567"],
+        "STREET_ADDRESS": [
+            "\u0634\u0627\u0631\u0639 \u0627\u0644\u0646\u064a\u0644 12",
+            "\u0637\u0631\u064a\u0642 \u0627\u0644\u0645\u0644\u0643 \u0641\u0647\u062f 45",
+        ],
+        "URL_PERSONAL": ["https://example.eg"],
+        "USERNAME": ["mareed123", "mostakhdem456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": [
+            "\u0627\u0644\u0642\u0627\u0647\u0631\u0629",
+            "\u0627\u0644\u0631\u064a\u0627\u0636",
+            "\u062f\u0628\u064a",
+        ],
+        "ZIPCODE": ["11511", "12345", "54321"],
+    },
+    "ja": {
+        "NAME": [
+            "\u4f50\u85e4 \u82b1\u5b50",
+            "\u7530\u4e2d \u592a\u90ce",
+            "\u9234\u6728 \u7f8e\u54b2",
+            "\u9ad8\u6a4b \u5065",
+        ],
+        "FIRST_NAME": [
+            "\u82b1\u5b50",
+            "\u592a\u90ce",
+            "\u7f8e\u54b2",
+            "\u5065",
+        ],
+        "LAST_NAME": [
+            "\u4f50\u85e4",
+            "\u7530\u4e2d",
+            "\u9234\u6728",
+            "\u9ad8\u6a4b",
+        ],
+        "EMAIL": ["patient@example.jp", "renraku@example.org"],
+        "PHONE": ["+81 90 1234 5678", "03-1234-5678"],
+        "ID_NUM": ["1234 5678 9012"],
+        "STREET_ADDRESS": [
+            "\u6771\u4eac\u90fd\u65b0\u5bbf\u533a\u897f\u65b0\u5bbf2\u4e01\u76ee8\u756a1\u53f7",
+            "\u5927\u962a\u5e9c\u5927\u962a\u5e02\u5317\u533a\u6885\u75301\u4e01\u76ee1\u756a",
+        ],
+        "URL_PERSONAL": ["https://example.jp"],
+        "USERNAME": ["kanja123", "riyousha456"],
+        "DATE": ["2000/01/01", "1999/12/31"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": [
+            "\u6771\u4eac",
+            "\u5927\u962a",
+            "\u4eac\u90fd",
+        ],
+        "ZIPCODE": ["160-0023", "530-0001", "100-0001"],
+    },
+    "tr": {
+        "NAME": ["Ay\u015fe Y\u0131lmaz", "Mehmet Kaya", "Zeynep Demir", "Emre \u015eahin"],
+        "FIRST_NAME": ["Ay\u015fe", "Mehmet", "Zeynep", "Emre"],
+        "LAST_NAME": ["Y\u0131lmaz", "Kaya", "Demir", "\u015eahin"],
+        "EMAIL": ["hasta@ornek.tr", "iletisim@ornek.org"],
+        "PHONE": ["+90 532 123 45 67", "0532 987 65 43"],
+        "ID_NUM": ["10000000146"],
+        "STREET_ADDRESS": ["Atat\u00fcrk Caddesi 12", "\u0130stiklal Sokak 45"],
+        "URL_PERSONAL": ["https://ornek.tr"],
+        "USERNAME": ["hasta123", "kullanici456"],
+        "DATE": ["01.01.2000", "31.12.1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
+        "ZIPCODE": ["34000", "06000", "35000"],
+    },
 }
 
 
@@ -1259,7 +1636,8 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
+            ar, ja, tr)
 
     Returns:
         List of PIIPattern instances for the language
