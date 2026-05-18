@@ -208,6 +208,32 @@ class TestMLXPipelineOutputFormat:
 class TestMLXModelResolve:
     """Test model resolution logic."""
 
+    def test_new_language_preconverted_map_includes_only_supported_rollout(self):
+        """Only the 28 currently supported ar/ja/tr MLX repos are pre-mapped."""
+        from openmed.mlx.inference import _MLX_MODEL_MAP
+
+        new_language_entries = {
+            source: target
+            for source, target in _MLX_MODEL_MAP.items()
+            if "OpenMed-PII-Arabic-" in source
+            or "OpenMed-PII-Japanese-" in source
+            or "OpenMed-PII-Turkish-" in source
+        }
+        assert len(new_language_entries) == 28
+        assert all(target == f"{source}-mlx" for source, target in new_language_entries.items())
+
+        blocked_fragments = (
+            "Japanese-NomicMed",
+            "Japanese-QwenMed",
+            "Turkish-BioClinicalModern",
+            "Turkish-ClinicalLongformer",
+            "Turkish-ModernMed",
+            "Turkish-NomicMed",
+            "Turkish-QwenMed",
+        )
+        for source in new_language_entries:
+            assert not any(fragment in source for fragment in blocked_fragments)
+
     def test_preconverted_repo_failure_falls_back_to_conversion(self, tmp_path):
         """A private/missing Hub snapshot should fall back to local conversion."""
         from openmed.mlx import inference
