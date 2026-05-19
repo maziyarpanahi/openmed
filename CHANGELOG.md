@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-05-18
+
+### Added
+
+- Arabic (`ar`), Japanese (`ja`), and Turkish (`tr`) PII extraction support in the Python SDK, including language defaults, localized regex patterns, fake replacement data, and anonymizer locale routing.
+- Registry entries for all API-visible Arabic, Japanese, and Turkish PII source checkpoints: 2 Arabic, 3 Japanese, and 32 Turkish models.
+- Preconverted MLX routing for the 28 supported Arabic, Japanese, and Turkish PII `-mlx` repositories so `OpenMedConfig(backend="mlx")` can resolve uploaded artifacts directly.
+- Turkish TCKN checksum validation plus context-aware Arabic and Japanese national ID patterns.
+
+### Changed
+
+- README, docs, website, and Apple demo version surfaces now point at `1.5.0`.
+- Faker anonymization now falls back to `en_US` with a warning if a requested locale is unavailable at runtime.
+
+### Fixed
+
+- Turkish street-address matching now accepts both descriptor-first forms such as `Cadde İnönü 12` and common Turkish name-first forms such as `Atatürk Caddesi 12`.
+
+### Tests
+
+- Added language constant/default routing, model registry count, MLX mapping, anonymizer locale, and multilingual PII regression coverage for Arabic, Japanese, and Turkish.
+
 ## [1.4.1] - 2026-05-17
 
 ### Changed

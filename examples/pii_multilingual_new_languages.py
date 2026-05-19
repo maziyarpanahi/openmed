@@ -47,6 +47,31 @@ SAMPLES = {
             "endere\u00e7o: Rua das Flores 25, 1200-195 Lisboa"
         ),
     },
+    "ar": {
+        "label": "Arabic",
+        "text": (
+            "\u0627\u0644\u0645\u0631\u064a\u0636\u0629 \u0644\u064a\u0644\u0649 \u062d\u0633\u0646\u060c "
+            "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f 15/03/1985\u060c "
+            "\u0627\u0644\u0647\u0627\u062a\u0641 +20 10 1234 5678\u060c "
+            "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a 29801011234567"
+        ),
+    },
+    "ja": {
+        "label": "Japanese",
+        "text": (
+            "\u60a3\u8005 \u4f50\u85e4 \u82b1\u5b50\u3001"
+            "\u751f\u5e74\u6708\u65e5 1985\u5e743\u670815\u65e5\u3001"
+            "\u96fb\u8a71 +81 90 1234 5678\u3001"
+            "\u30de\u30a4\u30ca\u30f3\u30d0\u30fc 1234 5678 9012"
+        ),
+    },
+    "tr": {
+        "label": "Turkish",
+        "text": (
+            "Hasta Ay\u015fe Y\u0131lmaz, do\u011fum tarihi 15.03.1985, "
+            "telefon +90 532 123 45 67, TCKN 10000000146, adres Atat\u00fcrk Caddesi 12"
+        ),
+    },
 }
 
 

@@ -29,6 +29,9 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "hi": "hi_IN",
     "te": "en_IN",  # Faker has no Telugu locale; en_IN is the closest match
     "pt": "pt_PT",
+    "ar": "ar_EG",  # Egypt is the most-populous Arabic-speaking country; override for Gulf/Levant locales.
+    "ja": "ja_JP",
+    "tr": "tr_TR",
 }
 
 

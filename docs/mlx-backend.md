@@ -1,6 +1,6 @@
 # MLX Backend (Apple Silicon)
 
-OpenMed v1.4.1 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx).
+OpenMed v1.5.0 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx), including preconverted Arabic, Japanese, and Turkish PII token-classification artifacts.
 
 That MLX story now has two surfaces:
 
@@ -66,7 +66,7 @@ As of May 4, 2026, the current public MLX path covers these families:
 - `openai-privacy-filter`
 - `privacy-filter-nemotron` / `privacy-filter-multilingual` artifacts through the OpenAI Privacy Filter runtime
 
-Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family tasks.
+Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family tasks. The Arabic/Japanese/Turkish PII rollout adds 28 supported `-mlx` repos now; unsupported ModernBERT, Qwen3, and Longformer PII checkpoints remain deferred until those architectures land in the converter.
 
 Architectures still in active rollout:
 
