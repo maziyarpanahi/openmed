@@ -657,7 +657,7 @@ _LANGUAGE_CONFIG = {
     "it": {"name": "Italian", "prefix": "Italian-"},
     "es": {"name": "Spanish", "prefix": "Spanish-"},
 }
-_SPARSE_LANGUAGE_KEYS = {"nl", "hi", "te", "pt"}
+_LOCALIZED_PII_LANGUAGE_KEYS = {"nl", "hi", "te", "pt", "ar", "ja", "tr"}
 
 # Keys to skip when generating multilingual variants
 # (pii_detection is a legacy alias for pii_superclinical_small)
@@ -766,7 +766,10 @@ OPENMED_MODELS.update({
 # Portuguese release: explicit API-visible model map.
 # The collection currently advertises 35 models, but the Hub API returns these
 # 31 public entries; keep the registry aligned with public availability.
-_PORTUGUESE_PII_ENTITY_TYPES = [
+# Full superset of PII labels emitted by the Portuguese collection. Reused
+# verbatim for the Arabic/Japanese/Turkish models until per-language entity
+# lists are confirmed against each model's actual output.
+_FULL_PII_ENTITY_TYPES = [
     "ACCOUNTNAME",
     "AGE",
     "AMOUNT",
@@ -870,7 +873,7 @@ def _build_portuguese_pii_models() -> Dict[str, ModelInfo]:
                 "Portuguese token-classification model for PII detection "
                 "and clinical de-identification"
             ),
-            entity_types=list(_PORTUGUESE_PII_ENTITY_TYPES),
+            entity_types=list(_FULL_PII_ENTITY_TYPES),
             size_category=size_category,
             recommended_confidence=0.55,
         )
@@ -879,6 +882,90 @@ def _build_portuguese_pii_models() -> Dict[str, ModelInfo]:
 
 
 OPENMED_MODELS.update(_build_portuguese_pii_models())
+
+
+_NEW_LANGUAGE_PII_MODEL_SPECS = {
+    "ar": {
+        "name": "Arabic",
+        "specialization": "Arabic PII detection",
+        "models": [
+            ("snowflake_med", "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1", "SnowflakeMed Large", "Large"),
+            ("big_med_large_560m", "OpenMed/OpenMed-PII-Arabic-BigMed-Large-560M-v1", "BigMed Large 560M", "Large"),
+        ],
+    },
+    "ja": {
+        "name": "Japanese",
+        "specialization": "Japanese PII detection",
+        "models": [
+            ("nomic_med", "OpenMed/OpenMed-PII-Japanese-NomicMed-Large-395M-v1", "NomicMed Large", "Large"),
+            ("qwen_med_xlarge", "OpenMed/OpenMed-PII-Japanese-QwenMed-XLarge-600M-v1", "QwenMed XLarge", "XLarge"),
+            ("big_med_large_560m", "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1", "BigMed Large 560M", "Large"),
+        ],
+    },
+    "tr": {
+        "name": "Turkish",
+        "specialization": "Turkish PII detection",
+        "models": [
+            ("snowflake_med", "OpenMed/OpenMed-PII-Turkish-SnowflakeMed-Large-568M-v1", "SnowflakeMed Large", "Large"),
+            ("clinical_bge_large_335m", "OpenMed/OpenMed-PII-Turkish-ClinicalBGE-Large-335M-v1", "ClinicalBGE Large 335M", "Large"),
+            ("clinical_bge_large_568m", "OpenMed/OpenMed-PII-Turkish-ClinicalBGE-Large-568M-v1", "ClinicalBGE Large 568M", "Large"),
+            ("bioclinical_bert", "OpenMed/OpenMed-PII-Turkish-BioClinicalBERT-Base-110M-v1", "BioClinicalBERT Base", "Medium"),
+            ("clinic_discharge", "OpenMed/OpenMed-PII-Turkish-ClinicDischarge-Base-110M-v1", "ClinicDischarge Base", "Medium"),
+            ("bioclinical_modern_base", "OpenMed/OpenMed-PII-Turkish-BioClinicalModern-Base-149M-v1", "BioClinicalModern Base", "Medium"),
+            ("bioclinical_modern_large", "OpenMed/OpenMed-PII-Turkish-BioClinicalModern-Large-395M-v1", "BioClinicalModern Large", "Large"),
+            ("biomed_bert_base", "OpenMed/OpenMed-PII-Turkish-BiomedBERT-Base-110M-v1", "BiomedBERT Base", "Medium"),
+            ("biomed_bert_full", "OpenMed/OpenMed-PII-Turkish-BiomedBERTFull-Base-110M-v1", "BiomedBERTFull Base", "Medium"),
+            ("biomed_bert_large", "OpenMed/OpenMed-PII-Turkish-BiomedBERT-Large-340M-v1", "BiomedBERT Large", "Large"),
+            ("biomed_electra_base", "OpenMed/OpenMed-PII-Turkish-BiomedELECTRA-Base-110M-v1", "BiomedELECTRA Base", "Medium"),
+            ("biomed_electra_large", "OpenMed/OpenMed-PII-Turkish-BiomedELECTRA-Large-335M-v1", "BiomedELECTRA Large", "Large"),
+            ("clinical_longformer", "OpenMed/OpenMed-PII-Turkish-ClinicalLongformer-Base-149M-v1", "ClinicalLongformer Base", "Medium"),
+            ("superclinical_base", "OpenMed/OpenMed-PII-Turkish-SuperClinical-Base-184M-v1", "SuperClinical Base", "Medium"),
+            ("superclinical_large", "OpenMed/OpenMed-PII-Turkish-SuperClinical-Large-434M-v1", "SuperClinical Large", "Large"),
+            ("superclinical_small", "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1", "SuperClinical Small", "Small"),
+            ("lite_clinical", "OpenMed/OpenMed-PII-Turkish-LiteClinical-Small-66M-v1", "LiteClinical Small", "Small"),
+            ("lite_clinical_u", "OpenMed/OpenMed-PII-Turkish-LiteClinicalU-Small-66M-v1", "LiteClinicalU Small", "Small"),
+            ("mlite_clinical", "OpenMed/OpenMed-PII-Turkish-mLiteClinical-Base-135M-v1", "mLiteClinical Base", "Medium"),
+            ("fast_clinical", "OpenMed/OpenMed-PII-Turkish-FastClinical-Small-82M-v1", "FastClinical Small", "Small"),
+            ("clinical_e5_base", "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Base-109M-v1", "ClinicalE5 Base", "Medium"),
+            ("clinical_e5_large", "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Large-335M-v1", "ClinicalE5 Large", "Large"),
+            ("clinical_e5_small", "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Small-33M-v1", "ClinicalE5 Small", "Small"),
+            ("msuper_clinical", "OpenMed/OpenMed-PII-Turkish-mSuperClinical-Large-279M-v1", "mSuperClinical Large", "Large"),
+            ("modern_med_base", "OpenMed/OpenMed-PII-Turkish-ModernMed-Base-149M-v1", "ModernMed Base", "Medium"),
+            ("nomic_med", "OpenMed/OpenMed-PII-Turkish-NomicMed-Large-395M-v1", "NomicMed Large", "Large"),
+            ("modern_med_large", "OpenMed/OpenMed-PII-Turkish-ModernMed-Large-395M-v1", "ModernMed Large", "Large"),
+            ("qwen_med_xlarge", "OpenMed/OpenMed-PII-Turkish-QwenMed-XLarge-600M-v1", "QwenMed XLarge", "XLarge"),
+            ("super_medical_base", "OpenMed/OpenMed-PII-Turkish-SuperMedical-Base-125M-v1", "SuperMedical Base", "Medium"),
+            ("super_medical_large", "OpenMed/OpenMed-PII-Turkish-SuperMedical-Large-355M-v1", "SuperMedical Large", "Large"),
+            ("big_med_large_278m", "OpenMed/OpenMed-PII-Turkish-BigMed-Large-278M-v1", "BigMed Large 278M", "Large"),
+            ("big_med_large_560m", "OpenMed/OpenMed-PII-Turkish-BigMed-Large-560M-v1", "BigMed Large 560M", "Large"),
+        ],
+    },
+}
+
+
+def _build_new_language_pii_models() -> Dict[str, ModelInfo]:
+    """Build Arabic, Japanese, and Turkish PII registry entries."""
+    generated: Dict[str, ModelInfo] = {}
+    for lang_code, spec in _NEW_LANGUAGE_PII_MODEL_SPECS.items():
+        language_name = spec["name"]
+        for arch_key, model_id, display_name, size_category in spec["models"]:
+            generated[f"pii_{lang_code}_{arch_key}"] = ModelInfo(
+                model_id=model_id,
+                display_name=f"PII Detection ({language_name}) - {display_name}",
+                category="Privacy",
+                specialization=spec["specialization"],
+                description=(
+                    f"{language_name} token-classification model for PII "
+                    "detection and clinical de-identification"
+                ),
+                entity_types=list(_FULL_PII_ENTITY_TYPES),
+                size_category=size_category,
+                recommended_confidence=0.55,
+            )
+    return generated
+
+
+OPENMED_MODELS.update(_build_new_language_pii_models())
 
 
 # Category mappings for easy filtering
@@ -1002,13 +1089,14 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
     """Return all PII models for a given language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
+            ar, ja, tr)
 
     Returns:
         Dict mapping registry keys to ModelInfo for that language.
     """
     if lang == "en":
-        localized_prefixes = _SPARSE_LANGUAGE_KEYS | set(_LANGUAGE_CONFIG)
+        localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS | set(_LANGUAGE_CONFIG)
         return {
             k: v
             for k, v in OPENMED_MODELS.items()
@@ -1024,7 +1112,8 @@ def get_default_pii_model(lang: str) -> Optional[str]:
     """Return the default (recommended) PII model_id for a language.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt)
+        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
+            ar, ja, tr)
 
     Returns:
         HuggingFace model ID string, or None if language unsupported.

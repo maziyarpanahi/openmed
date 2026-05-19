@@ -426,6 +426,136 @@ class TestPortugueseObfuscation:
 
 
 # ---------------------------------------------------------------------------
+# Arabic (ar)
+# ---------------------------------------------------------------------------
+
+
+class TestArabicRegression:
+
+    CLINICAL_NOTE = (
+        "\u0627\u0644\u0645\u0631\u064a\u0636\u0629 \u0644\u064a\u0644\u0649 \u062d\u0633\u0646\u060c "
+        "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f 15/03/1985\u060c "
+        "\u0627\u0644\u0647\u0627\u062a\u0641 +20 10 1234 5678\u060c "
+        "\u0627\u0644\u0631\u0642\u0645 \u0627\u0644\u0642\u0648\u0645\u064a 29801011234567."
+    )
+
+    @patch("openmed.analyze_text")
+    def test_ar_name_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "\u0644\u064a\u0644\u0649 \u062d\u0633\u0646", "FIRSTNAME", 0.90),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="ar")
+        names = [e for e in result.entities if "name" in e.label.lower()]
+        assert len(names) >= 1
+
+    @patch("openmed.analyze_text")
+    def test_ar_date_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "15/03/1985", "DATEOFBIRTH", 0.88),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="ar")
+        dates = [e for e in result.entities if "date" in e.label.lower()]
+        assert len(dates) >= 1
+
+    @patch("openmed.analyze_text")
+    def test_ar_phone_and_id_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "+20 10 1234 5678", "PHONE", 0.87),
+            _ent_in(self.CLINICAL_NOTE, "29801011234567", "national_id", 0.86),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="ar")
+        labels = {e.label.lower() for e in result.entities}
+        assert any("phone" in label for label in labels)
+        assert "national_id" in labels
+
+
+# ---------------------------------------------------------------------------
+# Japanese (ja)
+# ---------------------------------------------------------------------------
+
+
+class TestJapaneseRegression:
+
+    CLINICAL_NOTE = (
+        "\u60a3\u8005 \u4f50\u85e4 \u82b1\u5b50\u3001"
+        "\u751f\u5e74\u6708\u65e5 1985\u5e743\u670815\u65e5\u3001"
+        "\u96fb\u8a71 +81 90 1234 5678\u3001"
+        "\u30de\u30a4\u30ca\u30f3\u30d0\u30fc 1234 5678 9012."
+    )
+
+    @patch("openmed.analyze_text")
+    def test_ja_name_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "\u4f50\u85e4 \u82b1\u5b50", "FIRSTNAME", 0.90),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="ja")
+        names = [e for e in result.entities if "name" in e.label.lower()]
+        assert len(names) >= 1
+
+    @patch("openmed.analyze_text")
+    def test_ja_date_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "1985\u5e743\u670815\u65e5", "DATEOFBIRTH", 0.88),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="ja")
+        dates = [e for e in result.entities if "date" in e.label.lower()]
+        assert len(dates) >= 1
+
+    @patch("openmed.analyze_text")
+    def test_ja_phone_and_id_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "+81 90 1234 5678", "PHONE", 0.87),
+            _ent_in(self.CLINICAL_NOTE, "1234 5678 9012", "national_id", 0.86),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="ja")
+        labels = {e.label.lower() for e in result.entities}
+        assert any("phone" in label for label in labels)
+        assert "national_id" in labels
+
+
+# ---------------------------------------------------------------------------
+# Turkish (tr)
+# ---------------------------------------------------------------------------
+
+
+class TestTurkishRegression:
+
+    CLINICAL_NOTE = (
+        "Hasta Ay\u015fe Y\u0131lmaz, do\u011fum tarihi 15.03.1985, "
+        "telefon +90 532 123 45 67, TCKN 10000000146."
+    )
+
+    @patch("openmed.analyze_text")
+    def test_tr_name_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "Ay\u015fe Y\u0131lmaz", "FIRSTNAME", 0.90),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="tr")
+        names = [e for e in result.entities if "name" in e.label.lower()]
+        assert len(names) >= 1
+
+    @patch("openmed.analyze_text")
+    def test_tr_date_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "15.03.1985", "DATEOFBIRTH", 0.88),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="tr")
+        dates = [e for e in result.entities if "date" in e.label.lower()]
+        assert len(dates) >= 1
+
+    @patch("openmed.analyze_text")
+    def test_tr_phone_and_tckn_detection(self, mock_analyze):
+        mock_analyze.return_value = _make_result(self.CLINICAL_NOTE, [
+            _ent_in(self.CLINICAL_NOTE, "+90 532 123 45 67", "PHONE", 0.87),
+            _ent_in(self.CLINICAL_NOTE, "10000000146", "national_id", 0.86),
+        ])
+        result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="tr")
+        labels = {e.label.lower() for e in result.entities}
+        assert any("phone" in label for label in labels)
+        assert "national_id" in labels
+
+
+# ---------------------------------------------------------------------------
 # Dutch (nl)
 # ---------------------------------------------------------------------------
 
