@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-05-21
+
+### Changed
+
+- README, docs, website, and Apple demo version surfaces now point at `1.5.1`.
+- Prepared the patch release metadata for the tag-driven build and publish workflow.
+
 ## [1.5.0] - 2026-05-18
 
 ### Added
