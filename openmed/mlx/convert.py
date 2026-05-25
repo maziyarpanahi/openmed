@@ -132,7 +132,11 @@ def remap_key(key: str, model_type: str | None = None) -> str:
 
 def _to_numpy(tensor: Any) -> Any:
     if hasattr(tensor, "detach"):
-        return tensor.detach().cpu().numpy()
+        t = tensor.detach().cpu()
+        # numpy() does not support bfloat16 on CPU; cast to float32 first
+        if hasattr(t, "dtype") and str(t.dtype) == "torch.bfloat16":
+            t = t.to(float)
+        return t.numpy()
     return tensor
 
 
