@@ -93,6 +93,92 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("classifier.", "classifier."),
 ]
 
+def _convert_opf_weights(state_dict: dict) -> dict:
+    """Remap and reshape HuggingFace OPF weights to the MLX namespace.
+
+    The HF ``openai_privacy_filter`` model differs from the MLX layout in:
+
+    1. Top-level prefix: ``score.*`` → ``unembedding.*``
+    2. Layer container: ``model.layers.N.*`` → ``block.N.*``
+    3. QKV fusion: separate q/k/v_proj → single fused ``attn.qkv`` linear
+    4. Sub-key names: ``input_layernorm`` → ``attn.norm``, ``router`` → ``gate``
+    5. RMSNorm param: ``weight`` → ``scale``
+    6. Expert weight layout: HF stores as ``[E, in, out]``, same as MLX (no transpose needed)
+    """
+    import re
+    import numpy as np
+
+    out: dict[str, np.ndarray] = {}
+    # layer_idx → proj ("q"|"k"|"v") → param ("weight"|"bias") → array
+    qkv: dict[str, dict[str, dict[str, np.ndarray]]] = {}
+
+    for hf_key, arr in state_dict.items():
+        # classifier head
+        if hf_key == "score.weight":
+            out["unembedding.weight"] = arr; continue
+        if hf_key == "score.bias":
+            out["unembedding.bias"] = arr; continue
+
+        # top-level
+        if hf_key == "model.embed_tokens.weight":
+            out["embedding.weight"] = arr; continue
+        if hf_key == "model.norm.weight":
+            out["norm.scale"] = arr; continue
+
+        m = re.match(r"^model\.layers\.(\d+)\.(.*)", hf_key)
+        if m is None:
+            continue
+        n, rest = m.group(1), m.group(2)
+
+        # RMSNorms
+        if rest == "input_layernorm.weight":
+            out[f"block.{n}.attn.norm.scale"] = arr; continue
+        if rest == "post_attention_layernorm.weight":
+            out[f"block.{n}.mlp.norm.scale"] = arr; continue
+
+        # attention sinks
+        if rest == "self_attn.sinks":
+            out[f"block.{n}.attn.sinks"] = arr; continue
+
+        # output projection
+        if rest == "self_attn.o_proj.weight":
+            out[f"block.{n}.attn.out.weight"] = arr; continue
+        if rest == "self_attn.o_proj.bias":
+            out[f"block.{n}.attn.out.bias"] = arr; continue
+
+        # Q / K / V — collect for fusion
+        m2 = re.match(r"self_attn\.(q|k|v)_proj\.(weight|bias)", rest)
+        if m2:
+            proj, param = m2.group(1), m2.group(2)
+            qkv.setdefault(n, {}).setdefault(proj, {})[param] = arr
+            continue
+
+        # MLP router → gate
+        if rest == "mlp.router.weight":
+            out[f"block.{n}.mlp.gate.weight"] = arr; continue
+        if rest == "mlp.router.bias":
+            out[f"block.{n}.mlp.gate.bias"] = arr; continue
+
+        # expert weights: HF stores as [E, in_features, out_features] — same as MLX, no transpose needed
+        if rest == "mlp.experts.gate_up_proj":
+            out[f"block.{n}.mlp.swiglu.weight"] = arr; continue
+        if rest == "mlp.experts.gate_up_proj_bias":
+            out[f"block.{n}.mlp.swiglu.bias"] = arr; continue
+        if rest == "mlp.experts.down_proj":
+            out[f"block.{n}.mlp.out.weight"] = arr; continue
+        if rest == "mlp.experts.down_proj_bias":
+            out[f"block.{n}.mlp.out.bias"] = arr; continue
+
+    # fuse Q / K / V into a single QKV linear per layer
+    for n, projs in qkv.items():
+        for param in ("weight", "bias"):
+            parts = [projs[p][param] for p in ("q", "k", "v") if param in projs.get(p, {})]
+            if parts:
+                out[f"block.{n}.attn.qkv.{param}"] = np.concatenate(parts, axis=0)
+
+    return out
+
+
 def _infer_source_model_type(key: str, model_type: str | None) -> str:
     normalized = normalize_model_type(model_type)
     if normalized is not None:
@@ -158,23 +244,31 @@ def convert_weights(
 
     source_model_type = normalize_model_type(config.model_type)
     state_dict = model.state_dict()
-    mlx_weights = {}
-    skipped = []
 
-    for hf_key, tensor in state_dict.items():
-        mlx_key = remap_key(hf_key, source_model_type)
-        if mlx_key.startswith("_"):
-            skipped.append(hf_key)
-            continue
-        mlx_weights[mlx_key] = _to_numpy(tensor)
-
-    if skipped:
-        logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
+    if source_model_type in {"openai-privacy-filter", "privacy-filter-nemotron", "nemotron-privacy-filter"}:
+        # OPF requires QKV fusion and weight remapping — use dedicated converter
+        numpy_state = {k: _to_numpy(v) for k, v in state_dict.items()}
+        mlx_weights = _convert_opf_weights(numpy_state)
+        _has_classifier_bias = "score.bias" in state_dict
+    else:
+        _has_classifier_bias = False
+        mlx_weights = {}
+        skipped = []
+        for hf_key, tensor in state_dict.items():
+            mlx_key = remap_key(hf_key, source_model_type)
+            if mlx_key.startswith("_"):
+                skipped.append(hf_key)
+                continue
+            mlx_weights[mlx_key] = _to_numpy(tensor)
+        if skipped:
+            logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
 
     config_dict = normalize_model_config(config.to_dict())
     config_dict["_mlx_model_type"] = resolve_model_type(config_dict)
     config_dict["_mlx_task"] = "token-classification"
     config_dict.setdefault("num_labels", config.num_labels)
+    if _has_classifier_bias:
+        config_dict["classifier_bias"] = True
     return mlx_weights, config_dict
 
 
