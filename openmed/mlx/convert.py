@@ -93,6 +93,16 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("classifier.", "classifier."),
 ]
 
+_OPF_MODEL_TYPES = {
+    "openai-privacy-filter",
+    "privacy-filter",
+    "privacy-filter-nemotron",
+    "nemotron-privacy-filter",
+    "privacy-filter-multilingual",
+    "multilingual-privacy-filter",
+}
+
+
 def _convert_opf_weights(state_dict: dict) -> dict:
     """Remap and reshape HuggingFace OPF weights to the MLX namespace.
 
@@ -179,6 +189,86 @@ def _convert_opf_weights(state_dict: dict) -> dict:
     return out
 
 
+def _expected_opf_weight_shapes(config: dict[str, Any]) -> dict[str, tuple[int, ...]]:
+    """Return the MLX weight shapes expected by the OPF runtime."""
+    hidden_size = int(config["hidden_size"])
+    num_layers = int(config["num_hidden_layers"])
+    num_labels = int(config["num_labels"])
+    vocab_size = int(config["vocab_size"])
+    intermediate_size = int(config["intermediate_size"])
+    num_experts = int(config["num_experts"])
+    head_dim = int(config["head_dim"])
+    num_attention_heads = int(config["num_attention_heads"])
+    num_key_value_heads = int(config["num_key_value_heads"])
+    qkv_dim = head_dim * (num_attention_heads + 2 * num_key_value_heads)
+    attn_out_dim = head_dim * num_attention_heads
+
+    shapes: dict[str, tuple[int, ...]] = {
+        "embedding.weight": (vocab_size, hidden_size),
+        "norm.scale": (hidden_size,),
+        "unembedding.weight": (num_labels, hidden_size),
+    }
+    if bool(config.get("classifier_bias", config.get("unembedding_bias", False))):
+        shapes["unembedding.bias"] = (num_labels,)
+
+    for layer_idx in range(num_layers):
+        prefix = f"block.{layer_idx}"
+        shapes.update(
+            {
+                f"{prefix}.attn.norm.scale": (hidden_size,),
+                f"{prefix}.attn.qkv.weight": (qkv_dim, hidden_size),
+                f"{prefix}.attn.qkv.bias": (qkv_dim,),
+                f"{prefix}.attn.out.weight": (hidden_size, attn_out_dim),
+                f"{prefix}.attn.out.bias": (hidden_size,),
+                f"{prefix}.attn.sinks": (num_attention_heads,),
+                f"{prefix}.mlp.norm.scale": (hidden_size,),
+                f"{prefix}.mlp.gate.weight": (num_experts, hidden_size),
+                f"{prefix}.mlp.gate.bias": (num_experts,),
+                f"{prefix}.mlp.swiglu.weight": (
+                    num_experts,
+                    hidden_size,
+                    intermediate_size * 2,
+                ),
+                f"{prefix}.mlp.swiglu.bias": (num_experts, intermediate_size * 2),
+                f"{prefix}.mlp.out.weight": (
+                    num_experts,
+                    intermediate_size,
+                    hidden_size,
+                ),
+                f"{prefix}.mlp.out.bias": (num_experts, hidden_size),
+            }
+        )
+    return shapes
+
+
+def _validate_opf_weights(weights: dict[str, Any], config: dict[str, Any]) -> None:
+    """Fail early when OPF conversion misses keys or produces wrong shapes."""
+    expected_shapes = _expected_opf_weight_shapes(config)
+    expected_keys = set(expected_shapes)
+    actual_keys = set(weights)
+
+    missing = sorted(expected_keys - actual_keys)
+    unexpected = sorted(actual_keys - expected_keys)
+    if missing or unexpected:
+        details = []
+        if missing:
+            details.append(f"missing keys: {missing[:8]}")
+        if unexpected:
+            details.append(f"unexpected keys: {unexpected[:8]}")
+        raise ValueError("Invalid OPF MLX weight mapping (" + "; ".join(details) + ")")
+
+    bad_shapes: list[str] = []
+    for key, expected_shape in expected_shapes.items():
+        actual_shape = getattr(weights[key], "shape", None)
+        if actual_shape is not None and tuple(actual_shape) != expected_shape:
+            bad_shapes.append(f"{key}: expected {expected_shape}, got {tuple(actual_shape)}")
+
+    if bad_shapes:
+        raise ValueError(
+            "Invalid OPF MLX weight shapes: " + "; ".join(bad_shapes[:8])
+        )
+
+
 def _infer_source_model_type(key: str, model_type: str | None) -> str:
     normalized = normalize_model_type(model_type)
     if normalized is not None:
@@ -218,7 +308,12 @@ def remap_key(key: str, model_type: str | None = None) -> str:
 
 def _to_numpy(tensor: Any) -> Any:
     if hasattr(tensor, "detach"):
-        return tensor.detach().cpu().numpy()
+        t = tensor.detach().cpu()
+        # PyTorch CPU cannot expose bfloat16 tensors through numpy().
+        # Cast to float32 explicitly; ``to(float)`` would promote to float64.
+        if hasattr(t, "dtype") and str(t.dtype) == "torch.bfloat16":
+            t = t.float()
+        return t.numpy()
     return tensor
 
 
@@ -244,14 +339,20 @@ def convert_weights(
 
     source_model_type = normalize_model_type(config.model_type)
     state_dict = model.state_dict()
+    config_dict = normalize_model_config(config.to_dict())
+    config_dict["_mlx_model_type"] = resolve_model_type(config_dict)
+    config_dict["_mlx_task"] = "token-classification"
+    if config_dict.get("num_labels") is None:
+        config_dict["num_labels"] = config.num_labels
 
-    if source_model_type in {"openai-privacy-filter", "privacy-filter-nemotron", "nemotron-privacy-filter"}:
+    if source_model_type in _OPF_MODEL_TYPES:
         # OPF requires QKV fusion and weight remapping — use dedicated converter
+        if "score.bias" in state_dict:
+            config_dict["classifier_bias"] = True
         numpy_state = {k: _to_numpy(v) for k, v in state_dict.items()}
         mlx_weights = _convert_opf_weights(numpy_state)
-        _has_classifier_bias = "score.bias" in state_dict
+        _validate_opf_weights(mlx_weights, config_dict)
     else:
-        _has_classifier_bias = False
         mlx_weights = {}
         skipped = []
         for hf_key, tensor in state_dict.items():
@@ -263,12 +364,6 @@ def convert_weights(
         if skipped:
             logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
 
-    config_dict = normalize_model_config(config.to_dict())
-    config_dict["_mlx_model_type"] = resolve_model_type(config_dict)
-    config_dict["_mlx_task"] = "token-classification"
-    config_dict.setdefault("num_labels", config.num_labels)
-    if _has_classifier_bias:
-        config_dict["classifier_bias"] = True
     return mlx_weights, config_dict
 
 
