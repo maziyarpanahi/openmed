@@ -26,6 +26,7 @@ def _module_importable(module_name: str) -> bool:
 
 _NUMPY_AVAILABLE = _module_importable("numpy")
 _SAFETENSORS_NUMPY_AVAILABLE = _module_importable("safetensors.numpy")
+_TORCH_AVAILABLE = _module_importable("torch")
 
 
 class TestWeightKeyRemapping:
@@ -153,6 +154,168 @@ class TestWeightKeyRemapping:
             assert not mlx_key.startswith("bert."), (
                 f"Key {key!r} was not remapped: {mlx_key!r}"
             )
+
+
+@pytest.mark.skipif(
+    not (_NUMPY_AVAILABLE and _TORCH_AVAILABLE),
+    reason="numpy and torch are required for BF16 conversion tests",
+)
+def test_to_numpy_casts_bfloat16_to_float32():
+    """BF16 tensors need an explicit float32 cast before numpy conversion."""
+    import numpy as np
+    import torch
+
+    from openmed.mlx.convert import _to_numpy
+
+    converted = _to_numpy(torch.tensor([1.0], dtype=torch.bfloat16))
+
+    assert converted.dtype == np.float32
+    np.testing.assert_allclose(converted, np.array([1.0], dtype=np.float32))
+
+
+def _tiny_opf_config() -> dict:
+    return {
+        "model_type": "openai_privacy_filter",
+        "num_hidden_layers": 1,
+        "num_experts": 3,
+        "experts_per_token": 2,
+        "vocab_size": 16,
+        "num_labels": 5,
+        "hidden_size": 8,
+        "intermediate_size": 4,
+        "head_dim": 2,
+        "num_attention_heads": 4,
+        "num_key_value_heads": 2,
+        "classifier_bias": True,
+    }
+
+
+def _tiny_opf_state_dict(config: dict):
+    import numpy as np
+
+    hidden = config["hidden_size"]
+    intermediate = config["intermediate_size"]
+    num_experts = config["num_experts"]
+    num_q = config["num_attention_heads"]
+    num_kv = config["num_key_value_heads"]
+    head_dim = config["head_dim"]
+    q_dim = num_q * head_dim
+    kv_dim = num_kv * head_dim
+
+    state = {
+        "model.embed_tokens.weight": np.zeros(
+            (config["vocab_size"], hidden),
+            dtype=np.float32,
+        ),
+        "model.norm.weight": np.ones((hidden,), dtype=np.float32),
+        "score.weight": np.zeros((config["num_labels"], hidden), dtype=np.float32),
+        "score.bias": np.zeros((config["num_labels"],), dtype=np.float32),
+    }
+
+    prefix = "model.layers.0"
+    state.update(
+        {
+            f"{prefix}.input_layernorm.weight": np.ones((hidden,), dtype=np.float32),
+            f"{prefix}.post_attention_layernorm.weight": np.ones(
+                (hidden,),
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.q_proj.weight": np.full(
+                (q_dim, hidden),
+                1.0,
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.k_proj.weight": np.full(
+                (kv_dim, hidden),
+                2.0,
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.v_proj.weight": np.full(
+                (kv_dim, hidden),
+                3.0,
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.q_proj.bias": np.full(
+                (q_dim,),
+                1.0,
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.k_proj.bias": np.full(
+                (kv_dim,),
+                2.0,
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.v_proj.bias": np.full(
+                (kv_dim,),
+                3.0,
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.o_proj.weight": np.zeros(
+                (hidden, q_dim),
+                dtype=np.float32,
+            ),
+            f"{prefix}.self_attn.o_proj.bias": np.zeros((hidden,), dtype=np.float32),
+            f"{prefix}.self_attn.sinks": np.zeros((num_q,), dtype=np.float32),
+            f"{prefix}.mlp.router.weight": np.zeros(
+                (num_experts, hidden),
+                dtype=np.float32,
+            ),
+            f"{prefix}.mlp.router.bias": np.zeros((num_experts,), dtype=np.float32),
+            f"{prefix}.mlp.experts.gate_up_proj": np.zeros(
+                (num_experts, hidden, intermediate * 2),
+                dtype=np.float32,
+            ),
+            f"{prefix}.mlp.experts.gate_up_proj_bias": np.zeros(
+                (num_experts, intermediate * 2),
+                dtype=np.float32,
+            ),
+            f"{prefix}.mlp.experts.down_proj": np.zeros(
+                (num_experts, intermediate, hidden),
+                dtype=np.float32,
+            ),
+            f"{prefix}.mlp.experts.down_proj_bias": np.zeros(
+                (num_experts, hidden),
+                dtype=np.float32,
+            ),
+        }
+    )
+    return state
+
+
+@pytest.mark.skipif(not _NUMPY_AVAILABLE, reason="numpy is required for OPF tests")
+def test_opf_converter_remaps_and_validates_hf_layout():
+    import numpy as np
+
+    from openmed.mlx.convert import _convert_opf_weights, _validate_opf_weights
+
+    config = _tiny_opf_config()
+    converted = _convert_opf_weights(_tiny_opf_state_dict(config))
+    _validate_opf_weights(converted, config)
+
+    q_dim = config["num_attention_heads"] * config["head_dim"]
+    kv_dim = config["num_key_value_heads"] * config["head_dim"]
+    qkv_weight = converted["block.0.attn.qkv.weight"]
+
+    assert "unembedding.bias" in converted
+    assert "model.layers.0.self_attn.q_proj.weight" not in converted
+    assert qkv_weight.shape == (q_dim + 2 * kv_dim, config["hidden_size"])
+    np.testing.assert_array_equal(qkv_weight[:q_dim], 1.0)
+    np.testing.assert_array_equal(qkv_weight[q_dim : q_dim + kv_dim], 2.0)
+    np.testing.assert_array_equal(qkv_weight[q_dim + kv_dim :], 3.0)
+
+
+@pytest.mark.skipif(not _NUMPY_AVAILABLE, reason="numpy is required for OPF tests")
+def test_opf_validation_rejects_partial_qkv_fusion():
+    from openmed.mlx.convert import _convert_opf_weights, _validate_opf_weights
+
+    config = _tiny_opf_config()
+    state = _tiny_opf_state_dict(config)
+    del state["model.layers.0.self_attn.v_proj.bias"]
+
+    converted = _convert_opf_weights(state)
+
+    with pytest.raises(ValueError, match="Invalid OPF MLX weight shapes"):
+        _validate_opf_weights(converted, config)
 
 
 @pytest.mark.skipif(
