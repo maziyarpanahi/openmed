@@ -199,7 +199,11 @@ class TestCreatePrivacyFilterPipeline:
              patch("openmed.torch.privacy_filter.PrivacyFilterTorchPipeline") as MockPF:
             MockPF.return_value = sentinel
             pipeline = create_privacy_filter_pipeline("openai/privacy-filter")
-            MockPF.assert_called_once_with("openai/privacy-filter")
+            # Trusted first-party repo: dispatcher opts in to the custom-code
+            # path that openai/privacy-filter's modeling files require.
+            MockPF.assert_called_once_with(
+                "openai/privacy-filter", trust_remote_code=True,
+            )
             assert pipeline("hi") == sentinel("hi")
 
     def test_mlx_request_on_linux_substitutes_torch_model(self):
@@ -213,7 +217,9 @@ class TestCreatePrivacyFilterPipeline:
             warnings.simplefilter("always")
             MockPF.return_value = _fake_pipeline([])
             create_privacy_filter_pipeline("OpenMed/privacy-filter-mlx-8bit")
-            MockPF.assert_called_once_with("openai/privacy-filter")
+            MockPF.assert_called_once_with(
+                "openai/privacy-filter", trust_remote_code=True,
+            )
             assert any(issubclass(w.category, UserWarning) for w in caught)
 
 
