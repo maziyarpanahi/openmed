@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-05-27
+
+### Security
+
+- Hardened the privacy-filter dispatcher to refuse `trust_remote_code=True` for model identifiers outside an explicit allowlist of first-party OpenAI/OpenMed privacy-filter family models (`openai/privacy-filter`, `OpenMed/privacy-filter-multilingual`, `OpenMed/privacy-filter-nemotron`). Previously, any HuggingFace repository whose name contained the substring `privacy-filter` would be loaded with custom-code execution enabled, allowing remote code execution by anyone able to control the `model_name` parameter on `/pii/extract` or `/pii/deidentify`. Operators with custom fine-tunes of the privacy-filter family can extend the allowlist via the `OPENMED_TRUSTED_REMOTE_CODE_MODELS` environment variable (comma-separated repo IDs).
+- Changed `PrivacyFilterTorchPipeline`'s `trust_remote_code` default from `True` to `False`. The first-party dispatcher (`openmed.core.backends.create_privacy_filter_pipeline`) opts in explicitly only for allowlisted models.
+
+### Changed
+
+- README, docs, and website version surfaces now point at `1.5.2`.
+
+### Fixed
+
+- Fixed raw HuggingFace-to-MLX conversion for the OpenAI Privacy Filter family (`openai/privacy-filter`, `OpenMed/privacy-filter-nemotron`, and `OpenMed/privacy-filter-multilingual`) by casting BF16 tensors to float32 before NumPy conversion, remapping OPF/Nemotron checkpoints into the OpenMed MLX runtime layout, fusing Q/K/V projections, preserving classifier bias, and validating converted weight keys/shapes before artifact save.
+
+### Tests
+
+- Added `tests/unit/test_privacy_filter_security.py` covering the identifier matcher, allowlist gate, env-var override, local-artifact trust, and dispatcher opt-in.
+- Added HTTP-level regression tests in `tests/unit/service/test_api.py` that POST the attacker-controlled `model_name` payload to `/pii/extract` and `/pii/deidentify` and verify the privacy-filter dispatcher is never reached.
+- Added MLX converter regressions for BF16 NumPy conversion, OPF weight remapping, QKV fusion order, and partial-QKV rejection.
+
 ## [1.5.1] - 2026-05-21
 
 ### Changed
