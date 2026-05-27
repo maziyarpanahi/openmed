@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from datetime import datetime
 from typing import Any
+from unittest.mock import patch
 
 import openmed
 import pytest
@@ -476,6 +477,63 @@ def test_preload_model_load_failure_fails_startup(monkeypatch):
     with pytest.raises(ValueError, match="Could not load model"):
         with TestClient(app):
             pass
+
+
+def test_pii_extract_rejects_attacker_controlled_privacy_filter_model_name(
+    client, monkeypatch, fake_loader_cls,
+):
+    """CVE-2026-47117 regression: a request with an attacker-controlled
+    repo name whose path contains "privacy-filter" must NOT route through
+    the privacy-filter dispatcher (which would otherwise load with
+    trust_remote_code=True). It should fall through to the standard PII
+    loader, which never enables custom-code execution.
+    """
+    monkeypatch.setattr(openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result())
+
+    with patch(
+        "openmed.torch.privacy_filter.PrivacyFilterTorchPipeline",
+    ) as MockPipeline, patch(
+        "openmed.core.backends.create_privacy_filter_pipeline",
+    ) as mock_factory:
+        response = client.post(
+            "/pii/extract",
+            json={
+                "text": "John Doe called 555-1212",
+                "model_name": "attacker/foo-privacy-filter-bar",
+                "confidence_threshold": 0.0,
+            },
+        )
+
+    assert response.status_code == 200
+    MockPipeline.assert_not_called()
+    mock_factory.assert_not_called()
+
+
+def test_pii_deidentify_rejects_attacker_controlled_privacy_filter_model_name(
+    client, monkeypatch, fake_loader_cls,
+):
+    """CVE-2026-47117 regression: same as the /pii/extract case but for the
+    /pii/deidentify endpoint, which reaches the same vulnerable code path."""
+    monkeypatch.setattr(openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result())
+
+    with patch(
+        "openmed.torch.privacy_filter.PrivacyFilterTorchPipeline",
+    ) as MockPipeline, patch(
+        "openmed.core.backends.create_privacy_filter_pipeline",
+    ) as mock_factory:
+        response = client.post(
+            "/pii/deidentify",
+            json={
+                "text": "John Doe called 555-1212",
+                "method": "mask",
+                "model_name": "attacker/foo-privacy-filter-bar",
+                "confidence_threshold": 0.0,
+            },
+        )
+
+    assert response.status_code == 200
+    MockPipeline.assert_not_called()
+    mock_factory.assert_not_called()
 
 
 def test_second_request_reuses_shared_warmed_pipeline(monkeypatch, fake_loader_cls):
