@@ -14,11 +14,56 @@ consume MLX and Torch results interchangeably.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, List, Optional
 
 from openmed.core.decoding import refine_privacy_filter_span, trim_span_whitespace
 
 logger = logging.getLogger(__name__)
+
+
+# First-party privacy-filter repos that legitimately require
+# trust_remote_code=True (they ship modeling_openai_privacy_filter.py and
+# friends in the repo and rely on Transformers' auto_map import).
+TRUSTED_REMOTE_CODE_MODELS = frozenset({
+    "openai/privacy-filter",
+    "OpenMed/privacy-filter-multilingual",
+    "OpenMed/privacy-filter-nemotron",
+})
+
+# Operators with custom fine-tunes can extend the allowlist with a
+# comma-separated list of HuggingFace repo IDs. Empty entries are ignored.
+_ALLOWLIST_ENV_VAR = "OPENMED_TRUSTED_REMOTE_CODE_MODELS"
+
+
+def _env_allowlist() -> frozenset[str]:
+    raw = os.getenv(_ALLOWLIST_ENV_VAR, "")
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+
+def is_trusted_for_remote_code(model_name: str) -> bool:
+    """Return True if *model_name* may be loaded with ``trust_remote_code=True``.
+
+    Trusted sources:
+
+    - ``TRUSTED_REMOTE_CODE_MODELS`` — first-party OpenAI/OpenMed
+      privacy-filter repos that ship custom modeling code.
+    - The ``OPENMED_TRUSTED_REMOTE_CODE_MODELS`` env var — operator-extensible
+      comma-separated list of repo IDs for custom fine-tunes.
+    - Local filesystem paths that identify as a privacy-filter artifact
+      via on-disk metadata (the ``_is_privacy_filter_artifact_path`` check
+      already used by the dispatcher).
+    """
+    if not model_name:
+        return False
+    if model_name in TRUSTED_REMOTE_CODE_MODELS:
+        return True
+    if model_name in _env_allowlist():
+        return True
+    # Local path check is deferred (it touches the filesystem) and imported
+    # lazily to avoid a circular import with openmed.core.pii.
+    from openmed.core.pii import _is_privacy_filter_artifact_path
+    return _is_privacy_filter_artifact_path(model_name)
 
 
 class PrivacyFilterTorchPipeline:
@@ -40,12 +85,14 @@ class PrivacyFilterTorchPipeline:
             output shape.
         local_files_only: When True, never download from the Hub — only
             use a cached copy. Mirrors the demo's offline-first default.
-        trust_remote_code: The OpenAI Privacy Filter family ships with
-            custom modeling code (``modeling_openai_privacy_filter.py``) in
-            the model repo, which transformers needs permission to import.
-            Defaults to ``True`` because this pipeline is *specifically*
-            for that family — set to ``False`` to opt out (and accept that
-            loading will fail without an upstream registration).
+        trust_remote_code: When True, the loader permits Transformers to
+            execute custom Python shipped inside the model repo via
+            ``auto_map``. This is required by the first-party Privacy
+            Filter models (which ship ``modeling_openai_privacy_filter.py``)
+            but is dangerous for arbitrary HuggingFace repositories.
+            Defaults to ``False``. When True, ``model_name`` must be in the
+            allowlist resolved by :func:`is_trusted_for_remote_code` —
+            otherwise a :class:`ValueError` is raised before any download.
     """
 
     DEFAULT_MODEL_ID = "openai/privacy-filter"
@@ -58,8 +105,17 @@ class PrivacyFilterTorchPipeline:
         dtype: Optional[str] = None,
         aggregation_strategy: str = "simple",
         local_files_only: bool = False,
-        trust_remote_code: bool = True,
+        trust_remote_code: bool = False,
     ) -> None:
+        if trust_remote_code and not is_trusted_for_remote_code(model_name):
+            raise ValueError(
+                f"Refusing to load {model_name!r} with trust_remote_code=True: "
+                "model is not in the OpenMed trusted-remote-code allowlist. "
+                "Trusted repos are listed in "
+                "openmed.torch.privacy_filter.TRUSTED_REMOTE_CODE_MODELS; "
+                f"to extend, set {_ALLOWLIST_ENV_VAR} to a comma-separated "
+                "list of repo IDs you control."
+            )
         try:
             import torch
             from transformers import (
@@ -151,4 +207,8 @@ class PrivacyFilterTorchPipeline:
         }
 
 
-__all__ = ["PrivacyFilterTorchPipeline"]
+__all__ = [
+    "PrivacyFilterTorchPipeline",
+    "TRUSTED_REMOTE_CODE_MODELS",
+    "is_trusted_for_remote_code",
+]
