@@ -139,6 +139,19 @@ _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"})
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
+# Repository-prefix allowlist for org/model identifiers that route through the
+# privacy-filter dispatcher. The dispatcher loads these via Transformers'
+# custom-code path (trust_remote_code), so only first-party orgs are matched.
+# An identifier qualifies if it is exactly one of the prefixes (with any
+# trailing hyphen stripped) or starts with the prefix. Untrusted names whose
+# substring contains "privacy-filter" (e.g. attacker/foo-privacy-filter-bar)
+# are intentionally NOT matched and fall through to the standard PII loader,
+# which never enables trust_remote_code.
+_TRUSTED_PRIVACY_FILTER_PREFIXES = (
+    "openai/privacy-filter",
+    "openmed/privacy-filter-",
+)
+
 
 def _normalize_model_family(value: Optional[str]) -> str:
     if not value:
@@ -148,9 +161,15 @@ def _normalize_model_family(value: Optional[str]) -> str:
 
 def _looks_like_privacy_filter_identifier(value: Optional[str]) -> bool:
     normalized = _normalize_model_family(value)
-    return bool(normalized) and (
-        normalized in _PRIVACY_FILTER_FAMILY_ALIASES or "privacy-filter" in normalized
-    )
+    if not normalized:
+        return False
+    if normalized in _PRIVACY_FILTER_FAMILY_ALIASES:
+        return True
+    for prefix in _TRUSTED_PRIVACY_FILTER_PREFIXES:
+        bare = prefix.rstrip("-")
+        if normalized == bare or normalized.startswith(prefix):
+            return True
+    return False
 
 
 @lru_cache(maxsize=32)
