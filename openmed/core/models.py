@@ -16,6 +16,7 @@ try:
         pipeline,
     )
     from huggingface_hub import list_models, model_info as hf_model_info
+
     try:
         from huggingface_hub import ModelFilter
     except ImportError:  # pragma: no cover - older hub versions
@@ -208,6 +209,66 @@ class ModelLoader:
         except Exception as e:
             logger.error(f"Failed to load model {full_model_name}: {e}")
             raise ValueError(f"Could not load model {full_model_name}: {e}")
+
+    def unload_model(self, model_name: str) -> bool:
+        """Remove a loaded model from all in-memory caches.
+
+        Drops the model, tokenizer, and any pipeline entries for *model_name*,
+        then flushes the device allocator (CUDA / MPS) so GPU memory is
+        actually released.
+
+        Args:
+            model_name: Registry key, HuggingFace model ID, or local path —
+                the same value accepted by :meth:`load_model`.
+
+        Returns:
+            True if the model was cached and removed; False if it was not loaded.
+        """
+        full_model_name = self._resolve_model_name(model_name)
+
+        was_loaded = full_model_name in self._models
+        self._models.pop(full_model_name, None)
+        self._tokenizers.pop(full_model_name, None)
+
+        # Pipeline keys' first element is full_model_name
+        stale_keys = [k for k in self._pipelines if k[0] == full_model_name]
+        for key in stale_keys:
+            del self._pipelines[key]
+
+        if was_loaded:
+            self._flush_device_cache()
+
+        return was_loaded
+
+    def unload_all(self) -> None:
+        """Remove every cached model, tokenizer, and pipeline.
+
+        It clears all caches in one pass and flushes device memory once at the end.
+        """
+        self._models.clear()
+        self._tokenizers.clear()
+        self._pipelines.clear()
+        self._flush_device_cache()
+
+    def _flush_device_cache(self) -> None:
+        """Release unused GPU/MPS memory after Python references are dropped."""
+        device = (self.config.device or "").lower()
+        if device in ("cuda", "gpu"):
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
+        elif device == "mps":
+            try:
+                import torch
+
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+            except ImportError:
+                pass
 
     def create_pipeline(
         self,
