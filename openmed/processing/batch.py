@@ -16,6 +16,7 @@ from typing import (
     Dict,
     Iterator,
     List,
+    Literal,
     Optional,
     Sequence,
     Union,
@@ -41,7 +42,7 @@ class BatchItemResult:
     """Result for a single batch item."""
 
     id: str
-    result: Optional[PredictionResult] = None
+    result: Optional[Any] = None  # PredictionResult/DeidentificationResult
     error: Optional[str] = None
     processing_time: float = 0.0
     source: Optional[str] = None
@@ -159,6 +160,9 @@ class BatchProcessor:
     def __init__(
         self,
         model_name: str = "disease_detection_superclinical",
+        operation: Literal[
+            "analyze_text", "extract_pii", "deidentify"
+        ] = "analyze_text",
         config: Optional[Any] = None,
         loader: Optional[Any] = None,
         aggregation_strategy: Optional[str] = "simple",
@@ -171,15 +175,23 @@ class BatchProcessor:
 
         Args:
             model_name: Model registry key or HuggingFace identifier.
+            operation: Which function to call per item: ``"analyze_text"``
+                (default), ``"extract_pii"`` or ``"deidentify"``.
+                Extra kwargs passed via ``**analyze_kwargs`` are passed to
+                the selected function.
             config: Optional OpenMedConfig instance.
             loader: Optional ModelLoader instance to reuse.
-            aggregation_strategy: HuggingFace aggregation strategy.
-            confidence_threshold: Minimum confidence for entities.
-            group_entities: Whether to group adjacent entities.
+            aggregation_strategy: HuggingFace aggregation strategy
+                (``analyze_text`` operation only).
+            confidence_threshold: Minimum confidence for entities
+                (``analyze_text`` operation only).
+            group_entities: Whether to group adjacent entities
+                (``analyze_text`` operation only).
             continue_on_error: Continue processing on individual item errors.
-            **analyze_kwargs: Additional arguments passed to analyze_text.
+            **analyze_kwargs: Additional arguments passed to the selected function.
         """
         self.model_name = model_name
+        self.operation = operation
         self.config = config
         self.loader = loader
         self.aggregation_strategy = aggregation_strategy
@@ -194,8 +206,22 @@ class BatchProcessor:
         """Lazily import and cache analyze_text function."""
         if self._analyze_text is None:
             from openmed import analyze_text
+
             self._analyze_text = analyze_text
         return self._analyze_text
+
+    def _get_operation_fn(self) -> Callable:
+        """Return the callable for the configured operation."""
+        if self.operation == "extract_pii":
+            from openmed import extract_pii
+
+            return extract_pii
+        elif self.operation == "deidentify":
+            from openmed import deidentify
+
+            return deidentify
+
+        return self._get_analyze_text()
 
     def _create_batch_items(
         self,
@@ -324,7 +350,7 @@ class BatchProcessor:
         """Internal method to process batch items."""
         from datetime import datetime
 
-        analyze_text = self._get_analyze_text()
+        fn = self._get_operation_fn()
 
         batch_result = BatchResult(
             model_name=self.model_name,
@@ -335,7 +361,7 @@ class BatchProcessor:
         batch_start = time.time()
 
         for i, item in enumerate(items):
-            item_result = self._process_single_item(item, analyze_text)
+            item_result = self._process_single_item(item, fn)
             batch_result.items.append(item_result)
 
             if progress_callback:
@@ -352,7 +378,7 @@ class BatchProcessor:
     def _process_single_item(
         self,
         item: BatchItem,
-        analyze_text: Callable,
+        fn: Callable,
     ) -> BatchItemResult:
         """Process a single batch item."""
         if not item.text:
@@ -365,18 +391,28 @@ class BatchProcessor:
 
         start_time = time.time()
         try:
-            result = analyze_text(
-                item.text,
-                model_name=self.model_name,
-                config=self.config,
-                loader=self.loader,
-                aggregation_strategy=self.aggregation_strategy,
-                confidence_threshold=self.confidence_threshold,
-                group_entities=self.group_entities,
-                output_format="dict",
-                metadata=item.metadata,
-                **self.analyze_kwargs,
-            )
+            if self.operation == "analyze_text":
+                result = fn(
+                    item.text,
+                    model_name=self.model_name,
+                    config=self.config,
+                    loader=self.loader,
+                    aggregation_strategy=self.aggregation_strategy,
+                    confidence_threshold=self.confidence_threshold,
+                    group_entities=self.group_entities,
+                    output_format="dict",
+                    metadata=item.metadata,
+                    **self.analyze_kwargs,
+                )
+            else:
+                result = fn(
+                    item.text,
+                    model_name=self.model_name,
+                    confidence_threshold=self.confidence_threshold,
+                    config=self.config,
+                    loader=self.loader,
+                    **self.analyze_kwargs,
+                )
             processing_time = time.time() - start_time
 
             return BatchItemResult(
@@ -417,11 +453,11 @@ class BatchProcessor:
         Yields:
             BatchItemResult for each processed text.
         """
-        analyze_text = self._get_analyze_text()
+        fn = self._get_operation_fn()
         items = self._create_batch_items(texts, ids)
 
         for item in items:
-            yield self._process_single_item(item, analyze_text)
+            yield self._process_single_item(item, fn)
 
 
 def process_batch(
