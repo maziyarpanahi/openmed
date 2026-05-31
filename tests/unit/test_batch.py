@@ -712,6 +712,42 @@ class TestPIIBatchHelpers:
             "Jane Roe",
         ]
 
+    def test_batch_processor_reuses_privacy_filter_pipeline_across_chunks(self):
+        """Test BatchProcessor caches one privacy-filter pipeline per job."""
+        pipeline_calls = []
+
+        def fake_pipeline(texts, **kwargs):
+            pipeline_calls.append((list(texts), kwargs.get("batch_size")))
+            return [
+                [
+                    {
+                        "entity_group": "NAME",
+                        "score": 0.95,
+                        "word": text,
+                        "start": 0,
+                        "end": len(text),
+                    }
+                ]
+                for text in texts
+            ]
+
+        with patch("openmed.core.backends.create_privacy_filter_pipeline") as factory:
+            factory.return_value = fake_pipeline
+            processor = BatchProcessor(
+                model_name="openai/privacy-filter",
+                operation="extract_pii",
+                batch_size=2,
+                confidence_threshold=0.5,
+            )
+            result = processor.process_texts(["John Doe", "Jane Roe", "Alex Kim"])
+
+        factory.assert_called_once_with("openai/privacy-filter")
+        assert pipeline_calls == [
+            (["John Doe", "Jane Roe"], 2),
+            (["Alex Kim"], 2),
+        ]
+        assert result.successful_items == 3
+
     def test_deidentify_batch_forwards_kwargs_to_extraction(self, monkeypatch):
         """Test deidentify batch forwards language and pipeline kwargs."""
         from openmed.core import pii
@@ -745,6 +781,7 @@ class TestPIIBatchHelpers:
             seed=42,
             locale="pt_BR",
             loader="loader",
+            privacy_filter_pipeline="pipeline",
             batch_size=4,
         )
 
@@ -753,4 +790,5 @@ class TestPIIBatchHelpers:
         assert captured["kwargs"]["lang"] == "pt"
         assert captured["kwargs"]["normalize_accents"] is False
         assert captured["kwargs"]["loader"] == "loader"
+        assert captured["kwargs"]["privacy_filter_pipeline"] == "pipeline"
         assert captured["kwargs"]["batch_size"] == 4
