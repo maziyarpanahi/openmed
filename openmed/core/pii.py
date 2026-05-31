@@ -437,6 +437,7 @@ def _extract_pii_batch(
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
+    privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
 ) -> list[Any]:
     """Extract PII for multiple texts while reusing the same backend resources."""
@@ -461,9 +462,16 @@ def _extract_pii_batch(
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
 
-        pipeline = create_privacy_filter_pipeline(effective_model)
+        pipeline = privacy_filter_pipeline or create_privacy_filter_pipeline(
+            effective_model
+        )
         inference_texts = [item[1] for item in prepared]
-        raw_outputs = pipeline(inference_texts)
+        privacy_call_kwargs = {
+            key: pipeline_kwargs[key]
+            for key in ("batch_size", "num_workers")
+            if key in pipeline_kwargs and pipeline_kwargs[key] is not None
+        }
+        raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
             _prediction_result_from_privacy_filter_raw(
@@ -701,6 +709,7 @@ def _deidentify_batch(
     seed: Optional[int] = None,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
+    privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
 ) -> list[DeidentificationResult]:
     """De-identify multiple texts after one batched PII extraction pass."""
@@ -719,6 +728,7 @@ def _deidentify_batch(
         lang=lang,
         normalize_accents=normalize_accents,
         loader=loader,
+        privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
     )
 

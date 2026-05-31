@@ -212,6 +212,7 @@ class BatchProcessor:
 
         self._analyze_text = None
         self._shared_loader = loader
+        self._privacy_filter_pipeline_cache: Dict[str, Any] = {}
 
     def _get_analyze_text(self) -> Callable:
         """Lazily import and cache analyze_text function."""
@@ -249,6 +250,36 @@ class BatchProcessor:
         except ImportError:
             return None
         return self._shared_loader
+
+    def _get_privacy_filter_pipeline(self) -> Optional[Any]:
+        """Return a cached privacy-filter pipeline when the model uses one."""
+        if self.operation not in {"extract_pii", "deidentify"}:
+            return None
+
+        try:
+            from openmed.core.backends import create_privacy_filter_pipeline
+            from openmed.core.pii import (
+                _is_privacy_filter_artifact_path,
+                _looks_like_privacy_filter_identifier,
+                _resolve_effective_pii_model,
+            )
+        except ImportError:
+            return None
+
+        lang = self.analyze_kwargs.get("lang", "en")
+        effective_model = _resolve_effective_pii_model(self.model_name, lang)
+        uses_privacy_filter = (
+            _looks_like_privacy_filter_identifier(effective_model)
+            or _is_privacy_filter_artifact_path(effective_model)
+        )
+        if not uses_privacy_filter:
+            return None
+
+        if effective_model not in self._privacy_filter_pipeline_cache:
+            self._privacy_filter_pipeline_cache[effective_model] = (
+                create_privacy_filter_pipeline(effective_model)
+            )
+        return self._privacy_filter_pipeline_cache[effective_model]
 
     def _iter_chunks(self, items: Sequence[BatchItem]) -> Iterator[List[BatchItem]]:
         """Yield contiguous chunks of batch items."""
@@ -472,14 +503,25 @@ class BatchProcessor:
         valid_items = [item for _, item in valid_positions]
         start_time = time.time()
         try:
+            privacy_filter_pipeline = self._get_privacy_filter_pipeline()
+            operation_kwargs = {
+                "model_name": self.model_name,
+                "confidence_threshold": self.confidence_threshold,
+                "config": self.config,
+                "loader": (
+                    None
+                    if privacy_filter_pipeline is not None
+                    else self._get_shared_loader()
+                ),
+                "batch_size": self.batch_size,
+                **self.analyze_kwargs,
+            }
+            if privacy_filter_pipeline is not None:
+                operation_kwargs["privacy_filter_pipeline"] = privacy_filter_pipeline
+
             operation_results = batch_fn(
                 [item.text for item in valid_items],
-                model_name=self.model_name,
-                confidence_threshold=self.confidence_threshold,
-                config=self.config,
-                loader=self._get_shared_loader(),
-                batch_size=self.batch_size,
-                **self.analyze_kwargs,
+                **operation_kwargs,
             )
             if len(operation_results) != len(valid_items):
                 raise ValueError(

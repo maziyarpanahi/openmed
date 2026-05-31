@@ -172,15 +172,24 @@ class PrivacyFilterTorchPipeline:
     def __call__(
         self,
         text: str | Sequence[str],
+        *,
+        batch_size: Optional[int] = None,
+        num_workers: Optional[int] = None,
     ) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
         """Run inference and emit MLX-compatible entity dicts."""
+        call_kwargs: Dict[str, Any] = {}
+        if batch_size is not None:
+            call_kwargs["batch_size"] = batch_size
+        if num_workers is not None:
+            call_kwargs["num_workers"] = num_workers
+
         if isinstance(text, (list, tuple)):
             texts = list(text)
             non_empty = [item for item in texts if item and item.strip()]
             if not non_empty:
                 return [[] for _ in texts]
 
-            raw_batch = self._pipeline(non_empty)
+            raw_batch = self._pipeline(non_empty, **call_kwargs)
             normalized_batch = self._normalize_batch_output(raw_batch, len(non_empty))
             normalized_iter = iter(
                 [
@@ -196,7 +205,7 @@ class PrivacyFilterTorchPipeline:
         if not text or not text.strip():
             return []
 
-        raw = self._pipeline(text)
+        raw = self._pipeline(text, **call_kwargs)
         return [self._normalize_entity(item, text) for item in raw]
 
     @staticmethod
