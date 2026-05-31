@@ -111,7 +111,7 @@ from openmed import extract_pii
 
 result = extract_pii(
     text="Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789",
-    model_name="pii_detection_superclinical",
+    model_name="pii_superclinical_large",
     confidence_threshold=0.5,
     use_smart_merging=True  # DEFAULT: True (recommended)
 )
@@ -133,7 +133,7 @@ from openmed import deidentify
 result = deidentify(
     text="Patient: Jane Doe, DOB: 01/15/1970, SSN: 987-65-4321",
     method="mask",
-    model_name="pii_detection_superclinical",
+    model_name="pii_superclinical_large",
     confidence_threshold=0.7,
     use_smart_merging=True  # DEFAULT: True
 )
@@ -211,7 +211,7 @@ Appointment: 12/20/2024 at 2:30 PM
 result = deidentify(
     clinical_note,
     method="mask",
-    model_name="pii_detection_superclinical",
+    model_name="pii_superclinical_large",
     confidence_threshold=0.6,
     use_smart_merging=True  # Ensures dates and SSN are not fragmented
 )
@@ -237,7 +237,8 @@ Appointment: [date] at [time]
 from openmed import BatchProcessor
 
 processor = BatchProcessor(
-    model_name="pii_detection_superclinical",
+    operation="extract_pii",
+    model_name="pii_superclinical_large",
     confidence_threshold=0.6,
     use_smart_merging=True  # Will be applied to all texts
 )
@@ -248,11 +249,11 @@ texts = [
     "Email: john@example.com, Address: 123 Main St"
 ]
 
-results = processor.process_batch(texts)
+results = processor.process_texts(texts)
 
-for i, result in enumerate(results.items):
-    if result.success:
-        print(f"Text {i+1}: {len(result.entities)} complete entities extracted")
+for i, item in enumerate(results.items):
+    if item.success:
+        print(f"Text {i+1}: {len(item.result.entities)} complete entities extracted")
 ```
 
 ### Example 3: Comparing With and Without Smart Merging

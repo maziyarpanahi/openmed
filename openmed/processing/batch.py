@@ -26,6 +26,9 @@ from .outputs import PredictionResult
 
 logger = logging.getLogger(__name__)
 
+BatchOperation = Literal["analyze_text", "extract_pii", "deidentify"]
+_VALID_OPERATIONS = {"analyze_text", "extract_pii", "deidentify"}
+
 
 @dataclass
 class BatchItem:
@@ -160,9 +163,8 @@ class BatchProcessor:
     def __init__(
         self,
         model_name: str = "disease_detection_superclinical",
-        operation: Literal[
-            "analyze_text", "extract_pii", "deidentify"
-        ] = "analyze_text",
+        operation: BatchOperation = "analyze_text",
+        batch_size: int = 8,
         config: Optional[Any] = None,
         loader: Optional[Any] = None,
         aggregation_strategy: Optional[str] = "simple",
@@ -179,6 +181,7 @@ class BatchProcessor:
                 (default), ``"extract_pii"`` or ``"deidentify"``.
                 Extra kwargs passed via ``**analyze_kwargs`` are passed to
                 the selected function.
+            batch_size: Number of documents to process together per batch.
             config: Optional OpenMedConfig instance.
             loader: Optional ModelLoader instance to reuse.
             aggregation_strategy: HuggingFace aggregation strategy
@@ -190,8 +193,15 @@ class BatchProcessor:
             continue_on_error: Continue processing on individual item errors.
             **analyze_kwargs: Additional arguments passed to the selected function.
         """
+        if operation not in _VALID_OPERATIONS:
+            allowed = ", ".join(sorted(_VALID_OPERATIONS))
+            raise ValueError(f"Unsupported batch operation {operation!r}. Use one of: {allowed}")
+
+        from ..utils.validation import validate_batch_size
+
         self.model_name = model_name
         self.operation = operation
+        self.batch_size = validate_batch_size(batch_size)
         self.config = config
         self.loader = loader
         self.aggregation_strategy = aggregation_strategy
@@ -201,6 +211,7 @@ class BatchProcessor:
         self.analyze_kwargs = analyze_kwargs
 
         self._analyze_text = None
+        self._shared_loader = loader
 
     def _get_analyze_text(self) -> Callable:
         """Lazily import and cache analyze_text function."""
@@ -222,6 +233,27 @@ class BatchProcessor:
             return deidentify
 
         return self._get_analyze_text()
+
+    def _get_shared_loader(self) -> Optional[Any]:
+        """Return a reusable ModelLoader when the optional dependency exists."""
+        if self._shared_loader is not None:
+            return self._shared_loader
+
+        try:
+            from openmed.core import ModelLoader
+        except ImportError:
+            return None
+
+        try:
+            self._shared_loader = ModelLoader(self.config)
+        except ImportError:
+            return None
+        return self._shared_loader
+
+    def _iter_chunks(self, items: Sequence[BatchItem]) -> Iterator[List[BatchItem]]:
+        """Yield contiguous chunks of batch items."""
+        for start in range(0, len(items), self.batch_size):
+            yield list(items[start:start + self.batch_size])
 
     def _create_batch_items(
         self,
@@ -350,8 +382,6 @@ class BatchProcessor:
         """Internal method to process batch items."""
         from datetime import datetime
 
-        fn = self._get_operation_fn()
-
         batch_result = BatchResult(
             model_name=self.model_name,
             started_at=datetime.now().isoformat(),
@@ -360,20 +390,123 @@ class BatchProcessor:
         total = len(items)
         batch_start = time.time()
 
-        for i, item in enumerate(items):
-            item_result = self._process_single_item(item, fn)
-            batch_result.items.append(item_result)
+        for chunk in self._iter_chunks(items):
+            chunk_results = self._process_batch_chunk(chunk)
+            for item_result in chunk_results:
+                batch_result.items.append(item_result)
 
-            if progress_callback:
-                try:
-                    progress_callback(i + 1, total, item_result)
-                except Exception as e:
-                    logger.warning(f"Progress callback error: {e}")
+                if progress_callback:
+                    try:
+                        progress_callback(len(batch_result.items), total, item_result)
+                    except Exception as e:
+                        logger.warning(f"Progress callback error: {e}")
 
         batch_result.total_processing_time = time.time() - batch_start
         batch_result.completed_at = datetime.now().isoformat()
 
         return batch_result
+
+    def _process_batch_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
+        """Process a contiguous item chunk for the selected operation."""
+        if self.operation == "analyze_text":
+            return self._process_analyze_chunk(items)
+        if self.operation == "extract_pii":
+            return self._process_extract_pii_chunk(items)
+        return self._process_deidentify_chunk(items)
+
+    def _empty_item_result(self, item: BatchItem) -> BatchItemResult:
+        """Create an error result for empty or unreadable items."""
+        read_error = (item.metadata or {}).get("read_error")
+        return BatchItemResult(
+            id=item.id,
+            error=read_error or "Empty text",
+            source=item.source,
+        )
+
+    def _process_analyze_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
+        """Process a chunk with analyze_text while reusing one loader."""
+        analyze_text = self._get_analyze_text()
+        return [
+            self._process_single_item(item, analyze_text)
+            for item in items
+        ]
+
+    def _process_extract_pii_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
+        """Process a chunk with batched PII extraction."""
+        from openmed.core.pii import _extract_pii_batch
+
+        return self._process_pii_chunk(
+            items,
+            _extract_pii_batch,
+        )
+
+    def _process_deidentify_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
+        """Process a chunk with batched de-identification."""
+        from openmed.core.pii import _deidentify_batch
+
+        return self._process_pii_chunk(
+            items,
+            _deidentify_batch,
+        )
+
+    def _process_pii_chunk(
+        self,
+        items: List[BatchItem],
+        batch_fn: Callable[..., List[Any]],
+    ) -> List[BatchItemResult]:
+        """Run a PII batch helper and map outputs back to item results."""
+        results: List[Optional[BatchItemResult]] = [None] * len(items)
+        valid_positions = [
+            (index, item)
+            for index, item in enumerate(items)
+            if item.text
+        ]
+
+        for index, item in enumerate(items):
+            if not item.text:
+                results[index] = self._empty_item_result(item)
+
+        if not valid_positions:
+            return [item for item in results if item is not None]
+
+        valid_items = [item for _, item in valid_positions]
+        start_time = time.time()
+        try:
+            operation_results = batch_fn(
+                [item.text for item in valid_items],
+                model_name=self.model_name,
+                confidence_threshold=self.confidence_threshold,
+                config=self.config,
+                loader=self._get_shared_loader(),
+                batch_size=self.batch_size,
+                **self.analyze_kwargs,
+            )
+            if len(operation_results) != len(valid_items):
+                raise ValueError(
+                    "Batch operation returned "
+                    f"{len(operation_results)} results for {len(valid_items)} inputs"
+                )
+            elapsed = time.time() - start_time
+            per_item_time = elapsed / len(valid_items) if valid_items else 0.0
+
+            for (index, item), result in zip(valid_positions, operation_results):
+                results[index] = BatchItemResult(
+                    id=item.id,
+                    result=result,
+                    processing_time=per_item_time,
+                    source=item.source,
+                )
+
+        except Exception as e:
+            logger.warning(f"Error processing batch chunk: {e}")
+            if not self.continue_on_error:
+                raise
+
+            fn = self._get_operation_fn()
+            for index, item in valid_positions:
+                results[index] = self._process_single_item(item, fn)
+
+        return [item for item in results if item is not None]
 
     def _process_single_item(
         self,
@@ -382,12 +515,7 @@ class BatchProcessor:
     ) -> BatchItemResult:
         """Process a single batch item."""
         if not item.text:
-            read_error = (item.metadata or {}).get("read_error")
-            return BatchItemResult(
-                id=item.id,
-                error=read_error or "Empty text",
-                source=item.source,
-            )
+            return self._empty_item_result(item)
 
         start_time = time.time()
         try:
@@ -396,7 +524,7 @@ class BatchProcessor:
                     item.text,
                     model_name=self.model_name,
                     config=self.config,
-                    loader=self.loader,
+                    loader=self._get_shared_loader(),
                     aggregation_strategy=self.aggregation_strategy,
                     confidence_threshold=self.confidence_threshold,
                     group_entities=self.group_entities,
@@ -410,7 +538,7 @@ class BatchProcessor:
                     model_name=self.model_name,
                     confidence_threshold=self.confidence_threshold,
                     config=self.config,
-                    loader=self.loader,
+                    loader=self._get_shared_loader(),
                     **self.analyze_kwargs,
                 )
             processing_time = time.time() - start_time
@@ -453,11 +581,10 @@ class BatchProcessor:
         Yields:
             BatchItemResult for each processed text.
         """
-        fn = self._get_operation_fn()
         items = self._create_batch_items(texts, ids)
 
         for item in items:
-            yield self._process_single_item(item, fn)
+            yield self._process_batch_chunk([item])[0]
 
 
 def process_batch(
