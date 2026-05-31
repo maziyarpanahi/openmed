@@ -168,7 +168,7 @@ class BatchProcessor:
         config: Optional[Any] = None,
         loader: Optional[Any] = None,
         aggregation_strategy: Optional[str] = "simple",
-        confidence_threshold: float = 0.0,
+        confidence_threshold: Optional[float] = None,
         group_entities: bool = False,
         continue_on_error: bool = True,
         **analyze_kwargs: Any,
@@ -186,8 +186,10 @@ class BatchProcessor:
             loader: Optional ModelLoader instance to reuse.
             aggregation_strategy: HuggingFace aggregation strategy
                 (``analyze_text`` operation only).
-            confidence_threshold: Minimum confidence for entities
-                (``analyze_text`` operation only).
+            confidence_threshold: Minimum confidence for entities. When not
+                provided, defaults match the selected operation:
+                ``0.0`` for ``analyze_text``, ``0.5`` for ``extract_pii``,
+                and ``0.7`` for ``deidentify``.
             group_entities: Whether to group adjacent entities
                 (``analyze_text`` operation only).
             continue_on_error: Continue processing on individual item errors.
@@ -205,7 +207,11 @@ class BatchProcessor:
         self.config = config
         self.loader = loader
         self.aggregation_strategy = aggregation_strategy
-        self.confidence_threshold = confidence_threshold
+        self.confidence_threshold = (
+            confidence_threshold
+            if confidence_threshold is not None
+            else self._default_confidence_threshold(operation)
+        )
         self.group_entities = group_entities
         self.continue_on_error = continue_on_error
         self.analyze_kwargs = analyze_kwargs
@@ -213,6 +219,15 @@ class BatchProcessor:
         self._analyze_text = None
         self._shared_loader = loader
         self._privacy_filter_pipeline_cache: Dict[str, Any] = {}
+
+    @staticmethod
+    def _default_confidence_threshold(operation: BatchOperation) -> float:
+        """Return the single-call API default for the selected operation."""
+        if operation == "extract_pii":
+            return 0.5
+        if operation == "deidentify":
+            return 0.7
+        return 0.0
 
     def _get_analyze_text(self) -> Callable:
         """Lazily import and cache analyze_text function."""

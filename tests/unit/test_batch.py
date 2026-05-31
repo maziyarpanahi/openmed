@@ -242,6 +242,19 @@ class TestBatchProcessor:
         with pytest.raises(ValueError, match="Batch size must be positive"):
             BatchProcessor(batch_size=0)
 
+    def test_operation_specific_default_confidence_thresholds(self):
+        """Test BatchProcessor defaults match the selected operation."""
+        assert BatchProcessor().confidence_threshold == 0.0
+        assert BatchProcessor(operation="extract_pii").confidence_threshold == 0.5
+        assert BatchProcessor(operation="deidentify").confidence_threshold == 0.7
+        assert (
+            BatchProcessor(
+                operation="deidentify",
+                confidence_threshold=0.2,
+            ).confidence_threshold
+            == 0.2
+        )
+
     @patch("openmed.processing.batch.BatchProcessor._get_analyze_text")
     def test_process_texts(self, mock_get_analyze):
         """Test processing multiple texts."""
