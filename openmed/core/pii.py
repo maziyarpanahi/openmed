@@ -35,7 +35,7 @@ Example:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Literal, TYPE_CHECKING
+from typing import Any, Dict, Optional, Literal, TYPE_CHECKING, Sequence
 from datetime import datetime, timedelta
 from functools import lru_cache
 import hashlib
@@ -210,7 +210,8 @@ def _uses_model_led_pii_merging(*model_identifiers: Optional[str]) -> bool:
     return False
 
 
-def _extract_pii_via_privacy_filter(
+def _prediction_result_from_privacy_filter_raw(
+    raw: Sequence[dict[str, Any]],
     text: str,
     *,
     model_name: str,
@@ -218,17 +219,8 @@ def _extract_pii_via_privacy_filter(
     original_text: str,
     do_normalize: bool,
 ):
-    """Run privacy-filter inference via the MLX/Torch backend dispatcher.
-
-    Returns a ``PredictionResult`` with the same shape callers expect from
-    ``analyze_text``. Confidence filtering is applied here since the
-    privacy-filter pipelines don't know the user's threshold.
-    """
-    from .backends import create_privacy_filter_pipeline
+    """Convert privacy-filter raw output into a PredictionResult."""
     from ..processing.outputs import EntityPrediction, PredictionResult
-
-    pipeline = create_privacy_filter_pipeline(model_name)
-    raw = pipeline(text)
 
     entities: list[EntityPrediction] = []
     for item in raw:
@@ -260,6 +252,77 @@ def _extract_pii_via_privacy_filter(
     )
 
 
+def _coerce_batched_raw_outputs(
+    raw_outputs: Any,
+    expected_count: int,
+) -> list[list[dict[str, Any]]]:
+    """Normalize backend output for one or more input texts."""
+    if expected_count == 0:
+        return []
+
+    if raw_outputs is None:
+        return [[] for _ in range(expected_count)]
+
+    if expected_count == 1:
+        if isinstance(raw_outputs, list):
+            if not raw_outputs:
+                return [[]]
+            if all(isinstance(item, dict) for item in raw_outputs):
+                return [raw_outputs]
+            if len(raw_outputs) == 1 and isinstance(raw_outputs[0], list):
+                return [raw_outputs[0]]
+        return [[raw_outputs]]
+
+    if isinstance(raw_outputs, list) and len(raw_outputs) == expected_count:
+        normalized: list[list[dict[str, Any]]] = []
+        for item in raw_outputs:
+            if item is None:
+                normalized.append([])
+            elif isinstance(item, list):
+                normalized.append(item)
+            elif isinstance(item, dict):
+                normalized.append([item])
+            else:
+                normalized.append(list(item) if item else [])
+        return normalized
+
+    raise ValueError(
+        "Privacy-filter batch output length did not match input length "
+        f"({expected_count})"
+    )
+
+
+def _extract_pii_via_privacy_filter(
+    text: str,
+    *,
+    model_name: str,
+    confidence_threshold: float,
+    original_text: str,
+    do_normalize: bool,
+    pipeline: Optional[Any] = None,
+):
+    """Run privacy-filter inference via the MLX/Torch backend dispatcher.
+
+    Returns a ``PredictionResult`` with the same shape callers expect from
+    ``analyze_text``. Confidence filtering is applied here since the
+    privacy-filter pipelines don't know the user's threshold.
+    """
+    if pipeline is None:
+        from .backends import create_privacy_filter_pipeline
+
+        pipeline = create_privacy_filter_pipeline(model_name)
+
+    raw = pipeline(text)
+    return _prediction_result_from_privacy_filter_raw(
+        raw,
+        text,
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        original_text=original_text,
+        do_normalize=do_normalize,
+    )
+
+
 def _strip_accents(text: str) -> str:
     """Remove combining diacritical marks from *text*.
 
@@ -283,6 +346,182 @@ def _strip_accents(text: str) -> str:
     nfd = unicodedata.normalize("NFD", nfc)
     stripped = "".join(ch for ch in nfd if unicodedata.category(ch) != "Mn")
     return unicodedata.normalize("NFC", stripped)
+
+
+def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
+    """Validate language and resolve language-specific default PII model."""
+    from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
+
+    if lang not in SUPPORTED_LANGUAGES:
+        raise ValueError(
+            f"Unsupported language '{lang}'. "
+            f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+        )
+
+    if model_name == _DEFAULT_EN_MODEL and lang != "en":
+        return DEFAULT_PII_MODELS[lang]
+    return model_name
+
+
+def _prepare_pii_text(
+    text: str,
+    *,
+    lang: str,
+    normalize_accents: Optional[bool],
+) -> tuple[str, str, bool]:
+    """Return original stripped text, inference text, and normalization flag."""
+    do_normalize = (
+        normalize_accents
+        if normalize_accents is not None
+        else (lang in _ACCENT_NORMALIZE_LANGS)
+    )
+
+    original_text = text.strip()
+    inference_text = _strip_accents(original_text) if do_normalize else original_text
+    return original_text, inference_text, do_normalize
+
+
+def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> None:
+    """Apply semantic-unit PII merging in place."""
+    from .pii_entity_merger import merge_entities_with_semantic_units
+    from .pii_i18n import get_patterns_for_language
+    from ..processing.outputs import EntityPrediction
+
+    lang_patterns = get_patterns_for_language(lang)
+    entity_dicts = [
+        {
+            "entity_type": e.label,
+            "score": e.confidence,
+            "start": e.start,
+            "end": e.end,
+            "word": e.text,
+        }
+        for e in result.entities
+    ]
+
+    model_led_merging = _uses_model_led_pii_merging(
+        effective_model,
+        getattr(result, "model_name", None),
+    )
+
+    merged_dicts = merge_entities_with_semantic_units(
+        entity_dicts,
+        result.text,
+        patterns=lang_patterns,
+        use_semantic_patterns=True,
+        prefer_model_labels=True,
+        allow_semantic_only_matches=not model_led_merging,
+        allow_label_expansion=not model_led_merging,
+    )
+
+    result.entities = [
+        EntityPrediction(
+            text=e["word"],
+            label=e["entity_type"],
+            start=e["start"],
+            end=e["end"],
+            confidence=e["score"],
+        )
+        for e in merged_dicts
+    ]
+    result.num_entities = len(result.entities)
+
+
+def _extract_pii_batch(
+    texts: Sequence[str],
+    model_name: str = _DEFAULT_EN_MODEL,
+    confidence_threshold: float = 0.5,
+    config: Optional[OpenMedConfig] = None,
+    use_smart_merging: bool = True,
+    lang: str = "en",
+    normalize_accents: Optional[bool] = None,
+    *,
+    loader: Optional["ModelLoader"] = None,
+    **pipeline_kwargs: Any,
+) -> list[Any]:
+    """Extract PII for multiple texts while reusing the same backend resources."""
+    effective_model = _resolve_effective_pii_model(model_name, lang)
+    prepared = [
+        _prepare_pii_text(
+            text,
+            lang=lang,
+            normalize_accents=normalize_accents,
+        )
+        for text in texts
+    ]
+
+    if not prepared:
+        return []
+
+    uses_privacy_filter = (
+        _looks_like_privacy_filter_identifier(effective_model)
+        or _is_privacy_filter_artifact_path(effective_model)
+    )
+
+    if uses_privacy_filter:
+        from .backends import create_privacy_filter_pipeline
+
+        pipeline = create_privacy_filter_pipeline(effective_model)
+        inference_texts = [item[1] for item in prepared]
+        raw_outputs = pipeline(inference_texts)
+        batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
+        results = [
+            _prediction_result_from_privacy_filter_raw(
+                raw,
+                inference_text,
+                model_name=effective_model,
+                confidence_threshold=confidence_threshold,
+                original_text=original_text,
+                do_normalize=do_normalize,
+            )
+            for raw, (original_text, inference_text, do_normalize) in zip(
+                batched_raw, prepared
+            )
+        ]
+    else:
+        from .. import analyze_text
+        from .models import ModelLoader
+
+        shared_loader = loader
+        if shared_loader is None and len(prepared) > 1:
+            shared_loader = ModelLoader(config)
+        results = []
+        for original_text, inference_text, do_normalize in prepared:
+            result = analyze_text(
+                inference_text,
+                model_name=effective_model,
+                confidence_threshold=confidence_threshold,
+                config=config,
+                loader=shared_loader,
+                group_entities=True,
+                **pipeline_kwargs,
+            )
+
+            if do_normalize and original_text != inference_text:
+                result.text = original_text
+                result.entities = [
+                    EntityPrediction(
+                        text=original_text[e.start:e.end],
+                        label=e.label,
+                        start=e.start,
+                        end=e.end,
+                        confidence=e.confidence,
+                    )
+                    for e in result.entities
+                ]
+
+            results.append(result)
+
+    if use_smart_merging and not uses_privacy_filter:
+        for result in results:
+            _apply_pii_smart_merging(result, effective_model, lang)
+
+    from .quality_gates import validate_entity_spans
+
+    for result in results:
+        validate_entity_spans(result.entities, result.text)
+
+    return results
 
 
 def extract_pii(
@@ -337,132 +576,167 @@ def extract_pii(
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
-    from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
-
-    if lang not in SUPPORTED_LANGUAGES:
-        raise ValueError(
-            f"Unsupported language '{lang}'. "
-            f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
-        )
-
-    # Resolve language-appropriate default model
-    effective_model = model_name
-    if model_name == _DEFAULT_EN_MODEL and lang != "en":
-        effective_model = DEFAULT_PII_MODELS[lang]
-
-    # Decide whether to strip accents before inference
-    do_normalize = normalize_accents if normalize_accents is not None else (lang in _ACCENT_NORMALIZE_LANGS)
-
-    # Strip leading/trailing whitespace to match what validate_input() does
-    # inside analyze_text().  Entity spans are relative to the stripped text,
-    # so original_text must be aligned the same way.
-    text = text.strip()
-
-    original_text = text
-    if do_normalize:
-        text = _strip_accents(text)
-
-    # Privacy-filter family routes through a dedicated dispatcher that picks
-    # MLX (Apple Silicon) or PyTorch (everywhere else). Smart merging is
-    # skipped because the model already does Viterbi-constrained span
-    # construction internally — running regex merging on top would just
-    # introduce noise.
-    if _looks_like_privacy_filter_identifier(effective_model) or _is_privacy_filter_artifact_path(effective_model):
-        return _extract_pii_via_privacy_filter(
-            text,
-            model_name=effective_model,
-            confidence_threshold=confidence_threshold,
-            original_text=original_text,
-            do_normalize=do_normalize,
-        )
-
-    # Import here to avoid circular dependency
-    from .. import analyze_text
-
-    result = analyze_text(
-        text,
-        model_name=effective_model,
+    return _extract_pii_batch(
+        [text],
+        model_name=model_name,
         confidence_threshold=confidence_threshold,
         config=config,
+        use_smart_merging=use_smart_merging,
+        lang=lang,
+        normalize_accents=normalize_accents,
         loader=loader,
-        group_entities=True,  # Group multi-token PII entities
+    )[0]
+
+
+def _resolve_deidentification_method(
+    method: DeidentificationMethod,
+    shift_dates: Optional[bool],
+    date_shift_days: Optional[int],
+) -> DeidentificationMethod:
+    """Resolve method aliases and validate date-shift-only parameters."""
+    effective_method = method
+    if shift_dates is True and method != "shift_dates":
+        effective_method = "shift_dates"
+    elif shift_dates is False and method == "shift_dates":
+        raise ValueError("shift_dates=false conflicts with method='shift_dates'")
+
+    if date_shift_days is not None and effective_method != "shift_dates":
+        raise ValueError("date_shift_days requires method='shift_dates'")
+
+    return effective_method
+
+
+def _build_deidentification_result(
+    text: str,
+    pii_result: Any,
+    *,
+    effective_method: DeidentificationMethod,
+    keep_year: bool,
+    date_shift_days: Optional[int],
+    keep_mapping: bool,
+    lang: str,
+    consistent: bool,
+    seed: Optional[int],
+    locale: Optional[str],
+) -> DeidentificationResult:
+    """Build a de-identification result from an existing PII result."""
+    pii_entities = [
+        PIIEntity(
+            text=e.text,
+            label=e.label,
+            start=e.start,
+            end=e.end,
+            confidence=e.confidence,
+            entity_type=e.label,
+            original_text=e.text,
+        )
+        for e in pii_result.entities
+    ]
+
+    pii_entities.sort(key=lambda e: e.start, reverse=True)
+
+    if effective_method == "shift_dates" and date_shift_days is None:
+        date_shift_days = random.randint(-365, 365)
+
+    anonymizer = None
+    if effective_method == "replace":
+        from .anonymizer import Anonymizer
+
+        effective_consistent = consistent or seed is not None
+        anonymizer = Anonymizer(
+            lang=lang,
+            locale=locale,
+            consistent=effective_consistent,
+            seed=seed,
+        )
+
+    deidentified = text
+    mapping = {} if keep_mapping else None
+
+    for entity in pii_entities:
+        redacted = _redact_entity(
+            entity,
+            effective_method,
+            keep_year=keep_year,
+            date_shift_days=(
+                date_shift_days if effective_method == "shift_dates" else None
+            ),
+            lang=lang,
+            anonymizer=anonymizer,
+        )
+        entity.redacted_text = redacted
+
+        deidentified = (
+            deidentified[: entity.start] + redacted + deidentified[entity.end :]
+        )
+
+        if keep_mapping and mapping is not None:
+            mapping[redacted] = entity.original_text or entity.text
+
+    return DeidentificationResult(
+        original_text=text,
+        deidentified_text=deidentified,
+        pii_entities=pii_entities,
+        method=effective_method,
+        timestamp=datetime.now(),
+        mapping=mapping,
     )
 
-    # Map entity spans back to the original (possibly accented) text
-    if do_normalize and original_text != text:
-        result.text = original_text
-        from ..processing.outputs import EntityPrediction as _EP
-        result.entities = [
-            _EP(
-                text=original_text[e.start:e.end],
-                label=e.label,
-                start=e.start,
-                end=e.end,
-                confidence=e.confidence,
-            )
-            for e in result.entities
-        ]
 
-    # Apply smart merging if enabled
-    if use_smart_merging:
-        from .pii_entity_merger import merge_entities_with_semantic_units
-        from .pii_i18n import get_patterns_for_language
+def _deidentify_batch(
+    texts: Sequence[str],
+    method: DeidentificationMethod = "mask",
+    model_name: str = _DEFAULT_EN_MODEL,
+    confidence_threshold: float = 0.7,
+    keep_year: bool = True,
+    shift_dates: Optional[bool] = None,
+    date_shift_days: Optional[int] = None,
+    keep_mapping: bool = False,
+    config: Optional[OpenMedConfig] = None,
+    use_smart_merging: bool = True,
+    lang: str = "en",
+    normalize_accents: Optional[bool] = None,
+    *,
+    consistent: bool = False,
+    seed: Optional[int] = None,
+    locale: Optional[str] = None,
+    loader: Optional["ModelLoader"] = None,
+    **pipeline_kwargs: Any,
+) -> list[DeidentificationResult]:
+    """De-identify multiple texts after one batched PII extraction pass."""
+    effective_method = _resolve_deidentification_method(
+        method,
+        shift_dates,
+        date_shift_days,
+    )
+    stripped_texts = [text.strip() for text in texts]
+    pii_results = _extract_pii_batch(
+        stripped_texts,
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        config=config,
+        use_smart_merging=use_smart_merging,
+        lang=lang,
+        normalize_accents=normalize_accents,
+        loader=loader,
+        **pipeline_kwargs,
+    )
 
-        # Get language-specific patterns
-        lang_patterns = get_patterns_for_language(lang)
-
-        # Convert entities to dict format for merging
-        entity_dicts = [
-            {
-                'entity_type': e.label,
-                'score': e.confidence,
-                'start': e.start,
-                'end': e.end,
-                'word': e.text
-            }
-            for e in result.entities
-        ]
-
-        model_led_merging = _uses_model_led_pii_merging(
-            effective_model,
-            getattr(result, "model_name", None),
+    return [
+        _build_deidentification_result(
+            text,
+            pii_result,
+            effective_method=effective_method,
+            keep_year=keep_year,
+            date_shift_days=date_shift_days,
+            keep_mapping=keep_mapping,
+            lang=lang,
+            consistent=consistent,
+            seed=seed,
+            locale=locale,
         )
-
-        # Merge using semantic patterns
-        # IMPORTANT: Use result.text (validated/processed text) not original text
-        # because entity positions are based on the processed text
-        merged_dicts = merge_entities_with_semantic_units(
-            entity_dicts,
-            result.text,
-            patterns=lang_patterns,
-            use_semantic_patterns=True,
-            prefer_model_labels=True,  # Prefer model's more specific labels
-            allow_semantic_only_matches=not model_led_merging,
-            allow_label_expansion=not model_led_merging,
-        )
-
-        # Convert back to EntityPrediction objects
-        from ..processing.outputs import EntityPrediction
-        merged_entities = [
-            EntityPrediction(
-                text=e['word'],
-                label=e['entity_type'],
-                start=e['start'],
-                end=e['end'],
-                confidence=e['score']
-            )
-            for e in merged_dicts
-        ]
-
-        # Update result
-        result.entities = merged_entities
-        result.num_entities = len(merged_entities)
-
-    # Validate spans after all merging/fixing is complete
-    from .quality_gates import validate_entity_spans
-    validate_entity_spans(result.entities, result.text)
-
-    return result
+        for text, pii_result in zip(stripped_texts, pii_results)
+    ]
 
 
 def deidentify(
@@ -539,92 +813,34 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
-    # Strip to align with validate_input() inside analyze_text()
     text = text.strip()
-
-    effective_method = method
-    if shift_dates is True and method != "shift_dates":
-        effective_method = "shift_dates"
-    elif shift_dates is False and method == "shift_dates":
-        raise ValueError("shift_dates=false conflicts with method='shift_dates'")
-
-    if date_shift_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_days requires method='shift_dates'")
-
-    # Extract PII entities with smart merging
+    effective_method = _resolve_deidentification_method(
+        method,
+        shift_dates,
+        date_shift_days,
+    )
     pii_result = extract_pii(
-        text, model_name, confidence_threshold, config, use_smart_merging,
+        text,
+        model_name,
+        confidence_threshold,
+        config,
+        use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
         loader=loader,
     )
 
-    # Convert to PIIEntity with metadata
-    pii_entities = [
-        PIIEntity(
-            text=e.text,
-            label=e.label,
-            start=e.start,
-            end=e.end,
-            confidence=e.confidence,
-            entity_type=e.label,  # Use label as entity_type
-            original_text=e.text,
-        )
-        for e in pii_result.entities
-    ]
-
-    # Sort by position (reverse order for safe replacement)
-    pii_entities.sort(key=lambda e: e.start, reverse=True)
-
-    # Generate date shift offset if needed
-    if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = random.randint(-365, 365)
-
-    # Build a single Anonymizer for the whole document so deterministic
-    # mode produces consistent surrogates across all entities.
-    anonymizer = None
-    if effective_method == "replace":
-        from .anonymizer import Anonymizer
-        # Passing a non-None seed implies consistent=True.
-        effective_consistent = consistent or seed is not None
-        anonymizer = Anonymizer(
-            lang=lang,
-            locale=locale,
-            consistent=effective_consistent,
-            seed=seed,
-        )
-
-    # Apply de-identification
-    deidentified = text
-    mapping = {} if keep_mapping else None
-
-    for entity in pii_entities:
-        redacted = _redact_entity(
-            entity,
-            effective_method,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days if effective_method == "shift_dates" else None,
-            lang=lang,
-            anonymizer=anonymizer,
-        )
-        entity.redacted_text = redacted
-
-        # Replace in text (working backwards to preserve offsets)
-        deidentified = (
-            deidentified[: entity.start] + redacted + deidentified[entity.end :]
-        )
-
-        # Store mapping
-        if keep_mapping and mapping is not None:
-            mapping[redacted] = entity.original_text or entity.text
-
-    return DeidentificationResult(
-        original_text=text,
-        deidentified_text=deidentified,
-        pii_entities=pii_entities,
-        method=effective_method,
-        timestamp=datetime.now(),
-        mapping=mapping,
+    return _build_deidentification_result(
+        text,
+        pii_result,
+        effective_method=effective_method,
+        keep_year=keep_year,
+        date_shift_days=date_shift_days,
+        keep_mapping=keep_mapping,
+        lang=lang,
+        consistent=consistent,
+        seed=seed,
+        locale=locale,
     )
 
 

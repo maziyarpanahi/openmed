@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.core.decoding import refine_privacy_filter_span, trim_span_whitespace
 
@@ -169,13 +169,57 @@ class PrivacyFilterTorchPipeline:
         )
         self.device = resolved_device
 
-    def __call__(self, text: str) -> List[Dict[str, Any]]:
+    def __call__(
+        self,
+        text: str | Sequence[str],
+    ) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
         """Run inference and emit MLX-compatible entity dicts."""
+        if isinstance(text, (list, tuple)):
+            texts = list(text)
+            non_empty = [item for item in texts if item and item.strip()]
+            if not non_empty:
+                return [[] for _ in texts]
+
+            raw_batch = self._pipeline(non_empty)
+            normalized_batch = self._normalize_batch_output(raw_batch, len(non_empty))
+            normalized_iter = iter(
+                [
+                    [self._normalize_entity(entity, source) for entity in raw]
+                    for raw, source in zip(normalized_batch, non_empty)
+                ]
+            )
+            return [
+                next(normalized_iter) if item and item.strip() else []
+                for item in texts
+            ]
+
         if not text or not text.strip():
             return []
 
         raw = self._pipeline(text)
         return [self._normalize_entity(item, text) for item in raw]
+
+    @staticmethod
+    def _normalize_batch_output(
+        raw_batch: Any,
+        expected_count: int,
+    ) -> List[List[Dict[str, Any]]]:
+        """Normalize HuggingFace output for a batch of input texts."""
+        if expected_count == 1:
+            if raw_batch == []:
+                return [[]]
+            if isinstance(raw_batch, list) and raw_batch and isinstance(raw_batch[0], dict):
+                return [raw_batch]
+            if isinstance(raw_batch, list) and len(raw_batch) == 1:
+                return [raw_batch[0] or []]
+
+        if isinstance(raw_batch, list) and len(raw_batch) == expected_count:
+            return [item or [] for item in raw_batch]
+
+        raise ValueError(
+            "Privacy-filter batch output length did not match input length "
+            f"({expected_count})"
+        )
 
     @staticmethod
     def _normalize_entity(item: Dict[str, Any], text: str) -> Dict[str, Any]:
