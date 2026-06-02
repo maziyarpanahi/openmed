@@ -44,6 +44,36 @@ class FakeLoader:
             self.pipelines[key] = object()
         return self.pipelines[key]
 
+    def resolve_model_name(self, model_name: str) -> str:
+        return model_name
+
+    def loaded_models(self) -> dict[str, dict[str, int]]:
+        model_names = {key[0] for key in self.pipelines}
+        return {
+            model_name: {
+                "models": 0,
+                "tokenizers": 0,
+                "pipelines": sum(1 for key in self.pipelines if key[0] == model_name),
+            }
+            for model_name in sorted(model_names)
+        }
+
+    def unload_model(self, model_name: str) -> dict[str, Any]:
+        keys = [key for key in self.pipelines if key[0] == model_name]
+        for key in keys:
+            self.pipelines.pop(key, None)
+        return {
+            "model_name": model_name,
+            "models": 0,
+            "tokenizers": 0,
+            "pipelines": len(keys),
+        }
+
+    def unload_all_models(self) -> dict[str, int]:
+        released = {"models": 0, "tokenizers": 0, "pipelines": len(self.pipelines)}
+        self.pipelines.clear()
+        return released
+
 
 def _sample_prediction_result() -> PredictionResult:
     return PredictionResult(
@@ -106,6 +136,7 @@ def client(monkeypatch, fake_loader_cls):
     """Create a test client with a stable profile and fake loader."""
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
@@ -560,3 +591,147 @@ def test_second_request_reuses_shared_warmed_pipeline(monkeypatch, fake_loader_c
     assert second.status_code == 200
     assert len(fake_loader_cls.instances) == 1
     assert fake_loader_cls.instances[0].pipeline_creations == 1
+
+
+def test_keep_alive_zero_unloads_pipeline_after_request(client, monkeypatch, fake_loader_cls):
+    def fake_analyze(*args, **kwargs):
+        kwargs["loader"].create_pipeline(
+            kwargs["model_name"],
+            task="token-classification",
+            aggregation_strategy=kwargs["aggregation_strategy"],
+            use_fast_tokenizer=kwargs["use_fast_tokenizer"],
+        )
+        return _sample_prediction_result()
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    response = client.post("/analyze", json={"text": "sample", "keep_alive": 0})
+
+    assert response.status_code == 200
+    assert fake_loader_cls.instances[0].pipelines == {}
+
+
+def test_default_keep_alive_env_unloads_pipeline_after_request(
+    monkeypatch,
+    fake_loader_cls,
+):
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.setenv("OPENMED_SERVICE_KEEP_ALIVE", "0")
+
+    def fake_analyze(*args, **kwargs):
+        kwargs["loader"].create_pipeline(
+            kwargs["model_name"],
+            task="token-classification",
+            aggregation_strategy=kwargs["aggregation_strategy"],
+            use_fast_tokenizer=kwargs["use_fast_tokenizer"],
+        )
+        return _sample_prediction_result()
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+    app = create_app()
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.post("/analyze", json={"text": "sample"})
+        loaded = test_client.get("/models/loaded")
+
+    assert response.status_code == 200
+    assert loaded.status_code == 200
+    assert loaded.json()["default_keep_alive_seconds"] == 0.0
+    assert fake_loader_cls.instances[0].pipelines == {}
+
+
+def test_invalid_keep_alive_returns_validation_error(client):
+    response = client.post(
+        "/analyze",
+        json={"text": "sample", "keep_alive": "five-ish"},
+    )
+
+    payload = _assert_error_payload(response, 422, "validation_error")
+    assert payload["error"]["details"][0]["field"] == "body.keep_alive"
+
+
+def test_manual_unload_model_endpoint_releases_cached_pipeline(
+    client,
+    monkeypatch,
+    fake_loader_cls,
+):
+    def fake_analyze(*args, **kwargs):
+        kwargs["loader"].create_pipeline(
+            kwargs["model_name"],
+            task="token-classification",
+            aggregation_strategy=kwargs["aggregation_strategy"],
+            use_fast_tokenizer=kwargs["use_fast_tokenizer"],
+        )
+        return _sample_prediction_result()
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    analyze = client.post(
+        "/analyze",
+        json={"text": "sample", "keep_alive": "forever"},
+    )
+    loaded_before = client.get("/models/loaded")
+    unload = client.post(
+        "/models/unload",
+        json={"model_name": "disease_detection_superclinical"},
+    )
+    loaded_after = client.get("/models/loaded")
+
+    assert analyze.status_code == 200
+    assert loaded_before.status_code == 200
+    assert "disease_detection_superclinical" in loaded_before.json()["models"]
+    assert unload.status_code == 200
+    assert unload.json()["unloaded"] is True
+    assert unload.json()["released"]["pipelines"] == 1
+    assert loaded_after.json()["models"] == {}
+    assert fake_loader_cls.instances[0].pipelines == {}
+
+
+def test_manual_unload_all_endpoint_releases_cached_pipelines(
+    client,
+    monkeypatch,
+    fake_loader_cls,
+):
+    def fake_analyze(*args, **kwargs):
+        kwargs["loader"].create_pipeline(
+            kwargs["model_name"],
+            task="token-classification",
+            aggregation_strategy=kwargs["aggregation_strategy"],
+            use_fast_tokenizer=kwargs["use_fast_tokenizer"],
+        )
+        return _sample_prediction_result()
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    first = client.post(
+        "/analyze",
+        json={
+            "text": "sample",
+            "model_name": "disease_detection_superclinical",
+            "keep_alive": "forever",
+        },
+    )
+    second = client.post(
+        "/analyze",
+        json={
+            "text": "sample",
+            "model_name": "OpenMed/model-two",
+            "keep_alive": "forever",
+        },
+    )
+    unload = client.post("/models/unload", json={"all": True})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert unload.status_code == 200
+    assert unload.json()["unloaded"] is True
+    assert unload.json()["released"]["pipelines"] == 2
+    assert fake_loader_cls.instances[0].pipelines == {}
+
+
+def test_unload_endpoint_requires_model_or_all(client):
+    response = client.post("/models/unload", json={})
+
+    payload = _assert_error_payload(response, 422, "validation_error")
+    assert payload["error"]["details"][0]["field"] == "body"
