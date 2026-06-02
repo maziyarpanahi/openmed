@@ -1,5 +1,6 @@
 """Model loading functionality for OpenMed."""
 
+import gc
 import logging
 from collections.abc import Mapping
 from pathlib import Path
@@ -328,6 +329,62 @@ class ModelLoader:
             self._pipelines[cache_key] = ner_pipeline
             return ner_pipeline
 
+    def resolve_model_name(self, model_name: str) -> str:
+        """Resolve a registry alias, local path, or full model id."""
+        return self._resolve_model_name(model_name)
+
+    def loaded_models(self) -> Dict[str, Dict[str, int]]:
+        """Return cache counts grouped by resolved model name."""
+        model_names = set(self._models) | set(self._tokenizers)
+        model_names.update(key[0] for key in self._pipelines if key)
+
+        loaded = {}
+        for model_name in sorted(model_names):
+            loaded[model_name] = {
+                "models": int(model_name in self._models),
+                "tokenizers": int(model_name in self._tokenizers),
+                "pipelines": sum(
+                    1 for key in self._pipelines if key and key[0] == model_name
+                ),
+            }
+        return loaded
+
+    def unload_model(self, model_name: str) -> Dict[str, Any]:
+        """Release cached model, tokenizer, and pipelines for one model."""
+        full_model_name = self._resolve_model_name(model_name)
+        pipeline_keys = [
+            key for key in self._pipelines if key and key[0] == full_model_name
+        ]
+
+        for key in pipeline_keys:
+            self._pipelines.pop(key, None)
+
+        removed_models = int(self._models.pop(full_model_name, None) is not None)
+        removed_tokenizers = int(self._tokenizers.pop(full_model_name, None) is not None)
+        released = {
+            "model_name": full_model_name,
+            "models": removed_models,
+            "tokenizers": removed_tokenizers,
+            "pipelines": len(pipeline_keys),
+        }
+        if any(released[name] for name in ("models", "tokenizers", "pipelines")):
+            self._release_cached_memory()
+        return released
+
+    def unload_all_models(self) -> Dict[str, Any]:
+        """Release all cached models, tokenizers, and pipelines."""
+        released = {
+            "models": len(self._models),
+            "tokenizers": len(self._tokenizers),
+            "pipelines": len(self._pipelines),
+        }
+        self._models.clear()
+        self._tokenizers.clear()
+        self._pipelines.clear()
+        if any(released.values()):
+            self._release_cached_memory()
+        return released
+
     def get_max_sequence_length(
         self,
         model_name: str,
@@ -529,6 +586,32 @@ class ModelLoader:
         if isinstance(value, (str, int, float, bool, type(None))):
             return value
         return repr(value)
+
+    def _release_cached_memory(self) -> None:
+        """Nudge Python and torch runtimes after cache references are dropped."""
+        gc.collect()
+        try:
+            import torch
+        except Exception:
+            return
+
+        cuda = getattr(torch, "cuda", None)
+        if cuda is not None and callable(getattr(cuda, "is_available", None)):
+            try:
+                if cuda.is_available():
+                    cuda.empty_cache()
+            except Exception:
+                logger.debug(
+                    "Failed to clear CUDA cache after unloading model",
+                    exc_info=True,
+                )
+
+        mps = getattr(torch, "mps", None)
+        if mps is not None and callable(getattr(mps, "empty_cache", None)):
+            try:
+                mps.empty_cache()
+            except Exception:
+                logger.debug("Failed to clear MPS cache after unloading model", exc_info=True)
 
 
 # Convenience function for quick model loading
