@@ -174,6 +174,8 @@ Quick links:
 OpenMed includes a Docker-friendly FastAPI service with reliability hardening:
 
 - `GET /health`
+- `GET /models/loaded`
+- `POST /models/unload`
 - `POST /analyze`
 - `POST /pii/extract`
 - `POST /pii/deidentify`
@@ -192,11 +194,20 @@ OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical,OpenMed/OpenMed-P
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
+Optional idle unloading:
+
+```bash
+OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
 ### Run with Docker
 
 ```bash
 docker build -t openmed:1.5.2 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.2
+docker run --rm -p 8080:8080 \
+  -e OPENMED_PROFILE=prod \
+  -e OPENMED_SERVICE_KEEP_ALIVE=10m \
+  openmed:1.5.2
 ```
 
 ### Example request
@@ -204,7 +215,15 @@ docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.2
 ```bash
 curl -X POST http://127.0.0.1:8080/pii/extract \
   -H "Content-Type: application/json" \
-  -d '{"text":"Paciente: Maria Garcia, DNI: 12345678Z","lang":"es"}'
+  -d '{"text":"Paciente: Maria Garcia, DNI: 12345678Z","lang":"es","keep_alive":"5m"}'
+```
+
+Unload cached model resources manually:
+
+```bash
+curl -X POST http://127.0.0.1:8080/models/unload \
+  -H "Content-Type: application/json" \
+  -d '{"all":true}'
 ```
 
 See the full service guide at [REST Service docs](docs/rest-service.md).
