@@ -93,6 +93,182 @@ _ELECTRA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("classifier.", "classifier."),
 ]
 
+_OPF_MODEL_TYPES = {
+    "openai-privacy-filter",
+    "privacy-filter",
+    "privacy-filter-nemotron",
+    "nemotron-privacy-filter",
+    "privacy-filter-multilingual",
+    "multilingual-privacy-filter",
+}
+
+
+def _convert_opf_weights(state_dict: dict) -> dict:
+    """Remap and reshape HuggingFace OPF weights to the MLX namespace.
+
+    The HF ``openai_privacy_filter`` model differs from the MLX layout in:
+
+    1. Top-level prefix: ``score.*`` → ``unembedding.*``
+    2. Layer container: ``model.layers.N.*`` → ``block.N.*``
+    3. QKV fusion: separate q/k/v_proj → single fused ``attn.qkv`` linear
+    4. Sub-key names: ``input_layernorm`` → ``attn.norm``, ``router`` → ``gate``
+    5. RMSNorm param: ``weight`` → ``scale``
+    6. Expert weight layout: HF stores as ``[E, in, out]``, same as MLX (no transpose needed)
+    """
+    import re
+    import numpy as np
+
+    out: dict[str, np.ndarray] = {}
+    # layer_idx → proj ("q"|"k"|"v") → param ("weight"|"bias") → array
+    qkv: dict[str, dict[str, dict[str, np.ndarray]]] = {}
+
+    for hf_key, arr in state_dict.items():
+        # classifier head
+        if hf_key == "score.weight":
+            out["unembedding.weight"] = arr; continue
+        if hf_key == "score.bias":
+            out["unembedding.bias"] = arr; continue
+
+        # top-level
+        if hf_key == "model.embed_tokens.weight":
+            out["embedding.weight"] = arr; continue
+        if hf_key == "model.norm.weight":
+            out["norm.scale"] = arr; continue
+
+        m = re.match(r"^model\.layers\.(\d+)\.(.*)", hf_key)
+        if m is None:
+            continue
+        n, rest = m.group(1), m.group(2)
+
+        # RMSNorms
+        if rest == "input_layernorm.weight":
+            out[f"block.{n}.attn.norm.scale"] = arr; continue
+        if rest == "post_attention_layernorm.weight":
+            out[f"block.{n}.mlp.norm.scale"] = arr; continue
+
+        # attention sinks
+        if rest == "self_attn.sinks":
+            out[f"block.{n}.attn.sinks"] = arr; continue
+
+        # output projection
+        if rest == "self_attn.o_proj.weight":
+            out[f"block.{n}.attn.out.weight"] = arr; continue
+        if rest == "self_attn.o_proj.bias":
+            out[f"block.{n}.attn.out.bias"] = arr; continue
+
+        # Q / K / V — collect for fusion
+        m2 = re.match(r"self_attn\.(q|k|v)_proj\.(weight|bias)", rest)
+        if m2:
+            proj, param = m2.group(1), m2.group(2)
+            qkv.setdefault(n, {}).setdefault(proj, {})[param] = arr
+            continue
+
+        # MLP router → gate
+        if rest == "mlp.router.weight":
+            out[f"block.{n}.mlp.gate.weight"] = arr; continue
+        if rest == "mlp.router.bias":
+            out[f"block.{n}.mlp.gate.bias"] = arr; continue
+
+        # expert weights: HF stores as [E, in_features, out_features] — same as MLX, no transpose needed
+        if rest == "mlp.experts.gate_up_proj":
+            out[f"block.{n}.mlp.swiglu.weight"] = arr; continue
+        if rest == "mlp.experts.gate_up_proj_bias":
+            out[f"block.{n}.mlp.swiglu.bias"] = arr; continue
+        if rest == "mlp.experts.down_proj":
+            out[f"block.{n}.mlp.out.weight"] = arr; continue
+        if rest == "mlp.experts.down_proj_bias":
+            out[f"block.{n}.mlp.out.bias"] = arr; continue
+
+    # fuse Q / K / V into a single QKV linear per layer
+    for n, projs in qkv.items():
+        for param in ("weight", "bias"):
+            parts = [projs[p][param] for p in ("q", "k", "v") if param in projs.get(p, {})]
+            if parts:
+                out[f"block.{n}.attn.qkv.{param}"] = np.concatenate(parts, axis=0)
+
+    return out
+
+
+def _expected_opf_weight_shapes(config: dict[str, Any]) -> dict[str, tuple[int, ...]]:
+    """Return the MLX weight shapes expected by the OPF runtime."""
+    hidden_size = int(config["hidden_size"])
+    num_layers = int(config["num_hidden_layers"])
+    num_labels = int(config["num_labels"])
+    vocab_size = int(config["vocab_size"])
+    intermediate_size = int(config["intermediate_size"])
+    num_experts = int(config["num_experts"])
+    head_dim = int(config["head_dim"])
+    num_attention_heads = int(config["num_attention_heads"])
+    num_key_value_heads = int(config["num_key_value_heads"])
+    qkv_dim = head_dim * (num_attention_heads + 2 * num_key_value_heads)
+    attn_out_dim = head_dim * num_attention_heads
+
+    shapes: dict[str, tuple[int, ...]] = {
+        "embedding.weight": (vocab_size, hidden_size),
+        "norm.scale": (hidden_size,),
+        "unembedding.weight": (num_labels, hidden_size),
+    }
+    if bool(config.get("classifier_bias", config.get("unembedding_bias", False))):
+        shapes["unembedding.bias"] = (num_labels,)
+
+    for layer_idx in range(num_layers):
+        prefix = f"block.{layer_idx}"
+        shapes.update(
+            {
+                f"{prefix}.attn.norm.scale": (hidden_size,),
+                f"{prefix}.attn.qkv.weight": (qkv_dim, hidden_size),
+                f"{prefix}.attn.qkv.bias": (qkv_dim,),
+                f"{prefix}.attn.out.weight": (hidden_size, attn_out_dim),
+                f"{prefix}.attn.out.bias": (hidden_size,),
+                f"{prefix}.attn.sinks": (num_attention_heads,),
+                f"{prefix}.mlp.norm.scale": (hidden_size,),
+                f"{prefix}.mlp.gate.weight": (num_experts, hidden_size),
+                f"{prefix}.mlp.gate.bias": (num_experts,),
+                f"{prefix}.mlp.swiglu.weight": (
+                    num_experts,
+                    hidden_size,
+                    intermediate_size * 2,
+                ),
+                f"{prefix}.mlp.swiglu.bias": (num_experts, intermediate_size * 2),
+                f"{prefix}.mlp.out.weight": (
+                    num_experts,
+                    intermediate_size,
+                    hidden_size,
+                ),
+                f"{prefix}.mlp.out.bias": (num_experts, hidden_size),
+            }
+        )
+    return shapes
+
+
+def _validate_opf_weights(weights: dict[str, Any], config: dict[str, Any]) -> None:
+    """Fail early when OPF conversion misses keys or produces wrong shapes."""
+    expected_shapes = _expected_opf_weight_shapes(config)
+    expected_keys = set(expected_shapes)
+    actual_keys = set(weights)
+
+    missing = sorted(expected_keys - actual_keys)
+    unexpected = sorted(actual_keys - expected_keys)
+    if missing or unexpected:
+        details = []
+        if missing:
+            details.append(f"missing keys: {missing[:8]}")
+        if unexpected:
+            details.append(f"unexpected keys: {unexpected[:8]}")
+        raise ValueError("Invalid OPF MLX weight mapping (" + "; ".join(details) + ")")
+
+    bad_shapes: list[str] = []
+    for key, expected_shape in expected_shapes.items():
+        actual_shape = getattr(weights[key], "shape", None)
+        if actual_shape is not None and tuple(actual_shape) != expected_shape:
+            bad_shapes.append(f"{key}: expected {expected_shape}, got {tuple(actual_shape)}")
+
+    if bad_shapes:
+        raise ValueError(
+            "Invalid OPF MLX weight shapes: " + "; ".join(bad_shapes[:8])
+        )
+
+
 def _infer_source_model_type(key: str, model_type: str | None) -> str:
     normalized = normalize_model_type(model_type)
     if normalized is not None:
@@ -132,7 +308,12 @@ def remap_key(key: str, model_type: str | None = None) -> str:
 
 def _to_numpy(tensor: Any) -> Any:
     if hasattr(tensor, "detach"):
-        return tensor.detach().cpu().numpy()
+        t = tensor.detach().cpu()
+        # PyTorch CPU cannot expose bfloat16 tensors through numpy().
+        # Cast to float32 explicitly; ``to(float)`` would promote to float64.
+        if hasattr(t, "dtype") and str(t.dtype) == "torch.bfloat16":
+            t = t.float()
+        return t.numpy()
     return tensor
 
 
@@ -158,23 +339,31 @@ def convert_weights(
 
     source_model_type = normalize_model_type(config.model_type)
     state_dict = model.state_dict()
-    mlx_weights = {}
-    skipped = []
-
-    for hf_key, tensor in state_dict.items():
-        mlx_key = remap_key(hf_key, source_model_type)
-        if mlx_key.startswith("_"):
-            skipped.append(hf_key)
-            continue
-        mlx_weights[mlx_key] = _to_numpy(tensor)
-
-    if skipped:
-        logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
-
     config_dict = normalize_model_config(config.to_dict())
     config_dict["_mlx_model_type"] = resolve_model_type(config_dict)
     config_dict["_mlx_task"] = "token-classification"
-    config_dict.setdefault("num_labels", config.num_labels)
+    if config_dict.get("num_labels") is None:
+        config_dict["num_labels"] = config.num_labels
+
+    if source_model_type in _OPF_MODEL_TYPES:
+        # OPF requires QKV fusion and weight remapping — use dedicated converter
+        if "score.bias" in state_dict:
+            config_dict["classifier_bias"] = True
+        numpy_state = {k: _to_numpy(v) for k, v in state_dict.items()}
+        mlx_weights = _convert_opf_weights(numpy_state)
+        _validate_opf_weights(mlx_weights, config_dict)
+    else:
+        mlx_weights = {}
+        skipped = []
+        for hf_key, tensor in state_dict.items():
+            mlx_key = remap_key(hf_key, source_model_type)
+            if mlx_key.startswith("_"):
+                skipped.append(hf_key)
+                continue
+            mlx_weights[mlx_key] = _to_numpy(tensor)
+        if skipped:
+            logger.info("Skipped %d keys (pooler, etc.): %s", len(skipped), skipped[:5])
+
     return mlx_weights, config_dict
 
 

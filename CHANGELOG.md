@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-05-27
+
+### Security
+
+- Hardened the privacy-filter dispatcher to refuse `trust_remote_code=True` for model identifiers outside an explicit allowlist of first-party OpenAI/OpenMed privacy-filter family models (`openai/privacy-filter`, `OpenMed/privacy-filter-multilingual`, `OpenMed/privacy-filter-nemotron`). Previously, any HuggingFace repository whose name contained the substring `privacy-filter` would be loaded with custom-code execution enabled, allowing remote code execution by anyone able to control the `model_name` parameter on `/pii/extract` or `/pii/deidentify`. Operators with custom fine-tunes of the privacy-filter family can extend the allowlist via the `OPENMED_TRUSTED_REMOTE_CODE_MODELS` environment variable (comma-separated repo IDs).
+- Changed `PrivacyFilterTorchPipeline`'s `trust_remote_code` default from `True` to `False`. The first-party dispatcher (`openmed.core.backends.create_privacy_filter_pipeline`) opts in explicitly only for allowlisted models.
+
+### Changed
+
+- README, docs, and website version surfaces now point at `1.5.2`.
+
+### Fixed
+
+- Fixed raw HuggingFace-to-MLX conversion for the OpenAI Privacy Filter family (`openai/privacy-filter`, `OpenMed/privacy-filter-nemotron`, and `OpenMed/privacy-filter-multilingual`) by casting BF16 tensors to float32 before NumPy conversion, remapping OPF/Nemotron checkpoints into the OpenMed MLX runtime layout, fusing Q/K/V projections, preserving classifier bias, and validating converted weight keys/shapes before artifact save.
+
+### Tests
+
+- Added `tests/unit/test_privacy_filter_security.py` covering the identifier matcher, allowlist gate, env-var override, local-artifact trust, and dispatcher opt-in.
+- Added HTTP-level regression tests in `tests/unit/service/test_api.py` that POST the attacker-controlled `model_name` payload to `/pii/extract` and `/pii/deidentify` and verify the privacy-filter dispatcher is never reached.
+- Added MLX converter regressions for BF16 NumPy conversion, OPF weight remapping, QKV fusion order, and partial-QKV rejection.
+
+## [1.5.1] - 2026-05-21
+
+### Changed
+
+- README, docs, website, and Apple demo version surfaces now point at `1.5.1`.
+- Prepared the patch release metadata for the tag-driven build and publish workflow.
+
+## [1.5.0] - 2026-05-18
+
+### Added
+
+- Arabic (`ar`), Japanese (`ja`), and Turkish (`tr`) PII extraction support in the Python SDK, including language defaults, localized regex patterns, fake replacement data, and anonymizer locale routing.
+- Registry entries for all API-visible Arabic, Japanese, and Turkish PII source checkpoints: 2 Arabic, 3 Japanese, and 32 Turkish models.
+- Preconverted MLX routing for the 28 supported Arabic, Japanese, and Turkish PII `-mlx` repositories so `OpenMedConfig(backend="mlx")` can resolve uploaded artifacts directly.
+- Turkish TCKN checksum validation plus context-aware Arabic and Japanese national ID patterns.
+
+### Changed
+
+- README, docs, website, and Apple demo version surfaces now point at `1.5.0`.
+- Faker anonymization now falls back to `en_US` with a warning if a requested locale is unavailable at runtime.
+
+### Fixed
+
+- Turkish street-address matching now accepts both descriptor-first forms such as `Cadde İnönü 12` and common Turkish name-first forms such as `Atatürk Caddesi 12`.
+
+### Tests
+
+- Added language constant/default routing, model registry count, MLX mapping, anonymizer locale, and multilingual PII regression coverage for Arabic, Japanese, and Turkish.
+
+## [1.4.1] - 2026-05-17
+
+### Changed
+
+- README, docs, website, and Apple demo version surfaces now point at `1.4.1`.
+
+### Fixed
+
+- `ModelLoader` now resolves existing filesystem paths before prepending the default Hugging Face org, so local model directories load correctly.
+- Local model paths now set `local_files_only=True` across config, tokenizer, model, pipeline, and max-length probing to keep offline and air-gapped inference fully local.
+- `analyze_text()` now accepts `model_id` as an alias for `model_name`, including local directory paths.
+
+### Tests
+
+- Added unit coverage for local path resolution, local-only loading, and `model_id` alias handling.
+
+## [1.4.0] - 2026-05-04
+
+### Added
+
+- **OpenMed Multilingual Privacy Filter family**, registered across PyTorch and MLX:
+  - `OpenMed/privacy-filter-multilingual` — PyTorch / Transformers (CPU + CUDA).
+  - `OpenMed/privacy-filter-multilingual-mlx` — MLX full-precision (Apple Silicon).
+  - `OpenMed/privacy-filter-multilingual-mlx-8bit` — MLX 8-bit quantized (Apple Silicon and OpenMedKit demos).
+  These artifacts use the OpenAI Privacy Filter architecture and officially support 16 languages through the OpenMed multilingual PII corpus.
+- **Python MLX routing for multilingual Privacy Filter artifacts**:
+  - `_MLX_MODEL_MAP` entries for the full and 8-bit multilingual MLX repo IDs.
+  - `privacy-filter-multilingual` and `multilingual-privacy-filter` MLX family aliases, both resolving to the existing OpenAI Privacy Filter model class and BIOES decoder.
+  - Family-aware Torch fallback so multilingual MLX model names substitute `OpenMed/privacy-filter-multilingual` on non-MLX hosts instead of the OpenAI baseline.
+- **Multilingual Privacy Filter Studio** in `examples/privacy_filter_multilingual_studio/`, a web demo comparing the OpenAI baseline, OpenAI Nemotron Privacy Filter, and OpenMed Multilingual Privacy Filter with English, French, and Arabic examples.
+- **OpenMed Scan Demo multilingual mode** with `OpenMed/privacy-filter-multilingual-mlx-8bit`, a three-engine picker, EN/FR/AR sample buttons, and new French/Arabic scanned demo documents for screenshot-ready flows.
+### Changed
+
+- Privacy Filter docs and README now describe three Privacy Filter families and label the multilingual model as **OpenMed Multilingual Privacy Filter**.
+- OpenMedKit and demo version surfaces now point at `1.4.0`.
+- The scan demo clears previous annotation windows whenever the language/sample changes, avoiding stale entities from earlier model runs.
+- The multilingual web studio scan animation now performs a single top-to-bottom pass while redacting line by line, matching the stronger visual rhythm of the original Privacy Filter Studio.
+
+### Fixed
+
+- Improved Swift model-download handling so stale cached 401/404 responses cannot masquerade as `openmed-mlx.json` manifests after a public model becomes available.
+- Tightened stale-result invalidation in iOS and web demo flows so slower previous model runs cannot overwrite a newly selected language/sample.
+
+### Tests
+
+- Added Python unit coverage for multilingual MLX backend selection, family-aware Torch fallback, and MLX Privacy Filter family dispatch aliases.
+- Rebuilt the OpenMed Scan Demo after the multilingual 8-bit integration.
+
 ## [1.3.0] - 2026-04-27
 
 ### Added

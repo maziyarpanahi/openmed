@@ -29,6 +29,9 @@ jobs:
     - name: Clean build artifacts
       run: rm -rf dist build
 
+    - name: Enforce repo file policy
+      run: python scripts/release/check_repo_policy.py
+
     - name: Build package
       run: python -m build
 

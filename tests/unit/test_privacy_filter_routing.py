@@ -70,6 +70,18 @@ class TestSelectPrivacyFilterBackend:
             assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron-mlx") == "torch"
             assert select_privacy_filter_backend("OpenMed/privacy-filter-nemotron-mlx-8bit") == "torch"
 
+    def test_multilingual_mlx_artifact_on_mac_with_mlx(self):
+        from openmed.core.backends import select_privacy_filter_backend
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=True):
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-multilingual-mlx") == "mlx"
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-multilingual-mlx-8bit") == "mlx"
+
+    def test_multilingual_mlx_artifact_on_linux_falls_back_to_torch(self):
+        from openmed.core.backends import select_privacy_filter_backend
+        with patch("openmed.core.backends.MLXBackend.is_available", return_value=False):
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-multilingual-mlx") == "torch"
+            assert select_privacy_filter_backend("OpenMed/privacy-filter-multilingual-mlx-8bit") == "torch"
+
     def test_nemotron_torch_artifact_always_uses_torch(self):
         from openmed.core.backends import select_privacy_filter_backend
         with patch("openmed.core.backends.MLXBackend.is_available", return_value=True):
@@ -123,6 +135,24 @@ class TestResolvePrivacyFilterModel:
             for w in caught
         )
 
+    def test_multilingual_mlx_substitutes_to_multilingual_torch_repo(self):
+        """An MLX-only multilingual request must fall back to the multilingual
+        PyTorch repo, preserving the 16-language training distribution."""
+        from openmed.core.backends import resolve_privacy_filter_model
+        from openmed.core import backends
+        backends._warned_substitutions.clear()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            actual = resolve_privacy_filter_model(
+                "OpenMed/privacy-filter-multilingual-mlx-8bit", "torch",
+            )
+        assert actual == "OpenMed/privacy-filter-multilingual"
+        assert any(
+            issubclass(w.category, UserWarning)
+            and "OpenMed/privacy-filter-multilingual" in str(w.message)
+            for w in caught
+        )
+
     def test_nemotron_torch_repo_keeps_name(self):
         from openmed.core.backends import resolve_privacy_filter_model
         assert (
@@ -134,6 +164,7 @@ class TestResolvePrivacyFilterModel:
         """The substring matcher picks the right family fallback."""
         from openmed.core.backends import _torch_fallback_for, PRIVACY_FILTER_TORCH_FALLBACK
         assert _torch_fallback_for("OpenMed/privacy-filter-nemotron-mlx") == "OpenMed/privacy-filter-nemotron"
+        assert _torch_fallback_for("OpenMed/privacy-filter-multilingual-mlx") == "OpenMed/privacy-filter-multilingual"
         assert _torch_fallback_for("OpenMed/privacy-filter-mlx") == PRIVACY_FILTER_TORCH_FALLBACK
         assert _torch_fallback_for("openai/privacy-filter") == PRIVACY_FILTER_TORCH_FALLBACK
 
@@ -168,7 +199,11 @@ class TestCreatePrivacyFilterPipeline:
              patch("openmed.torch.privacy_filter.PrivacyFilterTorchPipeline") as MockPF:
             MockPF.return_value = sentinel
             pipeline = create_privacy_filter_pipeline("openai/privacy-filter")
-            MockPF.assert_called_once_with("openai/privacy-filter")
+            # Trusted first-party repo: dispatcher opts in to the custom-code
+            # path that openai/privacy-filter's modeling files require.
+            MockPF.assert_called_once_with(
+                "openai/privacy-filter", trust_remote_code=True,
+            )
             assert pipeline("hi") == sentinel("hi")
 
     def test_mlx_request_on_linux_substitutes_torch_model(self):
@@ -182,7 +217,9 @@ class TestCreatePrivacyFilterPipeline:
             warnings.simplefilter("always")
             MockPF.return_value = _fake_pipeline([])
             create_privacy_filter_pipeline("OpenMed/privacy-filter-mlx-8bit")
-            MockPF.assert_called_once_with("openai/privacy-filter")
+            MockPF.assert_called_once_with(
+                "openai/privacy-filter", trust_remote_code=True,
+            )
             assert any(issubclass(w.category, UserWarning) for w in caught)
 
 

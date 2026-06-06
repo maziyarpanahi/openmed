@@ -21,6 +21,9 @@ fi
 
 echo -e "${YELLOW}📦 Bump type: $BUMP_TYPE${NC}"
 
+echo -e "${YELLOW}🛡️ Checking repository policy...${NC}"
+python3 scripts/release/check_repo_policy.py
+
 # Clean and build
 echo -e "${YELLOW}🧹 Cleaning and building...${NC}"
 rm -rf dist/

@@ -215,6 +215,7 @@ public extension ScanModelID {
         switch self {
         case .piiLiteClinical:     return "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
         case .openaiPrivacyFilter: return "OpenMed/privacy-filter-nemotron-mlx-8bit"
+        case .multilingualPrivacyFilter: return "OpenMed/privacy-filter-multilingual-mlx-8bit"
         case .glinerRelex:         return "OpenMed/gliner-relex-base-v1.0-mlx"
         }
     }
@@ -224,7 +225,8 @@ public extension ScanModelID {
     var conservativeTotalBytes: Int64 {
         switch self {
         case .piiLiteClinical:     return 278 * 1024 * 1024
-        case .openaiPrivacyFilter: return 190 * 1024 * 1024
+        case .openaiPrivacyFilter: return 1_550 * 1024 * 1024
+        case .multilingualPrivacyFilter: return 1_550 * 1024 * 1024
         case .glinerRelex:         return 230 * 1024 * 1024
         }
     }

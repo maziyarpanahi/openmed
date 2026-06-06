@@ -167,6 +167,7 @@ PRIVACY_FILTER_TORCH_FALLBACK = "openai/privacy-filter"
 # MLX-only request from Linux falls back to the same family's PyTorch model
 # (not the unrelated default).
 _TORCH_FALLBACK_BY_FAMILY: tuple[tuple[str, str], ...] = (
+    ("multilingual", "OpenMed/privacy-filter-multilingual"),
     ("nemotron", "OpenMed/privacy-filter-nemotron"),
 )
 
@@ -256,5 +257,15 @@ def create_privacy_filter_pipeline(model_name: str) -> Callable:
         from openmed.mlx.inference import create_mlx_pipeline
         return create_mlx_pipeline(actual_model)
 
-    from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
-    return PrivacyFilterTorchPipeline(actual_model)
+    from openmed.torch.privacy_filter import (
+        PrivacyFilterTorchPipeline,
+        is_trusted_for_remote_code,
+    )
+    # ``trust_remote_code=True`` is required to import the custom modeling
+    # code shipped inside first-party privacy-filter repos. Only enable it
+    # when the resolved model is on the allowlist; the pipeline itself
+    # double-checks and raises ``ValueError`` if the gate is bypassed.
+    return PrivacyFilterTorchPipeline(
+        actual_model,
+        trust_remote_code=is_trusted_for_remote_code(actual_model),
+    )

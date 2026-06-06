@@ -266,6 +266,10 @@ def test_privacy_filter_grouped_decode_handles_bioes():
         # PrivacyFilterMLXPipeline (no separate Nemotron pipeline class).
         ("privacy-filter-nemotron", "OpenMed/privacy-filter-nemotron"),
         ("nemotron-privacy-filter", "OpenMed/privacy-filter-nemotron"),
+        # The multilingual fine-tune is also the same Privacy Filter
+        # architecture, expanded to official 16-language coverage.
+        ("privacy-filter-multilingual", "OpenMed/privacy-filter-multilingual"),
+        ("multilingual-privacy-filter", "OpenMed/privacy-filter-multilingual"),
     ],
 )
 def test_dispatches_privacy_filter_pipeline(tmp_path, manifest_family, source_model_id):

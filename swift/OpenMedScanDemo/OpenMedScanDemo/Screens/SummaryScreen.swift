@@ -139,7 +139,7 @@ public struct SummaryScreen: View {
 
     private var secondaryActions: some View {
         VStack(spacing: OM.Space.s2) {
-            if flow.openMedPIIOutput != nil && flow.privacyFilterPIIOutput != nil {
+            if completedPIIOutputs >= 2 {
                 Button {
                     onShowComparison()
                 } label: {
@@ -195,5 +195,11 @@ public struct SummaryScreen: View {
             return "{}"
         }
         return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    private var completedPIIOutputs: Int {
+        ScanFlowViewModel.PIIEngine.allCases
+            .filter { flow.output(for: $0) != nil }
+            .count
     }
 }

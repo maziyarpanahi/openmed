@@ -44,6 +44,7 @@ public final class ScanFlowViewModel: ObservableObject {
     }
     @Published public var openMedPIIOutput: PIIOutput?
     @Published public var privacyFilterPIIOutput: PIIOutput?
+    @Published public var multilingualPIIOutput: PIIOutput?
 
     private static let engineKey = "com.openmed.scan.pii-engine"
 
@@ -60,22 +61,42 @@ public final class ScanFlowViewModel: ObservableObject {
     }
 
     public enum PIIEngine: String, CaseIterable, Identifiable, Hashable, Sendable {
-        case openMed, privacyFilter
+        case openMed, privacyFilter, multilingual
 
         public var id: String { rawValue }
         public var modelID: ScanModelID {
-            self == .openMed ? .piiLiteClinical : .openaiPrivacyFilter
+            switch self {
+            case .openMed:       return .piiLiteClinical
+            case .privacyFilter: return .openaiPrivacyFilter
+            case .multilingual:  return .multilingualPrivacyFilter
+            }
         }
         public var displayName: String {
-            self == .openMed ? "OpenMed PII" : "OpenAI Nemotron Privacy Filter"
+            switch self {
+            case .openMed:       return "OpenMed PII"
+            case .privacyFilter: return "OpenAI Nemotron Privacy Filter"
+            case .multilingual:  return "OpenMed Multilingual Privacy Filter"
+            }
         }
         public var eyebrow: String {
-            self == .openMed ? "OPENMED · LOCAL" : "OPENAI NEMOTRON · LOCAL"
+            switch self {
+            case .openMed:       return "OPENMED · LOCAL"
+            case .privacyFilter: return "OPENAI NEMOTRON · 8-BIT"
+            case .multilingual:  return "OPENMED MULTILINGUAL · 8-BIT"
+            }
         }
     }
 
     public var currentPIIOutput: PIIOutput? {
-        piiEngine == .openMed ? openMedPIIOutput : privacyFilterPIIOutput
+        output(for: piiEngine)
+    }
+
+    public func output(for engine: PIIEngine) -> PIIOutput? {
+        switch engine {
+        case .openMed:       return openMedPIIOutput
+        case .privacyFilter: return privacyFilterPIIOutput
+        case .multilingual:  return multilingualPIIOutput
+        }
     }
 
     // MARK: Clinical extraction
@@ -100,6 +121,7 @@ public final class ScanFlowViewModel: ObservableObject {
     public let presets: ClinicalPresetsStore
     private let runtime: OMPipelineRuntime
     private let log = Logger(subsystem: "com.openmed.scan", category: "flow")
+    private var piiRevision: Int = 0
 
     public init(
         downloads: ModelDownloadManager? = nil,
@@ -197,26 +219,28 @@ public final class ScanFlowViewModel: ObservableObject {
     #endif
 
     public func runPIIForCurrentEngine() async {
-        guard hasText, !isWorking else { return }
-        guard downloads.state(for: piiEngine.modelID) == .ready else {
+        let engine = piiEngine
+        let text = trimmedText
+        let revision = piiRevision
+        guard !text.isEmpty, !isWorking else { return }
+        guard downloads.state(for: engine.modelID) == .ready else {
             errorMessage = "Model not ready yet — start the download first."
             return
         }
         isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Running \(piiEngine.displayName) on-device")
+        status = PipelineProgress(phase: .inferencing, detail: "Running \(engine.displayName) on-device")
         defer { isWorking = false; status = nil }
         do {
             let output = try await runtime.runPII(
-                text: trimmedText,
-                modelID: piiEngine.modelID
+                text: text,
+                modelID: engine.modelID
             )
-            switch piiEngine {
-            case .openMed:       openMedPIIOutput = output
-            case .privacyFilter: privacyFilterPIIOutput = output
-            }
+            guard revision == piiRevision, text == trimmedText else { return }
+            setPIIOutput(output, for: engine)
             hasRunAnalysis = true
             HapticsCenter.impact(.soft)
         } catch {
+            guard revision == piiRevision, text == trimmedText else { return }
             errorMessage = error.localizedDescription
             HapticsCenter.notify(.error)
             log.error("PII run failed: \(error.localizedDescription, privacy: .public)")
@@ -226,18 +250,21 @@ public final class ScanFlowViewModel: ObservableObject {
     public func runPIIForAllEngines() async {
         // Run current engine first (so user sees their selection complete),
         // then opportunistically run the other if its model is ready.
+        let selectedEngine = piiEngine
+        let text = trimmedText
+        let revision = piiRevision
         await runPIIForCurrentEngine()
-        let other: PIIEngine = piiEngine == .openMed ? .privacyFilter : .openMed
-        guard downloads.state(for: other.modelID) == .ready else { return }
-        do {
-            let text = trimmedText
-            let output = try await runtime.runPII(text: text, modelID: other.modelID)
-            switch other {
-            case .openMed:       openMedPIIOutput = output
-            case .privacyFilter: privacyFilterPIIOutput = output
+        guard revision == piiRevision, text == trimmedText else { return }
+        for engine in PIIEngine.allCases where engine != selectedEngine {
+            guard downloads.state(for: engine.modelID) == .ready else { continue }
+            do {
+                let output = try await runtime.runPII(text: text, modelID: engine.modelID)
+                guard revision == piiRevision, text == trimmedText else { return }
+                setPIIOutput(output, for: engine)
+            } catch {
+                guard revision == piiRevision, text == trimmedText else { return }
+                log.error("Secondary PII engine failed: \(error.localizedDescription, privacy: .public)")
             }
-        } catch {
-            log.error("Secondary PII engine failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -275,6 +302,7 @@ public final class ScanFlowViewModel: ObservableObject {
         errorMessage = nil
         switch scope {
         case .all:
+            piiRevision += 1
             #if canImport(UIKit)
             documentImages = []
             #endif
@@ -284,16 +312,30 @@ public final class ScanFlowViewModel: ObservableObject {
             currentSource = .none
             openMedPIIOutput = nil
             privacyFilterPIIOutput = nil
+            multilingualPIIOutput = nil
             clinicalOutput = nil
             hasRunAnalysis = false
             status = nil
             summaryCategoryFilter = nil
         case .piiOnly:
+            piiRevision += 1
             openMedPIIOutput = nil
             privacyFilterPIIOutput = nil
+            multilingualPIIOutput = nil
             clinicalOutput = nil
+            hasRunAnalysis = false
+            status = nil
+            summaryCategoryFilter = nil
         case .clinicalOnly:
             clinicalOutput = nil
+        }
+    }
+
+    private func setPIIOutput(_ output: PIIOutput, for engine: PIIEngine) {
+        switch engine {
+        case .openMed:       openMedPIIOutput = output
+        case .privacyFilter: privacyFilterPIIOutput = output
+        case .multilingual:  multilingualPIIOutput = output
         }
     }
 }

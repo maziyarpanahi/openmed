@@ -220,7 +220,7 @@ logs/
 local_config.py
 
 # Personal release/announcement drafts
-/RELEASE_NOTES*.md
+/RELEASE_NOTE*.md
 /ANNOUNCEMENT*.md
 local_settings.py
 dev_config.json
