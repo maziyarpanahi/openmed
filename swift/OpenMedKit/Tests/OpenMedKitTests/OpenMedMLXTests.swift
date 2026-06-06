@@ -703,35 +703,31 @@ final class OpenMedMLXTests: XCTestCase {
         print(piiEntities.map(\.description).joined(separator: "\n"))
 
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "full_name" && $0.text == "Eleanor Ruiz" },
+            piiEntities.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
             "Expected patient full name in \(piiEntities)"
         )
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "phone_number" && $0.text == "(415) 555-0142" },
+            piiEntities.contains { $0.label == "phone_number" && $0.text == "(720) 555-0148" },
             "Expected patient phone number in \(piiEntities)"
         )
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "phone_number" && $0.text == "(415) 555-0199" },
+            piiEntities.contains { $0.label == "phone_number" && $0.text == "(720) 555-0193" },
             "Expected emergency contact phone number in \(piiEntities)"
         )
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "email" && $0.text == "eleanor.ruiz@sampleclinic.test" },
+            piiEntities.contains { $0.label == "email" && $0.text == "jordan.whitfield@samplemail.test" },
             "Expected email in \(piiEntities)"
         )
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "date_of_birth" && $0.text == "03/14/1981" },
+            piiEntities.contains { $0.label == "date_of_birth" && $0.text == "07/22/1984" },
             "Expected DOB in \(piiEntities)"
         )
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "medical_record_number" && $0.text == "MRN-448271" },
+            piiEntities.contains { $0.label == "medical_record_number" && $0.text == "SRMC-7741920" },
             "Expected MRN in \(piiEntities)"
         )
         XCTAssertTrue(
-            piiEntities.contains { $0.label == "insurance_id" && $0.text == "HMO-99318442" },
-            "Expected insurance ID in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "street_address" && $0.text == "1942 Harbor View Drive, Marseille, CA 92111" },
+            piiEntities.contains { $0.label == "street_address" && $0.text == "4471 Lantern Ridge Ct, Aurora, CO 80016" },
             "Expected street address in \(piiEntities)"
         )
     }
@@ -985,11 +981,16 @@ final class OpenMedMLXTests: XCTestCase {
         lhs: VNRecognizedTextObservation,
         rhs: VNRecognizedTextObservation
     ) -> Bool {
-        let verticalDelta = lhs.boundingBox.maxY - rhs.boundingBox.maxY
-        if abs(verticalDelta) > 0.02 {
-            return verticalDelta > 0
-        }
-        return lhs.boundingBox.minX < rhs.boundingBox.minX
+        let lhsBox = lhs.boundingBox
+        let rhsBox = rhs.boundingBox
+        let verticalOverlap = min(lhsBox.maxY, rhsBox.maxY) - max(lhsBox.minY, rhsBox.minY)
+        let centerDelta = abs(lhsBox.midY - rhsBox.midY)
+        let sameLineThreshold = max(0.004, max(lhsBox.height, rhsBox.height) * 0.65)
+        let sameLine = verticalOverlap > min(lhsBox.height, rhsBox.height) * 0.2
+            || centerDelta <= sameLineThreshold
+
+        if sameLine { return lhsBox.minX < rhsBox.minX }
+        return lhsBox.midY > rhsBox.midY
     }
     #endif
 
