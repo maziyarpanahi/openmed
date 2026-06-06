@@ -99,29 +99,61 @@ public enum EntityCategory: String, CaseIterable, Hashable, Sendable, Identifiab
 
     /// Best-effort classification by substring match on the label.
     public static func classify(label: String) -> EntityCategory {
-        let normalized = label.lowercased()
-        if normalized.contains("name") || normalized == "person" { return .person }
-        if normalized == "dob" || normalized.contains("date") { return .date }
-        if normalized.contains("mrn") || normalized.contains("id") || normalized.contains("dni") ||
-           normalized.contains("passport") || normalized.contains("ssn") || normalized.contains("case") { return .identifier }
-        if normalized.contains("phone") || normalized.contains("email") || normalized.contains("fax") { return .contact }
-        if normalized.contains("address") || normalized.contains("location") || normalized.contains("city") ||
-           normalized.contains("zip") || normalized.contains("postal") { return .location }
-        if normalized.contains("hospital") || normalized.contains("clinic") || normalized.contains("org") ||
-           normalized.contains("organization") { return .organization }
-        if normalized.contains("diagnos") || normalized.contains("condition") || normalized.contains("disease") ||
-           normalized.contains("problem") || normalized.contains("medical history") { return .condition }
-        if normalized.contains("symptom") || normalized.contains("chief concern") || normalized.contains("complaint") { return .symptom }
-        if normalized.contains("medic") || normalized.contains("drug") || normalized.contains("prescription") ||
-           normalized.contains("pharmacy") { return .medication }
-        if normalized.contains("dos") || normalized.contains("frequency") || normalized.contains("strength") { return .dosage }
-        if normalized.contains("procedure") || normalized.contains("surg") || normalized.contains("operation") { return .procedure }
-        if normalized.contains("test") || normalized.contains("lab") || normalized.contains("imaging") ||
-           normalized.contains("exam") { return .test }
-        if normalized.contains("allerg") || normalized.contains("adverse") { return .allergy }
-        if normalized.contains("follow") || normalized.contains("return") { return .followUp }
-        if normalized.contains("care") || normalized.contains("plan") || normalized.contains("referral") ||
-           normalized.contains("instruction") || normalized.contains("treatment") { return .carePlan }
+        let normalized = label
+            .lowercased()
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+
+        func containsAny(_ terms: [String]) -> Bool {
+            terms.contains { normalized.contains($0) }
+        }
+
+        if normalized == "dob" || containsAny([
+            "date", "birth", "born"
+        ]) { return .date }
+
+        if containsAny([
+            "phone", "telephone", "mobile", "cell", "email", "e mail", "fax",
+            "contact"
+        ]) { return .contact }
+
+        if normalized == "id" || containsAny([
+            "mrn", "medical record", "record number", "record id", "identifier",
+            " id", "id ", "id number", "id num", "national id", "ssn",
+            "social security", "dni", "passport", "driver license", "license",
+            "account", "encounter", "case", "document", "npi", "member",
+            "insurance", "policy", "group", "employee id", "routing", "card",
+            "provider id", "provider identifier"
+        ]) { return .identifier }
+
+        if containsAny([
+            "person", "name", "patient", "provider", "doctor", "physician",
+            "clinician", "pcp"
+        ]) { return .person }
+
+        if containsAny([
+            "address", "location", "city", "state", "street", "zip", "zipcode",
+            "postal", "postcode", "country"
+        ]) { return .location }
+
+        if containsAny([
+            "hospital", "clinic", "facility", "employer", "company", "org",
+            "organization", "payer"
+        ]) { return .organization }
+
+        if containsAny([
+            "diagnos", "condition", "disease", "problem", "medical history"
+        ]) { return .condition }
+        if containsAny(["symptom", "chief concern", "complaint"]) { return .symptom }
+        if containsAny([
+            "medication", "medicine", "drug", "prescription", "pharmacy"
+        ]) { return .medication }
+        if containsAny(["dos", "frequency", "strength"]) { return .dosage }
+        if containsAny(["procedure", "surg", "operation"]) { return .procedure }
+        if containsAny(["test", "lab", "imaging", "exam"]) { return .test }
+        if containsAny(["allerg", "adverse"]) { return .allergy }
+        if containsAny(["follow", "return"]) { return .followUp }
+        if containsAny(["care", "plan", "referral", "instruction", "treatment"]) { return .carePlan }
         return .other
     }
 }
