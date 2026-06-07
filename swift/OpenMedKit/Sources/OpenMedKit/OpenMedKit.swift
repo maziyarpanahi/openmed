@@ -1,5 +1,6 @@
 import Dispatch
 import Foundation
+import MLX
 import Tokenizers
 
 /// OpenMedKit — On-device clinical NLP for iOS and macOS.
@@ -29,6 +30,16 @@ public final class OpenMed {
     private let runtime: Runtime
     private let tokenizer: (any Tokenizer)?
     private let maxSeqLength: Int
+
+    /// Release cached MLX buffers that are no longer referenced by model objects.
+    ///
+    /// OpenMedKit runtimes own their model weights via ARC. Apps that swap between
+    /// large on-device models can first drop their runtime references, then call
+    /// this helper so MLX returns cached Metal buffers instead of carrying them
+    /// into the next model load.
+    public static func clearRuntimeMemoryCache() {
+        Memory.clearCache()
+    }
 
     /// Initialize OpenMed with an explicit backend.
     public init(
@@ -173,7 +184,59 @@ public final class OpenMed {
         }
     }
 
+    /// Run PII detection over long text using overlapping token windows.
+    ///
+    /// The returned entity offsets always reference the original full text.
+    /// Overlapping duplicate detections are merged before the final smart
+    /// semantic merge pass.
+    public func extractPIIChunked(
+        _ text: String,
+        confidenceThreshold: Float = 0.5,
+        chunkTokenLimit: Int = 256,
+        tokenOverlap: Int = 32,
+        useSmartMerging: Bool = true
+    ) throws -> [EntityPrediction] {
+        let chunks = try makeTokenChunks(
+            for: text,
+            chunkTokenLimit: chunkTokenLimit,
+            tokenOverlap: tokenOverlap
+        )
+        guard chunks.count > 1 else {
+            return try extractPII(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                useSmartMerging: useSmartMerging
+            )
+        }
+
+        var chunkEntities: [EntityPrediction] = []
+        for chunk in chunks {
+            let chunkText = Self.substring(text, start: chunk.start, end: chunk.end)
+            let entities = try extractPII(
+                chunkText,
+                confidenceThreshold: confidenceThreshold,
+                useSmartMerging: useSmartMerging
+            )
+            chunkEntities.append(contentsOf: entities.compactMap { entity in
+                Self.offset(entity, by: chunk.start, in: text)
+            })
+        }
+
+        return mergeChunkedPIIEntities(
+            chunkEntities,
+            text: text,
+            useSmartMerging: useSmartMerging
+        )
+    }
+
     // MARK: - Private
+
+    struct TextChunk: Equatable {
+        let start: Int
+        let end: Int
+        let tokenStart: Int
+        let tokenEnd: Int
+    }
 
     private func tokenize(_ text: String) throws -> ([Int], [Int], [Int], [(Int, Int)]) {
         // Use swift-transformers for tokenization
@@ -188,6 +251,228 @@ public final class OpenMed {
         let offsets = Self.buildOffsets(tokens: tokens, in: text)
 
         return (inputIds, attentionMask, tokenTypeIDs, offsets)
+    }
+
+    func makeTokenChunks(
+        for text: String,
+        chunkTokenLimit: Int,
+        tokenOverlap: Int
+    ) throws -> [TextChunk] {
+        guard !text.isEmpty else {
+            return []
+        }
+
+        let tokenOffsets = try tokenOffsets(in: text)
+            .filter { $0.0 < $0.1 }
+
+        let tokenLimit = max(1, chunkTokenLimit)
+        guard tokenOffsets.count > tokenLimit else {
+            return [
+                TextChunk(
+                    start: 0,
+                    end: text.count,
+                    tokenStart: 0,
+                    tokenEnd: tokenOffsets.count
+                ),
+            ]
+        }
+
+        let overlap = min(max(0, tokenOverlap), tokenLimit - 1)
+        var chunks: [TextChunk] = []
+        var tokenStart = 0
+
+        while tokenStart < tokenOffsets.count {
+            let tokenEnd = min(tokenStart + tokenLimit, tokenOffsets.count)
+            chunks.append(
+                TextChunk(
+                    start: tokenOffsets[tokenStart].0,
+                    end: tokenOffsets[tokenEnd - 1].1,
+                    tokenStart: tokenStart,
+                    tokenEnd: tokenEnd
+                )
+            )
+
+            guard tokenEnd < tokenOffsets.count else {
+                break
+            }
+            tokenStart = max(tokenStart + 1, tokenEnd - overlap)
+        }
+
+        return chunks
+    }
+
+    private func tokenOffsets(in text: String) throws -> [(Int, Int)] {
+        switch runtime {
+        case .coreML, .mlx:
+            guard let tokenizer else {
+                throw TokenizerError.missingConfig
+            }
+            let inputIDs = tokenizer(text, addSpecialTokens: false)
+            let tokens = tokenizer.convertIdsToTokens(inputIDs).map { $0 ?? "" }
+            return Self.buildOffsets(tokens: tokens, in: text)
+        case .privacyFilter(let pipeline):
+            return try pipeline.tokenOffsets(in: text)
+        }
+    }
+
+    func mergeChunkedPIIEntities(
+        _ entities: [EntityPrediction],
+        text: String,
+        useSmartMerging: Bool
+    ) -> [EntityPrediction] {
+        let repaired = PostProcessing.repairEntitySpans(
+            Self.deduplicateOverlappingEntities(entities),
+            text: text
+        )
+
+        guard useSmartMerging else {
+            return Self.deduplicateOverlappingEntities(repaired)
+        }
+
+        let merged: [EntityPrediction]
+        switch runtime {
+        case .privacyFilter:
+            merged = PostProcessing.mergePIIEntities(
+                repaired,
+                text: text,
+                useSemanticPatterns: true,
+                preferModelLabels: true,
+                allowSemanticOnlyMatches: false,
+                allowSemanticLabelExpansion: false
+            )
+        case .coreML, .mlx:
+            merged = PostProcessing.mergePIIEntities(
+                repaired,
+                text: text,
+                useSemanticPatterns: true,
+                preferModelLabels: true
+            )
+        }
+
+        return Self.deduplicateOverlappingEntities(merged)
+    }
+
+    static func deduplicateOverlappingEntities(
+        _ entities: [EntityPrediction]
+    ) -> [EntityPrediction] {
+        var selected: [EntityPrediction] = []
+
+        for entity in entities.sorted(by: entitySort) {
+            guard let existingIndex = selected.firstIndex(where: {
+                areDuplicateCandidates(entity, $0)
+            }) else {
+                selected.append(entity)
+                continue
+            }
+
+            if isBetterDuplicate(candidate: entity, existing: selected[existingIndex]) {
+                selected[existingIndex] = entity
+            }
+        }
+
+        return selected.sorted {
+            if $0.start == $1.start {
+                return $0.end < $1.end
+            }
+            return $0.start < $1.start
+        }
+    }
+
+    private static func offset(
+        _ entity: EntityPrediction,
+        by baseOffset: Int,
+        in text: String
+    ) -> EntityPrediction? {
+        let start = entity.start + baseOffset
+        let end = entity.end + baseOffset
+        guard start >= 0, end > start, end <= text.count else {
+            return nil
+        }
+        return EntityPrediction(
+            label: entity.label,
+            text: substring(text, start: start, end: end),
+            confidence: entity.confidence,
+            start: start,
+            end: end
+        )
+    }
+
+    private static func entitySort(
+        lhs: EntityPrediction,
+        rhs: EntityPrediction
+    ) -> Bool {
+        if lhs.start == rhs.start {
+            if lhs.end == rhs.end {
+                return lhs.confidence > rhs.confidence
+            }
+            return entityLength(lhs) > entityLength(rhs)
+        }
+        return lhs.start < rhs.start
+    }
+
+    private static func areDuplicateCandidates(
+        _ lhs: EntityPrediction,
+        _ rhs: EntityPrediction
+    ) -> Bool {
+        guard labelsAreCompatible(lhs.label, rhs.label) else {
+            return false
+        }
+        let overlap = min(lhs.end, rhs.end) - max(lhs.start, rhs.start)
+        guard overlap > 0 else {
+            return false
+        }
+        let shorterLength = max(1, min(entityLength(lhs), entityLength(rhs)))
+        return Double(overlap) / Double(shorterLength) >= 0.5
+    }
+
+    private static func labelsAreCompatible(_ lhs: String, _ rhs: String) -> Bool {
+        if lhs == rhs {
+            return true
+        }
+
+        let normalizedLHS = PostProcessing.normalizeLabel(lhs)
+        let normalizedRHS = PostProcessing.normalizeLabel(rhs)
+        if normalizedLHS == normalizedRHS {
+            return true
+        }
+
+        let lowerLHS = lhs.lowercased()
+        let lowerRHS = rhs.lowercased()
+        let nameTokens = ["name", "person"]
+        return nameTokens.contains { token in
+            lowerLHS.contains(token) && lowerRHS.contains(token)
+        }
+    }
+
+    private static func isBetterDuplicate(
+        candidate: EntityPrediction,
+        existing: EntityPrediction
+    ) -> Bool {
+        let candidateLength = entityLength(candidate)
+        let existingLength = entityLength(existing)
+
+        if candidate.start == existing.start && candidate.end == existing.end {
+            return candidate.confidence > existing.confidence
+        }
+
+        if candidateLength > existingLength && candidate.confidence >= existing.confidence - 0.10 {
+            return true
+        }
+
+        return candidate.confidence > existing.confidence + 0.05
+    }
+
+    private static func entityLength(_ entity: EntityPrediction) -> Int {
+        max(0, entity.end - entity.start)
+    }
+
+    private static func substring(_ text: String, start: Int, end: Int) -> String {
+        guard start >= 0, end >= start, end <= text.count else {
+            return ""
+        }
+        let lowerBound = text.index(text.startIndex, offsetBy: start)
+        let upperBound = text.index(lowerBound, offsetBy: end - start)
+        return String(text[lowerBound..<upperBound])
     }
 
     static func loadTokenizer(

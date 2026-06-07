@@ -225,6 +225,127 @@ final class PostProcessingTests: XCTestCase {
         XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Dr. Maya Shah, MD" })
     }
 
+    func testMergePIIEntitiesRecoversCurrentDischargeSummaryHeaderFields() {
+        let text = """
+        PATIENT NAME
+        Whitfield, Jordan A.
+        DOB
+        07/22/1984
+        MRN
+        SRMC-7741920
+        ENCOUNTER #
+        ENC-20260601-3382
+        ACCOUNT #
+        ACC-55810394
+        INSURANCE
+        Summit Health PPO, Member ID
+        SHP-66201845, Group 4471
+        EMERGENCY CONTACT
+        Dana Whitfield (spouse), (720) 555-0193
+        PCP
+        Priya Nandakumar, MD
+        PCP NPI
+        1841992307
+        Document ID
+        SRMC-DS-20260601-3382
+        ELECTRONICALLY SIGNED
+        Maya Shah, MD
+        """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." })
+        XCTAssertTrue(merged.contains { $0.label == "medical_record_number" && $0.text == "SRMC-7741920" })
+        XCTAssertTrue(merged.contains { $0.label == "encounter_number" && $0.text == "ENC-20260601-3382" })
+        XCTAssertTrue(merged.contains { $0.label == "account_number" && $0.text == "ACC-55810394" })
+        XCTAssertTrue(merged.contains { $0.label == "insurance_id" && $0.text == "SHP-66201845" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Dana Whitfield" })
+        XCTAssertTrue(merged.contains { $0.label == "phone_number" && $0.text == "(720) 555-0193" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Priya Nandakumar, MD" })
+        XCTAssertTrue(merged.contains { $0.label == "npi" && $0.text == "1841992307" })
+        XCTAssertTrue(merged.contains { $0.label == "document_id" && $0.text == "SRMC-DS-20260601-3382" })
+        XCTAssertTrue(merged.contains { $0.label == "full_name" && $0.text == "Maya Shah, MD" })
+    }
+
+    func testChunkedEntityDedupKeepsBestOverlappingSpan() {
+        let entities = [
+            EntityPrediction(label: "full_name", text: "Jordan", confidence: 0.92, start: 23, end: 29),
+            EntityPrediction(label: "full_name", text: "Whitfield, Jordan A.", confidence: 0.87, start: 12, end: 32),
+        ]
+
+        let deduplicated = OpenMed.deduplicateOverlappingEntities(entities)
+
+        XCTAssertEqual(deduplicated.count, 1)
+        XCTAssertEqual(deduplicated[0].text, "Whitfield, Jordan A.")
+    }
+
+    func testMergePIIEntitiesRecoversSurnameFirstPatientHeader() {
+        let text = """
+        PATIENT NAME
+        Whitfield, Jordan A.
+        DOB
+        07/22/1984
+        MRN
+        SRMC-7741920
+        """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(
+            merged.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
+            "Expected surname-first patient header in \(merged)"
+        )
+    }
+
+    func testMergePIIEntitiesRecoversSurnameFirstInlinePatient() {
+        let text = """
+        Patient: Whitfield, Jordan A.
+        DOB: 07/22/1984
+        """
+
+        let merged = PostProcessing.mergePIIEntities([], text: text)
+
+        XCTAssertTrue(
+            merged.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
+            "Expected inline surname-first patient name in \(merged)"
+        )
+    }
+
+    func testMergePIIEntitiesExpandsSurnameFirstPatientHeaderOverlapWithoutLabelExpansion() {
+        let text = """
+        PATIENT NAME
+        Whitfield, Jordan A.
+        DOB
+        07/22/1984
+        """
+        let modelText = "Jordan"
+        let range = try! XCTUnwrap(text.range(of: modelText))
+        let start = text.distance(from: text.startIndex, to: range.lowerBound)
+        let end = text.distance(from: text.startIndex, to: range.upperBound)
+        let entities = [
+            EntityPrediction(
+                label: "private_person",
+                text: modelText,
+                confidence: 0.72,
+                start: start,
+                end: end
+            ),
+        ]
+
+        let merged = PostProcessing.mergePIIEntities(
+            entities,
+            text: text,
+            preferModelLabels: true,
+            allowSemanticOnlyMatches: false,
+            allowSemanticLabelExpansion: false
+        )
+
+        XCTAssertTrue(
+            merged.contains { $0.label == "private_person" && $0.text == "Whitfield, Jordan A." },
+            "Expected overlapping model span to expand to the full surname-first header in \(merged)"
+        )
+    }
+
     func testMergePIIEntitiesCanDisableSemanticOnlyMatches() {
         let text = "Patient SSN: 123-45-6789"
 

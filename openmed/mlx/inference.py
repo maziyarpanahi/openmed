@@ -405,7 +405,7 @@ class PrivacyFilterMLXPipeline:
         **kwargs: Any,
     ) -> List[Dict[str, Any]] | List[List[Dict[str, Any]]]:
         if isinstance(text, (list, tuple)):
-            return [self._predict_single(item) for item in text]
+            return self._predict_batch(list(text))
         return self._predict_single(text)
 
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
@@ -419,10 +419,66 @@ class PrivacyFilterMLXPipeline:
         mx.eval(logits)
 
         logits = logits.astype(mx.float32)
-        log_probs = (logits - mx.logsumexp(logits, axis=-1, keepdims=True))[0]
+        log_probs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
+        probs = mx.exp(log_probs)
+        return self._decode_prediction(
+            token_ids,
+            text,
+            log_probs.tolist()[0],
+            probs.tolist()[0],
+        )
+
+    def _predict_batch(self, texts: list[str]) -> list[list[dict[str, Any]]]:
+        results: list[list[dict[str, Any]]] = [[] for _ in texts]
+        encoded: list[tuple[int, str, list[int]]] = []
+        for index, item in enumerate(texts):
+            token_ids = [
+                int(token_id)
+                for token_id in self.encoding.encode(item, allowed_special="all")
+            ]
+            if token_ids:
+                encoded.append((index, item, token_ids))
+
+        if not encoded:
+            return results
+
+        max_len = max(len(token_ids) for _, _, token_ids in encoded)
+        padded_ids = [
+            token_ids + [0] * (max_len - len(token_ids))
+            for _, _, token_ids in encoded
+        ]
+        attention_mask = [
+            [True] * len(token_ids) + [False] * (max_len - len(token_ids))
+            for _, _, token_ids in encoded
+        ]
+        input_ids = mx.array(padded_ids, dtype=mx.int32)
+        mask = mx.array(attention_mask, dtype=mx.bool_)
+        logits = self.model(input_ids, attention_mask=mask)
+        mx.eval(logits)
+
+        logits = logits.astype(mx.float32)
+        log_probs = logits - mx.logsumexp(logits, axis=-1, keepdims=True)
         probs = mx.exp(log_probs)
         log_probs_py = log_probs.tolist()
         probs_py = probs.tolist()
+
+        for batch_index, (original_index, item, token_ids) in enumerate(encoded):
+            token_count = len(token_ids)
+            results[original_index] = self._decode_prediction(
+                token_ids,
+                item,
+                log_probs_py[batch_index][:token_count],
+                probs_py[batch_index][:token_count],
+            )
+        return results
+
+    def _decode_prediction(
+        self,
+        token_ids: list[int],
+        text: str,
+        log_probs_py: list[list[float]],
+        probs_py: list[list[float]],
+    ) -> list[dict[str, Any]]:
         pred_ids = viterbi_decode(
             log_probs_py,
             label_info=self.label_info,

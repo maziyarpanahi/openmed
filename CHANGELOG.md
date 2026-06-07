@@ -14,6 +14,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Overhauled the README: mascot hero, colorful badges, Apple Silicon / Swift / iOS brought front-and-center, an OpenMed-vs-cloud comparison table, and a Mermaid flow diagram.
 
+## [1.5.5] - 2026-06-07
+
+### Added
+
+- Added batch PII extraction and de-identification support through `BatchProcessor(operation="extract_pii")` and `BatchProcessor(operation="deidentify")`, including document-level `batch_size` chunking, shared loader/pipeline reuse, tests, docs, and a runnable example.
+- Added REST service model lifecycle controls with `GET /models/loaded`, `POST /models/unload`, request-level `keep_alive`, `OPENMED_SERVICE_KEEP_ALIVE`, and model-loader cache release helpers.
+- Added chunked Swift/OpenMedKit PII extraction for long OCR text and refreshed the OpenMed Scan Demo clinical document flow with updated sample text, a printable sample PDF, and a generator script.
+
+### Changed
+
+- Batched privacy-filter inference now accepts list inputs across Torch and MLX paths and forwards batching controls to the underlying pipelines.
+- The OpenMed Scan Demo now unloads inactive MLX runtime families when switching engines, sequences selected and secondary PII engine runs explicitly, improves OCR line ordering, and expands entity category mapping.
+- README and service/model-loader documentation now cover batch PII operations and model unloading behavior.
+
+### Fixed
+
+- Improved Swift structured PII recovery for clinical discharge summaries, including surname-first names, member and insurance IDs, account/encounter/document IDs, NPI values, PCP/signed-provider sections, and overlap deduplication.
+
 ## [1.5.2] - 2026-05-27
 
 ### Security

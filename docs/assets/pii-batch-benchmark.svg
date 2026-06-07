@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="980" viewBox="0 0 1500 980" role="img" aria-labelledby="title desc">
+  <title id="title">Batch PII processing benchmark results</title>
+  <desc id="desc">Comparison of single-document chunks versus 16-document batch chunks for extract_pii and deidentify on CPU/Torch and MLX.</desc>
+  <defs>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <linearGradient id="batchCpu" x1="0" x2="1">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+    <linearGradient id="batchMlx" x1="0" x2="1">
+      <stop offset="0" stop-color="#6d28d9"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="singleGrad" x1="0" x2="1">
+      <stop offset="0" stop-color="#475569"/>
+      <stop offset="1" stop-color="#94a3b8"/>
+    </linearGradient>
+    <style>
+      text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+      .small { font-size: 22px; fill: #475569; }
+      .axis { font-size: 18px; fill: #64748b; }
+      .group { font-size: 27px; font-weight: 760; fill: #0f172a; }
+      .backend { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; fill: #64748b; }
+      .metric { font-size: 42px; font-weight: 820; fill: #0f172a; }
+      .metricLabel { font-size: 18px; font-weight: 700; letter-spacing: 0.08em; fill: #64748b; }
+      .legend { font-size: 22px; font-weight: 700; fill: #334155; }
+      .value { font-size: 20px; font-weight: 760; fill: #0f172a; }
+      .speed { font-size: 24px; font-weight: 820; fill: #0f172a; }
+    </style>
+  </defs>
+
+  <rect width="1500" height="980" fill="#f8fafc"/>
+  <circle cx="1305" cy="88" r="168" fill="#dbeafe" opacity="0.45"/>
+  <circle cx="124" cy="915" r="190" fill="#ccfbf1" opacity="0.45"/>
+
+  <g transform="translate(70 58)">
+    <text x="0" y="0" font-size="50" font-weight="850" fill="#0f172a">Batch PII Processing Benchmarks</text>
+    <text x="0" y="45" class="small">64 short PII notes | median of 3 hot runs | model load excluded</text>
+    <text x="0" y="76" class="small">Single baseline: batch_size=1 | Batch path: batch_size=16</text>
+  </g>
+
+  <g transform="translate(1010 52)">
+    <rect x="0" y="0" width="190" height="76" rx="14" fill="#ffffff" filter="url(#softShadow)"/>
+    <text x="22" y="30" class="metricLabel">CPU BATCH</text>
+    <text x="22" y="62" font-size="28" font-weight="850" fill="#0f766e">3.3x faster</text>
+    <rect x="215" y="0" width="190" height="76" rx="14" fill="#ffffff" filter="url(#softShadow)"/>
+    <text x="237" y="30" class="metricLabel">MLX BATCH</text>
+    <text x="237" y="62" font-size="28" font-weight="850" fill="#7c3aed">2.2x faster</text>
+  </g>
+
+  <g transform="translate(70 164)">
+    <rect x="0" y="0" width="1360" height="744" rx="22" fill="#ffffff" filter="url(#softShadow)"/>
+
+    <g transform="translate(360 66)">
+      <text x="0" y="-24" class="legend">Throughput, documents per second</text>
+      <text x="834" y="-24" text-anchor="end" font-size="18" font-weight="700" fill="#64748b">Higher is better</text>
+      <line x1="0" y1="0" x2="850" y2="0" stroke="#cbd5e1" stroke-width="2"/>
+      <line x1="0" y1="0" x2="0" y2="586" stroke="#cbd5e1" stroke-width="2"/>
+
+      <g stroke="#e2e8f0" stroke-width="1">
+        <line x1="170" y1="0" x2="170" y2="586"/>
+        <line x1="340" y1="0" x2="340" y2="586"/>
+        <line x1="510" y1="0" x2="510" y2="586"/>
+        <line x1="680" y1="0" x2="680" y2="586"/>
+        <line x1="850" y1="0" x2="850" y2="586"/>
+      </g>
+      <g class="axis">
+        <text x="0" y="624" text-anchor="middle">0</text>
+        <text x="170" y="624" text-anchor="middle">50</text>
+        <text x="340" y="624" text-anchor="middle">100</text>
+        <text x="510" y="624" text-anchor="middle">150</text>
+        <text x="680" y="624" text-anchor="middle">200</text>
+        <text x="850" y="624" text-anchor="middle">250</text>
+      </g>
+    </g>
+
+    <g transform="translate(48 90)">
+      <g transform="translate(0 0)">
+        <text x="0" y="18" class="backend">EXTRACT_PII</text>
+        <text x="0" y="52" class="group">CPU / Torch</text>
+        <text x="0" y="84" class="axis">openai/privacy-filter</text>
+        <rect x="312" y="14" width="26.5" height="28" rx="8" fill="url(#singleGrad)"/>
+        <rect x="312" y="58" width="86.6" height="28" rx="8" fill="url(#batchCpu)"/>
+        <text x="350" y="35" class="value">7.80</text>
+        <text x="412" y="79" class="value">25.48</text>
+        <rect x="1188" y="34" width="100" height="44" rx="22" fill="#ccfbf1"/>
+        <text x="1238" y="64" text-anchor="middle" class="speed">3.27x</text>
+      </g>
+
+      <line x1="0" y1="134" x2="1264" y2="134" stroke="#e2e8f0"/>
+
+      <g transform="translate(0 158)">
+        <text x="0" y="18" class="backend">EXTRACT_PII</text>
+        <text x="0" y="52" class="group">MLX</text>
+        <text x="0" y="84" class="axis">OpenMed/privacy-filter-mlx-8bit</text>
+        <rect x="312" y="14" width="325.1" height="28" rx="8" fill="url(#singleGrad)"/>
+        <rect x="312" y="58" width="753.2" height="28" rx="8" fill="url(#batchMlx)"/>
+        <text x="650" y="35" class="value">95.61</text>
+        <text x="1080" y="79" class="value">221.54</text>
+        <rect x="1188" y="34" width="100" height="44" rx="22" fill="#ede9fe"/>
+        <text x="1238" y="64" text-anchor="middle" class="speed">2.32x</text>
+      </g>
+
+      <line x1="0" y1="292" x2="1264" y2="292" stroke="#e2e8f0"/>
+
+      <g transform="translate(0 316)">
+        <text x="0" y="18" class="backend">DEIDENTIFY</text>
+        <text x="0" y="52" class="group">CPU / Torch</text>
+        <text x="0" y="84" class="axis">mask method</text>
+        <rect x="312" y="14" width="33.9" height="28" rx="8" fill="url(#singleGrad)"/>
+        <rect x="312" y="58" width="114.5" height="28" rx="8" fill="url(#batchCpu)"/>
+        <text x="358" y="35" class="value">9.96</text>
+        <text x="440" y="79" class="value">33.67</text>
+        <rect x="1188" y="34" width="100" height="44" rx="22" fill="#ccfbf1"/>
+        <text x="1238" y="64" text-anchor="middle" class="speed">3.38x</text>
+      </g>
+
+      <line x1="0" y1="450" x2="1264" y2="450" stroke="#e2e8f0"/>
+
+      <g transform="translate(0 474)">
+        <text x="0" y="18" class="backend">DEIDENTIFY</text>
+        <text x="0" y="52" class="group">MLX</text>
+        <text x="0" y="84" class="axis">mask method</text>
+        <rect x="312" y="14" width="364.8" height="28" rx="8" fill="url(#singleGrad)"/>
+        <rect x="312" y="58" width="790.2" height="28" rx="8" fill="url(#batchMlx)"/>
+        <text x="690" y="35" class="value">107.28</text>
+        <text x="1116" y="79" class="value">232.40</text>
+        <rect x="1188" y="34" width="100" height="44" rx="22" fill="#ede9fe"/>
+        <text x="1238" y="64" text-anchor="middle" class="speed">2.17x</text>
+      </g>
+    </g>
+
+    <g transform="translate(48 718)">
+      <rect x="0" y="-1" width="18" height="18" rx="5" fill="url(#singleGrad)"/>
+      <text x="28" y="15" class="axis">Single chunks (batch_size=1)</text>
+      <rect x="340" y="-1" width="18" height="18" rx="5" fill="url(#batchCpu)"/>
+      <text x="368" y="15" class="axis">CPU/Torch batch chunks (16)</text>
+      <rect x="704" y="-1" width="18" height="18" rx="5" fill="url(#batchMlx)"/>
+      <text x="732" y="15" class="axis">MLX batch chunks (16)</text>
+    </g>
+  </g>
+</svg>

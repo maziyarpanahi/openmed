@@ -226,7 +226,7 @@ Un registro curado de modelos de NER médico especializados — explora el [cat�
 |--------|-----------------|------------------|--------|
 | `disease_detection_superclinical` | Enfermedades y afecciones | DISEASE, CONDITION, DIAGNOSIS | 434M |
 | `pharma_detection_superclinical`  | Fármacos y medicamentos | DRUG, MEDICATION, TREATMENT   | 434M |
-| `pii_detection_superclinical`     | PII y des-identificación | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
+| `pii_superclinical_large`     | PII y des-identificación | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
 | `anatomy_detection_electramed`    | Anatomía y partes del cuerpo | ANATOMY, ORGAN, BODY_PART     | 109M |
 | `gene_detection_genecorpus`       | Genes y proteínas | GENE, PROTEIN                 | 109M |
 
@@ -240,7 +240,7 @@ from openmed import extract_pii, deidentify
 text = "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789"
 
 # Extract PII with smart merging (prevents tokenization fragmentation)
-result = extract_pii(text, model_name="pii_detection_superclinical", use_smart_merging=True)
+result = extract_pii(text, model_name="pii_superclinical_large", use_smart_merging=True)
 
 # De-identify with the method you need
 deidentify(text, method="mask")     # [NAME], [DATE]
