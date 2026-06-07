@@ -24,9 +24,15 @@ public actor OMPipelineRuntime {
         modelID: ScanModelID,
         confidenceThreshold: Float = 0.5
     ) async throws -> PIIOutput {
+        await unloadRelationRuntimes()
         let runtime = try await loadPIIRuntime(for: modelID)
         let predictions = try await runBlocking {
-            try runtime.extractPII(text, confidenceThreshold: confidenceThreshold)
+            try runtime.extractPIIChunked(
+                text,
+                confidenceThreshold: confidenceThreshold,
+                chunkTokenLimit: 256,
+                tokenOverlap: 32
+            )
         }
         let entities = predictions.map(DetectedEntity.init(openMedKit:))
         let masked = Self.mask(text: text, entities: entities)
@@ -38,6 +44,7 @@ public actor OMPipelineRuntime {
         labels: [String],
         threshold: Float
     ) async throws -> ClinicalOutput {
+        await unloadPIIRuntimes()
         let extractor = try await loadRelationRuntime(for: .glinerRelex)
         let entities = try await runBlocking {
             try extractor.extract(
@@ -69,11 +76,7 @@ public actor OMPipelineRuntime {
                         request.automaticallyDetectsLanguage = true
                         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                         try handler.perform([request])
-                        let observations = (request.results ?? []).sorted { lhs, rhs in
-                            let dy = lhs.boundingBox.maxY - rhs.boundingBox.maxY
-                            if abs(dy) > 0.02 { return dy > 0 }
-                            return lhs.boundingBox.minX < rhs.boundingBox.minX
-                        }
+                        let observations = (request.results ?? []).sorted(by: Self.recognitionSort)
                         let lines = observations.compactMap { $0.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines) }
                         let page = lines.filter { !$0.isEmpty }.joined(separator: "\n")
                         if !page.isEmpty { combined.append(page) }
@@ -91,6 +94,36 @@ public actor OMPipelineRuntime {
     #endif
 
     // MARK: - Cached runtimes
+
+    public func unloadPIIRuntimes() async {
+        guard !piiRuntimes.isEmpty else { return }
+        piiRuntimes.removeAll(keepingCapacity: false)
+        await clearRuntimeMemoryCacheOnPipelineQueue()
+    }
+
+    public func unloadRelationRuntimes() async {
+        guard !relationRuntimes.isEmpty else { return }
+        relationRuntimes.removeAll(keepingCapacity: false)
+        await clearRuntimeMemoryCacheOnPipelineQueue()
+    }
+
+    #if canImport(UIKit)
+    private static func recognitionSort(
+        lhs: VNRecognizedTextObservation,
+        rhs: VNRecognizedTextObservation
+    ) -> Bool {
+        let lhsBox = lhs.boundingBox
+        let rhsBox = rhs.boundingBox
+        let verticalOverlap = min(lhsBox.maxY, rhsBox.maxY) - max(lhsBox.minY, rhsBox.minY)
+        let centerDelta = abs(lhsBox.midY - rhsBox.midY)
+        let sameLineThreshold = max(0.004, max(lhsBox.height, rhsBox.height) * 0.65)
+        let sameLine = verticalOverlap > min(lhsBox.height, rhsBox.height) * 0.2
+            || centerDelta <= sameLineThreshold
+
+        if sameLine { return lhsBox.minX < rhsBox.minX }
+        return lhsBox.midY > rhsBox.midY
+    }
+    #endif
 
     private func loadPIIRuntime(for modelID: ScanModelID) async throws -> OpenMed {
         if let cached = piiRuntimes[modelID.artifactRepoID] { return cached }
@@ -132,6 +165,17 @@ public actor OMPipelineRuntime {
                 } catch {
                     continuation.resume(throwing: error)
                 }
+            }
+        }
+    }
+
+    private func clearRuntimeMemoryCacheOnPipelineQueue() async {
+        await withCheckedContinuation { continuation in
+            blockingQueue.async {
+                autoreleasepool {
+                    OpenMed.clearRuntimeMemoryCache()
+                }
+                continuation.resume()
             }
         }
     }
