@@ -127,3 +127,4 @@ watch:
 
 exclude_docs: |
   website/**
+  brand/**
