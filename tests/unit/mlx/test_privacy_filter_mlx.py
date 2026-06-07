@@ -256,6 +256,58 @@ def test_privacy_filter_grouped_decode_handles_bioes():
     ]
 
 
+@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests")
+def test_privacy_filter_batch_path_runs_one_model_call():
+    import mlx.core as mx
+
+    from openmed.core.decoding import build_label_info
+    from openmed.mlx.inference import PrivacyFilterMLXPipeline
+
+    class FakeEncoding:
+        def encode(self, text, allowed_special="all"):
+            del allowed_special
+            return [1] * len(text)
+
+        def decode_single_token_bytes(self, token_id):
+            del token_id
+            return b"x"
+
+    class FakeModel:
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, input_ids, *, attention_mask=None):
+            self.calls.append(
+                (
+                    tuple(input_ids.shape),
+                    attention_mask.tolist() if attention_mask is not None else None,
+                )
+            )
+            batch_size, token_count = input_ids.shape
+            return mx.array(
+                [
+                    [[10.0, -10.0] for _ in range(token_count)]
+                    for _ in range(batch_size)
+                ],
+                dtype=mx.float32,
+            )
+
+    pipeline = PrivacyFilterMLXPipeline.__new__(PrivacyFilterMLXPipeline)
+    pipeline.model = FakeModel()
+    pipeline.encoding = FakeEncoding()
+    pipeline.id2label = {0: "O", 1: "S-private_email"}
+    pipeline.label_info = build_label_info(pipeline.id2label)
+    pipeline.viterbi_biases = {}
+    pipeline.aggregation_strategy = "simple"
+
+    result = pipeline(["ab", "c", ""])
+
+    assert result == [[], [], []]
+    assert pipeline.model.calls == [
+        ((2, 2), [[True, True], [True, False]]),
+    ]
+
+
 @pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline dispatch tests")
 @pytest.mark.parametrize(
     "manifest_family,source_model_id",

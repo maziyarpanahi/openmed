@@ -29,6 +29,7 @@ from openmed import BatchProcessor
 
 processor = BatchProcessor(
     model_name="disease_detection_superclinical",
+    batch_size=16,
     confidence_threshold=0.5,
     group_entities=True,
     continue_on_error=True,  # Don't stop on individual failures
@@ -45,6 +46,91 @@ result = processor.process_directory(
     "/path/to/notes/",
     pattern="*.txt",
     recursive=True,
+)
+```
+
+## Operations
+
+`BatchProcessor` supports three operations:
+
+| Operation | Result type | Use when |
+| --- | --- | --- |
+| `analyze_text` | `PredictionResult` | Clinical or biomedical NER. |
+| `extract_pii` | `PredictionResult` | PII detection across many records. |
+| `deidentify` | `DeidentificationResult` | Batch masking, removal, replacement, hashing, or date shifting. |
+
+`batch_size` controls how many documents are sent through each batch helper.
+For PII operations, OpenMed reuses the same loader or privacy-filter pipeline
+inside each batch instead of rebuilding it for every item.
+
+## Batch PII Extraction
+
+```python
+from openmed import BatchProcessor
+
+texts = [
+    "Patient John Doe, DOB 01/15/1970, phone (555) 123-4567.",
+    "Jane Roe emailed jane.roe@example.org from Boston.",
+]
+
+processor = BatchProcessor(
+    operation="extract_pii",
+    model_name="pii_detection",
+    batch_size=16,
+    confidence_threshold=0.5,
+    use_smart_merging=True,
+)
+
+result = processor.process_texts(texts, ids=["note-1", "note-2"])
+
+for item in result.get_successful_results():
+    print(item.id)
+    for entity in item.result.entities:
+        print(f"  {entity.label}: {entity.text}")
+```
+
+## Batch De-identification
+
+```python
+from openmed import BatchProcessor
+
+processor = BatchProcessor(
+    operation="deidentify",
+    model_name="pii_detection",
+    batch_size=16,
+    method="mask",
+    confidence_threshold=0.7,
+)
+
+result = processor.process_texts(texts)
+
+for item in result.items:
+    if item.success:
+        print(item.result.deidentified_text)
+```
+
+All `deidentify()` options can be passed through the constructor:
+
+```python
+processor = BatchProcessor(
+    operation="deidentify",
+    model_name="pii_detection",
+    method="replace",
+    lang="pt",
+    locale="pt_BR",
+    consistent=True,
+    seed=42,
+)
+```
+
+For date shifting:
+
+```python
+processor = BatchProcessor(
+    operation="deidentify",
+    model_name="pii_detection",
+    method="shift_dates",
+    date_shift_days=180,
 )
 ```
 
@@ -107,7 +193,7 @@ Each item result contains:
 
 - `id`: Item identifier
 - `success`: Whether processing succeeded
-- `result`: PredictionResult (if successful)
+- `result`: `PredictionResult` or `DeidentificationResult` (if successful)
 - `error`: Error message (if failed)
 - `processing_time`: Time taken for this item
 - `source`: Source file path (if applicable)
@@ -128,6 +214,10 @@ result = processor.process_texts(texts)
 for item in result.get_failed_results():
     print(f"Failed: {item.id} - {item.error}")
 ```
+
+If a PII batch helper fails and `continue_on_error=True`, OpenMed falls back
+to item-level processing so one bad record does not discard the rest of the
+batch. Set `continue_on_error=False` to raise the batch exception immediately.
 
 To stop on first error:
 
