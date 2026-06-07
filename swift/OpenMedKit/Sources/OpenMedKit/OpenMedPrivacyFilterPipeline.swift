@@ -655,6 +655,11 @@ final class OpenMedPrivacyFilterPipeline {
         maxSeqLength
     }
 
+    func tokenOffsets(in text: String) throws -> [(Int, Int)] {
+        let encoded = try tokenizer.encode(text, maxTokens: Int.max)
+        return zip(encoded.charStarts, encoded.charEnds).map { ($0, $1) }
+    }
+
     func predict(
         _ text: String,
         confidenceThreshold: Float = 0.0
