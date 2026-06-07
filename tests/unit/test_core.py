@@ -574,6 +574,67 @@ class TestAnalyzeTextBehaviour:
         mock_pipeline.assert_called_once()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
+    def test_unload_model_releases_matching_cache_entries(self):
+        """Unloading one model should keep other cached models intact."""
+        loader = ModelLoader(OpenMedConfig(default_org="OpenMed"))
+        model_name = "OpenMed/test-model"
+        other_name = "OpenMed/other-model"
+        loader._models[model_name] = Mock()
+        loader._tokenizers[model_name] = Mock()
+        loader._pipelines[(model_name, "token-classification", "simple")] = Mock()
+        loader._pipelines[(other_name, "token-classification", "simple")] = Mock()
+
+        with patch.object(loader, "_release_cached_memory") as release_memory:
+            released = loader.unload_model("test-model")
+
+        assert released == {
+            "model_name": model_name,
+            "models": 1,
+            "tokenizers": 1,
+            "pipelines": 1,
+        }
+        assert model_name not in loader._models
+        assert model_name not in loader._tokenizers
+        assert (model_name, "token-classification", "simple") not in loader._pipelines
+        assert (other_name, "token-classification", "simple") in loader._pipelines
+        release_memory.assert_called_once()
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    def test_unload_all_models_clears_all_cache_entries(self):
+        """Unloading all models should clear every loader cache."""
+        loader = ModelLoader()
+        loader._models["OpenMed/test-model"] = Mock()
+        loader._tokenizers["OpenMed/test-model"] = Mock()
+        loader._pipelines[("OpenMed/test-model", "token-classification")] = Mock()
+        loader._pipelines[("OpenMed/other-model", "token-classification")] = Mock()
+
+        with patch.object(loader, "_release_cached_memory") as release_memory:
+            released = loader.unload_all_models()
+
+        assert released == {"models": 1, "tokenizers": 1, "pipelines": 2}
+        assert loader._models == {}
+        assert loader._tokenizers == {}
+        assert loader._pipelines == {}
+        release_memory.assert_called_once()
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
+    def test_loaded_models_reports_cache_counts_by_model(self):
+        """Loaded model reporting should aggregate cache state by model id."""
+        loader = ModelLoader()
+        loader._models["OpenMed/test-model"] = Mock()
+        loader._tokenizers["OpenMed/test-model"] = Mock()
+        loader._pipelines[("OpenMed/test-model", "token-classification")] = Mock()
+        loader._pipelines[("OpenMed/test-model", "token-classification", "max")] = Mock()
+
+        assert loader.loaded_models() == {
+            "OpenMed/test-model": {
+                "models": 1,
+                "tokenizers": 1,
+                "pipelines": 2,
+            }
+        }
+
+    @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.backends.get_backend')
     def test_create_pipeline_dispatches_non_hf_backend(self, mock_get_backend):
         """Non-HF backends should be routed through the backend registry."""
