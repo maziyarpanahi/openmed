@@ -98,6 +98,18 @@ print(encoding["tokens"][:10])
 
 `load_model` lets you access the underlying HF `AutoModel` + `AutoTokenizer` for workflows that outgrow pipelines.
 
+## Releasing cached models
+
+Long-running services can release cached model references when VRAM or RAM should be reclaimed:
+
+```python
+loader.unload_model("disease_detection_superclinical")
+loader.unload_all_models()
+```
+
+`unload_model` resolves registry aliases before dropping matching cached pipelines, models, and tokenizers. After cached
+references are removed, OpenMed triggers Python garbage collection and clears available torch CUDA/MPS caches.
+
 ## Sentence detection reuse
 
 `ModelLoader` does not run pySBD itself, but it exposes hooks so `analyze_text` can pass in the tokenizer/pipeline it
