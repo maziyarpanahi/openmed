@@ -226,7 +226,7 @@ A curated registry of specialized medical NER models — browse the [full catalo
 |-------|----------------|--------------|------|
 | `disease_detection_superclinical` | Disease & conditions | DISEASE, CONDITION, DIAGNOSIS | 434M |
 | `pharma_detection_superclinical`  | Drugs & medications  | DRUG, MEDICATION, TREATMENT   | 434M |
-| `pii_detection_superclinical`     | PII & de-identification | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
+| `pii_superclinical_large`     | PII & de-identification | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
 | `anatomy_detection_electramed`    | Anatomy & body parts | ANATOMY, ORGAN, BODY_PART     | 109M |
 | `gene_detection_genecorpus`       | Genes & proteins     | GENE, PROTEIN                 | 109M |
 
@@ -240,7 +240,7 @@ from openmed import extract_pii, deidentify
 text = "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789"
 
 # Extract PII with smart merging (prevents tokenization fragmentation)
-result = extract_pii(text, model_name="pii_detection_superclinical", use_smart_merging=True)
+result = extract_pii(text, model_name="pii_superclinical_large", use_smart_merging=True)
 
 # De-identify with the method you need
 deidentify(text, method="mask")     # [NAME], [DATE]
@@ -252,6 +252,7 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 - **Smart entity merging** keeps `01/15/1970` whole instead of fragmenting it.
 - **Faker-backed obfuscation** with custom clinical-ID providers (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
 - **HIPAA**: all 18 Safe Harbor identifiers, configurable confidence thresholds.
+- **Batch PII** (v1.5.5): extract or de-identify across many documents with `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)`.
 
 [Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization](docs/anonymization.md)
 
@@ -332,6 +333,13 @@ docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.2
 curl -X POST http://127.0.0.1:8080/pii/extract \
   -H "Content-Type: application/json" \
   -d '{"text":"Paciente: Maria Garcia, DNI: 12345678Z","lang":"es"}'
+```
+
+**Model lifecycle (v1.5.5):** free memory on demand with `GET /models/loaded`, `POST /models/unload`, and a `keep_alive` idle window:
+
+```bash
+OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
 ```
 
 See the full [REST service guide](docs/rest-service.md).

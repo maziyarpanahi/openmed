@@ -65,6 +65,15 @@ public enum PostProcessing {
 
     static let defaultPIIPatterns: [SemanticUnitPattern] = [
         .init(
+            #"\bPatient(?:\s+Name)?:\s*([A-Z][A-Za-z]+(?:[-'][A-Za-z]+)*,\s*[A-Z][A-Za-z]+(?:[-'][A-Za-z]+)*(?:[ \t]+(?:[A-Z]\.|[A-Z][A-Za-z]+(?:[-'][A-Za-z]+)*))*)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            baseScore: 0.97,
+            contextBoost: 0.02,
+            contextWords: ["patient", "name"]
+        ),
+        .init(
             #"\bPatient:\s*([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+)\b"#,
             entityType: "full_name",
             priority: 14,
@@ -81,6 +90,16 @@ public enum PostProcessing {
             baseScore: 0.95,
             contextBoost: 0.03,
             contextWords: ["emergency contact", "contact"]
+        ),
+        .init(
+            #"^PATIENT NAME\s*$\n([A-Z][A-Za-z]+(?:[-'][A-Za-z]+)*,\s*[A-Z][A-Za-z]+(?:[-'][A-Za-z]+)*(?:[ \t]+(?:[A-Z]\.|[A-Z][A-Za-z]+(?:[-'][A-Za-z]+)*))*)(?=\n|$)"#,
+            entityType: "full_name",
+            priority: 16,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.98,
+            contextBoost: 0.02,
+            contextWords: ["patient", "name"]
         ),
         .init(
             #"^PATIENT NAME\s*$\n([A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+)(?=\n|$)"#,
@@ -103,6 +122,16 @@ public enum PostProcessing {
             contextWords: ["emergency contact", "contact"]
         ),
         .init(
+            #"^EMERGENCY CONTACT\s*$\n([A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+)(?:\s*\([^)]+\))?\s*,?\s*(?:\n)?(?=\(\d{3}\)|\n|$)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["emergency contact", "contact"]
+        ),
+        .init(
             #"^PRIMARY CLINIC(?:IAN|AN)\s*$\n((?:Dr\.\s+)?[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+(?:,\s*[A-Z.]+)?)(?=\n|$)"#,
             entityType: "full_name",
             priority: 15,
@@ -111,6 +140,35 @@ public enum PostProcessing {
             baseScore: 0.94,
             contextBoost: 0.03,
             contextWords: ["clinician", "provider", "doctor", "physician"]
+        ),
+        .init(
+            #"^PCP\s*$\n((?:Dr\.\s+)?[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+(?:,\s*[A-Z.]+)?)(?=\n|$)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["pcp", "provider", "doctor", "physician"]
+        ),
+        .init(
+            #"\bPCP:\s*((?:Dr\.\s+)?[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+(?:,\s*[A-Z.]+)?)"#,
+            entityType: "full_name",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["pcp", "provider", "doctor", "physician"]
+        ),
+        .init(
+            #"^ELECTRONICALLY SIGNED\s*$\n((?:Dr\.\s+)?[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*(?:\s+[A-Z][A-Za-z]+(?:[ '-][A-Za-z]+)*)+(?:,\s*[A-Z.]+)?)(?=\n|$)"#,
+            entityType: "full_name",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["signed", "electronically signed", "provider", "doctor", "physician"]
         ),
         .init(
             #"\bDOB:\s*(\d{1,2}/\d{1,2}/\d{2,4})\b"#,
@@ -207,7 +265,26 @@ public enum PostProcessing {
             contextWords: ["emergency contact", "contact", "phone"]
         ),
         .init(
+            #"\bEmergency Contact:\s*[A-Za-z][A-Za-z\s'-]+(?:\s*\([^)]+\))?\s*,\s*(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})\b"#,
+            entityType: "phone_number",
+            priority: 15,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["emergency contact", "contact", "phone"]
+        ),
+        .init(
             #"^EMERGENCY CONTACT\s*$\n[A-Za-z][A-Za-z\s'-]+,\s*(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})(?=\n|$)"#,
+            entityType: "phone_number",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["emergency contact", "contact", "phone"]
+        ),
+        .init(
+            #"^EMERGENCY CONTACT\s*$\n[A-Za-z][A-Za-z\s'-]+(?:\s*\([^)]+\))?\s*,?\s*(?:\n)?(\(\d{3}\)\s*\d{3}[-.\s]?\d{4})(?=\n|$)"#,
             entityType: "phone_number",
             priority: 15,
             captureGroup: 1,
@@ -275,6 +352,34 @@ public enum PostProcessing {
             contextWords: ["insurance", "policy", "coverage", "payer"]
         ),
         .init(
+            #"\bMember ID\s*:?[\t ]*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "insurance_id",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["insurance", "member id", "policy", "coverage", "payer"]
+        ),
+        .init(
+            #"\bMember ID\s*$\n([A-Z0-9][A-Z0-9-]{4,})(?=,|\n|$)"#,
+            entityType: "insurance_id",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["insurance", "member id", "policy", "coverage", "payer"]
+        ),
+        .init(
+            #"\bInsurance:\s*[^\n]*?Member ID\s*:?[\t ]*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "insurance_id",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["insurance", "member id", "policy", "coverage", "payer"]
+        ),
+        .init(
             #"\bDriver License:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
             entityType: "driver_license",
             priority: 14,
@@ -328,6 +433,63 @@ public enum PostProcessing {
             baseScore: 0.95,
             contextBoost: 0.03,
             contextWords: ["bank account", "account", "banking"]
+        ),
+        .init(
+            #"\bAccount\s*#?:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "account_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["account", "account number"]
+        ),
+        .init(
+            #"^ACCOUNT\s*#?\s*$\n([A-Z0-9][A-Z0-9-]{4,})(?=\n|$)"#,
+            entityType: "account_number",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["account", "account number"]
+        ),
+        .init(
+            #"\bEncounter\s*#?:\s*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "encounter_number",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["encounter", "visit", "case"]
+        ),
+        .init(
+            #"^ENCOUNTER\s*#?\s*$\n([A-Z0-9][A-Z0-9-]{4,})(?=\n|$)"#,
+            entityType: "encounter_number",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["encounter", "visit", "case"]
+        ),
+        .init(
+            #"\bDocument ID\s*:?[\t ]*([A-Z0-9][A-Z0-9-]{4,})\b"#,
+            entityType: "document_id",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.95,
+            contextBoost: 0.03,
+            contextWords: ["document", "document id"]
+        ),
+        .init(
+            #"^DOCUMENT ID\s*$\n([A-Z0-9][A-Z0-9-]{4,})(?=\n|$)"#,
+            entityType: "document_id",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.96,
+            contextBoost: 0.02,
+            contextWords: ["document", "document id"]
         ),
         .init(
             #"\bRouting:\s*(\d{9})\b"#,
@@ -422,6 +584,25 @@ public enum PostProcessing {
             contextBoost: 0.65,
             contextWords: ["npi", "national provider", "provider number", "provider id", "provider identifier"],
             validator: validateNPI
+        ),
+        .init(
+            #"\bNPI\s*:?[\t ]*(\d{10})\b"#,
+            entityType: "npi",
+            priority: 14,
+            captureGroup: 1,
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["npi", "national provider", "provider number", "provider id", "provider identifier"]
+        ),
+        .init(
+            #"^PCP NPI\s*$\n(\d{10})(?=\n|$)"#,
+            entityType: "npi",
+            priority: 15,
+            captureGroup: 1,
+            options: [.caseInsensitive, .anchorsMatchLines],
+            baseScore: 0.94,
+            contextBoost: 0.03,
+            contextWords: ["npi", "pcp", "provider number", "provider id", "provider identifier"]
         ),
         .init(
             #"\b\d{10}\b"#,
@@ -908,6 +1089,18 @@ public enum PostProcessing {
         if ["account_number", "account"].contains(normalized) {
             return "account"
         }
+        if ["encounter_number", "encounter"].contains(normalized) {
+            return "encounter"
+        }
+        if ["document_id", "document_number", "document"].contains(normalized) {
+            return "document"
+        }
+        if ["npi", "provider_id", "provider_identifier"].contains(normalized) {
+            return "provider_identifier"
+        }
+        if ["insurance_id", "member_id", "policy_number", "policy"].contains(normalized) {
+            return "insurance_id"
+        }
         if ["credit_debit_card", "credit_card", "debit_card", "payment_card"].contains(normalized) {
             return "payment_card"
         }
@@ -928,7 +1121,7 @@ public enum PostProcessing {
             "name": ["first_name", "last_name", "full_name"],
             "phone": ["phone_number", "fax_number", "mobile_number"],
             "address": ["street_address", "home_address", "billing_address"],
-            "id": ["ssn", "medical_record_number", "account_number", "employee_id"],
+            "id": ["ssn", "medical_record_number", "account_number", "employee_id", "encounter_number", "document_id", "npi", "insurance_id"],
             "national_id": ["nir", "insee", "steuer_id", "steuernummer", "codice_fiscale"],
         ]
 

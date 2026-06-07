@@ -37,38 +37,60 @@ public enum SampleClinicalText {
     }
 
     public static let note: String = """
-    PATIENT NOTE — Saint Mary Community Hospital
+    EMERGENCY DEPARTMENT DISCHARGE SUMMARY
+    Summit Ridge Regional Medical Center
+    1200 Cedar Hollow Parkway, Aurora, CO 80012
+    Main (303) 555-0170, Fax (303) 555-0171
 
-    Patient: Eleanor Ruiz
-    DOB: 03/14/1981
-    MRN: MRN-448271
-    Phone: (415) 555-0142
-    Email: eleanor.ruiz@sampleclinic.test
-    Address: 1942 Harbor View Drive, Marseille, CA 92111
-    Insurance ID: HMO-99318442
-    Employer: Blue Harbor Foods
-    Emergency contact: Martin Ruiz, (415) 555-0199
-    Encounter date: 04/16/2026
-    Provider: Dr. Maya Shah, MD — Emergency Department
+    Patient: Whitfield, Jordan A.
+    DOB: 07/22/1984
+    Age / Sex: 41 / Female
+    MRN: SRMC-7741920
+    SSN: 900-21-7755
+    Encounter #: ENC-20260601-3382
+    Account #: ACC-55810394
+    Phone: (720) 555-0148
+    Email: jordan.whitfield@samplemail.test
+    Address: 4471 Lantern Ridge Ct, Aurora, CO 80016
+    Insurance: Summit Health PPO, Member ID SHP-66201845, Group 4471
+    Emergency Contact: Dana Whitfield (spouse), (720) 555-0193
+    PCP: Priya Nandakumar, MD, NPI 1841992307
+    Employer: Front Range Logistics
+    Visit Date: 06/01/2026
+
+    CHIEF COMPLAINT
+    Frontal headache, dizziness, and nausea for three days.
 
     HISTORY OF PRESENT ILLNESS
-    The patient is a 45-year-old woman with type 2 diabetes, hypertension, chronic migraine, hyperlipidemia, and GERD who presents after urgent care hydration for persistent frontal headache, dizziness, nausea, and reduced oral intake. Home finger-stick glucose this morning was 212 mg/dL.
+    Ms. Whitfield is a 41-year-old woman with type 2 diabetes mellitus, essential hypertension, chronic migraine, hyperlipidemia, and GERD who presents to the emergency department after urgent care hydration. She reports three days of worsening frontal headache with photophobia, dizziness, and nausea. Home fingerstick glucose this morning was 212 mg/dL. She received one liter of normal saline and ondansetron 4 mg at urgent care yesterday with partial relief.
+
+    PAST MEDICAL HISTORY
+    Type 2 diabetes mellitus, essential hypertension, chronic migraine, hyperlipidemia, and gastroesophageal reflux disease.
 
     ALLERGIES
-    Penicillin — reported rash in childhood.
+    Penicillin (pruritic rash in childhood). Sulfonamides (hives).
 
     MEDICATIONS
-    Metformin 500 mg twice daily, lisinopril 10 mg daily, atorvastatin 20 mg nightly, sumatriptan 50 mg as needed, ondansetron 4 mg every 8 hours as needed.
+    Metformin 1000 mg twice daily, lisinopril 20 mg daily, atorvastatin 40 mg nightly, sumatriptan 50 mg as needed for migraine, ondansetron 4 mg every 8 hours as needed for nausea.
+
+    VITALS
+    BP 158/94 mmHg, HR 98 bpm, Temp 98.4 F, SpO2 98% on room air, point-of-care glucose 212 mg/dL.
 
     ASSESSMENT
-    Migraine flare with dehydration and mild hyperglycemia; neurologic exam stable.
+    Migraine flare with mild dehydration and hyperglycemia. Neurologic exam non-focal, with low concern for an acute intracranial process given a stable exam and improvement after hydration.
 
     PLAN
-    1. Continue oral hydration and ibuprofen 400 mg every 6 hours as needed.
-    2. PCP follow-up within 48 hours and neurology follow-up within 2 weeks.
-    3. Return to the emergency department for worsening headache, chest pain, repeated vomiting, syncope, confusion, or weakness.
+    1. Oral hydration and ibuprofen 400 mg every 6 hours as needed.
+    2. Resume home medications and recheck fasting glucose with PCP.
+    3. PCP follow-up within 48 hours and neurology follow-up within 2 weeks.
 
-    Signed electronically by Dr. Maya Shah, MD on 04/16/2026.
+    RETURN PRECAUTIONS
+    Return immediately for chest pain, repeated vomiting, syncope, confusion, focal weakness, or the worst headache of life.
+
+    DISPOSITION
+    Discharged home in stable condition. Work status: may return to work on 06/03/2026.
+
+    Electronically signed by Maya Shah, MD on 06/01/2026.
     """
 
     public static let frenchNote: String = """

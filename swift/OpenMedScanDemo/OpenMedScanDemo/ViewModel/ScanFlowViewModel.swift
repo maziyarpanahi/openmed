@@ -253,10 +253,34 @@ public final class ScanFlowViewModel: ObservableObject {
         let selectedEngine = piiEngine
         let text = trimmedText
         let revision = piiRevision
-        await runPIIForCurrentEngine()
+        guard !text.isEmpty, !isWorking else { return }
+        guard downloads.state(for: selectedEngine.modelID) == .ready else {
+            errorMessage = "Model not ready yet — start the download first."
+            return
+        }
+
+        isWorking = true
+        status = PipelineProgress(phase: .inferencing, detail: "Running \(selectedEngine.displayName) on-device")
+        defer { isWorking = false; status = nil }
+
+        do {
+            let output = try await runtime.runPII(text: text, modelID: selectedEngine.modelID)
+            guard revision == piiRevision, text == trimmedText else { return }
+            setPIIOutput(output, for: selectedEngine)
+            hasRunAnalysis = true
+            HapticsCenter.impact(.soft)
+        } catch {
+            guard revision == piiRevision, text == trimmedText else { return }
+            errorMessage = error.localizedDescription
+            HapticsCenter.notify(.error)
+            log.error("PII run failed: \(error.localizedDescription, privacy: .public)")
+            return
+        }
+
         guard revision == piiRevision, text == trimmedText else { return }
         for engine in PIIEngine.allCases where engine != selectedEngine {
             guard downloads.state(for: engine.modelID) == .ready else { continue }
+            status = PipelineProgress(phase: .inferencing, detail: "Running \(engine.displayName) on-device")
             do {
                 let output = try await runtime.runPII(text: text, modelID: engine.modelID)
                 guard revision == piiRevision, text == trimmedText else { return }
@@ -275,9 +299,11 @@ public final class ScanFlowViewModel: ObservableObject {
             return
         }
         isWorking = true
-        status = PipelineProgress(phase: .inferencing, detail: "Running GLiNER Relex")
+        status = PipelineProgress(phase: .inferencing, detail: "Freeing PII models before GLiNER")
         defer { isWorking = false; status = nil }
         do {
+            await runtime.unloadPIIRuntimes()
+            status = PipelineProgress(phase: .inferencing, detail: "Running GLiNER Relex")
             let output = try await runtime.runClinical(
                 maskedText: masked,
                 labels: activeLabels,

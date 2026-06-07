@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Union
 
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
 )
+
+from .keep_alive import parse_keep_alive
 
 try:
     from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -23,6 +25,7 @@ except ImportError:  # pragma: no cover
 
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+KeepAliveValue = Union[int, float, str]
 
 
 def _normalize_text(value: Any) -> str:
@@ -45,6 +48,11 @@ def _normalize_confidence_threshold(value: Optional[float]) -> Optional[float]:
     if value is None:
         return None
     return validate_confidence_threshold(value)
+
+
+def _validate_keep_alive_value(value: Any) -> Any:
+    parse_keep_alive(value)
+    return value
 
 
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
@@ -88,6 +96,7 @@ if PYDANTIC_V2:
         sentence_language: str = "en"
         sentence_clean: bool = False
         use_fast_tokenizer: bool = True
+        keep_alive: Optional[KeepAliveValue] = None
 
         @field_validator("text", mode="before")
         @classmethod
@@ -104,6 +113,11 @@ if PYDANTIC_V2:
         def _validate_confidence_threshold(cls, value: Optional[float]) -> Optional[float]:
             return _normalize_confidence_threshold(value)
 
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
 
     class PIIExtractRequest(_StrictModel):
         """Request schema for /pii/extract."""
@@ -114,6 +128,7 @@ if PYDANTIC_V2:
         use_smart_merging: bool = True
         lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
 
         @field_validator("text", mode="before")
         @classmethod
@@ -131,6 +146,11 @@ if PYDANTIC_V2:
             normalized = _normalize_confidence_threshold(value)
             assert normalized is not None
             return normalized
+
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
 
 
     class PIIDeidentifyRequest(_StrictModel):
@@ -147,6 +167,7 @@ if PYDANTIC_V2:
         use_smart_merging: bool = True
         lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
 
         @field_validator("text", mode="before")
         @classmethod
@@ -165,11 +186,36 @@ if PYDANTIC_V2:
             assert normalized is not None
             return normalized
 
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
         @model_validator(mode="after")
         def _validate_shift_dates(self) -> "PIIDeidentifyRequest":
             values = _normalize_shift_dates_payload(self.model_dump())
             for field_name, value in values.items():
                 setattr(self, field_name, value)
+            return self
+
+
+    class ModelUnloadRequest(_StrictModel):
+        """Request schema for /models/unload."""
+
+        model_name: Optional[str] = None
+        all: bool = False
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            return _normalize_model_name(value)
+
+        @model_validator(mode="after")
+        def _validate_target(self) -> "ModelUnloadRequest":
+            if not self.all and self.model_name is None:
+                raise ValueError("model_name is required unless all=true")
             return self
 
 else:
@@ -186,6 +232,7 @@ else:
         sentence_language: str = "en"
         sentence_clean: bool = False
         use_fast_tokenizer: bool = True
+        keep_alive: Optional[KeepAliveValue] = None
 
         @validator("text", pre=True)
         def _validate_text(cls, value: Any) -> str:
@@ -199,6 +246,10 @@ else:
         def _validate_confidence_threshold(cls, value: Optional[float]) -> Optional[float]:
             return _normalize_confidence_threshold(value)
 
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
 
     class PIIExtractRequest(_StrictModel):
         """Request schema for /pii/extract."""
@@ -209,6 +260,7 @@ else:
         use_smart_merging: bool = True
         lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
 
         @validator("text", pre=True)
         def _validate_text(cls, value: Any) -> str:
@@ -223,6 +275,10 @@ else:
             normalized = _normalize_confidence_threshold(value)
             assert normalized is not None
             return normalized
+
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
 
 
     class PIIDeidentifyRequest(_StrictModel):
@@ -239,6 +295,7 @@ else:
         use_smart_merging: bool = True
         lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
 
         @validator("text", pre=True)
         def _validate_text(cls, value: Any) -> str:
@@ -254,6 +311,29 @@ else:
             assert normalized is not None
             return normalized
 
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
+
+
+    class ModelUnloadRequest(_StrictModel):
+        """Request schema for /models/unload."""
+
+        model_name: Optional[str] = None
+        all: bool = False
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            return _normalize_model_name(value)
+
+        @root_validator
+        def _validate_target(cls, values: dict[str, Any]) -> dict[str, Any]:
+            if not values.get("all") and values.get("model_name") is None:
+                raise ValueError("model_name is required unless all=true")
+            return values

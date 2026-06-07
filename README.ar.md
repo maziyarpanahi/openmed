@@ -266,7 +266,7 @@ result = analyze_text(
 |---------|--------|----------------|-------|
 | `disease_detection_superclinical` | الأمراض والحالات | DISEASE, CONDITION, DIAGNOSIS | 434M |
 | `pharma_detection_superclinical`  | الأدوية والعلاجات | DRUG, MEDICATION, TREATMENT   | 434M |
-| `pii_detection_superclinical`     | PII وإزالة الهوية | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
+| `pii_superclinical_large`     | PII وإزالة الهوية | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
 | `anatomy_detection_electramed`    | التشريح وأجزاء الجسم | ANATOMY, ORGAN, BODY_PART     | 109M |
 | `gene_detection_genecorpus`       | الجينات والبروتينات | GENE, PROTEIN                 | 109M |
 
@@ -284,7 +284,7 @@ from openmed import extract_pii, deidentify
 text = "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789"
 
 # Extract PII with smart merging (prevents tokenization fragmentation)
-result = extract_pii(text, model_name="pii_detection_superclinical", use_smart_merging=True)
+result = extract_pii(text, model_name="pii_superclinical_large", use_smart_merging=True)
 
 # De-identify with the method you need
 deidentify(text, method="mask")     # [NAME], [DATE]

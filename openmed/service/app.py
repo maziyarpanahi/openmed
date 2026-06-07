@@ -14,7 +14,12 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .runtime import ServiceRuntime
-from .schemas import AnalyzeRequest, PIIDeidentifyRequest, PIIExtractRequest
+from .schemas import (
+    AnalyzeRequest,
+    ModelUnloadRequest,
+    PIIDeidentifyRequest,
+    PIIExtractRequest,
+)
 
 SERVICE_NAME = "openmed-rest"
 
@@ -203,26 +208,32 @@ def create_app() -> FastAPI:
             "profile": runtime.profile,
         }
 
+    @app.get("/models/loaded")
+    async def loaded_models(request: Request) -> Dict[str, Any]:
+        runtime = _get_service_runtime(request)
+        return runtime.loaded_models()
+
+    @app.post("/models/unload")
+    async def unload_models(
+        payload: ModelUnloadRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        runtime = _get_service_runtime(request)
+        if payload.all:
+            return runtime.unload_all_models()
+        assert payload.model_name is not None
+        return runtime.unload_model(payload.model_name)
+
     @app.post("/analyze")
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
 
         def _operation() -> Dict[str, Any]:
-            result = openmed.analyze_text(
-                payload.text,
-                model_name=payload.model_name,
-                config=runtime.config,
-                loader=runtime.get_loader(),
-                aggregation_strategy=payload.aggregation_strategy,
-                output_format="dict",
-                confidence_threshold=payload.confidence_threshold,
-                group_entities=payload.group_entities,
-                sentence_detection=payload.sentence_detection,
-                sentence_language=payload.sentence_language,
-                sentence_clean=payload.sentence_clean,
-                use_fast_tokenizer=payload.use_fast_tokenizer,
+            return runtime.run_model_request(
+                payload.model_name,
+                payload.keep_alive,
+                lambda: _analyze_payload(payload, runtime),
             )
-            return _result_to_dict(result)
 
         return await _run_with_timeout(runtime, _operation)
 
@@ -231,17 +242,11 @@ def create_app() -> FastAPI:
         runtime = _get_service_runtime(request)
 
         def _operation() -> Dict[str, Any]:
-            result = openmed.extract_pii(
-                payload.text,
-                model_name=payload.model_name,
-                confidence_threshold=payload.confidence_threshold,
-                config=runtime.config,
-                use_smart_merging=payload.use_smart_merging,
-                lang=payload.lang,
-                normalize_accents=payload.normalize_accents,
-                loader=runtime.get_loader(),
+            return runtime.run_model_request(
+                payload.model_name,
+                payload.keep_alive,
+                lambda: _pii_extract_payload(payload, runtime),
             )
-            return _result_to_dict(result)
 
         return await _run_with_timeout(runtime, _operation)
 
@@ -253,30 +258,76 @@ def create_app() -> FastAPI:
         runtime = _get_service_runtime(request)
 
         def _operation() -> Dict[str, Any]:
-            result = openmed.deidentify(
-                payload.text,
-                method=payload.method,
-                model_name=payload.model_name,
-                confidence_threshold=payload.confidence_threshold,
-                keep_year=payload.keep_year,
-                shift_dates=payload.shift_dates,
-                date_shift_days=payload.date_shift_days,
-                keep_mapping=payload.keep_mapping,
-                config=runtime.config,
-                use_smart_merging=payload.use_smart_merging,
-                lang=payload.lang,
-                normalize_accents=payload.normalize_accents,
-                loader=runtime.get_loader(),
+            return runtime.run_model_request(
+                payload.model_name,
+                payload.keep_alive,
+                lambda: _pii_deidentify_payload(payload, runtime),
             )
-
-            response = _result_to_dict(result)
-            if payload.keep_mapping and getattr(result, "mapping", None):
-                response["mapping"] = result.mapping
-            return response
 
         return await _run_with_timeout(runtime, _operation)
 
     return app
+
+
+def _analyze_payload(payload: AnalyzeRequest, runtime: ServiceRuntime) -> Dict[str, Any]:
+    result = openmed.analyze_text(
+        payload.text,
+        model_name=payload.model_name,
+        config=runtime.config,
+        loader=runtime.get_loader(),
+        aggregation_strategy=payload.aggregation_strategy,
+        output_format="dict",
+        confidence_threshold=payload.confidence_threshold,
+        group_entities=payload.group_entities,
+        sentence_detection=payload.sentence_detection,
+        sentence_language=payload.sentence_language,
+        sentence_clean=payload.sentence_clean,
+        use_fast_tokenizer=payload.use_fast_tokenizer,
+    )
+    return _result_to_dict(result)
+
+
+def _pii_extract_payload(
+    payload: PIIExtractRequest,
+    runtime: ServiceRuntime,
+) -> Dict[str, Any]:
+    result = openmed.extract_pii(
+        payload.text,
+        model_name=payload.model_name,
+        confidence_threshold=payload.confidence_threshold,
+        config=runtime.config,
+        use_smart_merging=payload.use_smart_merging,
+        lang=payload.lang,
+        normalize_accents=payload.normalize_accents,
+        loader=runtime.get_loader(),
+    )
+    return _result_to_dict(result)
+
+
+def _pii_deidentify_payload(
+    payload: PIIDeidentifyRequest,
+    runtime: ServiceRuntime,
+) -> Dict[str, Any]:
+    result = openmed.deidentify(
+        payload.text,
+        method=payload.method,
+        model_name=payload.model_name,
+        confidence_threshold=payload.confidence_threshold,
+        keep_year=payload.keep_year,
+        shift_dates=payload.shift_dates,
+        date_shift_days=payload.date_shift_days,
+        keep_mapping=payload.keep_mapping,
+        config=runtime.config,
+        use_smart_merging=payload.use_smart_merging,
+        lang=payload.lang,
+        normalize_accents=payload.normalize_accents,
+        loader=runtime.get_loader(),
+    )
+
+    response = _result_to_dict(result)
+    if payload.keep_mapping and getattr(result, "mapping", None):
+        response["mapping"] = result.mapping
+    return response
 
 
 app = create_app()
