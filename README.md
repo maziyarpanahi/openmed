@@ -128,6 +128,34 @@ result = processor.process_texts([
 ])
 ```
 
+Batch PII extraction and de-identification use the same processor:
+
+```python
+from openmed import BatchProcessor
+
+texts = [
+    "Patient John Doe, DOB 01/15/1970, phone (555) 123-4567.",
+    "Jane Roe emailed jane.roe@example.org from Boston.",
+]
+
+extractor = BatchProcessor(
+    operation="extract_pii",
+    model_name="pii_detection",
+    batch_size=16,
+    confidence_threshold=0.5,
+)
+pii_batch = extractor.process_texts(texts)
+
+deidentifier = BatchProcessor(
+    operation="deidentify",
+    model_name="pii_detection",
+    batch_size=16,
+    method="mask",
+)
+deid_batch = deidentifier.process_texts(texts)
+print(deid_batch.items[0].result.deidentified_text)
+```
+
 ---
 
 ## Key Features
@@ -237,7 +265,7 @@ OpenMed includes a curated registry of 12+ specialized medical NER models:
 |-------|---------------|--------------|------|
 | `disease_detection_superclinical` | Disease & Conditions | DISEASE, CONDITION, DIAGNOSIS | 434M |
 | `pharma_detection_superclinical` | Drugs & Medications | DRUG, MEDICATION, TREATMENT | 434M |
-| `pii_detection_superclinical` | PII & De-identification | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
+| `pii_superclinical_large` | PII & De-identification | NAME, DATE, SSN, PHONE, EMAIL, ADDRESS | 434M |
 | `anatomy_detection_electramed` | Anatomy & Body Parts | ANATOMY, ORGAN, BODY_PART | 109M |
 | `gene_detection_genecorpus` | Genes & Proteins | GENE, PROTEIN | 109M |
 
@@ -255,7 +283,7 @@ from openmed import extract_pii, deidentify
 # Extract PII entities with smart merging (default)
 result = extract_pii(
     "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789",
-    model_name="pii_detection_superclinical",
+    model_name="pii_superclinical_large",
     use_smart_merging=True  # Prevents entity fragmentation
 )
 
@@ -437,6 +465,7 @@ config = OpenMedConfig.from_profile("prod")
 processor = BatchProcessor(
     model_name="disease_detection_superclinical",
     config=config,
+    batch_size=16,
     group_entities=True,
 )
 
@@ -444,6 +473,41 @@ result = processor.process_texts([
     "Metastatic breast cancer treated with trastuzumab.",
     "Acute lymphoblastic leukemia diagnosed.",
 ])
+```
+
+```python
+from openmed import BatchProcessor
+
+notes = [
+    "Patient John Doe, DOB 01/15/1970, SSN 123-45-6789.",
+    "Maria Garcia can be reached at maria@example.org.",
+]
+
+pii = BatchProcessor(
+    operation="extract_pii",
+    model_name="pii_detection",
+    batch_size=16,
+    confidence_threshold=0.5,
+)
+pii_results = pii.process_texts(notes)
+
+masked = BatchProcessor(
+    operation="deidentify",
+    model_name="pii_detection",
+    batch_size=16,
+    method="mask",
+)
+masked_results = masked.process_texts(notes)
+
+replaced = BatchProcessor(
+    operation="deidentify",
+    model_name="pii_detection",
+    batch_size=16,
+    method="replace",
+    consistent=True,
+    seed=42,
+)
+replaced_results = replaced.process_texts(notes)
 ```
 
 ### Configuration Profiles
