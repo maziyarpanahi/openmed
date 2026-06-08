@@ -111,7 +111,7 @@ de sorte que la détection des PII et l'extraction clinique se font entièrement
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.2"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
 ]
 ```
 
@@ -324,8 +324,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.2 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.2
+docker build -t openmed:1.5.5 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
 ```
 
 ```bash

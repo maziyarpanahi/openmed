@@ -1,6 +1,6 @@
 # MLX Backend (Apple Silicon)
 
-OpenMed v1.5.2 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx), including preconverted Arabic, Japanese, and Turkish PII token-classification artifacts.
+OpenMed v1.5.5 expands native Apple Silicon acceleration via [Apple MLX](https://github.com/ml-explore/mlx), including preconverted Arabic, Japanese, and Turkish PII token-classification artifacts.
 
 That MLX story now has two surfaces:
 
