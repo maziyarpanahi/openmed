@@ -7,26 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- New project mascot — a Persian-cat "Avicenna" guardian — with brand assets in `docs/brand/` and an animated, on-device PII de-identification demo (`docs/brand/openmed-pii-demo.gif`).
-- README translations in 13 languages with a language switcher: zh-CN, es, fr, de, it, pt, nl, ar, hi, te, ja, tr, fa (Arabic and Farsi are right-to-left).
-
-### Changed
-- Overhauled the README: mascot hero, colorful badges, Apple Silicon / Swift / iOS brought front-and-center, an OpenMed-vs-cloud comparison table, and a Mermaid flow diagram.
-
-## [1.5.5] - 2026-06-07
+## [1.5.5] - 2026-06-08
 
 ### Added
 
 - Added batch PII extraction and de-identification support through `BatchProcessor(operation="extract_pii")` and `BatchProcessor(operation="deidentify")`, including document-level `batch_size` chunking, shared loader/pipeline reuse, tests, docs, and a runnable example.
 - Added REST service model lifecycle controls with `GET /models/loaded`, `POST /models/unload`, request-level `keep_alive`, `OPENMED_SERVICE_KEEP_ALIVE`, and model-loader cache release helpers.
 - Added chunked Swift/OpenMedKit PII extraction for long OCR text and refreshed the OpenMed Scan Demo clinical document flow with updated sample text, a printable sample PDF, and a generator script.
+- Added a project mascot, brand assets in `docs/brand/`, and an animated on-device PII de-identification demo (`docs/brand/openmed-pii-demo.gif`).
+- Added README translations in 13 languages with a language switcher: zh-CN, es, fr, de, it, pt, nl, ar, hi, te, ja, tr, fa.
 
 ### Changed
 
 - Batched privacy-filter inference now accepts list inputs across Torch and MLX paths and forwards batching controls to the underlying pipelines.
 - The OpenMed Scan Demo now unloads inactive MLX runtime families when switching engines, sequences selected and secondary PII engine runs explicitly, improves OCR line ordering, and expands entity category mapping.
 - README and service/model-loader documentation now cover batch PII operations and model unloading behavior.
+- Overhauled the README with a visual hero, brand badges, Apple Silicon/Swift/iOS entry points, an OpenMed-vs-cloud comparison table, and a Mermaid flow diagram.
 
 ### Fixed
 
