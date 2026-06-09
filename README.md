@@ -52,6 +52,16 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 ## See it in action
 
+OpenMed runs **entirely on the device** — clinical text never leaves it. Here it is on iPhone, fully offline:
+
+<div align="center">
+  <img src="docs/brand/openmed-ios-scan.png" alt="OpenMed Scan on iPhone — on-device PII de-identification and clinical extraction via OpenMedKit" width="840" />
+  <br/>
+  <sub><b>On iPhone via <a href="swift/OpenMedKit">OpenMedKit</a></b> — scan a clinical note, de-identify it, and extract clinical signals, all locally with Apple MLX. Nothing is uploaded.</sub>
+</div>
+
+<br/>
+
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed redacting PII from a clinical discharge document in real time" width="760" />
   <br/>
@@ -120,6 +130,12 @@ dependencies: [
 - **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
 
 Guides: [MLX backend](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML export](docs/coreml-export.md)
+
+<div align="center">
+  <img src="docs/brand/openmed-mlx-speedup.png" alt="MLX vs CPU latency on Apple Silicon — 24 to 33 times faster" width="840" />
+  <br/>
+  <sub><b>MLX on Apple Silicon: 24–33× faster than CPU PyTorch</b> for the Privacy Filter — median latency per inference step, lower is better.</sub>
+</div>
 
 ---
 
@@ -253,6 +269,12 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 - **Faker-backed obfuscation** with custom clinical-ID providers (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
 - **HIPAA**: all 18 Safe Harbor identifiers, configurable confidence thresholds.
 - **Batch PII** (v1.5.5): extract or de-identify across many documents with `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)`.
+
+<div align="center">
+  <img src="docs/assets/pii-batch-benchmark.png" alt="Batch PII processing throughput — up to 3.3x on CPU and 2.2x on MLX" width="840" />
+  <br/>
+  <sub><b>Batch processing</b> — up to <b>3.3×</b> higher throughput on CPU and <b>2.2×</b> on MLX vs. one document at a time.</sub>
+</div>
 
 [Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization](docs/anonymization.md)
 
