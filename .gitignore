@@ -232,3 +232,6 @@ docs/api/_build/
 .pypirc
 
 PLANS/**
+
+AGENTS.md
+CLAUDE.md
