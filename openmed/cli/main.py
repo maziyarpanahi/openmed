@@ -495,26 +495,64 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handler: Optional[Handler] = getattr(args, "handler", None)
 
     if handler is None:
-        # No subcommand provided; launch TUI directly.
-        try:
-            from openmed.tui import OpenMedTUI
-        except ImportError:
-            sys.stderr.write(
-                "TUI dependencies not installed. Install with: pip install openmed[tui]\n"
-                "\nFor CLI commands, use:\n"
-                "  openmed analyze --text \"...\"\n"
-                "  openmed batch --input-dir ./notes\n"
-                "  openmed models list\n"
-                "  openmed config show\n"
-                "\nRun 'openmed --help' for more options.\n"
-            )
-            return 1
-
-        app = OpenMedTUI()
-        app.run()
-        return 0
+        return _launch_tui(model_name=None, confidence_threshold=0.5)
 
     return handler(args)
+
+
+def _launch_tui(
+    *,
+    model_name: Optional[str],
+    confidence_threshold: float,
+) -> int:
+    try:
+        from openmed.tui import OpenMedTUI
+    except ImportError:
+        return _run_basic_tui_entry(
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+        )
+
+    app = OpenMedTUI(
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+    )
+    app.run()
+    return 0
+
+
+def _run_basic_tui_entry(
+    *,
+    model_name: Optional[str],
+    confidence_threshold: float,
+) -> int:
+    model_display = model_name or "disease_detection_superclinical"
+    if not sys.stdin.isatty():
+        sys.stdout.write(
+            "OpenMed TUI entry is installed. Run it from an interactive "
+            "terminal to start the basic prompt.\n"
+        )
+        return 0
+
+    sys.stdout.write(
+        "OpenMed basic terminal prompt\n"
+        f"Model: {model_display} | confidence threshold: {confidence_threshold}\n"
+        "Use 'openmed analyze --text \"...\"' for model-backed analysis.\n"
+        "Type 'quit' or press Ctrl-D to exit.\n"
+    )
+    while True:
+        try:
+            text = input("openmed> ")
+        except EOFError:
+            sys.stdout.write("\n")
+            return 0
+
+        if text.strip().lower() in {"quit", "exit", ":q"}:
+            return 0
+        if text.strip():
+            sys.stdout.write(
+                "Analysis is available through 'openmed analyze --text'.\n"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -661,20 +699,10 @@ def _handle_batch(args: argparse.Namespace) -> int:
 
 
 def _handle_tui(args: argparse.Namespace) -> int:
-    try:
-        from openmed.tui import OpenMedTUI
-    except ImportError:
-        sys.stderr.write(
-            "TUI dependencies not installed. Install with: pip install openmed[tui]\n"
-        )
-        return 1
-
-    app = OpenMedTUI(
+    return _launch_tui(
         model_name=args.model,
         confidence_threshold=args.confidence_threshold,
     )
-    app.run()
-    return 0
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:

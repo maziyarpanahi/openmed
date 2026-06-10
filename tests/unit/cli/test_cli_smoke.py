@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
 import types
@@ -71,6 +72,19 @@ def test_tui_entry_invokes_openmed_tui(monkeypatch: pytest.MonkeyPatch) -> None:
         },
         "ran": True,
     }
+
+
+def test_tui_entry_has_base_install_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delitem(sys.modules, "openmed.tui", raising=False)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+
+    result = main_module.main(["tui"])
+
+    assert result == 0
+    assert "OpenMed TUI entry is installed" in capsys.readouterr().out
 
 
 def test_typer_surface_is_importable() -> None:
