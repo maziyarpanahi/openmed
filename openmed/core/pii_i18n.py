@@ -70,9 +70,11 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
 def validate_french_nir(text: str) -> bool:
     """Validate French NIR/INSEE number.
 
-    The NIR (Numero d'Inscription au Repertoire) is 15 digits.
+    The NIR (Numero d'Inscription au Repertoire) is 15 characters.
     Format: S AA MM DDD CCC OOO KK
     Key (last 2 digits) = 97 - (first 13 digits mod 97)
+    Corsica department codes 2A and 2B are normalized to 19 and 18
+    respectively before computing the checksum.
 
     Args:
         text: NIR string (may contain spaces)
@@ -80,18 +82,26 @@ def validate_french_nir(text: str) -> bool:
     Returns:
         True if valid NIR format and checksum
     """
-    digits = re.sub(r"[^0-9]", "", text)
+    cleaned = re.sub(r"[\s.-]", "", text).upper()
 
-    if len(digits) != 15:
+    if len(cleaned) != 15:
         return False
 
     # First digit must be 1 or 2
-    if digits[0] not in ("1", "2"):
+    if cleaned[0] not in ("1", "2"):
         return False
 
     try:
-        number = int(digits[:13])
-        key = int(digits[13:15])
+        body = cleaned[:13]
+        key = int(cleaned[13:15])
+        if "A" in body or "B" in body:
+            if not re.match(r"^[12]\d{4}2[AB]\d{6}$", body):
+                return False
+            body = body.replace("2A", "19").replace("2B", "18")
+        elif not body.isdigit():
+            return False
+
+        number = int(body)
         return key == 97 - (number % 97)
     except (ValueError, IndexError):
         return False
@@ -531,9 +541,9 @@ _FRENCH_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.3,
     ),
-    # French NIR/INSEE (15 digits, possibly spaced)
+    # French NIR/INSEE (15 characters, possibly spaced; includes Corsica 2A/2B)
     PIIPattern(
-        r"\b[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2}\b",
+        r"\b[12]\s?\d{2}\s?\d{2}\s?(?:\d{2}|2[ABab])\s?\d{3}\s?\d{3}\s?\d{2}\b",
         "national_id",
         priority=10,
         base_score=0.55,
