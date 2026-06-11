@@ -131,6 +131,13 @@ class TestValidateFrenchNIR:
         # number = 2000000000000, key = 97 - (2000000000000 % 97) = 94
         assert validate_french_nir("200000000000094") is True
 
+    def test_valid_nir_corsica_departments(self):
+        assert validate_french_nir("291032A03396109") is True
+        assert validate_french_nir("291032B03396136") is True
+
+    def test_invalid_nir_corsica_wrong_checksum(self):
+        assert validate_french_nir("291032B03396137") is False
+
 
 # ---------------------------------------------------------------------------
 # German Steuer-ID Validator Tests
