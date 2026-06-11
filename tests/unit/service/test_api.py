@@ -183,6 +183,16 @@ def test_analyze_blank_text_returns_validation_error(client):
     assert payload["error"]["details"][0]["field"] == "body.text"
 
 
+def test_analyze_oversized_text_returns_validation_error(client, monkeypatch):
+    from openmed.service import schemas
+
+    monkeypatch.setattr(schemas, "MAX_TEXT_LENGTH", 10)
+    response = client.post("/analyze", json={"text": "x" * 11})
+
+    payload = _assert_error_payload(response, 422, "validation_error")
+    assert payload["error"]["details"][0]["field"] == "body.text"
+
+
 def test_analyze_invalid_confidence_threshold_returns_validation_error(client):
     response = client.post("/analyze", json={"text": "sample", "confidence_threshold": 1.5})
 
