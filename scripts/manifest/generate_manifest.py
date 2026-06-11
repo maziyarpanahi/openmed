@@ -11,7 +11,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable, Optional
 
-from huggingface_hub import HfApi
+try:
+    from huggingface_hub import HfApi
+except ImportError:  # pragma: no cover - exercised in minimal test envs
+    HfApi = None  # type: ignore[assignment]
 
 
 DEFAULT_ORG = "OpenMed"
@@ -391,6 +394,12 @@ def model_to_manifest_row(model: Any) -> dict[str, Any]:
 
 
 def fetch_manifest_rows(org: str) -> list[dict[str, Any]]:
+    if HfApi is None:
+        raise RuntimeError(
+            "huggingface-hub is required to refresh the model manifest. "
+            "Install the hf extra or run the manifest refresh workflow."
+        )
+
     api = HfApi()
     models = api.list_models(author=org, full=True)
     rows = [model_to_manifest_row(model) for model in models]
