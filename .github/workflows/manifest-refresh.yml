@@ -1,0 +1,38 @@
+name: Manifest refresh
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install manifest dependencies
+        run: python -m pip install "huggingface-hub>=0.30"
+
+      - name: Regenerate manifest
+        run: python scripts/manifest/generate_manifest.py --output models.jsonl
+
+      - name: Open manifest refresh PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: feature/refresh-canonical-model-manifest
+          base: master
+          commit-message: Refresh canonical model manifest
+          title: Refresh canonical model manifest
+          body: |
+            Refreshes the committed model manifest from the live HF org snapshot.
+          delete-branch: true

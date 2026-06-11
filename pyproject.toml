@@ -86,6 +86,7 @@ docs = [
 [tool.hatch.build]
 include = [
   "openmed/**",
+  "models.jsonl",
   "README.md",
   "pyproject.toml"
 ]
