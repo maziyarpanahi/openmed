@@ -30,6 +30,7 @@ from .core.model_registry import (
     list_model_categories,
 )
 from .core.model_search import ModelQuery, ModelSearchResult, search_models
+from .core.offline import network_blocked_if_offline
 from .core.pii import (
     DeidentificationResult,
     PIIEntity,
@@ -253,6 +254,7 @@ def analyze_text(
             return final_result
 
     loader = loader or ModelLoader(config)
+    runtime_config = getattr(loader, "config", config)
 
     pipeline_args = dict(
         task="token-classification",
@@ -276,10 +278,11 @@ def analyze_text(
     if truncate_inputs and provided_max_length is not None:
         effective_max_length = provided_max_length
     elif truncate_inputs:
-        effective_max_length = loader.get_max_sequence_length(
-            validated_model,
-            tokenizer=getattr(ner_pipeline, "tokenizer", None),
-        )
+        with network_blocked_if_offline(runtime_config):
+            effective_max_length = loader.get_max_sequence_length(
+                validated_model,
+                tokenizer=getattr(ner_pipeline, "tokenizer", None),
+            )
 
     desired_max_length = (
         provided_max_length if provided_max_length is not None else effective_max_length
@@ -429,9 +432,10 @@ def analyze_text(
     else:
         inference_input = validated_text
 
-    start_time = time.time()
-    raw_predictions = ner_pipeline(inference_input, **call_kwargs)
-    processing_time = time.time() - start_time
+    with network_blocked_if_offline(runtime_config):
+        start_time = time.time()
+        raw_predictions = ner_pipeline(inference_input, **call_kwargs)
+        processing_time = time.time() - start_time
 
     def _normalize_predictions(
         predictions: Any,

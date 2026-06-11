@@ -13,6 +13,7 @@ from .config import (
 from .custom_recognizer import CustomRecognizer
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
+from .offline import OfflineModeError
 from .redaction_preview import redaction_preview, render_redaction_preview
 from .script_detect import (
     SCRIPT_LANGUAGE_HINTS,
@@ -61,4 +62,5 @@ __all__ = [
     "candidate_languages_for_script",
     "detect_script",
     "segment_by_script",
+    "OfflineModeError",
 ]
