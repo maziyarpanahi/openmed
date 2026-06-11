@@ -1,1001 +1,591 @@
-"""Model registry for OpenMed models from HuggingFace collection."""
+"""Model registry derived from the committed OpenMed model manifest."""
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass
+import json
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
 @dataclass
 class ModelInfo:
     """Information about an OpenMed model."""
+
     model_id: str
     display_name: str
     category: str
     specialization: str
     description: str
     entity_types: List[str]
-    size_category: str  # Tiny, Small, Medium, Large, XLarge
+    size_category: str
     recommended_confidence: float = 0.60
+    family: str = "Unknown"
+    task: str = "unknown"
+    languages: List[str] = field(default_factory=list)
+    tier: Optional[str] = None
+    param_count: Optional[int] = None
+    architecture: Optional[str] = None
+    base_model: Optional[str] = None
+    formats: List[str] = field(default_factory=list)
+    benchmark: Dict[str, Any] = field(default_factory=dict)
+    arxiv: Optional[str] = None
+    license: Optional[str] = None
+    reproducibility_hash: Optional[str] = None
+    released: Optional[str] = None
 
     @property
     def size_mb(self) -> Optional[int]:
-        """Extract estimated size in MB from model name."""
-        if "Tiny" in self.model_id or "33M" in self.model_id:
-            return 33
-        elif "44M" in self.model_id:
-            return 44
-        elif "60M" in self.model_id or "65M" in self.model_id or "66M" in self.model_id:
-            return 66
-        elif "82M" in self.model_id:
-            return 82
-        elif "108M" in self.model_id or "109M" in self.model_id or "110M" in self.model_id:
-            return 110
-        elif "125M" in self.model_id:
-            return 125
-        elif "135M" in self.model_id:
-            return 135
-        elif "141M" in self.model_id:
-            return 141
-        elif "149M" in self.model_id:
-            return 149
-        elif "166M" in self.model_id:
-            return 166
-        elif "184M" in self.model_id:
-            return 184
-        elif "209M" in self.model_id or "210M" in self.model_id or "212M" in self.model_id:
-            return 210
-        elif "220M" in self.model_id:
-            return 220
-        elif "278M" in self.model_id or "279M" in self.model_id:
-            return 279
-        elif "335M" in self.model_id or "340M" in self.model_id:
-            return 340
-        elif "355M" in self.model_id:
-            return 355
-        elif "395M" in self.model_id:
-            return 395
-        elif "434M" in self.model_id:
-            return 434
-        elif "459M" in self.model_id:
-            return 459
-        elif "560M" in self.model_id:
-            return 560
-        elif "568M" in self.model_id:
-            return 568
-        elif "600M" in self.model_id:
-            return 600
-        elif "770M" in self.model_id:
-            return 770
+        """Extract estimated size in millions of parameters from metadata/name."""
+        if self.param_count:
+            return round(self.param_count / 1_000_000)
+
+        patterns = (
+            ("33M", 33),
+            ("44M", 44),
+            ("60M", 60),
+            ("65M", 65),
+            ("66M", 66),
+            ("82M", 82),
+            ("108M", 108),
+            ("109M", 109),
+            ("110M", 110),
+            ("125M", 125),
+            ("135M", 135),
+            ("141M", 141),
+            ("149M", 149),
+            ("166M", 166),
+            ("184M", 184),
+            ("209M", 209),
+            ("210M", 210),
+            ("212M", 212),
+            ("220M", 220),
+            ("278M", 278),
+            ("279M", 279),
+            ("335M", 335),
+            ("340M", 340),
+            ("355M", 355),
+            ("395M", 395),
+            ("434M", 434),
+            ("459M", 459),
+            ("560M", 560),
+            ("568M", 568),
+            ("600M", 600),
+            ("770M", 770),
+        )
+        for token, value in patterns:
+            if token in self.model_id:
+                return value
         return None
 
 
-# Comprehensive model registry from OpenMed HuggingFace collection
-OPENMED_MODELS = {
-    # Disease Detection Models
-    "disease_detection_superclinical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M",
-        display_name="Disease Detection (SuperClinical)",
-        category="Disease",
-        specialization="General disease detection",
-        description="Identifies diseases, conditions, and pathologies in clinical text",
-        entity_types=["DISEASE", "CONDITION", "PATHOLOGY"],
-        size_category="Large",
-        recommended_confidence=0.65
-    ),
-    "disease_detection_tiny": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M",
-        display_name="Disease Detection (Tiny)",
-        category="Disease",
-        specialization="Lightweight disease detection",
-        description="Fast, lightweight model for disease entity recognition",
-        entity_types=["DISEASE", "CONDITION"],
-        size_category="Tiny",
-        recommended_confidence=0.60
-    ),
+MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
 
-    # Pharmaceutical Detection Models
-    "pharma_detection_superclinical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M",
-        display_name="Pharmaceutical Detection (SuperClinical)",
-        category="Pharmaceutical",
-        specialization="Drug and chemical entity detection",
-        description="Detects drugs, chemicals, and pharmaceutical entities in clinical text",
-        entity_types=["CHEM", "DRUG", "MEDICATION"],
-        size_category="Large",
-        recommended_confidence=0.70
-    ),
-    "pharma_detection_supermedical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-PharmaDetect-SuperMedical-125M",
-        display_name="Pharmaceutical Detection (SuperMedical)",
-        category="Pharmaceutical",
-        specialization="Medical pharmaceutical detection",
-        description="Specialized for pharmaceutical entities in medical literature",
-        entity_types=["CHEM", "DRUG"],
-        size_category="Medium",
-        recommended_confidence=0.65
-    ),
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+_PARAM_RE = re.compile(r"^\d+(?:\.\d+)?[mb]$", re.IGNORECASE)
+_VERSION_RE = re.compile(r"^v\d+$", re.IGNORECASE)
 
-    # Oncology Detection Models
-    "oncology_detection_superclinical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M",
-        display_name="Oncology Detection (SuperClinical)",
-        category="Oncology",
-        specialization="Cancer and oncology entities",
-        description="Specialized in cancer, genetics, and oncology entity recognition",
-        entity_types=["Cancer", "Cell", "Gene_or_gene_product"],
-        size_category="Large",
-        recommended_confidence=0.65
-    ),
-    "oncology_detection_tiny": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M",
-        display_name="Oncology Detection (Tiny)",
-        category="Oncology",
-        specialization="Lightweight oncology detection",
-        description="Fast model for basic oncology entity recognition",
-        entity_types=["Cancer", "Cell"],
-        size_category="Tiny",
-        recommended_confidence=0.60
-    ),
-
-    # Anatomy Detection Models
-    "anatomy_detection_electramed": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M",
-        display_name="Anatomy Detection (ElectraMed)",
-        category="Anatomy",
-        specialization="Anatomical entity recognition",
-        description="Detects anatomical structures, organs, and body parts",
-        entity_types=["Organ", "Tissue", "ANATOMY"],
-        size_category="Medium",
-        recommended_confidence=0.60
-    ),
-
-    # Genome/Genetic Detection Models
-    "genome_detection_bioclinical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-GenomeDetect-BioClinical-108M",
-        display_name="Genome Detection (BioClinical)",
-        category="Genomics",
-        specialization="Genomic entity detection",
-        description="Recognizes genes, proteins, and genomic entities",
-        entity_types=["Gene_or_gene_product", "GENE", "PROTEIN"],
-        size_category="Medium",
-        recommended_confidence=0.65
-    ),
-
-    # Chemical Detection Models
-    "chemical_detection_pubmed": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M",
-        display_name="Chemical Detection (PubMed)",
-        category="Chemical",
-        specialization="Chemical entity recognition",
-        description="Detects chemical compounds and substances in biomedical text",
-        entity_types=["Simple_chemical", "CHEM"],
-        size_category="Large",
-        recommended_confidence=0.65
-    ),
-
-    # Species Detection Models
-    "species_detection_bioclinical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-SpeciesDetect-BioClinical-108M",
-        display_name="Species Detection (BioClinical)",
-        category="Species",
-        specialization="Organism and species detection",
-        description="Identifies species, organisms, and biological entities",
-        entity_types=["Organism", "SPECIES"],
-        size_category="Medium",
-        recommended_confidence=0.60
-    ),
-
-    # Protein Detection Models
-    "protein_detection_pubmed": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M",
-        display_name="Protein Detection (PubMed)",
-        category="Protein",
-        specialization="Protein entity recognition",
-        description="Specialized for protein and gene product detection",
-        entity_types=["Gene_or_gene_product", "PROTEIN"],
-        size_category="Medium",
-        recommended_confidence=0.65
-    ),
-
-    # Pathology Detection Models
-    "pathology_detection_modern": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-PathologyDetect-ModernClinical-395M",
-        display_name="Pathology Detection (ModernClinical)",
-        category="Pathology",
-        specialization="Pathological entity detection",
-        description="Detects pathological conditions and findings",
-        entity_types=["DISEASE", "PATHOLOGY"],
-        size_category="Large",
-        recommended_confidence=0.65
-    ),
-
-    # Blood Cancer Detection Models
-    "blood_cancer_detection": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-BloodCancerDetect-SuperClinical-434M",
-        display_name="Blood Cancer Detection",
-        category="Hematology",
-        specialization="Blood cancer and hematological disorders",
-        description="Specialized for blood cancers and hematological conditions",
-        entity_types=["Cancer", "DISEASE"],
-        size_category="Large",
-        recommended_confidence=0.70
-    ),
-
-    # DNA Detection Models
-    "dna_detection_supermedical": ModelInfo(
-        model_id="OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M",
-        display_name="DNA Detection (SuperMedical)",
-        category="Genomics",
-        specialization="DNA and genetic sequence detection",
-        description="Detects DNA sequences, genetic variants, and mutations",
-        entity_types=["Gene_or_gene_product", "DNA"],
-        size_category="Medium",
-        recommended_confidence=0.65
-    ),
-
-    # PII Detection Models (Privacy/De-identification)
-    "pii_detection": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
-        display_name="PII Detection (SuperClinical Small)",
-        category="Privacy",
-        specialization="Personally Identifiable Information detection",
-        description="Detects PII entities for HIPAA-compliant de-identification including names, emails, phone numbers, addresses, and other protected identifiers",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
-        size_category="Small",
-        recommended_confidence=0.50
-    ),
-
-    # OpenMed PII Detection Model Collection (33 models)
-    # SuperClinical Family
-    "pii_superclinical_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1",
-        display_name="PII Detection - SuperClinical Large",
-        category="Privacy",
-        specialization="Advanced PII detection for clinical text",
-        description="OpenMed's flagship PII detection model with comprehensive HIPAA-compliant de-identification including medical records, SSN, demographics, contact info, and more",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number", "api_key", "credit_debit_card", "occupation"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_superclinical_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SuperClinical-Base-184M-v1",
-        display_name="PII Detection - SuperClinical Base",
-        category="Privacy",
-        specialization="Balanced PII detection",
-        description="Medium-sized PII detection model balancing speed and accuracy for clinical text de-identification",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-    "pii_superclinical_small": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
-        display_name="PII Detection - SuperClinical Small",
-        category="Privacy",
-        specialization="Fast PII detection",
-        description="Lightweight PII detection model optimized for speed while maintaining good accuracy",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
-        size_category="Small",
-        recommended_confidence=0.50
-    ),
-
-    # BioClinicalModern Family
-    "pii_bioclinical_modern_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BioClinicalModern-Large-395M-v1",
-        display_name="PII Detection - BioClinicalModern Large",
-        category="Privacy",
-        specialization="BioClinical PII detection",
-        description="Large BioClinical model for comprehensive PII detection in clinical notes",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_bioclinical_modern_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BioClinicalModern-Base-149M-v1",
-        display_name="PII Detection - BioClinicalModern Base",
-        category="Privacy",
-        specialization="BioClinical PII detection",
-        description="Base BioClinical model for balanced PII detection performance",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # BioClinicalBERT
-    "pii_bioclinical_bert": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BioClinicalBERT-Base-110M-v1",
-        display_name="PII Detection - BioClinicalBERT",
-        category="Privacy",
-        specialization="BERT-based PII detection",
-        description="BioClinicalBERT-based model for reliable PII detection in medical text",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # ClinicDischarge
-    "pii_clinic_discharge": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicDischarge-Base-110M-v1",
-        display_name="PII Detection - ClinicDischarge",
-        category="Privacy",
-        specialization="Discharge note PII detection",
-        description="Specialized for PII detection in clinical discharge summaries and medical records",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # BiomedBERT Family
-    "pii_biomed_bert_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BiomedBERT-Large-340M-v1",
-        display_name="PII Detection - BiomedBERT Large",
-        category="Privacy",
-        specialization="Biomedical PII detection",
-        description="Large BiomedBERT model for comprehensive biomedical text de-identification",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_biomed_bert_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BiomedBERT-Base-110M-v1",
-        display_name="PII Detection - BiomedBERT Base",
-        category="Privacy",
-        specialization="Biomedical PII detection",
-        description="Base BiomedBERT model for balanced biomedical text de-identification",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # BiomedELECTRA Family
-    "pii_biomed_electra_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BiomedELECTRA-Large-335M-v1",
-        display_name="PII Detection - BiomedELECTRA Large",
-        category="Privacy",
-        specialization="ELECTRA-based PII detection",
-        description="Large ELECTRA model for efficient PII detection in biomedical text",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_biomed_electra_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BiomedELECTRA-Base-110M-v1",
-        display_name="PII Detection - BiomedELECTRA Base",
-        category="Privacy",
-        specialization="ELECTRA-based PII detection",
-        description="Base ELECTRA model for fast and efficient PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # ClinicalLongformer
-    "pii_clinical_longformer": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicalLongformer-Base-149M-v1",
-        display_name="PII Detection - ClinicalLongformer",
-        category="Privacy",
-        specialization="Long document PII detection",
-        description="Longformer-based model optimized for long clinical documents and notes",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # ModernMed Family
-    "pii_modern_med_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ModernMed-Large-395M-v1",
-        display_name="PII Detection - ModernMed Large",
-        category="Privacy",
-        specialization="Modern clinical PII detection",
-        description="Large modern architecture for comprehensive clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_modern_med_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ModernMed-Base-149M-v1",
-        display_name="PII Detection - ModernMed Base",
-        category="Privacy",
-        specialization="Modern clinical PII detection",
-        description="Base modern architecture for balanced clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # QwenMed
-    "pii_qwen_med_xlarge": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-QwenMed-XLarge-600M-v1",
-        display_name="PII Detection - QwenMed XLarge",
-        category="Privacy",
-        specialization="High-accuracy PII detection",
-        description="Extra-large Qwen-based model for maximum PII detection accuracy",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number"],
-        size_category="XLarge",
-        recommended_confidence=0.50
-    ),
-
-    # ClinicalBGE Family
-    "pii_clinical_bge_large_568m": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicalBGE-Large-568M-v1",
-        display_name="PII Detection - ClinicalBGE Large (568M)",
-        category="Privacy",
-        specialization="BGE-based PII detection",
-        description="Large BGE model for high-quality clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="XLarge",
-        recommended_confidence=0.50
-    ),
-    "pii_clinical_bge_large_335m": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicalBGE-Large-335M-v1",
-        display_name="PII Detection - ClinicalBGE Large (335M)",
-        category="Privacy",
-        specialization="BGE-based PII detection",
-        description="BGE model for balanced clinical PII detection performance",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-
-    # EuroMed
-    "pii_euro_med": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-EuroMed-Large-210M-v1",
-        display_name="PII Detection - EuroMed",
-        category="Privacy",
-        specialization="European clinical PII detection",
-        description="Optimized for European clinical text and GDPR compliance",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # LiteClinical
-    "pii_lite_clinical": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1",
-        display_name="PII Detection - LiteClinical",
-        category="Privacy",
-        specialization="Lightweight PII detection",
-        description="Ultra-lightweight model for fast PII detection with minimal resource usage",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
-        size_category="Small",
-        recommended_confidence=0.50
-    ),
-
-    # mLiteClinical
-    "pii_mlite_clinical": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-mLiteClinical-Base-135M-v1",
-        display_name="PII Detection - mLiteClinical",
-        category="Privacy",
-        specialization="Multilingual lightweight PII",
-        description="Multilingual lightweight model for PII detection across languages",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # FastClinical
-    "pii_fast_clinical": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-FastClinical-Small-82M-v1",
-        display_name="PII Detection - FastClinical",
-        category="Privacy",
-        specialization="Speed-optimized PII detection",
-        description="Optimized for maximum inference speed while maintaining accuracy",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
-        size_category="Small",
-        recommended_confidence=0.50
-    ),
-
-    # ClinicalE5 Family
-    "pii_clinical_e5_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicalE5-Large-335M-v1",
-        display_name="PII Detection - ClinicalE5 Large",
-        category="Privacy",
-        specialization="E5-based PII detection",
-        description="Large E5 model for comprehensive clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_clinical_e5_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicalE5-Base-109M-v1",
-        display_name="PII Detection - ClinicalE5 Base",
-        category="Privacy",
-        specialization="E5-based PII detection",
-        description="Base E5 model for balanced clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-    "pii_clinical_e5_small": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1",
-        display_name="PII Detection - ClinicalE5 Small",
-        category="Privacy",
-        specialization="E5-based fast PII detection",
-        description="Small E5 model for fast PII detection with minimal resources",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
-        size_category="Tiny",
-        recommended_confidence=0.50
-    ),
-
-    # GTEMed
-    "pii_gte_med": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-GTEMed-Base-149M-v1",
-        display_name="PII Detection - GTEMed",
-        category="Privacy",
-        specialization="GTE-based PII detection",
-        description="GTE architecture model for clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # mSuperClinical
-    "pii_msuper_clinical": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-mSuperClinical-Large-279M-v1",
-        display_name="PII Detection - mSuperClinical",
-        category="Privacy",
-        specialization="Multilingual advanced PII",
-        description="Multilingual SuperClinical model for cross-language PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-
-    # NomicMed
-    "pii_nomic_med": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-NomicMed-Large-395M-v1",
-        display_name="PII Detection - NomicMed",
-        category="Privacy",
-        specialization="Nomic-based PII detection",
-        description="Nomic architecture model for comprehensive PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-
-    # mClinicalE5
-    "pii_mclinical_e5": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-mClinicalE5-Large-560M-v1",
-        display_name="PII Detection - mClinicalE5",
-        category="Privacy",
-        specialization="Multilingual E5 PII detection",
-        description="Multilingual E5 model for cross-language clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="XLarge",
-        recommended_confidence=0.50
-    ),
-
-    # SuperMedical Family
-    "pii_super_medical_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SuperMedical-Large-355M-v1",
-        display_name="PII Detection - SuperMedical Large",
-        category="Privacy",
-        specialization="Medical-focused PII detection",
-        description="Large SuperMedical model for comprehensive medical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-    "pii_super_medical_base": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SuperMedical-Base-125M-v1",
-        display_name="PII Detection - SuperMedical Base",
-        category="Privacy",
-        specialization="Medical-focused PII detection",
-        description="Base SuperMedical model for balanced medical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # SnowflakeMed
-    "pii_snowflake_med": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-SnowflakeMed-Large-568M-v1",
-        display_name="PII Detection - SnowflakeMed",
-        category="Privacy",
-        specialization="Snowflake-based PII detection",
-        description="Large Snowflake architecture for high-quality PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number"],
-        size_category="XLarge",
-        recommended_confidence=0.50
-    ),
-
-    # BigMed Family
-    "pii_big_med_large_560m": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BigMed-Large-560M-v1",
-        display_name="PII Detection - BigMed Large (560M)",
-        category="Privacy",
-        specialization="Large-scale PII detection",
-        description="Extra-large BigMed model for maximum PII detection coverage",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode", "account_number"],
-        size_category="XLarge",
-        recommended_confidence=0.50
-    ),
-    "pii_big_med_large_278m": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BigMed-Large-278M-v1",
-        display_name="PII Detection - BigMed Large (278M)",
-        category="Privacy",
-        specialization="Large-scale PII detection",
-        description="Large BigMed model for comprehensive PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address", "city", "state", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.50
-    ),
-
-    # BiomedBERTFull
-    "pii_biomed_bert_full": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-BiomedBERTFull-Base-110M-v1",
-        display_name="PII Detection - BiomedBERTFull",
-        category="Privacy",
-        specialization="Full BiomedBERT PII detection",
-        description="Full BiomedBERT model for comprehensive biomedical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "medical_record_number", "date_of_birth", "street_address"],
-        size_category="Medium",
-        recommended_confidence=0.50
-    ),
-
-    # LiteClinicalU
-    "pii_lite_clinical_u": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-LiteClinicalU-Small-66M-v1",
-        display_name="PII Detection - LiteClinicalU",
-        category="Privacy",
-        specialization="Universal lightweight PII detection",
-        description="Universal lightweight clinical model for fast PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "ssn", "date_of_birth", "street_address"],
-        size_category="Small",
-        recommended_confidence=0.50
-    ),
+_LANGUAGE_NAME_TO_CODE = {
+    "arabic": "ar",
+    "dutch": "nl",
+    "english": "en",
+    "french": "fr",
+    "german": "de",
+    "hindi": "hi",
+    "italian": "it",
+    "japanese": "ja",
+    "portuguese": "pt",
+    "spanish": "es",
+    "telugu": "te",
+    "turkish": "tr",
 }
-
-
-# ---------------------------------------------------------------------------
-# Multilingual PII model generation
-# ---------------------------------------------------------------------------
-
+_LOCALIZED_PII_LANGUAGE_KEYS = {
+    code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"
+}
 _LANGUAGE_CONFIG = {
-    "fr": {"name": "French", "prefix": "French-"},
-    "de": {"name": "German", "prefix": "German-"},
-    "it": {"name": "Italian", "prefix": "Italian-"},
-    "es": {"name": "Spanish", "prefix": "Spanish-"},
+    code: {"name": name.title(), "prefix": f"{name.title()}-"}
+    for name, code in _LANGUAGE_NAME_TO_CODE.items()
+    if code not in {"en", "nl", "hi", "te", "pt", "ar", "ja", "tr"}
 }
-_LOCALIZED_PII_LANGUAGE_KEYS = {"nl", "hi", "te", "pt", "ar", "ja", "tr"}
 
-# Keys to skip when generating multilingual variants
-# (pii_detection is a legacy alias for pii_superclinical_small)
-_PII_SKIP_KEYS = {"pii_detection"}
-
-
-def _generate_multilingual_pii_models() -> Dict[str, ModelInfo]:
-    """Generate registry entries for French, German, Italian, and Spanish PII models.
-
-    For each English PII model template and each target language, creates a
-    new ModelInfo with the language prefix inserted into the HuggingFace
-    model ID.
-
-    Returns:
-        Dictionary mapping new registry keys to ModelInfo instances.
-    """
-    generated: Dict[str, ModelInfo] = {}
-
-    for en_key, en_model in list(OPENMED_MODELS.items()):
-        if not en_key.startswith("pii_") or en_key in _PII_SKIP_KEYS:
-            continue
-        if en_model.category != "Privacy":
-            continue
-
-        for lang_code, lang_cfg in _LANGUAGE_CONFIG.items():
-            lang_name = lang_cfg["name"]
-            lang_prefix = lang_cfg["prefix"]
-
-            # Build new registry key: pii_fr_superclinical_large
-            new_key = f"pii_{lang_code}_{en_key[4:]}"  # strip "pii_" prefix
-
-            # Insert language prefix into model_id:
-            # OpenMed/OpenMed-PII-SuperClinical-Large-434M-v1
-            # -> OpenMed/OpenMed-PII-French-SuperClinical-Large-434M-v1
-            new_model_id = en_model.model_id.replace(
-                "OpenMed/OpenMed-PII-",
-                f"OpenMed/OpenMed-PII-{lang_prefix}",
-            )
-
-            new_display = en_model.display_name.replace(
-                "PII Detection",
-                f"PII Detection ({lang_name})",
-            )
-
-            new_description = (
-                f"{lang_name} language variant: {en_model.description}"
-            )
-
-            new_specialization = (
-                f"{lang_name} {en_model.specialization}"
-            )
-
-            generated[new_key] = ModelInfo(
-                model_id=new_model_id,
-                display_name=new_display,
-                category="Privacy",
-                specialization=new_specialization,
-                description=new_description,
-                entity_types=list(en_model.entity_types),
-                size_category=en_model.size_category,
-                recommended_confidence=en_model.recommended_confidence,
-            )
-
-    return generated
-
-
-# Merge generated multilingual models into the main registry
-OPENMED_MODELS.update(_generate_multilingual_pii_models())
-
-
-# Sparse multilingual releases with a single public architecture.
-OPENMED_MODELS.update({
-    "pii_nl_superclinical_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-Dutch-SuperClinical-Large-434M-v1",
-        display_name="PII Detection (Dutch) - SuperClinical Large",
-        category="Privacy",
-        specialization="Dutch PII detection",
-        description="Dutch language flagship model for clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "national_id", "date", "street_address", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.55,
-    ),
-    "pii_hi_superclinical_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-Hindi-SuperClinical-Large-434M-v1",
-        display_name="PII Detection (Hindi) - SuperClinical Large",
-        category="Privacy",
-        specialization="Hindi PII detection",
-        description="Hindi language flagship model for clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "date", "street_address", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.55,
-    ),
-    "pii_te_superclinical_large": ModelInfo(
-        model_id="OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
-        display_name="PII Detection (Telugu) - SuperClinical Large",
-        category="Privacy",
-        specialization="Telugu PII detection",
-        description="Telugu language flagship model for clinical PII detection",
-        entity_types=["first_name", "last_name", "email", "phone_number", "date", "street_address", "postcode"],
-        size_category="Large",
-        recommended_confidence=0.55,
-    ),
-})
-
-
-# Portuguese release: explicit API-visible model map.
-# The collection currently advertises 35 models, but the Hub API returns these
-# 31 public entries; keep the registry aligned with public availability.
-# Full superset of PII labels emitted by the Portuguese collection. Reused
-# verbatim for the Arabic/Japanese/Turkish models until per-language entity
-# lists are confirmed against each model's actual output.
-_FULL_PII_ENTITY_TYPES = [
-    "ACCOUNTNAME",
-    "AGE",
-    "AMOUNT",
-    "BANKACCOUNT",
-    "BIC",
-    "BITCOINADDRESS",
-    "BUILDINGNUMBER",
-    "CITY",
-    "COUNTY",
-    "CREDITCARD",
-    "CREDITCARDISSUER",
-    "CURRENCY",
-    "CURRENCYCODE",
-    "CURRENCYNAME",
-    "CURRENCYSYMBOL",
-    "CVV",
-    "DATE",
-    "DATEOFBIRTH",
-    "EMAIL",
-    "ETHEREUMADDRESS",
-    "EYECOLOR",
-    "FIRSTNAME",
-    "GENDER",
-    "GPSCOORDINATES",
-    "HEIGHT",
-    "IBAN",
-    "IMEI",
-    "IPADDRESS",
-    "JOBDEPARTMENT",
-    "JOBTITLE",
-    "LASTNAME",
-    "LITECOINADDRESS",
-    "MACADDRESS",
-    "MASKEDNUMBER",
-    "MIDDLENAME",
-    "OCCUPATION",
-    "ORDINALDIRECTION",
-    "ORGANIZATION",
-    "PASSWORD",
-    "PHONE",
-    "PIN",
+_PII_ENTITY_TYPES = [
+    "PERSON",
+    "FIRST_NAME",
+    "LAST_NAME",
+    "MIDDLE_NAME",
     "PREFIX",
-    "SECONDARYADDRESS",
-    "SEX",
-    "SSN",
-    "STATE",
-    "STREET",
-    "TIME",
-    "URL",
-    "USERAGENT",
     "USERNAME",
-    "VIN",
-    "VRM",
+    "EMAIL",
+    "PHONE",
+    "URL",
+    "LOCATION",
+    "STREET_ADDRESS",
+    "BUILDING_NUMBER",
     "ZIPCODE",
+    "GPS_COORDINATES",
+    "ORDINAL_DIRECTION",
+    "DATE",
+    "DATE_OF_BIRTH",
+    "TIME",
+    "AGE",
+    "ID_NUM",
+    "SSN",
+    "ACCOUNT_NUMBER",
+    "PASSWORD",
+    "PIN",
+    "API_KEY",
+    "CREDIT_CARD",
+    "CREDIT_CARD_ISSUER",
+    "CVV",
+    "IBAN",
+    "BIC",
+    "AMOUNT",
+    "CURRENCY",
+    "BITCOIN_ADDRESS",
+    "ETHEREUM_ADDRESS",
+    "LITECOIN_ADDRESS",
+    "MASKED_NUMBER",
+    "GENDER",
+    "EYE_COLOR",
+    "HEIGHT",
+    "ORGANIZATION",
+    "JOB_TITLE",
+    "JOB_DEPARTMENT",
+    "OCCUPATION",
+    "IP_ADDRESS",
+    "MAC_ADDRESS",
+    "USER_AGENT",
+    "VIN",
+    "VEHICLE_REGISTRATION",
+    "IMEI",
+    "OTHER",
 ]
 
-_PORTUGUESE_PII_MODEL_SPECS = [
-    ("pii_pt_snowflake_med", "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1", "SnowflakeMed Large", "Large"),
-    ("pii_pt_clinical_bge_large_335m", "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-335M-v1", "ClinicalBGE Large 335M", "Large"),
-    ("pii_pt_clinical_bge_large_568m", "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-568M-v1", "ClinicalBGE Large 568M", "Large"),
-    ("pii_pt_bioclinical_bert", "OpenMed/OpenMed-PII-Portuguese-BioClinicalBERT-Base-110M-v1", "BioClinicalBERT Base", "Medium"),
-    ("pii_pt_clinic_discharge", "OpenMed/OpenMed-PII-Portuguese-ClinicDischarge-Base-110M-v1", "ClinicDischarge Base", "Medium"),
-    ("pii_pt_bioclinical_modern_base", "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Base-149M-v1", "BioClinicalModern Base", "Medium"),
-    ("pii_pt_bioclinical_modern_large", "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Large-395M-v1", "BioClinicalModern Large", "Large"),
-    ("pii_pt_biomed_bert_base", "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Base-110M-v1", "BiomedBERT Base", "Medium"),
-    ("pii_pt_biomed_bert_full", "OpenMed/OpenMed-PII-Portuguese-BiomedBERTFull-Base-110M-v1", "BiomedBERTFull Base", "Medium"),
-    ("pii_pt_biomed_bert_large", "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Large-340M-v1", "BiomedBERT Large", "Large"),
-    ("pii_pt_biomed_electra_base", "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Base-110M-v1", "BiomedELECTRA Base", "Medium"),
-    ("pii_pt_biomed_electra_large", "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Large-335M-v1", "BiomedELECTRA Large", "Large"),
-    ("pii_pt_clinical_longformer", "OpenMed/OpenMed-PII-Portuguese-ClinicalLongformer-Base-149M-v1", "ClinicalLongformer Base", "Medium"),
-    ("pii_pt_superclinical_base", "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Base-184M-v1", "SuperClinical Base", "Medium"),
-    ("pii_pt_superclinical_large", "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Large-434M-v1", "SuperClinical Large", "Large"),
-    ("pii_pt_superclinical_small", "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Small-44M-v1", "SuperClinical Small", "Small"),
-    ("pii_pt_lite_clinical", "OpenMed/OpenMed-PII-Portuguese-LiteClinical-Small-66M-v1", "LiteClinical Small", "Small"),
-    ("pii_pt_lite_clinical_u", "OpenMed/OpenMed-PII-Portuguese-LiteClinicalU-Small-66M-v1", "LiteClinicalU Small", "Small"),
-    ("pii_pt_mlite_clinical", "OpenMed/OpenMed-PII-Portuguese-mLiteClinical-Base-135M-v1", "mLiteClinical Base", "Medium"),
-    ("pii_pt_fast_clinical", "OpenMed/OpenMed-PII-Portuguese-FastClinical-Small-82M-v1", "FastClinical Small", "Small"),
-    ("pii_pt_clinical_e5_base", "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Base-109M-v1", "ClinicalE5 Base", "Medium"),
-    ("pii_pt_clinical_e5_large", "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Large-335M-v1", "ClinicalE5 Large", "Large"),
-    ("pii_pt_clinical_e5_small", "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Small-33M-v1", "ClinicalE5 Small", "Small"),
-    ("pii_pt_msuper_clinical", "OpenMed/OpenMed-PII-Portuguese-mSuperClinical-Large-279M-v1", "mSuperClinical Large", "Large"),
-    ("pii_pt_modern_med_base", "OpenMed/OpenMed-PII-Portuguese-ModernMed-Base-149M-v1", "ModernMed Base", "Medium"),
-    ("pii_pt_nomic_med", "OpenMed/OpenMed-PII-Portuguese-NomicMed-Large-395M-v1", "NomicMed Large", "Large"),
-    ("pii_pt_modern_med_large", "OpenMed/OpenMed-PII-Portuguese-ModernMed-Large-395M-v1", "ModernMed Large", "Large"),
-    ("pii_pt_qwen_med_xlarge", "OpenMed/OpenMed-PII-Portuguese-QwenMed-XLarge-600M-v1", "QwenMed XLarge", "XLarge"),
-    ("pii_pt_super_medical_base", "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Base-125M-v1", "SuperMedical Base", "Medium"),
-    ("pii_pt_super_medical_large", "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Large-355M-v1", "SuperMedical Large", "Large"),
-    ("pii_pt_big_med_large_278m", "OpenMed/OpenMed-PII-Portuguese-BigMed-Large-278M-v1", "BigMed Large 278M", "Large"),
-]
+_CATEGORY_ENTITY_TYPES = {
+    "Disease": ["DISEASE", "CONDITION", "PATHOLOGY"],
+    "Pharmaceutical": ["CHEM", "DRUG", "MEDICATION"],
+    "Oncology": ["CANCER", "CELL", "GENE_OR_GENE_PRODUCT"],
+    "Anatomy": ["ORGAN", "TISSUE", "ANATOMY"],
+    "Genomics": ["GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA"],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
+    "Species": ["ORGANISM", "SPECIES"],
+    "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
+    "Pathology": ["DISEASE", "PATHOLOGY"],
+    "Hematology": ["CANCER", "DISEASE"],
+    "Privacy": _PII_ENTITY_TYPES,
+}
+
+_LEGACY_MODEL_ALIASES = {
+    "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": [
+        "disease_detection_superclinical"
+    ],
+    "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M": [
+        "disease_detection_tiny"
+    ],
+    "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M": [
+        "pharma_detection_superclinical"
+    ],
+    "OpenMed/OpenMed-NER-PharmaDetect-SuperMedical-125M": [
+        "pharma_detection_supermedical"
+    ],
+    "OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M": [
+        "oncology_detection_superclinical"
+    ],
+    "OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M": [
+        "oncology_detection_tiny"
+    ],
+    "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M": [
+        "anatomy_detection_electramed"
+    ],
+    "OpenMed/OpenMed-NER-GenomeDetect-BioClinical-108M": [
+        "genome_detection_bioclinical"
+    ],
+    "OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M": [
+        "chemical_detection_pubmed"
+    ],
+    "OpenMed/OpenMed-NER-SpeciesDetect-BioClinical-108M": [
+        "species_detection_bioclinical"
+    ],
+    "OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M": [
+        "protein_detection_pubmed"
+    ],
+    "OpenMed/OpenMed-NER-PathologyDetect-ModernClinical-395M": [
+        "pathology_detection_modern"
+    ],
+    "OpenMed/OpenMed-NER-BloodCancerDetect-SuperClinical-434M": [
+        "blood_cancer_detection"
+    ],
+    "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": [
+        "dna_detection_supermedical"
+    ],
+    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
+}
 
 
-def _build_portuguese_pii_models() -> Dict[str, ModelInfo]:
-    """Build Portuguese PII registry entries from the public collection map."""
+def load_manifest_rows(path: Path = MANIFEST_PATH) -> List[Dict[str, Any]]:
+    """Load model manifest rows from the committed JSONL snapshot."""
+    if not path.exists():
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                row = json.loads(stripped)
+            except json.JSONDecodeError as exc:  # pragma: no cover - import guard
+                raise ValueError(
+                    f"Invalid JSON in {path} line {line_number}: {exc}"
+                ) from exc
+            rows.append(row)
+    return rows
+
+
+def _slug(value: str) -> str:
+    slug = _SLUG_RE.sub("_", value.lower()).strip("_")
+    return slug or "model"
+
+
+def _repo_name(repo_id: str) -> str:
+    return repo_id.rsplit("/", 1)[-1]
+
+
+def _split_repo_tokens(repo_id: str) -> List[str]:
+    return [token for token in re.split(r"[-_]+", _repo_name(repo_id)) if token]
+
+
+def _clean_model_tokens(tokens: Iterable[str]) -> List[str]:
+    cleaned: List[str] = []
+    for token in tokens:
+        lowered = token.lower()
+        if lowered in {"openmed", "ner", "pii"}:
+            continue
+        if _VERSION_RE.match(lowered):
+            continue
+        cleaned.append(token)
+    return cleaned
+
+
+def _category_from_row(row: Dict[str, Any]) -> str:
+    repo = row.get("repo_id", "").lower()
+    family = str(row.get("family") or "").lower()
+
+    if family == "pii" or "pii" in repo or "privacy-filter" in repo:
+        return "Privacy"
+    if "bloodcancerdetect" in repo or "hematology" in repo or "leukemia" in repo:
+        return "Hematology"
+    if "diseasedetect" in repo:
+        return "Disease"
+    if "pharmadetect" in repo or "drug" in repo:
+        return "Pharmaceutical"
+    if "oncologydetect" in repo or "cancer" in repo:
+        return "Oncology"
+    if "anatomydetect" in repo or "anatomy" in repo:
+        return "Anatomy"
+    if (
+        "genomedetect" in repo
+        or "genomicdetect" in repo
+        or "dnadetect" in repo
+        or "rna" in repo
+    ):
+        return "Genomics"
+    if "chemicaldetect" in repo or "chem" in repo:
+        return "Chemical"
+    if "speciesdetect" in repo or "organismdetect" in repo:
+        return "Species"
+    if "proteindetect" in repo:
+        return "Protein"
+    if "pathologydetect" in repo:
+        return "Pathology"
+    return "Medical"
+
+
+def _display_name_from_row(row: Dict[str, Any]) -> str:
+    name = _repo_name(row["repo_id"])
+    name = re.sub(r"^OpenMed-", "", name)
+    name = name.replace("-", " ")
+    return re.sub(r"\s+", " ", name).strip()
+
+
+def _specialization_from_row(row: Dict[str, Any], category: str) -> str:
+    languages = row.get("languages") or []
+    language = ""
+    if len(languages) == 1 and languages[0] != "en":
+        language = f"{languages[0].upper()} "
+
+    if category == "Privacy":
+        return f"{language}PII detection".strip()
+    if category == "Medical":
+        return str(row.get("task") or "medical model")
+    return f"{language}{category.lower()} entity detection".strip()
+
+
+def _description_from_row(row: Dict[str, Any], category: str) -> str:
+    task = row.get("task") or "model"
+    tier = row.get("tier")
+    param_count = row.get("param_count")
+    parts = [f"{category} {task} model"]
+    if tier:
+        parts.append(f"tier={tier}")
+    if isinstance(param_count, int):
+        parts.append(f"params={param_count}")
+    return "; ".join(parts)
+
+
+def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
+    labels = row.get("canonical_labels")
+    if isinstance(labels, list) and labels:
+        return [str(label) for label in labels]
+    return list(_CATEGORY_ENTITY_TYPES.get(category, []))
+
+
+def _recommended_confidence(category: str) -> float:
+    if category == "Privacy":
+        return 0.50
+    if category in {"Pharmaceutical", "Oncology", "Genomics", "Hematology"}:
+        return 0.65
+    return 0.60
+
+
+def _size_category(row: Dict[str, Any]) -> str:
+    tier = row.get("tier")
+    if isinstance(tier, str) and tier:
+        return "Medium" if tier == "Base" else tier
+
+    param_count = row.get("param_count")
+    if isinstance(param_count, int):
+        if param_count < 60_000_000:
+            return "Tiny"
+        if param_count < 100_000_000:
+            return "Small"
+        if param_count < 250_000_000:
+            return "Medium"
+        if param_count < 500_000_000:
+            return "Large"
+        return "XLarge"
+    return "Unknown"
+
+
+def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
+    category = _category_from_row(row)
+    return ModelInfo(
+        model_id=row["repo_id"],
+        display_name=_display_name_from_row(row),
+        category=category,
+        specialization=_specialization_from_row(row, category),
+        description=_description_from_row(row, category),
+        entity_types=_entity_types_from_row(row, category),
+        size_category=_size_category(row),
+        recommended_confidence=_recommended_confidence(category),
+        family=str(row.get("family") or "Unknown"),
+        task=str(row.get("task") or "unknown"),
+        languages=list(row.get("languages") or []),
+        tier=row.get("tier"),
+        param_count=row.get("param_count"),
+        architecture=row.get("architecture"),
+        base_model=row.get("base_model"),
+        formats=list(row.get("formats") or []),
+        benchmark=dict(row.get("benchmark") or {}),
+        arxiv=row.get("arxiv"),
+        license=row.get("license"),
+        reproducibility_hash=row.get("reproducibility_hash"),
+        released=row.get("released"),
+    )
+
+
+def _language_prefix(row: Dict[str, Any]) -> str:
+    languages = row.get("languages") or []
+    if len(languages) == 1 and languages[0] != "en":
+        return f"{languages[0]}_"
+    return ""
+
+
+def _strip_language_tokens(tokens: List[str], row: Dict[str, Any]) -> List[str]:
+    languages = set(row.get("languages") or [])
+    stripped: List[str] = []
+    for token in tokens:
+        lowered = token.lower()
+        code = _LANGUAGE_NAME_TO_CODE.get(lowered)
+        if code and code in languages:
+            continue
+        stripped.append(token)
+    return stripped
+
+
+def _pii_registry_key(row: Dict[str, Any]) -> str:
+    tokens = _clean_model_tokens(_split_repo_tokens(row["repo_id"]))
+    tokens = _strip_language_tokens(tokens, row)
+    if tokens and tokens[0].lower() == "privacy":
+        tokens = ["privacy_filter"] + tokens[2:] if len(tokens) > 1 else tokens
+    suffix = _slug("_".join(tokens))
+    return f"pii_{_language_prefix(row)}{suffix}"
+
+
+def _ner_registry_key(row: Dict[str, Any]) -> str:
+    tokens = _clean_model_tokens(_split_repo_tokens(row["repo_id"]))
+    if tokens and tokens[0].lower().endswith("detect"):
+        head = tokens[0][:-6]
+        tail = tokens[1:]
+        return _slug("_".join([head, "detection", *tail]))
+    return _slug("_".join(tokens))
+
+
+def _registry_key(row: Dict[str, Any]) -> str:
+    category = _category_from_row(row)
+    if category == "Privacy":
+        return _pii_registry_key(row)
+    if str(row.get("family") or "").upper() in {"NER", "ZEROSHOT"}:
+        return _ner_registry_key(row)
+    return _slug(_repo_name(row["repo_id"]))
+
+
+def _unique_key(base_key: str, row: Dict[str, Any], registry: Dict[str, ModelInfo]) -> str:
+    if base_key not in registry:
+        return base_key
+
+    formats = row.get("formats") or []
+    for format_name in formats:
+        candidate = f"{base_key}_{_slug(format_name)}"
+        if candidate not in registry:
+            return candidate
+
+    repo_suffix = _slug(_repo_name(row["repo_id"]))
+    candidate = f"{base_key}_{repo_suffix}"
+    if candidate not in registry:
+        return candidate
+
+    index = 2
+    while f"{candidate}_{index}" in registry:
+        index += 1
+    return f"{candidate}_{index}"
+
+
+def _pii_compatibility_aliases(row: Dict[str, Any]) -> List[str]:
+    if _category_from_row(row) != "Privacy":
+        return []
+    repo_id = row["repo_id"]
+    if "/OpenMed-PII-" not in repo_id:
+        return []
+
+    tokens = _clean_model_tokens(_split_repo_tokens(repo_id))
+    tokens = _strip_language_tokens(tokens, row)
+    no_param_tokens = [token for token in tokens if not _PARAM_RE.match(token)]
+    aliases = []
+    if no_param_tokens:
+        aliases.append(f"pii_{_language_prefix(row)}{_slug('_'.join(no_param_tokens))}")
+    return aliases
+
+
+def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
+    aliases = list(_LEGACY_MODEL_ALIASES.get(row["repo_id"], []))
+    aliases.extend(_pii_compatibility_aliases(row))
+    return aliases
+
+
+def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
+    registry: Dict[str, ModelInfo] = {}
+    for row in rows:
+        repo_id = row.get("repo_id")
+        if not isinstance(repo_id, str) or not repo_id:
+            continue
+
+        info = _model_info_from_row(row)
+        key = _unique_key(_registry_key(row), row, registry)
+        registry[key] = info
+
+        for alias in _compatibility_aliases(row):
+            registry.setdefault(alias, info)
+    return registry
+
+
+_MANIFEST_ROWS = load_manifest_rows()
+OPENMED_MODELS = _build_registry(_MANIFEST_ROWS)
+
+
+def _models_by_language_from_manifest(languages: Iterable[str]) -> Dict[str, ModelInfo]:
+    language_set = set(languages)
     return {
-        key: ModelInfo(
-            model_id=model_id,
-            display_name=f"PII Detection (Portuguese) - {display_name}",
-            category="Privacy",
-            specialization="Portuguese PII detection",
-            description=(
-                "Portuguese token-classification model for PII detection "
-                "and clinical de-identification"
-            ),
-            entity_types=list(_FULL_PII_ENTITY_TYPES),
-            size_category=size_category,
-            recommended_confidence=0.55,
-        )
-        for key, model_id, display_name, size_category in _PORTUGUESE_PII_MODEL_SPECS
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if key.startswith("pii_")
+        and info.category == "Privacy"
+        and language_set.intersection(info.languages or ["en"])
     }
 
 
-OPENMED_MODELS.update(_build_portuguese_pii_models())
+def _generate_multilingual_pii_models() -> Dict[str, ModelInfo]:
+    """Return French, German, Italian, and Spanish PII entries from manifest."""
+    return _models_by_language_from_manifest({"fr", "de", "it", "es"})
 
 
-_NEW_LANGUAGE_PII_MODEL_SPECS = {
-    "ar": {
-        "name": "Arabic",
-        "specialization": "Arabic PII detection",
-        "models": [
-            ("snowflake_med", "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1", "SnowflakeMed Large", "Large"),
-            ("big_med_large_560m", "OpenMed/OpenMed-PII-Arabic-BigMed-Large-560M-v1", "BigMed Large 560M", "Large"),
-        ],
-    },
-    "ja": {
-        "name": "Japanese",
-        "specialization": "Japanese PII detection",
-        "models": [
-            ("nomic_med", "OpenMed/OpenMed-PII-Japanese-NomicMed-Large-395M-v1", "NomicMed Large", "Large"),
-            ("qwen_med_xlarge", "OpenMed/OpenMed-PII-Japanese-QwenMed-XLarge-600M-v1", "QwenMed XLarge", "XLarge"),
-            ("big_med_large_560m", "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1", "BigMed Large 560M", "Large"),
-        ],
-    },
-    "tr": {
-        "name": "Turkish",
-        "specialization": "Turkish PII detection",
-        "models": [
-            ("snowflake_med", "OpenMed/OpenMed-PII-Turkish-SnowflakeMed-Large-568M-v1", "SnowflakeMed Large", "Large"),
-            ("clinical_bge_large_335m", "OpenMed/OpenMed-PII-Turkish-ClinicalBGE-Large-335M-v1", "ClinicalBGE Large 335M", "Large"),
-            ("clinical_bge_large_568m", "OpenMed/OpenMed-PII-Turkish-ClinicalBGE-Large-568M-v1", "ClinicalBGE Large 568M", "Large"),
-            ("bioclinical_bert", "OpenMed/OpenMed-PII-Turkish-BioClinicalBERT-Base-110M-v1", "BioClinicalBERT Base", "Medium"),
-            ("clinic_discharge", "OpenMed/OpenMed-PII-Turkish-ClinicDischarge-Base-110M-v1", "ClinicDischarge Base", "Medium"),
-            ("bioclinical_modern_base", "OpenMed/OpenMed-PII-Turkish-BioClinicalModern-Base-149M-v1", "BioClinicalModern Base", "Medium"),
-            ("bioclinical_modern_large", "OpenMed/OpenMed-PII-Turkish-BioClinicalModern-Large-395M-v1", "BioClinicalModern Large", "Large"),
-            ("biomed_bert_base", "OpenMed/OpenMed-PII-Turkish-BiomedBERT-Base-110M-v1", "BiomedBERT Base", "Medium"),
-            ("biomed_bert_full", "OpenMed/OpenMed-PII-Turkish-BiomedBERTFull-Base-110M-v1", "BiomedBERTFull Base", "Medium"),
-            ("biomed_bert_large", "OpenMed/OpenMed-PII-Turkish-BiomedBERT-Large-340M-v1", "BiomedBERT Large", "Large"),
-            ("biomed_electra_base", "OpenMed/OpenMed-PII-Turkish-BiomedELECTRA-Base-110M-v1", "BiomedELECTRA Base", "Medium"),
-            ("biomed_electra_large", "OpenMed/OpenMed-PII-Turkish-BiomedELECTRA-Large-335M-v1", "BiomedELECTRA Large", "Large"),
-            ("clinical_longformer", "OpenMed/OpenMed-PII-Turkish-ClinicalLongformer-Base-149M-v1", "ClinicalLongformer Base", "Medium"),
-            ("superclinical_base", "OpenMed/OpenMed-PII-Turkish-SuperClinical-Base-184M-v1", "SuperClinical Base", "Medium"),
-            ("superclinical_large", "OpenMed/OpenMed-PII-Turkish-SuperClinical-Large-434M-v1", "SuperClinical Large", "Large"),
-            ("superclinical_small", "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1", "SuperClinical Small", "Small"),
-            ("lite_clinical", "OpenMed/OpenMed-PII-Turkish-LiteClinical-Small-66M-v1", "LiteClinical Small", "Small"),
-            ("lite_clinical_u", "OpenMed/OpenMed-PII-Turkish-LiteClinicalU-Small-66M-v1", "LiteClinicalU Small", "Small"),
-            ("mlite_clinical", "OpenMed/OpenMed-PII-Turkish-mLiteClinical-Base-135M-v1", "mLiteClinical Base", "Medium"),
-            ("fast_clinical", "OpenMed/OpenMed-PII-Turkish-FastClinical-Small-82M-v1", "FastClinical Small", "Small"),
-            ("clinical_e5_base", "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Base-109M-v1", "ClinicalE5 Base", "Medium"),
-            ("clinical_e5_large", "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Large-335M-v1", "ClinicalE5 Large", "Large"),
-            ("clinical_e5_small", "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Small-33M-v1", "ClinicalE5 Small", "Small"),
-            ("msuper_clinical", "OpenMed/OpenMed-PII-Turkish-mSuperClinical-Large-279M-v1", "mSuperClinical Large", "Large"),
-            ("modern_med_base", "OpenMed/OpenMed-PII-Turkish-ModernMed-Base-149M-v1", "ModernMed Base", "Medium"),
-            ("nomic_med", "OpenMed/OpenMed-PII-Turkish-NomicMed-Large-395M-v1", "NomicMed Large", "Large"),
-            ("modern_med_large", "OpenMed/OpenMed-PII-Turkish-ModernMed-Large-395M-v1", "ModernMed Large", "Large"),
-            ("qwen_med_xlarge", "OpenMed/OpenMed-PII-Turkish-QwenMed-XLarge-600M-v1", "QwenMed XLarge", "XLarge"),
-            ("super_medical_base", "OpenMed/OpenMed-PII-Turkish-SuperMedical-Base-125M-v1", "SuperMedical Base", "Medium"),
-            ("super_medical_large", "OpenMed/OpenMed-PII-Turkish-SuperMedical-Large-355M-v1", "SuperMedical Large", "Large"),
-            ("big_med_large_278m", "OpenMed/OpenMed-PII-Turkish-BigMed-Large-278M-v1", "BigMed Large 278M", "Large"),
-            ("big_med_large_560m", "OpenMed/OpenMed-PII-Turkish-BigMed-Large-560M-v1", "BigMed Large 560M", "Large"),
-        ],
-    },
-}
+def _build_portuguese_pii_models() -> Dict[str, ModelInfo]:
+    """Return Portuguese PII entries from manifest."""
+    return _models_by_language_from_manifest({"pt"})
 
 
 def _build_new_language_pii_models() -> Dict[str, ModelInfo]:
-    """Build Arabic, Japanese, and Turkish PII registry entries."""
-    generated: Dict[str, ModelInfo] = {}
-    for lang_code, spec in _NEW_LANGUAGE_PII_MODEL_SPECS.items():
-        language_name = spec["name"]
-        for arch_key, model_id, display_name, size_category in spec["models"]:
-            generated[f"pii_{lang_code}_{arch_key}"] = ModelInfo(
-                model_id=model_id,
-                display_name=f"PII Detection ({language_name}) - {display_name}",
-                category="Privacy",
-                specialization=spec["specialization"],
-                description=(
-                    f"{language_name} token-classification model for PII "
-                    "detection and clinical de-identification"
-                ),
-                entity_types=list(_FULL_PII_ENTITY_TYPES),
-                size_category=size_category,
-                recommended_confidence=0.55,
-            )
-    return generated
+    """Return Arabic, Japanese, and Turkish PII entries from manifest."""
+    return _models_by_language_from_manifest({"ar", "ja", "tr"})
 
 
-OPENMED_MODELS.update(_build_new_language_pii_models())
+def _build_categories() -> Dict[str, List[str]]:
+    categories: Dict[str, List[str]] = {}
+    for key, model in OPENMED_MODELS.items():
+        categories.setdefault(model.category, []).append(key)
+    return {category: sorted(keys) for category, keys in categories.items()}
 
 
-# Category mappings for easy filtering
-CATEGORIES = {
-    "Disease": ["disease_detection_superclinical", "disease_detection_tiny"],
-    "Pharmaceutical": ["pharma_detection_superclinical", "pharma_detection_supermedical"],
-    "Oncology": ["oncology_detection_superclinical", "oncology_detection_tiny"],
-    "Anatomy": ["anatomy_detection_electramed"],
-    "Genomics": ["genome_detection_bioclinical", "dna_detection_supermedical"],
-    "Chemical": ["chemical_detection_pubmed"],
-    "Species": ["species_detection_bioclinical"],
-    "Protein": ["protein_detection_pubmed"],
-    "Pathology": ["pathology_detection_modern"],
-    "Hematology": ["blood_cancer_detection"],
-    "Privacy": sorted(
-        k for k in OPENMED_MODELS if k.startswith("pii_")
-    ),
-}
+CATEGORIES = _build_categories()
 
-# Size-based recommendations
 SIZE_RECOMMENDATIONS = {
-    "fast": ["disease_detection_tiny", "oncology_detection_tiny", "pii_superclinical_small", "pii_lite_clinical", "pii_fast_clinical"],
-    "balanced": ["pharma_detection_supermedical", "genome_detection_bioclinical", "anatomy_detection_electramed", "pii_superclinical_base", "pii_clinical_e5_base"],
-    "accurate": ["disease_detection_superclinical", "pharma_detection_superclinical", "oncology_detection_superclinical", "pii_superclinical_large", "pii_qwen_med_xlarge"],
+    "fast": [
+        key
+        for key in (
+            "disease_detection_tiny",
+            "oncology_detection_tiny",
+            "pii_superclinical_small",
+            "pii_liteclinical_small",
+            "pii_fastclinical_small",
+        )
+        if key in OPENMED_MODELS
+    ],
+    "balanced": [
+        key
+        for key in (
+            "pharma_detection_supermedical",
+            "genome_detection_bioclinical",
+            "anatomy_detection_electramed",
+            "pii_superclinical_base",
+            "pii_clinicale5_base",
+        )
+        if key in OPENMED_MODELS
+    ],
+    "accurate": [
+        key
+        for key in (
+            "disease_detection_superclinical",
+            "pharma_detection_superclinical",
+            "oncology_detection_superclinical",
+            "pii_superclinical_large",
+            "pii_qwenmed_xlarge",
+        )
+        if key in OPENMED_MODELS
+    ],
 }
 
 
 def get_model_info(model_key: str) -> Optional[ModelInfo]:
-    """Get model information by key."""
-    return OPENMED_MODELS.get(model_key)
+    """Get model information by registry key or repo id."""
+    if model_key in OPENMED_MODELS:
+        return OPENMED_MODELS[model_key]
+
+    for model in OPENMED_MODELS.values():
+        if model.model_id == model_key:
+            return model
+    return None
 
 
 def get_models_by_category(category: str) -> List[ModelInfo]:
@@ -1006,12 +596,17 @@ def get_models_by_category(category: str) -> List[ModelInfo]:
 
 def get_models_by_size(size_category: str) -> List[ModelInfo]:
     """Get models by size category (Tiny, Small, Medium, Large, XLarge)."""
-    return [model for model in OPENMED_MODELS.values() if model.size_category == size_category]
+    return [
+        model for model in OPENMED_MODELS.values()
+        if model.size_category == size_category
+    ]
 
 
 def get_recommended_models(use_case: str = "balanced") -> List[ModelInfo]:
     """Get recommended models for a specific use case."""
-    model_keys = SIZE_RECOMMENDATIONS.get(use_case, SIZE_RECOMMENDATIONS["balanced"])
+    model_keys = SIZE_RECOMMENDATIONS.get(
+        use_case, SIZE_RECOMMENDATIONS.get("balanced", [])
+    )
     return [OPENMED_MODELS[key] for key in model_keys if key in OPENMED_MODELS]
 
 
@@ -1032,39 +627,56 @@ def get_all_models() -> Dict[str, ModelInfo]:
 def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
     """Suggest appropriate models based on text content."""
     text_lower = text.lower()
-    suggestions = []
-
-    # Keywords that suggest specific model categories
+    suggestions: List[Tuple[str, ModelInfo, str]] = []
     keywords = {
-        "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": ("privacy", "Contains PII/de-identification terms"),
-        "cancer|tumor|oncolog|malign|chemotherapy|radiation": ("oncology", "Contains cancer/oncology terms"),
-        "drug|medication|pharma|dose|mg|pill|tablet": ("pharma", "Contains pharmaceutical terms"),
-        "gene|dna|protein|mutation|chromosome": ("genomics", "Contains genomic/genetic terms"),
-        "heart|lung|brain|liver|kidney|organ": ("anatomy", "Contains anatomical terms"),
-        "bacteria|virus|organism|species": ("species", "Contains organism/species terms"),
-        "disease|condition|disorder|syndrome": ("disease", "Contains disease/condition terms"),
-        "pathology|histology|biopsy": ("pathology", "Contains pathological terms"),
-        "blood|lymph|leukemia|lymphoma": ("hematology", "Contains hematological terms"),
+        "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
+            "Privacy",
+            "Contains PII/de-identification terms",
+        ),
+        "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
+            "Oncology",
+            "Contains cancer/oncology terms",
+        ),
+        "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
+            "Pharmaceutical",
+            "Contains pharmaceutical terms",
+        ),
+        "gene|dna|protein|mutation|chromosome": (
+            "Genomics",
+            "Contains genomic/genetic terms",
+        ),
+        "heart|lung|brain|liver|kidney|organ": (
+            "Anatomy",
+            "Contains anatomical terms",
+        ),
+        "bacteria|virus|organism|species": (
+            "Species",
+            "Contains organism/species terms",
+        ),
+        "disease|condition|disorder|syndrome": (
+            "Disease",
+            "Contains disease/condition terms",
+        ),
+        "pathology|histology|biopsy": (
+            "Pathology",
+            "Contains pathological terms",
+        ),
+        "blood|lymph|leukemia|lymphoma": (
+            "Hematology",
+            "Contains hematological terms",
+        ),
     }
 
-    import re
     for pattern, (category, reason) in keywords.items():
         if re.search(pattern, text_lower):
-            models = get_models_by_category(category.title())
-            for model in models:
-                # Find the model key
-                for key, info in OPENMED_MODELS.items():
-                    if info == model:
-                        suggestions.append((key, model, reason))
-                        break
+            for key in CATEGORIES.get(category, [])[:3]:
+                suggestions.append((key, OPENMED_MODELS[key], reason))
 
-    # If no specific suggestions, recommend balanced models
     if not suggestions:
-        for key in SIZE_RECOMMENDATIONS["balanced"]:
-            if key in OPENMED_MODELS:
-                suggestions.append((key, OPENMED_MODELS[key], "General medical text"))
+        for key in SIZE_RECOMMENDATIONS.get("balanced", [])[:3]:
+            suggestions.append((key, OPENMED_MODELS[key], "General medical text"))
 
-    return suggestions[:3]  # Return top 3 suggestions
+    return suggestions[:3]
 
 
 def list_model_categories() -> List[str]:
@@ -1078,45 +690,34 @@ def get_entity_types_by_category(category: str) -> List[str]:
     entity_types = set()
     for model in models:
         entity_types.update(model.entity_types)
-    return sorted(list(entity_types))
+    return sorted(entity_types)
 
-
-# ---------------------------------------------------------------------------
-# Multilingual PII helpers
-# ---------------------------------------------------------------------------
 
 def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
-    """Return all PII models for a given language.
-
-    Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
-            ar, ja, tr)
-
-    Returns:
-        Dict mapping registry keys to ModelInfo for that language.
-    """
+    """Return all single-language PII models for a given language."""
     if lang == "en":
-        localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS | set(_LANGUAGE_CONFIG)
+        localized_prefixes = _LOCALIZED_PII_LANGUAGE_KEYS
         return {
-            k: v
-            for k, v in OPENMED_MODELS.items()
-            if k.startswith("pii_")
-            and not any(k.startswith(f"pii_{lc}_") for lc in localized_prefixes)
+            key: info
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith("pii_")
+            and info.category == "Privacy"
+            and "en" in (info.languages or ["en"])
+            and not any(key.startswith(f"pii_{lc}_") for lc in localized_prefixes)
         }
 
     prefix = f"pii_{lang}_"
-    return {k: v for k, v in OPENMED_MODELS.items() if k.startswith(prefix)}
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if key.startswith(prefix)
+        and info.category == "Privacy"
+        and lang in (info.languages or [])
+    }
 
 
 def get_default_pii_model(lang: str) -> Optional[str]:
-    """Return the default (recommended) PII model_id for a language.
-
-    Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
-            ar, ja, tr)
-
-    Returns:
-        HuggingFace model ID string, or None if language unsupported.
-    """
+    """Return the default (recommended) PII model_id for a language."""
     from .pii_i18n import DEFAULT_PII_MODELS
+
     return DEFAULT_PII_MODELS.get(lang)

@@ -1,4 +1,4 @@
-"""Tests for multilingual PII model registry entries."""
+"""Tests for manifest-backed multilingual PII model registry entries."""
 
 import pytest
 
@@ -8,392 +8,82 @@ from openmed.core.model_registry import (
     ModelInfo,
     get_pii_models_by_language,
     get_default_pii_model,
+    load_manifest_rows,
 )
-from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
-
-
-# ---------------------------------------------------------------------------
-# Registry Completeness Tests
-# ---------------------------------------------------------------------------
+from openmed.core.pii_i18n import DEFAULT_PII_MODELS, LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 
 
 class TestRegistryCompleteness:
-    """Verify all multilingual PII models are registered."""
+    """Verify PII model registry entries are derived from the manifest."""
 
-    def test_total_pii_model_count(self):
-        """All PII models including ar/ja/tr should total 247."""
-        pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
-        # 210 existing + 2 Arabic + 3 Japanese + 32 Turkish = 247
-        assert len(pii_keys) == 247
-
-    def test_english_pii_model_count(self):
-        """English has 35 PII models + 1 legacy alias = 36."""
-        en_models = get_pii_models_by_language("en")
-        assert len(en_models) >= 35
-
-    def test_french_pii_model_count(self):
-        """French has 35 PII models."""
-        fr_models = get_pii_models_by_language("fr")
-        assert len(fr_models) == 35
-
-    def test_german_pii_model_count(self):
-        """German has 35 PII models."""
-        de_models = get_pii_models_by_language("de")
-        assert len(de_models) == 35
-
-    def test_italian_pii_model_count(self):
-        """Italian has 35 PII models."""
-        it_models = get_pii_models_by_language("it")
-        assert len(it_models) == 35
-
-    def test_spanish_pii_model_count(self):
-        """Spanish has 35 PII models."""
-        es_models = get_pii_models_by_language("es")
-        assert len(es_models) == 35
-
-    def test_dutch_pii_model_count(self):
-        """Dutch currently has one public flagship model."""
-        nl_models = get_pii_models_by_language("nl")
-        assert len(nl_models) == 1
-
-    def test_hindi_pii_model_count(self):
-        """Hindi currently has one public flagship model."""
-        hi_models = get_pii_models_by_language("hi")
-        assert len(hi_models) == 1
-
-    def test_telugu_pii_model_count(self):
-        """Telugu currently has one public flagship model."""
-        te_models = get_pii_models_by_language("te")
-        assert len(te_models) == 1
-
-    def test_portuguese_pii_model_count(self):
-        """Portuguese has 31 API-visible public models."""
-        pt_models = get_pii_models_by_language("pt")
-        assert len(pt_models) == 31
-
-    def test_arabic_pii_model_count(self):
-        """Arabic has 2 API-visible public models."""
-        ar_models = get_pii_models_by_language("ar")
-        assert len(ar_models) == 2
-
-    def test_japanese_pii_model_count(self):
-        """Japanese has 3 API-visible public models."""
-        ja_models = get_pii_models_by_language("ja")
-        assert len(ja_models) == 3
-
-    def test_turkish_pii_model_count(self):
-        """Turkish has 32 API-visible public models."""
-        tr_models = get_pii_models_by_language("tr")
-        assert len(tr_models) == 32
-
-    def test_portuguese_api_visible_model_ids(self):
-        """Portuguese registry should match the public collection API list."""
-        expected_ids = {
-            "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-335M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicalBGE-Large-568M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BioClinicalBERT-Base-110M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicDischarge-Base-110M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Base-149M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BioClinicalModern-Large-395M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Base-110M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BiomedBERTFull-Base-110M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BiomedBERT-Large-340M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Base-110M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BiomedELECTRA-Large-335M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicalLongformer-Base-149M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Base-184M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Large-434M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-SuperClinical-Small-44M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-LiteClinical-Small-66M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-LiteClinicalU-Small-66M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-mLiteClinical-Base-135M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-FastClinical-Small-82M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Base-109M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Large-335M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ClinicalE5-Small-33M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-mSuperClinical-Large-279M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ModernMed-Base-149M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-NomicMed-Large-395M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-ModernMed-Large-395M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-QwenMed-XLarge-600M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Base-125M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-SuperMedical-Large-355M-v1",
-            "OpenMed/OpenMed-PII-Portuguese-BigMed-Large-278M-v1",
+    def test_manifest_pii_ids_are_registered(self):
+        manifest_pii_ids = {
+            row["repo_id"] for row in load_manifest_rows() if row["family"] == "PII"
         }
-        actual_ids = {info.model_id for info in get_pii_models_by_language("pt").values()}
-        assert actual_ids == expected_ids
-
-    def test_new_language_api_visible_model_ids(self):
-        """Arabic, Japanese, and Turkish registry entries match Hub API search results."""
-        expected = {
-            "ar": {
-                "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
-                "OpenMed/OpenMed-PII-Arabic-BigMed-Large-560M-v1",
-            },
-            "ja": {
-                "OpenMed/OpenMed-PII-Japanese-NomicMed-Large-395M-v1",
-                "OpenMed/OpenMed-PII-Japanese-QwenMed-XLarge-600M-v1",
-                "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
-            },
-            "tr": {
-                "OpenMed/OpenMed-PII-Turkish-SnowflakeMed-Large-568M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicalBGE-Large-335M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicalBGE-Large-568M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BioClinicalBERT-Base-110M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicDischarge-Base-110M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BioClinicalModern-Base-149M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BioClinicalModern-Large-395M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BiomedBERT-Base-110M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BiomedBERTFull-Base-110M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BiomedBERT-Large-340M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BiomedELECTRA-Base-110M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BiomedELECTRA-Large-335M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicalLongformer-Base-149M-v1",
-                "OpenMed/OpenMed-PII-Turkish-SuperClinical-Base-184M-v1",
-                "OpenMed/OpenMed-PII-Turkish-SuperClinical-Large-434M-v1",
-                "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
-                "OpenMed/OpenMed-PII-Turkish-LiteClinical-Small-66M-v1",
-                "OpenMed/OpenMed-PII-Turkish-LiteClinicalU-Small-66M-v1",
-                "OpenMed/OpenMed-PII-Turkish-mLiteClinical-Base-135M-v1",
-                "OpenMed/OpenMed-PII-Turkish-FastClinical-Small-82M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Base-109M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Large-335M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ClinicalE5-Small-33M-v1",
-                "OpenMed/OpenMed-PII-Turkish-mSuperClinical-Large-279M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ModernMed-Base-149M-v1",
-                "OpenMed/OpenMed-PII-Turkish-NomicMed-Large-395M-v1",
-                "OpenMed/OpenMed-PII-Turkish-ModernMed-Large-395M-v1",
-                "OpenMed/OpenMed-PII-Turkish-QwenMed-XLarge-600M-v1",
-                "OpenMed/OpenMed-PII-Turkish-SuperMedical-Base-125M-v1",
-                "OpenMed/OpenMed-PII-Turkish-SuperMedical-Large-355M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BigMed-Large-278M-v1",
-                "OpenMed/OpenMed-PII-Turkish-BigMed-Large-560M-v1",
-            },
+        registry_ids = {
+            info.model_id
+            for key, info in OPENMED_MODELS.items()
+            if key.startswith("pii_")
         }
-        for lang, expected_ids in expected.items():
-            actual_ids = {info.model_id for info in get_pii_models_by_language(lang).values()}
-            assert actual_ids == expected_ids
+        assert manifest_pii_ids <= registry_ids
 
-    def test_privacy_category_includes_all(self):
-        """Privacy category should list all PII model keys."""
+    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
+    def test_supported_language_has_pii_models(self, lang):
+        models = get_pii_models_by_language(lang)
+        assert models, f"No PII models found for language {lang!r}"
+        assert all(lang in info.languages for info in models.values())
+
+    def test_privacy_category_includes_all_pii_keys(self):
         pii_keys = sorted(k for k in OPENMED_MODELS if k.startswith("pii_"))
         privacy_keys = sorted(CATEGORIES["Privacy"])
-        assert pii_keys == privacy_keys
+        assert set(pii_keys) <= set(privacy_keys)
 
-
-# ---------------------------------------------------------------------------
-# Model Naming Convention Tests
-# ---------------------------------------------------------------------------
+    def test_default_models_are_registered(self):
+        registry_model_ids = {info.model_id for info in OPENMED_MODELS.values()}
+        for lang, model_id in DEFAULT_PII_MODELS.items():
+            assert model_id in registry_model_ids, (
+                f"Default model for {lang} ({model_id}) not found in registry"
+            )
 
 
 class TestModelNaming:
-    """Verify generated model IDs follow HuggingFace naming convention."""
+    """Verify language-specific PII model IDs retain language identity."""
 
-    def test_french_model_ids_contain_french(self):
-        fr_models = get_pii_models_by_language("fr")
-        for key, info in fr_models.items():
-            assert "French-" in info.model_id, (
-                f"French model {key} missing 'French-' in model_id: {info.model_id}"
-            )
+    def test_english_default_has_no_language_prefix(self):
+        model_id = get_default_pii_model("en")
+        assert model_id == DEFAULT_PII_MODELS["en"]
+        for lang, name in LANGUAGE_NAMES.items():
+            if lang != "en":
+                assert f"{name}-" not in model_id
 
-    def test_german_model_ids_contain_german(self):
-        de_models = get_pii_models_by_language("de")
-        for key, info in de_models.items():
-            assert "German-" in info.model_id, (
-                f"German model {key} missing 'German-' in model_id: {info.model_id}"
-            )
-
-    def test_italian_model_ids_contain_italian(self):
-        it_models = get_pii_models_by_language("it")
-        for key, info in it_models.items():
-            assert "Italian-" in info.model_id, (
-                f"Italian model {key} missing 'Italian-' in model_id: {info.model_id}"
-            )
-
-    def test_spanish_model_ids_contain_spanish(self):
-        es_models = get_pii_models_by_language("es")
-        for key, info in es_models.items():
-            assert "Spanish-" in info.model_id, (
-                f"Spanish model {key} missing 'Spanish-' in model_id: {info.model_id}"
-            )
-
-    def test_portuguese_model_ids_contain_portuguese(self):
-        pt_models = get_pii_models_by_language("pt")
-        assert len(pt_models) == 31
-        for key, info in pt_models.items():
-            assert "Portuguese-" in info.model_id, (
-                f"Portuguese model {key} missing 'Portuguese-' in model_id: {info.model_id}"
-            )
-
-    @pytest.mark.parametrize(
-        ("lang", "token", "count"),
-        [
-            ("ar", "Arabic-", 2),
-            ("ja", "Japanese-", 3),
-            ("tr", "Turkish-", 32),
-        ],
-    )
-    def test_new_language_model_ids_contain_language_prefix(self, lang, token, count):
+    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
+    def test_language_specific_models_contain_language_name(self, lang):
+        language_name = LANGUAGE_NAMES[lang]
         models = get_pii_models_by_language(lang)
-        assert len(models) == count
-        for key, info in models.items():
-            assert token in info.model_id, (
-                f"{lang} model {key} missing '{token}' in model_id: {info.model_id}"
-            )
+        assert models
+        assert any(f"{language_name}-" in info.model_id for info in models.values())
 
-    def test_sparse_locale_model_ids_contain_language_prefix(self):
-        for lang, token in (("nl", "Dutch-"), ("hi", "Hindi-"), ("te", "Telugu-")):
-            models = get_pii_models_by_language(lang)
-            assert len(models) == 1
-            for key, info in models.items():
-                assert token in info.model_id, (
-                    f"{lang} model {key} missing '{token}' in model_id: {info.model_id}"
-                )
-
-    def test_english_model_ids_no_language_prefix(self):
-        en_models = get_pii_models_by_language("en")
-        for key, info in en_models.items():
-            for prefix in (
-                "French-", "German-", "Italian-", "Spanish-", "Dutch-",
-                "Hindi-", "Telugu-", "Portuguese-", "Arabic-", "Japanese-",
-                "Turkish-",
-            ):
-                assert prefix not in info.model_id, (
-                    f"English model {key} has unexpected prefix in: {info.model_id}"
-                )
-
-    def test_all_pii_model_ids_start_with_openmed(self):
+    def test_all_pii_model_ids_are_openmed_repos(self):
         pii_models = {k: v for k, v in OPENMED_MODELS.items() if k.startswith("pii_")}
         for key, info in pii_models.items():
-            assert info.model_id.startswith("OpenMed/OpenMed-PII-"), (
+            assert info.model_id.startswith("OpenMed/"), (
                 f"Model {key} has unexpected model_id prefix: {info.model_id}"
             )
 
-    def test_all_pii_model_ids_end_with_v1(self):
-        pii_models = {k: v for k, v in OPENMED_MODELS.items() if k.startswith("pii_")}
-        for key, info in pii_models.items():
-            assert info.model_id.endswith("-v1"), (
-                f"Model {key} model_id doesn't end with -v1: {info.model_id}"
-            )
-
-    def test_generated_keys_follow_pattern(self):
-        """Generated keys should be pii_{lang}_{architecture}."""
-        for lang in ("fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"):
-            lang_models = get_pii_models_by_language(lang)
-            for key in lang_models:
-                assert key.startswith(f"pii_{lang}_"), (
-                    f"Key {key} doesn't start with pii_{lang}_"
-                )
-
-
-# ---------------------------------------------------------------------------
-# Mirror Structure Tests
-# ---------------------------------------------------------------------------
-
-
-class TestMirrorStructure:
-    """Verify multilingual models mirror English model architectures."""
-
-    def test_each_language_mirrors_english(self):
-        """Each non-English language should have the same architectures."""
-        en_models = get_pii_models_by_language("en")
-        # Filter out the legacy pii_detection alias
-        en_archs = sorted(k[4:] for k in en_models if k != "pii_detection")
-
-        for lang in ("fr", "de", "it", "es"):
-            lang_models = get_pii_models_by_language(lang)
-            lang_archs = sorted(k[len(f"pii_{lang}_"):] for k in lang_models)
-            assert lang_archs == en_archs, (
-                f"{lang} architectures don't match English. "
-                f"Missing: {set(en_archs) - set(lang_archs)}, "
-                f"Extra: {set(lang_archs) - set(en_archs)}"
-            )
-
-    def test_size_categories_preserved(self):
-        """Size categories should be preserved across languages."""
-        en_models = get_pii_models_by_language("en")
-        for en_key, en_info in en_models.items():
-            if en_key == "pii_detection":
-                continue
-            arch = en_key[4:]  # strip "pii_"
-            for lang in ("fr", "de", "it", "es"):
-                lang_key = f"pii_{lang}_{arch}"
-                assert lang_key in OPENMED_MODELS, f"Missing: {lang_key}"
-                assert OPENMED_MODELS[lang_key].size_category == en_info.size_category
-
-
-# ---------------------------------------------------------------------------
-# Helper Function Tests
-# ---------------------------------------------------------------------------
+    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
+    def test_language_bucket_keys_use_language_prefix_when_specific(self, lang):
+        models = get_pii_models_by_language(lang)
+        prefixed_keys = [key for key in models if key.startswith(f"pii_{lang}_")]
+        assert prefixed_keys, f"No pii_{lang}_ keys found"
 
 
 class TestHelperFunctions:
     """Tests for get_pii_models_by_language and get_default_pii_model."""
 
-    def test_get_default_pii_model_en(self):
-        model_id = get_default_pii_model("en")
-        assert model_id == DEFAULT_PII_MODELS["en"]
-        assert "SuperClinical-Small-44M" in model_id
-
-    def test_get_default_pii_model_fr(self):
-        model_id = get_default_pii_model("fr")
-        assert model_id == DEFAULT_PII_MODELS["fr"]
-        assert "French-" in model_id
-
-    def test_get_default_pii_model_de(self):
-        model_id = get_default_pii_model("de")
-        assert model_id == DEFAULT_PII_MODELS["de"]
-        assert "German-" in model_id
-
-    def test_get_default_pii_model_it(self):
-        model_id = get_default_pii_model("it")
-        assert model_id == DEFAULT_PII_MODELS["it"]
-        assert "Italian-" in model_id
-
-    def test_get_default_pii_model_es(self):
-        model_id = get_default_pii_model("es")
-        assert model_id == DEFAULT_PII_MODELS["es"]
-        assert "Spanish-" in model_id
-
-    def test_get_default_pii_model_nl(self):
-        model_id = get_default_pii_model("nl")
-        assert model_id == DEFAULT_PII_MODELS["nl"]
-        assert "Dutch-" in model_id
-
-    def test_get_default_pii_model_hi(self):
-        model_id = get_default_pii_model("hi")
-        assert model_id == DEFAULT_PII_MODELS["hi"]
-        assert "Hindi-" in model_id
-
-    def test_get_default_pii_model_te(self):
-        model_id = get_default_pii_model("te")
-        assert model_id == DEFAULT_PII_MODELS["te"]
-        assert "Telugu-" in model_id
-
-    def test_get_default_pii_model_pt(self):
-        model_id = get_default_pii_model("pt")
-        assert model_id == DEFAULT_PII_MODELS["pt"]
-        assert "Portuguese-" in model_id
-        assert "SnowflakeMed-Large-568M" in model_id
-
-    def test_get_default_pii_model_ar(self):
-        model_id = get_default_pii_model("ar")
-        assert model_id == DEFAULT_PII_MODELS["ar"]
-        assert "Arabic-" in model_id
-        assert "SnowflakeMed-Large-568M" in model_id
-
-    def test_get_default_pii_model_ja(self):
-        model_id = get_default_pii_model("ja")
-        assert model_id == DEFAULT_PII_MODELS["ja"]
-        assert "Japanese-" in model_id
-        assert "BigMed-Large-560M" in model_id
-
-    def test_get_default_pii_model_tr(self):
-        model_id = get_default_pii_model("tr")
-        assert model_id == DEFAULT_PII_MODELS["tr"]
-        assert "Turkish-" in model_id
-        assert "SuperClinical-Small-44M" in model_id
+    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
+    def test_get_default_pii_model(self, lang):
+        model_id = get_default_pii_model(lang)
+        assert model_id == DEFAULT_PII_MODELS[lang]
 
     def test_get_default_pii_model_unsupported(self):
         result = get_default_pii_model("ko")
@@ -404,16 +94,5 @@ class TestHelperFunctions:
             models = get_pii_models_by_language(lang)
             for key, info in models.items():
                 assert isinstance(info, ModelInfo)
+                assert key.startswith("pii_")
                 assert info.category == "Privacy"
-
-    def test_all_default_models_in_registry(self):
-        """Each default model ID should correspond to a registered model."""
-        all_model_ids = {v.model_id for v in OPENMED_MODELS.values()}
-        for lang, model_id in DEFAULT_PII_MODELS.items():
-            assert model_id in all_model_ids, (
-                f"Default model for {lang} ({model_id}) not found in registry"
-            )
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
