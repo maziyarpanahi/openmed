@@ -246,7 +246,7 @@ def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
     assert payload["entities"][0]["label"] == "NAME"
 
 
-@pytest.mark.parametrize("lang", ["nl", "hi", "te"])
+@pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
 def test_pii_extract_accepts_new_langs(client, monkeypatch, fake_loader_cls, lang):
     result = _sample_prediction_result()
 
@@ -296,7 +296,7 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
     assert payload["method"] == "mask"
 
 
-@pytest.mark.parametrize("lang", ["nl", "hi", "te"])
+@pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
 def test_pii_deidentify_accepts_new_langs(client, monkeypatch, fake_loader_cls, lang):
     result = _sample_deid_result()
 
@@ -735,3 +735,14 @@ def test_unload_endpoint_requires_model_or_all(client):
 
     payload = _assert_error_payload(response, 422, "validation_error")
     assert payload["error"]["details"][0]["field"] == "body"
+
+
+def test_pii_lang_options_match_core_models():
+    """The REST lang options must stay in parity with the library's per-language
+    PII models, so a request can't be rejected for a language OpenMed supports."""
+    from typing import get_args
+
+    from openmed.core.pii_i18n import DEFAULT_PII_MODELS
+    from openmed.service.schemas import PIILang
+
+    assert set(get_args(PIILang)) == set(DEFAULT_PII_MODELS)

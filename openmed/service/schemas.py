@@ -27,6 +27,15 @@ except ImportError:  # pragma: no cover
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 KeepAliveValue = Union[int, float, str]
 
+# PII languages exposed by the service. Mirrors the per-language models in
+# openmed.core.pii_i18n.DEFAULT_PII_MODELS so the REST surface stays in parity
+# with the library (12 languages). Defined once and reused by every request
+# schema below; test_pii_lang_options_match_core_models locks the two lists
+# together to prevent future drift.
+PIILang = Literal[
+    "en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"
+]
+
 
 def _normalize_text(value: Any) -> str:
     if value is None:
@@ -126,7 +135,7 @@ if PYDANTIC_V2:
         model_name: str = _DEFAULT_PII_MODEL
         confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
+        lang: PIILang = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
@@ -165,7 +174,7 @@ if PYDANTIC_V2:
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
+        lang: PIILang = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
@@ -258,7 +267,7 @@ else:
         model_name: str = _DEFAULT_PII_MODEL
         confidence_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
+        lang: PIILang = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
@@ -293,7 +302,7 @@ else:
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
         use_smart_merging: bool = True
-        lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
+        lang: PIILang = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
 
