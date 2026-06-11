@@ -16,11 +16,6 @@ try:
         AutoConfig,
         pipeline,
     )
-    from huggingface_hub import list_models, model_info as hf_model_info
-    try:
-        from huggingface_hub import ModelFilter
-    except ImportError:  # pragma: no cover - older hub versions
-        ModelFilter = None  # type: ignore[assignment]
 
     HF_AVAILABLE = True
 except (ImportError, OSError) as e:
@@ -35,14 +30,6 @@ except (ImportError, OSError) as e:
     AutoModelForTokenClassification = None  # type: ignore[assignment]
     AutoConfig = None  # type: ignore[assignment]
     pipeline = None  # type: ignore[assignment]
-
-    def list_models(*args, **kwargs):  # type: ignore[override]
-        raise RuntimeError("HuggingFace Hub is not available")
-
-    def hf_model_info(*args, **kwargs):  # type: ignore[override]
-        raise RuntimeError("HuggingFace Hub is not available")
-
-    ModelFilter = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from .config import OpenMedConfig
@@ -94,31 +81,17 @@ class ModelLoader:
         """
         models = []
 
-        # Add models from local registry
         if include_registry:
             registry_models = [info.model_id for info in get_all_models().values()]
             models.extend(registry_models)
 
         if include_remote:
-            auth_kwargs = self._hub_auth_kwargs()
+            logger.debug(
+                "include_remote is retained for compatibility; model discovery "
+                "uses the committed manifest snapshot."
+            )
 
-            try:
-                hf_models = list_models(
-                    **self._build_model_filter_kwargs(),
-                    **auth_kwargs,
-                )
-                hf_model_ids = [model.modelId for model in hf_models]
-
-                for model_id in hf_model_ids:
-                    if model_id not in models:
-                        models.append(model_id)
-
-            except Exception as e:
-                logger.warning(f"Failed to fetch models from HuggingFace Hub: {e}")
-                if not models:  # If no registry models either
-                    return []
-
-        return sorted(models)
+        return sorted(set(models))
 
     def load_model(
         self, model_name: str, force_reload: bool = False, **kwargs
@@ -494,30 +467,7 @@ class ModelLoader:
             ModelInfo object or None if not found.
         """
         full_model_name = self._resolve_model_name(model_name)
-
-        try:
-            return hf_model_info(full_model_name, **self._hub_auth_kwargs())
-        except Exception as e:
-            logger.error(f"Failed to get model info for {full_model_name}: {e}")
-            return None
-
-    def _build_model_filter_kwargs(self) -> Dict[str, Any]:
-        """Build keyword arguments for huggingface_hub.list_models."""
-        if HF_AVAILABLE and ModelFilter is not None:  # type: ignore[name-defined]
-            return {
-                "filter": ModelFilter(
-                    author=self.config.default_org, task="token-classification"
-                )
-            }
-
-        # Fallback for older huggingface_hub versions without ModelFilter import.
-        logger.debug(
-            "huggingface_hub.ModelFilter unavailable; using deprecated author/task arguments."
-        )
-        return {
-            "author": self.config.default_org,
-            "task": "token-classification",
-        }
+        return get_model_info(model_name) or get_model_info(full_model_name)
 
     def _hub_auth_kwargs(self) -> Dict[str, Any]:
         """Return authentication kwargs for Hugging Face Hub calls."""

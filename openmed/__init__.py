@@ -99,8 +99,8 @@ def list_models(
 
     Args:
         include_registry: Include entries from the bundled registry in addition to
-            results fetched from Hugging Face.
-        include_remote: Query Hugging Face Hub for additional models.
+            entries in the committed manifest.
+        include_remote: Retained for compatibility; no live discovery is performed.
         config: Optional custom configuration for model discovery.
     """
 
