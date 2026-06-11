@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from .config import OpenMedConfig
 
 from .config import get_config
+from .offline import configure_offline_mode, is_local_only, raise_offline_error
 from .model_registry import (
     OPENMED_MODELS,
     get_model_info,
@@ -74,6 +75,7 @@ class ModelLoader:
             )
 
         self.config = config or get_config()
+        configure_offline_mode(self.config)
         self._models = {}  # Cache for loaded models
         self._tokenizers = {}  # Cache for loaded tokenizers
         self._pipelines = {}  # Cache for created pipelines
@@ -93,6 +95,8 @@ class ModelLoader:
             List of model names available for loading.
         """
         models = []
+        if is_local_only(self.config):
+            include_remote = False
 
         # Add models from local registry
         if include_registry:
@@ -494,6 +498,8 @@ class ModelLoader:
             ModelInfo object or None if not found.
         """
         full_model_name = self._resolve_model_name(model_name)
+        if is_local_only(self.config):
+            raise_offline_error(f"remote model metadata lookup for {full_model_name}")
 
         try:
             return hf_model_info(full_model_name, **self._hub_auth_kwargs())
@@ -545,6 +551,9 @@ class ModelLoader:
         kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Force local-only Hub loading for filesystem-backed model names."""
+        if is_local_only(self.config):
+            configure_offline_mode(self.config)
+            return {"local_files_only": True}
         if kwargs and "local_files_only" in kwargs:
             return {"local_files_only": kwargs["local_files_only"]}
         if self._as_existing_local_path(model_name) is not None:

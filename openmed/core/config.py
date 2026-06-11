@@ -5,6 +5,12 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Union, List
 import os
 
+from .offline import (
+    OFFLINE_ENV_VAR,
+    configure_offline_mode,
+    env_flag_enabled,
+)
+
 # Environment variable used to override the config file location
 CONFIG_ENV_VAR = "OPENMED_CONFIG"
 
@@ -77,6 +83,9 @@ class OpenMedConfig:
     # Inference backend: None (auto-detect), "hf" (HuggingFace/PyTorch), "mlx" (Apple MLX)
     backend: Optional[str] = None
 
+    # Cache-only, no-egress mode for inference and de-identification
+    local_only: bool = False
+
     # Active profile name (if any)
     profile: Optional[str] = None
 
@@ -96,6 +105,12 @@ class OpenMedConfig:
         if env_exceptions:
             self.medical_tokenizer_exceptions = [item.strip() for item in env_exceptions.split(",") if item.strip()]
 
+        env_offline = os.getenv(OFFLINE_ENV_VAR)
+        if env_offline is not None:
+            self.local_only = self.local_only or env_flag_enabled(env_offline)
+
+        configure_offline_mode(self)
+
         # Check for profile environment variable
         env_profile = os.getenv(PROFILE_ENV_VAR)
         if env_profile and self.profile is None:
@@ -108,7 +123,7 @@ class OpenMedConfig:
         valid_keys = {
             "default_org", "cache_dir", "device", "hf_token",
             "log_level", "timeout", "use_medical_tokenizer",
-            "medical_tokenizer_exceptions", "backend", "profile"
+            "medical_tokenizer_exceptions", "backend", "local_only", "profile"
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
         return cls(**filtered)
@@ -162,6 +177,7 @@ class OpenMedConfig:
             "use_medical_tokenizer": self.use_medical_tokenizer,
             "medical_tokenizer_exceptions": self.medical_tokenizer_exceptions,
             "backend": self.backend,
+            "local_only": self.local_only,
             "profile": self.profile,
         }
 
