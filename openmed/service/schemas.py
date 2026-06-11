@@ -165,6 +165,7 @@ if PYDANTIC_V2:
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
         use_smart_merging: bool = True
+        use_safety_sweep: bool = True
         lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None
@@ -293,6 +294,7 @@ else:
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
         use_smart_merging: bool = True
+        use_safety_sweep: bool = True
         lang: Literal["en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"] = "en"
         normalize_accents: Optional[bool] = None
         keep_alive: Optional[KeepAliveValue] = None

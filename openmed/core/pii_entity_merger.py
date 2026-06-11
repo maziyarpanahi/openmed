@@ -72,25 +72,9 @@ def validate_ssn(ssn_text: str) -> bool:
     Returns:
         True if valid SSN format
     """
-    # Extract digits only
-    digits = re.sub(r'[^0-9]', '', ssn_text)
+    from .anonymizer.providers import clinical_ids
 
-    if len(digits) != 9:
-        return False
-
-    area = digits[0:3]
-    group = digits[3:5]
-    serial = digits[5:9]
-
-    # Check for invalid patterns
-    if area == '000' or area == '666' or area[0] == '9':
-        return False
-    if group == '00':
-        return False
-    if serial == '0000':
-        return False
-
-    return True
+    return clinical_ids.validate_ssn(ssn_text)
 
 
 def validate_luhn(number_text: str) -> bool:
@@ -105,26 +89,9 @@ def validate_luhn(number_text: str) -> bool:
     Returns:
         True if passes Luhn checksum
     """
-    # Extract digits only
-    digits = re.sub(r'[^0-9]', '', number_text)
+    from .anonymizer.providers import clinical_ids
 
-    if len(digits) < 13:  # Minimum for credit cards
-        return False
-
-    # Luhn algorithm
-    def luhn_checksum(card_number):
-        def digits_of(n):
-            return [int(d) for d in str(n)]
-
-        digits = digits_of(card_number)
-        odd_digits = digits[-1::-2]
-        even_digits = digits[-2::-2]
-        checksum = sum(odd_digits)
-        for d in even_digits:
-            checksum += sum(digits_of(d * 2))
-        return checksum % 10
-
-    return luhn_checksum(digits) == 0
+    return clinical_ids.validate_luhn(number_text)
 
 
 def validate_npi(npi_text: str) -> bool:
@@ -138,31 +105,16 @@ def validate_npi(npi_text: str) -> bool:
     Returns:
         True if valid NPI
     """
-    # Extract digits only
-    digits = re.sub(r'[^0-9]', '', npi_text)
+    from .anonymizer.providers import clinical_ids
 
-    if len(digits) != 10:
-        return False
+    return clinical_ids.validate_npi(npi_text)
 
-    # NPI uses Luhn algorithm with prefix "80840"
-    # The constant 24 is added to the checksum
-    prefix = "80840"
-    checksum_input = prefix + digits
 
-    def luhn_checksum(number):
-        def digits_of(n):
-            return [int(d) for d in str(n)]
+def validate_iban(iban_text: str) -> bool:
+    """Validate an IBAN using the shared clinical identifier validator."""
+    from .anonymizer.providers import clinical_ids
 
-        digits = digits_of(number)
-        odd_digits = digits[-1::-2]
-        even_digits = digits[-2::-2]
-        checksum = sum(odd_digits)
-        for d in even_digits:
-            checksum += sum(digits_of(d * 2))
-        return checksum % 10
-
-    total = luhn_checksum(checksum_input)
-    return total == 0
+    return clinical_ids.validate_iban(iban_text)
 
 
 def validate_phone_us(phone_text: str) -> bool:
@@ -180,27 +132,9 @@ def validate_phone_us(phone_text: str) -> bool:
     Returns:
         True if valid US phone format
     """
-    # Extract digits only
-    digits = re.sub(r'[^0-9]', '', phone_text)
+    from .anonymizer.providers import clinical_ids
 
-    if len(digits) == 10:
-        area_code = digits[0:3]
-        exchange = digits[3:6]
-
-        # Area code can't start with 0 or 1
-        if area_code[0] in '01':
-            return False
-
-        # Exchange can't start with 0 (allow 1 for test numbers)
-        if exchange[0] == '0':
-            return False
-
-        return True
-    elif len(digits) == 11 and digits[0] == '1':
-        # 1-XXX-XXX-XXXX format
-        return validate_phone_us(digits[1:])
-
-    return False
+    return clinical_ids.validate_phone_us(phone_text)
 
 
 # Comprehensive PII regex patterns with context-aware scoring
@@ -338,6 +272,28 @@ PII_PATTERNS = [
         context_words=['card', 'credit', 'debit', 'visa', 'mastercard', 'amex', 'discover', 'payment'],
         context_boost=0.4,
         validator=validate_luhn
+    ),
+
+    # IBANs with ISO 13616 checksum validation
+    PIIPattern(
+        r'\b[A-Z]{2}\d{2}(?:[\s-]?[A-Z0-9]){11,30}\b',
+        'iban',
+        priority=9,
+        base_score=0.85,
+        context_words=['iban', 'bank account', 'account', 'routing', 'wire'],
+        context_boost=0.1,
+        validator=validate_iban
+    ),
+
+    # Account numbers when explicitly labeled in context
+    PIIPattern(
+        r'\b(?:account number|account #|acct\.|acct|account)[:\s#-]*[A-Z0-9][A-Z0-9-]{5,23}\b',
+        'account_number',
+        priority=8,
+        base_score=0.75,
+        context_words=['account', 'acct', 'account number', 'bank', 'billing'],
+        context_boost=0.15,
+        flags=re.IGNORECASE
     ),
 
     # Medical record numbers (common formats)
