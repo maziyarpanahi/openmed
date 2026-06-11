@@ -13,6 +13,13 @@ RUN python -m pip install --upgrade pip \
     && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && pip install --no-cache-dir ".[hf,service]"
 
+# Run as an unprivileged user. Created after install (which needs root); the
+# --create-home flag gives appuser a writable HOME for the Hugging Face model
+# cache pulled at runtime.
+RUN useradd --create-home --uid 1000 appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
