@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any, Literal, Optional, Union
 
 from openmed.utils.validation import (
@@ -28,6 +29,26 @@ _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 KeepAliveValue = Union[int, float, str]
 
 
+def _default_max_text_length() -> int:
+    """Resolve the request text cap from the environment (default 1,000,000)."""
+    raw = os.getenv("OPENMED_SERVICE_MAX_TEXT_LENGTH")
+    if raw:
+        try:
+            parsed = int(raw)
+        except ValueError:
+            return 1_000_000
+        if parsed > 0:
+            return parsed
+    return 1_000_000
+
+
+# Upper bound (characters) on request ``text``. Without a cap, a single request
+# can stream arbitrarily large input into model inference and exhaust memory.
+# Oversized documents should be chunked client-side or via BatchProcessor.
+# Override with OPENMED_SERVICE_MAX_TEXT_LENGTH.
+MAX_TEXT_LENGTH = _default_max_text_length()
+
+
 def _normalize_text(value: Any) -> str:
     if value is None:
         raise ValueError("Text is required")
@@ -37,6 +58,10 @@ def _normalize_text(value: Any) -> str:
     normalized = value.strip()
     if not normalized:
         raise ValueError("Text must not be blank")
+    if len(normalized) > MAX_TEXT_LENGTH:
+        raise ValueError(
+            f"Text exceeds the maximum length of {MAX_TEXT_LENGTH} characters"
+        )
     return normalized
 
 
