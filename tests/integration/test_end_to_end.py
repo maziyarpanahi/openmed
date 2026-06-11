@@ -77,16 +77,13 @@ class TestEndToEndAnalysis:
 
     @pytest.mark.integration
     @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.get_all_models', return_value={})
-    @patch('openmed.core.models.list_models')
-    def test_list_models_integration(self, mock_list_models, mock_get_all_models):
+    @patch('openmed.core.models.get_all_models')
+    def test_list_models_integration(self, mock_get_all_models):
         """Test model listing integration."""
-        # Mock model info objects
-        mock_model1 = Mock()
-        mock_model1.modelId = "OpenMed/medical-ner"
-        mock_model2 = Mock()
-        mock_model2.modelId = "OpenMed/medication-extraction"
-        mock_list_models.return_value = [mock_model1, mock_model2]
+        mock_get_all_models.return_value = {
+            "medical_ner": Mock(model_id="OpenMed/medical-ner"),
+            "medication_extraction": Mock(model_id="OpenMed/medication-extraction"),
+        }
 
         # Test list_models function
         models = list_models()

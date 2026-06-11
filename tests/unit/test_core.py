@@ -72,16 +72,13 @@ class TestModelLoader:
             ModelLoader()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.get_all_models', return_value={})
-    @patch('openmed.core.models.list_models')
-    def test_list_available_models(self, mock_list_models, mock_get_all_models):
+    @patch('openmed.core.models.get_all_models')
+    def test_list_available_models(self, mock_get_all_models):
         """Test listing available models."""
-        # Mock the model info objects
-        mock_model1 = Mock()
-        mock_model1.modelId = "OpenMed/model1"
-        mock_model2 = Mock()
-        mock_model2.modelId = "OpenMed/model2"
-        mock_list_models.return_value = [mock_model1, mock_model2]
+        mock_get_all_models.return_value = {
+            "model1": Mock(model_id="OpenMed/model1"),
+            "model2": Mock(model_id="OpenMed/model2"),
+        }
 
         loader = ModelLoader()
         models = loader.list_available_models()
@@ -89,15 +86,11 @@ class TestModelLoader:
         assert len(models) == 2
         assert "OpenMed/model1" in models
         assert "OpenMed/model2" in models
-        mock_list_models.assert_called_once()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.get_all_models', return_value={})
-    @patch('openmed.core.models.list_models')
-    def test_list_models_error_handling(self, mock_list_models, mock_get_all_models):
-        """Test error handling when listing models fails."""
-        mock_list_models.side_effect = Exception("API Error")
-
+    def test_list_models_empty_registry(self, mock_get_all_models):
+        """Test listing when the committed registry has no entries."""
         loader = ModelLoader()
         models = loader.list_available_models()
 
@@ -105,18 +98,16 @@ class TestModelLoader:
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
     @patch('openmed.core.models.get_all_models')
-    @patch('openmed.core.models.list_models')
-    def test_list_available_models_offline(self, mock_list_models, mock_get_all_models):
-        """Ensure registry listing works without remote fetch."""
+    def test_list_available_models_include_remote_compat(self, mock_get_all_models):
+        """Ensure registry listing ignores remote discovery while keeping the flag."""
         mock_get_all_models.return_value = {
             "disease_detection": Mock(model_id="OpenMed/model1")
         }
 
         loader = ModelLoader()
-        models = loader.list_available_models(include_remote=False)
+        models = loader.list_available_models(include_remote=True)
 
         assert models == ["OpenMed/model1"]
-        mock_list_models.assert_not_called()
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
     def test_resolve_model_name_preserves_local_directory_without_separator(
@@ -688,24 +679,17 @@ class TestAnalyzeTextBehaviour:
             loader.create_pipeline("test-model", aggregation_strategy="simple")
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.hf_model_info')
-    def test_get_model_info_success(self, mock_model_info):
-        """Test successful model info retrieval."""
-        mock_info = Mock()
-        mock_model_info.return_value = mock_info
-
+    def test_get_model_info_success(self):
+        """Test successful model info retrieval from the committed registry."""
         loader = ModelLoader()
-        result = loader.get_model_info("test-model")
+        result = loader.get_model_info("disease_detection_tiny")
 
-        assert result == mock_info
-        mock_model_info.assert_called_once()
+        assert result is not None
+        assert result.model_id == "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M"
 
     @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.hf_model_info')
-    def test_get_model_info_failure(self, mock_model_info):
-        """Test model info retrieval failure."""
-        mock_model_info.side_effect = Exception("Model not found")
-
+    def test_get_model_info_failure(self):
+        """Test model info lookup failure."""
         loader = ModelLoader()
         result = loader.get_model_info("nonexistent-model")
 
