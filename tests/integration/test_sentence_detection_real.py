@@ -13,6 +13,21 @@ def _skip_if_env_disabled() -> None:
         pytest.skip("Skipping Hugging Face dependent tests via OPENMED_SKIP_HF_TESTS")
 
 
+def _skip_if_model_unavailable(exc: Exception) -> None:
+    """Skip slow real-model tests when the model cannot be fetched or loaded."""
+    message = str(exc)
+    unavailable_markers = (
+        "Could not load model",
+        "Can't load",
+        "Cannot send a request",
+        "nodename nor servname",
+        "Name or service not known",
+    )
+    if any(marker in message for marker in unavailable_markers):
+        pytest.skip("Skipping Hugging Face dependent test because the model is unavailable")
+    raise exc
+
+
 @pytest.mark.slow
 def test_sentence_detection_short_text_consistency(tmp_path):
     """Sentence detection should behave identically on short inputs."""
@@ -40,8 +55,11 @@ def test_sentence_detection_short_text_consistency(tmp_path):
         batch_size=8,
     )
 
-    result_sd = analyze_text(text, sentence_detection=True, **common_kwargs)
-    result_no = analyze_text(text, sentence_detection=False, **common_kwargs)
+    try:
+        result_sd = analyze_text(text, sentence_detection=True, **common_kwargs)
+        result_no = analyze_text(text, sentence_detection=False, **common_kwargs)
+    except (OSError, RuntimeError, ValueError) as exc:
+        _skip_if_model_unavailable(exc)
 
     def _to_span(result) -> Tuple[Tuple[int, int, str], ...]:
         return tuple(sorted((ent.start or -1, ent.end or -1, ent.label) for ent in result.entities))
@@ -68,31 +86,34 @@ def test_sentence_detection_filters_placeholders(tmp_path):
     note_path = Path("tests/fixtures/clinical_note.txt")
     text = note_path.read_text().strip()
 
-    result_sd = analyze_text(
-        text,
-        model_name=model_id,
-        loader=loader,
-        config=config,
-        output_format="dict",
-        sentence_detection=True,
-        confidence_threshold=0.8,
-        group_entities=True,
-        max_length=512,
-        batch_size=8,
-    )
+    try:
+        result_sd = analyze_text(
+            text,
+            model_name=model_id,
+            loader=loader,
+            config=config,
+            output_format="dict",
+            sentence_detection=True,
+            confidence_threshold=0.8,
+            group_entities=True,
+            max_length=512,
+            batch_size=8,
+        )
 
-    result_no = analyze_text(
-        text,
-        model_name=model_id,
-        loader=loader,
-        config=config,
-        output_format="dict",
-        sentence_detection=False,
-        confidence_threshold=0.8,
-        group_entities=True,
-        max_length=512,
-        batch_size=8,
-    )
+        result_no = analyze_text(
+            text,
+            model_name=model_id,
+            loader=loader,
+            config=config,
+            output_format="dict",
+            sentence_detection=False,
+            confidence_threshold=0.8,
+            group_entities=True,
+            max_length=512,
+            batch_size=8,
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        _skip_if_model_unavailable(exc)
 
     assert len(result_sd.entities) >= len(result_no.entities)
     assert all(ent.text.strip("_- \n\t") for ent in result_sd.entities)

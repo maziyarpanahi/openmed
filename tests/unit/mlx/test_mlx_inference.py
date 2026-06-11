@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import pytest
+import subprocess
+import sys
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -18,10 +20,19 @@ from unittest.mock import patch, MagicMock
 
 def _module_importable(module_name: str) -> bool:
     try:
-        __import__(module_name)
+        code = f"import {module_name}"
+        if module_name == "mlx.core":
+            code = "import mlx.core as mx; mx.array([0]).tolist()"
+        completed = subprocess.run(
+            [sys.executable, "-c", code],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
     except Exception:
         return False
-    return True
+    return completed.returncode == 0
 
 
 _MLX_AVAILABLE = _module_importable("mlx.core")

@@ -12,6 +12,8 @@ import platform
 import warnings
 from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, runtime_checkable
 
+from .offline import configure_offline_mode, is_local_only
+
 logger = logging.getLogger(__name__)
 _warned_substitutions: set[str] = set()
 
@@ -243,19 +245,22 @@ def resolve_privacy_filter_model(
     return model_name
 
 
-def create_privacy_filter_pipeline(model_name: str) -> Callable:
+def create_privacy_filter_pipeline(model_name: str, config: Any = None) -> Callable:
     """Build a privacy-filter pipeline appropriate for the host.
 
     Returns a callable ``pipeline(text) -> List[Dict]`` whose output
     schema matches the HuggingFace ``token-classification`` pipeline so
     downstream OpenMed code is backend-agnostic.
     """
+    configure_offline_mode(config)
     backend = select_privacy_filter_backend(model_name)
     actual_model = resolve_privacy_filter_model(model_name, backend)
 
     if backend == "mlx":
         from openmed.mlx.inference import create_mlx_pipeline
-        return create_mlx_pipeline(actual_model)
+        if config is None:
+            return create_mlx_pipeline(actual_model)
+        return create_mlx_pipeline(actual_model, config=config)
 
     from openmed.torch.privacy_filter import (
         PrivacyFilterTorchPipeline,
@@ -265,7 +270,10 @@ def create_privacy_filter_pipeline(model_name: str) -> Callable:
     # code shipped inside first-party privacy-filter repos. Only enable it
     # when the resolved model is on the allowlist; the pipeline itself
     # double-checks and raises ``ValueError`` if the gate is bypassed.
-    return PrivacyFilterTorchPipeline(
-        actual_model,
-        trust_remote_code=is_trusted_for_remote_code(actual_model),
-    )
+    pipeline_kwargs: Dict[str, Any] = {
+        "trust_remote_code": is_trusted_for_remote_code(actual_model),
+    }
+    if is_local_only(config):
+        pipeline_kwargs["local_files_only"] = True
+
+    return PrivacyFilterTorchPipeline(actual_model, **pipeline_kwargs)

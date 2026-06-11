@@ -10,6 +10,7 @@ from .config import (
     delete_profile,
     load_config_with_profile,
 )
+from .offline import OfflineModeError
 
 __all__ = [
     "ModelLoader",
@@ -21,4 +22,5 @@ __all__ = [
     "save_profile",
     "delete_profile",
     "load_config_with_profile",
+    "OfflineModeError",
 ]
