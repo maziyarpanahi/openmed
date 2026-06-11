@@ -5,14 +5,14 @@
 <h3>Local-first healthcare AI that never leaves the device</h3>
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
-Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
+Entity extraction, PII de-identification, and 1,518 specialized medical models that run entirely on
 your own hardware — from a one-liner in Python to a native Swift app on iPhone, powered by Apple MLX.
 No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C518-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -26,7 +26,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>12 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,518 models</b> &nbsp;·&nbsp; <b>12 languages</b> &nbsp;·&nbsp; <b>978 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -97,14 +97,14 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Runs on your device / servers         |            ✅            |           ❌           |
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
-| Specialized medical models            |          1,000+          |        Limited         |
-| Languages                             |           12+            |         Varies         |
+| Specialized medical models            |          1,518          |        Limited         |
+| Languages                             |           12            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
 | Vendor lock-in                        |    None — Apache-2.0     |          Yes           |
 
-- **Specialized models** — 1,000+ curated biomedical & clinical models, many outperforming proprietary stacks.
+- **Specialized models** — 1,518 curated biomedical & clinical models, many outperforming proprietary stacks.
 - **HIPAA-aware de-identification** — all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
 - **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), and natively in iOS/macOS apps via OpenMedKit.
 - **One-line deployment** — Python API, Dockerized REST service, or batch pipelines.
@@ -309,7 +309,7 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ## Multilingual PII (12 languages)
 
-Extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja`, and `tr` — **247 PII checkpoints** total.
+Extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja`, `tr` — **978 PII checkpoints** total.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"

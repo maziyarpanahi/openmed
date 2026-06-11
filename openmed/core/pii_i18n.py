@@ -14,7 +14,8 @@ from typing import Dict, List, Optional, Set
 # ---------------------------------------------------------------------------
 
 SUPPORTED_LANGUAGES: Set[str] = {
-    "en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr",
+    "en", "fr", "de", "it", "es", "nl",
+    "hi", "te", "pt", "ar", "ja", "tr",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
