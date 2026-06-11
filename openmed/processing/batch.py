@@ -362,7 +362,10 @@ class BatchProcessor:
                     )
                 )
             except (OSError, IOError) as e:
-                logger.warning(f"Failed to read file {path}: {e}")
+                logger.warning(
+                    "Failed to read batch input file: error_type=%s",
+                    type(e).__name__,
+                )
                 if not self.continue_on_error:
                     raise
                 items.append(
@@ -445,7 +448,10 @@ class BatchProcessor:
                     try:
                         progress_callback(len(batch_result.items), total, item_result)
                     except Exception as e:
-                        logger.warning(f"Progress callback error: {e}")
+                        logger.warning(
+                            "Progress callback failed: error_type=%s",
+                            type(e).__name__,
+                        )
 
         batch_result.total_processing_time = time.time() - batch_start
         batch_result.completed_at = datetime.now().isoformat()
@@ -555,7 +561,10 @@ class BatchProcessor:
                 )
 
         except Exception as e:
-            logger.warning(f"Error processing batch chunk: {e}")
+            logger.warning(
+                "Error processing batch chunk: error_type=%s",
+                type(e).__name__,
+            )
             if not self.continue_on_error:
                 raise
 
@@ -609,7 +618,10 @@ class BatchProcessor:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.warning(f"Error processing item {item.id}: {e}")
+            logger.warning(
+                "Error processing batch item: error_type=%s",
+                type(e).__name__,
+            )
 
             if not self.continue_on_error:
                 raise
