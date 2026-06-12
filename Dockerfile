@@ -3,7 +3,10 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     OPENMED_PROFILE=prod \
-    OPENMED_SERVICE_KEEP_ALIVE=10m
+    OPENMED_SERVICE_KEEP_ALIVE=10m \
+    HOME=/home/appuser \
+    XDG_CACHE_HOME=/home/appuser/.cache \
+    HF_HOME=/home/appuser/.cache/huggingface
 
 WORKDIR /app
 
@@ -17,7 +20,8 @@ RUN python -m pip install --upgrade pip \
 # --create-home flag gives appuser a writable HOME for the Hugging Face model
 # cache pulled at runtime.
 RUN useradd --create-home --uid 1000 appuser \
-    && chown -R appuser:appuser /app
+    && mkdir -p /home/appuser/.cache/openmed /home/appuser/.cache/huggingface \
+    && chown -R appuser:appuser /app /home/appuser
 USER appuser
 
 EXPOSE 8080
