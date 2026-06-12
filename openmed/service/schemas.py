@@ -10,6 +10,7 @@ from openmed.utils.validation import (
 )
 
 from .keep_alive import parse_keep_alive
+from .limits import get_max_text_length
 
 try:
     from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -47,6 +48,11 @@ def _normalize_text(value: Any) -> str:
     normalized = value.strip()
     if not normalized:
         raise ValueError("Text must not be blank")
+    max_text_length = get_max_text_length()
+    if len(normalized) > max_text_length:
+        raise ValueError(
+            f"Text exceeds the maximum length of {max_text_length} characters"
+        )
     return normalized
 
 
