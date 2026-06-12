@@ -86,8 +86,8 @@
     }
     </script>
 
-    <link rel="stylesheet" href="assets/style.css?v=6">
-    <script src="assets/script.js?v=6" defer></script>
+    <link rel="stylesheet" href="assets/style.css?v=7">
+    <script src="assets/script.js?v=7" defer></script>
 </head>
 
 <body>
@@ -107,7 +107,7 @@
                 <span class="version-tag">v1.5.5</span>
             </a>
 
-            <nav aria-label="Primary">
+            <nav class="nav-menu" id="primaryNav" aria-label="Primary">
                 <ul class="nav-links">
                     <li><a href="#apple-runtime">Runtime</a></li>
                     <li><a href="#deidentification">Privacy</a></li>
@@ -115,6 +115,7 @@
                     <li><a href="#research">Research</a></li>
                     <li><a href="#sagemaker">SageMaker</a></li>
                     <li><a href="#faq">FAQ</a></li>
+                    <li class="nav-links-mobile-only"><a href="docs/">Docs</a></li>
                 </ul>
             </nav>
 
@@ -127,13 +128,18 @@
                     <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.1.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.58 9.58 0 0 1 5 0c1.9-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z" />
                     </svg>
-                    GitHub
-                    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <span class="btn-label">GitHub</span>
+                    <svg class="icon btn-label" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <line x1="7" y1="17" x2="17" y2="7" />
                         <polyline points="7 7 17 7 17 17" />
                     </svg>
                 </a>
                 <button id="themeToggle" class="theme-toggle" aria-label="Toggle color theme" title="Toggle theme"></button>
+                <button id="navToggle" class="nav-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="primaryNav">
+                    <span class="nav-toggle-bar" aria-hidden="true"></span>
+                    <span class="nav-toggle-bar" aria-hidden="true"></span>
+                    <span class="nav-toggle-bar" aria-hidden="true"></span>
+                </button>
             </div>
         </div>
     </header>
