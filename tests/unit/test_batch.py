@@ -444,6 +444,31 @@ class TestBatchProcessor:
         assert calls[0][1]["normalize_accents"] is True
         assert result.items[0].id == "a"
 
+    def test_iter_process_batches_by_batch_size(self, monkeypatch):
+        """iter_process must stream in chunks of batch_size, not one at a time."""
+        calls = []
+
+        def fake_extract_batch(texts, **kwargs):
+            calls.append(list(texts))
+            return [_prediction_result(text=text) for text in texts]
+
+        monkeypatch.setattr(
+            "openmed.core.pii._extract_pii_batch",
+            fake_extract_batch,
+        )
+        monkeypatch.setattr(BatchProcessor, "_get_shared_loader", lambda self: "loader")
+
+        processor = BatchProcessor(
+            model_name="pii-model",
+            operation="extract_pii",
+            batch_size=2,
+        )
+
+        results = list(processor.iter_process(["A", "B", "C"], ids=["a", "b", "c"]))
+
+        assert [r.id for r in results] == ["a", "b", "c"]
+        assert calls == [["A", "B"], ["C"]]
+
     def test_deidentify_operation_forwards_privacy_kwargs(self, monkeypatch):
         """Test deidentify operation forwards method and anonymizer kwargs."""
         calls = []
