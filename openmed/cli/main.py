@@ -23,6 +23,7 @@ from ..core.config import (
     PROFILE_PRESETS,
 )
 from ..core.model_registry import get_model_info
+from .benchmark import add_benchmark_command
 
 
 _ANALYZE_TEXT = None
@@ -115,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
     _add_tui_command(subparsers)
+    add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     return parser
