@@ -74,13 +74,19 @@ def validate_entity_spans(
                 if " ".join(actual.split()) == " ".join(entity.text.split()):
                     logger.info(
                         "SpanValidation: Entity %r @ [%d:%d]: "
-                        "whitespace-only text difference (span=%r, stored=%r)",
-                        entity.label, start, end, actual, entity.text,
+                        "whitespace-only text difference "
+                        "(span_chars=%d, stored_chars=%d)",
+                        entity.label,
+                        start,
+                        end,
+                        len(actual),
+                        len(entity.text),
                     )
                 else:
                     problems.append(
-                        f"text mismatch: span gives {actual!r}, "
-                        f"entity stores {entity.text!r}"
+                        "text mismatch: "
+                        f"span_chars={len(actual)}, "
+                        f"entity_chars={len(entity.text)}"
                     )
 
         # --- report ---

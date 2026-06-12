@@ -30,6 +30,7 @@ nav:
   - PII & De-identification:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
+      - No-Raw-PHI Logging: security/no-raw-phi-logging.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - CoreML Packaging: coreml-export.md

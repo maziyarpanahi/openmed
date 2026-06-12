@@ -9,6 +9,8 @@ publish the package to PyPI or GitHub Pages.
 - `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
 - `make docs-build` runs `mkdocs build --strict` for CI parity.
 - `uv pip install ".[dev]"` pulls in pytest + coverage; `uv pip install ".[dev,hf]"` stacks extras.
+- Follow the [no-raw-PHI logging policy](security/no-raw-phi-logging.md) for every PII, de-identification,
+  text-processing, service, and batch change.
 
 ## Release outline
 
@@ -38,3 +40,5 @@ to publish outside CI, run `make docs-deploy`; it mirrors the workflow by buildi
 - Keep user-facing docs inside `docs/`; new guides only require Markdown and optional front matter.
 - Reference exact file + section when filing doc bugs so we can reproduce quickly.
 - Prefer small pull requests that focus on a single guide or feature; CI + Pages runs on every PR.
+- Run `pytest tests/unit/test_no_raw_text_logging.py -q` when touching logging, text processing, service request
+  handling, PII extraction, or de-identification code.

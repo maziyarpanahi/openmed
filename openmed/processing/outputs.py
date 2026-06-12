@@ -27,7 +27,10 @@ def _to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
     try:
         return float(value)
     except (TypeError, ValueError):
-        logger.debug("Failed to convert %r to float", value)
+        logger.debug(
+            "Failed to convert value to float: value_type=%s",
+            type(value).__name__,
+        )
         return default
 
 
@@ -48,7 +51,10 @@ def _to_int(value: Any) -> Optional[int]:
     try:
         return int(value)
     except (TypeError, ValueError):
-        logger.debug("Failed to convert %r to int", value)
+        logger.debug(
+            "Failed to convert value to int: value_type=%s",
+            type(value).__name__,
+        )
         return None
 
 
