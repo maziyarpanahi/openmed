@@ -13,7 +13,39 @@ document.addEventListener("DOMContentLoaded", () => {
     initCopyInstall();
     initScrollSpy();
     initGitHubStars();
+    initMobileMenu();
 });
+
+/* ---------- Mobile menu --------------------------------------------------- */
+function initMobileMenu() {
+    const header = document.querySelector(".nav");
+    const toggle = document.getElementById("navToggle");
+    if (!header || !toggle) return;
+
+    function setOpen(open) {
+        header.classList.toggle("menu-open", open);
+        toggle.setAttribute("aria-expanded", String(open));
+        toggle.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    }
+
+    toggle.addEventListener("click", () => {
+        setOpen(!header.classList.contains("menu-open"));
+    });
+
+    header.querySelectorAll(".nav-links a").forEach(a => {
+        a.addEventListener("click", () => setOpen(false));
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") setOpen(false);
+    });
+
+    // Reset state when leaving the mobile breakpoint
+    const mq = window.matchMedia("(min-width: 721px)");
+    const onChange = (e) => { if (e.matches) setOpen(false); };
+    if (mq.addEventListener) mq.addEventListener("change", onChange);
+    else mq.addListener(onChange);
+}
 
 /* ---------- GitHub stars (live, with cache + graceful fallback) --------- */
 function initGitHubStars() {
