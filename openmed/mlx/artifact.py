@@ -168,6 +168,7 @@ def write_manifest(
 
     manifest = {
         "format": MANIFEST_FORMAT,
+        "formats": [MANIFEST_FORMAT],
         "format_version": MANIFEST_VERSION,
         "task": task,
         "family": family,
