@@ -163,20 +163,27 @@ def main() -> None:
         help="Maximum input sequence length (default: 512)",
     )
     parser.add_argument(
-        "--opset", type=int, default=14,
-        help="ONNX opset version (default: 14)",
+        "--opset", type=int, default=18,
+        help="ONNX opset version (default: 18)",
     )
     parser.add_argument("--cache-dir", default=None, help="HuggingFace cache directory")
+    parser.add_argument(
+        "--webgpu", action="store_true",
+        help="Also produce a fp16 variant for onnxruntime-web WebGPU EP",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    convert(
+    out = convert(
         args.model,
         args.output,
         max_seq_length=args.max_seq_length,
         opset_version=args.opset,
         cache_dir=args.cache_dir,
     )
+    if args.webgpu:
+        from openmed.onnx.webgpu import convert_to_fp16
+        convert_to_fp16(out)
 
 
 if __name__ == "__main__":
