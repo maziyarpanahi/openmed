@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- REST/MCP request schemas now accept `ar`, `ja`, and `tr` for the `lang` field. These languages have published PII models and are listed in `SUPPORTED_LANGUAGES`, but the `lang` `Literal` in `openmed/service/schemas.py` was never updated, so the service rejected them with a 422 even though the Python API and the models worked. The four `lang` annotations now share a single `PIILanguage` alias kept in sync with `SUPPORTED_LANGUAGES` (guarded by a regression test).
+
 ## [1.5.5] - 2026-06-08
 
 ### Added
