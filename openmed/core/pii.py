@@ -1172,6 +1172,21 @@ def _format_localized_month_date(
     return f"{new_date.day} {month_name} {new_date.year}"
 
 
+def _replace_year_safe(date_value: datetime, year: int) -> datetime:
+    """Return ``date_value`` with its year set to ``year``.
+
+    ``datetime.replace(year=...)`` raises ``ValueError`` for Feb 29 when the
+    target year is not a leap year. Clamp to Feb 28 in that case so keep_year
+    date shifting degrades gracefully instead of falling through to the
+    ``[DATE_SHIFTED]`` placeholder.
+    """
+    try:
+        return date_value.replace(year=year)
+    except ValueError:
+        # The only date that can fail here is Feb 29 -> a non-leap year.
+        return date_value.replace(year=year, month=2, day=28)
+
+
 def _shift_date(
     date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
 ) -> str:
@@ -1201,7 +1216,7 @@ def _shift_date(
             shifted_date = parsed_date + timedelta(days=shift_days)
 
             if keep_year:
-                shifted_date = shifted_date.replace(year=original_year)
+                shifted_date = _replace_year_safe(shifted_date, original_year)
 
             return _format_localized_month_date(shifted_date, lang, localized_style)
         except (ValueError, OverflowError):
@@ -1225,7 +1240,7 @@ def _shift_date(
 
         # If keep_year is True, restore the original year
         if keep_year:
-            shifted_date = shifted_date.replace(year=original_year)
+            shifted_date = _replace_year_safe(shifted_date, original_year)
 
         # Try to preserve the original format
         return _format_date_like_original(date_str, shifted_date, lang=lang)
@@ -1305,7 +1320,7 @@ def _shift_date_basic(
 
                 # Keep year if requested
                 if keep_year:
-                    shifted = shifted.replace(year=original_year)
+                    shifted = _replace_year_safe(shifted, original_year)
 
                 # Format back preserving separator
                 if "." in date_str:

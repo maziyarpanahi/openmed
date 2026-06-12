@@ -696,6 +696,17 @@ class TestShiftDate:
         result = _shift_date("not-a-date", 30)
         assert result == "[DATE_SHIFTED]"
 
+    def test_shift_date_keep_year_handles_leap_day(self):
+        """keep_year shifting onto Feb 29 must not fall through to a placeholder.
+
+        02/28/2019 + 366 days lands on 2020-02-29 (a leap day). Restoring the
+        original year 2019 (not a leap year) used to raise ValueError and
+        degrade the whole result to ``[DATE_SHIFTED]``; it should clamp to
+        Feb 28 instead.
+        """
+        result = _shift_date("02/28/2019", 366, keep_year=True)
+        assert result == "02/28/2019"
+
 
 # ---------------------------------------------------------------------------
 # reidentify Tests
