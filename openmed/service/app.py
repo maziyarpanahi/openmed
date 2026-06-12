@@ -319,6 +319,7 @@ def _pii_deidentify_payload(
         keep_mapping=payload.keep_mapping,
         config=runtime.config,
         use_smart_merging=payload.use_smart_merging,
+        use_safety_sweep=payload.use_safety_sweep,
         lang=payload.lang,
         normalize_accents=payload.normalize_accents,
         loader=runtime.get_loader(),

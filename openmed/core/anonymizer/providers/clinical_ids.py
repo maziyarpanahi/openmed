@@ -24,9 +24,133 @@ or emits a US-style format unrelated to the requested locale's actual ID:
 
 from __future__ import annotations
 
+import re
 from typing import Sequence
 
 from faker.providers import BaseProvider
+
+
+# ---------------------------------------------------------------------------
+# Shared deterministic validators
+# ---------------------------------------------------------------------------
+
+def _digits_only(text: str) -> str:
+    return re.sub(r"[^0-9]", "", text)
+
+
+def validate_ssn(ssn_text: str) -> bool:
+    """Validate a US SSN's format and basic impossible-number rules."""
+    digits = _digits_only(ssn_text)
+
+    if len(digits) != 9:
+        return False
+
+    area = digits[0:3]
+    group = digits[3:5]
+    serial = digits[5:9]
+
+    if area == "000" or area == "666" or area[0] == "9":
+        return False
+    if group == "00":
+        return False
+    if serial == "0000":
+        return False
+
+    return True
+
+
+def validate_phone_us(phone_text: str) -> bool:
+    """Validate US phone numbers accepted by the PII detector."""
+    digits = _digits_only(phone_text)
+
+    if len(digits) == 11 and digits[0] == "1":
+        digits = digits[1:]
+
+    if len(digits) != 10:
+        return False
+
+    area_code = digits[0:3]
+    exchange = digits[3:6]
+    if area_code[0] in "01":
+        return False
+    if exchange[0] == "0":
+        return False
+    return True
+
+
+def validate_luhn(number_text: str) -> bool:
+    """Validate a numeric identifier with the Luhn checksum."""
+    digits = _digits_only(number_text)
+
+    if len(digits) < 13:
+        return False
+
+    body = [int(digit) for digit in digits[:-1]]
+    return _luhn_check_digit(body) == int(digits[-1])
+
+
+def validate_npi(npi_text: str) -> bool:
+    """Validate a 10-digit US National Provider Identifier."""
+    digits = _digits_only(npi_text)
+
+    if len(digits) != 10:
+        return False
+
+    body = [int(digit) for digit in digits[:-1]]
+    prefixed = [8, 0, 8, 4, 0, *body]
+    return _luhn_check_digit(prefixed) == int(digits[-1])
+
+
+_IBAN_LENGTHS = {
+    "AD": 24, "AE": 23, "AL": 28, "AT": 20, "AZ": 28,
+    "BA": 20, "BE": 16, "BG": 22, "BH": 22, "BR": 29, "BY": 28,
+    "CH": 21, "CR": 22, "CY": 28, "CZ": 24,
+    "DE": 22, "DK": 18, "DO": 28,
+    "EE": 20, "EG": 29, "ES": 24,
+    "FI": 18, "FO": 18, "FR": 27,
+    "GB": 22, "GE": 22, "GI": 23, "GL": 18, "GR": 27, "GT": 28,
+    "HR": 21, "HU": 28,
+    "IE": 22, "IL": 23, "IS": 26, "IT": 27,
+    "JO": 30,
+    "KW": 30, "KZ": 20,
+    "LB": 28, "LC": 32, "LI": 21, "LT": 20, "LU": 20, "LV": 21,
+    "MC": 27, "MD": 24, "ME": 22, "MK": 19, "MR": 27, "MT": 31, "MU": 30,
+    "NL": 18, "NO": 15,
+    "PK": 24, "PL": 28, "PS": 29, "PT": 25,
+    "QA": 29,
+    "RO": 24, "RS": 22,
+    "SA": 24, "SC": 31, "SE": 24, "SI": 19, "SK": 24, "SM": 27,
+    "TN": 24, "TR": 26,
+    "UA": 29,
+    "VA": 22, "VG": 24,
+    "XK": 20,
+}
+
+
+def validate_iban(iban_text: str) -> bool:
+    """Validate an IBAN with the ISO 13616 mod-97 checksum."""
+    cleaned = re.sub(r"[\s-]", "", iban_text).upper()
+
+    if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{11,30}", cleaned):
+        return False
+
+    expected_length = _IBAN_LENGTHS.get(cleaned[:2])
+    if expected_length is not None and len(cleaned) != expected_length:
+        return False
+    if expected_length is None and not 15 <= len(cleaned) <= 34:
+        return False
+
+    rearranged = cleaned[4:] + cleaned[:4]
+    remainder = 0
+    for char in rearranged:
+        if char.isdigit():
+            values = char
+        else:
+            values = str(ord(char) - 55)
+        for digit in values:
+            remainder = (remainder * 10 + int(digit)) % 97
+
+    return remainder == 1
 
 
 # ---------------------------------------------------------------------------
@@ -170,4 +294,9 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "register_clinical_providers",
+    "validate_iban",
+    "validate_luhn",
+    "validate_npi",
+    "validate_phone_us",
+    "validate_ssn",
 ]
