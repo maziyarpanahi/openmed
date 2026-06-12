@@ -102,6 +102,7 @@ class DeidentificationResult:
     method: str
     timestamp: datetime
     mapping: Optional[dict[str, str]] = None
+    metadata: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict:
         """Convert result to dictionary format.
@@ -121,12 +122,14 @@ class DeidentificationResult:
                     "end": e.end,
                     "confidence": e.confidence,
                     "redacted_text": e.redacted_text,
+                    "metadata": e.metadata or {},
                 }
                 for e in self.pii_entities
             ],
             "method": self.method,
             "timestamp": self.timestamp.isoformat(),
             "num_entities_redacted": len(self.pii_entities),
+            "metadata": self.metadata or {},
         }
 
 
@@ -614,6 +617,42 @@ def _resolve_deidentification_method(
     return effective_method
 
 
+def _copy_metadata(metadata: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if metadata is None:
+        return None
+    return dict(metadata)
+
+
+def _apply_safety_sweep_to_result(
+    text: str,
+    pii_result: Any,
+    *,
+    lang: str,
+) -> int:
+    """Run the deterministic sweep and record its net span contribution."""
+    from .safety_sweep import (
+        SAFETY_SWEEP_PATTERNS_VERSION,
+        SAFETY_SWEEP_SOURCE,
+        safety_sweep,
+    )
+    from .quality_gates import validate_entity_spans
+
+    before_count = len(pii_result.entities)
+    pii_result.entities = safety_sweep(text, pii_result.entities, lang=lang)
+    added_count = len(pii_result.entities) - before_count
+
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    metadata["safety_sweep"] = {
+        "source": SAFETY_SWEEP_SOURCE,
+        "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
+        "spans_added": added_count,
+    }
+    pii_result.metadata = metadata
+    pii_result.num_entities = len(pii_result.entities)
+    validate_entity_spans(pii_result.entities, text)
+    return added_count
+
+
 def _build_deidentification_result(
     text: str,
     pii_result: Any,
@@ -635,13 +674,14 @@ def _build_deidentification_result(
             start=e.start,
             end=e.end,
             confidence=e.confidence,
+            metadata=_copy_metadata(getattr(e, "metadata", None)),
             entity_type=e.label,
             original_text=e.text,
         )
         for e in pii_result.entities
     ]
 
-    pii_entities.sort(key=lambda e: e.start, reverse=True)
+    redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
     if effective_method == "shift_dates" and date_shift_days is None:
         date_shift_days = random.randint(-365, 365)
@@ -661,7 +701,7 @@ def _build_deidentification_result(
     deidentified = text
     mapping = {} if keep_mapping else None
 
-    for entity in pii_entities:
+    for entity in redaction_entities:
         redacted = _redact_entity(
             entity,
             effective_method,
@@ -688,6 +728,7 @@ def _build_deidentification_result(
         method=effective_method,
         timestamp=datetime.now(),
         mapping=mapping,
+        metadata=_copy_metadata(getattr(pii_result, "metadata", None)),
     )
 
 
@@ -704,6 +745,7 @@ def _deidentify_batch(
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
+    use_safety_sweep: bool = True,
     *,
     consistent: bool = False,
     seed: Optional[int] = None,
@@ -731,6 +773,10 @@ def _deidentify_batch(
         privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
     )
+
+    if use_safety_sweep:
+        for stripped_text, pii_result in zip(stripped_texts, pii_results):
+            _apply_safety_sweep_to_result(stripped_text, pii_result, lang=lang)
 
     return [
         _build_deidentification_result(
@@ -762,6 +808,7 @@ def deidentify(
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
+    use_safety_sweep: bool = True,
     *,
     consistent: bool = False,
     seed: Optional[int] = None,
@@ -792,6 +839,8 @@ def deidentify(
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
+        use_safety_sweep: Run a deterministic structured-identifier sweep
+            after model detection and before redaction.
         lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
             ar, ja, tr). Controls model
             selection, regex patterns, and fake data for replacement.
@@ -839,6 +888,9 @@ def deidentify(
         normalize_accents=normalize_accents,
         loader=loader,
     )
+
+    if use_safety_sweep:
+        _apply_safety_sweep_to_result(text, pii_result, lang=lang)
 
     return _build_deidentification_result(
         text,

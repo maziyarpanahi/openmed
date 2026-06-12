@@ -1,0 +1,902 @@
+"""Benchmark metrics for OpenMed de-identification evaluation."""
+
+from __future__ import annotations
+
+from collections import defaultdict
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from math import ceil
+from typing import Any, Iterable, Mapping, Sequence
+
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.quality_gates import detect_overlapping_entities
+from openmed.processing.outputs import EntityPrediction
+
+
+DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+
+
+@dataclass(frozen=True)
+class EvalSpan:
+    """Normalized span record used by eval metrics."""
+
+    start: int
+    end: int
+    label: str
+    text: str = ""
+    language: str = "en"
+    device: str = "cpu"
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def length(self) -> int:
+        """Return the non-negative character span length."""
+        return max(self.end - self.start, 0)
+
+    def to_entity(self) -> EntityPrediction:
+        """Convert to the project's runtime span type for span utilities."""
+        return EntityPrediction(
+            text=self.text,
+            label=self.label,
+            confidence=float(self.metadata.get("confidence", 1.0)),
+            start=self.start,
+            end=self.end,
+            metadata=dict(self.metadata),
+        )
+
+
+@dataclass(frozen=True)
+class RateMetric:
+    """A metric represented as numerator / denominator."""
+
+    rate: float
+    numerator: int | float
+    denominator: int | float
+
+    def to_dict(self) -> dict[str, int | float]:
+        return {
+            "rate": self.rate,
+            "numerator": self.numerator,
+            "denominator": self.denominator,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class F1Metrics:
+    """Precision/recall/F1 counts for span matching."""
+
+    precision: float
+    recall: float
+    f1: float
+    true_positives: int
+    false_positives: int
+    false_negatives: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "true_positives": self.true_positives,
+            "false_positives": self.false_positives,
+            "false_negatives": self.false_negatives,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class LeakageMetrics:
+    """Character-weighted PHI leakage rate and required slices."""
+
+    overall: float
+    by_label: dict[str, float]
+    by_language: dict[str, float]
+    by_device: dict[str, float]
+    leaked_chars: int
+    total_chars: int
+    leaked_chars_by_label: dict[str, int]
+    total_chars_by_label: dict[str, int]
+    leaked_chars_by_language: dict[str, int]
+    total_chars_by_language: dict[str, int]
+    leaked_chars_by_device: dict[str, int]
+    total_chars_by_device: dict[str, int]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall": self.overall,
+            "by_label": self.by_label,
+            "by_language": self.by_language,
+            "by_device": self.by_device,
+            "leaked_chars": self.leaked_chars,
+            "total_chars": self.total_chars,
+            "leaked_chars_by_label": self.leaked_chars_by_label,
+            "total_chars_by_label": self.total_chars_by_label,
+            "leaked_chars_by_language": self.leaked_chars_by_language,
+            "total_chars_by_language": self.total_chars_by_language,
+            "leaked_chars_by_device": self.leaked_chars_by_device,
+            "total_chars_by_device": self.total_chars_by_device,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class RecallSlices:
+    """Character recall sliced by label, language, and device."""
+
+    overall: float
+    by_label: dict[str, float]
+    by_language: dict[str, float]
+    by_device: dict[str, float]
+    covered_chars: int
+    total_chars: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall": self.overall,
+            "by_label": self.by_label,
+            "by_language": self.by_language,
+            "by_device": self.by_device,
+            "covered_chars": self.covered_chars,
+            "total_chars": self.total_chars,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class ConsistencyMetric:
+    """Consistency score with concrete violation counts."""
+
+    score: float
+    consistent: int
+    total: int
+    violations: dict[str, list[str]]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "score": self.score,
+            "consistent": self.consistent,
+            "total": self.total,
+            "violations": self.violations,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class LatencyMetrics:
+    """Latency distribution in milliseconds."""
+
+    p50_ms: float
+    p95_ms: float
+    count: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        return {"p50_ms": self.p50_ms, "p95_ms": self.p95_ms, "count": self.count}
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class ResourceMetrics:
+    """Resource summary for a benchmark run."""
+
+    peak_rss_bytes: int | None = None
+    model_size_bytes: int | None = None
+
+    @property
+    def peak_rss_mib(self) -> float | None:
+        if self.peak_rss_bytes is None:
+            return None
+        return self.peak_rss_bytes / (1024 * 1024)
+
+    @property
+    def model_size_mib(self) -> float | None:
+        if self.model_size_bytes is None:
+            return None
+        return self.model_size_bytes / (1024 * 1024)
+
+    def to_dict(self) -> dict[str, float | int | None]:
+        return {
+            "peak_rss_bytes": self.peak_rss_bytes,
+            "peak_rss_mib": self.peak_rss_mib,
+            "model_size_bytes": self.model_size_bytes,
+            "model_size_mib": self.model_size_mib,
+        }
+
+    def __getitem__(self, key: str) -> float | int | None:
+        return self.to_dict()[key]
+
+
+def normalize_eval_span(
+    span: Any,
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> EvalSpan:
+    """Normalize dicts, runtime entities, and span-like objects for scoring."""
+    if isinstance(span, EvalSpan):
+        return span
+
+    data = span if isinstance(span, Mapping) else vars(span)
+    metadata = _read_mapping(data, "metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {"value": metadata}
+
+    start = _read_int(data, "start")
+    end = _read_int(data, "end")
+    if start is None or end is None:
+        raise ValueError(f"span must include integer start/end offsets: {span!r}")
+
+    raw_label = (
+        _read_value(data, "canonical_label")
+        or _read_value(data, "label")
+        or _read_value(data, "entity_type")
+        or _read_value(data, "entity_group")
+        or _read_value(data, "entity")
+        or "OTHER"
+    )
+    raw_language = (
+        _read_value(data, "language")
+        or _read_value(data, "lang")
+        or metadata.get("language")
+        or metadata.get("lang")
+        or metadata.get("sentence_language")
+        or default_language
+    )
+    raw_device = (
+        _read_value(data, "device")
+        or metadata.get("device")
+        or metadata.get("device_tier")
+        or metadata.get("hardware_backend")
+        or default_device
+    )
+    text = _read_value(data, "text")
+    if text is None and source_text is not None and 0 <= start <= end <= len(source_text):
+        text = source_text[start:end]
+
+    language = str(raw_language)
+    label = normalize_label(str(raw_label), lang=language)
+    return EvalSpan(
+        start=start,
+        end=end,
+        label=label,
+        text=str(text or ""),
+        language=language,
+        device=str(raw_device),
+        metadata=dict(metadata),
+    )
+
+
+def normalize_eval_spans(
+    spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> list[EvalSpan]:
+    """Normalize a sequence of span-like records."""
+    return [
+        normalize_eval_span(
+            span,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        )
+        for span in spans
+    ]
+
+
+def compute_leakage_rate(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> LeakageMetrics:
+    """Compute first-class character-weighted PHI leakage.
+
+    Leakage is the number of gold PHI characters not covered by any
+    same-label prediction divided by the total number of gold PHI characters.
+    The same numerator/denominator accounting is reported overall and by
+    label, language, and device.
+    """
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+
+    leaked_by_label: defaultdict[str, int] = defaultdict(int)
+    total_by_label: defaultdict[str, int] = defaultdict(int)
+    leaked_by_language: defaultdict[str, int] = defaultdict(int)
+    total_by_language: defaultdict[str, int] = defaultdict(int)
+    leaked_by_device: defaultdict[str, int] = defaultdict(int)
+    total_by_device: defaultdict[str, int] = defaultdict(int)
+
+    total_chars = 0
+    leaked_chars = 0
+    for span in gold:
+        covered = _covered_char_count(span, predicted)
+        leaked = max(span.length - covered, 0)
+        total_chars += span.length
+        leaked_chars += leaked
+        total_by_label[span.label] += span.length
+        leaked_by_label[span.label] += leaked
+        total_by_language[span.language] += span.length
+        leaked_by_language[span.language] += leaked
+        total_by_device[span.device] += span.length
+        leaked_by_device[span.device] += leaked
+
+    label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, leaked_by_label)
+    language_keys = _slice_keys(SUPPORTED_LANGUAGES, total_by_language, leaked_by_language)
+    device_keys = _slice_keys(DEVICE_TIERS, total_by_device, leaked_by_device)
+
+    return LeakageMetrics(
+        overall=_safe_rate(leaked_chars, total_chars, zero_denominator=0.0),
+        by_label=_rate_map(label_keys, leaked_by_label, total_by_label, 0.0),
+        by_language=_rate_map(language_keys, leaked_by_language, total_by_language, 0.0),
+        by_device=_rate_map(device_keys, leaked_by_device, total_by_device, 0.0),
+        leaked_chars=leaked_chars,
+        total_chars=total_chars,
+        leaked_chars_by_label=_count_map(label_keys, leaked_by_label),
+        total_chars_by_label=_count_map(label_keys, total_by_label),
+        leaked_chars_by_language=_count_map(language_keys, leaked_by_language),
+        total_chars_by_language=_count_map(language_keys, total_by_language),
+        leaked_chars_by_device=_count_map(device_keys, leaked_by_device),
+        total_chars_by_device=_count_map(device_keys, total_by_device),
+    )
+
+
+def compute_character_recall(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> RateMetric:
+    """Compute label-aware character recall over gold PHI spans."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    total_chars = sum(span.length for span in gold)
+    covered_chars = sum(_covered_char_count(span, predicted) for span in gold)
+    return RateMetric(
+        rate=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
+        numerator=covered_chars,
+        denominator=total_chars,
+    )
+
+
+def compute_recall_slices(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> RecallSlices:
+    """Compute character recall sliced by canonical labels, languages, devices."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+
+    covered_by_label: defaultdict[str, int] = defaultdict(int)
+    total_by_label: defaultdict[str, int] = defaultdict(int)
+    covered_by_language: defaultdict[str, int] = defaultdict(int)
+    total_by_language: defaultdict[str, int] = defaultdict(int)
+    covered_by_device: defaultdict[str, int] = defaultdict(int)
+    total_by_device: defaultdict[str, int] = defaultdict(int)
+
+    total_chars = 0
+    covered_chars = 0
+    for span in gold:
+        covered = _covered_char_count(span, predicted)
+        total_chars += span.length
+        covered_chars += covered
+        total_by_label[span.label] += span.length
+        covered_by_label[span.label] += covered
+        total_by_language[span.language] += span.length
+        covered_by_language[span.language] += covered
+        total_by_device[span.device] += span.length
+        covered_by_device[span.device] += covered
+
+    label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, covered_by_label)
+    language_keys = _slice_keys(SUPPORTED_LANGUAGES, total_by_language, covered_by_language)
+    device_keys = _slice_keys(DEVICE_TIERS, total_by_device, covered_by_device)
+
+    return RecallSlices(
+        overall=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
+        by_label=_rate_map(label_keys, covered_by_label, total_by_label, 1.0),
+        by_language=_rate_map(language_keys, covered_by_language, total_by_language, 1.0),
+        by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
+        covered_chars=covered_chars,
+        total_chars=total_chars,
+    )
+
+
+def compute_exact_span_f1(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> F1Metrics:
+    """Compute strict label-aware exact span F1."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    matched_predictions: set[int] = set()
+    true_positives = 0
+    for gold_span in gold:
+        for index, pred_span in enumerate(predicted):
+            if index in matched_predictions:
+                continue
+            if (
+                gold_span.label == pred_span.label
+                and gold_span.start == pred_span.start
+                and gold_span.end == pred_span.end
+            ):
+                matched_predictions.add(index)
+                true_positives += 1
+                break
+    return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def compute_relaxed_span_f1(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> F1Metrics:
+    """Compute label-aware relaxed F1 where any character overlap matches."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    matched_predictions: set[int] = set()
+    true_positives = 0
+    for gold_span in gold:
+        candidates = [
+            (index, pred_span)
+            for index, pred_span in enumerate(predicted)
+            if index not in matched_predictions and _label_aware_overlap(gold_span, pred_span)
+        ]
+        if not candidates:
+            continue
+        best_index, _ = max(
+            candidates,
+            key=lambda item: _overlap_len(gold_span, item[1]),
+        )
+        matched_predictions.add(best_index)
+        true_positives += 1
+    return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def compute_over_redaction_loss(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    text_length: int | None = None,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> RateMetric:
+    """Compute non-PHI character coverage by predicted redaction spans."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    pred_positions = _positions_for_spans(predicted)
+    gold_positions = _positions_for_spans(gold)
+    over_redacted = len(pred_positions - gold_positions)
+    if text_length is None:
+        denominator = max(len(pred_positions), 0)
+    else:
+        denominator = max(text_length - len(gold_positions), 0)
+    return RateMetric(
+        rate=_safe_rate(over_redacted, denominator, zero_denominator=0.0),
+        numerator=over_redacted,
+        denominator=denominator,
+    )
+
+
+def compute_clinical_utility_loss(*args: Any, **kwargs: Any) -> RateMetric:
+    """Alias for over-redaction loss used in benchmark reports."""
+    return compute_over_redaction_loss(*args, **kwargs)
+
+
+def compute_date_shift_consistency(
+    original_dates: Sequence[str],
+    shifted_dates: Sequence[str],
+) -> ConsistencyMetric:
+    """Score whether date replacements use one consistent day offset."""
+    if len(original_dates) != len(shifted_dates):
+        raise ValueError("original_dates and shifted_dates must have the same length")
+    parsed: list[tuple[str, str, int]] = []
+    violations: dict[str, list[str]] = {}
+    for original, shifted in zip(original_dates, shifted_dates):
+        original_date = _parse_date(original)
+        shifted_date = _parse_date(shifted)
+        if original_date is None or shifted_date is None:
+            violations.setdefault(original, []).append(shifted)
+            continue
+        parsed.append((original, shifted, (shifted_date - original_date).days))
+
+    if not original_dates:
+        return ConsistencyMetric(score=1.0, consistent=0, total=0, violations={})
+    if not parsed:
+        return ConsistencyMetric(
+            score=0.0,
+            consistent=0,
+            total=len(original_dates),
+            violations=violations,
+        )
+
+    expected = parsed[0][2]
+    consistent = 0
+    for original, shifted, delta in parsed:
+        if delta == expected:
+            consistent += 1
+        else:
+            violations.setdefault(original, []).append(shifted)
+    return ConsistencyMetric(
+        score=_safe_rate(consistent, len(original_dates), zero_denominator=1.0),
+        consistent=consistent,
+        total=len(original_dates),
+        violations=violations,
+    )
+
+
+def compute_surrogate_consistency(
+    originals: Sequence[str],
+    surrogates: Sequence[str],
+) -> ConsistencyMetric:
+    """Score whether repeated source values map to stable surrogates."""
+    if len(originals) != len(surrogates):
+        raise ValueError("originals and surrogates must have the same length")
+    groups: defaultdict[str, list[str]] = defaultdict(list)
+    for original, surrogate in zip(originals, surrogates):
+        groups[original].append(surrogate)
+
+    violations: dict[str, list[str]] = {}
+    consistent = 0
+    for original, values in groups.items():
+        unique_values = sorted(set(values))
+        if len(unique_values) == 1:
+            consistent += 1
+        else:
+            violations[original] = unique_values
+    return ConsistencyMetric(
+        score=_safe_rate(consistent, len(groups), zero_denominator=1.0),
+        consistent=consistent,
+        total=len(groups),
+        violations=violations,
+    )
+
+
+def compute_latency_summary(latencies_ms: Sequence[int | float]) -> LatencyMetrics:
+    """Compute p50 and p95 latency from elapsed milliseconds."""
+    if not latencies_ms:
+        return LatencyMetrics(p50_ms=0.0, p95_ms=0.0, count=0)
+    values = sorted(float(value) for value in latencies_ms)
+    return LatencyMetrics(
+        p50_ms=_percentile(values, 50),
+        p95_ms=_percentile(values, 95),
+        count=len(values),
+    )
+
+
+def compute_resource_metrics(
+    *,
+    peak_rss_bytes: int | None = None,
+    model_size_bytes: int | None = None,
+) -> ResourceMetrics:
+    """Build a resource summary for RSS and model artifact size."""
+    return ResourceMetrics(
+        peak_rss_bytes=peak_rss_bytes,
+        model_size_bytes=model_size_bytes,
+    )
+
+
+def compute_metrics_bundle(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    latencies_ms: Sequence[int | float] = (),
+    peak_rss_bytes: int | None = None,
+    model_size_bytes: int | None = None,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> dict[str, Any]:
+    """Compute the standard OM-018 benchmark metric bundle."""
+    text_length = len(source_text) if source_text is not None else None
+    return {
+        "leakage": compute_leakage_rate(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
+        "character_recall": compute_character_recall(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
+        "recall_slices": compute_recall_slices(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
+        "exact_span_f1": compute_exact_span_f1(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
+        "relaxed_span_f1": compute_relaxed_span_f1(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
+        "over_redaction_loss": compute_over_redaction_loss(
+            gold_spans,
+            predicted_spans,
+            text_length=text_length,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
+        "latency": compute_latency_summary(latencies_ms).to_dict(),
+        "resources": compute_resource_metrics(
+            peak_rss_bytes=peak_rss_bytes,
+            model_size_bytes=model_size_bytes,
+        ).to_dict(),
+    }
+
+
+def _read_value(data: Mapping[str, Any], key: str) -> Any:
+    if key in data:
+        return data[key]
+    return None
+
+
+def _read_mapping(data: Mapping[str, Any], key: str) -> Mapping[str, Any] | None:
+    value = _read_value(data, key)
+    return value if isinstance(value, Mapping) else None
+
+
+def _read_int(data: Mapping[str, Any], key: str) -> int | None:
+    value = _read_value(data, key)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_rate(
+    numerator: int | float,
+    denominator: int | float,
+    zero_denominator: float,
+) -> float:
+    if denominator == 0:
+        return zero_denominator
+    return float(numerator) / float(denominator)
+
+
+def _f1_from_counts(true_positives: int, predicted_count: int, gold_count: int) -> F1Metrics:
+    false_positives = predicted_count - true_positives
+    false_negatives = gold_count - true_positives
+    precision = _safe_rate(true_positives, predicted_count, zero_denominator=1.0)
+    recall = _safe_rate(true_positives, gold_count, zero_denominator=1.0)
+    if precision + recall == 0:
+        f1 = 0.0
+    else:
+        f1 = 2 * precision * recall / (precision + recall)
+    return F1Metrics(
+        precision=precision,
+        recall=recall,
+        f1=f1,
+        true_positives=true_positives,
+        false_positives=false_positives,
+        false_negatives=false_negatives,
+    )
+
+
+def _label_aware_overlap(gold_span: EvalSpan, pred_span: EvalSpan) -> bool:
+    if gold_span.label != pred_span.label:
+        return False
+    overlaps = detect_overlapping_entities([gold_span.to_entity(), pred_span.to_entity()])
+    return bool(overlaps)
+
+
+def _overlap_len(a: EvalSpan, b: EvalSpan) -> int:
+    if not _label_aware_overlap(a, b):
+        return 0
+    return max(min(a.end, b.end) - max(a.start, b.start), 0)
+
+
+def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> int:
+    intervals: list[tuple[int, int]] = []
+    for pred_span in predicted:
+        if not _label_aware_overlap(gold_span, pred_span):
+            continue
+        start = max(gold_span.start, pred_span.start)
+        end = min(gold_span.end, pred_span.end)
+        if start < end:
+            intervals.append((start, end))
+    return _merged_interval_length(intervals)
+
+
+def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
+    if not intervals:
+        return 0
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(intervals):
+        if not merged or start > merged[-1][1]:
+            merged.append((start, end))
+        else:
+            old_start, old_end = merged[-1]
+            merged[-1] = (old_start, max(old_end, end))
+    return sum(end - start for start, end in merged)
+
+
+def _positions_for_spans(spans: Sequence[EvalSpan]) -> set[int]:
+    positions: set[int] = set()
+    for span in spans:
+        positions.update(range(max(span.start, 0), max(span.end, span.start)))
+    return positions
+
+
+def _slice_keys(
+    required: Iterable[str],
+    *maps: Mapping[str, Any],
+) -> list[str]:
+    keys = set(required)
+    for item in maps:
+        keys.update(item)
+    return sorted(keys)
+
+
+def _rate_map(
+    keys: Iterable[str],
+    numerators: Mapping[str, int],
+    denominators: Mapping[str, int],
+    zero_denominator: float,
+) -> dict[str, float]:
+    return {
+        key: _safe_rate(numerators.get(key, 0), denominators.get(key, 0), zero_denominator)
+        for key in keys
+    }
+
+
+def _count_map(keys: Iterable[str], counts: Mapping[str, int]) -> dict[str, int]:
+    return {key: int(counts.get(key, 0)) for key in keys}
+
+
+def _parse_date(value: str) -> date | None:
+    candidates = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%Y/%m/%d")
+    for fmt in candidates:
+        try:
+            return datetime.strptime(value, fmt).date()
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
+
+
+def _percentile(values: Sequence[float], percentile: int | float) -> float:
+    if not values:
+        return 0.0
+    if len(values) == 1:
+        return values[0]
+    rank = ceil((float(percentile) / 100.0) * len(values))
+    index = min(max(rank - 1, 0), len(values) - 1)
+    return values[index]
+
+
+__all__ = [
+    "DEVICE_TIERS",
+    "EvalSpan",
+    "RateMetric",
+    "F1Metrics",
+    "LeakageMetrics",
+    "RecallSlices",
+    "ConsistencyMetric",
+    "LatencyMetrics",
+    "ResourceMetrics",
+    "normalize_eval_span",
+    "normalize_eval_spans",
+    "compute_leakage_rate",
+    "compute_character_recall",
+    "compute_recall_slices",
+    "compute_exact_span_f1",
+    "compute_relaxed_span_f1",
+    "compute_over_redaction_loss",
+    "compute_clinical_utility_loss",
+    "compute_date_shift_consistency",
+    "compute_surrogate_consistency",
+    "compute_latency_summary",
+    "compute_resource_metrics",
+    "compute_metrics_bundle",
+]

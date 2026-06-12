@@ -122,6 +122,18 @@ class TestPrivacyFilterTorchPipelineGate:
         assert captured["tokenizer_kwargs"]["trust_remote_code"] is True
         assert captured["model_kwargs"]["trust_remote_code"] is True
 
+    def test_case_variant_of_trusted_model_loads(self):
+        """Issue #205 — lowercase variant of an allowlisted model must
+        also pass the trust_remote_code gate."""
+        captured = {}
+        with _patched_transformers(captured):
+            from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+            PrivacyFilterTorchPipeline(
+                "openmed/privacy-filter-multilingual",
+                trust_remote_code=True,
+            )
+        assert captured["tokenizer_kwargs"]["trust_remote_code"] is True
+
 
 class TestIsTrustedForRemoteCode:
     """The allowlist function backs the gate."""
@@ -132,6 +144,10 @@ class TestIsTrustedForRemoteCode:
             "openai/privacy-filter",
             "OpenMed/privacy-filter-multilingual",
             "OpenMed/privacy-filter-nemotron",
+            # Case-insensitive matches (issue #205)
+            "openmed/privacy-filter-multilingual",
+            "OPENMED/PRIVACY-FILTER-NEMOTRON",
+            "OpenAI/Privacy-Filter",
         ],
     )
     def test_hardcoded_first_party_models_are_trusted(self, trusted):
@@ -163,6 +179,17 @@ class TestIsTrustedForRemoteCode:
         assert is_trusted_for_remote_code("other-org/another-fork") is True
         # Unrelated names are still rejected.
         assert is_trusted_for_remote_code("attacker/foo-privacy-filter") is False
+
+    def test_env_var_matches_case_insensitive(self, monkeypatch):
+        """Issue #205 — env-var allowlist entries should match regardless
+        of the case the caller supplies."""
+        from openmed.torch.privacy_filter import is_trusted_for_remote_code
+        monkeypatch.setenv(
+            "OPENMED_TRUSTED_REMOTE_CODE_MODELS",
+            "My-Org/My-Fork",
+        )
+        assert is_trusted_for_remote_code("my-org/my-fork") is True
+        assert is_trusted_for_remote_code("MY-ORG/MY-FORK") is True
 
     def test_env_var_unset_does_not_trust_extras(self, monkeypatch):
         monkeypatch.delenv("OPENMED_TRUSTED_REMOTE_CODE_MODELS", raising=False)

@@ -355,6 +355,37 @@ section[data-screen] { padding: 96px 0; }
     background: var(--bg-panel);
     border-color: var(--fg);
 }
+.nav-toggle {
+    display: none;
+    width: 36px;
+    height: 36px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background var(--dur-micro) var(--ease-out), border-color var(--dur-micro) var(--ease-out);
+}
+.nav-toggle:hover {
+    background: var(--bg-panel);
+    border-color: var(--fg);
+}
+.nav-toggle-bar {
+    display: block;
+    width: 14px;
+    height: 1.5px;
+    background: var(--fg);
+    border-radius: 1px;
+    transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out);
+}
+.nav.menu-open .nav-toggle-bar:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+.nav.menu-open .nav-toggle-bar:nth-child(2) { opacity: 0; }
+.nav.menu-open .nav-toggle-bar:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+.nav-links-mobile-only { display: none; }
 
 /* ---------- Buttons ------------------------------------------------------- */
 .btn {
@@ -453,7 +484,7 @@ section[data-screen] { padding: 96px 0; }
 .hero-ctas .cmd { font-family: var(--font-mono); font-weight: 500; }
 .hero-meta {
     display: flex;
-    gap: 22px;
+    gap: 12px;
     flex-wrap: wrap;
     align-items: center;
     color: var(--fg-muted);
@@ -569,7 +600,7 @@ section[data-screen] { padding: 96px 0; }
 [data-theme="dark"] .statband { background: var(--bg-panel); }
 .statband-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
 }
 .statband-cell {
     padding: 28px 24px;
@@ -1154,6 +1185,23 @@ section[data-screen] { padding: 96px 0; }
     line-height: 1.6;
 }
 
+/* ---------- Contribute CTA ------------------------------------------------ */
+.contribute { text-align: center; }
+.contribute-title {
+    margin: 16px auto 16px;
+    max-width: 24ch;
+}
+.contribute-desc {
+    max-width: 56ch;
+    margin: 0 auto 32px;
+}
+.contribute-ctas {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
 /* ---------- Footer -------------------------------------------------------- */
 .footer {
     padding: 64px 0 40px;
@@ -1223,8 +1271,36 @@ section[data-screen] { padding: 96px 0; }
 }
 @media (max-width: 720px) {
     :root { --fs-display-xl: 44px; --fs-display-lg: 34px; --fs-display-md: 28px; --gutter: 16px; }
-    .nav-links { display: none; }
+    .nav-inner { gap: 10px; }
+    .nav-toggle { display: inline-flex; }
+    .nav-actions { gap: 6px; }
     .nav-actions .btn.docs-btn { display: none; }
+    .nav-menu {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        display: none;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        box-shadow: var(--shadow-2);
+    }
+    .nav.menu-open .nav-menu { display: block; }
+    .nav-links {
+        flex-direction: column;
+        gap: 0;
+        padding: 6px var(--gutter) 10px;
+    }
+    .nav-links li { border-bottom: 1px solid var(--border); }
+    .nav-links li:last-child { border-bottom: none; }
+    .nav-links a {
+        display: block;
+        padding: 13px 0;
+        font-size: 15px;
+        border-bottom: none;
+    }
+    .nav-links a.active { color: var(--accent); }
+    .nav-links-mobile-only { display: block; }
     .hero { padding: 56px 0 40px; }
     section[data-screen] { padding: 64px 0; }
     .runtime-grid,
@@ -1236,6 +1312,11 @@ section[data-screen] { padding: 96px 0; }
     .statband-grid { grid-template-columns: repeat(2, 1fr); }
     .statband-cell:nth-child(2n) { border-right: none; }
     .statband-cell:nth-child(n+3) { border-top: 1px solid var(--border); }
-    .statband-cell:last-child { grid-column: 1 / -1; }
     .footer-grid { grid-template-columns: 1fr; gap: 32px; }
+}
+@media (max-width: 480px) {
+    .version-tag { display: none; }
+    .nav-actions .btn-primary .btn-label { display: none; }
+    .nav-actions .btn-primary { padding: 9px 10px; }
+    .wordmark { font-size: 20px; }
 }
