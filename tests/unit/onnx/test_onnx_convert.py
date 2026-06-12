@@ -45,11 +45,13 @@ class TestOnnxConvertModule:
         import inspect
         from openmed.onnx.convert import convert
 
-        params = list(inspect.signature(convert).parameters)
+        sig = inspect.signature(convert)
+        params = list(sig.parameters)
         assert "model_id" in params
         assert "output_path" in params
         assert "max_seq_length" in params
         assert "opset_version" in params
+        assert sig.parameters["opset_version"].default == 18
 
     def test_main_is_callable(self):
         from openmed.onnx.convert import main
@@ -239,6 +241,7 @@ class TestOnnxLogitParity:
                 return model(input_ids=input_ids, attention_mask=attention_mask).logits
 
         wrapper = _Wrapper()
+        wrapper.eval()
 
         # "Batch of clinical strings" as token-id sequences (vocab 512, seq 32, batch 4)
         torch.manual_seed(7)
@@ -250,23 +253,44 @@ class TestOnnxLogitParity:
         with torch.no_grad():
             torch_logits = wrapper(input_ids, attention_mask).numpy()
 
-        # Export — trace with a single example, dynamic_axes handle the full batch
+        # Export — trace with batch=2 so torch.export doesn't specialize the
+        # batch dimension as a constant (BERT position embeddings trigger that
+        # specialization when traced with batch=1).
         onnx_path = tmp_path / "tiny_tc.onnx"
+        _major = int(torch.__version__.split(".")[0])
+        _minor = int(torch.__version__.split(".")[1])
         with torch.no_grad():
-            torch.onnx.export(
-                wrapper,
-                (input_ids[:1], attention_mask[:1]),
-                str(onnx_path),
-                input_names=["input_ids", "attention_mask"],
-                output_names=["logits"],
-                dynamic_axes={
-                    "input_ids": {0: "batch_size", 1: "sequence_length"},
-                    "attention_mask": {0: "batch_size", 1: "sequence_length"},
-                    "logits": {0: "batch_size", 1: "sequence_length"},
-                },
-                opset_version=14,
-                do_constant_folding=True,
-            )
+            if _major > 2 or (_major == 2 and _minor >= 1):
+                from torch.export import Dim as _Dim
+                _batch = _Dim("batch_size")
+                _seq = _Dim("sequence_length", max=seq_len)
+                torch.onnx.export(
+                    wrapper,
+                    (input_ids[:2], attention_mask[:2]),
+                    str(onnx_path),
+                    input_names=["input_ids", "attention_mask"],
+                    output_names=["logits"],
+                    dynamic_shapes={
+                        "input_ids": {0: _batch, 1: _seq},
+                        "attention_mask": {0: _batch, 1: _seq},
+                    },
+                    opset_version=18,
+                )
+            else:
+                torch.onnx.export(
+                    wrapper,
+                    (input_ids[:2], attention_mask[:2]),
+                    str(onnx_path),
+                    input_names=["input_ids", "attention_mask"],
+                    output_names=["logits"],
+                    dynamic_axes={
+                        "input_ids": {0: "batch_size", 1: "sequence_length"},
+                        "attention_mask": {0: "batch_size", 1: "sequence_length"},
+                        "logits": {0: "batch_size", 1: "sequence_length"},
+                    },
+                    opset_version=14,
+                    do_constant_folding=True,
+                )
 
         # ONNX CPU EP inference
         sess = ort.InferenceSession(

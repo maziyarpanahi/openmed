@@ -25,7 +25,7 @@ def convert(
     model_id: str,
     output_path: str | Path,
     max_seq_length: int = 512,
-    opset_version: int = 14,
+    opset_version: int = 18,
     cache_dir: Optional[str] = None,
 ) -> Path:
     """Convert a HuggingFace token-classification model to ONNX.
@@ -34,7 +34,8 @@ def convert(
         model_id: HuggingFace model identifier or local directory.
         output_path: Destination for the ``.onnx`` file.
         max_seq_length: Maximum input sequence length (used for the export trace).
-        opset_version: ONNX opset version (default 14 for broad EP compatibility).
+        opset_version: ONNX opset version (default 18; required by torch >= 2.1
+            dynamo exporter which uses LayerNormalization-18).
         cache_dir: HuggingFace cache directory.
 
     Returns:
@@ -82,36 +83,62 @@ def convert(
     wrapper = _TokenClassificationWrapper(model)
     wrapper.eval()
 
-    # 3. Trace inputs (single example; dynamic_axes handle variable batch/seq at runtime)
+    # 3. Prepare two-example trace inputs.
+    # Tracing with batch=2 (not 1) is required so that torch.export does not
+    # specialize the batch dimension as a constant — BERT position embeddings
+    # trigger that specialization when the traced batch size is 1.
     logger.info("Preparing export trace (max_seq_length=%d) ...", max_seq_length)
     sample_text = "Patient John Doe visited the clinic on 2024-01-15."
     sample = tokenizer(
-        sample_text,
+        [sample_text, sample_text],
         max_length=max_seq_length,
         padding="max_length",
         truncation=True,
         return_tensors="pt",
     )
-    dummy_ids = sample["input_ids"]
+    dummy_ids = sample["input_ids"]    # shape: (2, max_seq_length)
     dummy_mask = sample["attention_mask"]
 
-    # 4. Export — dynamic_axes replaces CoreML's RangeDim
+    # 4. Export with dynamic batch and sequence dimensions.
+    # torch >= 2.1 uses the dynamo exporter by default; dynamic_shapes with
+    # torch.export.Dim objects is the correct API (dynamic_axes is deprecated
+    # and silently produces broken output shapes in 2.x). Fall back to the
+    # legacy TorchScript exporter for torch < 2.1.
     logger.info("Exporting to ONNX (opset %d) ...", opset_version)
+    _torch_major = int(torch.__version__.split(".")[0])
+    _torch_minor = int(torch.__version__.split(".")[1])
     with torch.no_grad():
-        torch.onnx.export(
-            wrapper,
-            (dummy_ids, dummy_mask),
-            str(output_path),
-            input_names=["input_ids", "attention_mask"],
-            output_names=["logits"],
-            dynamic_axes={
-                "input_ids": {0: "batch_size", 1: "sequence_length"},
-                "attention_mask": {0: "batch_size", 1: "sequence_length"},
-                "logits": {0: "batch_size", 1: "sequence_length"},
-            },
-            opset_version=opset_version,
-            do_constant_folding=True,
-        )
+        if _torch_major > 2 or (_torch_major == 2 and _torch_minor >= 1):
+            from torch.export import Dim as _Dim
+            _batch = _Dim("batch_size")
+            _seq = _Dim("sequence_length", max=max_seq_length)
+            torch.onnx.export(
+                wrapper,
+                (dummy_ids, dummy_mask),
+                str(output_path),
+                input_names=["input_ids", "attention_mask"],
+                output_names=["logits"],
+                dynamic_shapes={
+                    "input_ids": {0: _batch, 1: _seq},
+                    "attention_mask": {0: _batch, 1: _seq},
+                },
+                opset_version=opset_version,
+            )
+        else:
+            torch.onnx.export(
+                wrapper,
+                (dummy_ids, dummy_mask),
+                str(output_path),
+                input_names=["input_ids", "attention_mask"],
+                output_names=["logits"],
+                dynamic_axes={
+                    "input_ids": {0: "batch_size", 1: "sequence_length"},
+                    "attention_mask": {0: "batch_size", 1: "sequence_length"},
+                    "logits": {0: "batch_size", 1: "sequence_length"},
+                },
+                opset_version=opset_version,
+                do_constant_folding=True,
+            )
 
     # 5. Write id2label.json alongside (same convention as coreml/convert.py)
     id2label_path = output_path.parent / f"{output_path.stem}_id2label.json"
