@@ -25,10 +25,14 @@ logger = logging.getLogger(__name__)
 # First-party privacy-filter repos that legitimately require
 # trust_remote_code=True (they ship modeling_openai_privacy_filter.py and
 # friends in the repo and rely on Transformers' auto_map import).
+# Stored in lower-case because HuggingFace namespaces are case-insensitive
+# (OpenMed and openmed resolve to the same org).  Normalising both sides
+# prevents a user-supplied "openmed/privacy-filter-multilingual" from failing
+# to match the hard-coded "OpenMed/..." entry.
 TRUSTED_REMOTE_CODE_MODELS = frozenset({
     "openai/privacy-filter",
-    "OpenMed/privacy-filter-multilingual",
-    "OpenMed/privacy-filter-nemotron",
+    "openmed/privacy-filter-multilingual",
+    "openmed/privacy-filter-nemotron",
 })
 
 # Operators with custom fine-tunes can extend the allowlist with a
@@ -38,7 +42,9 @@ _ALLOWLIST_ENV_VAR = "OPENMED_TRUSTED_REMOTE_CODE_MODELS"
 
 def _env_allowlist() -> frozenset[str]:
     raw = os.getenv(_ALLOWLIST_ENV_VAR, "")
-    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+    return frozenset(
+        part.strip().lower() for part in raw.split(",") if part.strip()
+    )
 
 
 def is_trusted_for_remote_code(model_name: str) -> bool:
@@ -56,9 +62,10 @@ def is_trusted_for_remote_code(model_name: str) -> bool:
     """
     if not model_name:
         return False
-    if model_name in TRUSTED_REMOTE_CODE_MODELS:
+    normalized = model_name.lower()
+    if normalized in TRUSTED_REMOTE_CODE_MODELS:
         return True
-    if model_name in _env_allowlist():
+    if normalized in _env_allowlist():
         return True
     # Local path check is deferred (it touches the filesystem) and imported
     # lazily to avoid a circular import with openmed.core.pii.
