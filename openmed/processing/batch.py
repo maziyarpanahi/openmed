@@ -640,8 +640,9 @@ class BatchProcessor:
         """
         items = self._create_batch_items(texts, ids)
 
-        for item in items:
-            yield self._process_batch_chunk([item])[0]
+        for chunk in self._iter_chunks(items):
+            for result in self._process_batch_chunk(chunk):
+                yield result
 
 
 def process_batch(
