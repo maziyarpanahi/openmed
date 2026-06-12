@@ -137,6 +137,7 @@ def client(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client
@@ -183,14 +184,37 @@ def test_analyze_blank_text_returns_validation_error(client):
     assert payload["error"]["details"][0]["field"] == "body.text"
 
 
-def test_analyze_oversized_text_returns_validation_error(client, monkeypatch):
-    from openmed.service import schemas
-
-    monkeypatch.setattr(schemas, "MAX_TEXT_LENGTH", 10)
-    response = client.post("/analyze", json={"text": "x" * 11})
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/analyze", {}),
+        ("/pii/extract", {}),
+        ("/pii/deidentify", {"method": "mask"}),
+    ],
+)
+def test_oversized_text_returns_validation_error(
+    client,
+    monkeypatch,
+    path,
+    payload,
+):
+    monkeypatch.setenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", "10")
+    response = client.post(path, json={"text": "x" * 11, **payload})
 
     payload = _assert_error_payload(response, 422, "validation_error")
     assert payload["error"]["details"][0]["field"] == "body.text"
+
+
+def test_invalid_max_text_length_env_falls_back_to_default(monkeypatch):
+    from openmed.service.limits import (
+        DEFAULT_MAX_TEXT_LENGTH,
+        SERVICE_MAX_TEXT_LENGTH_ENV_VAR,
+        get_max_text_length,
+    )
+
+    monkeypatch.setenv(SERVICE_MAX_TEXT_LENGTH_ENV_VAR, "not-an-int")
+
+    assert get_max_text_length() == DEFAULT_MAX_TEXT_LENGTH
 
 
 def test_analyze_invalid_confidence_threshold_returns_validation_error(client):
