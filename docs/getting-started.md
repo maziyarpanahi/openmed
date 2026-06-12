@@ -39,14 +39,14 @@ uv pip install ".[hf,mlx,docs]"
 ```python
 from openmed import analyze_text
 
-resp = analyze_text(
-    "Metastatic breast cancer treated with paclitaxel and trastuzumab.",
-    model_name="disease_detection_superclinical",
-    include_html=True,
-)
+text = "Metastatic breast cancer treated with paclitaxel and trastuzumab."
 
+resp = analyze_text(text, model_name="disease_detection_superclinical")
 print(resp.entities[0])
-print(resp.html_snippet)  # ready for dashboards or docs
+
+# Want ready-to-embed HTML instead? Ask for the "html" output format:
+html = analyze_text(text, model_name="disease_detection_superclinical", output_format="html")
+print(html)  # ready for dashboards or docs
 ```
 
 Prefer a quick script entrypoint? Run a one-file smoke script:
