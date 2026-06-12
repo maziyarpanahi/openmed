@@ -1,0 +1,68 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 38,
+          "label": "DATE",
+          "metadata": {
+            "shift_group": "date_chain"
+          },
+          "start": 28,
+          "text": "2026-01-10"
+        },
+        {
+          "end": 60,
+          "label": "DATE",
+          "metadata": {
+            "shift_group": "date_chain"
+          },
+          "start": 50,
+          "text": "2026-01-17"
+        },
+        {
+          "end": 80,
+          "label": "DATE",
+          "metadata": {
+            "shift_group": "date_chain"
+          },
+          "start": 70,
+          "text": "2026-02-14"
+        }
+      ],
+      "id": "golden-date-arithmetic-shift-chain",
+      "language": "en",
+      "metadata": {
+        "category": "date_arithmetic",
+        "date_chain": {
+          "expected_interval_days": [
+            7,
+            28
+          ],
+          "original_dates": [
+            "2026-01-10",
+            "2026-01-17",
+            "2026-02-14"
+          ],
+          "shifted_dates": [
+            "2026-02-09",
+            "2026-02-16",
+            "2026-03-16"
+          ]
+        },
+        "expected_output": {
+          "date_shift_days": 30,
+          "keep_year": false,
+          "method": "shift_dates",
+          "text": "Date chain synthetic: visit 2026-02-09, follow-up 2026-02-16, imaging 2026-03-16."
+        },
+        "synthetic": true
+      },
+      "text": "Date chain synthetic: visit 2026-01-10, follow-up 2026-01-17, imaging 2026-02-14."
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}

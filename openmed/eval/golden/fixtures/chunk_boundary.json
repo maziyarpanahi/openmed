@@ -1,0 +1,39 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 71,
+          "label": "ID_NUM",
+          "metadata": {
+            "identifier_type": "mrn"
+          },
+          "start": 60,
+          "text": "MRN-2468135"
+        }
+      ],
+      "id": "golden-chunk-boundary-mrn",
+      "language": "en",
+      "metadata": {
+        "category": "chunk_boundary",
+        "chunk_window": {
+          "crosses_boundary": true,
+          "expected_global_end": 71,
+          "expected_global_start": 60,
+          "max_length": 64,
+          "span_id": "MRN-2468135"
+        },
+        "expected_output": {
+          "method": "mask",
+          "text": "Chunk remap synthetic note pads to boundary marker: xxxxxxxx[ID_NUM] after."
+        },
+        "synthetic": true
+      },
+      "text": "Chunk remap synthetic note pads to boundary marker: xxxxxxxxMRN-2468135 after."
+    }
+  ],
+  "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}
