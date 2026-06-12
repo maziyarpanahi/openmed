@@ -246,7 +246,7 @@ def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
     assert payload["entities"][0]["label"] == "NAME"
 
 
-@pytest.mark.parametrize("lang", ["nl", "hi", "te"])
+@pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
 def test_pii_extract_accepts_new_langs(client, monkeypatch, fake_loader_cls, lang):
     result = _sample_prediction_result()
 
@@ -275,6 +275,21 @@ def test_pii_extract_invalid_lang_returns_validation_error(client):
     assert payload["error"]["details"][0]["field"] == "body.lang"
 
 
+def test_pii_lang_literal_matches_supported_languages():
+    """The REST schema must accept exactly the languages the core supports.
+
+    Regression guard: ar/ja/tr shipped with published PII models and were in
+    ``SUPPORTED_LANGUAGES`` but were missing from the schema ``Literal``, so the
+    REST/MCP layer rejected them. Keep the two in lockstep.
+    """
+    from typing import get_args
+
+    from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+    from openmed.service.schemas import PIILanguage
+
+    assert set(get_args(PIILanguage)) == set(SUPPORTED_LANGUAGES)
+
+
 def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
     result = _sample_deid_result()
 
@@ -296,7 +311,7 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
     assert payload["method"] == "mask"
 
 
-@pytest.mark.parametrize("lang", ["nl", "hi", "te"])
+@pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
 def test_pii_deidentify_accepts_new_langs(client, monkeypatch, fake_loader_cls, lang):
     result = _sample_deid_result()
 
