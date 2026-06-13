@@ -43,29 +43,28 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip packages
-      uses: actions/cache@v4
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python ${{ matrix.python-version }}
 
     - name: Lint with flake8
       run: |
         # Stop the build if there are Python syntax errors or undefined names
-        flake8 openmed --count --select=E9,F63,F7,F82 --show-source --statistics
+        uv run flake8 openmed --count --select=E9,F63,F7,F82 --show-source --statistics
         # Exit-zero treats all errors as warnings
-        flake8 openmed --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
+        uv run flake8 openmed --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
     - name: Test with pytest
       run: |
-        pytest --cov=openmed --cov-report=xml --cov-report=term-missing
+        uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
