@@ -1,0 +1,12 @@
+{
+  "name": "openmed-node-tests",
+  "version": "0.0.0",
+  "description": "Node.js tests for OM-054 ONNX/WebGPU artifacts",
+  "type": "module",
+  "scripts": {
+    "test": "node --test test_onnx_web.mjs"
+  },
+  "dependencies": {
+    "onnxruntime-web": "^1.20.0"
+  }
+}
