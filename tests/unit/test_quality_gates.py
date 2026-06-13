@@ -9,6 +9,7 @@ import pytest
 from openmed.core.quality_gates import (
     SpanValidationWarning,
     detect_overlapping_entities,
+    resolve_overlapping_entities,
     validate_entity_spans,
 )
 from openmed.processing.outputs import EntityPrediction
@@ -18,12 +19,21 @@ from openmed.processing.outputs import EntityPrediction
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _ent(text, label="NAME", start=0, end=None, confidence=0.9):
+def _ent(text, label="NAME", start=0, end=None, confidence=0.9, metadata=None):
     if end is None:
         end = start + len(text)
     return EntityPrediction(
-        text=text, label=label, start=start, end=end, confidence=confidence,
+        text=text,
+        label=label,
+        start=start,
+        end=end,
+        confidence=confidence,
+        metadata=metadata,
     )
+
+
+def _assert_no_overlaps(entities):
+    assert detect_overlapping_entities(entities) == []
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +211,102 @@ class TestDetectOverlappingEntities:
 
     def test_single_entity(self):
         assert detect_overlapping_entities([_ent("John", start=0, end=4)]) == []
+
+
+# ---------------------------------------------------------------------------
+# resolve_overlapping_entities
+# ---------------------------------------------------------------------------
+
+
+class TestResolveOverlappingEntities:
+    """Tests for deterministic overlap resolution."""
+
+    def test_prefers_critical_label_over_longer_nested_span(self):
+        entities = [
+            _ent(
+                "Patient SSN 123-45-6789",
+                label="OTHER",
+                start=0,
+                end=24,
+                confidence=0.99,
+            ),
+            _ent("123-45-6789", label="SSN", start=12, end=23, confidence=0.50),
+        ]
+
+        resolved = resolve_overlapping_entities(entities)
+
+        _assert_no_overlaps(resolved)
+        assert [entity.label for entity in resolved] == ["SSN"]
+
+    def test_partial_overlap_prefers_longest_span_within_same_risk_tier(self):
+        entities = [
+            _ent("Alpha", label="OTHER", start=0, end=5, confidence=0.95),
+            _ent("ha Bravo", label="OTHER", start=3, end=11, confidence=0.40),
+            _ent("Charlie", label="OTHER", start=12, end=19, confidence=0.70),
+        ]
+
+        resolved = resolve_overlapping_entities(entities)
+
+        _assert_no_overlaps(resolved)
+        assert [(entity.start, entity.end) for entity in resolved] == [
+            (3, 11),
+            (12, 19),
+        ]
+
+    def test_identical_span_prefers_highest_confidence(self):
+        entities = [
+            _ent("John Doe", label="OTHER", start=8, end=16, confidence=0.60),
+            _ent("John Doe", label="OTHER", start=8, end=16, confidence=0.95),
+        ]
+
+        resolved = resolve_overlapping_entities(entities)
+
+        _assert_no_overlaps(resolved)
+        assert len(resolved) == 1
+        assert resolved[0].confidence == 0.95
+
+    def test_metadata_risk_level_wins_and_resolution_is_idempotent(self):
+        entities = [
+            _ent(
+                "Patient identifier",
+                label="OTHER",
+                start=0,
+                end=18,
+                confidence=0.99,
+            ),
+            _ent(
+                "identifier",
+                label="OTHER",
+                start=8,
+                end=18,
+                confidence=0.10,
+                metadata={"risk_level": "high"},
+            ),
+        ]
+
+        resolved = resolve_overlapping_entities(entities)
+        resolved_again = resolve_overlapping_entities(resolved)
+
+        _assert_no_overlaps(resolved)
+        assert resolved == resolved_again
+        assert len(resolved) == 1
+        assert resolved[0].metadata["risk_level"] == "high"
+
+    def test_validate_entity_spans_stays_warn_only_for_overlaps(self):
+        text = "Patient John Doe visited"
+        entities = [
+            _ent("John Doe", label="PERSON", start=8, end=16),
+            _ent("Doe", label="LAST_NAME", start=13, end=16),
+        ]
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            result = validate_entity_spans(entities, text)
+
+        assert len(w) == 0
+        assert result is entities
+        assert len(entities) == 2
+        assert len(detect_overlapping_entities(entities)) == 1
 
 
 # ---------------------------------------------------------------------------
