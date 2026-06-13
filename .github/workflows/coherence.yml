@@ -1,0 +1,26 @@
+name: Catalog coherence
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  catalog-coherence:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Regenerate manifest-derived surfaces
+        run: python scripts/manifest/regenerate_surfaces.py
+
+      - name: Fail on generated surface drift
+        run: git diff --exit-code
