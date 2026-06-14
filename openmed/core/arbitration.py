@@ -223,30 +223,50 @@ def arbitrate(
     *,
     mode: str | None = None,
     strict_no_leak: bool = False,
+    language: str = "en",
+    policy_profile: str | None = None,
     label_floors: Mapping[str, float] | None = None,
     high_recall_label_floors: Mapping[str, float] | None = None,
+    threshold_matrix: Mapping[str, Any] | None = None,
     calibrator: ScoreCalibrator | None = None,
 ) -> tuple[OpenMedSpan, ...]:
     """Resolve duplicate and overlapping detector spans."""
 
     selected_mode = arbitration_mode(strict_no_leak=strict_no_leak, mode=mode)
     calibrated = apply_calibration(spans, calibrator)
+    resolved_profile = _profile_for_mode(
+        selected_mode,
+        strict_no_leak=strict_no_leak,
+        policy_profile=policy_profile,
+    )
     if selected_mode == MODE_HIGH_RECALL_UNION:
+        floors = high_recall_label_floors or _matrix_keep_floors(
+            calibrated,
+            language=language,
+            policy_profile=resolved_profile,
+            matrix=threshold_matrix,
+        )
         union_candidates = [
             span
             for span in calibrated
             if _meets_floor(
                 span,
-                high_recall_label_floors,
+                floors,
                 default_floor=DEFAULT_HIGH_RECALL_FLOOR,
             )
         ]
         return _sort_spans(_collapse_exact_duplicates(union_candidates))
 
+    floors = label_floors or _matrix_keep_floors(
+        calibrated,
+        language=language,
+        policy_profile=resolved_profile,
+        matrix=threshold_matrix,
+    )
     candidates = [
         span
         for span in calibrated
-        if _meets_floor(span, label_floors, default_floor=DEFAULT_BALANCED_FLOOR)
+        if _meets_floor(span, floors, default_floor=DEFAULT_BALANCED_FLOOR)
     ]
     deduped = _collapse_exact_duplicates(candidates)
     winners = [_choose_winner(cluster) for cluster in _overlap_clusters(deduped)]
@@ -273,6 +293,49 @@ def _validate_mode(mode: str) -> None:
         raise ValueError(
             f"mode must be {MODE_BALANCED!r} or {MODE_HIGH_RECALL_UNION!r}"
         )
+
+
+def _profile_for_mode(
+    mode: str,
+    *,
+    strict_no_leak: bool,
+    policy_profile: str | None,
+) -> str:
+    if policy_profile is not None:
+        return policy_profile
+    if strict_no_leak or mode == MODE_HIGH_RECALL_UNION:
+        return "strict_no_leak"
+    return "balanced"
+
+
+def _matrix_keep_floors(
+    spans: Sequence[OpenMedSpan],
+    *,
+    language: str,
+    policy_profile: str,
+    matrix: Mapping[str, Any] | None,
+) -> dict[str, float]:
+    if not spans:
+        return {}
+
+    from .thresholds import lookup_threshold
+
+    floors: dict[str, float] = {}
+    for span in spans:
+        if span.canonical_label in floors:
+            continue
+        try:
+            floors[span.canonical_label] = float(
+                lookup_threshold(
+                    span.canonical_label,
+                    language,
+                    policy_profile,
+                    matrix=matrix,
+                )["keep_floor"]
+            )
+        except Exception:
+            continue
+    return floors
 
 
 def _sample_value(sample: Any, *names: str) -> Any:

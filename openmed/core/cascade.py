@@ -67,6 +67,9 @@ class CascadeRouter:
         clinical_doc_types: Sequence[str] = ("clinical", "note", "ehr", "medical"),
         offline_hook: OfflineHook | None = None,
         calibrator: ScoreCalibrator | None = None,
+        policy_profile: str | None = None,
+        language: str = "en",
+        threshold_matrix: Mapping[str, Any] | None = None,
         label_floors: Mapping[str, float] | None = None,
         high_recall_label_floors: Mapping[str, float] | None = None,
         arbitration_mode_override: str | None = None,
@@ -83,6 +86,9 @@ class CascadeRouter:
         self.clinical_doc_types = tuple(item.lower() for item in clinical_doc_types)
         self.offline_hook = offline_hook
         self.calibrator = calibrator
+        self.policy_profile = policy_profile
+        self.language = language
+        self.threshold_matrix = threshold_matrix
         self.label_floors = label_floors
         self.high_recall_label_floors = high_recall_label_floors
         self.arbitration_mode_override = arbitration_mode_override
@@ -96,9 +102,17 @@ class CascadeRouter:
         strict_no_leak: bool | None = None,
         high_recall: bool | None = None,
         audit_flag: bool = False,
+        language: str | None = None,
+        policy_profile: str | None = None,
     ) -> CascadeResult:
         strict = self.strict_no_leak if strict_no_leak is None else strict_no_leak
         recall = self.high_recall if high_recall is None else high_recall
+        route_language = language or self._language(context)
+        route_profile = (
+            policy_profile
+            or self.policy_profile
+            or ("strict_no_leak" if strict or recall else "balanced")
+        )
         selected_mode = (
             self.arbitration_mode_override
             or arbitration_mode(strict_no_leak=strict or recall)
@@ -132,7 +146,12 @@ class CascadeRouter:
         all_spans.extend(r1_spans)
 
         doc_type_value = self._doc_type(context, doc_type)
-        r2_reason = self._r2_reason(all_spans, doc_type_value)
+        r2_reason = self._r2_reason(
+            all_spans,
+            doc_type_value,
+            language=route_language,
+            policy_profile=route_profile,
+        )
         r2_spans: tuple[OpenMedSpan, ...] = ()
         if r2_reason is not None:
             r2_spans = self._run_detector(
@@ -166,7 +185,12 @@ class CascadeRouter:
             )
             all_spans.extend(r3_spans)
 
-        r4_reason = self._r4_reason(all_spans, audit_flag=audit_flag)
+        r4_reason = self._r4_reason(
+            all_spans,
+            audit_flag=audit_flag,
+            language=route_language,
+            policy_profile=route_profile,
+        )
         if r4_reason is not None:
             r4_spans = self._run_detector(
                 R4_LOCAL_SLM,
@@ -185,9 +209,12 @@ class CascadeRouter:
             all_spans,
             mode=selected_mode,
             strict_no_leak=strict,
+            language=route_language,
+            policy_profile=route_profile,
             calibrator=self.calibrator,
             label_floors=self.label_floors,
             high_recall_label_floors=self.high_recall_label_floors,
+            threshold_matrix=self.threshold_matrix,
         )
         return CascadeResult(
             spans=final_spans,
@@ -235,14 +262,27 @@ class CascadeRouter:
                 return str(value).lower()
         return None
 
+    def _language(self, context: Any) -> str:
+        route = getattr(context, "route", None)
+        if route is not None and getattr(route, "lang", None):
+            return str(route.lang)
+        return self.language
+
     def _r2_reason(
         self,
         spans: Sequence[OpenMedSpan],
         doc_type: str | None,
+        *,
+        language: str,
+        policy_profile: str,
     ) -> str | None:
         if doc_type and doc_type.lower() in self.clinical_doc_types:
             return "clinical_doc_type"
-        if _has_low_confidence(spans, self.low_confidence_threshold):
+        if self._has_low_confidence(
+            spans,
+            language=language,
+            policy_profile=policy_profile,
+        ):
             return "low_confidence"
         return None
 
@@ -267,23 +307,48 @@ class CascadeRouter:
         spans: Sequence[OpenMedSpan],
         *,
         audit_flag: bool,
+        language: str,
+        policy_profile: str,
     ) -> str | None:
         if not self.allow_local_slm:
             return None
         if audit_flag:
             return "audit_flag"
-        if _has_low_confidence(spans, self.low_confidence_threshold):
+        if self._has_low_confidence(
+            spans,
+            language=language,
+            policy_profile=policy_profile,
+        ):
             return "low_confidence"
         return None
 
+    def _has_low_confidence(
+        self,
+        spans: Sequence[OpenMedSpan],
+        *,
+        language: str,
+        policy_profile: str,
+    ) -> bool:
+        if not spans:
+            return True
 
-def _has_low_confidence(
-    spans: Sequence[OpenMedSpan],
-    threshold: float,
-) -> bool:
-    if not spans:
-        return True
-    return any(span.score is None or float(span.score) < threshold for span in spans)
+        from .thresholds import lookup_threshold
+
+        for span in spans:
+            try:
+                threshold = float(
+                    lookup_threshold(
+                        span.canonical_label,
+                        language,
+                        policy_profile,
+                        matrix=self.threshold_matrix,
+                    )["escalate_below"]
+                )
+            except Exception:
+                threshold = self.low_confidence_threshold
+            if span.score is None or float(span.score) < threshold:
+                return True
+        return False
 
 
 def _has_disagreement(
