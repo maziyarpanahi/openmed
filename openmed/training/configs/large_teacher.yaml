@@ -1,0 +1,30 @@
+schema_version: openmed.training.recipe.v1
+preset_name: large_teacher
+mode: C
+backbone:
+  model_ref: openmed/backbones/large-clinical-teacher
+  revision: policy-spine-v1
+  family: encoder-token-classification
+dapt:
+  corpus_ref: openmed/dapt/clinical-policy-spine-v1
+  sequence_length: 2048
+lora:
+  target_trainable_ratio: 0.014
+  rank: 32
+  alpha: 64
+  dropout: 0.05
+  target_modules: [query, key, value, output, intermediate]
+label_set_ref: openmed.core.labels:CANONICAL_LABELS@policy-spine-v1
+loss:
+  name: focal_class_weighted
+  focal_gamma: 2.0
+  class_weighted: true
+  class_weighting: inverse_frequency
+  critical_label_weight: 4.0
+  critical_labels: [PERSON, FIRST_NAME, LAST_NAME, DATE_OF_BIRTH, ID_NUM, SSN, EMAIL, PHONE, STREET_ADDRESS, ACCOUNT_NUMBER, PASSWORD, API_KEY, CREDIT_CARD, IBAN, IP_ADDRESS, MAC_ADDRESS]
+hard_negatives_required: true
+output_tier: teacher
+quantization:
+  default: bf16
+  allow_fp32_fallback: true
+seed: 3803
