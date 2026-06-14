@@ -99,6 +99,7 @@ openmed = "openmed.cli:main"
 [tool.hatch.build]
 include = [
   "openmed/**",
+  "gates/baseline.json",
   "models.jsonl",
   "README.md",
   "pyproject.toml"
