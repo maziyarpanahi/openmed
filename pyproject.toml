@@ -80,6 +80,7 @@ mlx = [
 
 coreml = [
   "coremltools>=8.0",
+  "huggingface-hub>=0.30",
   "torch>=2.0",
   "transformers>=4.50",
 ]

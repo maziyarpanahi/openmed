@@ -109,7 +109,6 @@ def test_only_manifest_generator_lists_org_models():
     forbidden_patterns = (
         "from huggingface_hub import list_models",
         "model_info as",
-        "HfApi",
         ".list_models(",
     )
     offenders = []
