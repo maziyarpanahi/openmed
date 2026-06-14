@@ -31,6 +31,20 @@ def test_convert_workflow_fails_publish_job_when_hf_token_is_missing():
     assert 'echo "$HF_WRITE_TOKEN' not in workflow
 
 
+def test_convert_workflow_publishes_downloaded_conversion_artifacts():
+    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "actions/download-artifact@v4" in workflow
+    assert "name: mlx-model" in workflow
+    assert "name: coreml-model" in workflow
+    assert "python -m openmed.core.hf_publish" in workflow
+    assert "--artifact-dir publish-artifacts/mlx-output" in workflow
+    assert "--artifact-dir publish-artifacts/coreml-output" in workflow
+    assert "--format \"$FORMAT\"" in workflow
+    assert "--format coreml" in workflow
+    assert "published-model-manifest" in workflow
+
+
 def test_hf_token_policy_documents_scope_storage_rotation_and_revocation():
     policy = HF_TOKEN_POLICY.read_text(encoding="utf-8")
 
