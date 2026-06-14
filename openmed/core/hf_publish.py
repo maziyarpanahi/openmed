@@ -12,8 +12,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from openmed.core.baseline import update_baseline_entry
+from openmed.core.baseline import load_baseline_store, update_baseline_entry
+from openmed.core.model_registry import load_manifest_rows
 from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
+from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
 
 
 DEFAULT_ORG = "OpenMed"
@@ -167,6 +169,12 @@ def publish_artifact(
     manifest_path: str | Path | None = None,
     baseline_path: str | Path | None = None,
     baseline_metrics: dict[str, Any] | None = None,
+    benchmark_report_paths: list[str | Path] | None = None,
+    benchmarks_dir: str | Path | None = None,
+    leaderboard_dir: str | Path | None = None,
+    status_output_path: str | Path | None = None,
+    smoke_status: str = "green",
+    smoke_failure_reason: str | None = None,
     api: Any | None = None,
     private: bool = False,
     skip_existing: bool = True,
@@ -240,6 +248,21 @@ def publish_artifact(
                 "task": row.get("task"),
             },
         )
+    if any((benchmarks_dir, leaderboard_dir, status_output_path)):
+        if manifest_path is None or baseline_path is None:
+            raise HfPublishError(
+                "manifest and baseline paths are required to refresh status outputs"
+            )
+        _refresh_status_outputs(
+            manifest_path=manifest_path,
+            baseline_path=baseline_path,
+            benchmark_report_paths=benchmark_report_paths or [],
+            benchmarks_dir=benchmarks_dir,
+            leaderboard_dir=leaderboard_dir,
+            status_output_path=status_output_path,
+            smoke_status=smoke_status,
+            smoke_failure_reason=smoke_failure_reason,
+        )
 
     return PublishResult(
         repo_id=repo_id,
@@ -303,6 +326,38 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional JSON object, or @file, with metrics for the baseline entry",
     )
     parser.add_argument(
+        "--benchmark-report",
+        action="append",
+        default=[],
+        help="BenchmarkReport JSON file used to refresh status artifacts",
+    )
+    parser.add_argument(
+        "--benchmarks-dir",
+        default=None,
+        help="Optional docs/benchmarks output directory to refresh",
+    )
+    parser.add_argument(
+        "--leaderboard-dir",
+        default=None,
+        help="Optional docs/leaderboard output directory to refresh",
+    )
+    parser.add_argument(
+        "--status-output",
+        default=None,
+        help="Optional status Markdown output path to refresh",
+    )
+    parser.add_argument(
+        "--smoke-status",
+        choices=["green", "red"],
+        default="green",
+        help="Smoke-test status rendered into the status page",
+    )
+    parser.add_argument(
+        "--smoke-failure-reason",
+        default=None,
+        help="Optional smoke-test failure reason rendered for red status",
+    )
+    parser.add_argument(
         "--git-sha",
         default=None,
         help="Git SHA to include in the reproducibility hash",
@@ -340,6 +395,12 @@ def main(argv: list[str] | None = None) -> None:
         baseline_metrics=_parse_json_object_arg(args.baseline_metrics)
         if args.baseline_metrics
         else None,
+        benchmark_report_paths=args.benchmark_report,
+        benchmarks_dir=args.benchmarks_dir,
+        leaderboard_dir=args.leaderboard_dir,
+        status_output_path=args.status_output,
+        smoke_status=args.smoke_status,
+        smoke_failure_reason=args.smoke_failure_reason,
         private=args.private,
         skip_existing=not args.overwrite_existing,
         git_sha=args.git_sha,
@@ -427,6 +488,46 @@ def _parse_json_object_arg(value: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise HfPublishError("--baseline-metrics must be a JSON object")
     return payload
+
+
+def _refresh_status_outputs(
+    *,
+    manifest_path: str | Path,
+    baseline_path: str | Path,
+    benchmark_report_paths: list[str | Path],
+    benchmarks_dir: str | Path | None,
+    leaderboard_dir: str | Path | None,
+    status_output_path: str | Path | None,
+    smoke_status: str,
+    smoke_failure_reason: str | None,
+) -> None:
+    manifest_rows = load_manifest_rows(Path(manifest_path))
+    baseline_store = load_baseline_store(Path(baseline_path))
+    reports = read_reports(benchmark_report_paths)
+    if benchmarks_dir is not None:
+        write_benchmark_cards(
+            reports,
+            benchmarks_dir,
+            manifest_rows=manifest_rows,
+        )
+    if leaderboard_dir is not None:
+        write_leaderboard(
+            leaderboard_dir,
+            manifest_rows=manifest_rows,
+            reports=reports,
+            baseline_store=baseline_store,
+        )
+    if status_output_path is not None:
+        from scripts.status.generate_status import write_status_page
+
+        write_status_page(
+            status_output_path,
+            manifest_rows=manifest_rows,
+            baseline_store=baseline_store,
+            reports=reports,
+            smoke_status=smoke_status,
+            smoke_failure_reason=smoke_failure_reason,
+        )
 
 
 def _default_repro_recipe(
