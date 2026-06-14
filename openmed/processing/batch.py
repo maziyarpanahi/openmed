@@ -2,12 +2,19 @@
 
 This module provides efficient batch processing capabilities for analyzing
 multiple texts or files with progress reporting and result aggregation.
+
+Dataset redaction supports local ``.csv``, ``.jsonl``/``.ndjson``, and
+``.parquet`` files. Callers choose one or more free-text columns explicitly;
+all other columns are copied through unchanged.
 """
 
 from __future__ import annotations
 
+import csv
+import json
 import logging
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
@@ -17,6 +24,7 @@ from typing import (
     Iterator,
     List,
     Literal,
+    Mapping,
     Optional,
     Sequence,
     Union,
@@ -27,7 +35,9 @@ from .outputs import PredictionResult
 logger = logging.getLogger(__name__)
 
 BatchOperation = Literal["analyze_text", "extract_pii", "deidentify"]
+DatasetFormat = Literal["csv", "jsonl", "parquet"]
 _VALID_OPERATIONS = {"analyze_text", "extract_pii", "deidentify"}
+_DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 
 
 @dataclass
@@ -153,6 +163,60 @@ class BatchResult:
             f"Average time per item: {self.average_processing_time:.3f}s",
         ]
         return "\n".join(lines)
+
+
+@dataclass
+class DatasetRedactionSummary:
+    """Aggregate audit summary for dataset redaction.
+
+    The summary intentionally contains counts and rates only. It does not
+    include raw input values, redacted cell values, or entity surfaces.
+    """
+
+    input_format: DatasetFormat
+    text_columns: List[str]
+    total_rows: int = 0
+    processed_cells: int = 0
+    redacted_cells: int = 0
+    total_spans: int = 0
+    per_label_counts: Dict[str, int] = field(default_factory=dict)
+    residual_span_count: int = 0
+
+    @property
+    def residual_leakage_estimate(self) -> float:
+        """Estimated residual span leakage rate after redaction."""
+        if self.total_spans == 0:
+            return 0.0
+        return self.residual_span_count / self.total_spans
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to a PHI-free dictionary representation."""
+        return {
+            "input_format": self.input_format,
+            "text_columns": list(self.text_columns),
+            "total_rows": self.total_rows,
+            "processed_cells": self.processed_cells,
+            "redacted_cells": self.redacted_cells,
+            "total_spans": self.total_spans,
+            "per_label_counts": dict(sorted(self.per_label_counts.items())),
+            "residual_span_count": self.residual_span_count,
+            "residual_leakage_estimate": self.residual_leakage_estimate,
+        }
+
+
+@dataclass
+class DatasetRedactionResult:
+    """Result returned by :func:`redact_dataset`."""
+
+    output_path: Path
+    summary: DatasetRedactionSummary
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary representation."""
+        return {
+            "output_path": str(self.output_path),
+            "summary": self.summary.to_dict(),
+        }
 
 
 # Type alias for progress callback
@@ -789,3 +853,326 @@ def process_batch(
         progress_callback,
         on_progress=on_progress,
     )
+
+
+def redact_dataset(
+    path: Union[str, Path],
+    text_columns: Sequence[str],
+    *,
+    output_path: Optional[Union[str, Path]] = None,
+    policy: Optional[str] = None,
+    method: str = "mask",
+    model_name: str = _DEFAULT_PII_MODEL,
+    confidence_threshold: float = 0.7,
+    config: Optional[Any] = None,
+    lang: str = "en",
+    keep_year: bool = True,
+    date_shift_days: Optional[int] = None,
+    use_safety_sweep: bool = True,
+    encoding: str = "utf-8",
+    batch_size: int = 512,
+) -> DatasetRedactionResult:
+    """Redact selected free-text columns in a local dataset.
+
+    Supported input formats are ``.csv``, ``.jsonl``/``.ndjson``, and
+    ``.parquet``. CSV and JSONL files are streamed row-by-row. Parquet files
+    are processed in row batches through ``pyarrow`` when that optional
+    dependency is installed.
+
+    Args:
+        path: Input dataset path.
+        text_columns: Free-text column names to pass through ``deidentify``.
+        output_path: Destination path. Defaults to ``<stem>.redacted<suffix>``.
+        policy: Optional de-identification policy profile name.
+        method: De-identification method forwarded to ``deidentify``.
+        model_name: PII detection model.
+        confidence_threshold: Minimum confidence for redaction.
+        config: Optional OpenMed configuration.
+        lang: Language hint forwarded to ``deidentify``.
+        keep_year: Keep the year in date redaction where applicable.
+        date_shift_days: Optional fixed date shift.
+        use_safety_sweep: Enable deterministic structured-identifier sweep.
+        encoding: Text encoding for CSV/JSONL.
+        batch_size: Parquet row batch size.
+
+    Returns:
+        DatasetRedactionResult with output path and PHI-free audit summary.
+    """
+    input_path = Path(path)
+    if not input_path.exists():
+        raise FileNotFoundError(f"Dataset not found: {input_path}")
+    if not input_path.is_file():
+        raise ValueError(f"Dataset path must be a file: {input_path}")
+
+    dataset_format = _infer_dataset_format(input_path)
+    normalized_columns = _normalize_text_columns(text_columns)
+    destination = (
+        Path(output_path)
+        if output_path is not None
+        else _default_output_path(
+            input_path,
+            dataset_format,
+        )
+    )
+    if input_path.resolve() == destination.resolve():
+        raise ValueError("output_path must not overwrite the input dataset")
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    summary = DatasetRedactionSummary(
+        input_format=dataset_format,
+        text_columns=list(normalized_columns),
+    )
+    deidentify_kwargs = {
+        "method": method,
+        "model_name": model_name,
+        "confidence_threshold": confidence_threshold,
+        "keep_year": keep_year,
+        "date_shift_days": date_shift_days,
+        "config": config,
+        "lang": lang,
+        "use_safety_sweep": use_safety_sweep,
+        "policy": policy,
+    }
+
+    if dataset_format == "csv":
+        _redact_csv_dataset(
+            input_path,
+            destination,
+            normalized_columns,
+            summary,
+            deidentify_kwargs,
+            encoding,
+        )
+    elif dataset_format == "jsonl":
+        _redact_jsonl_dataset(
+            input_path,
+            destination,
+            normalized_columns,
+            summary,
+            deidentify_kwargs,
+            encoding,
+        )
+    else:
+        _redact_parquet_dataset(
+            input_path,
+            destination,
+            normalized_columns,
+            summary,
+            deidentify_kwargs,
+            batch_size,
+        )
+
+    return DatasetRedactionResult(output_path=destination, summary=summary)
+
+
+def _infer_dataset_format(path: Path) -> DatasetFormat:
+    suffix = path.suffix.lower()
+    if suffix == ".csv":
+        return "csv"
+    if suffix in {".jsonl", ".ndjson"}:
+        return "jsonl"
+    if suffix == ".parquet":
+        return "parquet"
+    raise ValueError(
+        "Unsupported dataset format. Expected .csv, .jsonl, .ndjson, or .parquet."
+    )
+
+
+def _default_output_path(path: Path, dataset_format: DatasetFormat) -> Path:
+    suffix = ".jsonl" if dataset_format == "jsonl" else path.suffix
+    return path.with_name(f"{path.stem}.redacted{suffix}")
+
+
+def _normalize_text_columns(text_columns: Sequence[str]) -> tuple[str, ...]:
+    columns: list[str] = []
+    seen: set[str] = set()
+    for column in text_columns:
+        name = str(column).strip()
+        if not name:
+            continue
+        if name not in seen:
+            seen.add(name)
+            columns.append(name)
+    if not columns:
+        raise ValueError("At least one text column must be selected")
+    return tuple(columns)
+
+
+def _validate_text_columns(
+    available: Sequence[str], text_columns: Sequence[str]
+) -> None:
+    missing = [column for column in text_columns if column not in available]
+    if missing:
+        raise ValueError(f"Missing text column(s): {', '.join(missing)}")
+
+
+def _redact_csv_dataset(
+    input_path: Path,
+    output_path: Path,
+    text_columns: Sequence[str],
+    summary: DatasetRedactionSummary,
+    deidentify_kwargs: Mapping[str, Any],
+    encoding: str,
+) -> None:
+    with input_path.open("r", encoding=encoding, newline="") as source:
+        reader = csv.DictReader(source)
+        fieldnames = reader.fieldnames
+        if not fieldnames:
+            raise ValueError("CSV input must include a header row")
+        _validate_text_columns(fieldnames, text_columns)
+
+        with output_path.open("w", encoding=encoding, newline="") as target:
+            writer = csv.DictWriter(target, fieldnames=fieldnames)
+            writer.writeheader()
+            for row in reader:
+                writer.writerow(
+                    _redact_dataset_row(row, text_columns, summary, deidentify_kwargs)
+                )
+                summary.total_rows += 1
+
+
+def _redact_jsonl_dataset(
+    input_path: Path,
+    output_path: Path,
+    text_columns: Sequence[str],
+    summary: DatasetRedactionSummary,
+    deidentify_kwargs: Mapping[str, Any],
+    encoding: str,
+) -> None:
+    with (
+        input_path.open("r", encoding=encoding) as source,
+        output_path.open(
+            "w",
+            encoding=encoding,
+        ) as target,
+    ):
+        for line_number, line in enumerate(source, start=1):
+            if not line.strip():
+                target.write(line)
+                continue
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError(f"JSONL row {line_number} must be an object")
+            redacted = _redact_dataset_row(
+                row,
+                text_columns,
+                summary,
+                deidentify_kwargs,
+            )
+            target.write(
+                json.dumps(redacted, ensure_ascii=False, separators=(",", ":"))
+            )
+            target.write("\n")
+            summary.total_rows += 1
+
+
+def _redact_parquet_dataset(
+    input_path: Path,
+    output_path: Path,
+    text_columns: Sequence[str],
+    summary: DatasetRedactionSummary,
+    deidentify_kwargs: Mapping[str, Any],
+    batch_size: int,
+) -> None:
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "Parquet dataset redaction requires pyarrow to be installed."
+        ) from exc
+
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+
+    parquet_file = pq.ParquetFile(input_path)
+    schema = parquet_file.schema_arrow
+    _validate_text_columns(schema.names, text_columns)
+    for column in text_columns:
+        field_type = schema.field(column).type
+        if not (
+            pa.types.is_string(field_type)
+            or pa.types.is_large_string(field_type)
+            or pa.types.is_null(field_type)
+        ):
+            raise ValueError(f"Parquet text column must be string-typed: {column}")
+
+    writer = None
+    try:
+        for record_batch in parquet_file.iter_batches(batch_size=batch_size):
+            table = pa.Table.from_batches([record_batch], schema=schema)
+            rows = [
+                _redact_dataset_row(row, text_columns, summary, deidentify_kwargs)
+                for row in table.to_pylist()
+            ]
+            summary.total_rows += len(rows)
+            redacted_table = pa.Table.from_pylist(rows, schema=schema)
+            if writer is None:
+                writer = pq.ParquetWriter(output_path, schema)
+            writer.write_table(redacted_table)
+
+        if writer is None:
+            writer = pq.ParquetWriter(output_path, schema)
+    finally:
+        if writer is not None:
+            writer.close()
+
+
+def _redact_dataset_row(
+    row: Mapping[str, Any],
+    text_columns: Sequence[str],
+    summary: DatasetRedactionSummary,
+    deidentify_kwargs: Mapping[str, Any],
+) -> Dict[str, Any]:
+    output = dict(row)
+    _validate_text_columns(tuple(output.keys()), text_columns)
+
+    for column in text_columns:
+        value = output[column]
+        if value is None:
+            continue
+        text = value if isinstance(value, str) else str(value)
+        if text == "":
+            continue
+
+        result = _deidentify_dataset_cell(text, deidentify_kwargs)
+        output[column] = result.deidentified_text
+        _update_redaction_summary(summary, text, result)
+
+    return output
+
+
+def _deidentify_dataset_cell(text: str, kwargs: Mapping[str, Any]) -> Any:
+    from openmed.core.pii import deidentify
+
+    return deidentify(text, **dict(kwargs))
+
+
+def _update_redaction_summary(
+    summary: DatasetRedactionSummary,
+    original_text: str,
+    result: Any,
+) -> None:
+    summary.processed_cells += 1
+    if result.deidentified_text != original_text:
+        summary.redacted_cells += 1
+
+    label_counts: Counter[str] = Counter()
+    residual_spans = 0
+    for entity in getattr(result, "pii_entities", []) or []:
+        label = str(
+            getattr(entity, "label", None)
+            or getattr(entity, "entity_type", None)
+            or "UNKNOWN"
+        )
+        label_counts[label] += 1
+        surface = getattr(entity, "text", None) or getattr(
+            entity, "original_text", None
+        )
+        if surface and surface in result.deidentified_text:
+            residual_spans += 1
+
+    for label, count in label_counts.items():
+        summary.per_label_counts[label] = summary.per_label_counts.get(label, 0) + count
+    summary.total_spans += sum(label_counts.values())
+    summary.residual_span_count += residual_spans
