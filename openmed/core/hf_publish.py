@@ -12,6 +12,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from openmed.core.baseline import update_baseline_entry
+from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
+
 
 DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
@@ -75,6 +78,9 @@ def build_manifest_row(
     artifact_dir: str | Path,
     format_name: str,
     released: str | None = None,
+    recipe: Any | None = None,
+    data_manifest: Any | None = None,
+    git_sha: str | None = None,
 ) -> dict[str, Any]:
     """Build a models.jsonl-compatible row for a published artifact."""
 
@@ -83,11 +89,18 @@ def build_manifest_row(
     labels = _canonical_labels(repo_id, config)
     released = released or datetime.now(timezone.utc).date().isoformat()
     artifact_hash = artifact_sha256(artifact_dir)
-    reproducibility_hash = _reproducibility_hash(
-        repo_id=repo_id,
-        source_model_id=source_model_id,
-        format_name=format_name,
-        artifact_hash=artifact_hash,
+    manifest_format = _manifest_format_name(format_name)
+    reproducibility_hash = compute_reproducibility_hash(
+        recipe=recipe or _default_repro_recipe(
+            repo_id=repo_id,
+            format_name=manifest_format,
+            artifact_hash=artifact_hash,
+        ),
+        data_manifest=data_manifest
+        if data_manifest is not None
+        else _default_data_manifest(artifact_dir, artifact_hash),
+        base_model=source_model_id,
+        git_sha=git_sha,
     )
 
     if not _SHA256_RE.fullmatch(reproducibility_hash):
@@ -102,7 +115,7 @@ def build_manifest_row(
         "param_count": _param_count(repo_id),
         "architecture": _architecture(repo_id, config),
         "base_model": source_model_id,
-        "formats": [_manifest_format_name(format_name)],
+        "formats": [manifest_format],
         "canonical_labels": labels,
         "benchmark": {"dataset": None, "micro_f1": None, "recall": None},
         "arxiv": None,
@@ -152,10 +165,15 @@ def publish_artifact(
     token: str | None = None,
     token_env: str = DEFAULT_TOKEN_ENV,
     manifest_path: str | Path | None = None,
+    baseline_path: str | Path | None = None,
+    baseline_metrics: dict[str, Any] | None = None,
     api: Any | None = None,
     private: bool = False,
     skip_existing: bool = True,
     released: str | None = None,
+    recipe: Any | None = None,
+    data_manifest: Any | None = None,
+    git_sha: str | None = None,
 ) -> PublishResult:
     """Create a target repo, upload *artifact_dir*, and emit a manifest row."""
 
@@ -171,6 +189,7 @@ def publish_artifact(
         version=version,
     )
     api = api or _load_hf_api()
+    resolved_git_sha = git_sha or resolve_git_sha()
 
     skipped = False
     if skip_existing and _repo_exists(api, repo_id=repo_id, token=token):
@@ -197,9 +216,30 @@ def publish_artifact(
         artifact_dir=artifact_dir,
         format_name=format_name,
         released=released,
+        recipe=recipe,
+        data_manifest=data_manifest,
+        git_sha=resolved_git_sha,
     )
     if manifest_path is not None:
         append_manifest_row(manifest_path, row)
+    if baseline_path is not None:
+        update_baseline_entry(
+            baseline_path,
+            family=str(row["family"]),
+            tier=row.get("tier"),
+            format_name=str(row["formats"][0]),
+            metrics=baseline_metrics if baseline_metrics is not None else row["benchmark"],
+            reproducibility_hash=str(row["reproducibility_hash"]),
+            repo_id=str(row["repo_id"]),
+            source_model_id=source_model_id,
+            released=str(row["released"]) if row.get("released") else None,
+            git_sha=resolved_git_sha,
+            metadata={
+                "architecture": row.get("architecture"),
+                "base_model": row.get("base_model"),
+                "task": row.get("task"),
+            },
+        )
 
     return PublishResult(
         repo_id=repo_id,
@@ -253,6 +293,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="JSONL manifest path to append or update",
     )
     parser.add_argument(
+        "--baseline",
+        default=None,
+        help="Optional last-green baseline JSON path to update after publish",
+    )
+    parser.add_argument(
+        "--baseline-metrics",
+        default=None,
+        help="Optional JSON object, or @file, with metrics for the baseline entry",
+    )
+    parser.add_argument(
+        "--git-sha",
+        default=None,
+        help="Git SHA to include in the reproducibility hash",
+    )
+    parser.add_argument(
         "--token-env",
         default=DEFAULT_TOKEN_ENV,
         help="Environment variable containing the write token",
@@ -281,8 +336,13 @@ def main(argv: list[str] | None = None) -> None:
         version=args.version,
         token_env=args.token_env,
         manifest_path=args.manifest,
+        baseline_path=args.baseline,
+        baseline_metrics=_parse_json_object_arg(args.baseline_metrics)
+        if args.baseline_metrics
+        else None,
         private=args.private,
         skip_existing=not args.overwrite_existing,
+        git_sha=args.git_sha,
     )
     action = "Skipped existing" if result.skipped else "Published"
     print(f"{action} model artifact: {result.repo_id}")
@@ -357,6 +417,37 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         value = json.load(handle)
     return value if isinstance(value, dict) else {}
+
+
+def _parse_json_object_arg(value: str) -> dict[str, Any]:
+    source = value
+    if value.startswith("@"):
+        source = Path(value[1:]).read_text(encoding="utf-8")
+    payload = json.loads(source)
+    if not isinstance(payload, dict):
+        raise HfPublishError("--baseline-metrics must be a JSON object")
+    return payload
+
+
+def _default_repro_recipe(
+    *,
+    repo_id: str,
+    format_name: str,
+    artifact_hash: str,
+) -> dict[str, Any]:
+    return {
+        "artifact_hash": artifact_hash,
+        "format": format_name,
+        "repo_id": repo_id,
+    }
+
+
+def _default_data_manifest(artifact_dir: Path, artifact_hash: str) -> dict[str, Any]:
+    artifact_manifest = _read_optional_json(artifact_dir / "openmed-mlx.json")
+    return {
+        "artifact_hash": artifact_hash,
+        "artifact_manifest": artifact_manifest or None,
+    }
 
 
 def _family(repo_id: str) -> str:
@@ -452,26 +543,6 @@ def _canonical_labels(repo_id: str, config: dict[str, Any]) -> list[str]:
         if label not in labels:
             labels.append(label)
     return labels
-
-
-def _reproducibility_hash(
-    *,
-    repo_id: str,
-    source_model_id: str,
-    format_name: str,
-    artifact_hash: str,
-) -> str:
-    payload = json.dumps(
-        {
-            "repo_id": repo_id,
-            "source_model_id": source_model_id,
-            "format": _manifest_format_name(format_name),
-            "artifact_hash": artifact_hash,
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return f"sha256:{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
 
 
 if __name__ == "__main__":

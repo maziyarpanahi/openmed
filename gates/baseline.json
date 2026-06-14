@@ -1,0 +1,21 @@
+{
+  "entries": {
+    "pii::small::mlx-fp": {
+      "family": "PII",
+      "format": "mlx-fp",
+      "key": "pii::small::mlx-fp",
+      "metrics": {
+        "dataset": null,
+        "micro_f1": null,
+        "recall": null
+      },
+      "released": "2026-04-14",
+      "repo_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
+      "reproducibility_hash": "sha256:4818bdef580eb406f5cc665cc0892aefab1fd90c8743822d843dd48f135bde34",
+      "source_model_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+      "tier": "Small",
+      "updated_at": "2026-04-14T00:00:00+00:00"
+    }
+  },
+  "schema_version": 1
+}
