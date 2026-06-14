@@ -101,6 +101,7 @@ openmed = "openmed.cli:main"
 include = [
   "openmed/**",
   "openmed/core/thresholds.json",
+  "openmed/core/policies/*.json",
   "openmed/core/schemas/json/*.json",
   "gates/baseline.json",
   "models.jsonl",
