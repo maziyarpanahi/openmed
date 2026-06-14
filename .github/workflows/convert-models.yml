@@ -164,7 +164,12 @@ jobs:
           --format "$FORMAT" \
           --manifest models.jsonl \
           --baseline gates/baseline.json \
-          --git-sha "${{ github.sha }}"
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
 
     - name: Download CoreML model
       if: contains(github.event.inputs.formats, 'coreml')
@@ -184,12 +189,20 @@ jobs:
           --format coreml \
           --manifest models.jsonl \
           --baseline gates/baseline.json \
-          --git-sha "${{ github.sha }}"
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
 
-    - name: Upload publish manifest snapshot
+    - name: Upload publish status snapshot
       uses: actions/upload-artifact@v4
       with:
         name: published-model-manifest
         path: |
           models.jsonl
           gates/baseline.json
+          docs/benchmarks/
+          docs/leaderboard/
+          docs/status/
