@@ -35,6 +35,7 @@ nav:
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
+      - v1 to v2 Migration Guide: migration.md
       - Contributing & Releases: contributing.md
 
 theme:
