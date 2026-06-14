@@ -1,0 +1,5 @@
+sourceCode,sourceName,sourceFrequency,sourceAutoAssignedConceptIds,ADD_INFO:ICD10 code,matchScore,mappingStatus,equivalence,statusSetBy,statusSetOn,conceptId,conceptName,domainId,mappingType,comment,createdBy,createdOn,assignedReviewer
+E11.9,Type 2 diabetes mellitus without complications,120,,E11.9,0.98,APPROVED,EQUIVALENT,mapper1,20240101,201826,Type 2 diabetes mellitus,Condition,,ICD10 to SNOMED,mapper1,20240101,
+I10,Essential (primary) hypertension,85,,I10,0.95,APPROVED,EQUIVALENT,mapper1,20240101,4195694,Hypertension,Condition,,ICD10 to SNOMED,mapper1,20240101,
+Z99.9,Unknown code,5,,Z99.9,0.10,APPROVED,INEXACT,mapper1,20240101,0,Unmapped,,,unmapped,mapper1,20240101,
+D63.0,Pending review,2,,D63.0,0.5,UNCHECKED,,,0,,,,,mapper1,20240101,
