@@ -8,7 +8,7 @@ import unicodedata
 
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PIIPattern, PII_PATTERNS
-from .schemas.span import OpenMedSpan, hmac_text_hash
+from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
 
 
 STAGE_NAMES: tuple[str, ...] = (
@@ -156,6 +156,7 @@ class Pipeline:
         arbitration_mode: str | None = None,
         strict_no_leak: bool = False,
         policy_profile: str | None = None,
+        policy: Any = None,
         threshold_matrix: Mapping[str, Any] | None = None,
         score_calibrator: Any = None,
         arbitration_label_floors: Mapping[str, float] | None = None,
@@ -165,7 +166,18 @@ class Pipeline:
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
         from . import pii
+        from .policy import load_policy
 
+        resolved_policy = load_policy(policy) if policy is not None else None
+        if resolved_policy is not None:
+            policy_profile = policy_profile or resolved_policy.threshold_profile
+            arbitration_mode = resolved_policy.arbitration_mode
+            strict_no_leak = strict_no_leak or resolved_policy.strict_no_leak
+            use_safety_sweep = (
+                use_safety_sweep or resolved_policy.safety_sweep_mandatory
+            )
+
+        self.policy = resolved_policy
         self.model_name = model_name or pii._DEFAULT_EN_MODEL
         self.confidence_threshold = confidence_threshold
         self.config = config
@@ -338,6 +350,14 @@ class Pipeline:
         policy_spans = self.stage8_policy_actions(merged_spans, context)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
+        if self.policy is not None:
+            pii_result = _prediction_result_from_spans(
+                normalized.normalized_text,
+                [span for span in policy_spans if span.action != ACTION_KEEP],
+                model_name=f"policy:{self.policy.name}",
+            )
+            _attach_policy_metadata(pii_result, self.policy)
+
         sweep_spans, sweep_metadata = self.stage9_safety_sweep(
             normalized.normalized_text,
             pii_result,
@@ -352,19 +372,28 @@ class Pipeline:
             )
         )
 
+        effective_keep_mapping = keep_mapping or bool(
+            self.policy is not None and self.policy.keep_mapping
+        )
         deidentified = self.stage10_emit(
             normalized.normalized_text,
             pii_result,
             effective_method=effective_method,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
-            keep_mapping=keep_mapping,
+            keep_mapping=effective_keep_mapping,
             lang=route.lang,
             consistent=consistent,
             seed=seed,
             locale=locale,
+            reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
+            policy_name=self.policy.name if self.policy is not None else None,
         )
-        final_spans = sweep_spans or policy_spans
+        final_spans = (
+            sweep_spans
+            if self.policy is not None
+            else (sweep_spans or policy_spans)
+        )
         stage_results.append(
             PipelineStageResult(
                 10,
@@ -572,6 +601,11 @@ class Pipeline:
     ) -> tuple[OpenMedSpan, ...]:
         if self.policy_actions is not None:
             return tuple(self.policy_actions(spans, context))
+        if self.policy is not None:
+            return tuple(
+                _apply_policy_action(span, self.policy, language=context.route.lang)
+                for span in spans
+            )
         return tuple(
             _apply_threshold_action(
                 span,
@@ -630,6 +664,8 @@ class Pipeline:
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        reversible_ids: bool = False,
+        policy_name: Optional[str] = None,
     ) -> Any:
         from . import pii
 
@@ -644,6 +680,8 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            reversible_ids=reversible_ids,
+            policy_name=policy_name,
         )
 
     def _entities_to_spans(
@@ -694,7 +732,7 @@ class Pipeline:
         *,
         redacted_text: str,
     ) -> Mapping[str, Any]:
-        return {
+        record = {
             "doc_id": context.doc_id,
             "language": context.route.lang,
             "script": context.route.script,
@@ -714,6 +752,14 @@ class Pipeline:
                 for result in stage_results
             ],
         }
+        if self.policy is not None:
+            record["policy"] = {
+                "name": self.policy.name,
+                "schema_version": self.policy.schema_version,
+                "arbitration_mode": self.policy.arbitration_mode,
+                "threshold_profile": self.policy.threshold_profile,
+            }
+        return record
 
 
 def _iter_normalization_segments(text: str):
@@ -917,6 +963,38 @@ def _prediction_result_from_spans(
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    metadata["policy"] = {
+        "name": policy.name,
+        "schema_version": policy.schema_version,
+        "arbitration_mode": policy.arbitration_mode,
+        "threshold_profile": policy.threshold_profile,
+        "keep_mapping": policy.keep_mapping,
+        "reversible_id": policy.reversible_id,
+    }
+    pii_result.metadata = metadata
+
+
+def _apply_policy_action(
+    span: OpenMedSpan,
+    policy: Any,
+    *,
+    language: str,
+) -> OpenMedSpan:
+    action = policy.action_for(span.canonical_label, lang=language)
+    metadata = dict(span.metadata)
+    metadata["policy_action"] = {
+        "policy": policy.name,
+        "schema_version": policy.schema_version,
+        "action": action,
+        "source": "policy_profile",
+    }
+    if span.action == action:
+        return replace(span, metadata=metadata)
+    return replace(span, action=action, metadata=metadata)
 
 
 def _apply_threshold_action(
