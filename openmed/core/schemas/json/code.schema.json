@@ -1,0 +1,45 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/code.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": ["number", "null"]
+    },
+    "display": {
+      "type": ["string", "null"]
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "provenance_id": {
+      "type": ["string", "null"]
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "system": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "system",
+    "code",
+    "display",
+    "confidence",
+    "provenance_id",
+    "metadata"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedCode",
+  "type": "object"
+}
