@@ -1,6 +1,8 @@
 name: Convert Models
 
 on:
+  schedule:
+    - cron: '17 6 * * 1-5'
   workflow_dispatch:
     inputs:
       model_id:
@@ -25,10 +27,88 @@ on:
           - 'true'
 
 jobs:
+  plan-batch:
+    name: Plan scheduled model batch
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+      ids: ${{ steps.plan.outputs.ids }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install queue parser dependency
+      run: python -m pip install PyYAML
+
+    - name: Build release matrix
+      id: plan
+      run: |
+        python scripts/release/dispatch_batch.py plan \
+          --queue recipes/queue.yaml \
+          --github-output "$GITHUB_OUTPUT"
+
+  batch-release:
+    name: Batch model release
+    runs-on: macos-latest
+    needs: plan-batch
+    if: github.event_name == 'schedule' && needs.plan-batch.outputs.count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.plan-batch.outputs.matrix) }}
+    environment:
+      name: hf-publish
+      url: https://huggingface.co/OpenMed
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install conversion dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[mlx,coreml,hf]"
+
+    - name: Require HF write token before publish
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        if [ -z "${HF_WRITE_TOKEN:-}" ]; then
+          echo "::error title=Missing HF_WRITE_TOKEN::Configure HF_WRITE_TOKEN in the hf-publish protected environment before enabling publish."
+          exit 1
+        fi
+
+    - name: Run queued model release
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        OPENMED_BATCH_ITEM: ${{ toJson(matrix) }}
+      run: |
+        python scripts/release/dispatch_batch.py run-item \
+          --output-root release-artifacts \
+          --manifest models.jsonl
+
+    - name: Upload queued model artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: batch-release-${{ matrix.id }}
+        path: release-artifacts/${{ matrix.id }}/
+        if-no-files-found: warn
+
   convert-mlx:
     name: Convert to MLX
     runs-on: macos-latest
-    if: contains(github.event.inputs.formats, 'mlx')
+    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.formats, 'mlx')
 
     steps:
     - uses: actions/checkout@v4
@@ -66,7 +146,7 @@ jobs:
   convert-coreml:
     name: Convert to CoreML
     runs-on: macos-latest
-    if: contains(github.event.inputs.formats, 'coreml')
+    if: github.event_name == 'workflow_dispatch' && contains(github.event.inputs.formats, 'coreml')
 
     steps:
     - uses: actions/checkout@v4
@@ -107,6 +187,7 @@ jobs:
     if: >-
       ${{
         always() &&
+        github.event_name == 'workflow_dispatch' &&
         github.event.inputs.publish_to_hub == 'true' &&
         !cancelled() &&
         (contains(github.event.inputs.formats, 'mlx') || contains(github.event.inputs.formats, 'coreml')) &&
