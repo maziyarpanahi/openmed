@@ -1,3 +1,5 @@
+# Tags matching v* publish the openmed package to PyPI.
+# workflow_dispatch runs the same guarded publish job manually.
 name: Publish to PyPI
 
 on:
@@ -30,6 +32,10 @@ jobs:
         run: |
           pip uninstall openmed -y || true
           rm -rf ~/.cache/pip || true
+
+      - name: Clean build artifacts
+        run: |
+          rm -rf dist build
 
       - name: Enforce repo file policy
         run: |
