@@ -25,6 +25,7 @@ or emits a US-style format unrelated to the requested locale's actual ID:
 from __future__ import annotations
 
 import re
+import random
 from typing import Sequence
 
 from faker.providers import BaseProvider
@@ -99,6 +100,50 @@ def validate_npi(npi_text: str) -> bool:
     body = [int(digit) for digit in digits[:-1]]
     prefixed = [8, 0, 8, 4, 0, *body]
     return _luhn_check_digit(prefixed) == int(digits[-1])
+
+
+def generate_luhn_identifier(
+    *,
+    length: int = 16,
+    prefix: str = "",
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a numeric identifier that passes :func:`validate_luhn`."""
+
+    if length < 13:
+        raise ValueError("length must be at least 13 for Luhn validation")
+    if not prefix.isdigit() and prefix:
+        raise ValueError("prefix must contain only digits")
+    if len(prefix) >= length:
+        raise ValueError("prefix must leave room for body and check digit")
+
+    source = rng or random.Random()
+    body = [int(digit) for digit in prefix]
+    body.extend(source.randint(0, 9) for _ in range(length - len(prefix) - 1))
+    check_digit = _luhn_check_digit(body)
+    return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+def generate_npi(*, rng: random.Random | None = None) -> str:
+    """Generate a 10-digit US NPI that passes :func:`validate_npi`."""
+
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(9)]
+    prefixed = [8, 0, 8, 4, 0, *body]
+    check_digit = _luhn_check_digit(prefixed)
+    return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+def generate_ssn(*, rng: random.Random | None = None) -> str:
+    """Generate a US SSN-shaped value accepted by :func:`validate_ssn`."""
+
+    source = rng or random.Random()
+    area = source.randint(1, 899)
+    while area == 666:
+        area = source.randint(1, 899)
+    group = source.randint(1, 99)
+    serial = source.randint(1, 9999)
+    return f"{area:03d}-{group:02d}-{serial:04d}"
 
 
 _IBAN_LENGTHS = {
@@ -269,11 +314,7 @@ class NPIProvider(BaseProvider):
     """
 
     def npi(self) -> str:
-        rng = self.generator.random
-        body = [rng.randint(0, 9) for _ in range(9)]
-        prefixed = [8, 0, 8, 4, 0, *body]
-        check = _luhn_check_digit(prefixed)
-        return "".join(str(d) for d in body) + str(check)
+        return generate_npi(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -293,6 +334,9 @@ __all__ = [
     "GermanSteuerIdProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "generate_luhn_identifier",
+    "generate_npi",
+    "generate_ssn",
     "register_clinical_providers",
     "validate_iban",
     "validate_luhn",
