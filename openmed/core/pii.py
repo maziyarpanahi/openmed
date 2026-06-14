@@ -872,38 +872,30 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
-    text = text.strip()
-    effective_method = _resolve_deidentification_method(
-        method,
-        shift_dates,
-        date_shift_days,
-    )
-    pii_result = extract_pii(
-        text,
-        model_name,
-        confidence_threshold,
-        config,
-        use_smart_merging,
+    from .pipeline import Pipeline
+
+    pipeline = Pipeline(
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        config=config,
+        use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        use_safety_sweep=use_safety_sweep,
         loader=loader,
     )
-
-    if use_safety_sweep:
-        _apply_safety_sweep_to_result(text, pii_result, lang=lang)
-
-    return _build_deidentification_result(
+    result = pipeline.run(
         text,
-        pii_result,
-        effective_method=effective_method,
+        method=method,
         keep_year=keep_year,
+        shift_dates=shift_dates,
         date_shift_days=date_shift_days,
         keep_mapping=keep_mapping,
-        lang=lang,
         consistent=consistent,
         seed=seed,
         locale=locale,
     )
+    return result.deidentification_result
 
 
 def _redact_entity(
