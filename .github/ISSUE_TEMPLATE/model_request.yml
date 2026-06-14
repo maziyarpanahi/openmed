@@ -1,0 +1,75 @@
+name: Model or language support request
+description: Request a model, clinical domain, language, or manifest catalog addition.
+title: "[MODEL] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for model, language, clinical-domain, or manifest catalog requests.
+
+        Do not paste PHI, patient identifiers, credentials, private model tokens, or real clinical records. Use synthetic examples only.
+  - type: dropdown
+    id: request_type
+    attributes:
+      label: Request type
+      options:
+        - New language support
+        - New biomedical or clinical model family
+        - Add model to manifest/catalog
+        - Export format or backend support
+        - Documentation for an existing model
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: What workflow should this model or language support?
+      placeholder: "Synthetic examples only."
+    validations:
+      required: true
+  - type: input
+    id: model_id
+    attributes:
+      label: Candidate model id or registry key
+      placeholder: "Hugging Face repo id, OpenMed registry key, or n/a"
+    validations:
+      required: true
+  - type: input
+    id: language_domain
+    attributes:
+      label: Language, domain, or entity family
+      placeholder: "fa, cardiology, procedures, oncology, PII, etc."
+    validations:
+      required: true
+  - type: textarea
+    id: labels_outputs
+    attributes:
+      label: Expected labels or outputs
+      description: List expected labels, entity types, export formats, or backend targets.
+      placeholder: "DISEASE, DRUG, ID_NUM, MLX 8-bit, CoreML, etc."
+    validations:
+      required: true
+  - type: input
+    id: openmed_version
+    attributes:
+      label: OpenMed version
+      placeholder: "1.5.5 or main"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "OS, Python version, backend/hardware if relevant"
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I used only synthetic examples and did not include PHI, secrets, or private records.
+          required: true

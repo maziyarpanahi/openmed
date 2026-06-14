@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and usage help
+    url: https://github.com/maziyarpanahi/openmed/discussions
+    about: Ask questions, share usage patterns, and discuss setup in GitHub Discussions.
+  - name: Security reports
+    url: https://github.com/maziyarpanahi/openmed/security/policy
+    about: Report vulnerabilities or sensitive security issues privately.

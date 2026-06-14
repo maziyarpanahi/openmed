@@ -1,0 +1,79 @@
+name: Feature request
+description: Suggest an OpenMed improvement or new workflow.
+title: "[FEATURE] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an OpenMed improvement.
+
+        Do not paste PHI, patient identifiers, credentials, private model tokens, or real clinical records. Use synthetic examples only.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What workflow is blocked or painful today?
+      placeholder: "I want to..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, API, docs, or integration you want.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or other approaches did you consider?
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Python SDK
+        - REST service
+        - PII / de-identification
+        - Biomedical NER
+        - Model registry
+        - MLX / Apple Silicon
+        - CoreML / OpenMedKit
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: openmed_version
+    attributes:
+      label: OpenMed version
+      placeholder: "1.5.5 or main"
+    validations:
+      required: true
+  - type: input
+    id: os_python
+    attributes:
+      label: Environment
+      description: Include OS and Python version when relevant.
+      placeholder: "macOS 15.5, Python 3.10.14"
+    validations:
+      required: true
+  - type: input
+    id: model_id
+    attributes:
+      label: Related model id or registry key
+      placeholder: "OpenMed/... or n/a"
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I used only synthetic examples and did not include PHI, secrets, or private records.
+          required: true
