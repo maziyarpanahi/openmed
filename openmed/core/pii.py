@@ -70,12 +70,14 @@ class PIIEntity(EntityPrediction):
         redacted_text: Replacement text after de-identification
         original_text: Original text before redaction
         hash_value: Consistent hash for entity linking
+        reversible_id: Optional reversible pseudonymization handle
     """
 
     entity_type: str = ""
     redacted_text: Optional[str] = None
     original_text: Optional[str] = None
     hash_value: Optional[str] = None
+    reversible_id: Optional[str] = None
 
     def __post_init__(self):
         """Initialize entity_type from label if not set."""
@@ -123,6 +125,11 @@ class DeidentificationResult:
                     "confidence": e.confidence,
                     "redacted_text": e.redacted_text,
                     "metadata": e.metadata or {},
+                    **(
+                        {"reversible_id": e.reversible_id}
+                        if e.reversible_id is not None
+                        else {}
+                    ),
                 }
                 for e in self.pii_entities
             ],
@@ -665,6 +672,8 @@ def _build_deidentification_result(
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    reversible_ids: bool = False,
+    policy_name: Optional[str] = None,
 ) -> DeidentificationResult:
     """Build a de-identification result from an existing PII result."""
     pii_entities = [
@@ -687,7 +696,9 @@ def _build_deidentification_result(
         date_shift_days = random.randint(-365, 365)
 
     anonymizer = None
-    if effective_method == "replace":
+    if effective_method == "replace" or any(
+        _entity_policy_action(entity) == "replace" for entity in pii_entities
+    ):
         from .anonymizer import Anonymizer
 
         effective_consistent = consistent or seed is not None
@@ -702,17 +713,23 @@ def _build_deidentification_result(
     mapping = {} if keep_mapping else None
 
     for entity in redaction_entities:
+        entity_method = _entity_redaction_method(entity, effective_method)
         redacted = _redact_entity(
             entity,
-            effective_method,
+            entity_method,
             keep_year=keep_year,
             date_shift_days=(
-                date_shift_days if effective_method == "shift_dates" else None
+                date_shift_days if entity_method == "shift_dates" else None
             ),
             lang=lang,
             anonymizer=anonymizer,
         )
         entity.redacted_text = redacted
+        if reversible_ids:
+            entity.reversible_id = _build_reversible_id(
+                entity,
+                policy_name=policy_name,
+            )
 
         deidentified = (
             deidentified[: entity.start] + redacted + deidentified[entity.end :]
@@ -730,6 +747,42 @@ def _build_deidentification_result(
         mapping=mapping,
         metadata=_copy_metadata(getattr(pii_result, "metadata", None)),
     )
+
+
+def _entity_policy_action(entity: PIIEntity) -> Optional[str]:
+    metadata = entity.metadata or {}
+    policy_action = metadata.get("policy_action")
+    if not isinstance(policy_action, dict):
+        return None
+    action = policy_action.get("action")
+    return str(action) if action is not None else None
+
+
+def _entity_redaction_method(
+    entity: PIIEntity,
+    fallback: DeidentificationMethod,
+) -> DeidentificationMethod:
+    action = _entity_policy_action(entity)
+    if action == "replace":
+        return "replace"
+    if action == "hash":
+        return "hash"
+    if action in {"mask", "redact"}:
+        return "mask"
+    return fallback
+
+
+def _build_reversible_id(
+    entity: PIIEntity,
+    *,
+    policy_name: Optional[str],
+) -> str:
+    original = entity.original_text or entity.text
+    material = (
+        f"{policy_name or 'policy'}|{entity.entity_type}|"
+        f"{entity.start}|{entity.end}|{original}"
+    )
+    return "rev_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:24]
 
 
 def _deidentify_batch(
@@ -814,6 +867,7 @@ def deidentify(
     seed: Optional[int] = None,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
+    policy: Optional[str] = None,
 ) -> DeidentificationResult:
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -841,6 +895,8 @@ def deidentify(
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
         use_safety_sweep: Run a deterministic structured-identifier sweep
             after model detection and before redaction.
+        policy: Optional policy profile name controlling arbitration, action
+            selection, mandatory safety sweep behavior, and reversible mapping.
         lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
             ar, ja, tr). Controls model
             selection, regex patterns, and fake data for replacement.
@@ -883,6 +939,7 @@ def deidentify(
         normalize_accents=normalize_accents,
         use_safety_sweep=use_safety_sweep,
         loader=loader,
+        policy=policy,
     )
     result = pipeline.run(
         text,
