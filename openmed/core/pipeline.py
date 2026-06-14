@@ -151,7 +151,13 @@ class Pipeline:
         privacy_filter_pipeline: Any = None,
         model_detector: ModelDetector | None = None,
         clinical_model_detector: ModelDetector | None = None,
+        cascade_router: Any = None,
         arbitration: SpanHook | None = None,
+        arbitration_mode: str | None = None,
+        strict_no_leak: bool = False,
+        score_calibrator: Any = None,
+        arbitration_label_floors: Mapping[str, float] | None = None,
+        high_recall_label_floors: Mapping[str, float] | None = None,
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
@@ -169,7 +175,13 @@ class Pipeline:
         self.privacy_filter_pipeline = privacy_filter_pipeline
         self.model_detector = model_detector
         self.clinical_model_detector = clinical_model_detector
+        self.cascade_router = cascade_router
         self.arbitration = arbitration
+        self.arbitration_mode = arbitration_mode
+        self.strict_no_leak = strict_no_leak
+        self.score_calibrator = score_calibrator
+        self.arbitration_label_floors = arbitration_label_floors
+        self.high_recall_label_floors = high_recall_label_floors
         self.policy_actions = policy_actions
         self.section_detector = section_detector
         self.hmac_secret = hmac_secret
@@ -235,34 +247,86 @@ class Pipeline:
             ),
         ]
 
-        deterministic_spans = self.stage4_deterministic_detectors(
-            normalized.normalized_text,
-            context,
-        )
-        stage_results.append(
-            PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
-        )
+        cascade_driven = self.cascade_router is not None
+        if cascade_driven:
+            cascade_result = self.cascade_router.run(
+                normalized.normalized_text,
+                context=context,
+                strict_no_leak=self.strict_no_leak,
+            )
+            deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
+            model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
+            clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+            pii_result = _prediction_result_from_spans(
+                normalized.normalized_text,
+                cascade_result.spans,
+                model_name="cascade",
+            )
+            cascade_metadata = {
+                "cascade_mode": cascade_result.mode,
+                "routes": [
+                    {
+                        "route": stage.route,
+                        "name": stage.name,
+                        "reason": stage.reason,
+                        "span_count": len(stage.spans),
+                    }
+                    for stage in cascade_result.stage_results
+                ],
+            }
+            stage_results.append(
+                PipelineStageResult(
+                    4,
+                    STAGE_NAMES[3],
+                    spans=deterministic_spans,
+                    metadata=cascade_metadata,
+                )
+            )
+            stage_results.append(
+                PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
+            )
+            stage_results.append(
+                PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
+            )
+        else:
+            deterministic_spans = self.stage4_deterministic_detectors(
+                normalized.normalized_text,
+                context,
+            )
+            stage_results.append(
+                PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
+            )
 
-        pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
-        model_spans = self._entities_to_spans(
-            getattr(pii_result, "entities", ()),
-            normalized.normalized_text,
-            context,
-            default_detector=f"model:{getattr(pii_result, 'model_name', route.model_name)}",
-            stage=STAGE_NAMES[4],
-        )
-        stage_results.append(PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans))
+            pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
+            model_spans = self._entities_to_spans(
+                getattr(pii_result, "entities", ()),
+                normalized.normalized_text,
+                context,
+                default_detector=f"model:{getattr(pii_result, 'model_name', route.model_name)}",
+                stage=STAGE_NAMES[4],
+            )
+            stage_results.append(
+                PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
+            )
 
-        clinical_spans = self.stage6_clinical_phi_model(
-            normalized.normalized_text,
-            context,
-        )
-        stage_results.append(PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans))
+            clinical_spans = self.stage6_clinical_phi_model(
+                normalized.normalized_text,
+                context,
+            )
+            stage_results.append(
+                PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
+            )
 
         merged_spans = self.stage7_arbitration(
             (*deterministic_spans, *model_spans, *clinical_spans),
             context,
         )
+        if cascade_driven:
+            pii_result = _prediction_result_from_spans(
+                normalized.normalized_text,
+                merged_spans,
+                model_name="cascade",
+            )
         stage_results.append(PipelineStageResult(7, STAGE_NAMES[6], spans=merged_spans))
 
         policy_spans = self.stage8_policy_actions(merged_spans, context)
@@ -481,7 +545,16 @@ class Pipeline:
     ) -> tuple[OpenMedSpan, ...]:
         if self.arbitration is not None:
             return tuple(self.arbitration(spans, context))
-        return tuple(sorted(spans, key=lambda span: (span.start, span.end, span.detector or "")))
+        from .arbitration import arbitrate
+
+        return arbitrate(
+            spans,
+            mode=self.arbitration_mode,
+            strict_no_leak=self.strict_no_leak,
+            calibrator=self.score_calibrator,
+            label_floors=self.arbitration_label_floors,
+            high_recall_label_floors=self.high_recall_label_floors,
+        )
 
     def stage8_policy_actions(
         self,
@@ -786,6 +859,46 @@ def _redacted_char_count(entities: Sequence[Any]) -> int:
         current_start, current_end = start, end
     total += current_end - current_start
     return total
+
+
+def _cascade_stage_spans(cascade_result: Any, routes: set[str]) -> tuple[OpenMedSpan, ...]:
+    spans: list[OpenMedSpan] = []
+    for stage in getattr(cascade_result, "stage_results", ()):
+        if getattr(stage, "route", None) in routes:
+            spans.extend(getattr(stage, "spans", ()) or ())
+    return tuple(spans)
+
+
+def _prediction_result_from_spans(
+    text: str,
+    spans: Sequence[OpenMedSpan],
+    *,
+    model_name: str,
+) -> Any:
+    from datetime import datetime
+
+    from ..processing.outputs import EntityPrediction, PredictionResult
+
+    return PredictionResult(
+        text=text,
+        entities=[
+            EntityPrediction(
+                text=text[span.start:span.end],
+                label=span.entity_type or span.canonical_label,
+                start=span.start,
+                end=span.end,
+                confidence=float(span.score or 0.0),
+                metadata={
+                    **dict(span.metadata),
+                    "detector": span.detector,
+                    "canonical_label": span.canonical_label,
+                },
+            )
+            for span in spans
+        ],
+        model_name=model_name,
+        timestamp=datetime.now().isoformat(),
+    )
 
 
 __all__ = [
