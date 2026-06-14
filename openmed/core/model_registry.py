@@ -173,6 +173,7 @@ _CATEGORY_ENTITY_TYPES = {
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
+    "Procedures": ["PROCEDURE", "DEVICE", "APPROACH"],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -665,12 +666,35 @@ def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
             "Hematology",
             "Contains hematological terms",
         ),
+        "surgery|resection|biopsy|endoscopy|catheter|implant|procedure|laparoscopic|cholecystectomy": (
+            "Procedures",
+            "Contains procedure terms",
+        ),
     }
 
     for pattern, (category, reason) in keywords.items():
         if re.search(pattern, text_lower):
-            for key in CATEGORIES.get(category, [])[:3]:
-                suggestions.append((key, OPENMED_MODELS[key], reason))
+            model_keys = CATEGORIES.get(category, [])[:3]
+            if model_keys:
+                for key in model_keys:
+                    suggestions.append((key, OPENMED_MODELS[key], reason))
+            elif category in _CATEGORY_ENTITY_TYPES:
+                suggestions.append(
+                    (
+                        f"{_slug(category)}_domain",
+                        ModelInfo(
+                            model_id=f"OpenMed/{category}-domain-scaffold",
+                            display_name=f"{category} domain scaffold",
+                            category=category,
+                            specialization=f"{category.lower()} entity routing",
+                            description=f"{category} zero-shot domain scaffold",
+                            entity_types=list(_CATEGORY_ENTITY_TYPES[category]),
+                            size_category="Unknown",
+                            recommended_confidence=_recommended_confidence(category),
+                        ),
+                        reason,
+                    )
+                )
 
     if not suggestions:
         for key in SIZE_RECOMMENDATIONS.get("balanced", [])[:3]:

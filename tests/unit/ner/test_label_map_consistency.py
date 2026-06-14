@@ -11,8 +11,9 @@ from pathlib import Path
 
 import pytest
 
+from openmed.ner.labels import available_domains, get_default_labels
 from openmed.core.pii_entity_merger import normalize_label, is_more_specific
-from openmed.core.model_registry import OPENMED_MODELS
+from openmed.core.model_registry import OPENMED_MODELS, get_model_suggestions
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +61,18 @@ class TestDefaultsJsonInvariants:
 
     def test_generic_domain_has_labels(self, label_maps):
         assert len(label_maps["generic"]) >= 1
+
+    def test_procedures_domain_exists(self):
+        assert "procedures" in available_domains()
+        assert get_default_labels("procedures")
+
+    def test_procedure_text_routes_to_procedures_category(self):
+        suggestions = get_model_suggestions(
+            "Patient underwent laparoscopic cholecystectomy with an implant."
+        )
+
+        assert suggestions
+        assert suggestions[0][1].category == "Procedures"
 
 
 # ---------------------------------------------------------------------------

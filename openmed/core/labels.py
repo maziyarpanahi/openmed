@@ -84,6 +84,11 @@ JOB_TITLE: Final = "JOB_TITLE"
 JOB_DEPARTMENT: Final = "JOB_DEPARTMENT"
 OCCUPATION: Final = "OCCUPATION"
 
+#: Clinical concepts
+PROCEDURE: Final = "PROCEDURE"
+DEVICE: Final = "DEVICE"
+APPROACH: Final = "APPROACH"
+
 #: Tech
 IP_ADDRESS: Final = "IP_ADDRESS"
 MAC_ADDRESS: Final = "MAC_ADDRESS"
@@ -107,6 +112,7 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset({
     BITCOIN_ADDRESS, ETHEREUM_ADDRESS, LITECOIN_ADDRESS, MASKED_NUMBER,
     GENDER, EYE_COLOR, HEIGHT,
     ORGANIZATION, JOB_TITLE, JOB_DEPARTMENT, OCCUPATION,
+    PROCEDURE, DEVICE, APPROACH,
     IP_ADDRESS, MAC_ADDRESS, USER_AGENT, VIN, VEHICLE_REGISTRATION, IMEI,
     OTHER,
 })
@@ -238,6 +244,18 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "occupation": OCCUPATION,
     "profession": OCCUPATION,
 
+    # Clinical concepts
+    "procedure": PROCEDURE,
+    "surgery": PROCEDURE,
+    "surgicalprocedure": PROCEDURE,
+    "diagnosticprocedure": PROCEDURE,
+    "operation": PROCEDURE,
+    "intervention": PROCEDURE,
+    "device": DEVICE,
+    "implant": DEVICE,
+    "catheter": DEVICE,
+    "approach": APPROACH,
+
     # Tech
     "ipaddress": IP_ADDRESS,
     "ip": IP_ADDRESS,
@@ -325,6 +343,7 @@ __all__ = [
     "MASKED_NUMBER",
     "GENDER", "EYE_COLOR", "HEIGHT",
     "ORGANIZATION", "JOB_TITLE", "JOB_DEPARTMENT", "OCCUPATION",
+    "PROCEDURE", "DEVICE", "APPROACH",
     "IP_ADDRESS", "MAC_ADDRESS", "USER_AGENT", "VIN",
     "VEHICLE_REGISTRATION", "IMEI",
     "OTHER",

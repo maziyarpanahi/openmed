@@ -1,6 +1,7 @@
 {
   "biomedical": ["Disease", "Drug", "Gene", "Organism"],
   "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
+  "procedures": ["Procedure", "Surgery", "Diagnostic procedure", "Device", "Approach"],
   "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
   "finance": ["Company", "Ticker", "Instrument", "Event"],
   "legal": ["Case", "Court", "Judge", "Statute"],
