@@ -36,6 +36,7 @@ nav:
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - Contributing & Releases: contributing.md
+      - Model Release Queue: model-release-queue.md
       - HF Write Token Policy: security/hf-token-policy.md
 
 theme:
