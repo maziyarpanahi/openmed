@@ -15,6 +15,14 @@ on:
         description: 'Output formats (comma-separated: mlx,coreml)'
         required: false
         default: 'mlx'
+      publish_to_hub:
+        description: 'Run the protected HF publish credential gate'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   convert-mlx:
@@ -89,3 +97,32 @@ jobs:
         path: |
           OpenMedModel.mlpackage/
           *_id2label.json
+
+  publish-hf:
+    name: Publish to HF
+    runs-on: ubuntu-latest
+    needs:
+      - convert-mlx
+      - convert-coreml
+    if: >-
+      ${{
+        always() &&
+        github.event.inputs.publish_to_hub == 'true' &&
+        !cancelled() &&
+        (contains(github.event.inputs.formats, 'mlx') || contains(github.event.inputs.formats, 'coreml')) &&
+        (!contains(github.event.inputs.formats, 'mlx') || needs.convert-mlx.result == 'success') &&
+        (!contains(github.event.inputs.formats, 'coreml') || needs.convert-coreml.result == 'success')
+      }}
+    environment:
+      name: hf-publish
+      url: https://huggingface.co/OpenMed
+
+    steps:
+    - name: Require HF write token before publish
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        if [ -z "${HF_WRITE_TOKEN:-}" ]; then
+          echo "::error title=Missing HF_WRITE_TOKEN::Configure HF_WRITE_TOKEN in the hf-publish protected environment before enabling publish."
+          exit 1
+        fi
