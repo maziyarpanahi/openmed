@@ -162,7 +162,9 @@ jobs:
           --model "${{ github.event.inputs.model_id }}" \
           --artifact-dir publish-artifacts/mlx-output \
           --format "$FORMAT" \
-          --manifest models.jsonl
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}"
 
     - name: Download CoreML model
       if: contains(github.event.inputs.formats, 'coreml')
@@ -180,10 +182,14 @@ jobs:
           --model "${{ github.event.inputs.model_id }}" \
           --artifact-dir publish-artifacts/coreml-output \
           --format coreml \
-          --manifest models.jsonl
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}"
 
     - name: Upload publish manifest snapshot
       uses: actions/upload-artifact@v4
       with:
         name: published-model-manifest
-        path: models.jsonl
+        path: |
+          models.jsonl
+          gates/baseline.json
