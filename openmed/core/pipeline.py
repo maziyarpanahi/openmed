@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 import unicodedata
 
@@ -155,6 +155,8 @@ class Pipeline:
         arbitration: SpanHook | None = None,
         arbitration_mode: str | None = None,
         strict_no_leak: bool = False,
+        policy_profile: str | None = None,
+        threshold_matrix: Mapping[str, Any] | None = None,
         score_calibrator: Any = None,
         arbitration_label_floors: Mapping[str, float] | None = None,
         high_recall_label_floors: Mapping[str, float] | None = None,
@@ -179,6 +181,8 @@ class Pipeline:
         self.arbitration = arbitration
         self.arbitration_mode = arbitration_mode
         self.strict_no_leak = strict_no_leak
+        self.policy_profile = policy_profile
+        self.threshold_matrix = threshold_matrix
         self.score_calibrator = score_calibrator
         self.arbitration_label_floors = arbitration_label_floors
         self.high_recall_label_floors = high_recall_label_floors
@@ -253,6 +257,8 @@ class Pipeline:
                 normalized.normalized_text,
                 context=context,
                 strict_no_leak=self.strict_no_leak,
+                language=route.lang,
+                policy_profile=self.policy_profile,
             )
             deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
             model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
@@ -551,9 +557,12 @@ class Pipeline:
             spans,
             mode=self.arbitration_mode,
             strict_no_leak=self.strict_no_leak,
+            language=context.route.lang,
+            policy_profile=self.policy_profile,
             calibrator=self.score_calibrator,
             label_floors=self.arbitration_label_floors,
             high_recall_label_floors=self.high_recall_label_floors,
+            threshold_matrix=self.threshold_matrix,
         )
 
     def stage8_policy_actions(
@@ -563,7 +572,16 @@ class Pipeline:
     ) -> tuple[OpenMedSpan, ...]:
         if self.policy_actions is not None:
             return tuple(self.policy_actions(spans, context))
-        return tuple(spans)
+        return tuple(
+            _apply_threshold_action(
+                span,
+                language=context.route.lang,
+                policy_profile=self.policy_profile,
+                strict_no_leak=self.strict_no_leak,
+                matrix=self.threshold_matrix,
+            )
+            for span in spans
+        )
 
     def stage9_safety_sweep(
         self,
@@ -899,6 +917,36 @@ def _prediction_result_from_spans(
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def _apply_threshold_action(
+    span: OpenMedSpan,
+    *,
+    language: str,
+    policy_profile: str | None,
+    strict_no_leak: bool,
+    matrix: Mapping[str, Any] | None,
+) -> OpenMedSpan:
+    from .thresholds import lookup_threshold
+
+    profile = policy_profile or ("strict_no_leak" if strict_no_leak else "balanced")
+    threshold = lookup_threshold(
+        span.canonical_label,
+        language,
+        profile,
+        matrix=matrix,
+    )
+    action = str(threshold["action"])
+    if span.action == action:
+        return span
+
+    metadata = dict(span.metadata)
+    metadata["threshold_action"] = {
+        "policy_profile": threshold["policy_profile"],
+        "source": threshold["source"],
+        "schema_version": threshold["schema_version"],
+    }
+    return replace(span, action=action, metadata=metadata)
 
 
 __all__ = [
