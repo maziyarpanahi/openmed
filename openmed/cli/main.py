@@ -116,6 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_pii_command(subparsers)
     _add_tui_command(subparsers)
     _add_models_command(subparsers)
+    _add_release_command(subparsers)
     _add_config_command(subparsers)
     return parser
 
@@ -427,6 +428,12 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Registry key defined in openmed.core.model_registry.",
     )
     models_info.set_defaults(handler=_handle_models_info)
+
+
+def _add_release_command(subparsers: argparse._SubParsersAction) -> None:
+    from .release import add_release_command
+
+    add_release_command(subparsers)
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
