@@ -105,6 +105,8 @@ include = [
   "openmed/core/schemas/json/*.json",
   "gates/baseline.json",
   "models.jsonl",
+  "LICENSE",
+  "NOTICE",
   "README.md",
   "pyproject.toml"
 ]
