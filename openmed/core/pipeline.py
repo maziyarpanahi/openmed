@@ -215,6 +215,7 @@ class Pipeline:
         seed: Optional[int] = None,
         locale: Optional[str] = None,
         doc_id: str | None = None,
+        audit: bool = False,
     ) -> PipelineResult:
         from . import pii
 
@@ -386,8 +387,15 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            model_name=route.model_name,
+            confidence_threshold=self.confidence_threshold,
+            normalize_accents=self.normalize_accents,
+            use_smart_merging=self.use_smart_merging,
+            use_safety_sweep=self.use_safety_sweep,
             reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
             policy_name=self.policy.name if self.policy is not None else None,
+            policy=self.policy.name if self.policy is not None else "hipaa_safe_harbor",
+            audit=audit,
         )
         final_spans = (
             sweep_spans
@@ -664,8 +672,15 @@ class Pipeline:
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        model_name: str,
+        confidence_threshold: float,
+        normalize_accents: Optional[bool],
+        use_smart_merging: bool,
+        use_safety_sweep: bool,
         reversible_ids: bool = False,
         policy_name: Optional[str] = None,
+        policy: str = "hipaa_safe_harbor",
+        audit: bool = False,
     ) -> Any:
         from . import pii
 
@@ -680,8 +695,15 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+            normalize_accents=normalize_accents,
+            use_smart_merging=use_smart_merging,
+            use_safety_sweep=use_safety_sweep,
             reversible_ids=reversible_ids,
             policy_name=policy_name,
+            policy=policy,
+            audit=audit,
         )
 
     def _entities_to_spans(
