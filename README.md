@@ -377,6 +377,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [Getting Started](https://openmed.life/docs/) | [Analyze Text](https://openmed.life/docs/analyze-text) | [Model Registry](https://openmed.life/docs/model-registry) |
 | [PII Detection Guide](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
+| [Release Streams](docs/release/semver-and-channels.md) | [Dataset Access Plan](PLANS/V2/DATASET_ACCESS_PLAN.md) | [Risk Register](PLANS/V2/RISK_REGISTER_AND_NON_GOALS.md) |
 
 ---
 
@@ -408,7 +409,7 @@ OpenMed builds on excellent open-source work — particular thanks to **OpenAI**
 
 ## License
 
-Released under the [Apache-2.0 License](LICENSE).
+Released under the [Apache-2.0 License](LICENSE). Third-party asset notices are recorded in [NOTICE](NOTICE).
 
 ## Citation
 
