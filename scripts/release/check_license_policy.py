@@ -7,10 +7,14 @@ import argparse
 import importlib.metadata
 import re
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover - exercised by Python 3.10 CI
+    import tomli as tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PYPROJECT = ROOT / "pyproject.toml"
