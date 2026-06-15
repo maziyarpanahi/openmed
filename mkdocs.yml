@@ -27,6 +27,7 @@ nav:
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
+      - Eval Harness & Metrics: eval-harness.md
   - PII & De-identification:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md

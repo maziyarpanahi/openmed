@@ -1,0 +1,38 @@
+# Eval Harness & Metrics
+
+`run_benchmark` executes a model over a sequence of `BenchmarkFixture` objects and returns a
+`BenchmarkReport` whose `metrics` dict contains the standard OM-018 metric bundle.
+
+## Metric Bundle
+
+| Metric | Path | Gating? | Description |
+| --- | --- | --- | --- |
+| Latency p50 | `latency.p50_ms` | No | Median steady-state fixture latency in ms. |
+| Latency p95 | `latency.p95_ms` | No | 95th-percentile steady-state fixture latency in ms. |
+| Latency count | `latency.count` | No | Number of steady-state fixtures (excludes cold start). |
+| Cold-start latency | `latency.cold_start_ms` | No | Wall-clock latency of the first fixture call in ms. |
+| Peak RSS | `resources.peak_rss_bytes` | No | Peak resident set size in bytes during the run. |
+
+## Edge Metrics
+
+### cold_start_ms
+
+The harness records the wall-clock latency of the **first** fixture call separately. That call
+encloses model and tokenizer loading plus the first forward pass, so it is systematically higher
+than steady-state calls. The value is surfaced at:
+
+```
+report.metrics['latency']['cold_start_ms']
+```
+
+It is **excluded** from the steady-state `p50_ms`, `p95_ms`, and `count` values.
+
+!!! note "Reported, not gating"
+    `cold_start_ms` does not participate in any release gate. It is an observability metric
+    intended to track model-load overhead over time — not a pass/fail criterion.
+
+```python
+report = run_benchmark(fixtures, suite="my-suite", model_name="my-model", runner=runner)
+cold_ms = report.metrics["latency"]["cold_start_ms"]
+print(f"Cold-start latency: {cold_ms:.1f} ms")
+```
