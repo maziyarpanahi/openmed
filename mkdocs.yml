@@ -36,6 +36,7 @@ nav:
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
+      - FAQ: faq.md
       - Contributing & Releases: contributing.md
       - HF Write Token Policy: security/hf-token-policy.md
 
