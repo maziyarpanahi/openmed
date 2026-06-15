@@ -112,8 +112,7 @@ function renderSegments(segments) {
     }
     const label = escapeHtml(segment.labelTitle || segment.label || "PII");
     const group = escapeHtml(segment.group || "other");
-    const original = escapeHtml(segment.original || "");
-    return `<span class="redacted-entity" data-group="${group}" data-tooltip="${label}: ${original}">${escapeHtml(segment.text)}<span>${label}</span></span>`;
+    return `<span class="redacted-entity" data-group="${group}" data-tooltip="${label}">${escapeHtml(segment.text)}<span>${label}</span></span>`;
   }).join("");
 }
 
