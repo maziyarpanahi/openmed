@@ -117,6 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    _add_benchmark_command(subparsers)
     return parser
 
 
@@ -487,6 +488,54 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     profile_delete.set_defaults(handler=_handle_profile_delete)
 
 
+def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
+    benchmark_parser = subparsers.add_parser(
+        "benchmark", help="Run benchmark and adversarial evaluation suites."
+    )
+    benchmark_sub = benchmark_parser.add_subparsers(dest="benchmark_command")
+
+    pii_parser = benchmark_sub.add_parser(
+        "pii",
+        help="Run PII benchmark suites.",
+    )
+    pii_parser.add_argument(
+        "--attack",
+        choices=["reid"],
+        default=None,
+        help="Optional adversarial attack mode.",
+    )
+    pii_parser.add_argument(
+        "--suite",
+        choices=["golden"],
+        default="golden",
+        help="Benchmark suite to run.",
+    )
+    pii_parser.add_argument(
+        "--model",
+        default="privacy-filter",
+        help="Model identifier to record in the report.",
+    )
+    pii_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for the BenchmarkReport JSON.",
+    )
+    pii_parser.add_argument(
+        "--leaderboard-output",
+        type=Path,
+        default=None,
+        help="Optional path for a generated leaderboard table.",
+    )
+    pii_parser.add_argument(
+        "--leaderboard-format",
+        choices=["markdown", "json"],
+        default="markdown",
+        help="Generated leaderboard format.",
+    )
+    pii_parser.set_defaults(handler=_handle_benchmark_pii)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
     parser = build_parser()
@@ -751,6 +800,38 @@ def _handle_models_info(args: argparse.Namespace) -> int:
     if max_length is not None:
         payload["max_length"] = max_length
     sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
+    return 0
+
+
+def _handle_benchmark_pii(args: argparse.Namespace) -> int:
+    if args.attack != "reid":
+        sys.stderr.write("PII benchmark currently requires --attack reid.\n")
+        return 1
+
+    from openmed.eval.attacks.reid import (
+        render_reid_leaderboard,
+        run_reid_benchmark,
+    )
+
+    try:
+        report = run_reid_benchmark(
+            suite=args.suite,
+            model_name=args.model,
+            output_json=args.output,
+        )
+        if args.leaderboard_output is not None:
+            args.leaderboard_output.write_text(
+                render_reid_leaderboard(
+                    [report],
+                    output_format=args.leaderboard_format,
+                ),
+                encoding="utf-8",
+            )
+    except Exception as exc:
+        sys.stderr.write(f"PII benchmark failed: {exc}\n")
+        return 1
+
+    sys.stdout.write(report.to_json() + "\n")
     return 0
 
 

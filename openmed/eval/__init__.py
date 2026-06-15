@@ -22,6 +22,13 @@ from openmed.eval.metrics import (
     compute_surrogate_consistency,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.attacks.reid import (
+    ReidAttackResult,
+    generate_reid_leaderboard,
+    render_reid_leaderboard,
+    run_reid_attack,
+    run_reid_benchmark,
+)
 
 
 __all__ = [
@@ -30,6 +37,7 @@ __all__ = [
     "DEVICE_TIERS",
     "EvalSpan",
     "FixtureResult",
+    "ReidAttackResult",
     "compute_character_recall",
     "compute_clinical_utility_loss",
     "compute_date_shift_consistency",
@@ -42,6 +50,10 @@ __all__ = [
     "compute_relaxed_span_f1",
     "compute_resource_metrics",
     "compute_surrogate_consistency",
+    "generate_reid_leaderboard",
+    "render_reid_leaderboard",
+    "run_reid_attack",
     "run_benchmark",
+    "run_reid_benchmark",
     "run_suite",
 ]
