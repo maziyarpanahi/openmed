@@ -972,6 +972,12 @@ def _build_deidentification_result(
 ) -> DeidentificationResult:
     """Build a de-identification result from an existing PII result."""
     from .labels import normalize_label
+    from .quality_gates import resolve_overlapping_entities
+
+    resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
+    pii_result.entities = resolved_entities
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(resolved_entities)
 
     pii_entities = [
         PIIEntity(
