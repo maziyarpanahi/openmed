@@ -22,6 +22,7 @@ from openmed.eval.metrics import (
     compute_surrogate_consistency,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.tiers import TIERS
 
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "DEVICE_TIERS",
     "EvalSpan",
     "FixtureResult",
+    "TIERS",
     "compute_character_recall",
     "compute_clinical_utility_loss",
     "compute_date_shift_consistency",
