@@ -79,6 +79,8 @@ def default_model_runner(
     fixture: BenchmarkFixture,
     model_name: str,
     device: str,
+    *,
+    loader: Any | None = None,
 ) -> Iterable[Any]:
     """Run a fixture through the existing PII runtime."""
     from openmed.core.pii import extract_pii
@@ -87,6 +89,7 @@ def default_model_runner(
         fixture.text,
         model_name=model_name,
         lang=fixture.language,
+        loader=loader,
     )
     for entity in result.entities:
         metadata = dict(entity.metadata or {})
@@ -106,7 +109,7 @@ def run_benchmark(
     metadata: Mapping[str, Any] | None = None,
 ) -> BenchmarkReport:
     """Run *model_name* over fixtures and return a benchmark report."""
-    model_runner = runner or default_model_runner
+    model_runner = runner or _shared_default_model_runner()
     results: list[FixtureResult] = []
     peak_rss_start = _peak_rss_bytes()
 
@@ -192,6 +195,29 @@ def run_suite(
     if output_markdown is not None:
         report.write_markdown(output_markdown)
     return report
+
+
+def _shared_default_model_runner() -> ModelRunner:
+    shared_loader: Any | None = None
+
+    def run_fixture(
+        fixture: BenchmarkFixture,
+        model_name: str,
+        device: str,
+    ) -> Iterable[Any]:
+        nonlocal shared_loader
+        if shared_loader is None:
+            from openmed.core.models import ModelLoader
+
+            shared_loader = ModelLoader()
+        return default_model_runner(
+            fixture,
+            model_name,
+            device,
+            loader=shared_loader,
+        )
+
+    return run_fixture
 
 
 def _corpus_coordinates(

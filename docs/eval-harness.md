@@ -17,9 +17,10 @@
 
 ### cold_start_ms
 
-The harness records the wall-clock latency of the **first** fixture call separately. That call
-encloses model and tokenizer loading plus the first forward pass, so it is systematically higher
-than steady-state calls. The value is surfaced at:
+The harness records the wall-clock latency of the **first** fixture call separately. The default
+runner keeps a shared model loader for the duration of the benchmark run, so that first call encloses
+model and tokenizer loading plus the first forward pass. Later fixture calls reuse the warmed loader
+and feed the steady-state latency summary. The value is surfaced at:
 
 ```
 report.metrics['latency']['cold_start_ms']
