@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 import time
 
 from openmed.eval.harness import BenchmarkFixture, run_benchmark
@@ -58,3 +59,46 @@ def test_cold_start_ms_ge_first_steady_state_latency():
     latency = report.metrics["latency"]
     assert latency["cold_start_ms"] >= latency["p50_ms"]
     assert latency["count"] == 3
+
+
+def test_default_runner_reuses_loader_for_steady_state_samples(monkeypatch):
+    """The default path keeps model loading out of steady-state samples."""
+    created_loaders = []
+    seen_loaders = []
+
+    class FakeLoader:
+        pass
+
+    def fake_loader():
+        loader = FakeLoader()
+        created_loaders.append(loader)
+        return loader
+
+    def fake_extract_pii(text, *, loader, **kwargs):
+        seen_loaders.append(loader)
+        return SimpleNamespace(
+            entities=[
+                SimpleNamespace(
+                    text="John",
+                    label="PERSON",
+                    start=8,
+                    end=12,
+                    confidence=1.0,
+                    metadata={},
+                )
+            ]
+        )
+
+    monkeypatch.setattr("openmed.core.models.ModelLoader", fake_loader)
+    monkeypatch.setattr("openmed.core.pii.extract_pii", fake_extract_pii)
+
+    report = run_benchmark(
+        [_fixture("f1"), _fixture("f2"), _fixture("f3")],
+        suite="cold-start-test",
+        model_name="test-model",
+    )
+
+    assert len(created_loaders) == 1
+    assert seen_loaders == [created_loaders[0]] * 3
+    assert report.metrics["latency"]["cold_start_ms"] is not None
+    assert report.metrics["latency"]["count"] == 2
