@@ -37,6 +37,14 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.release_gates import (
+    QUARANTINED,
+    RELEASABLE,
+    GateCheck,
+    GateReport,
+    ModelStewardConfig,
+    ReleaseGate,
+)
 
 
 __all__ = [
@@ -50,6 +58,12 @@ __all__ = [
     "DEVICE_TIERS",
     "EvalSpan",
     "FixtureResult",
+    "GateCheck",
+    "GateReport",
+    "ModelStewardConfig",
+    "QUARANTINED",
+    "RELEASABLE",
+    "ReleaseGate",
     "artifact_dir_for",
     "build_thresholds_payload",
     "coerce_calibration_thresholds",
