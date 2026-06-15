@@ -145,7 +145,8 @@ def run_benchmark(
     metrics = compute_metrics_bundle(
         gold_spans,
         predicted_spans,
-        latencies_ms=[result.latency_ms for result in results],
+        latencies_ms=[result.latency_ms for result in results[1:]],
+        cold_start_ms=(results[0].latency_ms if results else None),
         peak_rss_bytes=peak_rss,
         default_device=device,
         source_text=corpus_text,
