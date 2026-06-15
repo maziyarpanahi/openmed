@@ -28,9 +28,11 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Device Tiers & SLOs: tiers.md
   - PII & De-identification:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
+      - Compliance Posture: compliance.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - CoreML Packaging: coreml-export.md
