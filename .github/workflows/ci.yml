@@ -110,8 +110,36 @@ jobs:
           safety-report.json
       if: always()
 
+  secret-scan:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Verify gitleaks canary
+      run: |
+        mkdir -p "$RUNNER_TEMP/gitleaks-canary"
+        cat > "$RUNNER_TEMP/gitleaks-canary/creds.txt" <<'EOF'
+        HF_TOKEN=hf_FAKE000000000000000000000000000000000000
+        EOF
+        if docker run --rm \
+          -v "$RUNNER_TEMP/gitleaks-canary:/scan:ro" \
+          -v "$PWD/.gitleaks.toml:/config/.gitleaks.toml:ro" \
+          ghcr.io/gitleaks/gitleaks:v8.30.1 \
+          dir --config /config/.gitleaks.toml --redact --no-banner --verbose /scan; then
+          echo "::error title=Gitleaks canary was not detected::Expected fake token fixture to fail the scan"
+          exit 1
+        fi
+
+    - name: Scan repository for committed secrets
+      run: |
+        docker run --rm \
+          -v "$PWD:/repo:ro" \
+          ghcr.io/gitleaks/gitleaks:v8.30.1 \
+          dir --config /repo/.gitleaks.toml --redact --no-banner --verbose /repo
+
   build:
-    needs: [repo-policy, test, security]
+    needs: [repo-policy, test, security, secret-scan]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

@@ -28,6 +28,14 @@ repos:
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: Detect hardcoded secrets
+        entry: ghcr.io/gitleaks/gitleaks:v8.30.1 git --pre-commit --redact --staged --verbose --config .gitleaks.toml
+        language: docker_image
+        pass_filenames: false
+
   - repo: https://github.com/pycqa/pydocstyle
     rev: 6.3.0
     hooks:

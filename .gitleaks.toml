@@ -1,0 +1,35 @@
+title = "OpenMed secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "local-secret-file"
+description = "Local credential files must not be committed"
+path = '''(^|/)(creds\.txt|\.pypirc|secrets\.json)$'''
+regex = '''(?m).+'''
+tags = ["credentials", "local-secret-file"]
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Synthetic secret labels in the privacy filter example"
+condition = "AND"
+regexTarget = "line"
+paths = ['''examples/privacy_filter_book/app\.py$''']
+regexes = ['''\("secret", "(VIOLET-WINDSOR-1944|KRONEN-29-ALPHA|silver-maple-lune-88)"\)''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Swift demo note describes tokenization, not a token value"
+condition = "AND"
+regexTarget = "line"
+paths = ['''swift/OpenMedDemo/OpenMedDemo/ContentView\.swift$''']
+regexes = ['''o200k_base tokenization, BIOES/Viterbi decoding''']
+
+[[allowlists]]
+targetRules = ["generic-api-key"]
+description = "Cloudflare Web Analytics beacon token is public site metadata"
+condition = "AND"
+regexTarget = "line"
+paths = ['''docs/website/index\.html$''']
+regexes = ['''data-cf-beacon=.*"token": "[0-9a-f]{32}"''']
