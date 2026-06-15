@@ -72,7 +72,9 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):
         raise ValueError("benchmark fixture JSON must be a list or contain a fixtures list")
-    return [BenchmarkFixture.from_mapping(row) for row in rows]
+    fixtures = [BenchmarkFixture.from_mapping(row) for row in rows]
+    _validate_unique_fixture_ids(fixtures)
+    return fixtures
 
 
 def default_model_runner(
@@ -109,6 +111,7 @@ def run_benchmark(
     metadata: Mapping[str, Any] | None = None,
 ) -> BenchmarkReport:
     """Run *model_name* over fixtures and return a benchmark report."""
+    _validate_unique_fixture_ids(fixtures)
     model_runner = runner or _shared_default_model_runner()
     results: list[FixtureResult] = []
     peak_rss_start = _peak_rss_bytes()
@@ -244,6 +247,18 @@ def _shift_spans(spans: Iterable[EvalSpan], offset: int) -> list[EvalSpan]:
         replace(span, start=span.start + offset, end=span.end + offset)
         for span in spans
     ]
+
+
+def _validate_unique_fixture_ids(fixtures: Sequence[BenchmarkFixture]) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for fixture in fixtures:
+        if fixture.fixture_id in seen and fixture.fixture_id not in duplicates:
+            duplicates.append(fixture.fixture_id)
+        seen.add(fixture.fixture_id)
+    if duplicates:
+        quoted = ", ".join(repr(value) for value in duplicates)
+        raise ValueError(f"duplicate benchmark fixture id(s): {quoted}")
 
 
 def _peak_rss_bytes() -> int | None:
