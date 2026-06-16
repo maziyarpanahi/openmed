@@ -89,17 +89,20 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install bandit[toml] safety
+        pip install -e ".[dev]"
+        pip install bandit[toml] pip-audit
 
-    - name: Run security check with bandit
+    - name: Run Bandit report
       run: |
-        bandit -r openmed -f json -o bandit-report.json
-      continue-on-error: true
+        bandit -r openmed -f json -o bandit-report.json --exit-zero
 
-    - name: Run safety check
+    - name: Enforce high-severity Bandit findings
       run: |
-        safety check --json --output safety-report.json
-      continue-on-error: true
+        bandit -r openmed --severity-level high --confidence-level medium
+
+    - name: Run pip-audit dependency gate
+      run: |
+        python scripts/security/pip_audit_gate.py
 
     - name: Upload security reports
       uses: actions/upload-artifact@v4
@@ -107,7 +110,7 @@ jobs:
         name: security-reports
         path: |
           bandit-report.json
-          safety-report.json
+          pip-audit-report.json
       if: always()
 
   build:
