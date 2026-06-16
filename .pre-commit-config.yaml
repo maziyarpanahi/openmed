@@ -33,3 +33,9 @@ repos:
     hooks:
       - id: pydocstyle
         args: [--convention=google]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.27.2
+    hooks:
+      - id: gitleaks
+        args: [--config=.gitleaks.toml]
