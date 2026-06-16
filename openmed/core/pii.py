@@ -44,7 +44,7 @@ import unicodedata
 from pathlib import Path
 
 from .config import OpenMedConfig
-from ..processing.outputs import EntityPrediction
+from ..processing.outputs import EntityPrediction, PredictionResult
 
 if TYPE_CHECKING:
     from .audit import AuditReport
@@ -567,7 +567,7 @@ def extract_pii(
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
-) -> AnalysisResult:
+) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
     Uses token classification models to detect personally identifiable information
@@ -597,7 +597,7 @@ def extract_pii(
         loader: Optional shared model loader to reuse warmed pipelines.
 
     Returns:
-        AnalysisResult with detected PII entities
+        PredictionResult with detected PII entities
 
     Example:
         >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
