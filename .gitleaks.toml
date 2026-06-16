@@ -1,0 +1,10 @@
+title = "OpenMed Secret Scanning Config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Paths exempted from secret scanning"
+paths = [
+  '''tests/fixtures/fake_secret\.txt''',
+]
