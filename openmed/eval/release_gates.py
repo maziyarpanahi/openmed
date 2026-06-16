@@ -7,20 +7,24 @@ it, and emits a signed, reproducible gate report.
 
 from __future__ import annotations
 
+import argparse
 import copy
 import hashlib
 import hmac
 import json
 import math
 import os
-import warnings
+import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core import baseline as baseline_store
+from openmed.core import model_registry
 from openmed.core import policy as policy_module
 from openmed.core import quality_gates
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.labels import normalize_label
 from openmed.core.thresholds import (
@@ -29,6 +33,12 @@ from openmed.core.thresholds import (
     validate_threshold_matrix,
 )
 from openmed.eval.metrics import normalize_eval_spans
+from openmed.eval.quant_delta import (
+    INT4_RECALL_DELTA_LIMIT,
+    INT8_RECALL_DELTA_LIMIT,
+    QuantRecallDeltaResult,
+    evaluate_quant_recall_delta,
+)
 from openmed.eval.report import BenchmarkReport
 
 
@@ -40,8 +50,8 @@ G1A_V20_RECALL_FLOOR = 0.995
 G1B_RECALL_FLOOR = 0.995
 G2_V16_RECALL_FLOOR = 0.980
 G2_V20_RECALL_FLOOR = 0.990
-G4_INT8_DELTA_LIMIT = 0.005
-G4_INT4_DELTA_LIMIT = 0.010
+G4_INT8_DELTA_LIMIT = INT8_RECALL_DELTA_LIMIT
+G4_INT4_DELTA_LIMIT = INT4_RECALL_DELTA_LIMIT
 G7_RECALL_DROP_LIMIT = 0.002
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
 
@@ -122,6 +132,10 @@ _TIER_BUDGETS = {
     "large": {"ram_mb": 4096.0, "p50_ms": 250.0, "p95_ms": 800.0},
     "accurate": {"ram_mb": 8192.0, "p50_ms": 400.0, "p95_ms": 1200.0},
 }
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_MANIFEST_PATH = _REPO_ROOT / "models.jsonl"
+_DEFAULT_README_PATH = _REPO_ROOT / "README.md"
 
 
 @dataclass(frozen=True)
@@ -464,7 +478,16 @@ class ReleaseGate:
         per_label_precision = _per_label_precision(metrics, metadata)
         critical_leakage_count = _critical_leakage_count(metrics, metadata)
         residual_leakage_rate = _residual_leakage_rate(metrics, metadata)
-        quant_delta = _quant_recall_delta(metrics, metadata, identity["format"])
+        quant_delta_result = evaluate_quant_recall_delta(
+            format_name=identity["format"],
+            candidate_recall=per_label_recall,
+            parent_recall=_quant_parent_recall(metrics, metadata),
+            precomputed_delta=_precomputed_quant_recall_delta(
+                metrics,
+                metadata,
+                identity["format"],
+            ),
+        )
         p50_ms, p95_ms = _latency(metrics, metadata)
         ram_mb = _ram_mb(metrics, metadata)
         baseline_entry = self._resolve_baseline(identity, baseline)
@@ -485,7 +508,7 @@ class ReleaseGate:
         checks.append(self._g1b_check(per_label_recall, recall_denominators))
         checks.append(self._g2_check(per_label_recall, recall_denominators))
         checks.append(_g3_check(critical_leakage_count))
-        checks.append(_g4_check(identity["format"], quant_delta))
+        checks.append(_g4_check(quant_delta_result))
         checks.append(_g5_check(identity["tier"], p50_ms, p95_ms, ram_mb))
         checks.append(_g6_check(p50_ms, p95_ms))
         checks.append(
@@ -518,7 +541,7 @@ class ReleaseGate:
             per_label_precision=per_label_precision,
             critical_leakage_count=critical_leakage_count,
             residual_leakage_rate=residual_leakage_rate,
-            quant_recall_delta=quant_delta,
+            quant_recall_delta=quant_delta_result.max_delta,
             p50_ms=p50_ms,
             p95_ms=p95_ms,
             ram_mb=ram_mb,
@@ -655,37 +678,398 @@ def _manifest_coherence_check(
             details={"missing": missing},
         )
 
+    mismatches: dict[str, Any] = {}
     manifest = _mapping(metadata.get("manifest"))
-    mismatches: dict[str, dict[str, Any]] = {}
     if manifest:
-        manifest_fields = {
-            "repo_id": manifest.get("repo_id"),
-            "family": manifest.get("family"),
-            "tier": manifest.get("tier"),
-            "param_count": manifest.get("param_count"),
-            "format": manifest.get("format") or manifest.get("model_format"),
-        }
-        for key, manifest_value in manifest_fields.items():
-            if manifest_value is None:
-                continue
-            candidate_value = identity.get(key)
-            if key == "param_count":
-                manifest_value = _optional_int(manifest_value)
-            if str(manifest_value) != str(candidate_value):
-                mismatches[key] = {
-                    "manifest": manifest_value,
-                    "candidate": candidate_value,
+        mismatches.update(
+            _manifest_row_mismatches(
+                manifest,
+                identity,
+                source="candidate_manifest",
+            )
+        )
+
+    manifest_path = _manifest_path(metadata)
+    manifest_rows: list[dict[str, Any]] = []
+    manifest_row: Mapping[str, Any] | None = None
+    if manifest_path is not None:
+        try:
+            manifest_rows = _load_manifest_rows(manifest_path)
+        except (OSError, ValueError) as exc:
+            mismatches["manifest_file"] = {
+                "path": str(manifest_path),
+                "error": str(exc),
+            }
+        else:
+            manifest_row = _find_manifest_row(manifest_rows, str(identity["repo_id"]))
+            if manifest_row is not None:
+                mismatches.update(
+                    _manifest_row_mismatches(
+                        manifest_row,
+                        identity,
+                        source="models_jsonl",
+                    )
+                )
+            elif _requires_manifest_row(metadata, manifest):
+                mismatches["manifest_row"] = {
+                    "repo_id": identity["repo_id"],
+                    "path": str(manifest_path),
+                    "error": "candidate repo_id is absent from manifest",
                 }
+
+    if manifest_rows:
+        mismatches.update(_manifest_surface_mismatches(manifest_rows, metadata, manifest_path))
+
+    card = _model_card_metadata(metadata)
+    if card and manifest_row is not None:
+        card_mismatches = _model_card_mismatches(card, manifest_row)
+        if card_mismatches:
+            mismatches["model_card"] = card_mismatches
 
     if mismatches:
         return GateCheck(
             "manifest_coherence",
             False,
-            reason="candidate metadata does not match manifest",
+            reason="candidate metadata or repository surfaces drift from manifest",
             details={"mismatches": mismatches},
         )
 
-    return GateCheck("manifest_coherence", True)
+    return GateCheck(
+        "manifest_coherence",
+        True,
+        details={
+            "manifest_path": str(manifest_path) if manifest_path is not None else None,
+            "manifest_rows": len(manifest_rows),
+            "candidate_manifest_row": manifest_row is not None,
+        },
+    )
+
+
+def _manifest_row_mismatches(
+    row: Mapping[str, Any],
+    identity: Mapping[str, Any],
+    *,
+    source: str,
+) -> dict[str, Any]:
+    mismatches: dict[str, Any] = {}
+    manifest_fields = {
+        "repo_id": row.get("repo_id"),
+        "family": row.get("family"),
+        "tier": row.get("tier"),
+        "param_count": row.get("param_count"),
+    }
+    for key, manifest_value in manifest_fields.items():
+        if manifest_value is None:
+            continue
+        candidate_value = identity.get(key)
+        if key == "param_count":
+            manifest_value = _optional_int(manifest_value)
+        if str(manifest_value) != str(candidate_value):
+            mismatches[f"{source}.{key}"] = {
+                "manifest": manifest_value,
+                "candidate": candidate_value,
+            }
+
+    candidate_format = str(identity.get("format") or "")
+    manifest_format = row.get("format") or row.get("model_format")
+    manifest_formats = row.get("formats")
+    if isinstance(manifest_formats, Sequence) and not isinstance(
+        manifest_formats,
+        (str, bytes),
+    ):
+        formats = {str(item) for item in manifest_formats}
+        if candidate_format not in formats:
+            mismatches[f"{source}.format"] = {
+                "manifest": sorted(formats),
+                "candidate": candidate_format,
+            }
+    elif manifest_format is not None and str(manifest_format) != candidate_format:
+        mismatches[f"{source}.format"] = {
+            "manifest": manifest_format,
+            "candidate": candidate_format,
+        }
+    return mismatches
+
+
+def _manifest_surface_mismatches(
+    rows: Sequence[Mapping[str, Any]],
+    metadata: Mapping[str, Any],
+    manifest_path: Path | None,
+) -> dict[str, Any]:
+    mismatches: dict[str, Any] = {}
+    default_manifest = _is_default_path(manifest_path, _DEFAULT_MANIFEST_PATH)
+
+    readme_path = _optional_path(metadata.get("readme_path"))
+    if readme_path is None and default_manifest:
+        readme_path = _DEFAULT_README_PATH
+    if readme_path is not None:
+        readme_mismatches = _readme_manifest_mismatches(rows, readme_path)
+        if readme_mismatches:
+            mismatches["readme"] = readme_mismatches
+
+    registry_ids = _string_set(metadata.get("registry_model_ids"))
+    if registry_ids:
+        missing = sorted(_manifest_repo_ids(rows) - registry_ids)
+        if missing:
+            mismatches["registry"] = {"missing_repo_ids": missing}
+    elif default_manifest:
+        registry_repo_ids = {
+            info.model_id for info in model_registry.OPENMED_MODELS.values()
+        }
+        missing = sorted(_manifest_repo_ids(rows) - registry_repo_ids)
+        if missing:
+            mismatches["registry"] = {"missing_repo_ids": missing}
+
+    supported_languages = _string_set(metadata.get("supported_languages"))
+    if not supported_languages and default_manifest:
+        supported_languages = set(SUPPORTED_LANGUAGES)
+    if supported_languages:
+        manifest_languages = _manifest_pii_languages(rows)
+        if manifest_languages != supported_languages:
+            mismatches["pii_languages"] = {
+                "manifest": sorted(manifest_languages),
+                "supported": sorted(supported_languages),
+            }
+
+    return mismatches
+
+
+def _readme_manifest_mismatches(
+    rows: Sequence[Mapping[str, Any]],
+    readme_path: Path,
+) -> dict[str, Any]:
+    if not readme_path.exists():
+        return {"path": str(readme_path), "error": "README evidence is missing"}
+
+    text = readme_path.read_text(encoding="utf-8")
+    declared = _readme_declared_counts(text)
+    mismatches: dict[str, Any] = {}
+    model_count = len(rows)
+    pii_count = len([row for row in rows if _is_pii_manifest_row(row)])
+    pii_languages = _manifest_pii_languages(rows)
+
+    if declared.get("models") is not None and model_count < declared["models"]:
+        mismatches["models"] = {
+            "readme_floor": declared["models"],
+            "manifest": model_count,
+        }
+    if declared.get("pii_checkpoints") is not None and pii_count < declared["pii_checkpoints"]:
+        mismatches["pii_checkpoints"] = {
+            "readme_floor": declared["pii_checkpoints"],
+            "manifest": pii_count,
+        }
+    if declared.get("languages") is not None and len(pii_languages) != declared["languages"]:
+        mismatches["languages"] = {
+            "readme": declared["languages"],
+            "manifest": len(pii_languages),
+        }
+    return mismatches
+
+
+def _readme_declared_counts(text: str) -> dict[str, int]:
+    import re
+
+    counts: dict[str, int] = {}
+    model_matches = [
+        _parse_count(match.group(1))
+        for match in re.finditer(
+            r"(\d[\d,]*)\+?\s+(?:specialized\s+medical\s+)?models\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+    ]
+    if model_matches:
+        counts["models"] = max(model_matches)
+
+    language_match = re.search(
+        r"(\d[\d,]*)\+?\s+languages?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if language_match:
+        counts["languages"] = _parse_count(language_match.group(1))
+
+    pii_match = re.search(
+        r"(\d[\d,]*)\+?\s+PII\s+checkpoints?\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if pii_match:
+        counts["pii_checkpoints"] = _parse_count(pii_match.group(1))
+    return counts
+
+
+def _model_card_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    card = _mapping(metadata.get("model_card"))
+    if card:
+        return card
+    card_path = _optional_path(metadata.get("model_card_path"))
+    if card_path is None or not card_path.exists():
+        return {}
+    return _parse_model_card_front_matter(card_path.read_text(encoding="utf-8"))
+
+
+def _model_card_mismatches(
+    card: Mapping[str, Any],
+    row: Mapping[str, Any],
+) -> dict[str, Any]:
+    mismatches: dict[str, Any] = {}
+    card_license = card.get("license")
+    if card_license and row.get("license") and str(card_license) != str(row["license"]):
+        mismatches["license"] = {
+            "card": card_license,
+            "manifest": row["license"],
+        }
+
+    card_task = card.get("pipeline_tag") or card.get("task")
+    if card_task and row.get("task") and str(card_task) != str(row["task"]):
+        mismatches["task"] = {"card": card_task, "manifest": row["task"]}
+
+    card_languages = _string_set(card.get("language") or card.get("languages"))
+    manifest_languages = _string_set(row.get("languages"))
+    if card_languages and manifest_languages and card_languages != manifest_languages:
+        mismatches["languages"] = {
+            "card": sorted(card_languages),
+            "manifest": sorted(manifest_languages),
+        }
+    return mismatches
+
+
+def _parse_model_card_front_matter(text: str) -> dict[str, Any]:
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return {}
+
+    data: dict[str, Any] = {}
+    current_key: str | None = None
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "---":
+            break
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("- ") and current_key:
+            data.setdefault(current_key, []).append(stripped[2:].strip().strip("'\""))
+            continue
+        if ":" not in stripped:
+            current_key = None
+            continue
+        key, value = stripped.split(":", 1)
+        current_key = key.strip()
+        value = value.strip()
+        if not value:
+            data[current_key] = []
+        elif value.startswith("[") and value.endswith("]"):
+            data[current_key] = [
+                item.strip().strip("'\"")
+                for item in value[1:-1].split(",")
+                if item.strip()
+            ]
+        else:
+            data[current_key] = value.strip("'\"")
+    return data
+
+
+def _manifest_path(metadata: Mapping[str, Any]) -> Path | None:
+    explicit = _optional_path(
+        _first_value(metadata.get("manifest_path"), metadata.get("models_manifest_path"))
+    )
+    if explicit is not None:
+        return explicit
+    if _DEFAULT_MANIFEST_PATH.exists():
+        return _DEFAULT_MANIFEST_PATH
+    return None
+
+
+def _load_manifest_rows(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                row = json.loads(stripped)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"invalid JSON on line {line_number}: {exc}") from exc
+            if isinstance(row, Mapping):
+                rows.append(dict(row))
+    return rows
+
+
+def _find_manifest_row(
+    rows: Sequence[Mapping[str, Any]],
+    repo_id: str,
+) -> Mapping[str, Any] | None:
+    for row in rows:
+        if row.get("repo_id") == repo_id:
+            return row
+    return None
+
+
+def _requires_manifest_row(
+    metadata: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+) -> bool:
+    return bool(
+        manifest
+        or metadata.get("require_manifest_row")
+        or metadata.get("manifest_path")
+        or metadata.get("models_manifest_path")
+    )
+
+
+def _manifest_repo_ids(rows: Sequence[Mapping[str, Any]]) -> set[str]:
+    return {
+        str(row["repo_id"])
+        for row in rows
+        if isinstance(row.get("repo_id"), str) and row.get("repo_id")
+    }
+
+
+def _manifest_pii_languages(rows: Sequence[Mapping[str, Any]]) -> set[str]:
+    languages: set[str] = set()
+    for row in rows:
+        if not _is_pii_manifest_row(row):
+            continue
+        languages.update(_string_set(row.get("languages")))
+    return languages
+
+
+def _is_pii_manifest_row(row: Mapping[str, Any]) -> bool:
+    repo_id = str(row.get("repo_id") or "").lower()
+    family = str(row.get("family") or "").lower()
+    return family == "pii" or "pii" in repo_id or "privacy" in repo_id
+
+
+def _string_set(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {value}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return {str(item) for item in value if str(item)}
+    return set()
+
+
+def _optional_path(value: Any) -> Path | None:
+    if value is None:
+        return None
+    text = str(value)
+    if not text:
+        return None
+    return Path(text)
+
+
+def _is_default_path(path: Path | None, default: Path) -> bool:
+    if path is None:
+        return False
+    try:
+        return path.resolve() == default.resolve()
+    except OSError:
+        return False
+
+
+def _parse_count(value: str) -> int:
+    return int(value.replace(",", ""))
 
 
 def _calibration_check(metadata: Mapping[str, Any], profile: Any | None) -> GateCheck:
@@ -761,29 +1145,30 @@ def _g3_check(critical_leakage_count: int) -> GateCheck:
     )
 
 
-def _g4_check(format_name: str, quant_delta: float | None) -> GateCheck:
-    normalized = _normalise_dimension(format_name)
-    if "int8" in normalized or "8bit" in normalized or "8-bit" in normalized:
-        limit = G4_INT8_DELTA_LIMIT
-    elif "int4" in normalized or "4bit" in normalized or "4-bit" in normalized:
-        limit = G4_INT4_DELTA_LIMIT
-    else:
-        return GateCheck("G4", True, reason="not applicable")
+def _g4_check(result: QuantRecallDeltaResult) -> GateCheck:
+    if not result.quantized:
+        return GateCheck(
+            "G4",
+            True,
+            reason="not applicable",
+            details=result.to_dict(),
+        )
 
-    if quant_delta is None:
+    if result.source == "missing_evidence":
         return GateCheck(
             "G4",
             False,
             reason="quantized artifacts require recall delta evidence",
-            blocking_format=format_name,
+            details=result.to_dict(),
+            blocking_format=result.format,
         )
-    delta = _normalise_delta(quant_delta)
+
     return GateCheck(
         "G4",
-        delta < limit,
-        reason="ok" if delta < limit else "quantized recall delta exceeds limit",
-        details={"delta": delta, "limit": limit},
-        blocking_format=None if delta < limit else format_name,
+        result.passed,
+        reason="ok" if result.passed else "quantized recall delta exceeds limit",
+        details=result.to_dict(),
+        blocking_format=result.blocking_format,
     )
 
 
@@ -930,33 +1315,14 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
             problems.append({"fixture_index": index, "error": str(exc)})
             continue
 
-        checked += len(entities)
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            quality_gates.validate_entity_spans(entities, text)
-        invalid_entities = [
-            entity
-            for entity in entities
-            if isinstance(entity.metadata, Mapping)
-            and entity.metadata.get("span_valid") is False
-        ]
-        if caught or invalid_entities:
+        scored = quality_gates.validate_entity_spans_strict(entities, text)
+        checked += scored.total_spans
+        resolved_overlaps += scored.overlaps_resolved
+        if not scored.passed:
             problems.append(
                 {
                     "fixture_index": index,
-                    "span_warnings": [str(item.message) for item in caught],
-                    "invalid_spans": len(invalid_entities),
-                }
-            )
-
-        resolved = quality_gates.resolve_overlapping_entities(entities)
-        resolved_overlaps += max(len(entities) - len(resolved), 0)
-        residual_overlaps = quality_gates.detect_overlapping_entities(resolved)
-        if residual_overlaps:
-            problems.append(
-                {
-                    "fixture_index": index,
-                    "residual_overlaps": len(residual_overlaps),
+                    "span_validation": scored.to_dict(),
                 }
             )
 
@@ -1105,11 +1471,11 @@ def _residual_leakage_rate(
     return 1.0 if parsed is None else parsed
 
 
-def _quant_recall_delta(
+def _precomputed_quant_recall_delta(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
     format_name: str,
-) -> float | None:
+) -> Any:
     raw = _first_value(
         metadata.get("quant_recall_delta"),
         metrics.get("quant_recall_delta"),
@@ -1119,9 +1485,25 @@ def _quant_recall_delta(
         format_key = _normalise_dimension(format_name)
         for key, value in raw.items():
             if _normalise_dimension(str(key)) == format_key:
-                return _optional_float(value)
-        return None
-    return _optional_float(raw)
+                return value
+    return raw
+
+
+def _quant_parent_recall(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    parent = _first_mapping(
+        metadata.get("fp_parent_per_label_recall"),
+        metadata.get("parent_per_label_recall"),
+        metadata.get("fp32_per_label_recall"),
+        metrics.get("fp_parent_per_label_recall"),
+        metrics.get("parent_per_label_recall"),
+        metrics.get("fp32_per_label_recall"),
+        _nested(metrics, "quantization", "fp_parent_per_label_recall"),
+        _nested(metrics, "quantization", "parent_per_label_recall"),
+    )
+    return parent or None
 
 
 def _latency(
@@ -1236,13 +1618,6 @@ def _is_v2_or_later(milestone: str) -> bool:
     return major >= 2
 
 
-def _normalise_delta(value: float) -> float:
-    delta = abs(float(value))
-    if delta > 0.05:
-        return delta / 100.0
-    return delta
-
-
 def _normalise_tier(tier: str) -> str:
     return _TIER_ALIASES.get(_normalise_dimension(tier), _normalise_dimension(tier))
 
@@ -1348,6 +1723,257 @@ def _key_bytes(key: bytes | str) -> bytes:
     raise TypeError("signing key must be bytes or str")
 
 
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Run the OpenMed release gate harness against a candidate "
+            "benchmark report and fail closed on any gate failure."
+        )
+    )
+    parser.add_argument(
+        "--candidate",
+        required=True,
+        help="Path to a candidate BenchmarkReport JSON payload.",
+    )
+    parser.add_argument(
+        "--baseline",
+        help="Optional baseline JSON payload. Defaults to the baseline store.",
+    )
+    parser.add_argument(
+        "--baseline-store",
+        default=str(baseline_store.BASELINE_PATH),
+        help="Path to the last-green baseline store.",
+    )
+    parser.add_argument(
+        "--output",
+        default="release-gate-report.json",
+        help="Path to write the signed gate report JSON.",
+    )
+    parser.add_argument(
+        "--milestone",
+        default="v1.6",
+        help="Milestone version used for release thresholds.",
+    )
+    parser.add_argument(
+        "--policy",
+        default="hipaa_safe_harbor",
+        help="Policy profile used when the candidate report omits one.",
+    )
+    parser.add_argument(
+        "--thresholds-matrix",
+        help="Optional thresholds matrix JSON path.",
+    )
+    parser.add_argument(
+        "--signing-key",
+        help="Signing key. Defaults to OPENMED_RELEASE_GATE_KEY or local key.",
+    )
+    parser.add_argument(
+        "--key-id",
+        default="release-gate",
+        help="Signing key identifier recorded in the gate report.",
+    )
+    parser.add_argument(
+        "--issue-on-failure",
+        action="store_true",
+        help="Open or update a tracking issue when the candidate is quarantined.",
+    )
+    parser.add_argument(
+        "--repo",
+        default=os.environ.get("GITHUB_REPOSITORY", "maziyarpanahi/openmed"),
+        help="Repository used for failure tracking issues.",
+    )
+    parser.add_argument(
+        "--tracking-issue-title",
+        help="Override the failure tracking issue title.",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    try:
+        candidate = _read_json_file(Path(args.candidate))
+        baseline = _read_json_file(Path(args.baseline)) if args.baseline else None
+        gate = ReleaseGate(
+            milestone=args.milestone,
+            policy=args.policy,
+            baseline_path=args.baseline_store,
+            thresholds_matrix_path=args.thresholds_matrix,
+            signing_key=args.signing_key,
+            key_id=args.key_id,
+        )
+        report = gate.evaluate(candidate, baseline)
+    except Exception as exc:
+        message = f"release gate evaluation failed before a report was produced: {exc}"
+        print(message, file=sys.stderr)
+        if args.issue_on_failure:
+            _open_or_update_tracking_issue_for_error(
+                repo=args.repo,
+                title=args.tracking_issue_title or "Release gate evaluation failed",
+                message=message,
+            )
+        return 2
+
+    output_path = Path(args.output)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(report.to_json() + "\n", encoding="utf-8")
+    print(report.to_json())
+
+    if report.decision != RELEASABLE:
+        if args.issue_on_failure:
+            _open_or_update_tracking_issue(
+                report,
+                repo=args.repo,
+                title=args.tracking_issue_title,
+            )
+        return 1
+    return 0
+
+
+def _read_json_file(path: Path) -> dict[str, Any]:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"{path} must contain a JSON object")
+    return dict(payload)
+
+
+def _open_or_update_tracking_issue(
+    report: GateReport,
+    *,
+    repo: str,
+    title: str | None = None,
+) -> int | None:
+    issue_title = title or f"Release gate failure for {report.repo_id}"
+    failing = [check for check in report.gate_results if not check.passed]
+    body = _tracking_issue_body(report, failing)
+    return _open_or_update_issue(repo=repo, title=issue_title, body=body)
+
+
+def _open_or_update_tracking_issue_for_error(
+    *,
+    repo: str,
+    title: str,
+    message: str,
+) -> int | None:
+    body = "\n".join(
+        [
+            "## Summary",
+            "",
+            "The release gate job failed before producing a gate report.",
+            "",
+            "## Failure",
+            "",
+            f"- `{message}`",
+            "",
+        ]
+    )
+    return _open_or_update_issue(repo=repo, title=title, body=body)
+
+
+def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
+    existing = _find_open_issue(repo=repo, title=title)
+    if existing is not None:
+        subprocess.run(
+            [
+                "gh",
+                "issue",
+                "comment",
+                str(existing),
+                "--repo",
+                repo,
+                "--body-file",
+                "-",
+            ],
+            input=body,
+            text=True,
+            check=True,
+        )
+        return existing
+
+    result = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "create",
+            "--repo",
+            repo,
+            "--title",
+            title,
+            "--body-file",
+            "-",
+        ],
+        input=body,
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    output = result.stdout.strip().rsplit("/", 1)[-1]
+    return _optional_int(output.lstrip("#"))
+
+
+def _find_open_issue(*, repo: str, title: str) -> int | None:
+    result = subprocess.run(
+        [
+            "gh",
+            "issue",
+            "list",
+            "--repo",
+            repo,
+            "--state",
+            "open",
+            "--search",
+            f"{title} in:title",
+            "--json",
+            "number,title",
+        ],
+        text=True,
+        check=True,
+        capture_output=True,
+    )
+    issues = json.loads(result.stdout or "[]")
+    for issue in issues:
+        if isinstance(issue, Mapping) and issue.get("title") == title:
+            return _optional_int(issue.get("number"))
+    return None
+
+
+def _tracking_issue_body(
+    report: GateReport,
+    failing: Sequence[GateCheck],
+) -> str:
+    lines = [
+        "## Summary",
+        "",
+        f"Release gates quarantined `{report.repo_id}`.",
+        "",
+        "## Gate report",
+        "",
+        f"- Decision: `{report.decision}`",
+        f"- Family: `{report.family}`",
+        f"- Tier: `{report.tier}`",
+        f"- Format: `{report.format}`",
+        f"- Eval set hash: `{report.eval_set_hash}`",
+        f"- Leakage fixture hash: `{report.leakage_fixture_hash}`",
+        f"- Repro hash: `{report.repro_hash}`",
+        "",
+        "## Failing gates",
+        "",
+    ]
+    for check in failing:
+        lines.append(f"- `{check.gate}`: {check.reason}")
+    lines.extend(["", "## Blocking formats", ""])
+    if report.blocked_formats:
+        for format_name in report.blocked_formats:
+            lines.append(f"- `{format_name}`")
+    else:
+        lines.append("- None")
+    lines.append("")
+    return "\n".join(lines)
+
+
 __all__ = [
     "G1A_V16_RECALL_FLOOR",
     "G1A_V20_RECALL_FLOOR",
@@ -1364,4 +1990,10 @@ __all__ = [
     "GateReport",
     "ModelStewardConfig",
     "ReleaseGate",
+    "build_arg_parser",
+    "main",
 ]
+
+
+if __name__ == "__main__":  # pragma: no cover
+    raise SystemExit(main())
