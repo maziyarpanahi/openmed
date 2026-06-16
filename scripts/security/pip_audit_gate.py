@@ -97,9 +97,10 @@ def load_ignores(path: Path, today: dt.date) -> set[str]:
     return ignored
 
 
-def run_pip_audit(ignored_ids: set[str], report_path: Path) -> dict[str, Any]:
+def run_pip_audit(report_path: Path) -> dict[str, Any]:
     """Run pip-audit and return its JSON payload."""
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.unlink(missing_ok=True)
     command = [
         sys.executable,
         "-m",
@@ -111,8 +112,6 @@ def run_pip_audit(ignored_ids: set[str], report_path: Path) -> dict[str, Any]:
         "--progress-spinner",
         "off",
     ]
-    for vuln_id in sorted(ignored_ids):
-        command.extend(["--ignore-vuln", vuln_id])
 
     result = subprocess.run(
         command,
@@ -129,6 +128,8 @@ def run_pip_audit(ignored_ids: set[str], report_path: Path) -> dict[str, Any]:
         print(result.stderr, end="", file=sys.stderr)
     if not report_path.exists():
         raise RuntimeError("pip-audit did not write a JSON report")
+    if result.returncode not in (0, 1):
+        raise RuntimeError(f"pip-audit exited with status {result.returncode}")
 
     try:
         return json.loads(report_path.read_text())
@@ -139,15 +140,38 @@ def run_pip_audit(ignored_ids: set[str], report_path: Path) -> dict[str, Any]:
 def fixable_vulnerabilities(report: dict[str, Any]) -> list[tuple[str, str, list[str]]]:
     """Return vulnerabilities that have at least one known fixed version."""
     fixable: list[tuple[str, str, list[str]]] = []
+    for name, vuln_id, fix_versions in iter_vulnerabilities(report):
+        if fix_versions:
+            fixable.append((name, vuln_id, fix_versions))
+    return fixable
+
+
+def iter_vulnerabilities(report: dict[str, Any]) -> list[tuple[str, str, list[str]]]:
+    """Return all vulnerabilities from a pip-audit report."""
+    vulnerabilities: list[tuple[str, str, list[str]]] = []
     for dependency in report.get("dependencies", []):
         name = dependency.get("name", "<unknown>")
         for vulnerability in dependency.get("vulns", []):
-            fix_versions = vulnerability.get("fix_versions") or []
-            if fix_versions:
-                fixable.append(
-                    (name, vulnerability.get("id", "<unknown>"), fix_versions)
+            vulnerabilities.append(
+                (
+                    name,
+                    vulnerability.get("id", "<unknown>"),
+                    vulnerability.get("fix_versions") or [],
                 )
-    return fixable
+            )
+    return vulnerabilities
+
+
+def unignored_unfixable_vulnerabilities(
+    report: dict[str, Any],
+    ignored_ids: set[str],
+) -> list[tuple[str, str]]:
+    """Return unfixable vulnerabilities that are missing an active ignore."""
+    unignored: list[tuple[str, str]] = []
+    for name, vuln_id, fix_versions in iter_vulnerabilities(report):
+        if not fix_versions and vuln_id not in ignored_ids:
+            unignored.append((name, vuln_id))
+    return unignored
 
 
 def main() -> int:
@@ -155,22 +179,31 @@ def main() -> int:
     args = parse_args()
     try:
         ignored_ids = load_ignores(args.ignore_file, dt.date.today())
-        report = run_pip_audit(ignored_ids, args.report)
+        report = run_pip_audit(args.report)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"pip-audit gate failed: {exc}", file=sys.stderr)
         return 1
 
     fixable = fixable_vulnerabilities(report)
-    if not fixable:
-        print("pip-audit gate passed: no fixable vulnerabilities found")
+    unignored_unfixable = unignored_unfixable_vulnerabilities(report, ignored_ids)
+    if not fixable and not unignored_unfixable:
+        print("pip-audit gate passed: no unreviewed vulnerabilities found")
         return 0
 
-    print("pip-audit gate failed: fixable vulnerabilities found", file=sys.stderr)
-    for package, vuln_id, fix_versions in fixable:
+    if fixable:
+        print("pip-audit gate failed: fixable vulnerabilities found", file=sys.stderr)
+        for package, vuln_id, fix_versions in fixable:
+            print(
+                f"- {package}: {vuln_id} fixed by {', '.join(fix_versions)}",
+                file=sys.stderr,
+            )
+    if unignored_unfixable:
         print(
-            f"- {package}: {vuln_id} fixed by {', '.join(fix_versions)}",
+            "pip-audit gate failed: unfixable vulnerabilities need reviewed ignores",
             file=sys.stderr,
         )
+        for package, vuln_id in unignored_unfixable:
+            print(f"- {package}: {vuln_id}", file=sys.stderr)
     return 1
 
 

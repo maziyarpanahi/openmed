@@ -8,9 +8,11 @@ blockers when a fixed version is available.
 The CI security job installs OpenMed with development extras, then runs
 `scripts/security/pip_audit_gate.py`. The gate wraps `pip-audit`, writes
 `pip-audit-report.json`, and fails when an advisory has a known fixed version.
+Fixable advisories must be resolved by upgrading the affected dependency.
 
 The gate allows time-boxed ignores from `docs/security/pip-audit-ignore.toml`
-for advisories that do not have a usable fix yet. Each ignore must include:
+for advisories that do not have a usable fix yet. Unfixable advisories without
+an active ignore fail CI so exceptions stay visible. Each ignore must include:
 
 - `id`: the vulnerability ID reported by `pip-audit`
 - `reason`: why the advisory cannot be fixed immediately
