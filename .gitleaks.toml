@@ -4,11 +4,23 @@ title = "OpenMed secret scanning"
 useDefault = true
 
 [[rules]]
-id = "local-secret-file"
+id = "local-credential-file"
 description = "Local credential files must not be committed"
-path = '''(^|/)(creds\.txt|\.pypirc|secrets\.json)$'''
+path = '''(^|/)(creds\.txt|\.pypirc|secrets\.json|\.env(\..*)?)$'''
 regex = '''(?m).+'''
 tags = ["credentials", "local-secret-file"]
+
+[[rules]]
+id = "openmed-secret-scan-canary"
+description = "Synthetic canary used to verify the secret scanner gate"
+regex = '''OPENMED_SECRET_SCAN_CANARY_[A-Z0-9]{32}'''
+keywords = ["OPENMED_SECRET_SCAN_CANARY_"]
+tags = ["secret-scanner-canary"]
+
+[[allowlists]]
+targetRules = ["openmed-secret-scan-canary"]
+description = "Committed canary fixture; CI copies it to a non-allowlisted path to prove detection still works"
+paths = ['''tests/fixtures/secret_scan_canary\.txt$''']
 
 [[allowlists]]
 targetRules = ["generic-api-key"]
