@@ -28,6 +28,7 @@ ALLOWED_LICENSE_MARKERS = (
     "BSD",
     "BSD-2-CLAUSE",
     "BSD-3-CLAUSE",
+    "ISC",
 )
 
 DISALLOWED_LICENSE_MARKERS = (
@@ -54,6 +55,7 @@ REVIEWED_LICENSES = {
     "faker": "MIT",
     "fastapi": "MIT",
     "gliner": "Apache-2.0",
+    "griffe": "ISC",
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
     "mcp": "MIT",
@@ -61,6 +63,7 @@ REVIEWED_LICENSES = {
     "mkdocs-git-revision-date-localized-plugin": "MIT",
     "mkdocs-material": "MIT",
     "mkdocs-minify-plugin": "MIT",
+    "mkdocstrings": "ISC",
     "mlx": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
@@ -215,7 +218,7 @@ def is_allowed_license(name: str, license_text: str) -> tuple[bool, str]:
     if has_allowed:
         return True, "permissive license"
 
-    return False, "license is outside the MIT/Apache-2.0/BSD allowlist"
+    return False, "license is outside the MIT/Apache-2.0/BSD/ISC allowlist"
 
 
 def audit_pyproject(
