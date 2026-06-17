@@ -52,6 +52,7 @@ from openmed.eval.release_gates import (
     ModelStewardConfig,
     ReleaseGate,
 )
+from openmed.eval.tiers import TIERS
 
 
 __all__ = [
@@ -97,5 +98,6 @@ __all__ = [
     "run_reid_attack",
     "run_reid_benchmark",
     "run_suite",
+    "TIERS",
     "write_calibration_artifacts",
 ]
