@@ -28,6 +28,12 @@ repos:
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
 
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+        args: [--config=.gitleaks.toml]
+
   - repo: https://github.com/pycqa/pydocstyle
     rev: 6.3.0
     hooks:

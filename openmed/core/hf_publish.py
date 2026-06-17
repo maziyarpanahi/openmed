@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from openmed.core.baseline import load_baseline_store, update_baseline_entry
+from openmed.core.model_card import DEFAULT_ARXIV, render_model_card, write_model_card
 from openmed.core.model_registry import load_manifest_rows
 from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
 from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
@@ -21,6 +22,7 @@ from openmed.eval.report import read_reports, write_benchmark_cards, write_leade
 DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
 DEFAULT_MANIFEST_PATH = Path("models.jsonl")
+DEFAULT_MODEL_CARD_COMMIT_MESSAGE = "Update generated model card"
 
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=$|-)")
 _SAFE_REPO_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -120,7 +122,7 @@ def build_manifest_row(
         "formats": [manifest_format],
         "canonical_labels": labels,
         "benchmark": {"dataset": None, "micro_f1": None, "recall": None},
-        "arxiv": None,
+        "arxiv": DEFAULT_ARXIV,
         "license": "apache-2.0",
         "reproducibility_hash": reproducibility_hash,
         "released": released,
@@ -154,6 +156,26 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
         for manifest_row in rows:
             handle.write(json.dumps(manifest_row, sort_keys=False, separators=(",", ":")))
             handle.write("\n")
+
+
+def publish_model_card(
+    row: dict[str, Any],
+    *,
+    token: str | None = None,
+    api: Any | None = None,
+    commit_message: str | None = None,
+) -> Any:
+    """Render and upload a manifest row as ``README.md`` for its model repo."""
+
+    api = api or _load_hf_api()
+    return api.upload_file(
+        path_or_fileobj=render_model_card(row).encode("utf-8"),
+        path_in_repo="README.md",
+        repo_id=row["repo_id"],
+        repo_type="model",
+        token=token,
+        commit_message=commit_message or DEFAULT_MODEL_CARD_COMMIT_MESSAGE,
+    )
 
 
 def publish_artifact(
@@ -198,6 +220,17 @@ def publish_artifact(
     )
     api = api or _load_hf_api()
     resolved_git_sha = git_sha or resolve_git_sha()
+    row = build_manifest_row(
+        repo_id=repo_id,
+        source_model_id=source_model_id,
+        artifact_dir=artifact_dir,
+        format_name=format_name,
+        released=released,
+        recipe=recipe,
+        data_manifest=data_manifest,
+        git_sha=resolved_git_sha,
+    )
+    write_model_card(artifact_dir / "README.md", row)
 
     skipped = False
     if skip_existing and _repo_exists(api, repo_id=repo_id, token=token):
@@ -218,16 +251,6 @@ def publish_artifact(
             commit_message=f"Publish {format_name} artifact",
         )
 
-    row = build_manifest_row(
-        repo_id=repo_id,
-        source_model_id=source_model_id,
-        artifact_dir=artifact_dir,
-        format_name=format_name,
-        released=released,
-        recipe=recipe,
-        data_manifest=data_manifest,
-        git_sha=resolved_git_sha,
-    )
     if manifest_path is not None:
         append_manifest_row(manifest_path, row)
     if baseline_path is not None:
@@ -285,6 +308,8 @@ def artifact_sha256(path: str | Path) -> str:
 
     for file_path in paths:
         relative = file_path.relative_to(root).as_posix()
+        if relative == "README.md":
+            continue
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
         with file_path.open("rb") as handle:
