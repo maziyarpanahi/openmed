@@ -1,0 +1,25 @@
+{
+  "device": "mlx-fp",
+  "fixture_count": 1,
+  "generated_at": "2026-06-14T00:00:00Z",
+  "metadata": {
+    "source": "committed benchmark report"
+  },
+  "metrics": {
+    "exact_span_f1": {
+      "f1": 1.0,
+      "false_negatives": 0,
+      "false_positives": 0,
+      "precision": 1.0,
+      "recall": 1.0,
+      "true_positives": 1
+    },
+    "leakage": {
+      "leaked_chars": 0,
+      "overall": 0.0,
+      "total_chars": 4
+    }
+  },
+  "model_name": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx",
+  "suite": "golden"
+}
