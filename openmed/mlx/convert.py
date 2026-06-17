@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
     build_model,
@@ -550,13 +551,21 @@ def convert(
     output_dir: str | Path,
     quantize_bits: int | None = None,
     cache_dir: str | None = None,
+    publish_to_hub: bool = False,
+    publish_repo_id: str | None = None,
+    publish_org: str = "OpenMed",
+    publish_version: int = 1,
+    publish_manifest_path: str | Path | None = None,
+    publish_token_env: str = "HF_WRITE_TOKEN",
+    publish_private: bool = False,
+    publish_overwrite_existing: bool = False,
 ) -> Path:
     """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
 
     try:
         import mlx.core  # noqa: F401
-        return save_mlx_model(
+        output_path = save_mlx_model(
             weights,
             config,
             output_dir,
@@ -570,13 +579,39 @@ def convert(
                 "MLX not available — skipping quantization. "
                 "Install mlx for quantization support."
             )
-        return save_numpy_model(
+        output_path = save_numpy_model(
             weights,
             config,
             output_dir,
             source_model_id=model_id,
             cache_dir=cache_dir,
         )
+
+    if publish_to_hub:
+        result = publish_artifact(
+            artifact_dir=output_path,
+            source_model_id=model_id,
+            format_name=_publish_format(quantize_bits),
+            repo_id=publish_repo_id,
+            org=publish_org,
+            version=publish_version,
+            token_env=publish_token_env,
+            manifest_path=publish_manifest_path,
+            private=publish_private,
+            skip_existing=not publish_overwrite_existing,
+        )
+        if result.skipped:
+            logger.info("Skipped existing Hub repo %s", result.repo_id)
+        else:
+            logger.info("Published MLX artifact to %s", result.repo_id)
+
+    return output_path
+
+
+def _publish_format(quantize_bits: int | None) -> str:
+    if quantize_bits is None:
+        return "mlx-fp"
+    return f"mlx-{quantize_bits}bit"
 
 
 def main() -> None:
@@ -605,10 +640,64 @@ def main() -> None:
         default=None,
         help="Hugging Face cache directory",
     )
+    parser.add_argument(
+        "--publish-to-hub",
+        action="store_true",
+        help="Publish the converted artifact after a successful conversion",
+    )
+    parser.add_argument(
+        "--publish-repo-id",
+        default=None,
+        help="Explicit target repo id for publishing",
+    )
+    parser.add_argument(
+        "--publish-org",
+        default="OpenMed",
+        help="Target organization for derived publish repo ids",
+    )
+    parser.add_argument(
+        "--publish-version",
+        type=int,
+        default=1,
+        help="Version suffix used when the source repo is not already versioned",
+    )
+    parser.add_argument(
+        "--publish-manifest",
+        default=None,
+        help="JSONL manifest path to append or update after publishing",
+    )
+    parser.add_argument(
+        "--publish-token-env",
+        default="HF_WRITE_TOKEN",
+        help="Environment variable containing the Hub write token",
+    )
+    parser.add_argument(
+        "--publish-private",
+        action="store_true",
+        help="Create the target repo as private when it does not exist",
+    )
+    parser.add_argument(
+        "--publish-overwrite-existing",
+        action="store_true",
+        help="Upload into an existing target repo instead of skipping it",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    convert(args.model, args.output, args.quantize, args.cache_dir)
+    convert(
+        args.model,
+        args.output,
+        args.quantize,
+        args.cache_dir,
+        publish_to_hub=args.publish_to_hub,
+        publish_repo_id=args.publish_repo_id,
+        publish_org=args.publish_org,
+        publish_version=args.publish_version,
+        publish_manifest_path=args.publish_manifest,
+        publish_token_env=args.publish_token_env,
+        publish_private=args.publish_private,
+        publish_overwrite_existing=args.publish_overwrite_existing,
+    )
 
 
 if __name__ == "__main__":

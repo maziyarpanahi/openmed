@@ -1,0 +1,59 @@
+OpenMed NOTICE
+==============
+
+OpenMed is licensed under Apache-2.0. This notice records third-party
+assets that are wrapped, ported, adapted, or planned as integration surfaces
+for the project. Direct package dependencies are also checked by
+scripts/release/check_license_policy.py.
+
+Permissive bundled or in-process assets
+---------------------------------------
+
+Name: Presidio
+Source: https://github.com/microsoft/presidio
+License: MIT
+Usage: Optional recognizers and image/DICOM redaction patterns may be wrapped
+behind OpenMed interfaces. OpenMed remains the orchestrator and routes
+detection decisions through its own policy and span layers.
+
+Name: DataProfiler
+Source: https://github.com/capitalone/DataProfiler
+License: Apache-2.0
+Usage: Planned structured-data profiling and quasi-identifier discovery for
+tabular anonymization workflows.
+
+Name: medspaCy ConText
+Source: https://github.com/medspacy/medspacy
+License: Apache-2.0
+Usage: Assertion, negation, temporality, and experiencer rule patterns may be
+ported into OpenMed clinical-context modules. Ported rule-set files must carry
+an upstream attribution header naming the source project, source URL, license,
+retrieval or port date, and a short summary of local modifications.
+
+Name: SHIELD clinical PHI corpus
+Source: https://github.com/susom/shield_dataset
+Paper: https://arxiv.org/abs/2605.03301
+License: Access and redistribution terms require review before use; current
+access instructions point to Stanford Redivis with a signed Data Use Agreement.
+Usage: Comparison and evaluation corpus for de-identification benchmarking.
+No dataset copy is bundled in the package unless its exact redistribution terms
+have been reviewed and approved.
+
+Name: ARX Data Anonymization Tool
+Source: https://github.com/arx-deidentifier/arx
+License: Apache-2.0
+Usage: Optional structured-data anonymization engine for k-anonymity,
+l-diversity, t-closeness, and differential-privacy workflows. ARX may run as
+an optional engine or out-of-process bridge and must not become a required core
+dependency.
+
+GPL bridge-only tools
+---------------------
+
+Name: sdcMicro
+Source: https://github.com/sdcTools/sdcMicro
+License: GPL-2.0-or-later
+Usage: Statistical disclosure-control reference tool. It is not bundled,
+vendored, imported, or required by the OpenMed package. Any future integration
+must be out-of-process only, isolated behind an optional bridge, and documented
+as a user-installed component.
