@@ -22,6 +22,13 @@ from openmed.eval.metrics import (
     compute_surrogate_consistency,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.attacks.reid import (
+    ReidAttackResult,
+    generate_reid_leaderboard,
+    render_reid_leaderboard,
+    run_reid_attack,
+    run_reid_benchmark,
+)
 from openmed.eval.calibrate import (
     CalibrationArtifactPaths,
     CalibrationGroupReport,
@@ -62,6 +69,7 @@ __all__ = [
     "GateReport",
     "ModelStewardConfig",
     "QUARANTINED",
+    "ReidAttackResult",
     "RELEASABLE",
     "ReleaseGate",
     "artifact_dir_for",
@@ -81,9 +89,13 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_suite_calibration_samples",
     "fit_calibration_thresholds",
+    "generate_reid_leaderboard",
     "load_calibration_samples",
     "load_calibration_thresholds",
+    "render_reid_leaderboard",
     "run_benchmark",
+    "run_reid_attack",
+    "run_reid_benchmark",
     "run_suite",
     "write_calibration_artifacts",
 ]
