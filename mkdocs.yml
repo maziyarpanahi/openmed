@@ -39,6 +39,8 @@ nav:
       - FAQ: faq.md
       - Contributing & Releases: contributing.md
       - HF Write Token Policy: security/hf-token-policy.md
+      - Release Streams & Channels: release/semver-and-channels.md
+      - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md
 
 theme:

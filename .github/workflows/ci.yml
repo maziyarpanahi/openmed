@@ -21,6 +21,10 @@ jobs:
       run: |
         python scripts/release/check_repo_policy.py
 
+    - name: Enforce dependency license policy
+      run: |
+        python scripts/release/check_license_policy.py
+
   test:
     needs: repo-policy
     runs-on: ${{ matrix.os }}
