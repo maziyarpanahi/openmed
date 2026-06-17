@@ -1,0 +1,17 @@
+{
+  "repo_id": "OpenMed/OpenMed-NER-AnatomyDetect-TinyMed-135M",
+  "family": "NER",
+  "task": "token-classification",
+  "languages": ["en"],
+  "tier": "Tiny",
+  "param_count": 135000000,
+  "architecture": "distilbert",
+  "base_model": null,
+  "formats": ["pytorch"],
+  "canonical_labels": ["ORGAN", "TISSUE", "ANATOMY"],
+  "benchmark": {"dataset": null, "micro_f1": null, "recall": null},
+  "arxiv": "2508.01630",
+  "license": "apache-2.0",
+  "reproducibility_hash": "sha256:eec908c76996f710aaf18b180e8668c356a22d9bea64e031ae1237718be167fb",
+  "released": "2025-08-05"
+}

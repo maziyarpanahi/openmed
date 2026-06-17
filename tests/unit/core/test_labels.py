@@ -12,6 +12,10 @@ from openmed.core.labels import (
     FIRST_NAME,
     GENDER,
     ID_NUM,
+    ID_SUBTYPE_MRN,
+    ID_SUBTYPE_NATIONAL_ID,
+    ID_SUBTYPE_NPI,
+    ID_SUBTYPES,
     IP_ADDRESS,
     LAST_NAME,
     LOCATION,
@@ -26,6 +30,7 @@ from openmed.core.labels import (
     USERNAME,
     ZIPCODE,
     hipaa_class_for,
+    id_subtype_for,
     normalize_label,
     policy_label_for,
     risk_level_for,
@@ -207,6 +212,60 @@ class TestEdgeCases:
         assert risk_level_for("ID_NUM") == "high"
         assert system_hints_for("ID_NUM") == ()
         assert hipaa_class_for("ID_NUM") == "UNIQUE_IDENTIFIER"
+
+
+class TestIdentifierSubtypes:
+    @pytest.mark.parametrize(
+        "label,expected_subtype",
+        [
+            ("medical_record_number", ID_SUBTYPE_MRN),
+            ("mrn", ID_SUBTYPE_MRN),
+            ("npi", ID_SUBTYPE_NPI),
+            ("national_id", ID_SUBTYPE_NATIONAL_ID),
+            ("nationalid", ID_SUBTYPE_NATIONAL_ID),
+            ("cpf", ID_SUBTYPE_NATIONAL_ID),
+            ("cnpj", ID_SUBTYPE_NATIONAL_ID),
+            ("nir", ID_SUBTYPE_NATIONAL_ID),
+            ("steuerid", ID_SUBTYPE_NATIONAL_ID),
+            ("codicefiscale", ID_SUBTYPE_NATIONAL_ID),
+            ("dni", ID_SUBTYPE_NATIONAL_ID),
+            ("nie", ID_SUBTYPE_NATIONAL_ID),
+            ("bsn", ID_SUBTYPE_NATIONAL_ID),
+            ("aadhaar", ID_SUBTYPE_NATIONAL_ID),
+            ("B-CPF", ID_SUBTYPE_NATIONAL_ID),
+        ],
+    )
+    def test_id_aliases_keep_canonical_id_num_with_subtype(
+        self,
+        label,
+        expected_subtype,
+    ):
+        assert normalize_label(label) == ID_NUM
+        assert id_subtype_for(label) == expected_subtype
+        assert expected_subtype in ID_SUBTYPES
+
+    def test_flat_canonical_id_num_consumers_are_unchanged(self):
+        assert normalize_label("mrn") == ID_NUM
+        assert normalize_label("npi") == ID_NUM
+        assert policy_label_for("mrn") == "DIRECT_IDENTIFIER"
+        assert risk_level_for("npi") == "high"
+
+    def test_non_id_num_labels_have_no_id_subtype(self):
+        assert id_subtype_for("ssn") is None
+        assert id_subtype_for("email") is None
+        assert id_subtype_for("id_num") is None
+        assert normalize_label("ssn") == SSN
+
+    def test_clinical_id_provider_exposes_regex_subtype_mapping(self):
+        from openmed.core.anonymizer.providers import clinical_ids
+
+        assert clinical_ids.id_subtype_for_entity_type("medical_record_number") == (
+            ID_SUBTYPE_MRN
+        )
+        assert clinical_ids.id_subtype_for_entity_type("npi") == ID_SUBTYPE_NPI
+        assert clinical_ids.id_subtype_for_entity_type("aadhaar") == (
+            ID_SUBTYPE_NATIONAL_ID
+        )
 
 
 class TestRegistryCoverage:
