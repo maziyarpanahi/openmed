@@ -6,6 +6,8 @@ from datetime import datetime
 from unittest.mock import patch
 
 from openmed.core.anonymizer.providers import clinical_ids
+from openmed.core.labels import ID_SUBTYPE_NPI
+from openmed.core.pii_entity_merger import PIIPattern
 from openmed.core.pii import deidentify
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.safety_sweep import (
@@ -91,6 +93,23 @@ def test_safety_sweep_delegates_checksum_validation_to_clinical_ids(monkeypatch)
     assert iban_calls == ["GB82 WEST 1234 5698 7654 32"]
     assert "credit_debit_card" in swept
     assert "iban" not in swept
+
+
+def test_safety_sweep_includes_id_subtype_metadata_for_id_matches():
+    text = "Provider NPI TEST-12345"
+    pattern = PIIPattern(
+        r"\bTEST-\d{5}\b",
+        "npi",
+        priority=1,
+        base_score=0.8,
+        context_words=["npi"],
+        context_boost=0.1,
+    )
+
+    swept = _swept_by_label(safety_sweep(text, [], patterns=[pattern]))
+
+    assert swept["npi"].metadata["id_subtype"] == ID_SUBTYPE_NPI
+    assert swept["npi"].metadata["safety_sweep"]["id_subtype"] == ID_SUBTYPE_NPI
 
 
 def test_safety_sweep_never_adds_spans_overlapping_model_spans():
