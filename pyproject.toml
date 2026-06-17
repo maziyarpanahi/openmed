@@ -92,6 +92,8 @@ docs = [
   "mkdocs-git-revision-date-localized-plugin>=1.2.6",
   "mkdocs-minify-plugin>=0.8.0",
   "pymdown-extensions>=10.8",
+  "mkdocstrings[python]",
+  "griffe",
 ]
 
 [project.scripts]
