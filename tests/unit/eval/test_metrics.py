@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from openmed.eval.harness import BenchmarkFixture, run_benchmark
+from openmed.eval.harness import BenchmarkFixture, load_fixtures, run_benchmark
 from openmed.eval.metrics import (
     EvalSpan,
     compute_character_recall,
@@ -148,3 +148,38 @@ def test_harness_runs_with_injected_runner_without_loading_models():
     assert report.fixture_count == 1
     assert report.metrics["leakage"]["overall"] == 0.0
     assert report.metrics["exact_span_f1"]["f1"] == 1.0
+
+
+def test_harness_rejects_duplicate_fixture_ids(tmp_path):
+    rows = [
+        {
+            "id": "duplicate-note",
+            "text": "Patient John",
+            "language": "en",
+            "gold_spans": [{"start": 8, "end": 12, "label": "PERSON"}],
+        },
+        {
+            "id": "duplicate-note",
+            "text": "Patient Jane",
+            "language": "en",
+            "gold_spans": [{"start": 8, "end": 12, "label": "PERSON"}],
+        },
+    ]
+    fixture_path = tmp_path / "fixtures.json"
+    fixture_path.write_text(json.dumps({"fixtures": rows}), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="duplicate benchmark fixture id"):
+        load_fixtures(fixture_path)
+
+    fixtures = [BenchmarkFixture.from_mapping(row) for row in rows]
+
+    def runner(fixture, model_name, device):
+        raise AssertionError("runner should not be called for duplicate fixture IDs")
+
+    with pytest.raises(ValueError, match="duplicate benchmark fixture id"):
+        run_benchmark(
+            fixtures,
+            suite="golden",
+            model_name="test-model",
+            runner=runner,
+        )
