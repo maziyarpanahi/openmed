@@ -1,0 +1,145 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/span.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": ["keep", "redact", "replace", "mask", "hash"],
+      "type": "string"
+    },
+    "canonical_label": {
+      "enum": [
+        "ACCOUNT_NUMBER",
+        "AGE",
+        "AMOUNT",
+        "API_KEY",
+        "BIC",
+        "BITCOIN_ADDRESS",
+        "BUILDING_NUMBER",
+        "CREDIT_CARD",
+        "CREDIT_CARD_ISSUER",
+        "CURRENCY",
+        "CVV",
+        "DATE",
+        "DATE_OF_BIRTH",
+        "EMAIL",
+        "ETHEREUM_ADDRESS",
+        "EYE_COLOR",
+        "FIRST_NAME",
+        "GENDER",
+        "GPS_COORDINATES",
+        "HEIGHT",
+        "IBAN",
+        "ID_NUM",
+        "IMEI",
+        "IP_ADDRESS",
+        "JOB_DEPARTMENT",
+        "JOB_TITLE",
+        "LAST_NAME",
+        "LITECOIN_ADDRESS",
+        "LOCATION",
+        "MAC_ADDRESS",
+        "MASKED_NUMBER",
+        "MIDDLE_NAME",
+        "OCCUPATION",
+        "ORDINAL_DIRECTION",
+        "ORGANIZATION",
+        "OTHER",
+        "PASSWORD",
+        "PERSON",
+        "PHONE",
+        "PIN",
+        "PREFIX",
+        "SSN",
+        "STREET_ADDRESS",
+        "TIME",
+        "URL",
+        "USER_AGENT",
+        "USERNAME",
+        "VEHICLE_REGISTRATION",
+        "VIN",
+        "ZIPCODE"
+      ],
+      "type": "string"
+    },
+    "detector": {
+      "type": ["string", "null"]
+    },
+    "doc_id": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "end": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "entity_type": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "evidence": {
+      "type": "object"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "policy_label": {
+      "enum": ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "CLINICAL_CONCEPT"],
+      "type": "string"
+    },
+    "regulatory_tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "replacement": {
+      "type": ["string", "null"]
+    },
+    "reversible_id": {
+      "type": ["string", "null"]
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    },
+    "score": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": ["number", "null"]
+    },
+    "section": {
+      "type": ["string", "null"]
+    },
+    "start": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text_hash": {
+      "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "doc_id",
+    "start",
+    "end",
+    "text_hash",
+    "entity_type",
+    "canonical_label",
+    "policy_label",
+    "regulatory_tags",
+    "score",
+    "detector",
+    "evidence",
+    "action",
+    "replacement",
+    "reversible_id",
+    "section",
+    "metadata"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedSpan",
+  "type": "object"
+}
