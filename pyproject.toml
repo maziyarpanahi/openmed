@@ -39,6 +39,7 @@ dev = [
   "flake8>=7.0",
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "jsonschema>=4.0",
   "fastapi>=0.110",
   "httpx>=0.27",
 ]
@@ -80,6 +81,7 @@ mlx = [
 
 coreml = [
   "coremltools>=8.0",
+  "huggingface-hub>=0.30",
   "torch>=2.0",
   "transformers>=4.50",
 ]
@@ -90,6 +92,8 @@ docs = [
   "mkdocs-git-revision-date-localized-plugin>=1.2.6",
   "mkdocs-minify-plugin>=0.8.0",
   "pymdown-extensions>=10.8",
+  "mkdocstrings[python]",
+  "griffe",
 ]
 
 [project.scripts]
@@ -98,6 +102,10 @@ openmed = "openmed.cli:main"
 [tool.hatch.build]
 include = [
   "openmed/**",
+  "openmed/core/thresholds.json",
+  "openmed/core/policies/*.json",
+  "openmed/core/schemas/json/*.json",
+  "gates/baseline.json",
   "models.jsonl",
   "README.md",
   "pyproject.toml"

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional, Union
 
+from openmed.core.policy import canonical_policy_name
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
@@ -64,6 +65,12 @@ def _normalize_confidence_threshold(value: Optional[float]) -> Optional[float]:
     if value is None:
         return None
     return validate_confidence_threshold(value)
+
+
+def _normalize_policy_name(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return canonical_policy_name(str(value))
 
 
 def _validate_keep_alive_value(value: Any) -> Any:
@@ -180,6 +187,7 @@ if PYDANTIC_V2:
         shift_dates: Optional[bool] = None
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
+        policy: Optional[str] = None
         use_smart_merging: bool = True
         use_safety_sweep: bool = True
         lang: PIILanguage = "en"
@@ -202,6 +210,11 @@ if PYDANTIC_V2:
             normalized = _normalize_confidence_threshold(value)
             assert normalized is not None
             return normalized
+
+        @field_validator("policy", mode="before")
+        @classmethod
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
@@ -309,6 +322,7 @@ else:
         shift_dates: Optional[bool] = None
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
+        policy: Optional[str] = None
         use_smart_merging: bool = True
         use_safety_sweep: bool = True
         lang: PIILanguage = "en"
@@ -328,6 +342,10 @@ else:
             normalized = _normalize_confidence_threshold(value)
             assert normalized is not None
             return normalized
+
+        @validator("policy", pre=True)
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:

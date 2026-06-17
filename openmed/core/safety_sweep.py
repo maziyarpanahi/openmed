@@ -7,6 +7,7 @@ from typing import Any, Mapping, Sequence
 import re
 
 from .pii_entity_merger import PIIPattern, PII_PATTERNS, find_context_words
+from .quality_gates import resolve_overlapping_entities
 from ..processing.outputs import EntityPrediction
 
 
@@ -134,7 +135,8 @@ def safety_sweep(
     """Add deterministic structured identifier spans not covered by ML spans.
 
     Existing spans always win. Sweep candidates that overlap any supplied span,
-    or any higher-ranked sweep candidate, are discarded so callers receive a
+    or any higher-ranked sweep candidate, are discarded. Existing overlapping
+    spans are resolved by the quality-gate policy so callers receive a
     non-overlapping span set.
     """
     existing = list(spans)
@@ -158,10 +160,7 @@ def safety_sweep(
         active_spans.append(entity)
         existing.append(entity)
 
-    if not selected:
-        return existing
-
-    return sorted(
+    ordered = sorted(
         existing,
         key=lambda span: (
             _span_value(span, "start") is None,
@@ -169,6 +168,7 @@ def safety_sweep(
             _span_value(span, "end") or 0,
         ),
     )
+    return resolve_overlapping_entities(ordered)
 
 
 __all__ = [

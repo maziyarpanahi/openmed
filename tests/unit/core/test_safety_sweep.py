@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.pii import deidentify
+from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.safety_sweep import (
     SAFETY_SWEEP_PATTERNS_VERSION,
     SAFETY_SWEEP_SOURCE,
@@ -105,6 +106,29 @@ def test_safety_sweep_never_adds_spans_overlapping_model_spans():
         assert entity.start >= model_card.end or entity.end <= model_card.start
 
 
+def test_safety_sweep_resolves_overlapping_existing_spans():
+    text = "Patient SSN 123-45-6789 was verified."
+    broad = EntityPrediction(
+        text="Patient SSN 123-45-6789",
+        label="OTHER",
+        start=0,
+        end=24,
+        confidence=0.99,
+    )
+    sensitive = EntityPrediction(
+        text="123-45-6789",
+        label="SSN",
+        start=12,
+        end=23,
+        confidence=0.50,
+    )
+
+    entities = safety_sweep(text, [broad, sensitive])
+
+    assert detect_overlapping_entities(entities) == []
+    assert [entity.label for entity in entities] == ["SSN"]
+
+
 @patch("openmed.core.pii.extract_pii")
 def test_deidentify_runs_safety_sweep_by_default_for_ml_misses(mock_extract):
     text = "Email: jane.patient@example.com"
@@ -139,3 +163,35 @@ def test_deidentify_can_disable_safety_sweep(mock_extract):
 
     assert result.deidentified_text == text
     assert result.pii_entities == []
+
+
+@patch("openmed.core.pii.extract_pii")
+def test_deidentify_resolves_overlaps_before_redaction(mock_extract):
+    text = "Patient SSN 123-45-6789 was verified."
+    mock_extract.return_value = PredictionResult(
+        text=text,
+        entities=[
+            EntityPrediction(
+                text="Patient SSN 123-45-6789",
+                label="OTHER",
+                start=0,
+                end=24,
+                confidence=0.99,
+            ),
+            EntityPrediction(
+                text="123-45-6789",
+                label="SSN",
+                start=12,
+                end=23,
+                confidence=0.50,
+            ),
+        ],
+        model_name="stub",
+        timestamp=datetime.now().isoformat(),
+    )
+
+    result = deidentify(text, method="mask", use_safety_sweep=False)
+
+    assert detect_overlapping_entities(result.pii_entities) == []
+    assert [entity.label for entity in result.pii_entities] == ["SSN"]
+    assert result.deidentified_text == "Patient SSN [SSN] was verified."

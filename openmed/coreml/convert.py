@@ -17,6 +17,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from openmed.core.hf_publish import publish_artifact
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +28,14 @@ def convert(
     max_seq_length: int = 512,
     compute_precision: str = "float16",
     cache_dir: Optional[str] = None,
+    publish_to_hub: bool = False,
+    publish_repo_id: str | None = None,
+    publish_org: str = "OpenMed",
+    publish_version: int = 1,
+    publish_manifest_path: str | Path | None = None,
+    publish_token_env: str = "HF_WRITE_TOKEN",
+    publish_private: bool = False,
+    publish_overwrite_existing: bool = False,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
 
@@ -153,6 +163,23 @@ def convert(
         json.dump({str(k): v for k, v in id2label.items()}, f, indent=2)
 
     logger.info("CoreML model saved to %s", output_path)
+    if publish_to_hub:
+        result = publish_artifact(
+            artifact_dir=output_path,
+            source_model_id=model_id,
+            format_name="coreml",
+            repo_id=publish_repo_id,
+            org=publish_org,
+            version=publish_version,
+            token_env=publish_token_env,
+            manifest_path=publish_manifest_path,
+            private=publish_private,
+            skip_existing=not publish_overwrite_existing,
+        )
+        if result.skipped:
+            logger.info("Skipped existing Hub repo %s", result.repo_id)
+        else:
+            logger.info("Published CoreML artifact to %s", result.repo_id)
     return output_path
 
 
@@ -180,6 +207,47 @@ def main():
         "--cache-dir", default=None,
         help="HuggingFace model cache directory",
     )
+    parser.add_argument(
+        "--publish-to-hub",
+        action="store_true",
+        help="Publish the converted artifact after a successful conversion",
+    )
+    parser.add_argument(
+        "--publish-repo-id",
+        default=None,
+        help="Explicit target repo id for publishing",
+    )
+    parser.add_argument(
+        "--publish-org",
+        default="OpenMed",
+        help="Target organization for derived publish repo ids",
+    )
+    parser.add_argument(
+        "--publish-version",
+        type=int,
+        default=1,
+        help="Version suffix used when the source repo is not already versioned",
+    )
+    parser.add_argument(
+        "--publish-manifest",
+        default=None,
+        help="JSONL manifest path to append or update after publishing",
+    )
+    parser.add_argument(
+        "--publish-token-env",
+        default="HF_WRITE_TOKEN",
+        help="Environment variable containing the Hub write token",
+    )
+    parser.add_argument(
+        "--publish-private",
+        action="store_true",
+        help="Create the target repo as private when it does not exist",
+    )
+    parser.add_argument(
+        "--publish-overwrite-existing",
+        action="store_true",
+        help="Upload into an existing target repo instead of skipping it",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -189,6 +257,14 @@ def main():
         max_seq_length=args.max_seq_length,
         compute_precision=args.precision,
         cache_dir=args.cache_dir,
+        publish_to_hub=args.publish_to_hub,
+        publish_repo_id=args.publish_repo_id,
+        publish_org=args.publish_org,
+        publish_version=args.publish_version,
+        publish_manifest_path=args.publish_manifest,
+        publish_token_env=args.publish_token_env,
+        publish_private=args.publish_private,
+        publish_overwrite_existing=args.publish_overwrite_existing,
     )
 
 
