@@ -53,6 +53,18 @@ def test_hypothetical_cue_families(text):
     assert resolve_temporality(text) == HYPOTHETICAL
 
 
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("history\nof MI", HISTORICAL),
+        ("status\tpost CABG", HISTORICAL),
+        ("in case\nof bleeding", HYPOTHETICAL),
+    ],
+)
+def test_multiword_cues_tolerate_clinical_whitespace(text, expected):
+    assert resolve_temporality(text) == expected
+
+
 def test_default_is_recent_without_cues():
     assert resolve_temporality("chest pain") == RECENT
     assert resolve_temporality("acute MI", []) == RECENT
@@ -68,6 +80,10 @@ def test_modifier_hits_carry_the_cue():
 def test_modifier_hits_as_mappings():
     hits = [{"text": "status post"}]
     assert resolve_temporality({"text": "CABG"}, hits) == HISTORICAL
+
+
+def test_modifier_hits_do_not_create_cues_across_fragments():
+    assert resolve_temporality("in", ["case of bleeding"]) == RECENT
 
 
 def test_span_mapping_is_supported():

@@ -63,7 +63,10 @@ HYPOTHETICAL_CUES = (
 
 
 def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
-    alternation = "|".join(re.escape(cue) for cue in sorted(cues, key=len, reverse=True))
+    alternation = "|".join(
+        r"\s+".join(re.escape(part) for part in cue.split())
+        for cue in sorted(cues, key=len, reverse=True)
+    )
     return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)", re.IGNORECASE)
 
 
@@ -91,6 +94,18 @@ def _text_of(obj: Any) -> str:
     return ""
 
 
+def _text_parts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
+    parts = [_text_of(span)]
+    if modifier_hits is not None and not isinstance(modifier_hits, (str, Mapping)):
+        if isinstance(modifier_hits, Iterable):
+            parts.extend(_text_of(hit) for hit in modifier_hits)
+        else:
+            parts.append(_text_of(modifier_hits))
+    else:
+        parts.append(_text_of(modifier_hits))
+    return tuple(part for part in parts if part)
+
+
 def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     """Classify the ConText temporality of ``span``.
 
@@ -108,20 +123,11 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     occurred, which takes precedence over where in time it would sit.
     """
 
-    parts = [_text_of(span)]
-    if modifier_hits is not None and not isinstance(modifier_hits, (str, Mapping)):
-        if isinstance(modifier_hits, Iterable):
-            parts.extend(_text_of(hit) for hit in modifier_hits)
-        else:
-            parts.append(_text_of(modifier_hits))
-    else:
-        parts.append(_text_of(modifier_hits))
+    parts = _text_parts(span, modifier_hits)
 
-    haystack = " ".join(part for part in parts if part)
-
-    if _HYPOTHETICAL_RE.search(haystack):
+    if any(_HYPOTHETICAL_RE.search(part) for part in parts):
         return HYPOTHETICAL
-    if _HISTORICAL_RE.search(haystack):
+    if any(_HISTORICAL_RE.search(part) for part in parts):
         return HISTORICAL
     return RECENT
 
