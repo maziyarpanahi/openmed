@@ -91,12 +91,19 @@ def _lazy_api():
 
 Handler = Callable[[argparse.Namespace], int]
 
+COMPLIANCE_CAVEAT = (
+    "No de-identification tool can guarantee compliance or zero residual risk. "
+    "Validate locally before any production or clinical use."
+)
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Create the top-level CLI argument parser."""
     parser = argparse.ArgumentParser(
         prog="openmed",
         description="Command-line utilities for OpenMed medical NLP models.",
+        epilog=COMPLIANCE_CAVEAT,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--config-path",
