@@ -7,6 +7,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 
@@ -30,3 +31,25 @@ def test_about_version_is_parseable_without_runtime_dependencies():
 
     assert match is not None
     assert re.fullmatch(r"\d+\.\d+\.\d+", match.group(1))
+
+
+def test_only_publish_workflow_runs_hatch_publish():
+    publishing_workflows = [
+        workflow
+        for workflow in WORKFLOWS_DIR.glob("*.yml")
+        if "hatch publish" in workflow.read_text(encoding="utf-8")
+    ]
+
+    assert publishing_workflows == [PUBLISH_WORKFLOW]
+
+
+def test_publish_workflow_keeps_release_gates():
+    workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "tags:\n      - 'v*'" in workflow
+    assert "workflow_dispatch:" in workflow
+    assert "python scripts/release/check_repo_policy.py" in workflow
+    assert "Verify version matches tag" in workflow
+    assert "twine check dist/*" in workflow
+    assert "name: pypi" in workflow
+    assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" in workflow

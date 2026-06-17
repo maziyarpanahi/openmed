@@ -1,231 +1,125 @@
-"""Render HuggingFace model cards from a single ``models.jsonl`` manifest row.
-
-This module is pure: it maps a manifest row (dict) to a Markdown string with no I/O
-and no network access. Uploading the rendered card lives in
-:mod:`openmed.core.hf_publish`. The manifest row is the single source of truth, so
-cards are generated and never hand-edited.
-"""
+"""Render OpenMed model cards from manifest rows."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-# Extra front-matter tags keyed by manifest ``family``. Every card also gets the
-# ``openmed`` / ``medical`` tags appended.
-_FAMILY_TAGS: dict[str, list[str]] = {
-    "NER": ["named-entity-recognition", "biomedical-nlp"],
-}
 
-# Section-title emoji keyed by ``family`` (purely cosmetic, matches OpenMed cards).
-_FAMILY_EMOJI: dict[str, str] = {
-    "NER": "🧬",
-}
-_DEFAULT_EMOJI = "🏥"
-
-_GENERATED_BANNER = (
-    "> ⚙️ This model card is generated automatically from the OpenMed model "
-    "manifest. Do not edit by hand."
-)
+DEFAULT_ARXIV = "2508.01630"
 
 
 def render_model_card(row: dict[str, Any]) -> str:
-    """Render a complete HF model card (front-matter + body) from a manifest row."""
-    blocks = [
-        _render_frontmatter(row),
-        _render_header(row),
-        _render_model_details(row),
-        _render_labels(row),
-        _render_quickstart(row),
-        _render_benchmark(row),
-        _render_reproducibility(row),
-        _render_citation(row),
-        _render_license(row),
-    ]
-    body = "\n\n".join(block for block in blocks if block)
-    return body + "\n"
+    """Return a README.md model card for one manifest row."""
 
-
-def _format_params(param_count: int | None) -> str | None:
-    """Format a parameter count compactly: 135_000_000 -> '135M', 1_500_000_000 -> '1.5B'."""
-    if param_count is None:
-        return None
-    if param_count >= 1_000_000_000:
-        value, suffix = param_count / 1_000_000_000, "B"
-    elif param_count >= 1_000_000:
-        value, suffix = param_count / 1_000_000, "M"
-    elif param_count >= 1_000:
-        value, suffix = param_count / 1_000, "K"
-    else:
-        return str(param_count)
-    text = f"{value:.1f}".rstrip("0").rstrip(".")
-    return f"{text}{suffix}"
-
-
-def _derive_tags(family: str) -> list[str]:
-    tags = list(_FAMILY_TAGS.get(family, [])) + ["openmed", "medical"]
-    return list(dict.fromkeys(tags))
-
-
-def _render_frontmatter(row: dict[str, Any]) -> str:
-    lines = ["---"]
-    if row.get("license"):
-        lines.append(f"license: {row['license']}")
-    languages = row.get("languages") or []
-    if languages:
-        lines.append("language:")
-        lines += [f"- {lang}" for lang in languages]
-    if row.get("task"):
-        lines.append(f"pipeline_tag: {row['task']}")
-    tags = _derive_tags(row.get("family") or "")
-    if tags:
-        lines.append("tags:")
-        lines += [f"- {tag}" for tag in tags]
-    if row.get("base_model"):
-        lines.append(f"base_model: {row['base_model']}")
-    lines.append("library_name: transformers")
-    lines.append("---")
-    return "\n".join(lines)
-
-
-def _render_header(row: dict[str, Any]) -> str:
-    repo_id = row["repo_id"]
-    name = repo_id.split("/", 1)[1] if "/" in repo_id else repo_id
-    emoji = _FAMILY_EMOJI.get(row.get("family") or "", _DEFAULT_EMOJI)
-    url = f"https://huggingface.co/{repo_id}"
-    family = row.get("family") or ""
-    task = row.get("task") or ""
+    repo_id = _string(row.get("repo_id"), "OpenMed/model")
+    title = repo_id.rsplit("/", 1)[-1]
+    benchmark = row.get("benchmark") if isinstance(row.get("benchmark"), dict) else {}
+    formats = _list(row.get("formats"))
+    languages = _list(row.get("languages"))
+    labels = _list(row.get("canonical_labels"))
+    arxiv = _string(row.get("arxiv"), DEFAULT_ARXIV)
+    license_name = _string(row.get("license"), "Not specified")
+    task = _string(row.get("task"), "unknown")
 
     lines = [
-        f"# {emoji} [{name}]({url})",
+        "---",
+        f"license: {license_name}",
+        f"pipeline_tag: {task}",
+        "library_name: openmed",
+        "tags:",
+        "- openmed",
+        "- medical-nlp",
+        "---",
         "",
-        f"**OpenMed {family} model · {task}**",
+        f"# {title}",
         "",
+        "This model card is rendered from the OpenMed model manifest. Update `models.jsonl` and rerun the publish step instead of editing this file directly.",
+        "",
+        "## Manifest Summary",
+        "",
+        "| Field | Value |",
+        "|---|---|",
+        f"| Repository | `{repo_id}` |",
+        f"| Family | {_string(row.get('family'), 'Not specified')} |",
+        f"| Task | {task} |",
+        f"| Languages | {_comma_or_unspecified(languages)} |",
+        f"| Tier | {_string(row.get('tier'), 'Not specified')} |",
+        f"| Parameters | {_format_param_count(row.get('param_count'))} |",
+        f"| Architecture | {_string(row.get('architecture'), 'Not specified')} |",
+        f"| Base model | {_string(row.get('base_model'), 'Not specified')} |",
+        f"| Formats | {_comma_or_unspecified(formats)} |",
+        f"| License | {license_name} |",
+        f"| arXiv | {_arxiv_link(arxiv)} |",
+        f"| Reproducibility hash | `{_string(row.get('reproducibility_hash'), 'Not specified')}` |",
+        f"| Released | {_string(row.get('released'), 'Not specified')} |",
+        "",
+        "## Benchmark",
+        "",
+        "| Dataset | Micro F1 | Recall |",
+        "|---|---:|---:|",
+        f"| {_string(benchmark.get('dataset'), 'Not reported')} | {_metric(benchmark.get('micro_f1'))} | {_metric(benchmark.get('recall'))} |",
+        "",
+        "## Canonical Labels",
+        "",
+        _labels_block(labels),
     ]
-    license_id = row.get("license")
-    if license_id:
-        lines.append(
-            f"[![License](https://img.shields.io/badge/License-{license_id}-blue.svg)]({url})"
-        )
-    lines.append(
-        "[![OpenMed](https://img.shields.io/badge/🏥-OpenMed-green)]"
-        "(https://huggingface.co/OpenMed)"
-    )
-    arxiv = row.get("arxiv")
-    if arxiv:
-        lines.append(
-            f"[![arXiv](https://img.shields.io/badge/arXiv-{arxiv}-b31b1b.svg)]"
-            f"(https://arxiv.org/abs/{arxiv})"
-        )
-    lines.append("")
-    lines.append(_GENERATED_BANNER)
-    return "\n".join(lines)
+    return "\n".join(lines) + "\n"
 
 
-def _render_model_details(row: dict[str, Any]) -> str:
-    rows: list[tuple[str, str]] = []
-    if row.get("tier"):
-        rows.append(("Tier", row["tier"]))
-    params = _format_params(row.get("param_count"))
-    if params:
-        rows.append(("Parameters", params))
-    if row.get("architecture"):
-        rows.append(("Architecture", row["architecture"]))
-    if row.get("base_model"):
-        rows.append(("Base model", row["base_model"]))
-    formats = row.get("formats") or []
-    if formats:
-        rows.append(("Formats", ", ".join(f"`{fmt}`" for fmt in formats)))
-    languages = row.get("languages") or []
-    if languages:
-        rows.append(("Languages", ", ".join(languages)))
-    if row.get("license"):
-        rows.append(("License", row["license"]))
-    if row.get("released"):
-        rows.append(("Released", row["released"]))
+def write_model_card(path: str | Path, row: dict[str, Any]) -> Path:
+    """Write a rendered model card to *path* and return the path."""
 
-    lines = ["## 📋 Model Details", "", "| Field | Value |", "|-------|-------|"]
-    lines += [f"| {field} | {value} |" for field, value in rows]
-    return "\n".join(lines)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_model_card(row), encoding="utf-8")
+    return path
 
 
-def _render_labels(row: dict[str, Any]) -> str:
-    labels = row.get("canonical_labels") or []
-    if not labels:
-        return ""
-    lines = ["## 🏷️ Entity Labels", ""]
-    lines += [f"- `{label}`" for label in labels]
-    return "\n".join(lines)
+def _string(value: Any, default: str) -> str:
+    if value is None:
+        return default
+    text = str(value).strip()
+    return text or default
 
 
-def _render_quickstart(row: dict[str, Any]) -> str:
-    repo_id = row["repo_id"]
-    task = row.get("task") or ""
-    if task == "token-classification":
-        snippet = (
-            "from transformers import pipeline\n\n"
-            "ner = pipeline(\n"
-            '    "token-classification",\n'
-            f'    model="{repo_id}",\n'
-            '    aggregation_strategy="simple",\n'
-            ")\n\n"
-            'entities = ner("The liver showed signs of fatty infiltration.")\n'
-            "print(entities)"
-        )
+def _list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def _comma_or_unspecified(values: list[str]) -> str:
+    return ", ".join(values) if values else "Not specified"
+
+
+def _format_param_count(value: Any) -> str:
+    if not isinstance(value, int) or value <= 0:
+        return "Not specified"
+    if value >= 1_000_000_000:
+        compact = f"{value / 1_000_000_000:g}B"
+    elif value >= 1_000_000:
+        compact = f"{value / 1_000_000:g}M"
+    elif value >= 1_000:
+        compact = f"{value / 1_000:g}K"
     else:
-        snippet = (
-            "from transformers import pipeline\n\n"
-            f'pipe = pipeline("{task}", model="{repo_id}")'
-        )
-    return "## 🚀 Quick Start\n\n```python\n" + snippet + "\n```"
+        compact = str(value)
+    return f"{compact} ({value:,})"
 
 
-def _render_benchmark(row: dict[str, Any]) -> str:
-    benchmark = row.get("benchmark") or {}
-    dataset = benchmark.get("dataset")
-    micro_f1 = benchmark.get("micro_f1")
-    recall = benchmark.get("recall")
-    cell_dataset = dataset if dataset else "—"
-    cell_f1 = f"{micro_f1:.4f}" if micro_f1 is not None else "—"
-    cell_recall = f"{recall:.4f}" if recall is not None else "—"
-    return (
-        "## 📊 Benchmark\n\n"
-        "| Dataset | Micro-F1 | Recall |\n"
-        "|---------|----------|--------|\n"
-        f"| {cell_dataset} | {cell_f1} | {cell_recall} |"
-    )
+def _metric(value: Any) -> str:
+    if isinstance(value, (int, float)):
+        return f"{float(value):.4f}"
+    return "Not reported"
 
 
-def _render_reproducibility(row: dict[str, Any]) -> str:
-    return (
-        "## 🔁 Reproducibility\n\n"
-        f"- **Manifest hash**: `{row['reproducibility_hash']}`"
-    )
+def _arxiv_link(value: str) -> str:
+    if value == "Not specified":
+        return value
+    return f"[arXiv:{value}](https://arxiv.org/abs/{value})"
 
 
-def _render_citation(row: dict[str, Any]) -> str:
-    arxiv = row.get("arxiv")
-    if not arxiv:
-        return ""
-    # The bibtex entry is the OpenMed NER paper. Every manifest row that carries an
-    # ``arxiv`` currently references this single paper; if a future family ships its
-    # own arXiv ref, key the citation off ``family`` rather than emitting this one.
-    return (
-        "## 📜 Citation\n\n"
-        "```bibtex\n"
-        "@misc{panahi2025openmedner,\n"
-        "      title={OpenMed NER: Open-Source, Domain-Adapted State-of-the-Art "
-        "Transformers for Biomedical NER Across 12 Public Datasets},\n"
-        "      author={Maziyar Panahi},\n"
-        "      year={2025},\n"
-        f"      eprint={{{arxiv}}},\n"
-        "      archivePrefix={arXiv},\n"
-        "      primaryClass={cs.CL},\n"
-        f"      url={{https://arxiv.org/abs/{arxiv}}},\n"
-        "}\n"
-        "```"
-    )
-
-
-def _render_license(row: dict[str, Any]) -> str:
-    license_id = row.get("license") or "unspecified"
-    return f"## 📄 License\n\nLicensed under the **{license_id}** license."
+def _labels_block(labels: list[str]) -> str:
+    if not labels:
+        return "Not specified."
+    return ", ".join(f"`{label}`" for label in labels)
