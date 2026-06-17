@@ -1,0 +1,39 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/entity.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "canonical_label": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "entity_type": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "policy_label": {
+      "enum": ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "CLINICAL_CONCEPT"],
+      "type": "string"
+    },
+    "regulatory_tags": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "entity_type",
+    "canonical_label",
+    "policy_label",
+    "regulatory_tags"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedEntity",
+  "type": "object"
+}

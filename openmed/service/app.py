@@ -308,6 +308,11 @@ def _pii_deidentify_payload(
     payload: PIIDeidentifyRequest,
     runtime: ServiceRuntime,
 ) -> Dict[str, Any]:
+    from openmed.core.policy import canonical_policy_name, load_policy
+
+    policy_name = canonical_policy_name(payload.policy) if payload.policy else None
+    policy_profile = load_policy(policy_name) if policy_name is not None else None
+
     result = openmed.deidentify(
         payload.text,
         method=payload.method,
@@ -323,10 +328,14 @@ def _pii_deidentify_payload(
         lang=payload.lang,
         normalize_accents=payload.normalize_accents,
         loader=runtime.get_loader(),
+        policy=policy_name,
     )
 
     response = _result_to_dict(result)
-    if payload.keep_mapping and getattr(result, "mapping", None):
+    should_emit_mapping = payload.keep_mapping or bool(
+        policy_profile is not None and policy_profile.keep_mapping
+    )
+    if should_emit_mapping and getattr(result, "mapping", None):
         response["mapping"] = result.mapping
     return response
 

@@ -13,10 +13,10 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -27,7 +27,7 @@ jobs:
         run: python scripts/manifest/generate_manifest.py --output models.jsonl
 
       - name: Open manifest refresh PR
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: feature/refresh-canonical-model-manifest
           base: master

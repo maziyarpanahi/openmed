@@ -2,6 +2,8 @@
 
 from . import main as main_module
 
+COMPLIANCE_CAVEAT = main_module.COMPLIANCE_CAVEAT
+
 # Some test cases patch these attributes on ``openmed.cli.main_module`` directly.
 # Ensure they always exist even if the implementation defers importing heavy
 # dependencies until runtime.
@@ -15,4 +17,4 @@ def main(argv=None):
     return main_module.main(argv)
 
 
-__all__ = ["main", "main_module"]
+__all__ = ["COMPLIANCE_CAVEAT", "main", "main_module"]
