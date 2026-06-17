@@ -42,6 +42,7 @@ dev = [
   "jsonschema>=4.0",
   "fastapi>=0.110",
   "httpx>=0.27",
+  "tomli>=2.0; python_version < '3.11'",
 ]
 
 cli = [
@@ -92,6 +93,8 @@ docs = [
   "mkdocs-git-revision-date-localized-plugin>=1.2.6",
   "mkdocs-minify-plugin>=0.8.0",
   "pymdown-extensions>=10.8",
+  "mkdocstrings[python]",
+  "griffe",
 ]
 
 [project.scripts]
@@ -105,6 +108,8 @@ include = [
   "openmed/core/schemas/json/*.json",
   "gates/baseline.json",
   "models.jsonl",
+  "LICENSE",
+  "NOTICE",
   "README.md",
   "pyproject.toml"
 ]

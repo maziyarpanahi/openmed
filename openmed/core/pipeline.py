@@ -158,6 +158,8 @@ class Pipeline:
         policy_profile: str | None = None,
         policy: Any = None,
         threshold_matrix: Mapping[str, Any] | None = None,
+        calibration_thresholds_path: str | None = None,
+        calibration_thresholds: Mapping[str, Any] | Any | None = None,
         score_calibrator: Any = None,
         arbitration_label_floors: Mapping[str, float] | None = None,
         high_recall_label_floors: Mapping[str, float] | None = None,
@@ -195,6 +197,10 @@ class Pipeline:
         self.strict_no_leak = strict_no_leak
         self.policy_profile = policy_profile
         self.threshold_matrix = threshold_matrix
+        self.calibration_thresholds = _load_calibration_thresholds(
+            calibration_thresholds=calibration_thresholds,
+            calibration_thresholds_path=calibration_thresholds_path,
+        )
         self.score_calibrator = score_calibrator
         self.arbitration_label_floors = arbitration_label_floors
         self.high_recall_label_floors = high_recall_label_floors
@@ -317,6 +323,7 @@ class Pipeline:
             )
 
             pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
+            self._apply_calibration_thresholds(pii_result, route)
             model_spans = self._entities_to_spans(
                 getattr(pii_result, "entities", ()),
                 normalized.normalized_text,
@@ -352,12 +359,19 @@ class Pipeline:
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
+            previous_metadata = dict(getattr(pii_result, "metadata", None) or {})
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 [span for span in policy_spans if span.action != ACTION_KEEP],
                 model_name=f"policy:{self.policy.name}",
             )
             _attach_policy_metadata(pii_result, self.policy)
+            if "calibration_thresholds" in previous_metadata:
+                metadata = dict(getattr(pii_result, "metadata", None) or {})
+                metadata["calibration_thresholds"] = previous_metadata[
+                    "calibration_thresholds"
+                ]
+                pii_result.metadata = metadata
 
         sweep_spans, sweep_metadata = self.stage9_safety_sweep(
             normalized.normalized_text,
@@ -580,6 +594,58 @@ class Pipeline:
             default_detector=f"model:{getattr(result, 'model_name', 'clinical_phi')}",
             stage=STAGE_NAMES[5],
         )
+
+    def _apply_calibration_thresholds(
+        self,
+        pii_result: Any,
+        route: LanguageRoute,
+    ) -> None:
+        if self.calibration_thresholds is None:
+            return
+
+        result_model = str(getattr(pii_result, "model_name", None) or route.model_name)
+        active = self.calibration_thresholds.active_for(
+            model_id=result_model,
+            language=route.lang,
+        )
+        retained = []
+        filtered = 0
+        for entity in getattr(pii_result, "entities", ()):
+            label = normalize_label(str(getattr(entity, "label", "") or ""), route.lang)
+            threshold = self.calibration_thresholds.lookup(
+                label,
+                route.lang,
+                model_id=result_model,
+                default=self.confidence_threshold,
+            )
+            active[label] = threshold
+            metadata = dict(getattr(entity, "metadata", None) or {})
+            metadata["calibration_threshold"] = {
+                "threshold": threshold,
+                "source": self.calibration_thresholds.source_path or "inline",
+                "schema_version": self.calibration_thresholds.schema_version,
+                "model_id": result_model,
+                "language": route.lang,
+            }
+            entity.metadata = metadata
+            if float(getattr(entity, "confidence", 0.0) or 0.0) >= threshold:
+                retained.append(entity)
+            else:
+                filtered += 1
+
+        pii_result.entities = retained
+        if hasattr(pii_result, "num_entities"):
+            pii_result.num_entities = len(retained)
+        metadata = dict(getattr(pii_result, "metadata", None) or {})
+        metadata["calibration_thresholds"] = {
+            "active": active,
+            "filtered_entities": filtered,
+            "source": self.calibration_thresholds.source_path or "inline",
+            "schema_version": self.calibration_thresholds.schema_version,
+            "model_id": result_model,
+            "suite": self.calibration_thresholds.suite,
+        }
+        pii_result.metadata = metadata
 
     def stage7_arbitration(
         self,
@@ -985,6 +1051,23 @@ def _prediction_result_from_spans(
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def _load_calibration_thresholds(
+    *,
+    calibration_thresholds: Mapping[str, Any] | Any | None,
+    calibration_thresholds_path: str | None,
+) -> Any | None:
+    if calibration_thresholds is not None:
+        from openmed.eval.calibrate import coerce_calibration_thresholds
+
+        return coerce_calibration_thresholds(calibration_thresholds)
+    if calibration_thresholds_path is None:
+        return None
+
+    from openmed.eval.calibrate import load_calibration_thresholds
+
+    return load_calibration_thresholds(calibration_thresholds_path)
 
 
 def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:

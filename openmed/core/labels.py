@@ -96,6 +96,19 @@ IMEI: Final = "IMEI"
 OTHER: Final = "OTHER"
 
 
+# Optional sub-type metadata for labels that still normalize to ID_NUM.
+ID_SUBTYPE_MRN: Final = "mrn"
+ID_SUBTYPE_NPI: Final = "npi"
+ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
+ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
+ID_SUBTYPES: Final[FrozenSet[str]] = frozenset({
+    ID_SUBTYPE_MRN,
+    ID_SUBTYPE_NPI,
+    ID_SUBTYPE_NATIONAL_ID,
+    ID_SUBTYPE_SSN_ADJACENT,
+})
+
+
 CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset({
     PERSON, FIRST_NAME, LAST_NAME, MIDDLE_NAME, PREFIX, USERNAME,
     EMAIL, PHONE, URL,
@@ -517,6 +530,23 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
 }
 
 
+ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
+    "medicalrecordnumber": ID_SUBTYPE_MRN,
+    "mrn": ID_SUBTYPE_MRN,
+    "npi": ID_SUBTYPE_NPI,
+    "nationalid": ID_SUBTYPE_NATIONAL_ID,
+    "cpf": ID_SUBTYPE_NATIONAL_ID,
+    "cnpj": ID_SUBTYPE_NATIONAL_ID,
+    "nir": ID_SUBTYPE_NATIONAL_ID,
+    "steuerid": ID_SUBTYPE_NATIONAL_ID,
+    "codicefiscale": ID_SUBTYPE_NATIONAL_ID,
+    "dni": ID_SUBTYPE_NATIONAL_ID,
+    "nie": ID_SUBTYPE_NATIONAL_ID,
+    "bsn": ID_SUBTYPE_NATIONAL_ID,
+    "aadhaar": ID_SUBTYPE_NATIONAL_ID,
+}
+
+
 _BIOES_PREFIX_RE: Final = re.compile(r"^[BIES]-")
 
 
@@ -576,6 +606,18 @@ def normalize_label(label: str, lang: str = "en") -> str:
     return OTHER
 
 
+def id_subtype_for(label: str, lang: str = "en") -> str | None:
+    """Return optional ID_NUM subtype metadata for a source label.
+
+    The canonical taxonomy remains flat: all values returned by this helper
+    still normalize to ``ID_NUM``. Callers that only need canonical labels
+    should continue to use :func:`normalize_label`.
+    """
+    if normalize_label(label, lang=lang) != ID_NUM:
+        return None
+    return ID_ALIAS_SUBTYPES.get(_key(label))
+
+
 def _metadata_for(label: str, lang: str = "en") -> Mapping[str, object]:
     return LABEL_METADATA[normalize_label(label, lang=lang)]
 
@@ -606,6 +648,13 @@ _validate_label_metadata()
 __all__ = [
     "CANONICAL_LABELS",
     "normalize_label",
+    "id_subtype_for",
+    "ID_ALIAS_SUBTYPES",
+    "ID_SUBTYPES",
+    "ID_SUBTYPE_MRN",
+    "ID_SUBTYPE_NPI",
+    "ID_SUBTYPE_NATIONAL_ID",
+    "ID_SUBTYPE_SSN_ADJACENT",
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
     "POLICY_LABELS",

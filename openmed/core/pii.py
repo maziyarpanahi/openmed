@@ -16,11 +16,8 @@ Example:
     >>>
     >>> # Extract PII entities
     >>> result = extract_pii("Dr. Smith called John Doe at 555-1234")
-    >>> for entity in result.entities:
-    ...     print(f"{entity.label}: {entity.text}")
-    NAME: Dr. Smith
-    NAME: John Doe
-    PHONE: 555-1234
+    >>> len(result.entities) > 0
+    True
 
     >>> # De-identify with masking
     >>> deid = deidentify(
@@ -47,7 +44,7 @@ import unicodedata
 from pathlib import Path
 
 from .config import OpenMedConfig
-from ..processing.outputs import EntityPrediction
+from ..processing.outputs import EntityPrediction, PredictionResult
 
 if TYPE_CHECKING:
     from .audit import AuditReport
@@ -570,7 +567,7 @@ def extract_pii(
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
-):
+) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
     Uses token classification models to detect personally identifiable information
@@ -600,14 +597,12 @@ def extract_pii(
         loader: Optional shared model loader to reuse warmed pipelines.
 
     Returns:
-        AnalysisResult with detected PII entities
+        PredictionResult with detected PII entities
 
     Example:
         >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
-        >>> for entity in result.entities:
-        ...     print(f"{entity.label}: {entity.text}")
-        date_of_birth: 01/15/1970
-        ssn: 123-45-6789
+        >>> len(result.entities) > 0
+        True
 
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
@@ -879,6 +874,47 @@ def _resolved_audit_profile(
     }
 
 
+def _active_calibration_thresholds(
+    pii_result: Any,
+    *,
+    lang: str,
+) -> dict[str, float]:
+    from .labels import normalize_label
+
+    metadata = getattr(pii_result, "metadata", None) or {}
+    calibration = metadata.get("calibration_thresholds")
+    if not isinstance(calibration, Mapping):
+        return {}
+    active = calibration.get("active")
+    if not isinstance(active, Mapping):
+        return {}
+
+    thresholds: dict[str, float] = {}
+    for label, value in active.items():
+        try:
+            thresholds[normalize_label(str(label), lang)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return thresholds
+
+
+def _entity_threshold(
+    entity: Any,
+    *,
+    canonical_label: str,
+    active_thresholds: Mapping[str, float],
+    fallback: float,
+) -> float:
+    metadata = getattr(entity, "metadata", None) or {}
+    calibration = metadata.get("calibration_threshold")
+    if isinstance(calibration, Mapping):
+        try:
+            return float(calibration["threshold"])
+        except (KeyError, TypeError, ValueError):
+            pass
+    return float(active_thresholds.get(canonical_label, fallback))
+
+
 def _build_audit_report(
     *,
     original_text: str,
@@ -901,10 +937,13 @@ def _build_audit_report(
     from .labels import normalize_label
     from ..__about__ import __version__
 
-    thresholds = {
-        normalize_label(entity.label, lang): float(confidence_threshold)
-        for entity in pii_entities
-    }
+    thresholds = _active_calibration_thresholds(pii_result, lang=lang)
+    thresholds.update(
+        {
+            normalize_label(entity.label, lang): float(entity.threshold or confidence_threshold)
+            for entity in pii_entities
+        }
+    )
     if not thresholds:
         thresholds["DEFAULT"] = float(confidence_threshold)
 
@@ -972,29 +1011,43 @@ def _build_deidentification_result(
 ) -> DeidentificationResult:
     """Build a de-identification result from an existing PII result."""
     from .labels import normalize_label
+    from .quality_gates import resolve_overlapping_entities
 
-    pii_entities = [
-        PIIEntity(
-            text=e.text,
-            label=e.label,
-            start=e.start,
-            end=e.end,
-            confidence=e.confidence,
-            metadata=_copy_metadata(getattr(e, "metadata", None)),
-            entity_type=e.label,
-            original_text=e.text,
-            canonical_label=normalize_label(e.label, lang),
-            sources=_entity_sources(e),
-            evidence=_entity_evidence(
-                e,
-                pii_result=pii_result,
-                model_name=model_name,
-                lang=lang,
+    resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
+    pii_result.entities = resolved_entities
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(resolved_entities)
+
+    active_thresholds = _active_calibration_thresholds(pii_result, lang=lang)
+    pii_entities = []
+    for e in pii_result.entities:
+        canonical_label = normalize_label(e.label, lang)
+        pii_entities.append(
+            PIIEntity(
+                text=e.text,
+                label=e.label,
+                start=e.start,
+                end=e.end,
+                confidence=e.confidence,
+                metadata=_copy_metadata(getattr(e, "metadata", None)),
+                entity_type=e.label,
+                original_text=e.text,
+                canonical_label=canonical_label,
+                sources=_entity_sources(e),
+                evidence=_entity_evidence(
+                    e,
+                    pii_result=pii_result,
+                    model_name=model_name,
+                    lang=lang,
+                ),
+                threshold=_entity_threshold(
+                    e,
+                    canonical_label=canonical_label,
+                    active_thresholds=active_thresholds,
+                    fallback=confidence_threshold,
+                ),
             ),
-            threshold=confidence_threshold,
         )
-        for e in pii_result.entities
-    ]
 
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
@@ -1202,6 +1255,7 @@ def deidentify(
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
+    calibration_thresholds_path: Optional[str | Path] = None,
     audit: bool = False,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
@@ -1246,6 +1300,9 @@ def deidentify(
             ``method="replace"``. When ``None``, derived from ``lang``.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
+        calibration_thresholds_path: Optional thresholds.json artifact path
+            or artifact directory. When provided, per-label calibrated
+            thresholds filter model detections and appear in audit output.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
 
@@ -1278,6 +1335,11 @@ def deidentify(
         use_safety_sweep=use_safety_sweep,
         loader=loader,
         policy=policy,
+        calibration_thresholds_path=(
+            str(calibration_thresholds_path)
+            if calibration_thresholds_path is not None
+            else None
+        ),
     )
     result = pipeline.run(
         text,

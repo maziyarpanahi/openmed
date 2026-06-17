@@ -41,6 +41,9 @@ nav:
       - FAQ: faq.md
       - Contributing & Releases: contributing.md
       - HF Write Token Policy: security/hf-token-policy.md
+      - Release Streams & Channels: release/semver-and-channels.md
+      - Generative Model Policy: generative-model-policy.md
+      - API Reference: api-reference.md
 
 theme:
   name: material
@@ -95,6 +98,11 @@ plugins:
       fallback_to_build_date: true
   - minify:
       minify_html: true
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: false
 
 hooks:
   - docs/_hooks.py
