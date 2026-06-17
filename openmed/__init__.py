@@ -61,6 +61,7 @@ from .core.pii import (
     PIIEntity,
     DeidentificationResult,
 )
+from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 from .core.pii_entity_merger import (
     merge_entities_with_semantic_units,
     find_semantic_units,

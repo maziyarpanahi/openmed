@@ -72,13 +72,17 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):
         raise ValueError("benchmark fixture JSON must be a list or contain a fixtures list")
-    return [BenchmarkFixture.from_mapping(row) for row in rows]
+    fixtures = [BenchmarkFixture.from_mapping(row) for row in rows]
+    _validate_unique_fixture_ids(fixtures)
+    return fixtures
 
 
 def default_model_runner(
     fixture: BenchmarkFixture,
     model_name: str,
     device: str,
+    *,
+    loader: Any | None = None,
 ) -> Iterable[Any]:
     """Run a fixture through the existing PII runtime."""
     from openmed.core.pii import extract_pii
@@ -87,6 +91,7 @@ def default_model_runner(
         fixture.text,
         model_name=model_name,
         lang=fixture.language,
+        loader=loader,
     )
     for entity in result.entities:
         metadata = dict(entity.metadata or {})
@@ -106,7 +111,8 @@ def run_benchmark(
     metadata: Mapping[str, Any] | None = None,
 ) -> BenchmarkReport:
     """Run *model_name* over fixtures and return a benchmark report."""
-    model_runner = runner or default_model_runner
+    _validate_unique_fixture_ids(fixtures)
+    model_runner = runner or _shared_default_model_runner()
     results: list[FixtureResult] = []
     peak_rss_start = _peak_rss_bytes()
 
@@ -145,7 +151,8 @@ def run_benchmark(
     metrics = compute_metrics_bundle(
         gold_spans,
         predicted_spans,
-        latencies_ms=[result.latency_ms for result in results],
+        latencies_ms=[result.latency_ms for result in results[1:]],
+        cold_start_ms=(results[0].latency_ms if results else None),
         peak_rss_bytes=peak_rss,
         default_device=device,
         source_text=corpus_text,
@@ -193,6 +200,29 @@ def run_suite(
     return report
 
 
+def _shared_default_model_runner() -> ModelRunner:
+    shared_loader: Any | None = None
+
+    def run_fixture(
+        fixture: BenchmarkFixture,
+        model_name: str,
+        device: str,
+    ) -> Iterable[Any]:
+        nonlocal shared_loader
+        if shared_loader is None:
+            from openmed.core.models import ModelLoader
+
+            shared_loader = ModelLoader()
+        return default_model_runner(
+            fixture,
+            model_name,
+            device,
+            loader=shared_loader,
+        )
+
+    return run_fixture
+
+
 def _corpus_coordinates(
     fixtures: Sequence[BenchmarkFixture],
     results: Sequence[FixtureResult],
@@ -217,6 +247,18 @@ def _shift_spans(spans: Iterable[EvalSpan], offset: int) -> list[EvalSpan]:
         replace(span, start=span.start + offset, end=span.end + offset)
         for span in spans
     ]
+
+
+def _validate_unique_fixture_ids(fixtures: Sequence[BenchmarkFixture]) -> None:
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for fixture in fixtures:
+        if fixture.fixture_id in seen and fixture.fixture_id not in duplicates:
+            duplicates.append(fixture.fixture_id)
+        seen.add(fixture.fixture_id)
+    if duplicates:
+        quoted = ", ".join(repr(value) for value in duplicates)
+        raise ValueError(f"duplicate benchmark fixture id(s): {quoted}")
 
 
 def _peak_rss_bytes() -> int | None:
