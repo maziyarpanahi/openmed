@@ -25,7 +25,11 @@ from openmed.core.labels import (
     URL,
     USERNAME,
     ZIPCODE,
+    hipaa_class_for,
     normalize_label,
+    policy_label_for,
+    risk_level_for,
+    system_hints_for,
 )
 
 
@@ -190,6 +194,19 @@ class TestEdgeCases:
         """The lang hint is accepted but currently doesn't change output."""
         for lang in ("en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"):
             assert normalize_label("first_name", lang=lang) == FIRST_NAME
+
+    def test_top_level_label_import_stability(self):
+        from openmed import CANONICAL_LABELS as top_level_labels
+        from openmed import normalize_label as top_level_normalize
+
+        assert top_level_labels is CANONICAL_LABELS
+        assert top_level_normalize("id_num") == ID_NUM
+
+    def test_policy_accessors_import(self):
+        assert policy_label_for("ID_NUM") == "DIRECT_IDENTIFIER"
+        assert risk_level_for("ID_NUM") == "high"
+        assert system_hints_for("ID_NUM") == ()
+        assert hipaa_class_for("ID_NUM") == "UNIQUE_IDENTIFIER"
 
 
 class TestRegistryCoverage:
