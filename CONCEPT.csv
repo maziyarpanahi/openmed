@@ -1,4 +1,0 @@
-concept_id	concept_name	domain_id	vocabulary_id	concept_class_id	standard_concept	concept_code	valid_start_date	valid_end_date	invalid_reason
-201826	Type 2 diabetes mellitus	Condition	SNOMED	Clinical Finding	S	73211009	19700101	20991231	
-4195694	Hypertension	Condition	SNOMED	Clinical Finding	S	38341003	19700101	20991231	
-21601782	Metformin	Drug	RxNorm	Ingredient	S	6809	19700101	20991231	
