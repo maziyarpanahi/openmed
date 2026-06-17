@@ -34,7 +34,7 @@ def test_convert_workflow_fails_publish_job_when_hf_token_is_missing():
 def test_convert_workflow_publishes_downloaded_conversion_artifacts():
     workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
 
-    assert "actions/download-artifact@v4" in workflow
+    assert "actions/download-artifact@v8" in workflow
     assert "name: mlx-model" in workflow
     assert "name: coreml-model" in workflow
     assert "python -m openmed.core.hf_publish" in workflow
