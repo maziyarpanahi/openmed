@@ -10,11 +10,16 @@ from .config import (
     delete_profile,
     load_config_with_profile,
 )
+from .audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 
 __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "AuditReport",
+    "AuditSignature",
+    "AuditSpan",
+    "DetectorInfo",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",

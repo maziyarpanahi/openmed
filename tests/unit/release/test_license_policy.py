@@ -74,6 +74,26 @@ dependencies = ["source-available-package>=1"]
     assert "not allowed" in results[0].reason
 
 
+def test_isc_dependency_passes_policy(tmp_path):
+    pyproject = write_pyproject(
+        tmp_path,
+        """
+[project]
+name = "sample"
+version = "0.0.1"
+dependencies = ["permissive-package>=1"]
+""",
+    )
+
+    results = policy.audit_pyproject(
+        pyproject,
+        reviewed_licenses={"permissive-package": "ISC"},
+    )
+
+    assert len(results) == 1
+    assert results[0].allowed is True
+
+
 def test_dev_optional_dependencies_are_not_audited(tmp_path):
     pyproject = write_pyproject(
         tmp_path,

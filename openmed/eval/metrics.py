@@ -671,13 +671,20 @@ def compute_metrics_bundle(
     predicted_spans: Iterable[Any],
     *,
     latencies_ms: Sequence[int | float] = (),
+    cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
     model_size_bytes: int | None = None,
     default_language: str = "en",
     default_device: str = "cpu",
     source_text: str | None = None,
 ) -> dict[str, Any]:
-    """Compute the standard OM-018 benchmark metric bundle."""
+    """Compute the standard OM-018 benchmark metric bundle.
+
+    ``cold_start_ms`` is reported as a non-gating edge metric nested under
+    ``report.metrics['latency']['cold_start_ms']``. It is the first fixture
+    call's wall-clock latency (model/tokenizer load plus first forward pass)
+    and is excluded from the steady-state ``p50``/``p95``/``count`` sample.
+    """
     text_length = len(source_text) if source_text is not None else None
     return {
         "leakage": compute_leakage_rate(
@@ -723,7 +730,10 @@ def compute_metrics_bundle(
             default_device=default_device,
             source_text=source_text,
         ).to_dict(),
-        "latency": compute_latency_summary(latencies_ms).to_dict(),
+        "latency": {
+            **compute_latency_summary(latencies_ms).to_dict(),
+            "cold_start_ms": cold_start_ms,
+        },
         "resources": compute_resource_metrics(
             peak_rss_bytes=peak_rss_bytes,
             model_size_bytes=model_size_bytes,
