@@ -1515,6 +1515,42 @@ class TestIntegration:
         assert reidentified == original_text
 
     @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_remove(self, mock_extract):
+        """Test round-trip with two PERSON entities using remove method."""
+        original_text = "Alice Smith and Bob Jones"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith",
+                    label="NAME",
+                    start=0,
+                    end=11,
+                    confidence=0.95,
+                ),
+                EntityPrediction(
+                    text="Bob Jones",
+                    label="NAME",
+                    start=16,
+                    end=25,
+                    confidence=0.93,
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="remove", keep_mapping=True)
+
+        assert deid_result.deidentified_text == "[NAME_REMOVED] and [NAME_REMOVED_2]"
+        assert deid_result.mapping == {
+            "[NAME_REMOVED]": "Alice Smith",
+            "[NAME_REMOVED_2]": "Bob Jones",
+        }
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
     def test_roundtrip_single_entity_unchanged(self, mock_extract):
         """Test that single entities still produce simple placeholders (no counter)."""
         original_text = "Patient John Doe"

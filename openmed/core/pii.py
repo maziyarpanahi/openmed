@@ -1075,7 +1075,7 @@ def _build_deidentification_result(
         entity_type_counts: dict[str, int] = {}
         for entity in sorted(pii_entities, key=lambda e: e.start):
             entity_method = _entity_redaction_method(entity, effective_method)
-            if entity_method == "mask" or (
+            if entity_method in {"mask", "remove"} or (
                 entity_method == "shift_dates" and entity.entity_type != "DATE"
             ):
                 entity_type_counts[entity.entity_type] = (
@@ -1098,8 +1098,11 @@ def _build_deidentification_result(
             anonymizer=anonymizer,
         )
 
+        if keep_mapping and entity_method == "remove":
+            redacted = f"[{entity.entity_type}_REMOVED]"
+
         # Only make repeated placeholders unique for reversible mappings. Plain
-        # masking without keep_mapping keeps the legacy placeholder text.
+        # masking/removal without keep_mapping keeps the legacy redacted text.
         occurrence_index = entity_occurrence_indexes.get(id(entity), 1)
         if keep_mapping and redacted and occurrence_index > 1:
             if redacted.endswith("]"):
