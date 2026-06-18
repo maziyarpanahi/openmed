@@ -1,14 +1,31 @@
-"""ConText decision layers for clinical spans.
+"""ConText decision axes for clinical spans (roadmap 5.2).
 
-This module holds narrow, deterministic ConText axes that classify clinical
+This module holds narrow, deterministic ConText layers that classify clinical
 spans from a target span plus optional modifier hits produced by the shared
 context engine.
 
-Temporality resolves whether a span is current, historical, or hypothetical.
+Temporality classifies the temporal status of a clinical span onto the original
+ConText three-value temporality scale:
+
+* ``"recent"``       -- the finding is current / active (the default).
+* ``"historical"``   -- the finding belongs to the patient's past history.
+* ``"hypothetical"`` -- the finding is conditional and not asserted as present.
+
+The historical-versus-current distinction is what separates a resolved past
+problem from an active one (``"history of MI"`` versus ``"acute MI"``).
+Downstream FHIR/OMOP records consume this axis to drive
+``clinicalStatus`` / ``onset``: a ``"historical"`` span maps to an inactive or
+resolved ``clinicalStatus`` and a past ``onset``, whereas a ``"recent"`` span
+maps to an active ``clinicalStatus``.  A ``"hypothetical"`` span is not asserted
+to be present at all and should not be recorded as an active condition.
+
 Uncertainty resolves whether a span is asserted as certain or remains hedged,
 hypothetical, or conditional. Uncertain spans are flagged, not dropped, so
 grounding layers can downweight or annotate unconfirmed conditions while still
 receiving the original span.
+
+Sibling axes (negation, experiencer) and absolute-date timeline normalization
+(TIMEX3) are handled by separate layers and are out of scope here.
 """
 
 from __future__ import annotations
@@ -148,11 +165,11 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     ``text``-like key, or any object exposing a ``text`` attribute.
     ``modifier_hits`` is the optional collection of ConText modifier cues the
     shared engine matched in the span's window (cue strings, or mappings/objects
-    exposing a ``text``-like field). The span surface itself is also scanned so
+    exposing a ``text``-like field).  The span surface itself is also scanned so
     the layer is usable standalone when no separate modifier hits are supplied.
 
     Returns one of ``"recent"``, ``"historical"`` or ``"hypothetical"``.
-    ``"recent"`` is the default when no temporal cue is found. When both a
+    ``"recent"`` is the default when no temporal cue is found.  When both a
     hypothetical and a historical cue are present the span is treated as
     ``"hypothetical"``: a conditional statement is not asserted to have
     occurred, which takes precedence over where in time it would sit.
