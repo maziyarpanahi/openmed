@@ -1070,7 +1070,20 @@ def _build_deidentification_result(
 
     deidentified = text
     mapping = {} if keep_mapping else None
-    entity_type_counts: dict[str, int] = {}
+    entity_occurrence_indexes: dict[int, int] = {}
+    if keep_mapping:
+        entity_type_counts: dict[str, int] = {}
+        for entity in sorted(pii_entities, key=lambda e: e.start):
+            entity_method = _entity_redaction_method(entity, effective_method)
+            if entity_method == "mask" or (
+                entity_method == "shift_dates" and entity.entity_type != "DATE"
+            ):
+                entity_type_counts[entity.entity_type] = (
+                    entity_type_counts.get(entity.entity_type, 0) + 1
+                )
+                entity_occurrence_indexes[id(entity)] = entity_type_counts[
+                    entity.entity_type
+                ]
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
@@ -1085,21 +1098,14 @@ def _build_deidentification_result(
             anonymizer=anonymizer,
         )
 
-        # When the same placeholder would be produced for multiple entities
-        # (e.g. two PERSONs both masking to "[PERSON]"), append an occurrence
-        # counter so each mapping key is unique and round-trip is lossless.
-        if entity_method in ("mask", "remove") or (
-            entity_method == "shift_dates" and entity.entity_type != "DATE"
-        ):
-            etype = entity.entity_type
-            entity_type_counts[etype] = entity_type_counts.get(etype, 0) + 1
-            if entity_type_counts[etype] > 1:
-                # Insert counter before closing bracket for mask (e.g. [NAME_2])
-                # or append for non-bracket placeholders (e.g. remove returns "")
-                if redacted.endswith("]"):
-                    redacted = f"{redacted[:-1]}_{entity_type_counts[etype]}]"
-                elif redacted:
-                    redacted = f"{redacted}_{entity_type_counts[etype]}"
+        # Only make repeated placeholders unique for reversible mappings. Plain
+        # masking without keep_mapping keeps the legacy placeholder text.
+        occurrence_index = entity_occurrence_indexes.get(id(entity), 1)
+        if keep_mapping and redacted and occurrence_index > 1:
+            if redacted.endswith("]"):
+                redacted = f"{redacted[:-1]}_{occurrence_index}]"
+            else:
+                redacted = f"{redacted}_{occurrence_index}"
 
         entity.redacted_text = redacted
         if reversible_ids:

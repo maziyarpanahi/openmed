@@ -1374,12 +1374,46 @@ class TestIntegration:
 
         deid_result = deidentify(original_text, method="mask", keep_mapping=True)
         # First NAME -> [NAME], second NAME -> [NAME_2]
-        assert "[NAME]" in deid_result.deidentified_text
-        assert "[NAME_2]" in deid_result.deidentified_text
+        assert deid_result.deidentified_text == "Dr. [NAME] met [NAME_2] today"
         assert deid_result.mapping is not None
 
         reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
         assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_repeated_mask_without_mapping_keeps_default_placeholders(self, mock_extract):
+        """Repeated mask output is unchanged when no reversible mapping is requested."""
+        original_text = "Dr. Alice Smith met Bob Jones today"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith",
+                    label="NAME",
+                    start=4,
+                    end=15,
+                    confidence=0.95,
+                ),
+                EntityPrediction(
+                    text="Bob Jones",
+                    label="NAME",
+                    start=20,
+                    end=29,
+                    confidence=0.93,
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=False)
+
+        assert deid_result.deidentified_text == "Dr. [NAME] met [NAME] today"
+        assert [entity.redacted_text for entity in deid_result.pii_entities] == [
+            "[NAME]",
+            "[NAME]",
+        ]
+        assert deid_result.mapping is None
 
     @patch("openmed.core.pii.extract_pii")
     def test_roundtrip_two_dates_mask(self, mock_extract):
@@ -1440,6 +1474,43 @@ class TestIntegration:
 
         deid_result = deidentify(original_text, method="hash", keep_mapping=True)
         # Hash produces unique values per text, so no counter needed
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_replace(self, mock_extract):
+        """Test round-trip with two PERSON entities using replace method."""
+        original_text = "Alice Smith and Bob Jones"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith",
+                    label="NAME",
+                    start=0,
+                    end=11,
+                    confidence=0.95,
+                ),
+                EntityPrediction(
+                    text="Bob Jones",
+                    label="NAME",
+                    start=16,
+                    end=25,
+                    confidence=0.93,
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(
+            original_text,
+            method="replace",
+            keep_mapping=True,
+            consistent=True,
+            seed=123,
+        )
+
         reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
         assert reidentified == original_text
 
