@@ -1,0 +1,63 @@
+name: Release Gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Path to the candidate benchmark report JSON.
+        required: false
+        default: artifacts/release-candidate.json
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  release-gates:
+    runs-on: ubuntu-latest
+    env:
+      CANDIDATE_REPORT: ${{ github.event.inputs.candidate || 'artifacts/release-candidate.json' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run release gates
+        id: gates
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m openmed.eval.release_gates \
+            --candidate "$CANDIDATE_REPORT" \
+            --output release-gate-report.json \
+            --issue-on-failure \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload gate report
+        if: always() && hashFiles('release-gate-report.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-gate-report
+          path: release-gate-report.json
+
+      - name: Publish candidate
+        if: steps.gates.outcome == 'success'
+        run: |
+          echo "Release gates passed; publish step is unblocked."
+
+      - name: Fail closed
+        if: steps.gates.outcome != 'success'
+        run: |
+          exit 1

@@ -11,6 +11,7 @@ from openmed.core.quality_gates import (
     detect_overlapping_entities,
     resolve_overlapping_entities,
     validate_entity_spans,
+    validate_entity_spans_strict,
 )
 from openmed.processing.outputs import EntityPrediction
 
@@ -307,6 +308,24 @@ class TestResolveOverlappingEntities:
         assert result is entities
         assert len(entities) == 2
         assert len(detect_overlapping_entities(entities)) == 1
+
+    def test_strict_validation_returns_scored_structured_output(self):
+        text = "Patient John Doe visited"
+        entities = [
+            _ent("John Doe", label="PERSON", start=8, end=16),
+            _ent("Jane", label="PERSON", start=8, end=12),
+            _ent("missing", label="ID_NUM", start=30, end=37),
+        ]
+
+        result = validate_entity_spans_strict(entities, text)
+
+        assert result.passed is False
+        assert result.total_spans == 3
+        assert result.invalid_spans == 2
+        assert result.valid_spans == 1
+        assert result.overlaps_resolved == 1
+        assert result.to_dict()["offending_spans"][0]["problems"]
+        assert result.to_dict()["overlap_findings"][0]["first"]["label"] == "PERSON"
 
 
 # ---------------------------------------------------------------------------

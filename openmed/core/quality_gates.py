@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, List, Mapping, Sequence, Tuple, TypeVar
 
 from .labels import normalize_label
@@ -68,6 +69,72 @@ _HIGH_RISK_LABEL_RANKS = {
 
 class SpanValidationWarning(UserWarning):
     """Raised when an entity span fails a boundary check."""
+
+
+@dataclass(frozen=True)
+class SpanIssue:
+    """One invalid span found during strict validation."""
+
+    index: int
+    label: str
+    start: int | None
+    end: int | None
+    text: str
+    problems: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "label": self.label,
+            "start": self.start,
+            "end": self.end,
+            "text": self.text,
+            "problems": list(self.problems),
+        }
+
+
+@dataclass(frozen=True)
+class OverlapFinding:
+    """One overlapping span pair found during strict validation."""
+
+    first: Mapping[str, Any]
+    second: Mapping[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"first": dict(self.first), "second": dict(self.second)}
+
+
+@dataclass(frozen=True)
+class SpanValidationResult:
+    """Structured span-validation evidence for release gates."""
+
+    total_spans: int
+    valid_spans: int
+    invalid_spans: int
+    offsetless_spans: int
+    offending_spans: tuple[SpanIssue, ...] = field(default_factory=tuple)
+    overlap_findings: tuple[OverlapFinding, ...] = field(default_factory=tuple)
+    overlaps_resolved: int = 0
+    residual_overlaps: int = 0
+
+    @property
+    def passed(self) -> bool:
+        return self.invalid_spans == 0 and self.residual_overlaps == 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_spans": self.total_spans,
+            "valid_spans": self.valid_spans,
+            "invalid_spans": self.invalid_spans,
+            "offsetless_spans": self.offsetless_spans,
+            "offending_spans": [issue.to_dict() for issue in self.offending_spans],
+            "overlap_findings": [
+                finding.to_dict() for finding in self.overlap_findings
+            ],
+            "overlaps_resolved": self.overlaps_resolved,
+            "residual_overlaps": self.residual_overlaps,
+            "passed": self.passed,
+        }
 
 
 def _span_value(entity: Any, key: str) -> Any:
@@ -146,6 +213,75 @@ def _valid_offsets(start: Any, end: Any) -> bool:
     return isinstance(start, int) and isinstance(end, int) and start < end
 
 
+def _set_span_valid(entity: Any, valid: bool) -> None:
+    metadata = _span_value(entity, "metadata")
+    if metadata is None:
+        metadata = {}
+    if isinstance(metadata, Mapping):
+        metadata = dict(metadata)
+    metadata["span_valid"] = valid
+    if isinstance(entity, Mapping):
+        entity["metadata"] = metadata
+    else:
+        entity.metadata = metadata
+
+
+def _span_text(entity: Any) -> str:
+    return str(_span_value(entity, "text") or "")
+
+
+def _span_summary(entity: Any, index: int | None = None) -> dict[str, Any]:
+    start, end = _span_bounds(entity)
+    summary: dict[str, Any] = {
+        "label": normalize_label(_entity_label(entity)),
+        "start": start,
+        "end": end,
+        "text": _span_text(entity),
+    }
+    if index is not None:
+        summary["index"] = index
+    return summary
+
+
+def _span_problems(entity: Any, text: str) -> list[str] | None:
+    text_len = len(text)
+    problems: list[str] = []
+    start, end = _span_bounds(entity)
+
+    if start is None or end is None:
+        return None
+
+    if start >= end:
+        if start == end:
+            problems.append("zero-length span")
+        else:
+            problems.append(f"inverted span (start={start} >= end={end})")
+
+    if start < 0:
+        problems.append(f"negative start ({start})")
+
+    if end > text_len:
+        problems.append(f"end ({end}) exceeds text length ({text_len})")
+
+    if not problems and start >= 0 and end <= text_len:
+        actual = text[start:end]
+        entity_text = _span_text(entity)
+        if actual != entity_text:
+            if " ".join(actual.split()) == " ".join(entity_text.split()):
+                logger.info(
+                    "SpanValidation: Entity %r @ [%d:%d]: "
+                    "whitespace-only text difference (span=%r, stored=%r)",
+                    _entity_label(entity), start, end, actual, entity_text,
+                )
+            else:
+                problems.append(
+                    f"text mismatch: span gives {actual!r}, "
+                    f"entity stores {entity_text!r}"
+                )
+
+    return problems
+
+
 def validate_entity_spans(
     entities: List["EntityPrediction"],
     text: str,
@@ -164,47 +300,12 @@ def validate_entity_spans(
 
     Returns the *same* list (never filters entities out).
     """
-    text_len = len(text)
-
     for entity in entities:
-        problems: list[str] = []
         start = entity.start
         end = entity.end
-
-        if start is None or end is None:
-            # Entities without offsets cannot be validated.
+        problems = _span_problems(entity, text)
+        if problems is None:
             continue
-
-        # --- invariant checks ---
-        if start >= end:
-            if start == end:
-                problems.append("zero-length span")
-            else:
-                problems.append(f"inverted span (start={start} >= end={end})")
-
-        if start < 0:
-            problems.append(f"negative start ({start})")
-
-        if end > text_len:
-            problems.append(f"end ({end}) exceeds text length ({text_len})")
-
-        # --- text-match check (only when bounds are sane) ---
-        if not problems and start >= 0 and end <= text_len:
-            actual = text[start:end]
-            if actual != entity.text:
-                # Allow whitespace-only differences (common after span
-                # trimming) — downgrade to INFO instead of a full warning.
-                if " ".join(actual.split()) == " ".join(entity.text.split()):
-                    logger.info(
-                        "SpanValidation: Entity %r @ [%d:%d]: "
-                        "whitespace-only text difference (span=%r, stored=%r)",
-                        entity.label, start, end, actual, entity.text,
-                    )
-                else:
-                    problems.append(
-                        f"text mismatch: span gives {actual!r}, "
-                        f"entity stores {entity.text!r}"
-                    )
 
         # --- report ---
         if problems:
@@ -216,11 +317,70 @@ def validate_entity_spans(
             warnings.warn(msg, SpanValidationWarning, stacklevel=2)
 
         # Tag metadata so downstream code can inspect validity.
-        meta = entity.metadata if entity.metadata is not None else {}
-        meta["span_valid"] = len(problems) == 0
-        entity.metadata = meta
+        _set_span_valid(entity, len(problems) == 0)
 
     return entities
+
+
+def validate_entity_spans_strict(
+    entities: Sequence[EntityT],
+    text: str,
+) -> SpanValidationResult:
+    """Return structured span-validation evidence without emitting warnings.
+
+    The warn-only validator above remains the default runtime API. Release gates
+    use this strict/scored path so invalid spans and unresolved overlaps become
+    machine-readable gate evidence.
+    """
+
+    offending: list[SpanIssue] = []
+    valid_spans = 0
+    offsetless_spans = 0
+
+    for index, entity in enumerate(entities):
+        problems = _span_problems(entity, text)
+        start, end = _span_bounds(entity)
+        if problems is None:
+            offsetless_spans += 1
+            continue
+
+        if problems:
+            _set_span_valid(entity, False)
+            offending.append(
+                SpanIssue(
+                    index=index,
+                    label=normalize_label(_entity_label(entity)),
+                    start=start,
+                    end=end,
+                    text=_span_text(entity),
+                    problems=tuple(problems),
+                )
+            )
+        else:
+            valid_spans += 1
+            _set_span_valid(entity, True)
+
+    overlaps = detect_overlapping_entities(list(entities))
+    resolved = resolve_overlapping_entities(entities)
+    residual = detect_overlapping_entities(resolved)
+    overlap_findings = tuple(
+        OverlapFinding(
+            first=_span_summary(first),
+            second=_span_summary(second),
+        )
+        for first, second in overlaps
+    )
+
+    return SpanValidationResult(
+        total_spans=len(entities),
+        valid_spans=valid_spans,
+        invalid_spans=len(offending),
+        offsetless_spans=offsetless_spans,
+        offending_spans=tuple(offending),
+        overlap_findings=overlap_findings,
+        overlaps_resolved=max(len(entities) - len(resolved), 0),
+        residual_overlaps=len(residual),
+    )
 
 
 def resolve_overlapping_entities(

@@ -316,26 +316,87 @@ def test_g7_blocks_recall_regression_and_residual_leakage(tmp_path: Path) -> Non
     assert "residual_leakage_regression" in check.details["violations"]
 
 
-def test_g8_calls_quality_gate_span_primitives(tmp_path: Path, monkeypatch) -> None:
-    calls = {"validate": 0, "resolve": 0, "detect": 0}
+def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> None:
+    calls = {"strict": 0}
+    original = release_gates.quality_gates.validate_entity_spans_strict
 
-    def validate(entities, text):
-        calls["validate"] += 1
-        return entities
+    def strict(entities, text):
+        calls["strict"] += 1
+        return original(entities, text)
 
-    def resolve(entities):
-        calls["resolve"] += 1
-        return list(entities)
-
-    def detect(entities):
-        calls["detect"] += 1
-        return []
-
-    monkeypatch.setattr(release_gates.quality_gates, "validate_entity_spans", validate)
-    monkeypatch.setattr(release_gates.quality_gates, "resolve_overlapping_entities", resolve)
-    monkeypatch.setattr(release_gates.quality_gates, "detect_overlapping_entities", detect)
+    monkeypatch.setattr(
+        release_gates.quality_gates,
+        "validate_entity_spans_strict",
+        strict,
+    )
 
     result = _gate().evaluate(_report(tmp_path), _baseline())
 
     assert result.decision == RELEASABLE
-    assert calls == {"validate": 1, "resolve": 1, "detect": 1}
+    assert calls == {"strict": 1}
+    assert _check(result, "G8").details["spans_checked"] == 3
+
+
+def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"format": "mlx-8bit"},
+            metric_updates={
+                "quant_recall_delta": None,
+                "per_label_recall": {
+                    "PERSON": 0.991,
+                    "DATE": 0.990,
+                    "ID_NUM": 0.990,
+                    "API_KEY": 0.995,
+                },
+                "fp_parent_per_label_recall": {"PERSON": 0.996},
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G4")
+    assert result.decision == QUARANTINED
+    assert result.quant_recall_delta == pytest.approx(0.005)
+    assert check.passed is False
+    assert check.details["offending_labels"]["PERSON"]["limit"] == 0.005
+    assert result.blocked_formats == ("mlx-8bit",)
+
+
+def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> None:
+    manifest = tmp_path / "models.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "repo_id": "OpenMed/unit-model",
+                "family": "PII",
+                "task": "token-classification",
+                "languages": ["en"],
+                "tier": "Tiny",
+                "param_count": 44_000_000,
+                "formats": ["mlx-fp"],
+                "license": "apache-2.0",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text("2 models\n", encoding="utf-8")
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "manifest_path": str(manifest),
+                "readme_path": str(readme),
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "manifest_coherence")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["mismatches"]["readme"]["models"]["readme_floor"] == 2
