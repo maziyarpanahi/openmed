@@ -58,6 +58,14 @@ presidio = [
   "presidio-analyzer>=2.2.354,<3",
 ]
 
+philter = [
+  "philter-ucsf>=1.0.3,<2",
+]
+
+pydeid = [
+  "pyDeid>=0.0.1",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
