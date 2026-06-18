@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added release changelog tooling that renders Keep a Changelog sections from Conventional Commits, computes the SemVer bump, and exposes the computed next version to the PyPI publish workflow.
+- Added `bootstrap_ci` and `compute_confidence_intervals` to `openmed.eval.metrics` and an opt-in `confidence_intervals` flag on the benchmark harness that attaches deterministic non-parametric bootstrap confidence intervals to the leakage, character recall, and span F1 metrics (off by default to keep fast runs cheap).
 
 ### Fixed
 
