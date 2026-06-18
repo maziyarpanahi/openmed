@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a FHIR R4 transaction Bundle assembler (`openmed.clinical.exporters.fhir.to_bundle`) that wraps a document's exported resources into a single Bundle, assigns deterministic `urn:uuid` `fullUrl` values (seeded by `doc_id` + resource index), rewrites in-Bundle references (`subject`/`result`/`encounter`) to those URNs, and emits per-entry `request` blocks for transaction/batch bundles.
 - Added release changelog tooling that renders Keep a Changelog sections from Conventional Commits, computes the SemVer bump, and exposes the computed next version to the PyPI publish workflow.
+- Added `bootstrap_ci` and `compute_confidence_intervals` to `openmed.eval.metrics` and an opt-in `confidence_intervals` flag on the benchmark harness that attaches deterministic non-parametric bootstrap confidence intervals to the leakage, character recall, and span F1 metrics (off by default to keep fast runs cheap).
 
 ### Fixed
 
