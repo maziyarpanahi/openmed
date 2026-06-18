@@ -1358,3 +1358,107 @@ class TestIntegration:
         assert "method" in result_dict
         assert "timestamp" in result_dict
         assert "num_entities_redacted" in result_dict
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_mask(self, mock_extract):
+        """Test round-trip with two distinct PERSON entities using mask (#204, #222)."""
+        original_text = "Dr. Alice Smith met Bob Jones today"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(text="Alice Smith", label="NAME", start=4, end=15, confidence=0.95),
+                EntityPrediction(text="Bob Jones", label="NAME", start=20, end=29, confidence=0.93),
+            ],
+            model_name="test", timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        # First NAME -> [NAME], second NAME -> [NAME_2]
+        assert "[NAME]" in deid_result.deidentified_text
+        assert "[NAME_2]" in deid_result.deidentified_text
+        assert deid_result.mapping is not None
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_dates_mask(self, mock_extract):
+        """Test round-trip with two distinct DATE entities using mask."""
+        original_text = "Born 1990-01-15 seen 2024-06-20"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(text="1990-01-15", label="DATE", start=5, end=15, confidence=0.95),
+                EntityPrediction(text="2024-06-20", label="DATE", start=21, end=31, confidence=0.92),
+            ],
+            model_name="test", timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        assert "[DATE]" in deid_result.deidentified_text
+        assert "[DATE_2]" in deid_result.deidentified_text
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_mixed_repeated_and_unique(self, mock_extract):
+        """Test round-trip with mixed repeated and unique entity types."""
+        original_text = "Alice and Bob called 555-1234 on 2024-01-01"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(text="Alice", label="NAME", start=0, end=5, confidence=0.95),
+                EntityPrediction(text="Bob", label="NAME", start=10, end=13, confidence=0.93),
+                EntityPrediction(text="555-1234", label="PHONE", start=21, end=29, confidence=0.90),
+                EntityPrediction(text="2024-01-01", label="DATE", start=33, end=43, confidence=0.91),
+            ],
+            model_name="test", timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        assert "[NAME]" in deid_result.deidentified_text
+        assert "[NAME_2]" in deid_result.deidentified_text
+        assert "[PHONE]" in deid_result.deidentified_text
+        assert "[DATE]" in deid_result.deidentified_text
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_hash(self, mock_extract):
+        """Test round-trip with two PERSON entities using hash method."""
+        original_text = "Alice Smith and Bob Jones"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(text="Alice Smith", label="NAME", start=0, end=11, confidence=0.95),
+                EntityPrediction(text="Bob Jones", label="NAME", start=16, end=25, confidence=0.93),
+            ],
+            model_name="test", timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="hash", keep_mapping=True)
+        # Hash produces unique values per text, so no counter needed
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_single_entity_unchanged(self, mock_extract):
+        """Test that single entities still produce simple placeholders (no counter)."""
+        original_text = "Patient John Doe"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95),
+            ],
+            model_name="test", timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        # Single entity should NOT have a counter suffix
+        assert deid_result.deidentified_text == "Patient [NAME]"
+        assert "[NAME_2]" not in deid_result.deidentified_text
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
