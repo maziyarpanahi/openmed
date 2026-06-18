@@ -54,6 +54,10 @@ mcp = [
   "mcp>=1.9",
 ]
 
+presidio = [
+  "presidio-analyzer>=2.2.354,<3",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
