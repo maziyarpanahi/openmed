@@ -1,8 +1,11 @@
-"""ConText temporality axis for clinical spans (OM-141, roadmap 5.2).
+"""ConText decision axes for clinical spans (roadmap 5.2).
 
-This module is the narrow temporality decision layer of the shared ConText
-engine.  It classifies the temporal status of a clinical span onto the
-original ConText three-value temporality scale:
+This module holds narrow, deterministic ConText layers that classify clinical
+spans from a target span plus optional modifier hits produced by the shared
+context engine.
+
+Temporality classifies the temporal status of a clinical span onto the original
+ConText three-value temporality scale:
 
 * ``"recent"``       -- the finding is current / active (the default).
 * ``"historical"``   -- the finding belongs to the patient's past history.
@@ -16,16 +19,20 @@ resolved ``clinicalStatus`` and a past ``onset``, whereas a ``"recent"`` span
 maps to an active ``clinicalStatus``.  A ``"hypothetical"`` span is not asserted
 to be present at all and should not be recorded as an active condition.
 
-Sibling axes (negation, uncertainty, experiencer) and absolute-date timeline
-normalization (TIMEX3) are handled by separate layers and are out of scope
-here.
+Uncertainty resolves whether a span is asserted as certain or remains hedged,
+hypothetical, or conditional. Uncertain spans are flagged, not dropped, so
+grounding layers can downweight or annotate unconfirmed conditions while still
+receiving the original span.
+
+Sibling axes (negation, experiencer) and absolute-date timeline normalization
+(TIMEX3) are handled by separate layers and are out of scope here.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import Any, Literal
 
 RECENT = "recent"
 HISTORICAL = "historical"
@@ -34,7 +41,15 @@ HYPOTHETICAL = "hypothetical"
 #: The temporality values, ordered from default to most specific.
 TEMPORALITY_VALUES = (RECENT, HISTORICAL, HYPOTHETICAL)
 
-# Ported ConText temporal lexicon.  Cues are matched case-insensitively and on
+Certainty = Literal["certain", "uncertain"]
+
+CERTAIN: Certainty = "certain"
+UNCERTAIN: Certainty = "uncertain"
+
+#: The certainty values, ordered from asserted to less certain.
+CERTAINTY_VALUES = (CERTAIN, UNCERTAIN)
+
+# Ported ConText temporal lexicon. Cues are matched case-insensitively and on
 # token boundaries so abbreviations such as ``h/o`` and ``s/p`` match cleanly
 # without firing inside unrelated words.
 HISTORICAL_CUES = (
@@ -61,6 +76,42 @@ HYPOTHETICAL_CUES = (
     "unless",
 )
 
+# ConText hypothetical/uncertainty trigger lexicon. It intentionally overlaps
+# with HYPOTHETICAL_CUES because a conditional span is both temporally
+# hypothetical and not clinically asserted as certain.
+UNCERTAINTY_CUES = (
+    "cannot exclude",
+    "can't exclude",
+    "concern for",
+    "concerning for",
+    "suspicious for",
+    "suspicion for",
+    "worrisome for",
+    "question of",
+    "to rule out",
+    "rule out",
+    "in the event of",
+    "in case of",
+    "in case",
+    "versus",
+    "probable",
+    "probably",
+    "possible",
+    "possibly",
+    "suspected",
+    "suspect",
+    "unlikely",
+    "likely",
+    "unless",
+    "should",
+    "might",
+    "could",
+    "may",
+    "r/o",
+    "vs",
+    "if",
+)
+
 
 def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
     alternation = "|".join(
@@ -72,6 +123,7 @@ def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
 
 _HISTORICAL_RE = _cue_pattern(HISTORICAL_CUES)
 _HYPOTHETICAL_RE = _cue_pattern(HYPOTHETICAL_CUES)
+_UNCERTAINTY_RE = _cue_pattern(UNCERTAINTY_CUES)
 
 
 def _text_of(obj: Any) -> str:
@@ -132,6 +184,26 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     return RECENT
 
 
+def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
+    """Classify a clinical span as certain or uncertain/hypothetical.
+
+    ``span`` is the target clinical span -- a string, a span mapping with a
+    ``text``-like key, or any object exposing a ``text`` attribute.
+    ``modifier_hits`` is the optional collection of ConText uncertainty cues
+    matched in the span's window. Each part is scanned independently so cues
+    are never created by concatenating unrelated fragments.
+
+    Returns ``"uncertain"`` for hedged, hypothetical, or conditional concepts
+    and ``"certain"`` otherwise. Uncertain spans are flagged for grounding
+    consumers; this helper does not filter or drop spans.
+    """
+
+    parts = _text_parts(span, modifier_hits)
+    if any(_UNCERTAINTY_RE.search(part) for part in parts):
+        return UNCERTAIN
+    return CERTAIN
+
+
 __all__ = [
     "RECENT",
     "HISTORICAL",
@@ -140,4 +212,10 @@ __all__ = [
     "HISTORICAL_CUES",
     "HYPOTHETICAL_CUES",
     "resolve_temporality",
+    "Certainty",
+    "CERTAIN",
+    "UNCERTAIN",
+    "CERTAINTY_VALUES",
+    "UNCERTAINTY_CUES",
+    "resolve_uncertainty",
 ]
