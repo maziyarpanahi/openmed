@@ -1070,6 +1070,7 @@ def _build_deidentification_result(
 
     deidentified = text
     mapping = {} if keep_mapping else None
+    entity_type_counts: dict[str, int] = {}
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
@@ -1083,6 +1084,23 @@ def _build_deidentification_result(
             lang=lang,
             anonymizer=anonymizer,
         )
+
+        # When the same placeholder would be produced for multiple entities
+        # (e.g. two PERSONs both masking to "[PERSON]"), append an occurrence
+        # counter so each mapping key is unique and round-trip is lossless.
+        if entity_method in ("mask", "remove") or (
+            entity_method == "shift_dates" and entity.entity_type != "DATE"
+        ):
+            etype = entity.entity_type
+            entity_type_counts[etype] = entity_type_counts.get(etype, 0) + 1
+            if entity_type_counts[etype] > 1:
+                # Insert counter before closing bracket for mask (e.g. [NAME_2])
+                # or append for non-bracket placeholders (e.g. remove returns "")
+                if redacted.endswith("]"):
+                    redacted = f"{redacted[:-1]}_{entity_type_counts[etype]}]"
+                elif redacted:
+                    redacted = f"{redacted}_{entity_type_counts[etype]}"
+
         entity.redacted_text = redacted
         if reversible_ids:
             entity.reversible_id = _build_reversible_id(
