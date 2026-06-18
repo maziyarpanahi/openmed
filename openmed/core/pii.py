@@ -1070,6 +1070,20 @@ def _build_deidentification_result(
 
     deidentified = text
     mapping = {} if keep_mapping else None
+    entity_occurrence_indexes: dict[int, int] = {}
+    if keep_mapping:
+        entity_type_counts: dict[str, int] = {}
+        for entity in sorted(pii_entities, key=lambda e: e.start):
+            entity_method = _entity_redaction_method(entity, effective_method)
+            if entity_method in {"mask", "remove"} or (
+                entity_method == "shift_dates" and entity.entity_type != "DATE"
+            ):
+                entity_type_counts[entity.entity_type] = (
+                    entity_type_counts.get(entity.entity_type, 0) + 1
+                )
+                entity_occurrence_indexes[id(entity)] = entity_type_counts[
+                    entity.entity_type
+                ]
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
@@ -1083,6 +1097,19 @@ def _build_deidentification_result(
             lang=lang,
             anonymizer=anonymizer,
         )
+
+        if keep_mapping and entity_method == "remove":
+            redacted = f"[{entity.entity_type}_REMOVED]"
+
+        # Only make repeated placeholders unique for reversible mappings. Plain
+        # masking/removal without keep_mapping keeps the legacy redacted text.
+        occurrence_index = entity_occurrence_indexes.get(id(entity), 1)
+        if keep_mapping and redacted and occurrence_index > 1:
+            if redacted.endswith("]"):
+                redacted = f"{redacted[:-1]}_{occurrence_index}]"
+            else:
+                redacted = f"{redacted}_{occurrence_index}"
+
         entity.redacted_text = redacted
         if reversible_ids:
             entity.reversible_id = _build_reversible_id(
