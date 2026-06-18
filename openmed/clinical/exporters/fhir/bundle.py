@@ -30,7 +30,10 @@ __all__ = ["to_bundle"]
 
 # Fixed namespace so the generated ``urn:uuid`` values are reproducible across
 # runs and machines (uuid5 is a deterministic hash of namespace + name).
-_BUNDLE_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://openmed.ai/fhir/bundle")
+_BUNDLE_NAMESPACE = uuid.uuid5(
+    uuid.NAMESPACE_URL,
+    "https://openmed.ai/fhir/bundle",
+)
 
 # Bundle types whose entries must carry a ``request`` block.
 _REQUEST_BUNDLE_TYPES = frozenset({"transaction", "batch"})
@@ -87,7 +90,10 @@ def to_bundle(
         rewritten = _rewrite_references(resource, reference_map)
         entry: dict[str, Any] = {"fullUrl": urn, "resource": rewritten}
         if emit_request:
-            entry["request"] = {"method": "POST", "url": resource["resourceType"]}
+            entry["request"] = {
+                "method": "POST",
+                "url": resource["resourceType"],
+            }
         entries.append(entry)
 
     return {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
@@ -104,15 +110,19 @@ def _rewrite_references(node: Any, reference_map: Mapping[str, str]) -> Any:
     """Deep-copy ``node``, rewriting in-Bundle references to their ``fullUrl``.
 
     Any ``{"reference": "ResourceType/id"}`` whose target is present in
-    ``reference_map`` is repointed at the corresponding ``urn:uuid``. References
-    to resources absent from the Bundle (e.g. a de-identified Patient) are left
-    untouched. The input is never mutated.
+    ``reference_map`` is repointed at the corresponding ``urn:uuid``.
+    References to resources absent from the Bundle (e.g. a de-identified
+    Patient) are left untouched. The input is never mutated.
     """
 
     if isinstance(node, Mapping):
         result: dict[str, Any] = {}
         for key, value in node.items():
-            if key == "reference" and isinstance(value, str) and value in reference_map:
+            if (
+                key == "reference"
+                and isinstance(value, str)
+                and value in reference_map
+            ):
                 result[key] = reference_map[value]
             else:
                 result[key] = _rewrite_references(value, reference_map)
