@@ -15,6 +15,14 @@ on:
         description: 'Output formats (comma-separated: mlx,coreml)'
         required: false
         default: 'mlx'
+      publish_to_hub:
+        description: 'Publish converted artifacts to HF after successful conversion'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   convert-mlx:
@@ -23,10 +31,10 @@ jobs:
     if: contains(github.event.inputs.formats, 'mlx')
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.12"
 
@@ -50,7 +58,7 @@ jobs:
       run: ls -la mlx-output/
 
     - name: Upload MLX model
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: mlx-model
         path: mlx-output/
@@ -61,10 +69,10 @@ jobs:
     if: contains(github.event.inputs.formats, 'coreml')
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.12"
 
@@ -83,9 +91,118 @@ jobs:
       run: ls -la ./OpenMedModel.mlpackage/
 
     - name: Upload CoreML model
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: coreml-model
         path: |
           OpenMedModel.mlpackage/
           *_id2label.json
+
+  publish-hf:
+    name: Publish to HF
+    runs-on: ubuntu-latest
+    needs:
+      - convert-mlx
+      - convert-coreml
+    if: >-
+      ${{
+        always() &&
+        github.event.inputs.publish_to_hub == 'true' &&
+        !cancelled() &&
+        (contains(github.event.inputs.formats, 'mlx') || contains(github.event.inputs.formats, 'coreml')) &&
+        (!contains(github.event.inputs.formats, 'mlx') || needs.convert-mlx.result == 'success') &&
+        (!contains(github.event.inputs.formats, 'coreml') || needs.convert-coreml.result == 'success')
+      }}
+    environment:
+      name: hf-publish
+      url: https://huggingface.co/OpenMed
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Install publish dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[hf]"
+
+    - name: Require HF write token before publish
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        if [ -z "${HF_WRITE_TOKEN:-}" ]; then
+          echo "::error title=Missing HF_WRITE_TOKEN::Configure HF_WRITE_TOKEN in the hf-publish protected environment before enabling publish."
+          exit 1
+        fi
+
+    - name: Download MLX model
+      if: contains(github.event.inputs.formats, 'mlx')
+      uses: actions/download-artifact@v8
+      with:
+        name: mlx-model
+        path: publish-artifacts/mlx-output
+
+    - name: Publish MLX model
+      if: contains(github.event.inputs.formats, 'mlx')
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        FORMAT="mlx-fp"
+        if [ "${{ github.event.inputs.quantize }}" = "8" ]; then
+          FORMAT="mlx-8bit"
+        fi
+        if [ "${{ github.event.inputs.quantize }}" = "4" ]; then
+          FORMAT="mlx-4bit"
+        fi
+        python -m openmed.core.hf_publish \
+          --model "${{ github.event.inputs.model_id }}" \
+          --artifact-dir publish-artifacts/mlx-output \
+          --format "$FORMAT" \
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
+
+    - name: Download CoreML model
+      if: contains(github.event.inputs.formats, 'coreml')
+      uses: actions/download-artifact@v8
+      with:
+        name: coreml-model
+        path: publish-artifacts/coreml-output
+
+    - name: Publish CoreML model
+      if: contains(github.event.inputs.formats, 'coreml')
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        python -m openmed.core.hf_publish \
+          --model "${{ github.event.inputs.model_id }}" \
+          --artifact-dir publish-artifacts/coreml-output \
+          --format coreml \
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
+
+    - name: Upload publish status snapshot
+      uses: actions/upload-artifact@v7
+      with:
+        name: published-model-manifest
+        path: |
+          models.jsonl
+          gates/baseline.json
+          docs/benchmarks/
+          docs/leaderboard/
+          docs/status/

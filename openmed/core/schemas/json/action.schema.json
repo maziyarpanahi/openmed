@@ -1,0 +1,39 @@
+{
+  "$id": "https://openmed.dev/schemas/v1/action.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "action": {
+      "enum": ["keep", "redact", "replace", "mask", "hash"],
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "policy_label": {
+      "enum": ["DIRECT_IDENTIFIER", "QUASI_IDENTIFIER", "CLINICAL_CONCEPT"],
+      "type": "string"
+    },
+    "replacement": {
+      "type": ["string", "null"]
+    },
+    "reversible_id": {
+      "type": ["string", "null"]
+    },
+    "schema_version": {
+      "const": 1,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "action",
+    "policy_label",
+    "replacement",
+    "reversible_id",
+    "metadata"
+  ],
+  "schema_version": 1,
+  "title": "OpenMedAction",
+  "type": "object"
+}

@@ -29,6 +29,14 @@ from typing import Sequence
 
 from faker.providers import BaseProvider
 
+from openmed.core.labels import id_subtype_for
+
+
+def id_subtype_for_entity_type(entity_type: str) -> str | None:
+    """Return ID_NUM subtype metadata for regex/checksum entity labels."""
+
+    return id_subtype_for(entity_type)
+
 
 # ---------------------------------------------------------------------------
 # Shared deterministic validators
@@ -293,6 +301,7 @@ __all__ = [
     "GermanSteuerIdProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",
     "validate_luhn",
