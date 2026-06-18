@@ -10,7 +10,12 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.quality_gates import validate_entity_spans
-from openmed.eval.metrics import EvalSpan, compute_metrics_bundle, normalize_eval_spans
+from openmed.eval.metrics import (
+    EvalSpan,
+    compute_confidence_intervals,
+    compute_metrics_bundle,
+    normalize_eval_spans,
+)
 from openmed.eval.report import BenchmarkReport
 
 
@@ -109,8 +114,19 @@ def run_benchmark(
     runner: ModelRunner | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
+    confidence_intervals: bool = False,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
 ) -> BenchmarkReport:
-    """Run *model_name* over fixtures and return a benchmark report."""
+    """Run *model_name* over fixtures and return a benchmark report.
+
+    When ``confidence_intervals`` is enabled (off by default to keep fast runs
+    cheap), a non-parametric bootstrap over documents attaches a
+    ``confidence_interval`` payload to the leakage, character recall, and exact
+    and relaxed span F1 metrics. The bootstrap is deterministic for a fixed
+    ``ci_seed``.
+    """
     _validate_unique_fixture_ids(fixtures)
     model_runner = runner or _shared_default_model_runner()
     results: list[FixtureResult] = []
@@ -157,6 +173,16 @@ def run_benchmark(
         default_device=device,
         source_text=corpus_text,
     )
+    if confidence_intervals:
+        metrics = _attach_confidence_intervals(
+            metrics,
+            fixtures,
+            results,
+            device=device,
+            n_resamples=ci_resamples,
+            alpha=ci_alpha,
+            seed=ci_seed,
+        )
 
     report_metadata = dict(metadata or {})
     report_metadata.setdefault("fixture_ids", [fixture.fixture_id for fixture in fixtures])
@@ -182,6 +208,10 @@ def run_suite(
     output_markdown: str | Path | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
+    confidence_intervals: bool = False,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
 ) -> BenchmarkReport:
     """Load fixtures, run the benchmark, and optionally write reports."""
     report = run_benchmark(
@@ -192,6 +222,10 @@ def run_suite(
         runner=runner,
         generated_at=generated_at,
         metadata=metadata,
+        confidence_intervals=confidence_intervals,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
     )
     if output_json is not None:
         report.write_json(output_json)
@@ -221,6 +255,40 @@ def _shared_default_model_runner() -> ModelRunner:
         )
 
     return run_fixture
+
+
+def _attach_confidence_intervals(
+    metrics: Mapping[str, Any],
+    fixtures: Sequence[BenchmarkFixture],
+    results: Sequence[FixtureResult],
+    *,
+    device: str,
+    n_resamples: int,
+    alpha: float,
+    seed: int,
+) -> dict[str, Any]:
+    """Bootstrap per-document CIs and merge them into the metric bundle."""
+    result_by_id = {result.fixture_id: result for result in results}
+    per_document_spans = [
+        (
+            fixture.gold_spans,
+            getattr(result_by_id.get(fixture.fixture_id), "predicted_spans", ()),
+        )
+        for fixture in fixtures
+    ]
+    intervals = compute_confidence_intervals(
+        per_document_spans,
+        n_resamples=n_resamples,
+        alpha=alpha,
+        seed=seed,
+        default_device=device,
+    )
+    merged = dict(metrics)
+    for key, interval in intervals.items():
+        metric = merged.get(key)
+        if isinstance(metric, Mapping):
+            merged[key] = {**metric, "confidence_interval": interval}
+    return merged
 
 
 def _corpus_coordinates(

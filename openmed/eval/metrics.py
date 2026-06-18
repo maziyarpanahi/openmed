@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from math import ceil
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
@@ -216,6 +217,36 @@ class ResourceMetrics:
         }
 
     def __getitem__(self, key: str) -> float | int | None:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class BootstrapCI:
+    """A bootstrap confidence interval around a point estimate.
+
+    ``degenerate`` is set when the interval could not vary under resampling
+    (an empty or single-document corpus), in which case ``lower``/``upper``
+    collapse onto ``point`` -- a zero-width, explicitly flagged interval.
+    """
+
+    point: float
+    lower: float
+    upper: float
+    n_resamples: int
+    alpha: float
+    degenerate: bool = False
+
+    def to_dict(self) -> dict[str, float | int | bool]:
+        return {
+            "point": self.point,
+            "lower": self.lower,
+            "upper": self.upper,
+            "n_resamples": self.n_resamples,
+            "alpha": self.alpha,
+            "degenerate": self.degenerate,
+        }
+
+    def __getitem__(self, key: str) -> float | int | bool:
         return self.to_dict()[key]
 
 
@@ -741,6 +772,169 @@ def compute_metrics_bundle(
     }
 
 
+def bootstrap_ci(
+    per_document_values: Sequence[Any],
+    statistic: Callable[[Sequence[Any]], float],
+    *,
+    n_resamples: int = 1000,
+    alpha: float = 0.05,
+    seed: int = 0,
+) -> BootstrapCI:
+    """Non-parametric bootstrap confidence interval over documents.
+
+    ``per_document_values`` holds one entry per benchmark document (any value
+    ``statistic`` knows how to aggregate, e.g. a ``(numerator, denominator)``
+    pair). ``statistic`` maps a resampled list of those entries to a scalar
+    point estimate. Documents are drawn with replacement from a
+    ``random.Random(seed)`` stream, so a fixed ``seed`` is fully reproducible.
+
+    The returned interval always brackets the point estimate. Degenerate inputs
+    -- an empty corpus or a single document -- cannot vary under resampling and
+    yield a zero-width interval flagged with ``degenerate=True``.
+    """
+    values = list(per_document_values)
+    point = float(statistic(values))
+    if len(values) < 2:
+        return BootstrapCI(
+            point=point,
+            lower=point,
+            upper=point,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            degenerate=True,
+        )
+
+    rng = random.Random(seed)
+    size = len(values)
+    samples: list[float] = []
+    for _ in range(n_resamples):
+        resample = [values[rng.randrange(size)] for _ in range(size)]
+        samples.append(float(statistic(resample)))
+    samples.sort()
+
+    lower = _percentile(samples, 100.0 * (alpha / 2.0))
+    upper = _percentile(samples, 100.0 * (1.0 - alpha / 2.0))
+    # Guarantee the point estimate is bracketed even when the bootstrap
+    # distribution is skewed to one side of it.
+    return BootstrapCI(
+        point=point,
+        lower=min(lower, point),
+        upper=max(upper, point),
+        n_resamples=n_resamples,
+        alpha=alpha,
+        degenerate=False,
+    )
+
+
+def compute_confidence_intervals(
+    per_document_spans: Sequence[tuple[Iterable[Any], Iterable[Any]]],
+    *,
+    n_resamples: int = 1000,
+    alpha: float = 0.05,
+    seed: int = 0,
+    default_language: str = "en",
+    default_device: str = "cpu",
+) -> dict[str, dict[str, Any]]:
+    """Bootstrap per-document CIs for leakage rate, character recall, and F1.
+
+    Each entry in ``per_document_spans`` is a ``(gold_spans, predicted_spans)``
+    pair for one benchmark document. Documents are resampled with replacement so
+    the intervals reflect document-level uncertainty in the corpus point
+    estimates. Returns a mapping keyed by metric name (``leakage``,
+    ``character_recall``, ``exact_span_f1``, ``relaxed_span_f1``) whose values
+    are :meth:`BootstrapCI.to_dict` payloads.
+    """
+    leakage_docs: list[tuple[int, int]] = []
+    recall_docs: list[tuple[int, int]] = []
+    exact_docs: list[tuple[int, int, int]] = []
+    relaxed_docs: list[tuple[int, int, int]] = []
+    for gold_spans, predicted_spans in per_document_spans:
+        leakage = compute_leakage_rate(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+        )
+        leakage_docs.append((leakage.leaked_chars, leakage.total_chars))
+        recall = compute_character_recall(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+        )
+        recall_docs.append((int(recall.numerator), int(recall.denominator)))
+        exact = compute_exact_span_f1(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+        )
+        exact_docs.append(
+            (exact.true_positives, exact.false_positives, exact.false_negatives)
+        )
+        relaxed = compute_relaxed_span_f1(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+        )
+        relaxed_docs.append(
+            (relaxed.true_positives, relaxed.false_positives, relaxed.false_negatives)
+        )
+
+    return {
+        "leakage": bootstrap_ci(
+            leakage_docs,
+            lambda docs: _ratio_over_docs(docs, zero_denominator=0.0),
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+        "character_recall": bootstrap_ci(
+            recall_docs,
+            lambda docs: _ratio_over_docs(docs, zero_denominator=1.0),
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+        "exact_span_f1": bootstrap_ci(
+            exact_docs,
+            _f1_over_docs,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+        "relaxed_span_f1": bootstrap_ci(
+            relaxed_docs,
+            _f1_over_docs,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+    }
+
+
+def _ratio_over_docs(
+    docs: Sequence[tuple[int | float, int | float]],
+    *,
+    zero_denominator: float,
+) -> float:
+    numerator = sum(item[0] for item in docs)
+    denominator = sum(item[1] for item in docs)
+    return _safe_rate(numerator, denominator, zero_denominator=zero_denominator)
+
+
+def _f1_over_docs(docs: Sequence[tuple[int, int, int]]) -> float:
+    true_positives = sum(item[0] for item in docs)
+    false_positives = sum(item[1] for item in docs)
+    false_negatives = sum(item[2] for item in docs)
+    return _f1_from_counts(
+        true_positives,
+        true_positives + false_positives,
+        true_positives + false_negatives,
+    ).f1
+
+
 def _read_value(data: Mapping[str, Any], key: str) -> Any:
     if key in data:
         return data[key]
@@ -895,6 +1089,7 @@ __all__ = [
     "ConsistencyMetric",
     "LatencyMetrics",
     "ResourceMetrics",
+    "BootstrapCI",
     "normalize_eval_span",
     "normalize_eval_spans",
     "compute_leakage_rate",
@@ -909,4 +1104,6 @@ __all__ = [
     "compute_latency_summary",
     "compute_resource_metrics",
     "compute_metrics_bundle",
+    "bootstrap_ci",
+    "compute_confidence_intervals",
 ]
