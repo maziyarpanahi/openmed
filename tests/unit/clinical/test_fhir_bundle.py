@@ -60,7 +60,10 @@ class TestBundleStructure:
 
         for entry, resource in zip(bundle["entry"], resources):
             assert entry["fullUrl"].startswith("urn:uuid:")
-            assert entry["resource"]["resourceType"] == resource["resourceType"]
+            assert (
+                entry["resource"]["resourceType"]
+                == resource["resourceType"]
+            )
             assert entry["request"] == {
                 "method": "POST",
                 "url": resource["resourceType"],
@@ -79,6 +82,19 @@ class TestBundleStructure:
         )
         assert bundle["type"] == "collection"
         assert all("request" not in entry for entry in bundle["entry"])
+
+    def test_batch_bundle_keeps_request_blocks(self):
+        resources = _condition_observation_report()
+        bundle = to_bundle(resources, doc_id="doc-1", bundle_type="batch")
+
+        assert bundle["type"] == "batch"
+        assert [
+            entry["request"]
+            for entry in bundle["entry"]
+        ] == [
+            {"method": "POST", "url": resource["resourceType"]}
+            for resource in resources
+        ]
 
     def test_missing_resource_type_raises(self):
         with pytest.raises(ValueError):
@@ -112,10 +128,10 @@ class TestReferenceResolution:
             assert reference in full_urls
 
     def test_subject_result_encounter_all_resolved(self):
-        # A richer graph exercising the three reference fields called out by the
-        # issue (subject, result, encounter). The Patient/Encounter fixtures are
-        # only here to anchor those references; the assembler never synthesises
-        # them itself.
+        # A richer graph exercising the three reference fields called out by
+        # the issue (subject, result, encounter). The Patient/Encounter
+        # fixtures are only here to anchor those references; the assembler
+        # never synthesises them itself.
         resources = [
             {"resourceType": "Patient", "id": "pat1"},
             {"resourceType": "Encounter", "id": "enc1",
