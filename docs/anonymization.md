@@ -12,7 +12,104 @@ PII entities:
 | `shift_dates` | Dates only — shifted by N days          | You want to preserve relative time.      |
 
 This document focuses on `replace`, which was upgraded in v1.3.0 to a full
-Faker-backed obfuscation engine.
+Faker-backed obfuscation engine. If you just want to compare all five
+methods side by side, start with the quickstart below.
+
+## Quickstart: choosing a method
+
+### `mask` — clear placeholders
+
+```python
+from openmed import deidentify
+
+result = deidentify(
+    "Patient John Doe (DOB: 01/15/1970) called from 555-1234",
+    method="mask",
+)
+print(result.deidentified_text)
+# Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
+```
+
+Not reversible by itself — pass `keep_mapping=True` and use `reidentify()`
+(see below) if you need to restore the original text later.
+
+### `remove` — delete PII entirely
+
+```python
+result = deidentify("Call 555-1234", method="remove")
+print(result.deidentified_text)
+# Call
+```
+
+Use this when you don't need positional alignment with the original text
+(e.g. exporting de-identified text for search indexing).
+
+### `replace` — realistic fake surrogates
+
+```python
+result = deidentify(
+    "Email: test@example.com",
+    method="replace",
+    consistent=True,
+    seed=42,
+)
+print(result.deidentified_text)
+# Email: <a realistic, fake-but-valid-looking address>
+```
+
+Best for sharing data with downstream tools that expect well-formed values
+(e.g. an email field that should still look like an email). See
+[The new `replace` engine](#the-new-replace-engine) below for locale and
+determinism options.
+
+### `hash` — consistent, irreversible digests
+
+```python
+result = deidentify("Patient John Doe", method="hash")
+print(result.deidentified_text)
+# Patient NAME_<digest>   (e.g. "Patient NAME_3f9a21bc")
+```
+
+The same input always hashes to the same digest, so repeated mentions of
+the same value link together across documents — without storing the
+original anywhere.
+
+### `shift_dates` — preserve intervals, hide absolute dates
+
+```python
+result = deidentify(
+    "DOB 01/15/2020",
+    method="shift_dates",
+    date_shift_days=30,
+)
+print(result.deidentified_text)
+# DOB 02/14/2020
+```
+
+All dates in a document shift by the same offset, so durations between
+dates (e.g. "3 days after admission") stay correct.
+
+### Reversing a de-identification: `reidentify()`
+
+Pass `keep_mapping=True` to get back a `mapping` you can hand to
+`reidentify()` later:
+
+```python
+from openmed import deidentify, reidentify
+
+text = "Dr. Alice Smith met Bob Jones today"
+result = deidentify(text, method="mask", keep_mapping=True)
+print(result.deidentified_text)
+# Dr. [NAME] met [NAME_2] today
+
+restored = reidentify(result.deidentified_text, result.mapping)
+assert restored == text
+```
+
+Repeated entities of the same type (two `NAME`s above) get a numbered
+placeholder (`[NAME]`, `[NAME_2]`, ...) so each one maps back to its own
+original value — this was a known limitation (#204) fixed by #222;
+`reidentify()` now round-trips correctly even when a type repeats.
 
 ## The new `replace` engine
 
