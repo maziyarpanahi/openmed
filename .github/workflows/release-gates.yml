@@ -40,7 +40,7 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "No candidate report found at $CANDIDATE_REPORT — skipping release gates."
+            echo "No candidate report found at $CANDIDATE_REPORT; skipping release gates."
           fi
 
       - name: Run release gates
