@@ -43,6 +43,7 @@ dev = [
   "fastapi>=0.110",
   "httpx>=0.27",
   "tomli>=2.0; python_version < '3.11'",
+  "nbformat>=5.0",
 ]
 
 cli = [

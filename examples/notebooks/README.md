@@ -38,6 +38,23 @@ A comprehensive tutorial covering **everything** about PII functionality:
 
 ---
 
+### 🧑‍🍳 [Deidentification_Cookbook.ipynb](./Deidentification_Cookbook.ipynb)
+
+**Task-oriented de-identification recipes (copy-paste)**
+
+Short, self-contained recipes for the most common real workflows:
+
+- De-identify a list or CSV of clinical strings
+- Batch-redact a directory of text files with `BatchProcessor`
+- Reversible replace + re-identify round-trip
+- Per-language model selection with `DEFAULT_PII_MODELS`
+
+Uses **synthetic PHI only** and a lightweight 44M English model for CPU-friendly runs.
+
+**Recommended for:** Engineers wiring de-identification into a pipeline who want a quick, runnable starting point.
+
+---
+
 ### 🌍 [Multilingual_PII_Detection_Guide.ipynb](./Multilingual_PII_Detection_Guide.ipynb)
 
 **Multilingual PII detection across 9 supported languages**
