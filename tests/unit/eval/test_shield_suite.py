@@ -157,7 +157,7 @@ def test_cli_benchmark_pii_emits_shield_benchmark_report(
         lambda **kwargs: fixtures,
     )
 
-    def runner(fixture, model_name, device):
+    def runner(fixture, model_name, device, **_kwargs):
         return [
             {"start": span.start, "end": span.end, "label": span.label}
             for span in fixture.gold_spans

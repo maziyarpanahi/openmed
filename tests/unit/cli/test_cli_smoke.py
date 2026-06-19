@@ -46,6 +46,35 @@ def test_argparse_cli_prints_version() -> None:
     assert openmed.__version__ in result.stdout
 
 
+def test_argparse_cli_parses_benchmark_pii_modes() -> None:
+    parser = main_module.build_parser()
+
+    suite_args = parser.parse_args(
+        ["benchmark", "pii", "--suite", "shield", "--models", "fixture-model"]
+    )
+    assert suite_args.command == "benchmark"
+    assert suite_args.benchmark_command == "pii"
+    assert suite_args.attack is None
+    assert suite_args.models == ["fixture-model"]
+
+    attack_args = parser.parse_args(
+        [
+            "benchmark",
+            "pii",
+            "--attack",
+            "reid",
+            "--suite",
+            "golden",
+            "--model",
+            "unit-model",
+        ]
+    )
+    assert attack_args.command == "benchmark"
+    assert attack_args.benchmark_command == "pii"
+    assert attack_args.attack == "reid"
+    assert attack_args.model == "unit-model"
+
+
 def test_tui_entry_invokes_openmed_tui(monkeypatch: pytest.MonkeyPatch) -> None:
     launched: dict[str, object] = {}
 
