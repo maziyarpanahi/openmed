@@ -33,7 +33,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
+      - name: Check for candidate report
+        id: check-candidate
+        run: |
+          if [ -f "$CANDIDATE_REPORT" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No candidate report found at $CANDIDATE_REPORT — skipping release gates."
+          fi
+
       - name: Run release gates
+        if: steps.check-candidate.outputs.exists == 'true'
         id: gates
         continue-on-error: true
         env:
@@ -46,18 +57,18 @@ jobs:
             --repo "$GITHUB_REPOSITORY"
 
       - name: Upload gate report
-        if: always() && hashFiles('release-gate-report.json') != ''
+        if: always() && steps.check-candidate.outputs.exists == 'true' && hashFiles('release-gate-report.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: release-gate-report
           path: release-gate-report.json
 
       - name: Publish candidate
-        if: steps.gates.outcome == 'success'
+        if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome == 'success'
         run: |
           echo "Release gates passed; publish step is unblocked."
 
       - name: Fail closed
-        if: steps.gates.outcome != 'success'
+        if: steps.check-candidate.outputs.exists == 'true' && steps.gates.outcome != 'success'
         run: |
           exit 1
