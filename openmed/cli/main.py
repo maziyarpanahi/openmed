@@ -127,7 +127,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     add_calibrate_command(subparsers)
-    _add_benchmark_command(subparsers)
     return parser
 
 
