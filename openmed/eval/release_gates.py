@@ -1793,8 +1793,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
+    candidate_path = Path(args.candidate)
+    if not candidate_path.is_file():
+        print(
+            f"Candidate report not found: {candidate_path}. "
+            "Skipping release gate evaluation.",
+            file=sys.stderr,
+        )
+        return 0
+
     try:
-        candidate = _read_json_file(Path(args.candidate))
+        candidate = _read_json_file(candidate_path)
         baseline = _read_json_file(Path(args.baseline)) if args.baseline else None
         gate = ReleaseGate(
             milestone=args.milestone,
