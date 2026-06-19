@@ -67,6 +67,8 @@ REVIEWED_LICENSES = {
     "mkdocs-minify-plugin": "MIT",
     "mkdocstrings": "ISC",
     "mlx": "MIT",
+    "onnx": "Apache-2.0",
+    "onnxruntime": "MIT",
     "paddleocr": "Apache-2.0",
     "pdfplumber": "MIT",
     "pillow": "HPND",
