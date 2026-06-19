@@ -1,5 +1,6 @@
 """Output formatting utilities for OpenMed."""
 
+import html as html_mod
 import json
 import unicodedata
 from typing import List, Dict, Any, Optional, Union, Tuple
@@ -433,8 +434,8 @@ class OutputFormatter:
         """
         html = f'<div class="openmed-result">\n'
         html += f'<h3>Analysis Results</h3>\n'
-        html += f'<p><strong>Model:</strong> {result.model_name}</p>\n'
-        html += f'<p><strong>Timestamp:</strong> {result.timestamp}</p>\n'
+        html += f'<p><strong>Model:</strong> {html_mod.escape(str(result.model_name))}</p>\n'
+        html += f'<p><strong>Timestamp:</strong> {html_mod.escape(str(result.timestamp))}</p>\n'
 
         if result.processing_time:
             html += f'<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n'
@@ -442,7 +443,7 @@ class OutputFormatter:
         html += f'<div class="text-content">\n'
 
         # Highlight entities in text
-        highlighted_text = result.text
+        highlighted_text = html_mod.escape(result.text)
         offset = 0
 
         # Sort entities by start position
@@ -457,7 +458,7 @@ class OutputFormatter:
 
             color = self._get_entity_color(entity.label)
 
-            highlight_start = f'<span class="entity entity-{entity.label.lower()}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {entity.label}, Confidence: {entity.confidence:.3f}">'
+            highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
             highlight_end = '</span>'
 
             highlighted_text = (
@@ -481,7 +482,7 @@ class OutputFormatter:
 
             for entity in result.entities:
                 confidence_str = f" (confidence: {entity.confidence:.3f})" if self.include_confidence else ""
-                html += f'<li><strong>{entity.label}:</strong> {entity.text}{confidence_str}</li>\n'
+                html += f'<li><strong>{html_mod.escape(entity.label)}:</strong> {html_mod.escape(entity.text)}{confidence_str}</li>\n'
 
             html += f'</ul>\n'
             html += f'</div>\n'
