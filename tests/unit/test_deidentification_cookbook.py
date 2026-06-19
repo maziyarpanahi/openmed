@@ -1,14 +1,13 @@
 """Structural validation for the de-identification cookbook notebook.
 
-The notebook's model-calling cells are not executed in CI (out of scope); this
-test only confirms the notebook is valid and has the expected recipe structure.
+The notebook's model-calling cells are not executed in CI (out of scope); these
+tests confirm the notebook is valid JSON and has the expected recipe structure.
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-
-import nbformat
 
 ROOT = Path(__file__).resolve().parents[2]
 NOTEBOOK = ROOT / "examples" / "notebooks" / "Deidentification_Cookbook.ipynb"
@@ -23,34 +22,77 @@ REQUIRED_SECTIONS = [
 
 
 def _load():
-    return nbformat.read(NOTEBOOK, as_version=4)
+    return json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+
+
+def _cell_text(cell):
+    source = cell.get("source", "")
+    if isinstance(source, list):
+        return "".join(source)
+    return source
+
+
+def _notebook_text():
+    return "\n".join(_cell_text(cell) for cell in _load()["cells"])
 
 
 def test_notebook_exists():
     assert NOTEBOOK.exists()
 
 
-def test_notebook_is_valid():
-    nbformat.validate(_load())  # raises NotebookValidationError if malformed
+def test_notebook_is_valid_structure():
+    nb = _load()
+    assert nb["nbformat"] == 4
+    assert isinstance(nb.get("nbformat_minor"), int)
+    assert isinstance(nb.get("metadata"), dict)
+    assert isinstance(nb.get("cells"), list)
+    assert nb["cells"]
+
+    for cell in nb["cells"]:
+        assert cell["cell_type"] in {"markdown", "code"}
+        assert isinstance(cell.get("metadata"), dict)
+        assert isinstance(cell.get("source"), list)
+        assert all(isinstance(line, str) for line in cell["source"])
 
 
 def test_notebook_has_four_recipes():
     nb = _load()
-    markdown = "\n".join(c.source for c in nb.cells if c.cell_type == "markdown")
+    markdown = "\n".join(
+        _cell_text(cell) for cell in nb["cells"] if cell["cell_type"] == "markdown"
+    )
     for header in REQUIRED_SECTIONS:
         assert header in markdown, f"missing recipe section: {header}"
 
 
 def test_notebook_uses_synthetic_data_disclaimer():
-    nb = _load()
-    markdown = "\n".join(c.source for c in nb.cells if c.cell_type == "markdown")
-    assert "Synthetic data only" in markdown
+    assert "Synthetic data only" in _notebook_text()
+
+
+def test_notebook_uses_expected_public_apis():
+    source = _notebook_text()
+    for snippet in [
+        "deidentify(",
+        "reidentify(",
+        "BatchProcessor(",
+        "process_directory(",
+        "DEFAULT_PII_MODELS",
+        'method="replace"',
+        "keep_mapping=True",
+        "consistent=True",
+    ]:
+        assert snippet in source
+
+
+def test_batch_recipe_writes_redacted_files():
+    source = _notebook_text()
+    assert "notes_deidentified" in source
+    assert "write_text(item.result.deidentified_text" in source
 
 
 def test_notebook_outputs_are_cleared():
     nb = _load()
-    for cell in nb.cells:
-        if cell.cell_type == "code":
+    for cell in nb["cells"]:
+        if cell["cell_type"] == "code":
             assert cell.get("outputs") == []
             assert cell.get("execution_count") is None
 

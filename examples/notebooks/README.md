@@ -38,7 +38,7 @@ A comprehensive tutorial covering **everything** about PII functionality:
 
 ---
 
-### 🧑‍🍳 [Deidentification_Cookbook.ipynb](./Deidentification_Cookbook.ipynb)
+### [Deidentification_Cookbook.ipynb](./Deidentification_Cookbook.ipynb)
 
 **Task-oriented de-identification recipes (copy-paste)**
 
