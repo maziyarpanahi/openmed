@@ -843,6 +843,43 @@ section[data-screen] { padding: 96px 0; }
 .code-copy:hover { color: var(--fg-on-inverse); border-color: var(--fg-on-inverse); }
 .code-copy.copied { color: var(--accent-on-inverse); border-color: var(--accent-on-inverse); }
 
+.code-install {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-on-inverse);
+    background: rgba(255, 255, 255, .02);
+}
+.code-install-prompt {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--accent-on-inverse);
+    user-select: none;
+}
+.code-install-cmd {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--fg-on-inverse);
+    letter-spacing: .01em;
+}
+.code-install-copy {
+    background: transparent;
+    border: 1px solid var(--border-on-inverse);
+    color: var(--fg-on-inverse-muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--dur-micro), border-color var(--dur-micro);
+}
+.code-install-copy:hover { color: var(--fg-on-inverse); border-color: var(--fg-on-inverse); }
+.code-install-copy.copied { color: var(--accent-on-inverse); border-color: var(--accent-on-inverse); }
+
 .code-tabs {
     display: flex;
     gap: 2px;
@@ -1319,4 +1356,156 @@ section[data-screen] { padding: 96px 0; }
     .nav-actions .btn-primary .btn-label { display: none; }
     .nav-actions .btn-primary { padding: 9px 10px; }
     .wordmark { font-size: 20px; }
+}
+
+/* ---------- Products (Welna + OpenMed Agent) ----------------------------- */
+.product-duo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+.product-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 30px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elevated);
+    text-decoration: none;
+    color: inherit;
+    transition: border-color var(--dur-micro) var(--ease-out), transform var(--dur-micro) var(--ease-out);
+}
+.product-card:hover { border-color: var(--fg); transform: translateY(-2px); }
+.product-card.dark {
+    background: var(--surface-inverse);
+    color: var(--fg-on-inverse);
+    border-color: var(--surface-inverse-2);
+}
+.product-card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.product-wordmark {
+    font-family: var(--font-display);
+    font-style: italic;
+    font-weight: 500;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+.product-badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    border: 1px solid var(--border-strong);
+    color: var(--fg-muted);
+    white-space: nowrap;
+}
+.product-card.dark .product-badge { border-color: var(--border-on-inverse); color: var(--fg-on-inverse-muted); }
+.product-card h3 {
+    font-family: var(--font-sans);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+    margin: 0;
+}
+.product-card .pdesc { font-size: 14px; line-height: 1.55; color: var(--fg-muted); margin: 0; }
+.product-card.dark .pdesc { color: var(--fg-on-inverse-muted); }
+.product-built {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--fg-muted);
+    padding-top: 4px;
+}
+.product-built b { color: var(--accent); font-weight: 500; }
+.product-card.dark .product-built { color: var(--fg-on-inverse-muted); }
+.product-card.dark .product-built b { color: var(--accent-on-inverse); }
+.product-cta {
+    margin-top: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    align-self: flex-start;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 14px;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    background: var(--fg);
+    color: var(--bg);
+    transition: background var(--dur-micro) var(--ease-out);
+}
+.product-card:hover .product-cta { background: var(--stone-600); }
+[data-theme="dark"] .product-card:not(.dark):hover .product-cta { background: var(--stone-200); color: var(--ink); }
+.product-card.dark .product-cta { background: var(--fg-on-inverse); color: var(--surface-inverse); }
+.product-card.dark:hover .product-cta { background: #fff; }
+
+/* Models — managed deployment strip (SageMaker) */
+.deploy-strip {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+}
+.deploy-strip .btn { flex-shrink: 0; }
+
+/* Welna app screenshot */
+.product-card.welna { overflow: hidden; }
+.welna-device {
+    margin: 14px -30px 0;
+    width: calc(100% + 60px);
+    height: 264px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    background: #ECE6D9;
+    border-top: 1px solid #E0D8C7;
+    border-bottom: 1px solid #E0D8C7;
+}
+.welna-device img {
+    display: block;
+    width: 360px;
+    max-width: 100%;
+    height: auto;
+}
+.product-card.welna:hover { border-color: var(--border-strong); }
+
+/* Agent terminal preview */
+.agent-shot { background: #0B0D10; border: 1px solid var(--border-on-inverse); border-radius: var(--radius-md); overflow: hidden; font-family: var(--font-mono); }
+.agent-shot-bar { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border-on-inverse); font-size: 11px; color: var(--fg-on-inverse-muted); }
+.agent-shot-body { padding: 16px; font-size: 12.5px; line-height: 1.95; color: #E9E4D7; }
+.agent-line { display: flex; align-items: center; gap: 9px; }
+.agent-line .dn { color: #4EC38A; }
+.agent-line .pend { color: var(--fg-on-inverse-muted); }
+.agent-line .svc { color: #6FB5B5; font-size: 10.5px; }
+.agent-line .pr { color: var(--highlight); }
+
+/* Clarity strip */
+.clarity-strip {
+    margin-top: 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 18px 22px;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-md);
+    background: var(--bg-elevated);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--fg-muted);
+}
+.clarity-strip b { color: var(--fg); font-weight: 600; }
+.clarity-strip .ico { color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+
+@media (max-width: 1100px) {
+    .product-duo { grid-template-columns: 1fr; }
 }
