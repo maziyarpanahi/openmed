@@ -43,8 +43,6 @@ to publish outside CI, run `make docs-deploy`; it mirrors the workflow by buildi
 
 - [Release Streams & Channels](release/semver-and-channels.md) defines model artifact and library release cadence.
 - [Generative Model Policy](generative-model-policy.md) defines approved and prohibited model-assisted workflows.
-- [Dataset Access Plan](https://github.com/maziyarpanahi/openmed/blob/master/PLANS/V2/DATASET_ACCESS_PLAN.md) records public, DUA-gated, and synthetic data handling.
-- [Risk Register & Non-Goals](https://github.com/maziyarpanahi/openmed/blob/master/PLANS/V2/RISK_REGISTER_AND_NON_GOALS.md) records hard invariants, risks, and explicit non-goals.
 
 Ported rule-set files must start with an upstream attribution header naming the
 source project, source URL, license, port date, and local modifications.
