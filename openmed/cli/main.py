@@ -122,6 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
+    _add_benchmark_command(subparsers)
     _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
@@ -394,6 +395,44 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
         help="Minimum confidence for redaction.",
     )
     batch_parser.set_defaults(handler=_handle_pii_batch)
+
+
+def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
+    benchmark_parser = subparsers.add_parser(
+        "benchmark", help="Run OpenMed benchmark suites."
+    )
+    benchmark_sub = benchmark_parser.add_subparsers(dest="benchmark_command")
+
+    pii_parser = benchmark_sub.add_parser(
+        "pii", help="Run PII/PHI de-identification benchmark suites."
+    )
+    pii_parser.add_argument(
+        "--suite",
+        default="shield",
+        help="Benchmark suite name.",
+    )
+    pii_parser.add_argument(
+        "--models",
+        nargs="+",
+        required=True,
+        help="One or more model identifiers. Comma-separated values are accepted.",
+    )
+    pii_parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device tier label recorded in the benchmark report.",
+    )
+    pii_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Write BenchmarkReport JSON to this path instead of stdout.",
+    )
+    pii_parser.add_argument(
+        "--full-shield",
+        action="store_true",
+        help="Use the approved-access full SHIELD corpus instead of the public sample.",
+    )
+    pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
 
 def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
@@ -754,6 +793,66 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_benchmark_pii(args: argparse.Namespace) -> int:
+    from openmed.eval.harness import run_benchmark
+    from openmed.eval.suites import SHIELD, load_suite_fixtures, suite_metadata
+
+    models = _parse_model_args(args.models)
+    if not models:
+        sys.stderr.write("At least one model identifier is required.\n")
+        return 1
+
+    suite = str(args.suite)
+    try:
+        if suite == SHIELD:
+            use_sample = not bool(args.full_shield)
+            fixtures = load_suite_fixtures(suite, use_sample=use_sample)
+            metadata = suite_metadata(suite, use_sample=use_sample)
+        else:
+            fixtures = load_suite_fixtures(suite)
+            metadata = suite_metadata(suite)
+    except (RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load benchmark suite: {exc}\n")
+        return 1
+
+    reports = [
+        run_benchmark(
+            fixtures,
+            suite=suite,
+            model_name=model,
+            device=args.device,
+            metadata=metadata,
+        )
+        for model in models
+    ]
+    if len(reports) == 1:
+        payload: Any = reports[0].to_dict()
+    else:
+        payload = {
+            "metadata": metadata,
+            "reports": [report.to_dict() for report in reports],
+            "suite": suite,
+        }
+
+    output = json.dumps(payload, indent=2, sort_keys=True)
+    if args.output:
+        try:
+            args.output.write_text(output + "\n", encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(output + "\n")
+    return 0
+
+
+def _parse_model_args(values: Sequence[str]) -> list[str]:
+    models: list[str] = []
+    for value in values:
+        models.extend(item.strip() for item in value.split(",") if item.strip())
+    return models
 
 
 def _handle_tui(args: argparse.Namespace) -> int:
