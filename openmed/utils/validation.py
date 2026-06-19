@@ -194,8 +194,10 @@ def _contains_suspicious_content(text: str) -> bool:
     if special_char_ratio > 0.5:
         return True
 
-    # Check for binary or encoded content
-    if re.search(r'[^\x00-\x7F]{50,}', text):
+    # Check for binary or encoded content (control characters excluding
+    # common whitespace).  Do NOT reject non-ASCII text — CJK, Arabic,
+    # Devanagari and other scripts legitimately contain long non-ASCII runs.
+    if re.search(r'[\x00-\x08\x0e-\x1f\x7f]{10,}', text):
         return True
 
     return False
