@@ -1,5 +1,6 @@
 """Output formatting utilities for OpenMed."""
 
+import html as html_mod
 import json
 import unicodedata
 from typing import List, Dict, Any, Optional, Union, Tuple
@@ -433,17 +434,13 @@ class OutputFormatter:
         """
         html = f'<div class="openmed-result">\n'
         html += f'<h3>Analysis Results</h3>\n'
-        html += f'<p><strong>Model:</strong> {result.model_name}</p>\n'
-        html += f'<p><strong>Timestamp:</strong> {result.timestamp}</p>\n'
+        html += f'<p><strong>Model:</strong> {html_mod.escape(str(result.model_name))}</p>\n'
+        html += f'<p><strong>Timestamp:</strong> {html_mod.escape(str(result.timestamp))}</p>\n'
 
         if result.processing_time:
             html += f'<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n'
 
         html += f'<div class="text-content">\n'
-
-        # Highlight entities in text
-        highlighted_text = result.text
-        offset = 0
 
         # Sort entities by start position
         sorted_entities = sorted(
@@ -451,24 +448,29 @@ class OutputFormatter:
             key=lambda x: x.start
         )
 
+        highlighted_parts: List[str] = []
+        cursor = 0
         for entity in sorted_entities:
-            start = entity.start + offset
-            end = entity.end + offset
+            start = entity.start
+            end = entity.end
+            if start < cursor or end <= start or end > len(result.text):
+                continue
 
             color = self._get_entity_color(entity.label)
+            label = html_mod.escape(str(entity.label))
+            class_label = html_mod.escape(str(entity.label).lower())
 
-            highlight_start = f'<span class="entity entity-{entity.label.lower()}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {entity.label}, Confidence: {entity.confidence:.3f}">'
-            highlight_end = '</span>'
-
-            highlighted_text = (
-                highlighted_text[:start] +
-                highlight_start +
-                highlighted_text[start:end] +
-                highlight_end +
-                highlighted_text[end:]
+            highlighted_parts.append(html_mod.escape(result.text[cursor:start]))
+            highlighted_parts.append(
+                f'<span class="entity entity-{class_label}" '
+                f'style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" '
+                f'title="Label: {label}, Confidence: {entity.confidence:.3f}">'
+                f'{html_mod.escape(result.text[start:end])}</span>'
             )
+            cursor = end
 
-            offset += len(highlight_start) + len(highlight_end)
+        highlighted_parts.append(html_mod.escape(result.text[cursor:]))
+        highlighted_text = "".join(highlighted_parts)
 
         html += f'<p>{highlighted_text}</p>\n'
         html += f'</div>\n'
@@ -481,7 +483,7 @@ class OutputFormatter:
 
             for entity in result.entities:
                 confidence_str = f" (confidence: {entity.confidence:.3f})" if self.include_confidence else ""
-                html += f'<li><strong>{entity.label}:</strong> {entity.text}{confidence_str}</li>\n'
+                html += f'<li><strong>{html_mod.escape(entity.label)}:</strong> {html_mod.escape(entity.text)}{confidence_str}</li>\n'
 
             html += f'</ul>\n'
             html += f'</div>\n'

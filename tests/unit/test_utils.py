@@ -260,3 +260,30 @@ class TestSuspiciousContentDetection:
         # Excessive special characters should be detected
         suspicious_text = "!@#$%^&*()_+" * 10
         assert _contains_suspicious_content(suspicious_text)
+
+    def test_suspicious_content_allows_cjk_clinical_text(self):
+        """Test that long CJK clinical notes are valid input."""
+        from openmed.utils.validation import _contains_suspicious_content
+
+        japanese_note = (
+            "患者は高血圧を患っており、心臓専門医による定期的なフォローアップが必要です。"
+            "現在の内服薬を継続し、次回外来で血圧と症状を再評価します。"
+        ) * 3
+        chinese_note = (
+            "患者有高血压病史，需要继续监测血压并记录头痛、胸闷或呼吸困难等症状。"
+            "建议按时服药，并在下次门诊复查。"
+        ) * 3
+
+        assert not _contains_suspicious_content(japanese_note)
+        assert not _contains_suspicious_content(chinese_note)
+        assert validate_input(japanese_note) == japanese_note
+
+    def test_suspicious_content_rejects_control_character_runs(self):
+        """Test detection of binary-like control character runs."""
+        from openmed.utils.validation import _contains_suspicious_content
+
+        suspicious_text = "Patient note" + ("\x00" * 10) + "trailer"
+
+        assert _contains_suspicious_content(suspicious_text)
+        with pytest.raises(ValueError, match="Input text contains suspicious content"):
+            validate_input(suspicious_text)
