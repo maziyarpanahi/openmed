@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import sys
 import time
@@ -236,6 +237,7 @@ def run_suite(
 
 def _shared_default_model_runner() -> ModelRunner:
     shared_loader: Any | None = None
+    accepts_loader = _runner_accepts_loader(default_model_runner)
 
     def run_fixture(
         fixture: BenchmarkFixture,
@@ -243,6 +245,8 @@ def _shared_default_model_runner() -> ModelRunner:
         device: str,
     ) -> Iterable[Any]:
         nonlocal shared_loader
+        if not accepts_loader:
+            return default_model_runner(fixture, model_name, device)
         if shared_loader is None:
             from openmed.core.models import ModelLoader
 
@@ -255,6 +259,18 @@ def _shared_default_model_runner() -> ModelRunner:
         )
 
     return run_fixture
+
+
+def _runner_accepts_loader(runner: Callable[..., Iterable[Any]]) -> bool:
+    try:
+        signature = inspect.signature(runner)
+    except (TypeError, ValueError):
+        return True
+
+    return any(
+        parameter.name == "loader" or parameter.kind is inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
 
 
 def _attach_confidence_intervals(

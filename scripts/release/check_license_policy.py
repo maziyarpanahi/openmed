@@ -65,6 +65,7 @@ REVIEWED_LICENSES = {
     "mkdocs-minify-plugin": "MIT",
     "mkdocstrings": "ISC",
     "mlx": "MIT",
+    "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
     "rich": "MIT",
