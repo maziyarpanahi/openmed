@@ -84,7 +84,7 @@ def test_tui_entry_has_base_install_fallback(
     result = main_module.main(["tui"])
 
     assert result == 0
-    assert "OpenMed TUI entry is installed" in capsys.readouterr().out
+    assert "OpenMed TUI is not installed" in capsys.readouterr().out
 
 
 def test_typer_surface_is_importable() -> None:

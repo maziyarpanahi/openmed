@@ -587,8 +587,9 @@ def _run_basic_tui_entry(
     model_display = model_name or "disease_detection_superclinical"
     if not sys.stdin.isatty():
         sys.stdout.write(
-            "OpenMed TUI entry is installed. Run it from an interactive "
-            "terminal to start the basic prompt.\n"
+            "OpenMed TUI is not installed. Run from an interactive "
+            "terminal to use the basic prompt, or install the TUI "
+            "for the full experience.\n"
         )
         return 0
 
