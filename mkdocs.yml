@@ -11,6 +11,7 @@ strict: true
 nav:
   - Overview:
       - Welcome: index.md
+      - Ecosystem Overview: ecosystem-overview.md
       - Feature Map: feature-map.md
       - Quick Start: getting-started.md
   - Core Guides:

@@ -6,8 +6,8 @@
 > ([arXiv:2508.01630](https://arxiv.org/abs/2508.01630)), and the OpenMed Agent
 > preview ([agent.openmed.life](https://agent.openmed.life/)).
 >
-> Compiled 2026-06-19. This is a landscape document, not API docs — for usage see
-> [`docs/`](docs/) and [openmed.life/docs](https://openmed.life/docs).
+> Compiled 2026-06-19. This is a landscape document, not API docs — for usage start
+> with [Welcome](index.md) or [openmed.life/docs](https://openmed.life/docs).
 
 ## What OpenMed is
 
