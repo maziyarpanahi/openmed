@@ -442,34 +442,35 @@ class OutputFormatter:
 
         html += f'<div class="text-content">\n'
 
-        # Highlight entities in text
-        highlighted_text = html_mod.escape(result.text)
-        offset = 0
-
         # Sort entities by start position
         sorted_entities = sorted(
             [e for e in result.entities if e.start is not None and e.end is not None],
             key=lambda x: x.start
         )
 
+        highlighted_parts: List[str] = []
+        cursor = 0
         for entity in sorted_entities:
-            start = entity.start + offset
-            end = entity.end + offset
+            start = entity.start
+            end = entity.end
+            if start < cursor or end <= start or end > len(result.text):
+                continue
 
             color = self._get_entity_color(entity.label)
+            label = html_mod.escape(str(entity.label))
+            class_label = html_mod.escape(str(entity.label).lower())
 
-            highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
-            highlight_end = '</span>'
-
-            highlighted_text = (
-                highlighted_text[:start] +
-                highlight_start +
-                highlighted_text[start:end] +
-                highlight_end +
-                highlighted_text[end:]
+            highlighted_parts.append(html_mod.escape(result.text[cursor:start]))
+            highlighted_parts.append(
+                f'<span class="entity entity-{class_label}" '
+                f'style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" '
+                f'title="Label: {label}, Confidence: {entity.confidence:.3f}">'
+                f'{html_mod.escape(result.text[start:end])}</span>'
             )
+            cursor = end
 
-            offset += len(highlight_start) + len(highlight_end)
+        highlighted_parts.append(html_mod.escape(result.text[cursor:]))
+        highlighted_text = "".join(highlighted_parts)
 
         html += f'<p>{highlighted_text}</p>\n'
         html += f'</div>\n'
