@@ -299,6 +299,35 @@ class TestOutputFormatter:
         assert "diabetes" in html_output
         assert "test-model" in html_output
 
+    def test_to_html_escapes_user_controlled_values_preserving_offsets(self):
+        """Test HTML escaping without shifting entity offsets."""
+        text = 'Intro <script>alert("x")</script> patient Jane & Co'
+        start = text.index("Jane")
+        result = PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text="<b>Jane</b>",
+                    label='NAME" onclick="alert(1)',
+                    confidence=0.99,
+                    start=start,
+                    end=start + len("Jane"),
+                )
+            ],
+            model_name='model"><img src=x onerror=alert(1)>',
+            timestamp="2026-06-19T00:00:00Z<script>",
+        )
+
+        html_output = OutputFormatter().to_html(result)
+
+        assert "<script>" not in html_output
+        assert "<img" not in html_output
+        assert 'onclick="' not in html_output
+        assert "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;" in html_output
+        assert "model&quot;&gt;&lt;img src=x onerror=alert(1)&gt;" in html_output
+        assert "&lt;b&gt;Jane&lt;/b&gt;" in html_output
+        assert ">Jane</span>" in html_output
+
     def test_to_csv_rows(self, test_helpers, sample_predictions, sample_text):
         """Test CSV rows generation."""
         formatter = OutputFormatter()

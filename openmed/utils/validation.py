@@ -194,8 +194,9 @@ def _contains_suspicious_content(text: str) -> bool:
     if special_char_ratio > 0.5:
         return True
 
-    # Check for binary or encoded content
-    if re.search(r'[^\x00-\x7F]{50,}', text):
+    # Check for binary-like control content without rejecting legitimate
+    # non-ASCII clinical text.
+    if re.search(r'[\x00-\x08\x0e-\x1f\x7f]{10,}', text):
         return True
 
     return False

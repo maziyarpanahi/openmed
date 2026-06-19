@@ -115,3 +115,35 @@ def test_release_gate_cli_returns_nonzero_for_failed_gate(tmp_path: Path) -> Non
         check["gate"] == "G3" and check["passed"] is False
         for check in report["gate_results"]
     )
+
+
+def test_release_gate_cli_skips_missing_candidate_without_issue(
+    tmp_path: Path,
+    capsys,
+    monkeypatch,
+) -> None:
+    missing_candidate = tmp_path / "missing-candidate.json"
+    output = tmp_path / "gate-report.json"
+
+    def fail_issue_creation(**kwargs):
+        raise AssertionError("missing candidate should not open a tracking issue")
+
+    monkeypatch.setattr(
+        release_gates,
+        "_open_or_update_tracking_issue_for_error",
+        fail_issue_creation,
+    )
+
+    exit_code = release_gates.main(
+        [
+            "--candidate",
+            str(missing_candidate),
+            "--output",
+            str(output),
+            "--issue-on-failure",
+        ]
+    )
+
+    assert exit_code == 0
+    assert not output.exists()
+    assert "Candidate report not found" in capsys.readouterr().err
