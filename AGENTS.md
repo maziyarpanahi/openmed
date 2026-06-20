@@ -8,7 +8,7 @@ Core Python package code lives in `openmed/`. Keep existing privacy and registry
 
 - `uv pip install -e ".[dev]"`: install editable package with test and lint dependencies.
 - `uv pip install -e ".[dev,hf]"`: add Hugging Face dependencies for model-related work.
-- `.venv/bin/python -m pytest tests/ -q`: required pre-PR test command for roadmap tasks.
+- `.venv/bin/python -m pytest tests/ -q`: run the full test suite before preparing a PR.
 - `pytest --cov=openmed --cov-report=term-missing`: run local coverage.
 - `make build`: build wheel and sdist via `python3 -m build`.
 - `make docs-serve` / `make docs-build`: preview or strictly build MkDocs.
@@ -28,7 +28,7 @@ For privacy, aggregate F1 is not enough. Add tests or fixtures for direct-identi
 
 ## Commit & Pull Request Guidelines
 
-Recent history uses concise imperative commits, often with prefixes such as `fix:`. For roadmap tasks, keep commits and PRs focused on the task acceptance criteria. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.
+Recent history uses concise imperative commits, often with prefixes such as `fix:`. Keep commits and PRs focused on the requested change. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.
 
 Pull requests should follow `.github/PULL_REQUEST_TEMPLATE.md`: description, change type, tests run, docs or changelog updates when applicable, dependency justification, linked issue, and screenshots or example output for UI/docs changes.
 
