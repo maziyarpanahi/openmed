@@ -92,6 +92,27 @@ VIN: Final = "VIN"
 VEHICLE_REGISTRATION: Final = "VEHICLE_REGISTRATION"
 IMEI: Final = "IMEI"
 
+#: Biomedical entities
+DISEASE: Final = "DISEASE"
+CONDITION: Final = "CONDITION"
+PATHOLOGY: Final = "PATHOLOGY"
+CANCER: Final = "CANCER"
+CELL: Final = "CELL"
+GENE_OR_GENE_PRODUCT: Final = "GENE_OR_GENE_PRODUCT"
+GENE: Final = "GENE"
+PROTEIN: Final = "PROTEIN"
+DNA: Final = "DNA"
+RNA: Final = "RNA"
+MEDICATION: Final = "MEDICATION"
+DRUG: Final = "DRUG"
+CHEM: Final = "CHEM"
+SIMPLE_CHEMICAL: Final = "SIMPLE_CHEMICAL"
+ANATOMY: Final = "ANATOMY"
+ORGAN: Final = "ORGAN"
+TISSUE: Final = "TISSUE"
+ORGANISM: Final = "ORGANISM"
+SPECIES: Final = "SPECIES"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -121,6 +142,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset({
     GENDER, EYE_COLOR, HEIGHT,
     ORGANIZATION, JOB_TITLE, JOB_DEPARTMENT, OCCUPATION,
     IP_ADDRESS, MAC_ADDRESS, USER_AGENT, VIN, VEHICLE_REGISTRATION, IMEI,
+    DISEASE, CONDITION, PATHOLOGY, CANCER, CELL,
+    GENE_OR_GENE_PRODUCT, GENE, PROTEIN, DNA, RNA,
+    MEDICATION, DRUG, CHEM, SIMPLE_CHEMICAL,
+    ANATOMY, ORGAN, TISSUE, ORGANISM, SPECIES,
     OTHER,
 })
 
@@ -527,6 +552,29 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vrm": VEHICLE_REGISTRATION,
     "licenseplate": VEHICLE_REGISTRATION,
     "imei": IMEI,
+
+    # Biomedical entities
+    "disease": DISEASE,
+    "condition": CONDITION,
+    "pathology": PATHOLOGY,
+    "cancer": CANCER,
+    "cell": CELL,
+    "geneorgeneproduct": GENE_OR_GENE_PRODUCT,
+    "genegeneproduct": GENE_OR_GENE_PRODUCT,
+    "gene": GENE,
+    "protein": PROTEIN,
+    "dna": DNA,
+    "rna": RNA,
+    "medication": MEDICATION,
+    "drug": DRUG,
+    "chem": CHEM,
+    "chemical": CHEM,
+    "simplechemical": SIMPLE_CHEMICAL,
+    "anatomy": ANATOMY,
+    "organ": ORGAN,
+    "tissue": TISSUE,
+    "organism": ORGANISM,
+    "species": SPECIES,
 }
 
 
@@ -686,5 +734,9 @@ __all__ = [
     "ORGANIZATION", "JOB_TITLE", "JOB_DEPARTMENT", "OCCUPATION",
     "IP_ADDRESS", "MAC_ADDRESS", "USER_AGENT", "VIN",
     "VEHICLE_REGISTRATION", "IMEI",
+    "DISEASE", "CONDITION", "PATHOLOGY", "CANCER", "CELL",
+    "GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA",
+    "MEDICATION", "DRUG", "CHEM", "SIMPLE_CHEMICAL",
+    "ANATOMY", "ORGAN", "TISSUE", "ORGANISM", "SPECIES",
     "OTHER",
 ]
