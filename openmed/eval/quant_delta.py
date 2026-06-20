@@ -13,7 +13,6 @@ from typing import Any, Mapping, Sequence
 
 from openmed.core.labels import normalize_label
 
-
 INT8_RECALL_DELTA_LIMIT = 0.005
 INT4_RECALL_DELTA_LIMIT = 0.010
 
@@ -75,8 +74,7 @@ class QuantRecallDeltaResult:
             "max_delta": self.max_delta,
             "per_label_delta": dict(self.per_label_delta),
             "offending_labels": {
-                label: dict(details)
-                for label, details in self.offending_labels.items()
+                label: dict(details) for label, details in self.offending_labels.items()
             },
             "labels_evaluated": list(self.labels_evaluated),
             "source": self.source,
@@ -223,7 +221,11 @@ def _normalise_delta_map(
 ) -> dict[str, float]:
     result: dict[str, float] = {}
     for label, value in values.items():
-        canonical = "OVERALL" if str(label).upper() == "OVERALL" else normalize_label(str(label))
+        canonical = (
+            "OVERALL"
+            if str(label).upper() == "OVERALL"
+            else normalize_label(str(label))
+        )
         if canonical not in labels and canonical != "OVERALL":
             continue
         parsed = _normalise_precomputed_delta(value)
@@ -240,7 +242,11 @@ def _normalise_recall_map(values: Mapping[str, Any]) -> dict[str, float]:
             continue
         if parsed > 1.0:
             parsed = parsed / 100.0
-        canonical = "OVERALL" if str(label).upper() == "OVERALL" else normalize_label(str(label))
+        canonical = (
+            "OVERALL"
+            if str(label).upper() == "OVERALL"
+            else normalize_label(str(label))
+        )
         result[canonical] = parsed
     return result
 

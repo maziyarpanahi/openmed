@@ -18,7 +18,6 @@ from openmed.core.model_registry import load_manifest_rows
 from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
 from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
 
-
 DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
 DEFAULT_MANIFEST_PATH = Path("models.jsonl")
@@ -95,7 +94,8 @@ def build_manifest_row(
     artifact_hash = artifact_sha256(artifact_dir)
     manifest_format = _manifest_format_name(format_name)
     reproducibility_hash = compute_reproducibility_hash(
-        recipe=recipe or _default_repro_recipe(
+        recipe=recipe
+        or _default_repro_recipe(
             repo_id=repo_id,
             format_name=manifest_format,
             artifact_hash=artifact_hash,
@@ -154,7 +154,9 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
 
     with path.open("w", encoding="utf-8") as handle:
         for manifest_row in rows:
-            handle.write(json.dumps(manifest_row, sort_keys=False, separators=(",", ":")))
+            handle.write(
+                json.dumps(manifest_row, sort_keys=False, separators=(",", ":"))
+            )
             handle.write("\n")
 
 
@@ -259,7 +261,9 @@ def publish_artifact(
             family=str(row["family"]),
             tier=row.get("tier"),
             format_name=str(row["formats"][0]),
-            metrics=baseline_metrics if baseline_metrics is not None else row["benchmark"],
+            metrics=baseline_metrics
+            if baseline_metrics is not None
+            else row["benchmark"],
             reproducibility_hash=str(row["reproducibility_hash"]),
             repo_id=str(row["repo_id"]),
             source_model_id=source_model_id,
@@ -304,7 +308,9 @@ def artifact_sha256(path: str | Path) -> str:
 
     digest = hashlib.sha256()
     root = path if path.is_dir() else path.parent
-    paths = [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
+    paths = (
+        [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
+    )
 
     for file_path in paths:
         relative = file_path.relative_to(root).as_posix()
@@ -325,7 +331,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Publish one converted OpenMed model artifact to the Hub.",
     )
     parser.add_argument("--model", required=True, help="Source model id")
-    parser.add_argument("--artifact-dir", required=True, help="Converted artifact directory")
+    parser.add_argument(
+        "--artifact-dir", required=True, help="Converted artifact directory"
+    )
     parser.add_argument(
         "--format",
         required=True,
@@ -334,7 +342,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--repo-id", default=None, help="Explicit target repo id")
     parser.add_argument("--org", default=DEFAULT_ORG, help="Target organization")
-    parser.add_argument("--version", type=int, default=1, help="Version suffix for new repos")
+    parser.add_argument(
+        "--version", type=int, default=1, help="Version suffix for new repos"
+    )
     parser.add_argument(
         "--manifest",
         default=str(DEFAULT_MANIFEST_PATH),
@@ -469,7 +479,9 @@ def _source_repo_name(source_model_id: str) -> str:
     name = source_model_id.rstrip("/").rsplit("/", 1)[-1]
     name = _SAFE_REPO_RE.sub("-", name).strip(".-_")
     if not name:
-        raise HfPublishError(f"could not derive target repo name from {source_model_id!r}")
+        raise HfPublishError(
+            f"could not derive target repo name from {source_model_id!r}"
+        )
     return name
 
 
@@ -611,7 +623,10 @@ def _languages(repo_id: str) -> list[str]:
 
 
 def _tier(repo_id: str) -> str | None:
-    match = re.search(r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])", repo_id)
+    match = re.search(
+        r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])",
+        repo_id,
+    )
     if not match:
         return None
     value = match.group(1)

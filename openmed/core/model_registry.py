@@ -180,9 +180,7 @@ _LEGACY_MODEL_ALIASES = {
     "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": [
         "disease_detection_superclinical"
     ],
-    "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M": [
-        "disease_detection_tiny"
-    ],
+    "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M": ["disease_detection_tiny"],
     "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M": [
         "pharma_detection_superclinical"
     ],
@@ -192,33 +190,25 @@ _LEGACY_MODEL_ALIASES = {
     "OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M": [
         "oncology_detection_superclinical"
     ],
-    "OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M": [
-        "oncology_detection_tiny"
-    ],
+    "OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M": ["oncology_detection_tiny"],
     "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M": [
         "anatomy_detection_electramed"
     ],
     "OpenMed/OpenMed-NER-GenomeDetect-BioClinical-108M": [
         "genome_detection_bioclinical"
     ],
-    "OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M": [
-        "chemical_detection_pubmed"
-    ],
+    "OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M": ["chemical_detection_pubmed"],
     "OpenMed/OpenMed-NER-SpeciesDetect-BioClinical-108M": [
         "species_detection_bioclinical"
     ],
-    "OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M": [
-        "protein_detection_pubmed"
-    ],
+    "OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M": ["protein_detection_pubmed"],
     "OpenMed/OpenMed-NER-PathologyDetect-ModernClinical-395M": [
         "pathology_detection_modern"
     ],
     "OpenMed/OpenMed-NER-BloodCancerDetect-SuperClinical-434M": [
         "blood_cancer_detection"
     ],
-    "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": [
-        "dna_detection_supermedical"
-    ],
+    "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
 }
 
@@ -442,7 +432,9 @@ def _registry_key(row: Dict[str, Any]) -> str:
     return _slug(_repo_name(row["repo_id"]))
 
 
-def _unique_key(base_key: str, row: Dict[str, Any], registry: Dict[str, ModelInfo]) -> str:
+def _unique_key(
+    base_key: str, row: Dict[str, Any], registry: Dict[str, ModelInfo]
+) -> str:
     if base_key not in registry:
         return base_key
 
@@ -597,7 +589,8 @@ def get_models_by_category(category: str) -> List[ModelInfo]:
 def get_models_by_size(size_category: str) -> List[ModelInfo]:
     """Get models by size category (Tiny, Small, Medium, Large, XLarge)."""
     return [
-        model for model in OPENMED_MODELS.values()
+        model
+        for model in OPENMED_MODELS.values()
         if model.size_category == size_category
     ]
 

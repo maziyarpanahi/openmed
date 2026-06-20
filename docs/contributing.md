@@ -6,9 +6,36 @@ publish the package to PyPI or GitHub Pages.
 ## Local workflows
 
 - `make help` prints a list of scripted tasks (build, publish, release, docs, etc.).
+- `make format` applies the canonical Ruff import ordering and formatting.
+- `make lint` and `make format-check` run the same style gates used by CI.
+- `make format-swift` and `make lint-swift` apply the canonical Swift format checks for OpenMedKit.
+- `pre-commit install` enables the local hooks that auto-format staged Python files before commit.
 - `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
 - `make docs-build` runs `mkdocs build --strict` for CI parity.
 - `uv pip install ".[dev]"` pulls in pytest + coverage; `uv pip install ".[dev,hf]"` stacks extras.
+
+## Code style
+
+Ruff is the single source of truth for Python linting, import ordering, and formatting. Do not run Black, isort, flake8,
+or editor-specific formatters over the repository. Before opening a pull request, run:
+
+```bash
+uv pip install -e ".[dev]"
+make format
+make lint
+make format-check
+```
+
+CI enforces `ruff check .` and `ruff format --check .`; pull requests should not include unrelated formatting-only
+changes outside the files needed for the feature or fix.
+
+Swift package code uses Apple `swift-format` with the checked-in `.swift-format` configuration. For changes under
+`swift/OpenMedKit`, run:
+
+```bash
+make format-swift
+make lint-swift
+```
 
 ## Release outline
 

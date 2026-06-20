@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
-import unicodedata
 
 from .labels import hipaa_class_for, normalize_label, policy_label_for
-from .pii_entity_merger import PIIPattern, PII_PATTERNS
+from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
-
 
 STAGE_NAMES: tuple[str, ...] = (
     "normalize",
@@ -57,7 +56,9 @@ class OffsetMap:
             return len(self.normalized_to_original), len(self.normalized_to_original)
         return min(mapped), max(mapped) + 1
 
-    def normalized_span_to_original_offsets(self, start: int, end: int) -> tuple[int, int]:
+    def normalized_span_to_original_offsets(
+        self, start: int, end: int
+    ) -> tuple[int, int]:
         if start == end:
             if start >= len(self.normalized_to_original_span):
                 terminal = (
@@ -412,9 +413,7 @@ class Pipeline:
             audit=audit,
         )
         final_spans = (
-            sweep_spans
-            if self.policy is not None
-            else (sweep_spans or policy_spans)
+            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
         stage_results.append(
             PipelineStageResult(
@@ -802,7 +801,9 @@ class Pipeline:
                     entity_type=label or canonical,
                     canonical_label=canonical,
                     policy_label=policy_label_for(canonical, lang=context.route.lang),
-                    regulatory_tags=(hipaa_class_for(canonical, lang=context.route.lang),),
+                    regulatory_tags=(
+                        hipaa_class_for(canonical, lang=context.route.lang),
+                    ),
                     score=float(getattr(entity, "confidence", 0.0) or 0.0),
                     detector=detector,
                     evidence=_evidence_for_entity(entity),
@@ -825,7 +826,9 @@ class Pipeline:
             "language": context.route.lang,
             "script": context.route.script,
             "model_name": context.route.model_name,
-            "input_text_hash": hmac_text_hash(context.normalized_text, self.hmac_secret),
+            "input_text_hash": hmac_text_hash(
+                context.normalized_text, self.hmac_secret
+            ),
             "redacted_text_hash": hmac_text_hash(redacted_text, self.hmac_secret),
             "normalized_length": len(context.normalized_text),
             "redacted_length": len(redacted_text),
@@ -923,7 +926,11 @@ def _deterministic_patterns(lang: str) -> list[PIIPattern]:
 def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
     start = getattr(entity, "start", None)
     end = getattr(entity, "end", None)
-    if isinstance(start, int) and isinstance(end, int) and 0 <= start <= end <= len(text):
+    if (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and 0 <= start <= end <= len(text)
+    ):
         return start, end
 
     surface = str(getattr(entity, "text", "") or "")
@@ -1013,7 +1020,9 @@ def _redacted_char_count(entities: Sequence[Any]) -> int:
     return total
 
 
-def _cascade_stage_spans(cascade_result: Any, routes: set[str]) -> tuple[OpenMedSpan, ...]:
+def _cascade_stage_spans(
+    cascade_result: Any, routes: set[str]
+) -> tuple[OpenMedSpan, ...]:
     spans: list[OpenMedSpan] = []
     for stage in getattr(cascade_result, "stage_results", ()):
         if getattr(stage, "route", None) in routes:
@@ -1035,7 +1044,7 @@ def _prediction_result_from_spans(
         text=text,
         entities=[
             EntityPrediction(
-                text=text[span.start:span.end],
+                text=text[span.start : span.end],
                 label=span.entity_type or span.canonical_label,
                 start=span.start,
                 end=span.end,

@@ -6,8 +6,8 @@ import pytest
 
 from openmed.eval.datasets import (
     DUA_GATED_CORPORA,
-    DUACredentialRequired,
     PUBLIC_DATASETS,
+    DUACredentialRequired,
     assert_no_gated_content_committed,
     license_for,
     load_dua_corpus,

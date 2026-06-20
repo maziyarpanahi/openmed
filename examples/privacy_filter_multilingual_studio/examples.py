@@ -21,27 +21,32 @@ class StudioExample:
     text: str
 
     def to_public_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "title": self.title, "blurb": self.blurb, "text": self.text}
+        return {
+            "id": self.id,
+            "title": self.title,
+            "blurb": self.blurb,
+            "text": self.text,
+        }
 
 
 # Display order for the language tab strip.
 LANGUAGE_META: list[dict[str, str]] = [
-    {"code": "en", "label": "English",   "native": "English"},
-    {"code": "es", "label": "Spanish",   "native": "Español"},
-    {"code": "fr", "label": "French",    "native": "Français"},
-    {"code": "de", "label": "German",    "native": "Deutsch"},
-    {"code": "it", "label": "Italian",   "native": "Italiano"},
-    {"code": "nl", "label": "Dutch",     "native": "Nederlands"},
-    {"code": "pt", "label": "Portuguese","native": "Português"},
-    {"code": "tr", "label": "Turkish",   "native": "Türkçe"},
-    {"code": "ar", "label": "Arabic",    "native": "العربية"},
-    {"code": "hi", "label": "Hindi",     "native": "हिन्दी"},
-    {"code": "bn", "label": "Bengali",   "native": "বাংলা"},
-    {"code": "te", "label": "Telugu",    "native": "తెలుగు"},
-    {"code": "vi", "label": "Vietnamese","native": "Tiếng Việt"},
-    {"code": "zh", "label": "Chinese",   "native": "中文"},
-    {"code": "ja", "label": "Japanese",  "native": "日本語"},
-    {"code": "ko", "label": "Korean",    "native": "한국어"},
+    {"code": "en", "label": "English", "native": "English"},
+    {"code": "es", "label": "Spanish", "native": "Español"},
+    {"code": "fr", "label": "French", "native": "Français"},
+    {"code": "de", "label": "German", "native": "Deutsch"},
+    {"code": "it", "label": "Italian", "native": "Italiano"},
+    {"code": "nl", "label": "Dutch", "native": "Nederlands"},
+    {"code": "pt", "label": "Portuguese", "native": "Português"},
+    {"code": "tr", "label": "Turkish", "native": "Türkçe"},
+    {"code": "ar", "label": "Arabic", "native": "العربية"},
+    {"code": "hi", "label": "Hindi", "native": "हिन्दी"},
+    {"code": "bn", "label": "Bengali", "native": "বাংলা"},
+    {"code": "te", "label": "Telugu", "native": "తెలుగు"},
+    {"code": "vi", "label": "Vietnamese", "native": "Tiếng Việt"},
+    {"code": "zh", "label": "Chinese", "native": "中文"},
+    {"code": "ja", "label": "Japanese", "native": "日本語"},
+    {"code": "ko", "label": "Korean", "native": "한국어"},
 ]
 
 

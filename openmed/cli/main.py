@@ -10,21 +10,20 @@ from typing import Any, Callable, Optional, Sequence
 
 from ..__about__ import __version__
 from ..core.config import (
-    OpenMedConfig,
-    get_config,
-    set_config,
-    load_config_from_file,
-    save_config_to_file,
-    resolve_config_path,
-    list_profiles,
-    get_profile,
-    save_profile,
-    delete_profile,
     PROFILE_PRESETS,
+    OpenMedConfig,
+    delete_profile,
+    get_config,
+    get_profile,
+    list_profiles,
+    load_config_from_file,
+    resolve_config_path,
+    save_config_to_file,
+    save_profile,
+    set_config,
 )
 from ..core.model_registry import get_model_info
 from .calibrate import add_calibrate_command
-
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -54,7 +53,10 @@ def _lazy_api():
 
             _ANALYZE_TEXT = analyze_text = _analyze
 
-    if get_model_max_length is not None and get_model_max_length is not _GET_MODEL_MAX_LENGTH:
+    if (
+        get_model_max_length is not None
+        and get_model_max_length is not _GET_MODEL_MAX_LENGTH
+    ):
         _GET_MODEL_MAX_LENGTH = get_model_max_length
 
     if _GET_MODEL_MAX_LENGTH is None:
@@ -88,6 +90,7 @@ def _lazy_api():
             _BATCH_PROCESSOR = BatchProcessor = _batch
 
     return _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS, _BATCH_PROCESSOR
+
 
 Handler = Callable[[argparse.Namespace], int]
 
@@ -351,9 +354,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     deid_parser.set_defaults(handler=_handle_pii_deidentify)
 
     # PII Batch command
-    batch_parser = pii_sub.add_parser(
-        "batch", help="Batch de-identification of files."
-    )
+    batch_parser = pii_sub.add_parser("batch", help="Batch de-identification of files.")
     batch_parser.add_argument(
         "--model",
         default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
@@ -415,9 +416,7 @@ def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
-    models_parser = subparsers.add_parser(
-        "models", help="Discover OpenMed models."
-    )
+    models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
 
     models_list = models_sub.add_parser("list", help="List available models.")
@@ -643,7 +642,10 @@ def _load_and_apply_config(args: argparse.Namespace) -> OpenMedConfig:
         config = get_config()
 
     # Apply CLI overrides if present
-    if hasattr(args, "use_medical_tokenizer") and args.use_medical_tokenizer is not None:
+    if (
+        hasattr(args, "use_medical_tokenizer")
+        and args.use_medical_tokenizer is not None
+    ):
         config.use_medical_tokenizer = bool(args.use_medical_tokenizer)
 
     if getattr(args, "medical_tokenizer_exceptions", None):
@@ -758,7 +760,9 @@ def _handle_batch(args: argparse.Namespace) -> int:
     if args.output:
         try:
             args.output.write_text(
-                json.dumps(result.to_dict(), indent=2) if args.output_format == "json" else output,
+                json.dumps(result.to_dict(), indent=2)
+                if args.output_format == "json"
+                else output,
                 encoding="utf-8",
             )
             sys.stdout.write(f"Results written to: {args.output}\n")

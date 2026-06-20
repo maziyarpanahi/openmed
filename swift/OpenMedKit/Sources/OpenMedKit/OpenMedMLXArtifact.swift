@@ -415,10 +415,11 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
 
             if normalized == "roberta" || normalized == "xlm-roberta" {
                 let padTokenID = try container.decodeIfPresent(Int.self, forKey: .padTokenID) ?? 1
-                typeVocabularySize = try container.decodeIfPresent(
-                    Int.self,
-                    forKey: .typeVocabularySize
-                ) ?? 1
+                typeVocabularySize =
+                    try container.decodeIfPresent(
+                        Int.self,
+                        forKey: .typeVocabularySize
+                    ) ?? 1
                 resolvedPositionOffset =
                     try container.decodeIfPresent(Int.self, forKey: .positionOffset)
                     ?? (padTokenID + 1)
@@ -437,9 +438,10 @@ struct OpenMedMLXBertConfiguration: Decodable, Sendable {
 
         let rawLabels =
             try container.decodeIfPresent([String: String].self, forKey: .id2label) ?? [:]
-        id2label = Dictionary(uniqueKeysWithValues: rawLabels.compactMap { key, value in
-            Int(key).map { ($0, value) }
-        })
+        id2label = Dictionary(
+            uniqueKeysWithValues: rawLabels.compactMap { key, value in
+                Int(key).map { ($0, value) }
+            })
     }
 }
 
@@ -505,7 +507,8 @@ struct OpenMedMLXArtifact: Sendable {
         let discoveredTokenizerFiles = Self.discoverTokenizerFiles(in: tokenizerDirectoryURL)
 
         let resolvedTokenizerDirectoryURL: URL?
-        let hasUsableListedTokenizer = hasListedTokenizerAssets
+        let hasUsableListedTokenizer =
+            hasListedTokenizerAssets
             && Self.hasUsableTokenizerAssets(listedTokenizerFiles)
         let hasUsableDiscoveredTokenizer = Self.hasUsableTokenizerAssets(discoveredTokenizerFiles)
         if !listedTokenizerFiles.isEmpty {
@@ -532,9 +535,10 @@ struct OpenMedMLXArtifact: Sendable {
             let labelURL = modelDirectoryURL.appending(path: labelMapPath)
             let data = try Data(contentsOf: labelURL)
             let raw = try decoder.decode([String: String].self, from: data)
-            labelMap = Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
-                Int(key).map { ($0, value) }
-            })
+            labelMap = Dictionary(
+                uniqueKeysWithValues: raw.compactMap { key, value in
+                    Int(key).map { ($0, value) }
+                })
         } else {
             labelMap = configuration.id2label
         }
@@ -550,9 +554,10 @@ struct OpenMedMLXArtifact: Sendable {
     }
 
     var weightCandidateURLs: [URL] {
-        let candidates = Array(
-            NSOrderedSet(array: manifest.availableWeights + [manifest.preferredWeights] + manifest.fallbackWeights)
-        ) as? [String] ?? []
+        let candidates =
+            Array(
+                NSOrderedSet(array: manifest.availableWeights + [manifest.preferredWeights] + manifest.fallbackWeights)
+            ) as? [String] ?? []
         return candidates.map { directoryURL.appending(path: $0) }
     }
 
@@ -582,15 +587,15 @@ struct OpenMedMLXArtifact: Sendable {
     private static func supports(task: OpenMedMLXTask, family: OpenMedMLXFamily) -> Bool {
         switch (task, family) {
         case (.tokenClassification, .bert),
-             (.tokenClassification, .distilbert),
-             (.tokenClassification, .roberta),
-             (.tokenClassification, .xlmRoberta),
-             (.tokenClassification, .electra),
-             (.tokenClassification, .openaiPrivacyFilter):
+            (.tokenClassification, .distilbert),
+            (.tokenClassification, .roberta),
+            (.tokenClassification, .xlmRoberta),
+            (.tokenClassification, .electra),
+            (.tokenClassification, .openaiPrivacyFilter):
             return true
         case (.zeroShotNER, .glinerUniEncoderSpan),
-             (.zeroShotSequenceClassification, .gliclassUniEncoder),
-             (.zeroShotRelationExtraction, .glinerUniEncoderTokenRelex):
+            (.zeroShotSequenceClassification, .gliclassUniEncoder),
+            (.zeroShotRelationExtraction, .glinerUniEncoderTokenRelex):
             return true
         default:
             return false

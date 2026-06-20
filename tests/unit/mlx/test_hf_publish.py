@@ -80,7 +80,9 @@ def test_target_repo_id_adds_version_before_8bit_variant():
     )
 
 
-def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(tmp_path, monkeypatch):
+def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(
+    tmp_path, monkeypatch
+):
     artifact = _write_mlx_artifact(tmp_path)
     manifest = tmp_path / "models.jsonl"
     fake_api = FakeApi()
@@ -105,7 +107,9 @@ def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(tmp_pa
     assert "OpenMed/test-model-v1-mlx" in fake_api.uploaded_cards[0]
     assert "sha256:" in fake_api.uploaded_cards[0]
 
-    rows = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
+    ]
     assert rows == [result.manifest_row]
     assert rows[0]["repo_id"] == "OpenMed/test-model-v1-mlx"
     assert rows[0]["formats"] == ["mlx-fp"]
@@ -155,7 +159,9 @@ def test_manifest_append_replaces_existing_repo_row(tmp_path):
     append_manifest_row(manifest, first)
     append_manifest_row(manifest, second)
 
-    rows = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
+    ]
     assert rows == [second]
 
 
