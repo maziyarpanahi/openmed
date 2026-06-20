@@ -13,7 +13,6 @@ from typing import Any, Mapping, Sequence
 
 from openmed.core.labels import normalize_label
 
-
 SCHEMA_VERSION = 1
 THRESHOLDS_ARTIFACT = "openmed.calibration.thresholds"
 REPORT_ARTIFACT = "openmed.calibration.report"
@@ -65,7 +64,9 @@ class CalibrationSample:
             raise ValueError("calibration sample requires score")
         score = _bounded_float(raw_score, "score")
 
-        target_value = data.get("target", data.get("is_true", data.get("matched", True)))
+        target_value = data.get(
+            "target", data.get("is_true", data.get("matched", True))
+        )
         target = bool(target_value)
 
         raw_weight = (
@@ -213,7 +214,9 @@ class CalibrationThresholdSet:
 
         if default is not None:
             return float(default)
-        raise KeyError(f"no threshold for {model_id or self.model_id}:{canonical}:{lang}")
+        raise KeyError(
+            f"no threshold for {model_id or self.model_id}:{canonical}:{lang}"
+        )
 
     def active_for(
         self,
@@ -224,11 +227,17 @@ class CalibrationThresholdSet:
         lang = (language or WILDCARD_LANGUAGE).lower()
         labels: dict[str, float] = {}
         for artifact_model, label, threshold_language in sorted(self.thresholds):
-            if model_id and artifact_model != model_id and artifact_model != self.model_id:
+            if (
+                model_id
+                and artifact_model != model_id
+                and artifact_model != self.model_id
+            ):
                 continue
             if threshold_language not in {lang, WILDCARD_LANGUAGE}:
                 continue
-            labels[label] = float(self.thresholds[(artifact_model, label, threshold_language)])
+            labels[label] = float(
+                self.thresholds[(artifact_model, label, threshold_language)]
+            )
         return labels
 
 
@@ -245,9 +254,13 @@ def fit_calibration_thresholds(
     """Fit thresholds with leakage target first, over-redaction second."""
 
     target_leakage = _bounded_float(target_leakage, "target_leakage")
-    recall_floor = 1.0 - target_leakage if min_recall is None else _bounded_float(
-        min_recall,
-        "min_recall",
+    recall_floor = (
+        1.0 - target_leakage
+        if min_recall is None
+        else _bounded_float(
+            min_recall,
+            "min_recall",
+        )
     )
     normalized = [
         sample
@@ -375,7 +388,9 @@ def load_calibration_samples(
     ]
 
 
-def default_suite_calibration_samples(model_id: str, suite: str) -> list[CalibrationSample]:
+def default_suite_calibration_samples(
+    model_id: str, suite: str
+) -> list[CalibrationSample]:
     """Return a deterministic base-install sample set for the named suite."""
 
     if suite != "golden":
@@ -451,7 +466,9 @@ def coerce_calibration_thresholds(
         for label_key, languages in labels.items():
             canonical = normalize_label(str(label_key))
             if not isinstance(languages, Mapping):
-                raise ValueError(f"thresholds.{model_key}.{canonical} must be an object")
+                raise ValueError(
+                    f"thresholds.{model_key}.{canonical} must be an object"
+                )
             for language_key, value in languages.items():
                 language = str(language_key or WILDCARD_LANGUAGE).lower()
                 thresholds[(str(model_key), canonical, language)] = _bounded_float(
@@ -488,7 +505,9 @@ def _fit_group(
     positive_weight = sum(sample.weight for sample in samples if sample.target)
     negative_weight = sum(sample.weight for sample in samples if not sample.target)
     if positive_weight <= 0.0:
-        raise ValueError(f"calibration group {model_id}:{label}:{language} has no targets")
+        raise ValueError(
+            f"calibration group {model_id}:{label}:{language} has no targets"
+        )
 
     candidates = sorted({0.0, 1.0, *(sample.score for sample in samples)})
     reliability = tuple(
@@ -501,18 +520,14 @@ def _fit_group(
         for threshold in candidates
     )
 
-    recall_safe = [
-        row
-        for row in reliability
-        if float(row["recall"]) >= min_recall
-    ]
+    recall_safe = [row for row in reliability if float(row["recall"]) >= min_recall]
     if not recall_safe:
-        raise ValueError(f"calibration group {model_id}:{label}:{language} violates recall floor")
+        raise ValueError(
+            f"calibration group {model_id}:{label}:{language} violates recall floor"
+        )
 
     target_safe = [
-        row
-        for row in recall_safe
-        if float(row["leakage"]) <= target_leakage
+        row for row in recall_safe if float(row["leakage"]) <= target_leakage
     ]
     candidates_to_rank = target_safe or recall_safe
     if target_safe:

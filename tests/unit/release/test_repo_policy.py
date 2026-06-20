@@ -8,7 +8,6 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "release" / "check_repo_policy.py"
 
@@ -39,9 +38,7 @@ def test_tracked_ignored_files_use_standard_ignore_rules(monkeypatch):
     monkeypatch.setattr(repo_policy.subprocess, "run", fake_run)
 
     assert repo_policy.git_tracked_ignored_files() == ["PLANS/V2/example.md"]
-    assert calls == [
-        ["git", "ls-files", "--cached", "--ignored", "--exclude-standard"]
-    ]
+    assert calls == [["git", "ls-files", "--cached", "--ignored", "--exclude-standard"]]
 
 
 def test_main_fails_for_tracked_ignored_files(monkeypatch, capsys):

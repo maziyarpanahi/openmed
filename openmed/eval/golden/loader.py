@@ -13,7 +13,6 @@ from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import EvalSpan, normalize_eval_spans
 
-
 GOLDEN_CATEGORIES: tuple[str, ...] = (
     "nested_overlapping",
     "chunk_boundary",
@@ -58,7 +57,9 @@ class GoldenFixture:
 
         expected_output = metadata.get("expected_output")
         if not isinstance(expected_output, Mapping):
-            raise ValueError("golden fixture metadata.expected_output must be a mapping")
+            raise ValueError(
+                "golden fixture metadata.expected_output must be a mapping"
+            )
         if not str(expected_output.get("method", "")):
             raise ValueError("golden fixture expected_output.method is required")
         if not isinstance(expected_output.get("text"), str):

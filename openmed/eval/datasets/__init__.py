@@ -8,12 +8,12 @@ from .dua_stubs import (
     dua_stub_for,
     load_dua_corpus,
 )
-from .licenses import DatasetLicense, PUBLIC_DATASET_LICENSES, license_for
+from .licenses import PUBLIC_DATASET_LICENSES, DatasetLicense, license_for
 from .public import (
-    DatasetLoadResult,
-    DatasetUnavailable,
     PUBLIC_DATASETS,
     PUBLIC_LABEL_MAPS,
+    DatasetLoadResult,
+    DatasetUnavailable,
     PublicDatasetAdapter,
     PublicDatasetRecord,
     PublicDatasetSpan,

@@ -51,7 +51,9 @@ def tag_exists_locally(tag: str) -> bool:
 
 
 def tag_exists_on_origin(tag: str) -> bool:
-    result = run_git(["ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"])
+    result = run_git(
+        ["ls-remote", "--exit-code", "--tags", "origin", f"refs/tags/{tag}"]
+    )
     return result.returncode == 0
 
 
@@ -81,19 +83,30 @@ def main() -> int:
 
     checks = [
         (package_version == expected_version, f"package version is {package_version}"),
-        (changelog_version == expected_version, f"top CHANGELOG release is {changelog_version}"),
+        (
+            changelog_version == expected_version,
+            f"top CHANGELOG release is {changelog_version}",
+        ),
         (not tag_exists_locally(tag), f"local tag {tag} is not already used"),
     ]
 
     if not args.skip_origin_tag_check:
-        checks.append((not tag_exists_on_origin(tag), f"origin tag {tag} is not already used"))
+        checks.append(
+            (not tag_exists_on_origin(tag), f"origin tag {tag} is not already used")
+        )
 
     for path, expected in (
         ("README.md", f'from: "{expected_version}"'),
         ("docs/swift-openmedkit.md", f'from: "{expected_version}"'),
         ("docs/website/index.html", f"OpenMed {expected_version}"),
-        ("swift/OpenMedDemo/OpenMedDemo/Info.plist", f"<string>{expected_version}</string>"),
-        ("swift/OpenMedScanDemo/OpenMedScanDemo/Info.plist", f"<string>{expected_version}</string>"),
+        (
+            "swift/OpenMedDemo/OpenMedDemo/Info.plist",
+            f"<string>{expected_version}</string>",
+        ),
+        (
+            "swift/OpenMedScanDemo/OpenMedScanDemo/Info.plist",
+            f"<string>{expected_version}</string>",
+        ),
     ):
         checks.append(
             (

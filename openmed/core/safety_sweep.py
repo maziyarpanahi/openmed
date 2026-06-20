@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
-import re
 
-from .pii_entity_merger import PIIPattern, PII_PATTERNS, find_context_words
-from .anonymizer.providers.clinical_ids import id_subtype_for_entity_type
-from .quality_gates import resolve_overlapping_entities
 from ..processing.outputs import EntityPrediction
-
+from .anonymizer.providers.clinical_ids import id_subtype_for_entity_type
+from .pii_entity_merger import PII_PATTERNS, PIIPattern, find_context_words
+from .quality_gates import resolve_overlapping_entities
 
 SAFETY_SWEEP_SOURCE = "safety_sweep"
 SAFETY_SWEEP_PATTERNS_VERSION = "safety-sweep-v1"
@@ -148,7 +147,9 @@ def safety_sweep(
     existing = list(spans)
     selected: list[_Candidate] = []
     active_spans: list[Any] = list(existing)
-    sweep_patterns = list(patterns) if patterns is not None else _patterns_for_language(lang)
+    sweep_patterns = (
+        list(patterns) if patterns is not None else _patterns_for_language(lang)
+    )
 
     for candidate in _collect_candidates(text, sweep_patterns):
         if _overlaps(candidate.start, candidate.end, active_spans):

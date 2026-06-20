@@ -22,7 +22,9 @@ def git_ls_files(pattern: str) -> list[str]:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git ls-files failed for {pattern}")
+        raise RuntimeError(
+            result.stderr.strip() or f"git ls-files failed for {pattern}"
+        )
     return [line for line in result.stdout.splitlines() if line]
 
 

@@ -138,7 +138,9 @@ def run_reid_attack(
         risk=risk,
         surrogate_findings=surrogate_findings,
         date_shift_findings=date_shift_findings,
-        metadata={"fixture_ids": [fixture.fixture_id for fixture in normalized_fixtures]},
+        metadata={
+            "fixture_ids": [fixture.fixture_id for fixture in normalized_fixtures]
+        },
     )
 
 
@@ -323,7 +325,9 @@ def _iter_audit_spans(record: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         value = record.get(key)
         if isinstance(value, Mapping):
             spans.append(value)
-        elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        elif isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
             spans.extend(item for item in value if isinstance(item, Mapping))
 
     audit = record.get("audit") or record.get("audit_report")
@@ -331,17 +335,16 @@ def _iter_audit_spans(record: Mapping[str, Any]) -> list[Mapping[str, Any]]:
         audit = audit.to_dict()
     if isinstance(audit, Mapping):
         value = audit.get("spans")
-        if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        if isinstance(value, Sequence) and not isinstance(
+            value, (str, bytes, bytearray)
+        ):
             spans.extend(item for item in value if isinstance(item, Mapping))
     return spans
 
 
 def _record_id(record: Mapping[str, Any]) -> str:
     return str(
-        record.get("record_id")
-        or record.get("doc_id")
-        or record.get("id")
-        or "record"
+        record.get("record_id") or record.get("doc_id") or record.get("id") or "record"
     )
 
 
@@ -352,10 +355,7 @@ def _intervals(values: Sequence[Any]) -> list[int]:
             dates.append(datetime.fromisoformat(str(value)))
         except ValueError:
             return []
-    return [
-        (dates[index + 1] - dates[index]).days
-        for index in range(len(dates) - 1)
-    ]
+    return [(dates[index + 1] - dates[index]).days for index in range(len(dates) - 1)]
 
 
 def _rate(numerator: int, denominator: int) -> float:

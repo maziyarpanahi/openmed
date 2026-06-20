@@ -11,7 +11,6 @@ from openmed.eval.suites.shield import (
     shield_suite_metadata,
 )
 
-
 GOLDEN = "golden"
 I2B2 = "i2b2"
 N2C2 = "n2c2"
@@ -23,7 +22,9 @@ def validate_suite_name(name: str) -> str:
     """Return *name* if it is one of the scaffolded benchmark suites."""
     if name not in DEFAULT_SUITES:
         allowed = ", ".join(DEFAULT_SUITES)
-        raise ValueError(f"unknown benchmark suite {name!r}; expected one of: {allowed}")
+        raise ValueError(
+            f"unknown benchmark suite {name!r}; expected one of: {allowed}"
+        )
     return name
 
 
