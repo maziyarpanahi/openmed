@@ -27,8 +27,12 @@ result = deidentify(
     method="mask",
 )
 print(result.deidentified_text)
-# Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
+# Patient [first_name] [last_name] (DOB: [date]) called from [phone_number]
 ```
+
+Placeholder names come from the model's own entity labels, so they vary by
+model (the default `OpenMed-PII-SuperClinical-Small-44M-v1` model used here
+splits names into `first_name`/`last_name` rather than a single `NAME`).
 
 Not reversible by itself — pass `keep_mapping=True` and use `reidentify()`
 (see below) if you need to restore the original text later.
@@ -67,7 +71,7 @@ determinism options.
 ```python
 result = deidentify("Patient John Doe", method="hash")
 print(result.deidentified_text)
-# Patient NAME_<digest>   (e.g. "Patient NAME_3f9a21bc")
+# Patient first_name_a8cfcd74 last_name_fd53ef83
 ```
 
 The same input always hashes to the same digest, so repeated mentions of
@@ -83,11 +87,15 @@ result = deidentify(
     date_shift_days=30,
 )
 print(result.deidentified_text)
-# DOB 02/14/2020
+# DOB [date]
 ```
 
-All dates in a document shift by the same offset, so durations between
-dates (e.g. "3 days after admission") stay correct.
+The intent is for every date in a document to shift by the same offset, so
+durations between dates (e.g. "3 days after admission") stay correct. With
+the default English model, however, dates currently get masked instead of
+shifted — the model's raw label for dates is lowercase `date`, but the
+redaction code only shifts entities labeled exactly `DATE`. Tracked in
+#408.
 
 ### Reversing a de-identification: `reidentify()`
 
@@ -100,15 +108,15 @@ from openmed import deidentify, reidentify
 text = "Dr. Alice Smith met Bob Jones today"
 result = deidentify(text, method="mask", keep_mapping=True)
 print(result.deidentified_text)
-# Dr. [NAME] met [NAME_2] today
+# Dr. [first_name] [last_name] met [first_name_2] [last_name_2] today
 
 restored = reidentify(result.deidentified_text, result.mapping)
 assert restored == text
 ```
 
-Repeated entities of the same type (two `NAME`s above) get a numbered
-placeholder (`[NAME]`, `[NAME_2]`, ...) so each one maps back to its own
-original value — this was a known limitation (#204) fixed by #222;
+Repeated entities of the same type (two `first_name`s above) get a numbered
+placeholder (`[first_name]`, `[first_name_2]`, ...) so each one maps back to
+its own original value — this was a known limitation (#204) fixed by #222;
 `reidentify()` now round-trips correctly even when a type repeats.
 
 ## The new `replace` engine

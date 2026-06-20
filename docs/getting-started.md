@@ -62,7 +62,7 @@ from openmed import deidentify
 
 result = deidentify("Patient John Doe, DOB 01/15/1970", method="mask")
 print(result.deidentified_text)
-# Patient [NAME], DOB [DATE]
+# Patient [first_name] [last_name], DOB [date]
 ```
 
 `deidentify()` supports five methods (`mask`, `remove`, `replace`, `hash`,
