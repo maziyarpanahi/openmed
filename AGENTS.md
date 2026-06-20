@@ -4,18 +4,6 @@
 
 Core Python package code lives in `openmed/`. Keep existing privacy and registry code in `openmed/core/`; add genuinely new capability in top-level packages already present or planned: `clinical/`, `eval/`, `multimodal/`, `structured/`, `risk/`, and `interop/`. Backend adapters live in `mlx/`, `coreml/`, and `torch/`; the REST surface is in `service/`; Swift code and demos are in `swift/`. Tests are under `tests/unit`, `tests/integration`, and `tests/fixtures`; docs are in `docs/`; examples are in `examples/`; release and maintenance scripts are in `scripts/`.
 
-## Roadmap Goals From `PLANS/`
-
-Roadmap work should move OpenMed toward a local-first, privacy-first clinical NLP runtime: de-identification is the wedge, clinical extraction and interoperability are the moat, and one Apache-2.0 API should run on device without sending PHI to the cloud. Prefer hardening and extending existing modules over rebuilding them. Maintain stable public exports such as `analyze_text`, `extract_pii`, `deidentify`, and `reidentify`.
-
-Highest-priority themes are: canonical `models.jsonl` manifest and drift CI, no-raw-PHI logging, `OPENMED_OFFLINE` / `local_only` behavior, deterministic post-ML safety sweep, signed audit reports, leakage-first benchmark harness, policy profiles, HIPAA/GDPR label cross-maps, span overlap resolution, and device-tier-aware model artifacts. For clinical features, build section detection, assertion/context, concept linking, relation extraction, temporal extraction, medication structuring, and FHIR/OMOP export in that order.
-
-## Plan-Driven Task Workflow
-
-For V2 backlog work, use `PLANS/V2/EXECUTION/README.md` and the task specs as the source of truth. The generated board is `PLANS/V2/EXECUTION/TASKS.md`; each item has a runnable objective in `goals/OM-###.goal.md` and a full spec in `tasks/OM-###.md`. Read both before editing. Edit `PLANS/V2/EXECUTION/backlog.json` and rerun `.venv/bin/python PLANS/V2/EXECUTION/generate.py` instead of hand-editing generated task or goal files.
-
-Follow the plan contract: one task equals one issue, one branch, and one PR. A task is available only when its dependencies are merged, no issue carries its `Task: OM-###` marker, and no matching remote branch exists; search before claiming to avoid duplicates. Branch from latest `origin/master` using the task's `feature/...` or `bugfix/...` branch name. Respect `Depends on` and `Conflicts with`; keep diffs tight when overlapping files are listed. Open PRs against `maziyarpanahi/openmed:master` only. For releases, work from `master`; `v1.5.6` was skipped, and the next backlog release starts at `v1.6.0`.
-
 ## Build, Test, and Development Commands
 
 - `uv pip install -e ".[dev]"`: install editable package with test and lint dependencies.
@@ -43,6 +31,12 @@ For privacy, aggregate F1 is not enough. Add tests or fixtures for direct-identi
 Recent history uses concise imperative commits, often with prefixes such as `fix:`. For roadmap tasks, keep commits and PRs focused on the task acceptance criteria. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.
 
 Pull requests should follow `.github/PULL_REQUEST_TEMPLATE.md`: description, change type, tests run, docs or changelog updates when applicable, dependency justification, linked issue, and screenshots or example output for UI/docs changes.
+
+## Tracked Files and Commit Safety
+
+Do not add untracked files to git unless the user explicitly asks for those files to be tracked. Never force-add or commit ignored files or ignored directories. Stage only files that are already tracked or files the user has explicitly approved for tracking.
+
+When a file is untracked, ignored, private-looking, generated, or outside the requested scope, leave it alone. If there is any doubt about whether a file should be staged, committed, pushed, or included in a pull request, stop and ask the user before taking the git action.
 
 ## OpenMedKit and Multimodal Work
 
