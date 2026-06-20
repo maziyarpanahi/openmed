@@ -12,7 +12,9 @@ from pathlib import Path
 import pytest
 
 from openmed.core.pii_entity_merger import normalize_label, is_more_specific
-from openmed.core.model_registry import OPENMED_MODELS
+from openmed.core.model_registry import OPENMED_MODELS, get_model_suggestions
+from openmed.core.labels import normalize_label as normalize_canonical_label
+from openmed.ner.labels import get_default_labels, available_domains
 
 
 # ---------------------------------------------------------------------------
@@ -212,3 +214,40 @@ class TestModelRegistryEntityTypes:
                 assert any(
                     k.startswith(f"pii_{lang}_") for k in pii_keys
                 ), f"No PII model found for language {lang!r}"
+
+
+# ---------------------------------------------------------------------------
+# Microbiology domain (OM-149)
+# ---------------------------------------------------------------------------
+
+
+class TestMicrobiologyDomain:
+
+    def test_microbiology_in_available_domains(self):
+        assert "microbiology" in available_domains()
+
+    def test_get_default_labels_microbiology_non_empty(self):
+        labels = get_default_labels("microbiology")
+        assert len(labels) >= 1
+
+    def test_microbiology_labels_include_expected_entities(self):
+        labels = [l.lower() for l in get_default_labels("microbiology")]
+        assert any("microorganism" in l for l in labels)
+        assert any("antibiotic" in l for l in labels)
+        assert any("susceptibility" in l for l in labels)
+
+    def test_normalize_label_susceptibility(self):
+        assert normalize_canonical_label("susceptibility") == "SUSCEPTIBILITY"
+
+    def test_normalize_label_antibiotic(self):
+        assert normalize_canonical_label("antibiotic") == "ANTIBIOTIC"
+
+    def test_normalize_label_microorganism(self):
+        assert normalize_canonical_label("microorganism") == "MICROORGANISM"
+
+    def test_normalize_label_organism_aliases_to_microorganism(self):
+        assert normalize_canonical_label("organism") == "MICROORGANISM"
+
+    def test_get_model_suggestions_microbiology_text_runs(self):
+        results = get_model_suggestions("Blood culture grew MRSA, resistant to oxacillin")
+        assert isinstance(results, list)
