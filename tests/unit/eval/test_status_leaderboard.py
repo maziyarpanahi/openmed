@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from openmed.core.baseline import load_baseline_store
+from openmed.core.hf_publish import publish_artifact
 from openmed.core.model_registry import load_manifest_rows
 from openmed.eval.report import (
     BenchmarkReport,
@@ -12,9 +13,7 @@ from openmed.eval.report import (
     render_benchmark_card,
     render_leaderboard,
 )
-from openmed.core.hf_publish import publish_artifact
 from scripts.status.generate_status import render_status_page
-
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = ROOT / "models.jsonl"

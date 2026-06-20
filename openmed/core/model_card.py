@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-
 DEFAULT_ARXIV = "2508.01630"
 
 

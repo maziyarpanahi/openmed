@@ -11,9 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from openmed.core.pii_entity_merger import normalize_label, is_more_specific
 from openmed.core.model_registry import OPENMED_MODELS
-
+from openmed.core.pii_entity_merger import is_more_specific, normalize_label
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -41,7 +40,6 @@ def label_maps():
 
 
 class TestDefaultsJsonInvariants:
-
     def test_every_domain_has_at_least_one_label(self, label_maps):
         for domain, labels in label_maps.items():
             assert len(labels) >= 1, f"Domain {domain!r} has no labels"
@@ -68,46 +66,48 @@ class TestDefaultsJsonInvariants:
 
 
 class TestNormalizeLabelIdempotency:
-
-    @pytest.mark.parametrize("label", [
-        "date_of_birth",
-        "phone_number",
-        "email",
-        "ssn",
-        "social_security_number",
-        "national_id",
-        "nir",
-        "insee",
-        "steuer_id",
-        "steuernummer",
-        "codice_fiscale",
-        "bsn",
-        "dni",
-        "nie",
-        "aadhaar",
-        "cpf",
-        "cnpj",
-        "postcode",
-        "zipcode",
-        "zip",
-        "postal_code",
-        "address",
-        "street_address",
-        "fax",
-        "first_name",
-        "last_name",
-        "date",
-        "phone",
-        "medical_record_number",
-        "mrn",
-        "medical_record",
-        "account_number",
-        "account",
-        "credit_debit_card",
-        "credit_card",
-        "debit_card",
-        "payment_card",
-    ])
+    @pytest.mark.parametrize(
+        "label",
+        [
+            "date_of_birth",
+            "phone_number",
+            "email",
+            "ssn",
+            "social_security_number",
+            "national_id",
+            "nir",
+            "insee",
+            "steuer_id",
+            "steuernummer",
+            "codice_fiscale",
+            "bsn",
+            "dni",
+            "nie",
+            "aadhaar",
+            "cpf",
+            "cnpj",
+            "postcode",
+            "zipcode",
+            "zip",
+            "postal_code",
+            "address",
+            "street_address",
+            "fax",
+            "first_name",
+            "last_name",
+            "date",
+            "phone",
+            "medical_record_number",
+            "mrn",
+            "medical_record",
+            "account_number",
+            "account",
+            "credit_debit_card",
+            "credit_card",
+            "debit_card",
+            "payment_card",
+        ],
+    )
     def test_normalize_is_idempotent(self, label):
         once = normalize_label(label)
         twice = normalize_label(once)
@@ -123,7 +123,6 @@ class TestNormalizeLabelIdempotency:
 
 
 class TestSpecificityHierarchy:
-
     HIERARCHY = {
         "date": ["date_of_birth", "date_time"],
         "name": ["first_name", "last_name", "full_name"],
@@ -131,8 +130,13 @@ class TestSpecificityHierarchy:
         "address": ["street_address", "home_address", "billing_address"],
         "id": ["ssn", "medical_record_number", "account_number", "employee_id"],
         "national_id": [
-            "nir", "insee", "steuer_id", "steuernummer",
-            "codice_fiscale", "cpf", "cnpj",
+            "nir",
+            "insee",
+            "steuer_id",
+            "steuernummer",
+            "codice_fiscale",
+            "cpf",
+            "cnpj",
         ],
     }
 
@@ -165,10 +169,10 @@ class TestSpecificityHierarchy:
 
 
 class TestModelRegistryEntityTypes:
-
     def _pii_models(self):
         return {
-            key: info for key, info in OPENMED_MODELS.items()
+            key: info
+            for key, info in OPENMED_MODELS.items()
             if key.startswith("pii_") and info.entity_types
         }
 
@@ -197,18 +201,20 @@ class TestModelRegistryEntityTypes:
     def test_at_least_one_pii_model_per_supported_language(self):
         """Every supported language should have at least one PII model in the registry."""
         from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
         for lang in SUPPORTED_LANGUAGES:
             if lang == "en":
                 # English models don't have a language infix
                 assert any(
-                    k.startswith("pii_") and not any(
+                    k.startswith("pii_")
+                    and not any(
                         f"pii_{l}_" in k for l in SUPPORTED_LANGUAGES if l != "en"
                     )
                     for k in pii_keys
                 ), "No English PII model found"
             else:
                 # Non-English keys use pii_{lang}_ prefix, e.g. pii_de_superclinical_small
-                assert any(
-                    k.startswith(f"pii_{lang}_") for k in pii_keys
-                ), f"No PII model found for language {lang!r}"
+                assert any(k.startswith(f"pii_{lang}_") for k in pii_keys), (
+                    f"No PII model found for language {lang!r}"
+                )

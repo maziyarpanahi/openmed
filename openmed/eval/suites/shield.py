@@ -27,7 +27,6 @@ from openmed.core.labels import (
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import EvalSpan
 
-
 SHIELD = "shield"
 CORPUS_ROLE = "comparison"
 SUITE_ANNOTATION = "comparison corpus, not a high-recall gate target"
@@ -166,7 +165,10 @@ def fixtures_from_rows(
             _span_from_row(span, text=text)
             for span in sorted(
                 spans_by_note.get(note_id, []),
-                key=lambda row: (int(row.get("span_start", 0)), str(row.get("span_id", ""))),
+                key=lambda row: (
+                    int(row.get("span_start", 0)),
+                    str(row.get("span_id", "")),
+                ),
             )
         )
         fixture_metadata = dict(metadata)
@@ -211,7 +213,9 @@ def _span_from_row(row: Mapping[str, Any], *, text: str) -> EvalSpan:
     )
 
 
-def _load_dataset_rows(repository: str, config: str, split: str) -> list[Mapping[str, Any]]:
+def _load_dataset_rows(
+    repository: str, config: str, split: str
+) -> list[Mapping[str, Any]]:
     try:
         from datasets import load_dataset
     except ImportError:
@@ -283,7 +287,9 @@ _invalid_mapping = {
     if canonical not in CANONICAL_LABELS
 }
 if _invalid_mapping:
-    raise RuntimeError(f"SHIELD mapping contains non-canonical labels: {_invalid_mapping}")
+    raise RuntimeError(
+        f"SHIELD mapping contains non-canonical labels: {_invalid_mapping}"
+    )
 
 
 __all__ = [

@@ -108,7 +108,11 @@ class ProfileReport:
         sorted_timings = sorted(self.timings, key=lambda t: t.duration, reverse=True)
 
         for t in sorted_timings:
-            pct = (t.duration / self.total_duration * 100) if self.total_duration > 0 else 0
+            pct = (
+                (t.duration / self.total_duration * 100)
+                if self.total_duration > 0
+                else 0
+            )
             lines.append(f"  {t.name:<35} {t.duration * 1000:>8.2f}ms ({pct:>5.1f}%)")
 
         if include_metadata and self.metadata:
@@ -276,6 +280,7 @@ def profile(name: Optional[str] = None) -> Callable[[F], F]:
         ... def slow_function():
         ...     time.sleep(0.1)
     """
+
     def decorator(func: F) -> F:
         timing_name = name or func.__name__
 

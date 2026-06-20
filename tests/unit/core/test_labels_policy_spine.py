@@ -22,7 +22,6 @@ from openmed.core.labels import (
     system_hints_for,
 )
 
-
 ALLOWED_SYSTEM_HINTS = {"RxNorm", "LOINC", "ICD-10-CM", "HPO", "SNOMED"}
 
 

@@ -21,12 +21,11 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core import baseline as baseline_store
-from openmed.core import model_registry
+from openmed.core import model_registry, quality_gates
 from openmed.core import policy as policy_module
-from openmed.core import quality_gates
-from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.labels import normalize_label
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.thresholds import (
     load_thresholds,
     profile_recall_floor,
@@ -40,7 +39,6 @@ from openmed.eval.quant_delta import (
     evaluate_quant_recall_delta,
 )
 from openmed.eval.report import BenchmarkReport
-
 
 RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
@@ -379,7 +377,9 @@ class GateReport:
             target_leakage_rate=float(
                 data.get("target_leakage_rate", RESIDUAL_LEAKAGE_SOFT_CEILING)
             ),
-            blocked_formats=tuple(str(item) for item in data.get("blocked_formats", [])),
+            blocked_formats=tuple(
+                str(item) for item in data.get("blocked_formats", [])
+            ),
             repro_hash=str(data.get("repro_hash", "")),
             signature=(
                 AuditSignature.from_dict(signature_data)
@@ -415,7 +415,9 @@ class ReleaseGate:
         self.thresholds_matrix_path = (
             Path(thresholds_matrix_path) if thresholds_matrix_path is not None else None
         )
-        self.model_steward_config = ModelStewardConfig.from_mapping(model_steward_config)
+        self.model_steward_config = ModelStewardConfig.from_mapping(
+            model_steward_config
+        )
         self.signing_key = (
             signing_key
             if signing_key is not None
@@ -437,7 +439,9 @@ class ReleaseGate:
         metrics = _mapping(payload.get("metrics"))
         metadata = _mapping(payload.get("metadata"))
         identity = _identity(payload, metrics, metadata)
-        policy_name = str(metadata.get("policy") or payload.get("policy") or self.policy)
+        policy_name = str(
+            metadata.get("policy") or payload.get("policy") or self.policy
+        )
 
         checks: list[GateCheck] = []
         profile = None
@@ -556,7 +560,9 @@ class ReleaseGate:
             target_leakage_rate=target_leakage,
             blocked_formats=blocked_formats,
         )
-        return gate_report.sign(signing_key or self.signing_key, key_id=key_id or self.key_id)
+        return gate_report.sign(
+            signing_key or self.signing_key, key_id=key_id or self.key_id
+        )
 
     def _load_threshold_matrix(self) -> Mapping[str, Any]:
         if self.thresholds_matrix is not None:
@@ -603,7 +609,11 @@ class ReleaseGate:
         threshold_matrix: Mapping[str, Any] | None,
     ) -> GateCheck:
         floor = _g1a_floor(self.milestone)
-        if profile is not None and threshold_matrix is not None and profile.strict_no_leak:
+        if (
+            profile is not None
+            and threshold_matrix is not None
+            and profile.strict_no_leak
+        ):
             try:
                 floor = max(
                     floor,
@@ -718,7 +728,9 @@ def _manifest_coherence_check(
                 }
 
     if manifest_rows:
-        mismatches.update(_manifest_surface_mismatches(manifest_rows, metadata, manifest_path))
+        mismatches.update(
+            _manifest_surface_mismatches(manifest_rows, metadata, manifest_path)
+        )
 
     card = _model_card_metadata(metadata)
     if card and manifest_row is not None:
@@ -853,12 +865,18 @@ def _readme_manifest_mismatches(
             "readme_floor": declared["models"],
             "manifest": model_count,
         }
-    if declared.get("pii_checkpoints") is not None and pii_count < declared["pii_checkpoints"]:
+    if (
+        declared.get("pii_checkpoints") is not None
+        and pii_count < declared["pii_checkpoints"]
+    ):
         mismatches["pii_checkpoints"] = {
             "readme_floor": declared["pii_checkpoints"],
             "manifest": pii_count,
         }
-    if declared.get("languages") is not None and len(pii_languages) != declared["languages"]:
+    if (
+        declared.get("languages") is not None
+        and len(pii_languages) != declared["languages"]
+    ):
         mismatches["languages"] = {
             "readme": declared["languages"],
             "manifest": len(pii_languages),
@@ -972,7 +990,9 @@ def _parse_model_card_front_matter(text: str) -> dict[str, Any]:
 
 def _manifest_path(metadata: Mapping[str, Any]) -> Path | None:
     explicit = _optional_path(
-        _first_value(metadata.get("manifest_path"), metadata.get("models_manifest_path"))
+        _first_value(
+            metadata.get("manifest_path"), metadata.get("models_manifest_path")
+        )
     )
     if explicit is not None:
         return explicit
@@ -1454,7 +1474,11 @@ def _critical_leakage_count(
 
     leaked_by_label = _float_map(_nested(metrics, "leakage", "leaked_chars_by_label"))
     return int(
-        sum(value for label, value in leaked_by_label.items() if label in _CRITICAL_LABELS)
+        sum(
+            value
+            for label, value in leaked_by_label.items()
+            if label in _CRITICAL_LABELS
+        )
     )
 
 

@@ -65,7 +65,7 @@ public enum OpenMedZeroShotError: LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case let .unsupportedArtifact(expectedTask, expectedFamily, actualTask, actualFamily):
+        case .unsupportedArtifact(let expectedTask, let expectedFamily, let actualTask, let actualFamily):
             return "Expected \(expectedTask)/\(expectedFamily) MLX artifact, got \(actualTask)/\(actualFamily)."
         case .missingPromptSpec(let field):
             return "GLiNER artifact is missing prompt_spec.\(field)."
@@ -213,7 +213,8 @@ public final class OpenMedZeroShotClassifier {
 
         let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
         guard artifact.task == .zeroShotSequenceClassification,
-              artifact.family == .gliclassUniEncoder else {
+            artifact.family == .gliclassUniEncoder
+        else {
             throw OpenMedZeroShotError.unsupportedArtifact(
                 expectedTask: OpenMedMLXTask.zeroShotSequenceClassification.rawValue,
                 expectedFamily: OpenMedMLXFamily.gliclassUniEncoder.rawValue,
@@ -311,7 +312,8 @@ public final class OpenMedRelationExtractor {
 
         let artifact = try OpenMedMLXArtifact(modelDirectoryURL: modelDirectoryURL)
         guard artifact.task == .zeroShotRelationExtraction,
-              artifact.family == .glinerUniEncoderTokenRelex else {
+            artifact.family == .glinerUniEncoderTokenRelex
+        else {
             throw OpenMedZeroShotError.unsupportedArtifact(
                 expectedTask: OpenMedMLXTask.zeroShotRelationExtraction.rawValue,
                 expectedFamily: OpenMedMLXFamily.glinerUniEncoderTokenRelex.rawValue,
@@ -541,10 +543,11 @@ struct OpenMedGLiNERPromptEncoder {
                 continue
             }
             words.append(String(text[matchRange]))
-            offsets.append((
-                text.distance(from: text.startIndex, to: matchRange.lowerBound),
-                text.distance(from: text.startIndex, to: matchRange.upperBound)
-            ))
+            offsets.append(
+                (
+                    text.distance(from: text.startIndex, to: matchRange.lowerBound),
+                    text.distance(from: text.startIndex, to: matchRange.upperBound)
+                ))
         }
         return (words, offsets)
     }
@@ -573,9 +576,11 @@ struct OpenMedGLiNERPromptEncoder {
         _ spans: [(Int, Int)]
     ) -> (index: MLXArray, mask: MLXArray) {
         let width = max(spans.count, 1)
-        let padded = spans.map { [$0.0, $0.1] }
+        let padded =
+            spans.map { [$0.0, $0.1] }
             + Array(repeating: [0, 0], count: max(0, width - spans.count))
-        let mask = Array(repeating: 1, count: spans.count)
+        let mask =
+            Array(repeating: 1, count: spans.count)
             + Array(repeating: 0, count: max(0, width - spans.count))
         return (
             MLXArray(padded.flatMap { $0 }.map(Int32.init), [1, width, 2]),
@@ -686,8 +691,8 @@ struct OpenMedGLiNERPromptEncoder {
     }
 }
 
-private extension String {
-    func characterSlice(start: Int, end: Int) -> Substring {
+extension String {
+    fileprivate func characterSlice(start: Int, end: Int) -> Substring {
         let lower = index(startIndex, offsetBy: max(0, start), limitedBy: endIndex) ?? endIndex
         let upper = index(startIndex, offsetBy: max(0, end), limitedBy: endIndex) ?? endIndex
         return self[lower..<upper]

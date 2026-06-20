@@ -5,10 +5,10 @@ from __future__ import annotations
 from .base import ModelFamily
 from .gliner import ensure_gliner_available, is_gliner_available
 from .gliner2 import (
+    clear_gliner2_cache,
     ensure_gliner2_available,
     is_gliner2_available,
     load_gliner2_handle,
-    clear_gliner2_cache,
 )
 
 __all__ = [

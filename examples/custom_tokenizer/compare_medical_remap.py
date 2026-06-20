@@ -7,7 +7,6 @@ Run:
 from openmed import analyze_text
 from openmed.core import OpenMedConfig
 
-
 TEXT = (
     "62-year-old male with B-cell ALL day +5 post CAR-T (tisagenlecleucel) developed "
     "IL-6-mediated cytokine storm with Tmax 39.8C, tachycardia 128."
@@ -15,7 +14,9 @@ TEXT = (
 
 
 def summarize(result):
-    return [(e.label, e.text, e.start, e.end, float(e.confidence)) for e in result.entities]
+    return [
+        (e.label, e.text, e.start, e.end, float(e.confidence)) for e in result.entities
+    ]
 
 
 def main():
@@ -46,4 +47,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

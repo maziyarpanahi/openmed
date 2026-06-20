@@ -14,7 +14,6 @@ from __future__ import annotations
 import math
 from typing import Final, Sequence
 
-
 # ---------------------------------------------------------------------------
 # Public types
 # ---------------------------------------------------------------------------
@@ -110,7 +109,9 @@ def _transition_bias(
     previous_is_background = (
         previous_span == background_span_idx or previous_idx == background_token_idx
     )
-    next_is_background = next_span == background_span_idx or next_idx == background_token_idx
+    next_is_background = (
+        next_span == background_span_idx or next_idx == background_token_idx
+    )
 
     if previous_is_background:
         if next_is_background:
@@ -146,7 +147,9 @@ def _is_valid_transition(
     background_span_idx: int,
     next_idx: int,
 ) -> bool:
-    next_is_background = next_span == background_span_idx or next_idx == background_token_idx
+    next_is_background = (
+        next_span == background_span_idx or next_idx == background_token_idx
+    )
     if (next_span is None or next_tag is None) and not next_is_background:
         return False
 
@@ -212,6 +215,7 @@ def _build_viterbi_scores(
 # Public decoders
 # ---------------------------------------------------------------------------
 
+
 def viterbi_decode(
     token_logprobs: list[list[float]],
     *,
@@ -235,7 +239,9 @@ def viterbi_decode(
         return []
 
     resolved_biases = zero_viterbi_biases()
-    resolved_biases.update({key: float(value) for key, value in biases.items() if key in resolved_biases})
+    resolved_biases.update(
+        {key: float(value) for key, value in biases.items() if key in resolved_biases}
+    )
     start_scores, end_scores, transition_scores = _build_viterbi_scores(
         label_info,
         resolved_biases,
@@ -243,7 +249,9 @@ def viterbi_decode(
 
     num_classes = len(label_info.token_to_span_label)
     if any(len(row) < num_classes for row in token_logprobs):
-        raise ValueError("token_logprobs has fewer classes than the configured label space")
+        raise ValueError(
+            "token_logprobs has fewer classes than the configured label space"
+        )
     scores = [token_logprobs[0][idx] + start_scores[idx] for idx in range(num_classes)]
     backpointers: list[list[int]] = []
 
@@ -265,7 +273,9 @@ def viterbi_decode(
 
     final_scores = [score + end_scores[idx] for idx, score in enumerate(scores)]
     if not any(math.isfinite(score) for score in final_scores):
-        return [max(range(num_classes), key=lambda idx: row[idx]) for row in token_logprobs]
+        return [
+            max(range(num_classes), key=lambda idx: row[idx]) for row in token_logprobs
+        ]
 
     last_label = max(range(num_classes), key=lambda idx: final_scores[idx])
     path = [last_label]
@@ -321,25 +331,45 @@ def labels_to_token_spans(
             continue
 
         if boundary_tag == "S":
-            if current_label is not None and start_idx is not None and previous_idx is not None:
+            if (
+                current_label is not None
+                and start_idx is not None
+                and previous_idx is not None
+            ):
                 spans.append((current_label, start_idx, previous_idx + 1))
             spans.append((span_label, token_idx, token_idx + 1))
             current_label = None
             start_idx = None
         elif boundary_tag == "B":
-            if current_label is not None and start_idx is not None and previous_idx is not None:
+            if (
+                current_label is not None
+                and start_idx is not None
+                and previous_idx is not None
+            ):
                 spans.append((current_label, start_idx, previous_idx + 1))
             current_label = span_label
             start_idx = token_idx
         elif boundary_tag == "I":
             if current_label is None or current_label != span_label:
-                if current_label is not None and start_idx is not None and previous_idx is not None:
+                if (
+                    current_label is not None
+                    and start_idx is not None
+                    and previous_idx is not None
+                ):
                     spans.append((current_label, start_idx, previous_idx + 1))
                 current_label = span_label
                 start_idx = token_idx
         elif boundary_tag == "E":
-            if current_label is None or current_label != span_label or start_idx is None:
-                if current_label is not None and start_idx is not None and previous_idx is not None:
+            if (
+                current_label is None
+                or current_label != span_label
+                or start_idx is None
+            ):
+                if (
+                    current_label is not None
+                    and start_idx is not None
+                    and previous_idx is not None
+                ):
                     spans.append((current_label, start_idx, previous_idx + 1))
                 spans.append((span_label, token_idx, token_idx + 1))
                 current_label = None
