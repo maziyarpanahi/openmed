@@ -170,6 +170,7 @@ _CATEGORY_ENTITY_TYPES = {
     "Genomics": ["GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA"],
     "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
     "Species": ["ORGANISM", "SPECIES"],
+    "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
@@ -665,6 +666,10 @@ def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
             "Hematology",
             "Contains hematological terms",
         ),
+        "culture|gram.stain|susceptib|\\bmic\\b|resistant|sensitive|e\\.\\s*coli|mrsa": (
+            "Microbiology",
+            "Contains microbiology terms",
+        )
     }
 
     for pattern, (category, reason) in keywords.items():

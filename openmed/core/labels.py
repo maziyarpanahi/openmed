@@ -92,6 +92,11 @@ VIN: Final = "VIN"
 VEHICLE_REGISTRATION: Final = "VEHICLE_REGISTRATION"
 IMEI: Final = "IMEI"
 
+#: Microbiology
+MICROORGANISM: Final = "MICROORGANISM"
+ANTIBIOTIC: Final = "ANTIBIOTIC"
+SUSCEPTIBILITY: Final = "SUSCEPTIBILITY"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -121,6 +126,7 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset({
     GENDER, EYE_COLOR, HEIGHT,
     ORGANIZATION, JOB_TITLE, JOB_DEPARTMENT, OCCUPATION,
     IP_ADDRESS, MAC_ADDRESS, USER_AGENT, VIN, VEHICLE_REGISTRATION, IMEI,
+    MICROORGANISM, ANTIBIOTIC, SUSCEPTIBILITY,
     OTHER,
 })
 
@@ -279,6 +285,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     VEHICLE_REGISTRATION: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     IMEI: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
 
+    # Microbiology
+    MICROORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
+    ANTIBIOTIC: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    SUSCEPTIBILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -350,6 +361,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     VIN: HIPAA_VEHICLE_IDENTIFIER,
     VEHICLE_REGISTRATION: HIPAA_VEHICLE_IDENTIFIER,
     IMEI: HIPAA_DEVICE_IDENTIFIER,
+
+    # Microbiology
+    MICROORGANISM: HIPAA_UNIQUE_IDENTIFIER,
+    ANTIBIOTIC: HIPAA_UNIQUE_IDENTIFIER,
+    SUSCEPTIBILITY: HIPAA_UNIQUE_IDENTIFIER,
 
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
@@ -517,6 +533,15 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "department": JOB_DEPARTMENT,
     "occupation": OCCUPATION,
     "profession": OCCUPATION,
+
+    # Microbiology
+    "microorganism": MICROORGANISM,
+    "organism": MICROORGANISM,
+    "pathogen": MICROORGANISM,
+    "antibiotic": ANTIBIOTIC,
+    "antimicrobial": ANTIBIOTIC,
+    "susceptibility": SUSCEPTIBILITY,
+    "susceptibilityresult": SUSCEPTIBILITY,
 
     # Tech
     "ipaddress": IP_ADDRESS,
@@ -686,5 +711,6 @@ __all__ = [
     "ORGANIZATION", "JOB_TITLE", "JOB_DEPARTMENT", "OCCUPATION",
     "IP_ADDRESS", "MAC_ADDRESS", "USER_AGENT", "VIN",
     "VEHICLE_REGISTRATION", "IMEI",
+    "MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY",
     "OTHER",
 ]
