@@ -14,6 +14,16 @@ Core Python package code lives in `openmed/`. Keep existing privacy and registry
 - `make docs-serve` / `make docs-build`: preview or strictly build MkDocs.
 - `cd swift/OpenMedKit && swift test`: run Swift package tests.
 
+## Linting and Formatting
+
+Use the checked-in tooling as the single source of truth. Do not apply ad hoc editor formatting or alternate lint configurations.
+
+Python linting and formatting are owned by Ruff through `pyproject.toml`, `.pre-commit-config.yaml`, and the CI lint job. Before opening a Python-touching PR, run `make format`, `make lint`, and `make format-check`. Use `pre-commit run --all-files` for broad validation, or `pre-commit run --files <paths>` when validating a tightly scoped change.
+
+Swift package formatting is separate from Python. OpenMedKit Swift code uses Apple `swift-format` through `.swift-format`, `scripts/format_swift.sh`, `scripts/lint_swift.sh`, and the Swift package CI workflow. Before opening a PR that touches `Package.swift` or `swift/OpenMedKit`, run `make format-swift` and `make lint-swift`.
+
+Keep `.editorconfig`, Ruff, pre-commit, Swift format scripts, Make targets, documentation, and CI in sync when changing lint policy. A lint policy change should explain the local command, the CI gate, and the expected developer workflow.
+
 ## Coding Style & Architecture Rules
 
 Use Python 3.10+, 4-space indentation, and 88-character lines. Prefer `snake_case` for functions and modules, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants. Public APIs need Google-style docstrings.
@@ -31,6 +41,16 @@ For privacy, aggregate F1 is not enough. Add tests or fixtures for direct-identi
 Recent history uses concise imperative commits, often with prefixes such as `fix:`. Keep commits and PRs focused on the requested change. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.
 
 Pull requests should follow `.github/PULL_REQUEST_TEMPLATE.md`: description, change type, tests run, docs or changelog updates when applicable, dependency justification, linked issue, and screenshots or example output for UI/docs changes.
+
+## Reviewing Existing PRs After Lint Changes
+
+Do not start review on a stale branch when a repo-wide lint or formatting baseline has landed. First require the branch to update from latest `master` by rebasing or merging `master` into the PR branch.
+
+After the branch is updated, run the canonical formatter on that branch and commit only files that belong to the PR's actual scope. Do not run broad formatting on a stale branch before updating from `master`; that creates avoidable churn and makes review harder.
+
+Expect overlapping PRs to need small formatting follow-up commits only for files they already touch. They should not gain the full baseline diff. If updating a PR produces unrelated formatting-only changes outside its scope, stop and ask before reviewing or committing those changes.
+
+Before approving or merging another contributor's PR, verify that its branch is current enough for CI, the relevant lint commands pass, and the diff does not contain unrelated formatting churn.
 
 ## Tracked Files and Commit Safety
 
