@@ -11,8 +11,7 @@ from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import EvalSpan
 
-from .licenses import DatasetLicense, PUBLIC_DATASET_LICENSES, license_for
-
+from .licenses import PUBLIC_DATASET_LICENSES, DatasetLicense, license_for
 
 PUBLIC_DATASETS: tuple[str, ...] = (
     "shield",
@@ -130,7 +129,9 @@ class PublicDatasetRecord:
         return BenchmarkFixture(
             fixture_id=self.record_id,
             text=self.text,
-            gold_spans=tuple(span.to_eval_span(language=self.language) for span in self.spans),
+            gold_spans=tuple(
+                span.to_eval_span(language=self.language) for span in self.spans
+            ),
             language=self.language,
             metadata={
                 **dict(self.metadata),
@@ -215,10 +216,15 @@ class PublicDatasetAdapter:
         language = str(row.get("language") or row.get("lang") or "en")
         spans = tuple(
             self._span_from_mapping(span, text=text, language=language)
-            for span in row.get("spans") or row.get("entities") or row.get("annotations") or []
+            for span in row.get("spans")
+            or row.get("entities")
+            or row.get("annotations")
+            or []
         )
         return PublicDatasetRecord(
-            record_id=str(row.get("id") or row.get("record_id") or row.get("pmid") or "record"),
+            record_id=str(
+                row.get("id") or row.get("record_id") or row.get("pmid") or "record"
+            ),
             dataset=self.dataset,
             text=text,
             spans=spans,
@@ -266,7 +272,9 @@ def adapter_for(dataset: str) -> PublicDatasetAdapter:
     )
 
 
-def load_public_dataset(dataset: str, path: str | Path | None = None) -> DatasetLoadResult:
+def load_public_dataset(
+    dataset: str, path: str | Path | None = None
+) -> DatasetLoadResult:
     return adapter_for(dataset).load(path)
 
 

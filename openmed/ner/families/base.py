@@ -17,8 +17,7 @@ class ModelFamily(str, Enum):
 class SupportsPrediction(Protocol):  # pragma: no cover - interface only
     """Protocol for minimal predictor objects."""
 
-    def predict(self, text: str, *, labels: list[str] | None = None) -> object:
-        ...
+    def predict(self, text: str, *, labels: list[str] | None = None) -> object: ...
 
 
 __all__ = ["ModelFamily", "SupportsPrediction"]

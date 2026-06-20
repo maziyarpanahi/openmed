@@ -14,7 +14,6 @@ from openmed.eval.release_gates import (
 )
 from openmed.eval.report import BenchmarkReport
 
-
 SIGNING_KEY = "unit-release-key"
 
 

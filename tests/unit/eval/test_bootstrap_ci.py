@@ -81,7 +81,9 @@ def test_compute_confidence_intervals_covers_required_metrics():
         ),
     ]
 
-    intervals = compute_confidence_intervals(per_document_spans, n_resamples=200, seed=0)
+    intervals = compute_confidence_intervals(
+        per_document_spans, n_resamples=200, seed=0
+    )
 
     assert set(intervals) == {
         "leakage",

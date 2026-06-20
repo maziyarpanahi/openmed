@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from openmed.core.backends import (
+    _BACKENDS,
     HuggingFaceBackend,
     MLXBackend,
     get_backend,
-    _BACKENDS,
 )
 
 
 class TestHuggingFaceBackend:
-
     @patch("openmed.core.backends.HuggingFaceBackend.is_available", return_value=True)
     def test_is_available_when_installed(self, _):
         backend = HuggingFaceBackend()
@@ -27,7 +27,6 @@ class TestHuggingFaceBackend:
 
 
 class TestMLXBackend:
-
     @patch("platform.system", return_value="Linux")
     def test_not_available_on_linux(self, _):
         backend = MLXBackend()
@@ -41,7 +40,6 @@ class TestMLXBackend:
 
 
 class TestGetBackend:
-
     @patch.object(HuggingFaceBackend, "is_available", return_value=True)
     def test_explicit_hf(self, _):
         backend = get_backend("hf")
@@ -81,7 +79,6 @@ class TestGetBackend:
 
 
 class TestBackendRegistry:
-
     def test_hf_in_registry(self):
         assert "hf" in _BACKENDS
 
@@ -90,18 +87,20 @@ class TestBackendRegistry:
 
 
 class TestOpenMedConfigBackendField:
-
     def test_default_backend_is_none(self):
         from openmed.core.config import OpenMedConfig
+
         config = OpenMedConfig()
         assert config.backend is None
 
     def test_backend_can_be_set(self):
         from openmed.core.config import OpenMedConfig
+
         config = OpenMedConfig(backend="mlx")
         assert config.backend == "mlx"
 
     def test_backend_round_trips_through_dict(self):
         from openmed.core.config import OpenMedConfig
+
         config = OpenMedConfig.from_dict({"backend": "mlx"})
         assert config.backend == "mlx"

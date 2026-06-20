@@ -6,12 +6,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Mapping, Optional
 
-import openmed
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+import openmed
 
 from .runtime import ServiceRuntime
 from .schemas import (
@@ -238,7 +239,9 @@ def create_app() -> FastAPI:
         return await _run_with_timeout(runtime, _operation)
 
     @app.post("/pii/extract")
-    async def pii_extract(payload: PIIExtractRequest, request: Request) -> Dict[str, Any]:
+    async def pii_extract(
+        payload: PIIExtractRequest, request: Request
+    ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
 
         def _operation() -> Dict[str, Any]:
@@ -269,7 +272,9 @@ def create_app() -> FastAPI:
     return app
 
 
-def _analyze_payload(payload: AnalyzeRequest, runtime: ServiceRuntime) -> Dict[str, Any]:
+def _analyze_payload(
+    payload: AnalyzeRequest, runtime: ServiceRuntime
+) -> Dict[str, Any]:
     result = openmed.analyze_text(
         payload.text,
         model_name=payload.model_name,

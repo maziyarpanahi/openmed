@@ -80,7 +80,9 @@ def test_load_shield_fixtures_uses_public_sample_reference_by_default() -> None:
     note, spans = _synthetic_shield_rows()
     calls: list[tuple[str, str, str]] = []
 
-    def rows_loader(repository: str, config: str, split: str) -> list[Mapping[str, object]]:
+    def rows_loader(
+        repository: str, config: str, split: str
+    ) -> list[Mapping[str, object]]:
         calls.append((repository, config, split))
         if config == PUBLIC_SAMPLE_NOTES_CONFIG:
             return [note]
@@ -100,7 +102,9 @@ def test_load_shield_fixtures_uses_public_sample_reference_by_default() -> None:
 def test_suite_registry_loads_shield_and_metadata() -> None:
     note, spans = _synthetic_shield_rows()
 
-    def rows_loader(repository: str, config: str, split: str) -> list[Mapping[str, object]]:
+    def rows_loader(
+        repository: str, config: str, split: str
+    ) -> list[Mapping[str, object]]:
         return [note] if config == PUBLIC_SAMPLE_NOTES_CONFIG else spans
 
     fixtures = load_suite_fixtures(SHIELD, rows_loader=rows_loader)

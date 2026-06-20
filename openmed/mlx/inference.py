@@ -7,9 +7,9 @@ unchanged.
 
 from __future__ import annotations
 
-import math
 import json
 import logging
+import math
 import re
 from bisect import bisect_left, bisect_right
 from pathlib import Path
@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 try:
     import mlx.core as mx
+
     MLX_AVAILABLE = True
 except ImportError:
     MLX_AVAILABLE = False
@@ -79,10 +80,9 @@ def _load_auto_tokenizer(reference: str | Path) -> Any:
     try:
         return _from_pretrained()
     except AttributeError as exc:
-        if (
-            "'list' object has no attribute 'keys'" not in str(exc)
-            or not _tokenizer_has_list_extra_special_tokens(reference)
-        ):
+        if "'list' object has no attribute 'keys'" not in str(
+            exc
+        ) or not _tokenizer_has_list_extra_special_tokens(reference):
             raise
         return _from_pretrained(extra_special_tokens={})
 
@@ -243,14 +243,16 @@ class MLXTokenClassificationPipeline:
             score = probs[i][label_id]
             if label == "O":
                 continue
-            results.append({
-                "entity": label,
-                "score": score,
-                "word": text[start:end],
-                "start": start,
-                "end": end,
-                "index": i,
-            })
+            results.append(
+                {
+                    "entity": label,
+                    "score": score,
+                    "word": text[start:end],
+                    "start": start,
+                    "end": end,
+                    "index": i,
+                }
+            )
         return results
 
     def _decode_grouped(
@@ -305,7 +307,7 @@ class MLXTokenClassificationPipeline:
             else:
                 # Continue current entity
                 current["end"] = end
-                current["word"] = text[current["start"]:end]
+                current["word"] = text[current["start"] : end]
                 current["_scores"].append(score)
 
         if current is not None:
@@ -325,8 +327,12 @@ class MLXTokenClassificationPipeline:
         return entities
 
 
-def _decode_tiktoken_offsets(token_ids: Sequence[int], encoding: Any) -> tuple[str, list[int], list[int]]:
-    token_bytes = [encoding.decode_single_token_bytes(int(token_id)) for token_id in token_ids]
+def _decode_tiktoken_offsets(
+    token_ids: Sequence[int], encoding: Any
+) -> tuple[str, list[int], list[int]]:
+    token_bytes = [
+        encoding.decode_single_token_bytes(int(token_id)) for token_id in token_ids
+    ]
     decoded_text = b"".join(token_bytes).decode("utf-8", errors="replace")
     if not token_bytes:
         return decoded_text, [], []
@@ -409,7 +415,10 @@ class PrivacyFilterMLXPipeline:
         return self._predict_single(text)
 
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
-        token_ids = [int(token_id) for token_id in self.encoding.encode(text, allowed_special="all")]
+        token_ids = [
+            int(token_id)
+            for token_id in self.encoding.encode(text, allowed_special="all")
+        ]
         if not token_ids:
             return []
 
@@ -444,8 +453,7 @@ class PrivacyFilterMLXPipeline:
 
         max_len = max(len(token_ids) for _, _, token_ids in encoded)
         padded_ids = [
-            token_ids + [0] * (max_len - len(token_ids))
-            for _, _, token_ids in encoded
+            token_ids + [0] * (max_len - len(token_ids)) for _, _, token_ids in encoded
         ]
         attention_mask = [
             [True] * len(token_ids) + [False] * (max_len - len(token_ids))
@@ -485,12 +493,18 @@ class PrivacyFilterMLXPipeline:
             biases=self.viterbi_biases,
         )
 
-        decoded_text, char_starts, char_ends = _decode_tiktoken_offsets(token_ids, self.encoding)
+        decoded_text, char_starts, char_ends = _decode_tiktoken_offsets(
+            token_ids, self.encoding
+        )
         source_text = decoded_text if decoded_text != text else text
 
         if self.aggregation_strategy is None:
-            return self._decode_raw(pred_ids, probs_py, char_starts, char_ends, source_text)
-        return self._decode_grouped(pred_ids, probs_py, char_starts, char_ends, source_text)
+            return self._decode_raw(
+                pred_ids, probs_py, char_starts, char_ends, source_text
+            )
+        return self._decode_grouped(
+            pred_ids, probs_py, char_starts, char_ends, source_text
+        )
 
     def _decode_raw(
         self,
@@ -529,7 +543,9 @@ class PrivacyFilterMLXPipeline:
         char_ends: list[int],
         text: str,
     ) -> list[dict[str, Any]]:
-        labels_by_index = {index: int(label_id) for index, label_id in enumerate(pred_ids)}
+        labels_by_index = {
+            index: int(label_id) for index, label_id in enumerate(pred_ids)
+        }
         token_spans = labels_to_token_spans(labels_by_index, self.label_info)
 
         entities: list[dict[str, Any]] = []
@@ -609,7 +625,9 @@ def _as_batched_lists(values: Any) -> list[list[int]]:
     return [values]
 
 
-def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.array, mx.array]:
+def _build_ragged_span_batch(
+    spans: list[list[tuple[int, int]]],
+) -> tuple[mx.array, mx.array]:
     max_spans = max((len(sample) for sample in spans), default=0)
     max_spans = max(max_spans, 1)
     padded_spans = [
@@ -617,8 +635,7 @@ def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.arr
         for sample in spans
     ]
     padded_mask = [
-        [True] * len(sample) + [False] * (max_spans - len(sample))
-        for sample in spans
+        [True] * len(sample) + [False] * (max_spans - len(sample)) for sample in spans
     ]
     return (
         mx.array(padded_spans, dtype=mx.int32),
@@ -628,14 +645,18 @@ def _build_ragged_span_batch(spans: list[list[tuple[int, int]]]) -> tuple[mx.arr
 
 def _suppress_overlaps(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
-    for entity in sorted(entities, key=lambda item: (-item["score"], item["start"], item["end"])):
+    for entity in sorted(
+        entities, key=lambda item: (-item["score"], item["start"], item["end"])
+    ):
         overlaps = any(
             not (entity["end"] <= current["start"] or entity["start"] >= current["end"])
             for current in selected
         )
         if not overlaps:
             selected.append(entity)
-    return sorted(selected, key=lambda item: (item["start"], item["end"], item["label"]))
+    return sorted(
+        selected, key=lambda item: (item["start"], item["end"], item["label"])
+    )
 
 
 class _BaseExperimentalMLXPipeline:
@@ -644,7 +665,9 @@ class _BaseExperimentalMLXPipeline:
     expected_task: str | None = None
     expected_family: str | None = None
 
-    def __init__(self, model_path: str | Path, tokenizer_name: Optional[str] = None) -> None:
+    def __init__(
+        self, model_path: str | Path, tokenizer_name: Optional[str] = None
+    ) -> None:
         if not MLX_AVAILABLE:
             raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
 
@@ -654,7 +677,9 @@ class _BaseExperimentalMLXPipeline:
         self.model = load_model(self.model_path)
         self.manifest, self.config = load_artifact_config(self.model_path)
         self.task = (self.manifest or {}).get("task") or self.config.get("_mlx_task")
-        self.family = (self.manifest or {}).get("family") or self.config.get("_mlx_family")
+        self.family = (self.manifest or {}).get("family") or self.config.get(
+            "_mlx_family"
+        )
 
         if self.expected_task is not None and self.task != self.expected_task:
             raise ValueError(
@@ -678,7 +703,11 @@ class _BaseExperimentalMLXPipeline:
                 "Install with: pip install tokenizers transformers"
             )
         self.max_length = _resolve_model_max_length(self.tokenizer, self.config)
-        self.prompt_spec = (self.manifest or {}).get("prompt_spec") or self.config.get("_mlx_prompt_spec") or {}
+        self.prompt_spec = (
+            (self.manifest or {}).get("prompt_spec")
+            or self.config.get("_mlx_prompt_spec")
+            or {}
+        )
 
 
 class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
@@ -721,18 +750,26 @@ class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
             padding=False,
         )
         words_mask = _prepare_word_mask(tokenized, skip_first_words=len(prompt_words))
-        span_idx, span_mask = build_candidate_span_indices([len(words)], self.config.get("max_width", 12))
+        span_idx, span_mask = build_candidate_span_indices(
+            [len(words)], self.config.get("max_width", 12)
+        )
 
         outputs = self.model(
-            input_ids=mx.array(_as_batched_lists(tokenized["input_ids"]), dtype=mx.int32),
-            attention_mask=mx.array(_as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32),
+            input_ids=mx.array(
+                _as_batched_lists(tokenized["input_ids"]), dtype=mx.int32
+            ),
+            attention_mask=mx.array(
+                _as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32
+            ),
             words_mask=mx.array([words_mask], dtype=mx.int32),
             span_idx=span_idx,
             span_mask=span_mask,
         )
 
         scores = _sigmoid(outputs["logits"])[0].tolist()
-        valid_prompt_count = min(len(labels), int(mx.sum(outputs["prompt_mask"][0].astype(mx.int32)).item()))
+        valid_prompt_count = min(
+            len(labels), int(mx.sum(outputs["prompt_mask"][0].astype(mx.int32)).item())
+        )
         candidate_spans = outputs["span_idx"][0].tolist()
         candidate_mask = outputs["span_mask"][0].tolist()
 
@@ -762,7 +799,9 @@ class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
         if flat_ner:
             return _suppress_overlaps(entities)
 
-        return sorted(entities, key=lambda item: (item["start"], item["end"], item["label"]))
+        return sorted(
+            entities, key=lambda item: (item["start"], item["end"], item["label"])
+        )
 
 
 class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
@@ -810,7 +849,9 @@ class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
         )
 
         scores = _sigmoid(outputs["logits"])[0].tolist()
-        valid_labels = min(len(labels), int(mx.sum(outputs["classes_mask"][0].astype(mx.int32)).item()))
+        valid_labels = min(
+            len(labels), int(mx.sum(outputs["classes_mask"][0].astype(mx.int32)).item())
+        )
         predictions = []
         for index in range(valid_labels):
             score = float(scores[index])
@@ -868,8 +909,12 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
         )
         words_mask = _prepare_word_mask(tokenized, skip_first_words=len(prompt_words))
         encoded = self.model.encode(
-            input_ids=mx.array(_as_batched_lists(tokenized["input_ids"]), dtype=mx.int32),
-            attention_mask=mx.array(_as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32),
+            input_ids=mx.array(
+                _as_batched_lists(tokenized["input_ids"]), dtype=mx.int32
+            ),
+            attention_mask=mx.array(
+                _as_batched_lists(tokenized["attention_mask"]), dtype=mx.float32
+            ),
             words_mask=mx.array([words_mask], dtype=mx.int32),
         )
         entity_scores = _sigmoid(self.model.entity_scores(encoded))
@@ -884,17 +929,22 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
             multi_label=multi_label,
         )[0]
         decoded_spans = [
-            span for span in decoded_result.spans
+            span
+            for span in decoded_result.spans
             if span.label_index < entity_prompt_count
         ]
-        span_idx, span_mask = _build_ragged_span_batch([
-            [(span.start, span.end) for span in decoded_spans]
-        ])
+        span_idx, span_mask = _build_ragged_span_batch(
+            [[(span.start, span.end) for span in decoded_spans]]
+        )
         relation_outputs = self.model.relation_scores(encoded, span_idx, span_mask)
 
         relation_prompt_count = min(
             len(relations),
-            int(mx.sum(relation_outputs["relation_prompt_mask"][0].astype(mx.int32)).item()),
+            int(
+                mx.sum(
+                    relation_outputs["relation_prompt_mask"][0].astype(mx.int32)
+                ).item()
+            ),
         )
 
         entities: list[dict[str, Any]] = []
@@ -996,8 +1046,7 @@ def _download_preconverted_mlx_model(
         from huggingface_hub import snapshot_download
     except ImportError as e:
         raise ImportError(
-            f"Missing dependency: {e}. "
-            "Install with: pip install openmed[mlx]"
+            f"Missing dependency: {e}. Install with: pip install openmed[mlx]"
         ) from e
 
     return snapshot_download(
@@ -1063,14 +1112,18 @@ def _resolve_mlx_model(
 
     # Check local path
     local = Path(model_name)
-    if local.is_dir() and ((local / "config.json").exists() or (local / MANIFEST_FILENAME).exists()):
+    if local.is_dir() and (
+        (local / "config.json").exists() or (local / MANIFEST_FILENAME).exists()
+    ):
         manifest = read_manifest(local)
         if manifest is not None or has_local_tokenizer(local):
             try:
                 _, local_config = load_artifact_config(local)
             except Exception:
                 local_config = {}
-            return str(local), resolve_tokenizer_reference(local, config=local_config, manifest=manifest)
+            return str(local), resolve_tokenizer_reference(
+                local, config=local_config, manifest=manifest
+            )
 
         try:
             with open(local / "config.json") as f:
@@ -1092,6 +1145,7 @@ def _resolve_mlx_model(
 
     logger.info("Converting %s to MLX format (one-time) ...", full_model_id)
     from openmed.mlx.convert import convert
+
     convert(full_model_id, output_dir, cache_dir=cache_dir)
     return str(output_dir), full_model_id
 
@@ -1110,7 +1164,9 @@ def create_mlx_pipeline(
     manifest, artifact_config = load_artifact_config(model_path)
     from openmed.mlx.models import resolve_artifact_family
 
-    task = (manifest or {}).get("task") or artifact_config.get("_mlx_task", "token-classification")
+    task = (manifest or {}).get("task") or artifact_config.get(
+        "_mlx_task", "token-classification"
+    )
     raw_family = (manifest or {}).get("family") or artifact_config.get("_mlx_family")
     try:
         family = resolve_artifact_family(artifact_config, manifest=manifest)
@@ -1139,7 +1195,10 @@ def create_mlx_pipeline(
             model_path=model_path,
             tokenizer_name=tokenizer_name,
         )
-    if task == "zero-shot-relation-extraction" or family == "gliner-uni-encoder-token-relex":
+    if (
+        task == "zero-shot-relation-extraction"
+        or family == "gliner-uni-encoder-token-relex"
+    ):
         return GLiNERRelexMLXPipeline(
             model_path=model_path,
             tokenizer_name=tokenizer_name,

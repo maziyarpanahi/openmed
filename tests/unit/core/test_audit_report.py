@@ -8,9 +8,9 @@ from openmed.core.audit import (
     AuditReport,
     AuditSpan,
     DetectorInfo,
+    hash_text,
     recompute_repro_hash,
     verify_repro_hash,
-    hash_text,
 )
 
 
