@@ -66,6 +66,13 @@ hf = [
   "tokenizers>=0.15"
 ]
 
+
+multimodal = [
+  "python-doctr",
+]
+
+
+
 service = [
   "fastapi>=0.110",
   "uvicorn[standard]>=0.29",
