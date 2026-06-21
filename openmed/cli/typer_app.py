@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional, List
+from typing import List, Optional
 
 try:  # soft dependency to avoid import errors in base installs
     import typer
@@ -24,22 +24,24 @@ except ImportError:  # pragma: no cover - optional surface
     Table = None
     rprint = print
 
-from openmed import analyze_text, list_models, get_model_max_length
+from openmed import analyze_text, get_model_max_length, list_models
 from openmed.core.config import (
     OpenMedConfig,
     get_config,
-    set_config,
-    resolve_config_path,
     load_config_from_file,
+    resolve_config_path,
     save_config_to_file,
+    set_config,
 )
 from openmed.ner import (
-    build_index,
-    write_index,
-    infer as zs_infer,
     NerRequest,
-    ensure_gliner_available,
+    build_index,
     ensure_gliner2_available,
+    ensure_gliner_available,
+    write_index,
+)
+from openmed.ner import (
+    infer as zs_infer,
 )
 
 
@@ -117,7 +119,9 @@ def main() -> None:
             False, "--no-confidence", help="Exclude confidence values."
         ),
         sentence_detection: bool = typer.Option(
-            True, "--sentence-detection/--no-sentence-detection", help="Toggle sentence splitting."
+            True,
+            "--sentence-detection/--no-sentence-detection",
+            help="Toggle sentence splitting.",
         ),
         config_path: Optional[Path] = typer.Option(
             None, "--config-path", help="Override config path."
@@ -160,7 +164,9 @@ def main() -> None:
         ),
     ):
         cfg = _load_config(config_path)
-        models = list_models(include_registry=True, include_remote=include_remote, config=cfg)
+        models = list_models(
+            include_registry=True, include_remote=include_remote, config=cfg
+        )
         rows = [[m] for m in models]
         _render_table("Models", ["model_id"], rows)
 
@@ -207,7 +213,9 @@ def main() -> None:
             cfg = get_config()
         cfg_dict = cfg.to_dict()
         if key not in cfg_dict:
-            raise typer.BadParameter(f"Unknown key '{key}'. Valid: {', '.join(cfg_dict.keys())}")
+            raise typer.BadParameter(
+                f"Unknown key '{key}'. Valid: {', '.join(cfg_dict.keys())}"
+            )
         cfg_dict[key] = None if unset else value
         new_cfg = OpenMedConfig.from_dict(cfg_dict)
         set_config(new_cfg)
@@ -237,9 +245,15 @@ def main() -> None:
 
     @zero_app.command("index")
     def zero_index(
-        models_dir: Path = typer.Argument(..., help="Root directory containing zero-shot models."),
-        output: Optional[Path] = typer.Option(None, "--output", "-o", help="Path to write index.json"),
-        pretty: bool = typer.Option(True, "--pretty/--compact", help="Pretty-print JSON."),
+        models_dir: Path = typer.Argument(
+            ..., help="Root directory containing zero-shot models."
+        ),
+        output: Optional[Path] = typer.Option(
+            None, "--output", "-o", help="Path to write index.json"
+        ),
+        pretty: bool = typer.Option(
+            True, "--pretty/--compact", help="Pretty-print JSON."
+        ),
     ):
         index = build_index(models_dir)
         out_path = output or (models_dir / "index.json")
@@ -249,14 +263,23 @@ def main() -> None:
     @zero_app.command("infer")
     def zero_infer(
         text: str = typer.Argument(..., help="Input text for zero-shot NER."),
-        model_id: str = typer.Option(..., "--model-id", "-m", help="Model id from index."),
+        model_id: str = typer.Option(
+            ..., "--model-id", "-m", help="Model id from index."
+        ),
         labels: Optional[str] = typer.Option(
             None, "--labels", "-l", help="Comma-separated label list (optional)."
         ),
-        domain: Optional[str] = typer.Option(None, "--domain", "-d", help="Domain hint."),
-        threshold: float = typer.Option(0.5, "--threshold", "-c", help="Score threshold."),
+        domain: Optional[str] = typer.Option(
+            None, "--domain", "-d", help="Domain hint."
+        ),
+        threshold: float = typer.Option(
+            0.5, "--threshold", "-c", help="Score threshold."
+        ),
         index_path: Optional[Path] = typer.Option(
-            None, "--index-path", "-i", help="Path to index.json (defaults to models/index.json)."
+            None,
+            "--index-path",
+            "-i",
+            help="Path to index.json (defaults to models/index.json).",
         ),
     ):
         label_list = [label.strip() for label in labels.split(",")] if labels else None

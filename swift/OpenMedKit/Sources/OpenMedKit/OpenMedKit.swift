@@ -217,9 +217,10 @@ public final class OpenMed {
                 confidenceThreshold: confidenceThreshold,
                 useSmartMerging: useSmartMerging
             )
-            chunkEntities.append(contentsOf: entities.compactMap { entity in
-                Self.offset(entity, by: chunk.start, in: text)
-            })
+            chunkEntities.append(
+                contentsOf: entities.compactMap { entity in
+                    Self.offset(entity, by: chunk.start, in: text)
+                })
         }
 
         return mergeChunkedPIIEntities(
@@ -273,7 +274,7 @@ public final class OpenMed {
                     end: text.count,
                     tokenStart: 0,
                     tokenEnd: tokenOffsets.count
-                ),
+                )
             ]
         }
 
@@ -358,9 +359,11 @@ public final class OpenMed {
         var selected: [EntityPrediction] = []
 
         for entity in entities.sorted(by: entitySort) {
-            guard let existingIndex = selected.firstIndex(where: {
-                areDuplicateCandidates(entity, $0)
-            }) else {
+            guard
+                let existingIndex = selected.firstIndex(where: {
+                    areDuplicateCandidates(entity, $0)
+                })
+            else {
                 selected.append(entity)
                 continue
             }
@@ -529,7 +532,8 @@ public final class OpenMed {
         let tokenizerConfigURL = directoryURL.appending(path: "tokenizer_config.json")
 
         guard FileManager.default.fileExists(atPath: tokenizerDataURL.path),
-              FileManager.default.fileExists(atPath: tokenizerConfigURL.path) else {
+            FileManager.default.fileExists(atPath: tokenizerConfigURL.path)
+        else {
             if let fallbackTokenizerName {
                 return try blockingPretrainedTokenizer(named: fallbackTokenizerName)
             }
@@ -608,7 +612,7 @@ public final class OpenMed {
             ) ?? tokenizerConfigData
 
         if FileManager.default.fileExists(atPath: modelConfigURL.path),
-           patchedTokenizerConfigData == tokenizerConfigData
+            patchedTokenizerConfigData == tokenizerConfigData
         {
             return directoryURL
         }
@@ -662,7 +666,8 @@ public final class OpenMed {
             )
         let leafName = sanitizedCacheComponent(directoryURL.lastPathComponent)
         let digest = stableDigest(for: directoryURL.path)
-        return base
+        return
+            base
             .appending(path: "OpenMed", directoryHint: .isDirectory)
             .appending(path: "PreparedTokenizerAssets", directoryHint: .isDirectory)
             .appending(path: "\(leafName)-\(digest)", directoryHint: .isDirectory)
@@ -730,7 +735,8 @@ public final class OpenMed {
                 create: true
             )
         let sanitized = modelID.replacingOccurrences(of: "/", with: "__")
-        return base
+        return
+            base
             .appending(path: "OpenMed", directoryHint: .isDirectory)
             .appending(path: "TokenizerAssets", directoryHint: .isDirectory)
             .appending(path: sanitized, directoryHint: .isDirectory)
@@ -758,18 +764,22 @@ public final class OpenMed {
             return
         }
 
-        let encodedModelID = modelID
+        let encodedModelID =
+            modelID
             .split(separator: "/")
             .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
             .joined(separator: "/")
-        let encodedPath = relativePath
+        let encodedPath =
+            relativePath
             .split(separator: "/")
             .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
             .joined(separator: "/")
 
-        guard let url = URL(
-            string: "https://huggingface.co/\(encodedModelID)/resolve/main/\(encodedPath)?download=1"
-        ) else {
+        guard
+            let url = URL(
+                string: "https://huggingface.co/\(encodedModelID)/resolve/main/\(encodedPath)?download=1"
+            )
+        else {
             throw TokenizerError.missingConfig
         }
 
@@ -816,10 +826,10 @@ public final class OpenMed {
     }
 
     private static func stableDigest(for value: String) -> String {
-        var hash: UInt64 = 0xcbf29ce484222325
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
         for byte in value.utf8 {
             hash ^= UInt64(byte)
-            hash &*= 0x100000001b3
+            hash &*= 0x100_0000_01b3
         }
         return String(format: "%016llx", hash)
     }
@@ -861,15 +871,15 @@ public final class OpenMed {
 
             let range: Range<String.Index>?
             switch (exactRange, insensitiveRange) {
-            case let (exact?, insensitive?):
+            case (let exact?, let insensitive?):
                 if exact.lowerBound <= insensitive.lowerBound {
                     range = exact
                 } else {
                     range = insensitive
                 }
-            case let (exact?, nil):
+            case (let exact?, nil):
                 range = exact
-            case let (nil, insensitive?):
+            case (nil, let insensitive?):
                 range = insensitive
             case (nil, nil):
                 range = nil
@@ -884,11 +894,12 @@ public final class OpenMed {
             }
 
             let start = text.distance(from: text.startIndex, to: searchStart)
-            let endIndex = text.index(
-                searchStart,
-                offsetBy: piece.count,
-                limitedBy: text.endIndex
-            ) ?? text.endIndex
+            let endIndex =
+                text.index(
+                    searchStart,
+                    offsetBy: piece.count,
+                    limitedBy: text.endIndex
+                ) ?? text.endIndex
             let end = text.distance(from: text.startIndex, to: endIndex)
             offsets.append((start, end))
             cursor = endIndex

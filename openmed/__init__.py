@@ -2,93 +2,92 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
-import logging
-from typing import Any, Dict, Optional, Union, List
+from typing import Any, Dict, List, Optional, Union
 
 from .__about__ import __version__
-from .core import ModelLoader, load_model, OpenMedConfig
+from .core import ModelLoader, OpenMedConfig, load_model
+from .core.anonymizer import (
+    LANG_TO_LOCALE,
+    Anonymizer,
+    AnonymizerConfig,
+    register_clinical_provider,
+    register_label_generator,
+)
+from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
-    get_model_info,
-    get_models_by_category,
     get_all_models,
-    list_model_categories,
-    get_model_suggestions,
-    get_pii_models_by_language,
     get_default_pii_model,
+    get_model_info,
+    get_model_suggestions,
+    get_models_by_category,
+    get_pii_models_by_language,
+    list_model_categories,
+)
+from .core.pii import (
+    DeidentificationResult,
+    PIIEntity,
+    deidentify,
+    extract_pii,
+    reidentify,
+)
+from .core.pii_entity_merger import (
+    PII_PATTERNS,
+    PIIPattern,
+    calculate_dominant_label,
+    find_semantic_units,
+    merge_entities_with_semantic_units,
+)
+from .core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    LANGUAGE_PII_PATTERNS,
+    SUPPORTED_LANGUAGES,
+    get_patterns_for_language,
 )
 from .processing import (
-    TextProcessor,
-    preprocess_text,
-    postprocess_text,
-    TokenizationHelper,
-    OutputFormatter,
-    format_predictions,
-    BatchProcessor,
     BatchItem,
     BatchItemResult,
+    BatchProcessor,
     BatchResult,
+    OutputFormatter,
+    TextProcessor,
+    TokenizationHelper,
+    format_predictions,
+    postprocess_text,
+    preprocess_text,
     process_batch,
 )
 from .processing import sentences as sentence_utils
 from .processing.advanced_ner import AdvancedNERProcessor, create_advanced_processor
 from .processing.outputs import PredictionResult
 from .utils import (
-    setup_logging,
-    get_logger,
-    validate_input,
-    validate_model_name,
     Profiler,
     ProfileReport,
     Timer,
-    enable_profiling,
     disable_profiling,
+    enable_profiling,
+    get_logger,
     get_profile_report,
     profile,
+    setup_logging,
     timed,
+    validate_input,
+    validate_model_name,
 )
 from .utils.validation import (
+    sanitize_filename,
+    validate_batch_size,
     validate_confidence_threshold,
     validate_output_format,
-    validate_batch_size,
-    sanitize_filename,
-)
-from .core.pii import (
-    extract_pii,
-    deidentify,
-    reidentify,
-    PIIEntity,
-    DeidentificationResult,
-)
-from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
-from .core.pii_entity_merger import (
-    merge_entities_with_semantic_units,
-    find_semantic_units,
-    calculate_dominant_label,
-    PII_PATTERNS,
-    PIIPattern,
-)
-from .core.pii_i18n import (
-    SUPPORTED_LANGUAGES,
-    DEFAULT_PII_MODELS,
-    LANGUAGE_PII_PATTERNS,
-    get_patterns_for_language,
-)
-from .core.labels import CANONICAL_LABELS, normalize_label
-from .core.anonymizer import (
-    Anonymizer,
-    AnonymizerConfig,
-    LANG_TO_LOCALE,
-    register_clinical_provider,
-    register_label_generator,
 )
 
-_PLACEHOLDER_SEGMENT_PATTERN = re.compile(
-    r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE
-)
+_PLACEHOLDER_SEGMENT_PATTERN = re.compile(r"(?:_{3,}|placeholder|^\W+$)", re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
+
 
 def list_models(
     *,
@@ -265,7 +264,9 @@ def analyze_text(
             if not trimmed_text:
                 continue
 
-            suppress_predictions = bool(_PLACEHOLDER_SEGMENT_PATTERN.search(trimmed_text))
+            suppress_predictions = bool(
+                _PLACEHOLDER_SEGMENT_PATTERN.search(trimmed_text)
+            )
 
             processed_segments.append(
                 {
@@ -473,17 +474,23 @@ def analyze_text(
 
     # Optional: remap model spans onto medical-friendly tokens (no change to model tokenization).
     active_config = loader.config if hasattr(loader, "config") else config
-    if active_config is not None and getattr(active_config, "use_medical_tokenizer", False):
+    if active_config is not None and getattr(
+        active_config, "use_medical_tokenizer", False
+    ):
         try:
             from .processing.tokenization import (
+                DEFAULT_MEDICAL_EXCEPTIONS,
                 medical_tokenize,
                 remap_predictions_to_tokens,
-                DEFAULT_MEDICAL_EXCEPTIONS,
             )
 
-            extra_exceptions = getattr(active_config, "medical_tokenizer_exceptions", None) or []
+            extra_exceptions = (
+                getattr(active_config, "medical_tokenizer_exceptions", None) or []
+            )
             token_exceptions = list(DEFAULT_MEDICAL_EXCEPTIONS) + list(extra_exceptions)
-            medical_tokens = medical_tokenize(validated_text, exceptions=token_exceptions)
+            medical_tokens = medical_tokenize(
+                validated_text, exceptions=token_exceptions
+            )
             flattened_predictions = remap_predictions_to_tokens(
                 flattened_predictions,
                 validated_text,

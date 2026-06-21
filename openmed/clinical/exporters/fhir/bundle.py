@@ -118,11 +118,7 @@ def _rewrite_references(node: Any, reference_map: Mapping[str, str]) -> Any:
     if isinstance(node, Mapping):
         result: dict[str, Any] = {}
         for key, value in node.items():
-            if (
-                key == "reference"
-                and isinstance(value, str)
-                and value in reference_map
-            ):
+            if key == "reference" and isinstance(value, str) and value in reference_map:
                 result[key] = reference_map[value]
             else:
                 result[key] = _rewrite_references(value, reference_map)

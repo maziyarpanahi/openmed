@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import copy
+import json
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping, Sequence
-import copy
-import json
 
 from .labels import normalize_label
 from .schemas.span import ACTION_VALUES
-
 
 CURRENT_SCHEMA_VERSION = 1
 DEFAULT_RESOURCE = "thresholds.json"
@@ -290,7 +289,9 @@ def _resolve_profile_name(matrix: Mapping[str, Any], policy_profile: str) -> str
     profiles = matrix["profiles"]
     if policy_profile in profiles:
         return policy_profile
-    default_profile = str(matrix.get("default_policy_profile") or DEFAULT_POLICY_PROFILE)
+    default_profile = str(
+        matrix.get("default_policy_profile") or DEFAULT_POLICY_PROFILE
+    )
     if default_profile in profiles:
         return default_profile
     raise KeyError(f"unknown policy profile {policy_profile!r}")

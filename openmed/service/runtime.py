@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from openmed.core.config import OpenMedConfig, PROFILE_ENV_VAR
+from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
 from openmed.utils.validation import validate_model_name
 
@@ -52,7 +52,9 @@ class ServiceRuntime:
     _loader: Optional[ModelLoader] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _active_models: Dict[str, int] = field(default_factory=dict, repr=False)
-    _keep_alive_timers: Dict[str, threading.Timer] = field(default_factory=dict, repr=False)
+    _keep_alive_timers: Dict[str, threading.Timer] = field(
+        default_factory=dict, repr=False
+    )
     _keep_alive_deadlines: Dict[str, float] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -258,7 +260,9 @@ class ServiceRuntime:
         with self._loader_lock:
             self._cancel_idle_timer_locked(model_key)
             self._keep_alive_timers[model_key] = timer
-            self._keep_alive_deadlines[model_key] = time.monotonic() + keep_alive_seconds
+            self._keep_alive_deadlines[model_key] = (
+                time.monotonic() + keep_alive_seconds
+            )
         timer.start()
 
     def _unload_model_if_idle(self, model_key: str) -> None:

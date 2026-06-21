@@ -19,10 +19,10 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Phone numbers
 # ---------------------------------------------------------------------------
+
 
 def extract_digit_groups(text: str) -> List[int]:
     """Return the lengths of each contiguous digit run in ``text``.
@@ -102,6 +102,7 @@ def preserve_date_format(
 # Emails
 # ---------------------------------------------------------------------------
 
+
 def preserve_email_pattern(original: str, fake_email: str) -> str:
     """Use ``fake_email``'s local part with ``original``'s domain.
 
@@ -121,6 +122,7 @@ def preserve_email_pattern(original: str, fake_email: str) -> str:
 # Generic IDs (digit + separator preservation)
 # ---------------------------------------------------------------------------
 
+
 def preserve_id_pattern(original: str, *, rng: Optional[random.Random] = None) -> str:
     """Replace digits in ``original`` with random digits, keeping all other
     characters in place.
@@ -135,8 +137,11 @@ def preserve_id_pattern(original: str, *, rng: Optional[random.Random] = None) -
         if ch.isdigit():
             out.append(str(rng.randint(0, 9)))
         elif ch.isalpha():
-            out.append(rng.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ") if ch.isupper()
-                       else rng.choice("abcdefghijklmnopqrstuvwxyz"))
+            out.append(
+                rng.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+                if ch.isupper()
+                else rng.choice("abcdefghijklmnopqrstuvwxyz")
+            )
         else:
             out.append(ch)
     return "".join(out)

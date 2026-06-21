@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "indentation": {
+    "spaces": 4
+  },
+  "lineLength": 999,
+  "maximumBlankLines": 1,
+  "multiElementCollectionTrailingCommas": true,
+  "respectsExistingLineBreaks": true,
+  "reflowMultilineStringLiterals": {
+    "never": {}
+  }
+}

@@ -14,19 +14,18 @@ boundaries diverge.
 from __future__ import annotations
 
 import re
-from typing import List, Tuple, Dict, Iterable
+from typing import Dict, Iterable, List, Tuple
 
 import spacy
 import torch
 from spacy.lang import char_classes
 from spacy.tokenizer import Tokenizer
 from spacy.util import compile_infix_regex, compile_prefix_regex, compile_suffix_regex
-
 from tokenizers import pre_tokenizers
-from tokenizers.pre_tokenizers import Split, Sequence as PreSeq
+from tokenizers.pre_tokenizers import Sequence as PreSeq
+from tokenizers.pre_tokenizers import Split
 
 from openmed.core.models import ModelLoader
-
 
 # --------------------------------------------------------------------------- #
 # SciSpaCy-like rules
@@ -95,7 +94,9 @@ def build_scispacy_spacy_tokenizer() -> Tokenizer:
     suffix_re = compile_suffix_regex(suffixes)
 
     tokenizer_exceptions = nlp.Defaults.tokenizer_exceptions.copy()
-    tokenizer_exceptions.update({abbr: [{spacy.symbols.ORTH: abbr}] for abbr in ABBREVIATIONS})
+    tokenizer_exceptions.update(
+        {abbr: [{spacy.symbols.ORTH: abbr}] for abbr in ABBREVIATIONS}
+    )
 
     return Tokenizer(
         nlp.vocab,
@@ -112,7 +113,9 @@ def build_scispacy_hf_pre_tokenizer() -> PreSeq:
     prefix_pattern = "(" + "|".join(_combined_rule_prefixes()) + ")"
     hyphens = char_classes.HYPHENS.replace("-|", "", 1)
     infix_patterns = [
-        r"…", r"\.\.\.", r"×",
+        r"…",
+        r"\.\.\.",
+        r"×",
         r"(?<=[0-9])[+\-\*^](?=[0-9-])",
         rf"(?<=[{char_classes.ALPHA_LOWER}])\.(?=[{char_classes.ALPHA_UPPER}])",
         rf"(?<=[{char_classes.ALPHA}]),(?=[{char_classes.ALPHA}])",
@@ -120,7 +123,10 @@ def build_scispacy_hf_pre_tokenizer() -> PreSeq:
         rf'(?<=[{char_classes.ALPHA}"])[:<>=](?=[{char_classes.ALPHA}])',
     ]
     suffix_patterns = [
-        r"'s", r"'S", r"’s", r"’S",
+        r"'s",
+        r"'S",
+        r"’s",
+        r"’S",
         r"(?<=[0-9])\+",
         r"(?<=°[FfCcKk])\.",
         rf"(?<=[0-9])(?:{char_classes.CURRENCY})",
@@ -153,6 +159,7 @@ CORPUS = [
 # --------------------------------------------------------------------------- #
 # Tokenizers
 # --------------------------------------------------------------------------- #
+
 
 def run_model_with_offsets(text: str):
     """Tokenize with the model tokenizer and return tokens, offsets, labels."""
@@ -223,7 +230,10 @@ def pretokenizer_tokens(pre_tok: PreSeq, text: str):
     return merged
 
 
-def map_labels(target_spans: Iterable[Tuple[str, int, int]], wp_spans: List[Tuple[str, int, int, str]]):
+def map_labels(
+    target_spans: Iterable[Tuple[str, int, int]],
+    wp_spans: List[Tuple[str, int, int, str]],
+):
     """Assign labels to target spans by overlapping WordPiece-labeled spans."""
     labeled = []
     for tok, s, e in target_spans:
@@ -242,18 +252,23 @@ def map_labels(target_spans: Iterable[Tuple[str, int, int]], wp_spans: List[Tupl
 
 
 def print_table(title: str, rows: List[Tuple[str, int, int, str]]):
-    col_widths = [max(len(str(r[i])) for r in rows + [("token", 0, 0, "label")]) for i in range(4)]
+    col_widths = [
+        max(len(str(r[i])) for r in rows + [("token", 0, 0, "label")]) for i in range(4)
+    ]
     header = f"{'token'.ljust(col_widths[0])}  {'start'.ljust(col_widths[1])}  {'end'.ljust(col_widths[2])}  label"
     print(f"{title}\n{header}")
     print("-" * len(header))
     for tok, s, e, lab in rows:
-        print(f"{tok.ljust(col_widths[0])}  {str(s).ljust(col_widths[1])}  {str(e).ljust(col_widths[2])}  {lab}")
+        print(
+            f"{tok.ljust(col_widths[0])}  {str(s).ljust(col_widths[1])}  {str(e).ljust(col_widths[2])}  {lab}"
+        )
     print()
 
 
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
+
 
 def main():
     spacy_tok = build_scispacy_spacy_tokenizer()

@@ -292,7 +292,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--report", action="append", type=Path, default=[])
     parser.add_argument("--benchmarks-dir", type=Path, default=Path("docs/benchmarks"))
     parser.add_argument("--leaderboard", action="store_true")
-    parser.add_argument("--leaderboard-dir", type=Path, default=Path("docs/leaderboard"))
+    parser.add_argument(
+        "--leaderboard-dir", type=Path, default=Path("docs/leaderboard")
+    )
     return parser
 
 
@@ -362,7 +364,9 @@ def _find_manifest_row(
     return None
 
 
-def _manifest_aggregates(rows: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+def _manifest_aggregates(
+    rows: Iterable[Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
     aggregates: dict[str, dict[str, Any]] = {}
     for row in rows:
         family = str(row.get("family") or "Unknown")
@@ -398,7 +402,9 @@ def _reports_by_key(
     for report in reports:
         row = _find_manifest_row(report.model_name, rows)
         if row is not None:
-            family = str(row.get("family") or report.metadata.get("family") or "Unknown")
+            family = str(
+                row.get("family") or report.metadata.get("family") or "Unknown"
+            )
             tier = row.get("tier")
             formats = row.get("formats") or [report.device]
             format_name = report.device if report.device in formats else formats[0]
@@ -444,7 +450,10 @@ def _display_value(value: Any) -> str:
 
 
 def _slug(value: str) -> str:
-    return "".join(ch if ch.isalnum() else "-" for ch in value.lower()).strip("-") or "report"
+    return (
+        "".join(ch if ch.isalnum() else "-" for ch in value.lower()).strip("-")
+        or "report"
+    )
 
 
 __all__ = [

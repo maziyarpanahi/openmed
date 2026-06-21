@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
-from datetime import datetime, timezone
-
-from openmed.ner.indexing import ModelIndex, ModelRecord, build_index, load_index, write_index
+from openmed.ner.indexing import (
+    ModelIndex,
+    ModelRecord,
+    build_index,
+    load_index,
+    write_index,
+)
 
 
 @pytest.fixture()

@@ -197,7 +197,9 @@ class BatchProcessor:
         """
         if operation not in _VALID_OPERATIONS:
             allowed = ", ".join(sorted(_VALID_OPERATIONS))
-            raise ValueError(f"Unsupported batch operation {operation!r}. Use one of: {allowed}")
+            raise ValueError(
+                f"Unsupported batch operation {operation!r}. Use one of: {allowed}"
+            )
 
         from ..utils.validation import validate_batch_size
 
@@ -283,10 +285,9 @@ class BatchProcessor:
 
         lang = self.analyze_kwargs.get("lang", "en")
         effective_model = _resolve_effective_pii_model(self.model_name, lang)
-        uses_privacy_filter = (
-            _looks_like_privacy_filter_identifier(effective_model)
-            or _is_privacy_filter_artifact_path(effective_model)
-        )
+        uses_privacy_filter = _looks_like_privacy_filter_identifier(
+            effective_model
+        ) or _is_privacy_filter_artifact_path(effective_model)
         if not uses_privacy_filter:
             return None
 
@@ -299,7 +300,7 @@ class BatchProcessor:
     def _iter_chunks(self, items: Sequence[BatchItem]) -> Iterator[List[BatchItem]]:
         """Yield contiguous chunks of batch items."""
         for start in range(0, len(items), self.batch_size):
-            yield list(items[start:start + self.batch_size])
+            yield list(items[start : start + self.batch_size])
 
     def _create_batch_items(
         self,
@@ -472,12 +473,11 @@ class BatchProcessor:
     def _process_analyze_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
         """Process a chunk with analyze_text while reusing one loader."""
         analyze_text = self._get_analyze_text()
-        return [
-            self._process_single_item(item, analyze_text)
-            for item in items
-        ]
+        return [self._process_single_item(item, analyze_text) for item in items]
 
-    def _process_extract_pii_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
+    def _process_extract_pii_chunk(
+        self, items: List[BatchItem]
+    ) -> List[BatchItemResult]:
         """Process a chunk with batched PII extraction."""
         from openmed.core.pii import _extract_pii_batch
 
@@ -486,7 +486,9 @@ class BatchProcessor:
             _extract_pii_batch,
         )
 
-    def _process_deidentify_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
+    def _process_deidentify_chunk(
+        self, items: List[BatchItem]
+    ) -> List[BatchItemResult]:
         """Process a chunk with batched de-identification."""
         from openmed.core.pii import _deidentify_batch
 
@@ -503,9 +505,7 @@ class BatchProcessor:
         """Run a PII batch helper and map outputs back to item results."""
         results: List[Optional[BatchItemResult]] = [None] * len(items)
         valid_positions = [
-            (index, item)
-            for index, item in enumerate(items)
-            if item.text
+            (index, item) for index, item in enumerate(items) if item.text
         ]
 
         for index, item in enumerate(items):

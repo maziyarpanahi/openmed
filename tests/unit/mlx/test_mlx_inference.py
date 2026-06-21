@@ -8,9 +8,10 @@ No actual MLX installation required.
 from __future__ import annotations
 
 import json
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # We test the BIO decoding and output format logic without requiring MLX.
 # The actual MLX model calls are mocked.
@@ -56,8 +57,12 @@ class TestMLXPipelineOutputFormat:
         # Simulate what _decode_grouped produces
         from openmed.mlx.inference import MLXTokenClassificationPipeline
 
-        with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
-            pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+        with patch.object(
+            MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None
+        ):
+            pipeline = MLXTokenClassificationPipeline.__new__(
+                MLXTokenClassificationPipeline
+            )
             pipeline.id2label = {int(k): v for k, v in config["id2label"].items()}
             pipeline.aggregation_strategy = "simple"
 
@@ -65,11 +70,11 @@ class TestMLXPipelineOutputFormat:
             pred_ids = [0, 1, 2, 0, 3, 0]
             probs = [
                 [0.9, 0.05, 0.03, 0.02],  # O
-                [0.05, 0.9, 0.03, 0.02],   # B-NAME
-                [0.03, 0.05, 0.9, 0.02],   # I-NAME
-                [0.9, 0.05, 0.03, 0.02],   # O
-                [0.02, 0.05, 0.03, 0.9],   # B-DATE
-                [0.9, 0.05, 0.03, 0.02],   # O
+                [0.05, 0.9, 0.03, 0.02],  # B-NAME
+                [0.03, 0.05, 0.9, 0.02],  # I-NAME
+                [0.9, 0.05, 0.03, 0.02],  # O
+                [0.02, 0.05, 0.03, 0.9],  # B-DATE
+                [0.9, 0.05, 0.03, 0.02],  # O
             ]
             offsets = [[0, 0], [0, 4], [5, 8], [8, 9], [10, 20], [0, 0]]
             text = "John Doe, 2024-01-15"
@@ -100,8 +105,12 @@ class TestMLXPipelineOutputFormat:
 
         from openmed.mlx.inference import MLXTokenClassificationPipeline
 
-        with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
-            pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+        with patch.object(
+            MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None
+        ):
+            pipeline = MLXTokenClassificationPipeline.__new__(
+                MLXTokenClassificationPipeline
+            )
             pipeline.id2label = {int(k): v for k, v in config["id2label"].items()}
             pipeline.aggregation_strategy = None
 
@@ -131,8 +140,12 @@ class TestMLXPipelineOutputFormat:
 
         from openmed.mlx.inference import MLXTokenClassificationPipeline
 
-        with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
-            pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+        with patch.object(
+            MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None
+        ):
+            pipeline = MLXTokenClassificationPipeline.__new__(
+                MLXTokenClassificationPipeline
+            )
             pipeline.id2label = {int(k): v for k, v in config["id2label"].items()}
             pipeline.aggregation_strategy = "simple"
 
@@ -171,15 +184,20 @@ class TestMLXPipelineOutputFormat:
             ("max", 0.9),
             ("simple", (0.9 + 0.8) / 2),
         ]:
-            with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
-                pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+            with patch.object(
+                MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None
+            ):
+                pipeline = MLXTokenClassificationPipeline.__new__(
+                    MLXTokenClassificationPipeline
+                )
                 pipeline.id2label = {int(k): v for k, v in config["id2label"].items()}
                 pipeline.aggregation_strategy = strategy
 
                 result = pipeline._decode_grouped(pred_ids, probs, offsets, text)
                 assert len(result) == 1
-                assert abs(result[0]["score"] - expected_score) < 0.01, \
+                assert abs(result[0]["score"] - expected_score) < 0.01, (
                     f"Strategy {strategy}: expected {expected_score}, got {result[0]['score']}"
+                )
 
     def test_batch_input_returns_per_text_predictions(self, tmp_path):
         """Batch input should return one prediction list per input string."""
@@ -187,8 +205,12 @@ class TestMLXPipelineOutputFormat:
 
         from openmed.mlx.inference import MLXTokenClassificationPipeline
 
-        with patch.object(MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None):
-            pipeline = MLXTokenClassificationPipeline.__new__(MLXTokenClassificationPipeline)
+        with patch.object(
+            MLXTokenClassificationPipeline, "__init__", lambda self, **kw: None
+        ):
+            pipeline = MLXTokenClassificationPipeline.__new__(
+                MLXTokenClassificationPipeline
+            )
             pipeline._predict_single = MagicMock(
                 side_effect=[
                     [{"entity_group": "NAME", "word": "John"}],
@@ -220,7 +242,9 @@ class TestMLXModelResolve:
             or "OpenMed-PII-Turkish-" in source
         }
         assert len(new_language_entries) == 28
-        assert all(target == f"{source}-mlx" for source, target in new_language_entries.items())
+        assert all(
+            target == f"{source}-mlx" for source, target in new_language_entries.items()
+        )
 
         blocked_fragments = (
             "Japanese-NomicMed",
@@ -241,20 +265,27 @@ class TestMLXModelResolve:
         output_dir = tmp_path / "OpenMed_OpenMed-PII-SuperClinical-Small-44M-v1"
         config = type("Config", (), {"cache_dir": str(tmp_path)})()
 
-        with patch.dict(
-            inference._MLX_MODEL_MAP,
-            {"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": "OpenMed/private-mlx"},
-            clear=True,
-        ), patch.object(
-            inference,
-            "_download_preconverted_mlx_model",
-            side_effect=RuntimeError("private repo"),
-        ) as mock_download, patch(
-            "openmed.mlx.convert.convert",
-            side_effect=lambda model_id, output_dir, cache_dir=None: Path(output_dir).mkdir(
-                parents=True, exist_ok=True
-            ) or (Path(output_dir) / "config.json").write_text("{}"),
-        ) as mock_convert:
+        with (
+            patch.dict(
+                inference._MLX_MODEL_MAP,
+                {
+                    "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": "OpenMed/private-mlx"
+                },
+                clear=True,
+            ),
+            patch.object(
+                inference,
+                "_download_preconverted_mlx_model",
+                side_effect=RuntimeError("private repo"),
+            ) as mock_download,
+            patch(
+                "openmed.mlx.convert.convert",
+                side_effect=lambda model_id, output_dir, cache_dir=None: (
+                    Path(output_dir).mkdir(parents=True, exist_ok=True)
+                    or (Path(output_dir) / "config.json").write_text("{}")
+                ),
+            ) as mock_convert,
+        ):
             path, tok_name = inference._resolve_mlx_model(
                 "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
                 config=config,
@@ -279,6 +310,7 @@ class TestMLXModelResolve:
         )
 
         from openmed.mlx.inference import _resolve_mlx_model
+
         path, tok_name = _resolve_mlx_model(str(tmp_path))
         assert path == str(tmp_path)
         assert tok_name == "OpenMed/original-model"
@@ -302,6 +334,7 @@ class TestMLXModelResolve:
         (tmp_path / "tokenizer.json").write_text("{}")
 
         from openmed.mlx.inference import _resolve_mlx_model
+
         path, tok_name = _resolve_mlx_model(str(tmp_path))
         assert path == str(tmp_path)
         assert tok_name == str(tmp_path)
@@ -313,25 +346,29 @@ class TestExperimentalMLXPipelineDispatch:
     def test_dispatches_gliner_zero_shot_pipeline(self):
         from openmed.mlx import inference
 
-        with patch.object(
-            inference,
-            "_resolve_mlx_model",
-            return_value=("/tmp/gliner-mlx", "urchade/gliner_multi_pii-v1"),
-        ), patch.object(
-            inference,
-            "load_artifact_config",
-            return_value=(
-                {
-                    "task": "zero-shot-ner",
-                    "family": "gliner-uni-encoder-span",
-                },
-                {},
+        with (
+            patch.object(
+                inference,
+                "_resolve_mlx_model",
+                return_value=("/tmp/gliner-mlx", "urchade/gliner_multi_pii-v1"),
             ),
-        ), patch.object(
-            inference,
-            "GLiNERMLXPipeline",
-            return_value="gliner-pipeline",
-        ) as mock_ctor:
+            patch.object(
+                inference,
+                "load_artifact_config",
+                return_value=(
+                    {
+                        "task": "zero-shot-ner",
+                        "family": "gliner-uni-encoder-span",
+                    },
+                    {},
+                ),
+            ),
+            patch.object(
+                inference,
+                "GLiNERMLXPipeline",
+                return_value="gliner-pipeline",
+            ) as mock_ctor,
+        ):
             pipeline = inference.create_mlx_pipeline("urchade/gliner_multi_pii-v1")
 
         assert pipeline == "gliner-pipeline"
@@ -343,26 +380,35 @@ class TestExperimentalMLXPipelineDispatch:
     def test_dispatches_gliclass_pipeline(self):
         from openmed.mlx import inference
 
-        with patch.object(
-            inference,
-            "_resolve_mlx_model",
-            return_value=("/tmp/gliclass-mlx", "knowledgator/gliclass-instruct-base-v1.0"),
-        ), patch.object(
-            inference,
-            "load_artifact_config",
-            return_value=(
-                {
-                    "task": "zero-shot-sequence-classification",
-                    "family": "gliclass-uni-encoder",
-                },
-                {},
+        with (
+            patch.object(
+                inference,
+                "_resolve_mlx_model",
+                return_value=(
+                    "/tmp/gliclass-mlx",
+                    "knowledgator/gliclass-instruct-base-v1.0",
+                ),
             ),
-        ), patch.object(
-            inference,
-            "GLiClassMLXPipeline",
-            return_value="gliclass-pipeline",
-        ) as mock_ctor:
-            pipeline = inference.create_mlx_pipeline("knowledgator/gliclass-instruct-base-v1.0")
+            patch.object(
+                inference,
+                "load_artifact_config",
+                return_value=(
+                    {
+                        "task": "zero-shot-sequence-classification",
+                        "family": "gliclass-uni-encoder",
+                    },
+                    {},
+                ),
+            ),
+            patch.object(
+                inference,
+                "GLiClassMLXPipeline",
+                return_value="gliclass-pipeline",
+            ) as mock_ctor,
+        ):
+            pipeline = inference.create_mlx_pipeline(
+                "knowledgator/gliclass-instruct-base-v1.0"
+            )
 
         assert pipeline == "gliclass-pipeline"
         mock_ctor.assert_called_once_with(
@@ -373,26 +419,35 @@ class TestExperimentalMLXPipelineDispatch:
     def test_dispatches_gliner_relex_pipeline(self):
         from openmed.mlx import inference
 
-        with patch.object(
-            inference,
-            "_resolve_mlx_model",
-            return_value=("/tmp/gliner-relex-mlx", "knowledgator/gliner-relex-base-v1.0"),
-        ), patch.object(
-            inference,
-            "load_artifact_config",
-            return_value=(
-                {
-                    "task": "zero-shot-relation-extraction",
-                    "family": "gliner-uni-encoder-token-relex",
-                },
-                {},
+        with (
+            patch.object(
+                inference,
+                "_resolve_mlx_model",
+                return_value=(
+                    "/tmp/gliner-relex-mlx",
+                    "knowledgator/gliner-relex-base-v1.0",
+                ),
             ),
-        ), patch.object(
-            inference,
-            "GLiNERRelexMLXPipeline",
-            return_value="gliner-relex-pipeline",
-        ) as mock_ctor:
-            pipeline = inference.create_mlx_pipeline("knowledgator/gliner-relex-base-v1.0")
+            patch.object(
+                inference,
+                "load_artifact_config",
+                return_value=(
+                    {
+                        "task": "zero-shot-relation-extraction",
+                        "family": "gliner-uni-encoder-token-relex",
+                    },
+                    {},
+                ),
+            ),
+            patch.object(
+                inference,
+                "GLiNERRelexMLXPipeline",
+                return_value="gliner-relex-pipeline",
+            ) as mock_ctor,
+        ):
+            pipeline = inference.create_mlx_pipeline(
+                "knowledgator/gliner-relex-base-v1.0"
+            )
 
         assert pipeline == "gliner-relex-pipeline"
         mock_ctor.assert_called_once_with(
@@ -403,16 +458,19 @@ class TestExperimentalMLXPipelineDispatch:
     def test_rejects_unknown_experimental_task(self):
         from openmed.mlx import inference
 
-        with patch.object(
-            inference,
-            "_resolve_mlx_model",
-            return_value=("/tmp/unknown-mlx", "OpenMed/unknown"),
-        ), patch.object(
-            inference,
-            "load_artifact_config",
-            return_value=(
-                {"task": "zero-shot-telepathy", "family": "mystery-family"},
-                {},
+        with (
+            patch.object(
+                inference,
+                "_resolve_mlx_model",
+                return_value=("/tmp/unknown-mlx", "OpenMed/unknown"),
+            ),
+            patch.object(
+                inference,
+                "load_artifact_config",
+                return_value=(
+                    {"task": "zero-shot-telepathy", "family": "mystery-family"},
+                    {},
+                ),
             ),
         ):
             with pytest.raises(ValueError, match="Unsupported MLX experimental task"):
@@ -448,7 +506,10 @@ class TestExperimentalGLiNERDecoding:
 
         result = decode_token_level_spans(scores, threshold=0.5)[0]
 
-        assert [(span.start, span.end, span.label_index, span.score) for span in result.spans] == [
+        assert [
+            (span.start, span.end, span.label_index, span.score)
+            for span in result.spans
+        ] == [
             (0, 0, 0, 0.97),
             (2, 2, 1, 0.94),
         ]

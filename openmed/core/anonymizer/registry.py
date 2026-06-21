@@ -24,7 +24,6 @@ from .format_preserve import (
     preserve_phone_format,
 )
 
-
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
 
@@ -32,6 +31,7 @@ Generator = Callable[..., str]
 # ---------------------------------------------------------------------------
 # Names
 # ---------------------------------------------------------------------------
+
 
 def _gen_person(faker, original, *, locale):
     return faker.name()
@@ -61,6 +61,7 @@ def _gen_username(faker, original, *, locale):
 # Contact
 # ---------------------------------------------------------------------------
 
+
 def _gen_email(faker, original, *, locale):
     fake = faker.email()
     return preserve_email_pattern(original, fake)
@@ -79,6 +80,7 @@ def _gen_url(faker, original, *, locale):
 # ---------------------------------------------------------------------------
 # Location
 # ---------------------------------------------------------------------------
+
 
 def _gen_location(faker, original, *, locale):
     # Prefer city-level granularity since most "LOCATION" detections are cities
@@ -110,10 +112,19 @@ def _gen_gps(faker, original, *, locale):
 
 # Day-first locales — same set as openmed.core.pii._DAY_FIRST_LANGS but
 # expressed in Faker locale terms.
-_DAY_FIRST_LOCALES = frozenset({
-    "fr_FR", "de_DE", "it_IT", "es_ES", "nl_NL",
-    "hi_IN", "en_IN", "pt_PT", "pt_BR",
-})
+_DAY_FIRST_LOCALES = frozenset(
+    {
+        "fr_FR",
+        "de_DE",
+        "it_IT",
+        "es_ES",
+        "nl_NL",
+        "hi_IN",
+        "en_IN",
+        "pt_PT",
+        "pt_BR",
+    }
+)
 
 
 def _gen_date(faker, original, *, locale):
@@ -192,6 +203,7 @@ def _gen_api_key(faker, original, *, locale):
 # Financial
 # ---------------------------------------------------------------------------
 
+
 def _gen_credit_card(faker, original, *, locale):
     return faker.credit_card_number()
 
@@ -209,7 +221,9 @@ def _gen_iban(faker, original, *, locale):
 
 
 def _gen_bic(faker, original, *, locale):
-    return faker.swift11() if hasattr(faker, "swift11") else faker.bothify("########XXX")
+    return (
+        faker.swift11() if hasattr(faker, "swift11") else faker.bothify("########XXX")
+    )
 
 
 def _gen_amount(faker, original, *, locale):
@@ -241,12 +255,17 @@ def _gen_litecoin_address(faker, original, *, locale):
 
 
 def _gen_masked_number(faker, original, *, locale):
-    return preserve_id_pattern(original, rng=faker.random) if original else faker.numerify("****-****-####")
+    return (
+        preserve_id_pattern(original, rng=faker.random)
+        if original
+        else faker.numerify("****-****-####")
+    )
 
 
 # ---------------------------------------------------------------------------
 # Demographics / work / tech
 # ---------------------------------------------------------------------------
+
 
 def _gen_gender(faker, original, *, locale):
     return faker.random_element(("Female", "Male", "Non-binary"))
@@ -270,11 +289,22 @@ def _gen_job_title(faker, original, *, locale):
 
 
 def _gen_job_department(faker, original, *, locale):
-    return faker.random_element((
-        "Cardiology", "Oncology", "Radiology", "Emergency", "Pediatrics",
-        "Neurology", "Surgery", "Internal Medicine", "Dermatology",
-        "Orthopedics", "Psychiatry", "Anesthesiology",
-    ))
+    return faker.random_element(
+        (
+            "Cardiology",
+            "Oncology",
+            "Radiology",
+            "Emergency",
+            "Pediatrics",
+            "Neurology",
+            "Surgery",
+            "Internal Medicine",
+            "Dermatology",
+            "Orthopedics",
+            "Psychiatry",
+            "Anesthesiology",
+        )
+    )
 
 
 def _gen_occupation(faker, original, *, locale):
@@ -294,11 +324,17 @@ def _gen_user_agent(faker, original, *, locale):
 
 
 def _gen_vin(faker, original, *, locale):
-    return faker.bothify("?????????????????", letters="ABCDEFGHJKLMNPRSTUVWXYZ0123456789").upper()
+    return faker.bothify(
+        "?????????????????", letters="ABCDEFGHJKLMNPRSTUVWXYZ0123456789"
+    ).upper()
 
 
 def _gen_vehicle_registration(faker, original, *, locale):
-    return faker.license_plate() if hasattr(faker, "license_plate") else faker.bothify("???-####")
+    return (
+        faker.license_plate()
+        if hasattr(faker, "license_plate")
+        else faker.bothify("???-####")
+    )
 
 
 def _gen_imei(faker, original, *, locale):
@@ -306,13 +342,24 @@ def _gen_imei(faker, original, *, locale):
 
 
 def _gen_ordinal_direction(faker, original, *, locale):
-    return faker.random_element(("North", "South", "East", "West",
-                                 "Northeast", "Northwest", "Southeast", "Southwest"))
+    return faker.random_element(
+        (
+            "North",
+            "South",
+            "East",
+            "West",
+            "Northeast",
+            "Northwest",
+            "Southeast",
+            "Southwest",
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
 # Default fallback
 # ---------------------------------------------------------------------------
+
 
 def _gen_other(faker, original, *, locale):
     """Last-resort surrogate when no specific generator fits.
@@ -336,30 +383,25 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     L.MIDDLE_NAME: _gen_middle_name,
     L.PREFIX: _gen_prefix,
     L.USERNAME: _gen_username,
-
     L.EMAIL: _gen_email,
     L.PHONE: _gen_phone,
     L.URL: _gen_url,
-
     L.LOCATION: _gen_location,
     L.STREET_ADDRESS: _gen_street_address,
     L.BUILDING_NUMBER: _gen_building_number,
     L.ZIPCODE: _gen_zipcode,
     L.GPS_COORDINATES: _gen_gps,
     L.ORDINAL_DIRECTION: _gen_ordinal_direction,
-
     L.DATE: _gen_date,
     L.DATE_OF_BIRTH: _gen_date_of_birth,
     L.TIME: _gen_time,
     L.AGE: _gen_age,
-
     L.ID_NUM: _gen_id_num,
     L.SSN: _gen_ssn,
     L.ACCOUNT_NUMBER: _gen_account_number,
     L.PASSWORD: _gen_password,
     L.PIN: _gen_pin,
     L.API_KEY: _gen_api_key,
-
     L.CREDIT_CARD: _gen_credit_card,
     L.CREDIT_CARD_ISSUER: _gen_credit_card_issuer,
     L.CVV: _gen_cvv,
@@ -371,23 +413,19 @@ LABEL_GENERATORS: Dict[str, Generator] = {
     L.ETHEREUM_ADDRESS: _gen_ethereum_address,
     L.LITECOIN_ADDRESS: _gen_litecoin_address,
     L.MASKED_NUMBER: _gen_masked_number,
-
     L.GENDER: _gen_gender,
     L.EYE_COLOR: _gen_eye_color,
     L.HEIGHT: _gen_height,
-
     L.ORGANIZATION: _gen_organization,
     L.JOB_TITLE: _gen_job_title,
     L.JOB_DEPARTMENT: _gen_job_department,
     L.OCCUPATION: _gen_occupation,
-
     L.IP_ADDRESS: _gen_ip_address,
     L.MAC_ADDRESS: _gen_mac_address,
     L.USER_AGENT: _gen_user_agent,
     L.VIN: _gen_vin,
     L.VEHICLE_REGISTRATION: _gen_vehicle_registration,
     L.IMEI: _gen_imei,
-
     L.OTHER: _gen_other,
 }
 

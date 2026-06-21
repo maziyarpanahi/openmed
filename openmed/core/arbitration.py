@@ -14,8 +14,8 @@ from .labels import (
     DATE_OF_BIRTH,
     EMAIL,
     FIRST_NAME,
-    ID_NUM,
     IBAN,
+    ID_NUM,
     IP_ADDRESS,
     LAST_NAME,
     LOCATION,
@@ -33,7 +33,6 @@ from .labels import (
 )
 from .pii_entity_merger import is_more_specific
 from .schemas.span import OpenMedSpan
-
 
 CALIBRATION_VERSION = 1
 MODE_BALANCED = "balanced"
@@ -138,7 +137,9 @@ class ScoreCalibrator:
             score = _sample_value(sample, "score", "raw_score")
             target = _sample_value(sample, "target", "label", "outcome", "is_true")
             if detector is None or score is None or target is None:
-                raise ValueError("calibration samples require detector, score, and target")
+                raise ValueError(
+                    "calibration samples require detector, score, and target"
+                )
             grouped.setdefault(str(detector), []).append(
                 (_clamp(float(score)), 1.0 if bool(target) else 0.0)
             )
@@ -364,7 +365,9 @@ def _sample_value(sample: Any, *names: str) -> Any:
     return None
 
 
-def _fit_isotonic(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
+def _fit_isotonic(
+    points: Sequence[tuple[float, float]],
+) -> tuple[tuple[float, float], ...]:
     if not points:
         return ()
 
@@ -385,8 +388,7 @@ def _fit_isotonic(points: Sequence[tuple[float, float]]) -> tuple[tuple[float, f
             blocks[-2:] = [merged]
 
     return tuple(
-        (block["max"], _clamp(block["sum"] / block["count"]))
-        for block in blocks
+        (block["max"], _clamp(block["sum"] / block["count"])) for block in blocks
     )
 
 
