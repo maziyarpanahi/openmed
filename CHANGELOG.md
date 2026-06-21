@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `method="shift_dates"` now shifts dates for the default English model instead of masking them. `_redact_entity` (and the `keep_mapping` occurrence counter) compared the raw `entity.entity_type` against the literal `"DATE"`, but the default model `OpenMed-PII-SuperClinical-Small-44M-v1` emits a lowercase `date` label, so date spans silently fell through to `[DATE]` placeholders. Date detection now uses the canonical label (`entity.canonical_label`, falling back to `normalize_label`), guarded by a regression test.
 - REST/MCP request schemas now accept `ar`, `ja`, and `tr` for the `lang` field. These languages have published PII models and are listed in `SUPPORTED_LANGUAGES`, but the `lang` `Literal` in `openmed/service/schemas.py` was never updated, so the service rejected them with a 422 even though the Python API and the models worked. The four `lang` annotations now share a single `PIILanguage` alias kept in sync with `SUPPORTED_LANGUAGES` (guarded by a regression test).
 
 ## [1.5.5] - 2026-06-08

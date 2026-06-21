@@ -1093,7 +1093,7 @@ def _build_deidentification_result(
         for entity in sorted(pii_entities, key=lambda e: e.start):
             entity_method = _entity_redaction_method(entity, effective_method)
             if entity_method in {"mask", "remove"} or (
-                entity_method == "shift_dates" and entity.entity_type != "DATE"
+                entity_method == "shift_dates" and not _is_date_entity(entity, lang)
             ):
                 entity_type_counts[entity.entity_type] = (
                     entity_type_counts.get(entity.entity_type, 0) + 1
@@ -1402,6 +1402,21 @@ def deidentify(
     return result.deidentification_result
 
 
+def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
+    """Return True if ``entity`` is a DATE span.
+
+    ``entity.entity_type`` holds the raw model label, whose spelling and case
+    vary across models (the default English model emits lowercase ``"date"``),
+    so comparing it to the literal ``"DATE"`` misses dates for most models. The
+    canonical label normalizes these to ``DATE``; fall back to normalizing the
+    raw label when ``canonical_label`` is unset.
+    """
+    from .labels import DATE, normalize_label
+
+    canonical = entity.canonical_label or normalize_label(entity.entity_type, lang)
+    return canonical == DATE
+
+
 def _redact_entity(
     entity: PIIEntity,
     method: DeidentificationMethod,
@@ -1450,7 +1465,7 @@ def _redact_entity(
 
     elif method == "shift_dates":
         # Shift dates by offset
-        if entity.entity_type == "DATE" and date_shift_days is not None:
+        if _is_date_entity(entity, lang) and date_shift_days is not None:
             return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
         else:
             # Non-date entities get masked

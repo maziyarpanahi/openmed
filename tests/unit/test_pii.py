@@ -693,6 +693,25 @@ class TestRedactEntity:
         result = _redact_entity(entity, "shift_dates", date_shift_days=30)
         assert result == "[NAME]"
 
+    def test_redact_shift_dates_uses_canonical_label(self):
+        """shift_dates must shift dates whose raw label is not literally 'DATE'.
+
+        The default English model emits a lowercase ``date`` label; comparing
+        the raw ``entity_type`` to ``"DATE"`` made such dates silently fall
+        through to masking. Regression test for the canonical-label fix.
+        """
+        entity = PIIEntity(
+            text="01/15/2020",
+            label="date",
+            start=0,
+            end=10,
+            confidence=0.90,
+            entity_type="date",
+            canonical_label="DATE",
+        )
+        result = _redact_entity(entity, "shift_dates", date_shift_days=30)
+        assert result == "02/14/2020"
+
 
 # ---------------------------------------------------------------------------
 # _generate_fake_pii Tests
