@@ -183,6 +183,15 @@ _CATEGORY_ENTITY_TYPES = {
         "CARDIAC_DEVICE",
         "ANATOMY",
     ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": ["SKIN_LESION", "MORPHOLOGY", "DISTRIBUTION", "ANATOMY"],
+    "Ophthalmology": [
+        "EYE_FINDING",
+        "VISUAL_ACUITY",
+        "INTRAOCULAR_PRESSURE",
+        "ANATOMY",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -647,6 +656,14 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "ecg|ekg|ejection fraction|arrhythmia|stent|pacemaker|murmur|st elevation|echocardiogram|cardiac|cardiolog": (
         "Cardiology",
         "Contains cardiology terms",
+    ),
+    "rash|lesion|macule|papule|erythema|pruritus|biopsy of skin|dermatolog|skin": (
+        "Dermatology",
+        "Contains dermatology terms",
+    ),
+    "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
+        "Ophthalmology",
+        "Contains ophthalmology terms",
     ),
     "heart|lung|brain|liver|kidney|organ": (
         "Anatomy",
