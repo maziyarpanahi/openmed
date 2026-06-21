@@ -105,6 +105,22 @@ class TestBundleStructure:
         ):
             to_bundle(resources, doc_id="doc-1")
 
+    def test_resources_without_ids_do_not_collide(self):
+        resources = [
+            {"resourceType": "Observation", "status": "final"},
+            {
+                "resourceType": "DiagnosticReport",
+                "id": "dr1",
+                "result": [{"reference": "Observation/obs1"}],
+            },
+        ]
+
+        bundle = to_bundle(resources, doc_id="doc-1")
+
+        assert len(bundle["entry"]) == 2
+        report = bundle["entry"][1]["resource"]
+        assert report["result"][0]["reference"] == "Observation/obs1"
+
 
 class TestReferenceResolution:
     def test_internal_references_rewritten_to_full_urls(self):
