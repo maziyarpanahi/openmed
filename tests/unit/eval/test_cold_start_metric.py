@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+import sys
 import time
+from types import ModuleType, SimpleNamespace
 
+from openmed.eval import harness
 from openmed.eval.harness import BenchmarkFixture, run_benchmark
 
 
@@ -102,3 +104,27 @@ def test_default_runner_reuses_loader_for_steady_state_samples(monkeypatch):
     assert seen_loaders == [created_loaders[0]] * 3
     assert report.metrics["latency"]["cold_start_ms"] is not None
     assert report.metrics["latency"]["count"] == 2
+
+
+def test_replaced_default_runner_without_loader_keyword_skips_model_loader(monkeypatch):
+    """Patched default runners do not need optional model packages installed."""
+    fake_models = ModuleType("openmed.core.models")
+
+    def fail_loader():
+        raise AssertionError("ModelLoader should not be constructed")
+
+    fake_models.ModelLoader = fail_loader
+    monkeypatch.setitem(sys.modules, "openmed.core.models", fake_models)
+
+    def runner(fixture, model_name, device):
+        return [{"start": 8, "end": 12, "label": "PERSON"}]
+
+    monkeypatch.setattr(harness, "default_model_runner", runner)
+
+    report = run_benchmark(
+        [_fixture("f1"), _fixture("f2")],
+        suite="cold-start-test",
+        model_name="test-model",
+    )
+
+    assert report.metrics["latency"]["cold_start_ms"] is not None

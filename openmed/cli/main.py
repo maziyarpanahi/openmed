@@ -10,21 +10,20 @@ from typing import Any, Callable, Optional, Sequence
 
 from ..__about__ import __version__
 from ..core.config import (
-    OpenMedConfig,
-    get_config,
-    set_config,
-    load_config_from_file,
-    save_config_to_file,
-    resolve_config_path,
-    list_profiles,
-    get_profile,
-    save_profile,
-    delete_profile,
     PROFILE_PRESETS,
+    OpenMedConfig,
+    delete_profile,
+    get_config,
+    get_profile,
+    list_profiles,
+    load_config_from_file,
+    resolve_config_path,
+    save_config_to_file,
+    save_profile,
+    set_config,
 )
 from ..core.model_registry import get_model_info
 from .calibrate import add_calibrate_command
-
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -54,7 +53,10 @@ def _lazy_api():
 
             _ANALYZE_TEXT = analyze_text = _analyze
 
-    if get_model_max_length is not None and get_model_max_length is not _GET_MODEL_MAX_LENGTH:
+    if (
+        get_model_max_length is not None
+        and get_model_max_length is not _GET_MODEL_MAX_LENGTH
+    ):
         _GET_MODEL_MAX_LENGTH = get_model_max_length
 
     if _GET_MODEL_MAX_LENGTH is None:
@@ -89,6 +91,7 @@ def _lazy_api():
 
     return _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS, _BATCH_PROCESSOR
 
+
 Handler = Callable[[argparse.Namespace], int]
 
 COMPLIANCE_CAVEAT = (
@@ -122,11 +125,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
+    _add_benchmark_command(subparsers)
     _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     add_calibrate_command(subparsers)
-    _add_benchmark_command(subparsers)
     return parser
 
 
@@ -351,9 +354,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     deid_parser.set_defaults(handler=_handle_pii_deidentify)
 
     # PII Batch command
-    batch_parser = pii_sub.add_parser(
-        "batch", help="Batch de-identification of files."
-    )
+    batch_parser = pii_sub.add_parser("batch", help="Batch de-identification of files.")
     batch_parser.add_argument(
         "--model",
         default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
@@ -415,9 +416,7 @@ def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
-    models_parser = subparsers.add_parser(
-        "models", help="Discover OpenMed models."
-    )
+    models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
 
     models_list = models_sub.add_parser("list", help="List available models.")
@@ -515,14 +514,24 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     pii_parser.add_argument(
         "--suite",
-        choices=["golden"],
-        default="golden",
-        help="Benchmark suite to run.",
+        default=None,
+        help="Benchmark suite to run. Defaults to shield, or golden for re-id attacks.",
+    )
+    pii_parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help="One or more model identifiers. Comma-separated values are accepted.",
+    )
+    pii_parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device tier label recorded in the benchmark report.",
     )
     pii_parser.add_argument(
         "--model",
-        default="privacy-filter",
-        help="Model identifier to record in the report.",
+        default=None,
+        help="Model identifier to record in the re-id report.",
     )
     pii_parser.add_argument(
         "--output",
@@ -541,6 +550,11 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         choices=["markdown", "json"],
         default="markdown",
         help="Generated leaderboard format.",
+    )
+    pii_parser.add_argument(
+        "--full-shield",
+        action="store_true",
+        help="Use the approved-access full SHIELD corpus instead of the public sample.",
     )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
@@ -628,7 +642,10 @@ def _load_and_apply_config(args: argparse.Namespace) -> OpenMedConfig:
         config = get_config()
 
     # Apply CLI overrides if present
-    if hasattr(args, "use_medical_tokenizer") and args.use_medical_tokenizer is not None:
+    if (
+        hasattr(args, "use_medical_tokenizer")
+        and args.use_medical_tokenizer is not None
+    ):
         config.use_medical_tokenizer = bool(args.use_medical_tokenizer)
 
     if getattr(args, "medical_tokenizer_exceptions", None):
@@ -743,7 +760,9 @@ def _handle_batch(args: argparse.Namespace) -> int:
     if args.output:
         try:
             args.output.write_text(
-                json.dumps(result.to_dict(), indent=2) if args.output_format == "json" else output,
+                json.dumps(result.to_dict(), indent=2)
+                if args.output_format == "json"
+                else output,
                 encoding="utf-8",
             )
             sys.stdout.write(f"Results written to: {args.output}\n")
@@ -754,6 +773,69 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_benchmark_pii(args: argparse.Namespace) -> int:
+    if args.attack == "reid":
+        return _handle_benchmark_pii_reid(args)
+
+    from openmed.eval.harness import run_benchmark
+    from openmed.eval.suites import SHIELD, load_suite_fixtures, suite_metadata
+
+    models = _parse_model_args(args.models or [])
+    if not models:
+        sys.stderr.write("At least one model identifier is required.\n")
+        return 1
+
+    suite = str(args.suite or SHIELD)
+    try:
+        if suite == SHIELD:
+            use_sample = not bool(args.full_shield)
+            fixtures = load_suite_fixtures(suite, use_sample=use_sample)
+            metadata = suite_metadata(suite, use_sample=use_sample)
+        else:
+            fixtures = load_suite_fixtures(suite)
+            metadata = suite_metadata(suite)
+    except (RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load benchmark suite: {exc}\n")
+        return 1
+
+    reports = [
+        run_benchmark(
+            fixtures,
+            suite=suite,
+            model_name=model,
+            device=args.device,
+            metadata=metadata,
+        )
+        for model in models
+    ]
+    if len(reports) == 1:
+        payload: Any = reports[0].to_dict()
+    else:
+        payload = {
+            "metadata": metadata,
+            "reports": [report.to_dict() for report in reports],
+            "suite": suite,
+        }
+
+    output = json.dumps(payload, indent=2, sort_keys=True)
+    if args.output:
+        try:
+            args.output.write_text(output + "\n", encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(output + "\n")
+    return 0
+
+
+def _parse_model_args(values: Sequence[str]) -> list[str]:
+    models: list[str] = []
+    for value in values:
+        models.extend(item.strip() for item in value.split(",") if item.strip())
+    return models
 
 
 def _handle_tui(args: argparse.Namespace) -> int:
@@ -812,11 +894,7 @@ def _handle_models_info(args: argparse.Namespace) -> int:
     return 0
 
 
-def _handle_benchmark_pii(args: argparse.Namespace) -> int:
-    if args.attack != "reid":
-        sys.stderr.write("PII benchmark currently requires --attack reid.\n")
-        return 1
-
+def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
     from openmed.eval.attacks.reid import (
         render_reid_leaderboard,
         run_reid_benchmark,
@@ -824,8 +902,8 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
 
     try:
         report = run_reid_benchmark(
-            suite=args.suite,
-            model_name=args.model,
+            suite=args.suite or "golden",
+            model_name=args.model or "privacy-filter",
             output_json=args.output,
         )
         if args.leaderboard_output is not None:

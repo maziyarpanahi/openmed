@@ -109,7 +109,8 @@ enum OpenMedMLXWeightArchive {
             guard data.count >= 12 else {
                 throw OpenMedMLXWeightError.invalidNPYHeader(name)
             }
-            headerLength = Int(data[8]) | (Int(data[9]) << 8) | (Int(data[10]) << 16)
+            headerLength =
+                Int(data[8]) | (Int(data[9]) << 8) | (Int(data[10]) << 16)
                 | (Int(data[11]) << 24)
             headerOffset = 12
         default:

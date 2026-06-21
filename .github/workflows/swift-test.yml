@@ -4,10 +4,18 @@ on:
   push:
     branches: [main, master]
     paths:
+      - '.swift-format'
+      - 'Package.swift'
+      - 'scripts/format_swift.sh'
+      - 'scripts/lint_swift.sh'
       - 'swift/**'
   pull_request:
     branches: [main, master]
     paths:
+      - '.swift-format'
+      - 'Package.swift'
+      - 'scripts/format_swift.sh'
+      - 'scripts/lint_swift.sh'
       - 'swift/**'
 
 jobs:
@@ -20,6 +28,9 @@ jobs:
 
     - name: Select Xcode version
       run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+    - name: Lint Swift formatting
+      run: scripts/lint_swift.sh
 
     - name: Resolve Swift package dependencies
       working-directory: swift/OpenMedKit

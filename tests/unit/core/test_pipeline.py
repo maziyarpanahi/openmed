@@ -82,8 +82,9 @@ def test_stage9_safety_sweep_only_increases_redacted_character_count():
     result = Pipeline(model_detector=model_detector).run(text, method="mask")
     stage9 = result.stage("safety_sweep")
 
-    assert stage9.metadata["redacted_chars_after"] >= stage9.metadata[
-        "redacted_chars_before"
-    ]
+    assert (
+        stage9.metadata["redacted_chars_after"]
+        >= stage9.metadata["redacted_chars_before"]
+    )
     assert stage9.metadata["spans_added"] == 1
     assert result.redacted_text == "Patient [NAME] email [email]"
