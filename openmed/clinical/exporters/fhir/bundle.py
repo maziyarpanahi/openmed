@@ -65,6 +65,15 @@ def to_bundle(
     -------
     dict
         A ``resourceType=Bundle`` mapping with one entry per resource.
+
+    Raises
+    ------
+    ValueError
+        If a resource lacks a ``resourceType``, or if two resources share the
+        same ``resourceType`` and ``id``. Duplicate ids would silently
+        overwrite one another in the internal reference map, corrupting
+        cross-references, so they are rejected explicitly. Resources without
+        an ``id`` remain valid (they are simply unreferenceable).
     """
 
     entries: list[dict[str, Any]] = []
@@ -83,7 +92,14 @@ def to_bundle(
     for urn, resource in zip(urns, resources):
         resource_id = resource.get("id")
         if resource_id is not None:
-            reference_map[f"{resource['resourceType']}/{resource_id}"] = urn
+            ref_key = f"{resource['resourceType']}/{resource_id}"
+            if ref_key in reference_map:
+                raise ValueError(
+                    f"duplicate resource id {ref_key!r}: two resources share "
+                    "the same resourceType and id, which would silently "
+                    "corrupt internal cross-references"
+                )
+            reference_map[ref_key] = urn
 
     emit_request = bundle_type in _REQUEST_BUNDLE_TYPES
     for urn, resource in zip(urns, resources):
