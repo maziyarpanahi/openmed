@@ -50,8 +50,12 @@ def manifest_hash(path: Path | None = None) -> str:
 
 def _key_bytes(key: bytes | str) -> bytes:
     if isinstance(key, bytes):
+        if not key:
+            raise ValueError("Signing key must not be empty")
         return key
     if isinstance(key, str):
+        if not key:
+            raise ValueError("Signing key must not be empty")
         return key.encode("utf-8")
     raise TypeError("Signing key must be str or bytes")
 
