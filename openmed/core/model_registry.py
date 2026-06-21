@@ -173,6 +173,16 @@ _CATEGORY_ENTITY_TYPES = {
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        "CARDIAC_FINDING",
+        "ECG_FINDING",
+        "EJECTION_FRACTION",
+        "CARDIAC_PROCEDURE",
+        "CARDIAC_DEVICE",
+        "ANATOMY",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -617,53 +627,74 @@ def get_all_models() -> Dict[str, ModelInfo]:
     return OPENMED_MODELS.copy()
 
 
+_CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
+    "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
+        "Privacy",
+        "Contains PII/de-identification terms",
+    ),
+    "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
+        "Oncology",
+        "Contains cancer/oncology terms",
+    ),
+    "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
+        "Pharmaceutical",
+        "Contains pharmaceutical terms",
+    ),
+    "gene|dna|protein|mutation|chromosome": (
+        "Genomics",
+        "Contains genomic/genetic terms",
+    ),
+    "ecg|ekg|ejection fraction|arrhythmia|stent|pacemaker|murmur|st elevation|echocardiogram|cardiac|cardiolog": (
+        "Cardiology",
+        "Contains cardiology terms",
+    ),
+    "heart|lung|brain|liver|kidney|organ": (
+        "Anatomy",
+        "Contains anatomical terms",
+    ),
+    "bacteria|virus|organism|species": (
+        "Species",
+        "Contains organism/species terms",
+    ),
+    "disease|condition|disorder|syndrome": (
+        "Disease",
+        "Contains disease/condition terms",
+    ),
+    "pathology|histology|biopsy": (
+        "Pathology",
+        "Contains pathological terms",
+    ),
+    "blood|lymph|leukemia|lymphoma": (
+        "Hematology",
+        "Contains hematological terms",
+    ),
+}
+
+
+def _match_categories(text: str) -> List[Tuple[str, str]]:
+    """Return ``(category, reason)`` pairs whose keywords match ``text``.
+
+    This is the routing layer behind :func:`get_model_suggestions`. It reports
+    a category whenever the text matches its keywords, independently of whether
+    any model is registered for that category (e.g. ``Cardiology`` has keyword
+    routing but no registered model yet).
+    """
+
+    text_lower = text.lower()
+    return [
+        (category, reason)
+        for pattern, (category, reason) in _CATEGORY_KEYWORDS.items()
+        if re.search(pattern, text_lower)
+    ]
+
+
 def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
     """Suggest appropriate models based on text content."""
-    text_lower = text.lower()
     suggestions: List[Tuple[str, ModelInfo, str]] = []
-    keywords = {
-        "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
-            "Privacy",
-            "Contains PII/de-identification terms",
-        ),
-        "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
-            "Oncology",
-            "Contains cancer/oncology terms",
-        ),
-        "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
-            "Pharmaceutical",
-            "Contains pharmaceutical terms",
-        ),
-        "gene|dna|protein|mutation|chromosome": (
-            "Genomics",
-            "Contains genomic/genetic terms",
-        ),
-        "heart|lung|brain|liver|kidney|organ": (
-            "Anatomy",
-            "Contains anatomical terms",
-        ),
-        "bacteria|virus|organism|species": (
-            "Species",
-            "Contains organism/species terms",
-        ),
-        "disease|condition|disorder|syndrome": (
-            "Disease",
-            "Contains disease/condition terms",
-        ),
-        "pathology|histology|biopsy": (
-            "Pathology",
-            "Contains pathological terms",
-        ),
-        "blood|lymph|leukemia|lymphoma": (
-            "Hematology",
-            "Contains hematological terms",
-        ),
-    }
 
-    for pattern, (category, reason) in keywords.items():
-        if re.search(pattern, text_lower):
-            for key in CATEGORIES.get(category, [])[:3]:
-                suggestions.append((key, OPENMED_MODELS[key], reason))
+    for category, reason in _match_categories(text):
+        for key in CATEGORIES.get(category, [])[:3]:
+            suggestions.append((key, OPENMED_MODELS[key], reason))
 
     if not suggestions:
         for key in SIZE_RECOMMENDATIONS.get("balanced", [])[:3]:
