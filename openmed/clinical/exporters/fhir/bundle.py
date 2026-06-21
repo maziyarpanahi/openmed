@@ -52,6 +52,8 @@ def to_bundle(
     resources:
         The standalone FHIR resources to wrap, in the order they should appear
         in the Bundle. Each must be a mapping carrying a ``resourceType``.
+        Resources with an ``id`` must have a unique ``ResourceType/id`` within
+        the Bundle; resources without an ``id`` are left unreferenceable.
     doc_id:
         Stable identifier for the source document. Together with the resource
         index it seeds the deterministic ``urn:uuid`` ``fullUrl`` of each
@@ -83,7 +85,10 @@ def to_bundle(
     for urn, resource in zip(urns, resources):
         resource_id = resource.get("id")
         if resource_id is not None:
-            reference_map[f"{resource['resourceType']}/{resource_id}"] = urn
+            reference_key = f"{resource['resourceType']}/{resource_id}"
+            if reference_key in reference_map:
+                raise ValueError(f"duplicate FHIR resource id: {reference_key}")
+            reference_map[reference_key] = urn
 
     emit_request = bundle_type in _REQUEST_BUNDLE_TYPES
     for urn, resource in zip(urns, resources):
