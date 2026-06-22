@@ -246,8 +246,32 @@ docker run --rm -p 8080:8080 \
   openmed:0.6.2
 ```
 
+### Docker Compose
+
+Use the provided `docker-compose.yml` to build and start the service with a single command.
+The Compose setup maps port **8080**, sets `OPENMED_PROFILE=prod`, and persists the HF model cache in a named volume so models are not re-downloaded on restart.
+
+```bash
+docker compose up -d
+```
+
+Verify the service started correctly:
+
+```bash
+docker compose ps
+# The STATUS column should show "(healthy)"
+```
+
+Stop and clean up:
+
+```bash
+docker compose down
+```
+
 Smoke check:
 
 ```bash
 curl http://127.0.0.1:8080/health
 ```
+
+> **Tip:** For sensitive environment variables (e.g. `HF_TOKEN`), store them in a `.env` file and add `.env` to `.gitignore` — never commit secrets to version control.

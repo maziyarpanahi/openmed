@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENMED_PROFILE=prod
+    volumes:
+      - HF_CACHE:/root/.cache/huggingface
+
+volumes:
+  HF_CACHE:
