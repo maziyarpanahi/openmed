@@ -1,11 +1,10 @@
 """Build R4 ``OperationOutcome`` resources from internal result objects.
 
 The FHIR-native way to report errors, warnings, and informational notes from an
-operation or a validation pass is the ``OperationOutcome`` resource. OpenMed's
-interop surfaces -- the ``$de-identify`` wrapper, the structural validator, and
-the US Core conformance checks -- each return their own ad-hoc result objects.
-This module is the single shared adapter that turns those internal results into
-a standard ``OperationOutcome`` that any FHIR server or client understands.
+operation or a validation pass is the ``OperationOutcome`` resource. This module
+is the shared adapter that lets current and future OpenMed interop surfaces
+report their internal findings as a standard ``OperationOutcome`` that FHIR
+servers and clients already understand.
 
 Two entry points are exposed:
 
@@ -26,7 +25,9 @@ one ``issue``.
 
 The builder is purely mechanical: it never inspects PHI, only the structural
 metadata of each issue (severity, code, a human-readable diagnostic string, and
-a FHIRPath-style location).
+a FHIRPath-style location). Callers are responsible for keeping diagnostics
+sanitized and should use expressions, offsets, hashes, or risk scores rather
+than raw identifiers.
 """
 
 from __future__ import annotations
@@ -42,9 +43,15 @@ __all__ = ["OperationOutcomeIssue", "to_operation_outcome", "from_validation_res
 class OperationOutcomeIssue:
     """OpenMed-owned issue shape that maps directly to ``OperationOutcome.issue``.
 
-    ``severity`` and ``code`` must already be FHIR R4 issue-severity and
-    issue-type codes. ``expression`` is a FHIRPath-style location and is emitted
-    as R4 ``issue.expression``.
+    Attributes:
+        severity: FHIR R4 issue-severity code: ``fatal``, ``error``,
+            ``warning``, or ``information``.
+        code: FHIR R4 issue-type code such as ``invalid``, ``structure``,
+            ``required``, ``processing``, or ``informational``.
+        diagnostics: Optional human-readable detail. Keep this sanitized; do not
+            include raw PHI or direct identifiers.
+        expression: Optional FHIRPath-style location. Emitted as R4
+            ``issue.expression``.
     """
 
     severity: str

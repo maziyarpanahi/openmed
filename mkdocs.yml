@@ -33,6 +33,7 @@ nav:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
       - Compliance Posture: compliance.md
+      - FHIR Interop Helpers: fhir-interop.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - CoreML Packaging: coreml-export.md
