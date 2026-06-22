@@ -94,6 +94,33 @@ class TestBundleStructure:
         with pytest.raises(ValueError):
             to_bundle([{"id": "x"}], doc_id="doc-1")
 
+    def test_duplicate_resource_type_id_raises(self):
+        resources = [
+            {"resourceType": "Observation", "id": "obs1"},
+            {"resourceType": "Observation", "id": "obs1"},
+        ]
+
+        with pytest.raises(
+            ValueError, match="duplicate FHIR resource id: Observation/obs1"
+        ):
+            to_bundle(resources, doc_id="doc-1")
+
+    def test_resources_without_ids_do_not_collide(self):
+        resources = [
+            {"resourceType": "Observation", "status": "final"},
+            {
+                "resourceType": "DiagnosticReport",
+                "id": "dr1",
+                "result": [{"reference": "Observation/obs1"}],
+            },
+        ]
+
+        bundle = to_bundle(resources, doc_id="doc-1")
+
+        assert len(bundle["entry"]) == 2
+        report = bundle["entry"][1]["resource"]
+        assert report["result"][0]["reference"] == "Observation/obs1"
+
 
 class TestReferenceResolution:
     def test_internal_references_rewritten_to_full_urls(self):

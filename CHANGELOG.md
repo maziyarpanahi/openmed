@@ -7,15 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-22
+
 ### Added
 
-- Added a FHIR R4 transaction Bundle assembler (`openmed.clinical.exporters.fhir.to_bundle`) that wraps a document's exported resources into a single Bundle, assigns deterministic `urn:uuid` `fullUrl` values (seeded by `doc_id` + resource index), rewrites in-Bundle references (`subject`/`result`/`encounter`) to those URNs, and emits per-entry `request` blocks for transaction/batch bundles.
-- Added release changelog tooling that renders Keep a Changelog sections from Conventional Commits, computes the SemVer bump, and exposes the computed next version to the PyPI publish workflow.
-- Added `bootstrap_ci` and `compute_confidence_intervals` to `openmed.eval.metrics` and an opt-in `confidence_intervals` flag on the benchmark harness that attaches deterministic non-parametric bootstrap confidence intervals to the leakage, character recall, and span F1 metrics (off by default to keep fast runs cheap).
+- Added a policy-aware de-identification runtime with canonical `OpenMedSpan` schema contracts, a ten-stage `Pipeline`, detector arbitration/cascade routing, calibrated per-label/language/policy thresholds, deterministic safety sweep backstops, and six bundled policy profiles (`hipaa_safe_harbor`, `hipaa_expert_review_assist`, `gdpr_pseudonymization`, `research_limited_dataset`, `strict_no_leak`, `clinical_minimal_redaction`).
+- Added signed, reproducible de-identification audit reports with span provenance, residual-risk metadata, reproducibility hashes, and optional HMAC signatures.
+- Added re-identification risk reporting and adversarial re-identification benchmark support, including `openmed benchmark pii --attack reid`.
+- Added a leakage-first evaluation harness with `BenchmarkReport`, synthetic golden de-identification fixtures, public/reference dataset adapters, DUA-gated corpus stubs, SHIELD comparison-suite support, weak labeling utilities, cold-start latency, and deterministic bootstrap confidence intervals.
+- Added release-gate infrastructure for v1.6.0 model readiness: last-green baselines, calibration artifacts, G1a-G8 signed gate reports, quantization recall-delta checks, generated status/leaderboard pages, and a fail-closed release-gates workflow.
+- Added clinical and interoperability utilities: ConText temporality and uncertainty axes, OHDSI Athena/Usagi ingestion, a Presidio adapter, and a deterministic FHIR R4 transaction/batch Bundle assembler.
+- Added a cardiology zero-shot label-map domain (`CardiacFinding`, `ECGFinding`, `EjectionFraction`, `CardiacProcedure`, `CardiacDevice`, `Anatomy`) plus cardiology keyword routing metadata for future model registration. Public model suggestions continue to fall back to existing general medical models until a cardiology model is registered.
+- Added a canonical `models.jsonl` manifest, manifest refresh workflow, manifest-driven Hugging Face model card generation, and HF publishing support for converted MLX/CoreML artifacts.
+- Added a packaged `openmed` CLI surface with benchmark and calibration commands, plus a de-identification cookbook notebook and an offline clinical NER families example.
+- Added governance, compliance, security, device-tier, FAQ, API reference, release-channel, status, leaderboard, and notebook documentation.
+
+### Changed
+
+- `deidentify()` now routes through the staged policy pipeline and accepts policy, calibration, threshold, and audit controls. When `audit=True`, it returns an audit report rather than the regular `DeidentificationResult`.
+- `deidentify(..., keep_mapping=True)` now emits unique placeholders for repeated entities of the same type, such as `[NAME]` and `[NAME_2]`, so re-identification round trips can distinguish them.
+- Label metadata now carries policy labels, HIPAA Safe Harbor mappings, risk levels, and ID-number subtype hints while keeping canonical labels stable.
+- Benchmark steady-state latency now excludes cold start while preserving `latency.cold_start_ms` in reports.
+- PyPI publishing now uses a single guarded tag/manual `publish.yml` workflow; the duplicate release workflow was removed.
+- Release metadata now derives changelog sections and expected SemVer bumps from Conventional Commits.
+- Python linting/formatting moved to Ruff and pre-commit, Swift formatting moved to checked-in `swift-format` scripts, and CI now enforces the updated repo policy, lint, tests, security, secret-scan, Swift-format, and release-gate jobs.
+- Packaging now includes the model manifest, release-gate baseline, policy/schema JSON, `LICENSE`, and `NOTICE`.
 
 ### Fixed
 
+- Fixed `method="shift_dates"` to recognize canonical date labels before redaction, so lowercase `date` output from the default English PII model and `date_of_birth` labels are shifted instead of masked; `keep_mapping` no longer treats shifted dates as mask placeholders.
+- FHIR Bundle assembly now rejects duplicate `ResourceType/id` values instead of silently overwriting the earlier resource in the internal reference map. Duplicate resources raise a `ValueError` that names the colliding key, preventing downstream references from being rewritten to the wrong Bundle entry.
 - REST/MCP request schemas now accept `ar`, `ja`, and `tr` for the `lang` field. These languages have published PII models and are listed in `SUPPORTED_LANGUAGES`, but the `lang` `Literal` in `openmed/service/schemas.py` was never updated, so the service rejected them with a 422 even though the Python API and the models worked. The four `lang` annotations now share a single `PIILanguage` alias kept in sync with `SUPPORTED_LANGUAGES` (guarded by a regression test).
+- Fixed case-insensitive `trust_remote_code` allowlist matching for first-party and environment-configured privacy-filter repositories.
+- Fixed Feb 29 date shifting when `keep_year=True` targets a non-leap year.
+- Fixed REST oversized-text handling with `OPENMED_SERVICE_MAX_TEXT_LENGTH` (default `1_000_000` characters).
+- Fixed `BatchProcessor.iter_process` so `batch_size` is honored while preserving output order.
+- Fixed duplicate benchmark fixture IDs, duplicate benchmark CLI registration, release-gate behavior when no candidate report is present, and repo-policy ignored-file handling.
+- Fixed user-controlled HTML formatter escaping and validation false positives for legitimate long non-ASCII/CJK clinical text.
+- Fixed reversible `remove` mappings and repeated entity-type re-identification round trips when `keep_mapping=True`.
+
+### Security
+
+- Added a protected `hf-publish` environment and `HF_WRITE_TOKEN` policy for model publishing.
+- Added dependency license policy, `pip-audit` security gate with time-boxed ignores, and gitleaks CI/pre-commit secret scanning with a canary fixture.
+- Hardened de-identification audit report signing so `AuditReport.sign()` and `AuditReport.verify()` require a non-empty HMAC key. `None`, empty strings, and empty byte strings now raise `ValueError` instead of producing or accepting weak signatures.
+
+### Tests
+
+- Added FHIR Bundle regression coverage for empty resource lists across transaction, collection, and batch Bundles, and for dangling references that should remain unchanged when the referenced resource is absent from the Bundle.
+
+### Notes
+
+- `shift_dates` remains available as a compatibility alias; prefer `method="shift_dates"` in new code.
+- REST clients sending more than `OPENMED_SERVICE_MAX_TEXT_LENGTH` characters now receive a 422 response unless the limit is raised.
+- Full SHIELD/DUA datasets require approved or user-supplied access paths; restricted corpus rows are not vendored.
+- Release-gate candidates for v1.6.0 need release metadata, calibration evidence for masking/replacement profiles, span fixtures for G8, and quantization evidence for quantized formats.
 
 ## [1.5.5] - 2026-06-08
 
@@ -793,7 +839,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/maziyarpanahi/openmed/compare/v1.5.5...v1.6.0
 [0.6.1]: https://github.com/OpenMed/openmed/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/OpenMed/openmed/compare/v0.5.8...v0.6.0
 [0.5.8]: https://github.com/OpenMed/openmed/compare/v0.5.7...v0.5.8
