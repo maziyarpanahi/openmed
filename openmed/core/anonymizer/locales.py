@@ -27,7 +27,7 @@ Regression contract (OM-135):
 from __future__ import annotations
 
 import warnings
-from typing import Final, List, Mapping, Optional, Tuple
+from typing import Final, Mapping
 
 # Default Faker locale per OpenMed language code.
 LANG_TO_LOCALE: Final[Mapping[str, str]] = {
@@ -62,7 +62,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te"})
 # addresses, ...) stays ``pt_PT``. The method must match the registry's
 # locale-aware dispatch (``registry._LOCALE_ID_METHODS``); the regression suite
 # asserts that and the round-trip.
-NATIONAL_ID_PROVIDERS: Final[Mapping[str, Tuple[str, str]]] = {
+NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "en": ("en_US", "ssn"),
     "fr": ("fr_FR", "ssn"),               # NIR / INSEE
     "de": ("de_DE", "german_steuer_id"),  # Steuer-ID
@@ -107,7 +107,7 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
     return locale
 
 
-def locale_coherence_report() -> List[dict]:
+def locale_coherence_report() -> list[dict[str, object]]:
     """Return one locale-coherence row per supported language.
 
     Each row is a plain JSON-friendly ``dict`` (so the status/leaderboard work
@@ -127,9 +127,9 @@ def locale_coherence_report() -> List[dict]:
     """
     from ..pii_i18n import SUPPORTED_LANGUAGES  # lazy: avoid import cycle
 
-    rows: List[dict] = []
+    rows: list[dict[str, object]] = []
     for lang in sorted(SUPPORTED_LANGUAGES):
-        provider: Optional[Tuple[str, str]] = NATIONAL_ID_PROVIDERS.get(lang)
+        provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
         id_locale, id_method = provider if provider else (None, None)
         rows.append(
             {

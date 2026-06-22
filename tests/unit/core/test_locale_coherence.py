@@ -34,7 +34,6 @@ from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS, SUPPORTED_LANGUAGES
 
-
 # Documented set of languages whose *default* Faker locale is an intentional
 # approximation. Kept here, independent of the code under test, so that wiring a
 # new pack to a wrong/approximate locale flips the assertions red until a human
