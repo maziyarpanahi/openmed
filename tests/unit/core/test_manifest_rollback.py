@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+import openmed.core.manifest as manifest_module
 from openmed.cli import main_module
 from openmed.core.baseline import (
     BASELINE_SCHEMA_VERSION,
@@ -19,6 +20,7 @@ from openmed.core.manifest import (
     rollback_manifest_pointer,
     write_manifest_rows,
 )
+from openmed.core.model_card import render_model_card
 
 
 def _row(
@@ -136,6 +138,7 @@ def test_rollback_flips_manifest_pointer_and_retains_prior_version(
     assert active["reproducibility_hash"] == "sha256:" + "a" * 64
     assert "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v2-mlx" in repo_ids
     assert len(repo_ids) == len(set(repo_ids))
+    assert card_text == render_model_card(active)
     assert result.active_repo_id in card_text
     assert active["reproducibility_hash"] in card_text
     assert status["active"]["repo_id"] == result.active_repo_id
@@ -179,6 +182,75 @@ def test_release_rollback_cli_uses_fixture_paths(
     assert "Rolled back PII/Small/mlx-fp" in out
     assert rows[0]["repo_id"] == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
     assert tracking_log.exists()
+
+
+def test_release_rollback_dry_run_does_not_write_outputs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    manifest, baseline, card_dir, status_path, tracking_log = _write_fixture(tmp_path)
+    original_manifest = manifest.read_text(encoding="utf-8")
+
+    code = main_module.main(
+        [
+            "release",
+            "rollback",
+            "PII",
+            "--tier",
+            "Small",
+            "--format",
+            "mlx-fp",
+            "--manifest",
+            str(manifest),
+            "--baseline",
+            str(baseline),
+            "--card-dir",
+            str(card_dir),
+            "--status-path",
+            str(status_path),
+            "--tracking-log",
+            str(tracking_log),
+            "--dry-run",
+        ]
+    )
+
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "Would roll back PII/Small/mlx-fp" in out
+    assert manifest.read_text(encoding="utf-8") == original_manifest
+    assert not card_dir.exists()
+    assert not status_path.exists()
+    assert not tracking_log.exists()
+
+
+def test_rollback_leaves_manifest_unchanged_when_card_write_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest, baseline, card_dir, status_path, tracking_log = _write_fixture(tmp_path)
+    original_manifest = manifest.read_text(encoding="utf-8")
+
+    def fail_model_card(*args: object, **kwargs: object) -> Path:
+        raise OSError("card write failed")
+
+    monkeypatch.setattr(manifest_module, "write_model_card", fail_model_card)
+
+    with pytest.raises(OSError, match="card write failed"):
+        rollback_manifest_pointer(
+            family="PII",
+            tier="Small",
+            format_name="mlx-fp",
+            manifest_path=manifest,
+            baseline_path=baseline,
+            card_dir=card_dir,
+            status_path=status_path,
+            tracking_log_path=tracking_log,
+        )
+
+    assert manifest.read_text(encoding="utf-8") == original_manifest
+    assert not status_path.exists()
+    assert not tracking_log.exists()
 
 
 def test_rollback_requires_disambiguation_for_multiple_family_baselines(

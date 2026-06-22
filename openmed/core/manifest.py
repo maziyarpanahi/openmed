@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,6 +17,7 @@ from openmed.core.baseline import (
     baseline_key,
     load_baseline_store,
 )
+from openmed.core.model_card import render_model_card
 from openmed.core.model_registry import MANIFEST_PATH
 
 DEFAULT_CARD_DIR = Path(__file__).resolve().parents[2] / "docs" / "model-cards"
@@ -87,11 +90,47 @@ def write_manifest_rows(
 
     manifest_path = Path(path)
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    with manifest_path.open("w", encoding="utf-8") as handle:
-        for row in rows:
-            handle.write(json.dumps(dict(row), sort_keys=False, separators=(",", ":")))
-            handle.write("\n")
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            dir=manifest_path.parent,
+            encoding="utf-8",
+            delete=False,
+        ) as handle:
+            tmp_path = Path(handle.name)
+            for row in rows:
+                handle.write(
+                    json.dumps(dict(row), sort_keys=False, separators=(",", ":"))
+                )
+                handle.write("\n")
+        os.replace(tmp_path, manifest_path)
+    except Exception:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        raise
     return manifest_path
+
+
+def _write_text_atomic(path: str | Path, text: str) -> Path:
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            dir=output_path.parent,
+            encoding="utf-8",
+            delete=False,
+        ) as handle:
+            tmp_path = Path(handle.name)
+            handle.write(text)
+        os.replace(tmp_path, output_path)
+    except Exception:
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        raise
+    return output_path
 
 
 def rollback_manifest_pointer(
@@ -179,7 +218,6 @@ def rollback_manifest_pointer(
     )
 
     if not dry_run:
-        write_manifest_rows(new_rows, manifest_path)
         if card_path is not None:
             write_model_card(
                 target_row,
@@ -194,6 +232,7 @@ def rollback_manifest_pointer(
                 path=resolved_status_path,
                 manifest_path=Path(manifest_path),
             )
+        write_manifest_rows(new_rows, manifest_path)
         if resolved_tracking_path is not None:
             append_rollback_record(
                 path=resolved_tracking_path,
@@ -232,41 +271,10 @@ def write_model_card(
     previous_repo_id: str | None = None,
     baseline_key_value: str | None = None,
 ) -> Path:
-    """Write a compact model card for the active manifest row."""
+    """Write the canonical model card for the active manifest row."""
 
-    path = Path(card_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    formats = ", ".join(str(item) for item in row.get("formats", []))
-    labels = row.get("canonical_labels") or []
-    labels_text = (
-        ", ".join(str(label) for label in labels) if labels else "None declared"
-    )
-    benchmark = (
-        row.get("benchmark") if isinstance(row.get("benchmark"), Mapping) else {}
-    )
-    lines = [
-        f"# {row.get('repo_id')}",
-        "",
-        "This model card is derived from the active OpenMed manifest entry.",
-        "",
-        f"- Active repo: `{row.get('repo_id')}`",
-        f"- Family: `{row.get('family')}`",
-        f"- Tier: `{row.get('tier') if row.get('tier') is not None else 'none'}`",
-        f"- Formats: `{formats}`",
-        f"- Base model: `{row.get('base_model') or 'none'}`",
-        f"- Released: `{row.get('released') or 'unknown'}`",
-        f"- Reproducibility hash: `{row.get('reproducibility_hash')}`",
-        f"- Benchmark dataset: `{benchmark.get('dataset') or 'none'}`",
-        f"- Benchmark micro F1: `{benchmark.get('micro_f1')}`",
-        f"- Benchmark recall: `{benchmark.get('recall')}`",
-        f"- Canonical labels: {labels_text}",
-    ]
-    if previous_repo_id:
-        lines.append(f"- Previous active repo: `{previous_repo_id}`")
-    if baseline_key_value:
-        lines.append(f"- Last-green baseline key: `{baseline_key_value}`")
-    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
-    return path
+    del previous_repo_id, baseline_key_value
+    return _write_text_atomic(card_path, render_model_card(dict(row)))
 
 
 def write_release_status_snapshot(
@@ -293,12 +301,10 @@ def write_release_status_snapshot(
         "leaderboard": leaderboard,
     }
     snapshot_path = Path(path)
-    snapshot_path.parent.mkdir(parents=True, exist_ok=True)
-    snapshot_path.write_text(
+    return _write_text_atomic(
+        snapshot_path,
         json.dumps(payload, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
     )
-    return snapshot_path
 
 
 def append_rollback_record(
