@@ -54,7 +54,10 @@ def _lazy_api():
 
             _ANALYZE_TEXT = analyze_text = _analyze
 
-    if get_model_max_length is not None and get_model_max_length is not _GET_MODEL_MAX_LENGTH:
+    if (
+        get_model_max_length is not None
+        and get_model_max_length is not _GET_MODEL_MAX_LENGTH
+    ):
         _GET_MODEL_MAX_LENGTH = get_model_max_length
 
     if _GET_MODEL_MAX_LENGTH is None:
@@ -89,6 +92,7 @@ def _lazy_api():
 
     return _ANALYZE_TEXT, _GET_MODEL_MAX_LENGTH, _LIST_MODELS, _BATCH_PROCESSOR
 
+
 Handler = Callable[[argparse.Namespace], int]
 
 COMPLIANCE_CAVEAT = (
@@ -122,7 +126,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
-    _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     add_calibrate_command(subparsers)
@@ -351,9 +354,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     deid_parser.set_defaults(handler=_handle_pii_deidentify)
 
     # PII Batch command
-    batch_parser = pii_sub.add_parser(
-        "batch", help="Batch de-identification of files."
-    )
+    batch_parser = pii_sub.add_parser("batch", help="Batch de-identification of files.")
     batch_parser.add_argument(
         "--model",
         default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
@@ -396,28 +397,8 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.set_defaults(handler=_handle_pii_batch)
 
 
-def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
-    tui_parser = subparsers.add_parser(
-        "tui", help="Launch interactive terminal UI for clinical NER analysis."
-    )
-    tui_parser.add_argument(
-        "--model",
-        default=None,
-        help="Model registry key or Hugging Face identifier (default: disease_detection_superclinical).",
-    )
-    tui_parser.add_argument(
-        "--confidence-threshold",
-        type=float,
-        default=0.5,
-        help="Minimum confidence score for predictions (default: 0.5).",
-    )
-    tui_parser.set_defaults(handler=_handle_tui)
-
-
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
-    models_parser = subparsers.add_parser(
-        "models", help="Discover OpenMed models."
-    )
+    models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
 
     models_list = models_sub.add_parser("list", help="List available models.")
@@ -553,65 +534,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handler: Optional[Handler] = getattr(args, "handler", None)
 
     if handler is None:
-        return _launch_tui(model_name=None, confidence_threshold=0.5)
-
-    return handler(args)
-
-
-def _launch_tui(
-    *,
-    model_name: Optional[str],
-    confidence_threshold: float,
-) -> int:
-    try:
-        from openmed.tui import OpenMedTUI
-    except ImportError:
-        return _run_basic_tui_entry(
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-        )
-
-    app = OpenMedTUI(
-        model_name=model_name,
-        confidence_threshold=confidence_threshold,
-    )
-    app.run()
-    return 0
-
-
-def _run_basic_tui_entry(
-    *,
-    model_name: Optional[str],
-    confidence_threshold: float,
-) -> int:
-    model_display = model_name or "disease_detection_superclinical"
-    if not sys.stdin.isatty():
-        sys.stdout.write(
-            "OpenMed TUI is not installed. Run from an interactive "
-            "terminal to use the basic prompt, or install the TUI "
-            "for the full experience.\n"
-        )
+        parser.print_help()
         return 0
 
-    sys.stdout.write(
-        "OpenMed basic terminal prompt\n"
-        f"Model: {model_display} | confidence threshold: {confidence_threshold}\n"
-        "Use 'openmed analyze --text \"...\"' for model-backed analysis.\n"
-        "Type 'quit' or press Ctrl-D to exit.\n"
-    )
-    while True:
-        try:
-            text = input("openmed> ")
-        except EOFError:
-            sys.stdout.write("\n")
-            return 0
-
-        if text.strip().lower() in {"quit", "exit", ":q"}:
-            return 0
-        if text.strip():
-            sys.stdout.write(
-                "Analysis is available through 'openmed analyze --text'.\n"
-            )
+    return handler(args)
 
 
 # ---------------------------------------------------------------------------
@@ -629,7 +555,10 @@ def _load_and_apply_config(args: argparse.Namespace) -> OpenMedConfig:
         config = get_config()
 
     # Apply CLI overrides if present
-    if hasattr(args, "use_medical_tokenizer") and args.use_medical_tokenizer is not None:
+    if (
+        hasattr(args, "use_medical_tokenizer")
+        and args.use_medical_tokenizer is not None
+    ):
         config.use_medical_tokenizer = bool(args.use_medical_tokenizer)
 
     if getattr(args, "medical_tokenizer_exceptions", None):
@@ -744,7 +673,9 @@ def _handle_batch(args: argparse.Namespace) -> int:
     if args.output:
         try:
             args.output.write_text(
-                json.dumps(result.to_dict(), indent=2) if args.output_format == "json" else output,
+                json.dumps(result.to_dict(), indent=2)
+                if args.output_format == "json"
+                else output,
                 encoding="utf-8",
             )
             sys.stdout.write(f"Results written to: {args.output}\n")
@@ -755,13 +686,6 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
-
-
-def _handle_tui(args: argparse.Namespace) -> int:
-    return _launch_tui(
-        model_name=args.model,
-        confidence_threshold=args.confidence_threshold,
-    )
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
