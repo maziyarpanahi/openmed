@@ -18,7 +18,9 @@ from openmed.core.manifest import (
 from openmed.core.model_registry import MANIFEST_PATH
 
 
-def add_release_command(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def add_release_command(
+    subparsers: argparse._SubParsersAction,
+) -> argparse.ArgumentParser:
     """Register the ``openmed release`` command group."""
 
     release_parser = subparsers.add_parser(
@@ -31,7 +33,9 @@ def add_release_command(subparsers: argparse._SubParsersAction) -> argparse.Argu
     return release_parser
 
 
-def _add_rollback_parser(subparsers: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def _add_rollback_parser(
+    subparsers: argparse._SubParsersAction,
+) -> argparse.ArgumentParser:
     """Register the ``rollback`` release subcommand."""
 
     rollback_parser = subparsers.add_parser(
@@ -121,8 +125,7 @@ def handle_rollback(args: argparse.Namespace) -> int:
     if result.changed:
         action = "Would roll back" if args.dry_run else "Rolled back"
         sys.stdout.write(
-            f"{action} {target}: {result.previous_repo_id} -> "
-            f"{result.active_repo_id}\n"
+            f"{action} {target}: {result.previous_repo_id} -> {result.active_repo_id}\n"
         )
     else:
         sys.stdout.write(f"{target} already points to {result.active_repo_id}\n")

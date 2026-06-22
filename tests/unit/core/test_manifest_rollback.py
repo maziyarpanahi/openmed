@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from openmed.cli import main_module
-from openmed.core.baseline import BASELINE_SCHEMA_VERSION, baseline_key, write_baseline_store
+from openmed.core.baseline import (
+    BASELINE_SCHEMA_VERSION,
+    baseline_key,
+    write_baseline_store,
+)
 from openmed.core.manifest import (
     ManifestRollbackError,
     load_manifest_rows,
@@ -95,7 +99,9 @@ def _write_fixture(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     return manifest, baseline, card_dir, status_path, tracking_log
 
 
-def test_rollback_flips_manifest_pointer_and_retains_prior_version(tmp_path: Path) -> None:
+def test_rollback_flips_manifest_pointer_and_retains_prior_version(
+    tmp_path: Path,
+) -> None:
     manifest, baseline, card_dir, status_path, tracking_log = _write_fixture(tmp_path)
 
     result = rollback_manifest_pointer(
@@ -122,7 +128,9 @@ def test_rollback_flips_manifest_pointer_and_retains_prior_version(tmp_path: Pat
     ]
 
     assert result.changed is True
-    assert result.previous_repo_id == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v2-mlx"
+    assert (
+        result.previous_repo_id == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v2-mlx"
+    )
     assert result.active_repo_id == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1-mlx"
     assert active["repo_id"] == result.active_repo_id
     assert active["reproducibility_hash"] == "sha256:" + "a" * 64
