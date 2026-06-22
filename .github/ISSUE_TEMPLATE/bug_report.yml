@@ -1,0 +1,87 @@
+name: Bug report
+description: Report a reproducible OpenMed bug.
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve OpenMed.
+
+        Do not paste PHI, patient identifiers, credentials, private model tokens, or real clinical records. Use synthetic examples only.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: "Briefly describe the failure."
+    validations:
+      required: true
+  - type: textarea
+    id: minimal_repro
+    attributes:
+      label: Minimal reproduction
+      description: Include the smallest command or code snippet that reproduces the bug.
+      placeholder: |
+        from openmed import analyze_text
+        analyze_text("Synthetic patient text", model_name="...")
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect OpenMed to do?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and error output
+      description: Paste traceback or logs after removing any sensitive values.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: openmed_version
+    attributes:
+      label: OpenMed version
+      placeholder: "1.5.5"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15.5, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+  - type: input
+    id: python_version
+    attributes:
+      label: Python version
+      placeholder: "3.10.14"
+    validations:
+      required: true
+  - type: input
+    id: model_id
+    attributes:
+      label: Model id or registry key
+      placeholder: "disease_detection_superclinical or OpenMed/..."
+    validations:
+      required: true
+  - type: input
+    id: backend
+    attributes:
+      label: Backend and hardware
+      placeholder: "CPU, CUDA, Apple MLX, CoreML, REST service"
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I used only synthetic data and removed PHI, secrets, and private records from this report.
+          required: true
