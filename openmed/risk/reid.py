@@ -49,7 +49,6 @@ from openmed.core.labels import (
     normalize_label,
 )
 
-
 _TEXT_KEYS = (
     "text",
     "note",
@@ -186,7 +185,9 @@ def risk_report(
     """
 
     deidentified_records = _coerce_records(deidentified, source="deidentified")
-    original_records = _coerce_records(original, source="original") if original is not None else []
+    original_records = (
+        _coerce_records(original, source="original") if original is not None else []
+    )
     aux_records = _coerce_records(aux, source="aux") if aux is not None else []
 
     deidentified_profiles = [_profile_record(record) for record in deidentified_records]
@@ -239,7 +240,14 @@ def _coerce_records(data: Any, *, source: str) -> list[_Record]:
         for item in data:
             records.extend(_coerce_records(item, source=source))
         return [
-            _Record(index, record.record_id, record.text, record.fields, record.spans, record.source)
+            _Record(
+                index,
+                record.record_id,
+                record.text,
+                record.fields,
+                record.spans,
+                record.source,
+            )
             for index, record in enumerate(records)
         ]
 
@@ -314,7 +322,9 @@ def _coerce_spans(value: Any) -> tuple[Mapping[str, Any], ...]:
 
 
 def _is_sequence(value: Any) -> bool:
-    return isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray))
+    return isinstance(value, Sequence) and not isinstance(
+        value, (str, bytes, bytearray)
+    )
 
 
 def _is_scalar(value: Any) -> bool:
@@ -370,24 +380,58 @@ def _span_category(span: Mapping[str, Any]) -> str | None:
     normalized = _name_key(label)
     if any(hint in normalized for hint in ("age", "date", "dob", "birthdate")):
         return "age" if "age" in normalized else "date"
-    if any(hint in normalized for hint in ("city", "state", "county", "zip", "postal", "location", "geography")):
+    if any(
+        hint in normalized
+        for hint in (
+            "city",
+            "state",
+            "county",
+            "zip",
+            "postal",
+            "location",
+            "geography",
+        )
+    ):
         return "geography"
-    if any(hint in normalized for hint in ("provider", "doctor", "physician", "hospital", "clinic", "facility", "institution")):
+    if any(
+        hint in normalized
+        for hint in (
+            "provider",
+            "doctor",
+            "physician",
+            "hospital",
+            "clinic",
+            "facility",
+            "institution",
+        )
+    ):
         return "provider_institution"
-    if any(hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")):
+    if any(
+        hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")
+    ):
         return "rare_condition"
     return None
 
 
 def _span_label(span: Mapping[str, Any]) -> str:
-    for key in ("canonical_label", "policy_label", "label", "entity_group", "entity", "entity_type", "type"):
+    for key in (
+        "canonical_label",
+        "policy_label",
+        "label",
+        "entity_group",
+        "entity",
+        "entity_type",
+        "type",
+    ):
         value = span.get(key)
         if value:
             return str(value)
     return ""
 
 
-def _span_value(record: _Record, span: Mapping[str, Any]) -> tuple[str, int | None, int | None]:
+def _span_value(
+    record: _Record, span: Mapping[str, Any]
+) -> tuple[str, int | None, int | None]:
     start = _optional_int(span.get("start"))
     end = _optional_int(span.get("end"))
     if start is not None and end is not None and record.text:
@@ -432,13 +476,43 @@ def _field_category(name: str) -> str | None:
     normalized = _name_key(name)
     if "age" in normalized:
         return "age"
-    if any(hint in normalized for hint in ("date", "dob", "birth", "visit", "admission", "discharge")):
+    if any(
+        hint in normalized
+        for hint in ("date", "dob", "birth", "visit", "admission", "discharge")
+    ):
         return "date"
-    if any(hint in normalized for hint in ("city", "state", "county", "zip", "postal", "country", "region", "location", "geography")):
+    if any(
+        hint in normalized
+        for hint in (
+            "city",
+            "state",
+            "county",
+            "zip",
+            "postal",
+            "country",
+            "region",
+            "location",
+            "geography",
+        )
+    ):
         return "geography"
-    if any(hint in normalized for hint in ("provider", "doctor", "physician", "hospital", "clinic", "facility", "institution", "organization")):
+    if any(
+        hint in normalized
+        for hint in (
+            "provider",
+            "doctor",
+            "physician",
+            "hospital",
+            "clinic",
+            "facility",
+            "institution",
+            "organization",
+        )
+    ):
         return "provider_institution"
-    if any(hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")):
+    if any(
+        hint in normalized for hint in ("rare", "condition", "diagnosis", "disease")
+    ):
         return "rare_condition"
     return None
 
@@ -530,7 +604,9 @@ def _dedupe_qis(qis: list[_QuasiIdentifier]) -> list[_QuasiIdentifier]:
     return deduped
 
 
-def _profile_key(qis: list[_QuasiIdentifier]) -> tuple[tuple[str, tuple[str, ...]], ...]:
+def _profile_key(
+    qis: list[_QuasiIdentifier],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
     by_category: dict[str, set[str]] = {}
     for qi in qis:
         by_category.setdefault(qi.category, set()).add(qi.normalized_value)
@@ -561,7 +637,9 @@ def _reid_rate(
     if not deidentified_profiles:
         return 0.0
 
-    original_counts = Counter(profile.key for profile in original_profiles if profile.key)
+    original_counts = Counter(
+        profile.key for profile in original_profiles if profile.key
+    )
     aux_counts = Counter(profile.key for profile in aux_profiles if profile.key)
 
     linked = 0
@@ -573,7 +651,9 @@ def _reid_rate(
     return linked / len(deidentified_profiles)
 
 
-def _leakage_rate(deidentified_records: list[_Record], original_records: list[_Record]) -> float:
+def _leakage_rate(
+    deidentified_records: list[_Record], original_records: list[_Record]
+) -> float:
     if not deidentified_records:
         return 0.0
 
@@ -597,8 +677,12 @@ def _leakage_rate(deidentified_records: list[_Record], original_records: list[_R
             leaked_records += 1
             continue
 
-        blob = _normalize_direct_value(" ".join([record.text, *map(str, record.fields.values())]))
-        if original_values and any(value in blob for value in original_values if len(value) > 1):
+        blob = _normalize_direct_value(
+            " ".join([record.text, *map(str, record.fields.values())])
+        )
+        if original_values and any(
+            value in blob for value in original_values if len(value) > 1
+        ):
             leaked_records += 1
 
     return leaked_records / len(deidentified_records)
@@ -644,7 +728,10 @@ def _span_is_direct_identifier(span: Mapping[str, Any]) -> bool:
 
 def _field_is_direct_identifier(name: str) -> bool:
     normalized = _name_key(name)
-    if any(safe_hint in normalized for safe_hint in ("date", "age", "diagnosis", "condition")):
+    if any(
+        safe_hint in normalized
+        for safe_hint in ("date", "age", "diagnosis", "condition")
+    ):
         return False
     return any(
         hint in normalized

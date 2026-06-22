@@ -21,7 +21,6 @@ from openmed.core.decoding import build_label_info
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
 
-
 CONFIG_SCHEMA_VERSION = "openmed.training.recipe.v1"
 MAX_LORA_TRAINABLE_RATIO = 0.015
 CONFIG_DIR = Path(__file__).with_name("configs")
@@ -32,20 +31,22 @@ PRESET_BY_MODE = {
 }
 MODE_BY_PRESET = {preset: mode for mode, preset in PRESET_BY_MODE.items()}
 
-_REQUIRED_ROOT_FIELDS = frozenset({
-    "schema_version",
-    "preset_name",
-    "mode",
-    "backbone",
-    "dapt",
-    "lora",
-    "label_set_ref",
-    "loss",
-    "hard_negatives_required",
-    "output_tier",
-    "quantization",
-    "seed",
-})
+_REQUIRED_ROOT_FIELDS = frozenset(
+    {
+        "schema_version",
+        "preset_name",
+        "mode",
+        "backbone",
+        "dapt",
+        "lora",
+        "label_set_ref",
+        "loss",
+        "hard_negatives_required",
+        "output_tier",
+        "quantization",
+        "seed",
+    }
+)
 
 
 class RecipeConfigError(ValueError):
@@ -282,13 +283,19 @@ def run_recipe(mode_or_preset: str, *, dry_run: bool = True) -> DryRunResult:
     config = load_preset(mode_or_preset)
     if dry_run:
         return dry_run_recipe(config)
-    raise NotImplementedError("Training execution is out of scope for this recipe package")
+    raise NotImplementedError(
+        "Training execution is out of scope for this recipe package"
+    )
 
 
 def config_hash(config: TrainingRecipeConfig | Mapping[str, Any]) -> str:
     """Return a deterministic hash over the canonical recipe config."""
 
-    payload = config.to_dict() if isinstance(config, TrainingRecipeConfig) else _copy_mapping(config)
+    payload = (
+        config.to_dict()
+        if isinstance(config, TrainingRecipeConfig)
+        else _copy_mapping(config)
+    )
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
@@ -309,8 +316,12 @@ def runtime_dependencies() -> RuntimeDependencies:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate an OpenMed training recipe preset.")
-    parser.add_argument("mode", choices=tuple(PRESET_BY_MODE) + tuple(PRESET_BY_MODE.values()))
+    parser = argparse.ArgumentParser(
+        description="Validate an OpenMed training recipe preset."
+    )
+    parser.add_argument(
+        "mode", choices=tuple(PRESET_BY_MODE) + tuple(PRESET_BY_MODE.values())
+    )
     parser.add_argument("--dry-run", action="store_true", default=True)
     args = parser.parse_args(argv)
 
@@ -445,7 +456,9 @@ def _require_exact_fields(data: Mapping[str, Any], name: str, fields: set[str]) 
     missing = sorted(fields - keys)
     unknown = sorted(keys - fields)
     if missing:
-        raise RecipeConfigError(f"{name} missing required field(s): {', '.join(missing)}")
+        raise RecipeConfigError(
+            f"{name} missing required field(s): {', '.join(missing)}"
+        )
     if unknown:
         raise RecipeConfigError(f"{name} has unknown field(s): {', '.join(unknown)}")
 

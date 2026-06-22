@@ -146,7 +146,9 @@ DOMAIN_LABELS = {
 }
 
 PARAM_RE = re.compile(r"(?P<value>\d+(?:\.\d+)?)(?P<unit>[mMbB])")
-TIER_RE = re.compile(r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])")
+TIER_RE = re.compile(
+    r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])"
+)
 
 
 def _repo_name(repo_id: str) -> str:
@@ -180,9 +182,7 @@ def _family(repo_id: str, tags: list[str], task: str) -> str:
 
 def _languages(repo_id: str, tags: list[str]) -> list[str]:
     name = _repo_name(repo_id).lower()
-    name_languages = {
-        code for token, code in LANGUAGE_NAMES.items() if token in name
-    }
+    name_languages = {code for token, code in LANGUAGE_NAMES.items() if token in name}
     if name_languages:
         return sorted(name_languages)
 
@@ -274,7 +274,10 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
     if (
         "safetensors" in lowered_tags
         or "transformers" in lowered_tags
-        or any(name.endswith((".safetensors", "pytorch_model.bin")) for name in lowered_names)
+        or any(
+            name.endswith((".safetensors", "pytorch_model.bin"))
+            for name in lowered_names
+        )
     ):
         formats.add("pytorch")
     if (
@@ -347,7 +350,9 @@ def _date(value: Any) -> Optional[str]:
         return str(value)[:10] or None
 
 
-def _reproducibility_hash(repo_id: str, sha: Optional[str], released: Optional[str], siblings: list[str]) -> str:
+def _reproducibility_hash(
+    repo_id: str, sha: Optional[str], released: Optional[str], siblings: list[str]
+) -> str:
     payload = json.dumps(
         {
             "repo_id": repo_id,
@@ -367,7 +372,9 @@ def model_to_manifest_row(model: Any) -> dict[str, Any]:
     siblings = _siblings(model)
     task = getattr(model, "pipeline_tag", None) or "unknown"
     family = _family(repo_id, tags, task)
-    released = _date(getattr(model, "lastModified", None) or getattr(model, "createdAt", None))
+    released = _date(
+        getattr(model, "lastModified", None) or getattr(model, "createdAt", None)
+    )
 
     return {
         "repo_id": repo_id,

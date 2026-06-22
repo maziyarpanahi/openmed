@@ -10,7 +10,6 @@ from openmed.core.labels import normalize_label
 from openmed.core.pii import PIIEntity
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
 
-
 _PRESIDIO_TO_CANONICAL = {
     "PERSON": "PERSON",
     "PHONE_NUMBER": "PHONE",
@@ -89,7 +88,9 @@ def from_canonical(
 
     cfg = config or PresidioAdapterConfig()
     cls = result_cls or _load_presidio_result_cls()
-    return [_entity_to_recognizer_result(entity, cls, config=cfg) for entity in entities]
+    return [
+        _entity_to_recognizer_result(entity, cls, config=cfg) for entity in entities
+    ]
 
 
 def merge_with_openmed(
@@ -119,10 +120,7 @@ def merge_with_openmed(
         allow_semantic_only_matches=cfg.allow_semantic_only_matches,
         allow_label_expansion=True,
     )
-    return [
-        _merger_dict_to_entity(item, text)
-        for item in _resolve_overlaps(merged)
-    ]
+    return [_merger_dict_to_entity(item, text) for item in _resolve_overlaps(merged)]
 
 
 def _load_presidio_result_cls() -> type[Any]:
@@ -227,7 +225,9 @@ def _merger_dict_to_entity(item: Mapping[str, Any], text: str) -> PIIEntity:
 
 def _resolve_overlaps(items: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
     winners: list[Mapping[str, Any]] = []
-    for item in sorted(items, key=lambda value: (int(value["start"]), int(value["end"]))):
+    for item in sorted(
+        items, key=lambda value: (int(value["start"]), int(value["end"]))
+    ):
         overlaps = [
             existing
             for existing in winners

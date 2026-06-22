@@ -60,10 +60,7 @@ class TestBundleStructure:
 
         for entry, resource in zip(bundle["entry"], resources):
             assert entry["fullUrl"].startswith("urn:uuid:")
-            assert (
-                entry["resource"]["resourceType"]
-                == resource["resourceType"]
-            )
+            assert entry["resource"]["resourceType"] == resource["resourceType"]
             assert entry["request"] == {
                 "method": "POST",
                 "url": resource["resourceType"],
@@ -88,10 +85,7 @@ class TestBundleStructure:
         bundle = to_bundle(resources, doc_id="doc-1", bundle_type="batch")
 
         assert bundle["type"] == "batch"
-        assert [
-            entry["request"]
-            for entry in bundle["entry"]
-        ] == [
+        assert [entry["request"] for entry in bundle["entry"]] == [
             {"method": "POST", "url": resource["resourceType"]}
             for resource in resources
         ]
@@ -99,6 +93,33 @@ class TestBundleStructure:
     def test_missing_resource_type_raises(self):
         with pytest.raises(ValueError):
             to_bundle([{"id": "x"}], doc_id="doc-1")
+
+    def test_duplicate_resource_type_id_raises(self):
+        resources = [
+            {"resourceType": "Observation", "id": "obs1"},
+            {"resourceType": "Observation", "id": "obs1"},
+        ]
+
+        with pytest.raises(
+            ValueError, match="duplicate FHIR resource id: Observation/obs1"
+        ):
+            to_bundle(resources, doc_id="doc-1")
+
+    def test_resources_without_ids_do_not_collide(self):
+        resources = [
+            {"resourceType": "Observation", "status": "final"},
+            {
+                "resourceType": "DiagnosticReport",
+                "id": "dr1",
+                "result": [{"reference": "Observation/obs1"}],
+            },
+        ]
+
+        bundle = to_bundle(resources, doc_id="doc-1")
+
+        assert len(bundle["entry"]) == 2
+        report = bundle["entry"][1]["resource"]
+        assert report["result"][0]["reference"] == "Observation/obs1"
 
 
 class TestReferenceResolution:
@@ -134,17 +155,29 @@ class TestReferenceResolution:
         # never synthesises them itself.
         resources = [
             {"resourceType": "Patient", "id": "pat1"},
-            {"resourceType": "Encounter", "id": "enc1",
-             "subject": {"reference": "Patient/pat1"}},
-            {"resourceType": "Condition", "id": "cond1",
-             "subject": {"reference": "Patient/pat1"},
-             "encounter": {"reference": "Encounter/enc1"}},
-            {"resourceType": "Observation", "id": "obs1",
-             "subject": {"reference": "Patient/pat1"},
-             "encounter": {"reference": "Encounter/enc1"}},
-            {"resourceType": "DiagnosticReport", "id": "dr1",
-             "subject": {"reference": "Patient/pat1"},
-             "result": [{"reference": "Observation/obs1"}]},
+            {
+                "resourceType": "Encounter",
+                "id": "enc1",
+                "subject": {"reference": "Patient/pat1"},
+            },
+            {
+                "resourceType": "Condition",
+                "id": "cond1",
+                "subject": {"reference": "Patient/pat1"},
+                "encounter": {"reference": "Encounter/enc1"},
+            },
+            {
+                "resourceType": "Observation",
+                "id": "obs1",
+                "subject": {"reference": "Patient/pat1"},
+                "encounter": {"reference": "Encounter/enc1"},
+            },
+            {
+                "resourceType": "DiagnosticReport",
+                "id": "dr1",
+                "subject": {"reference": "Patient/pat1"},
+                "result": [{"reference": "Observation/obs1"}],
+            },
         ]
         bundle = to_bundle(resources, doc_id="patient-graph")
 
@@ -159,8 +192,11 @@ class TestReferenceResolution:
         # The targeted Patient is not part of the Bundle, so its reference is
         # preserved verbatim rather than rewritten.
         resources = [
-            {"resourceType": "Condition", "id": "cond1",
-             "subject": {"reference": "Patient/missing"}},
+            {
+                "resourceType": "Condition",
+                "id": "cond1",
+                "subject": {"reference": "Patient/missing"},
+            },
         ]
         bundle = to_bundle(resources, doc_id="doc-1")
         condition = bundle["entry"][0]["resource"]
@@ -188,8 +224,9 @@ class TestDeterminism:
         urls_b = [entry["fullUrl"] for entry in b["entry"]]
         # Different document -> different urns; same document -> reproducible.
         assert urls_a != urls_b
-        assert urls_a == [entry["fullUrl"] for entry in
-                          to_bundle(resources, doc_id="doc-A")["entry"]]
+        assert urls_a == [
+            entry["fullUrl"] for entry in to_bundle(resources, doc_id="doc-A")["entry"]
+        ]
 
 
 def test_rewrite_references_is_pure_helper():

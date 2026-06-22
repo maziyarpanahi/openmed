@@ -3,13 +3,9 @@ from __future__ import annotations
 import pytest
 
 from openmed.core.pii import PIIEntity
-from openmed.interop import get_adapter
-from openmed.interop import gliner_biomed
+from openmed.interop import get_adapter, gliner_biomed
 
-
-GOLDEN_TEXT = (
-    "John Doe visited City Hospital on 2024-01-02. Call 555-123-4567."
-)
+GOLDEN_TEXT = "John Doe visited City Hospital on 2024-01-02. Call 555-123-4567."
 
 
 def _span(text: str, label: str, score: float = 0.91) -> dict[str, object]:
@@ -57,8 +53,7 @@ def test_to_canonical_preserves_offsets_and_uses_canonical_labels():
         "555-123-4567",
     ]
     assert [(entity.start, entity.end) for entity in entities] == [
-        (item["start"], item["end"])
-        for item in GOLDEN_RESULTS
+        (item["start"], item["end"]) for item in GOLDEN_RESULTS
     ]
     assert all(entity.metadata["adapter"] == "gliner_biomed" for entity in entities)
 
@@ -84,16 +79,12 @@ def test_from_canonical_round_trip_preserves_gliner_labels():
     round_tripped = gliner_biomed.from_canonical(entities)
 
     assert [item["label"] for item in round_tripped] == [
-        item["label"]
-        for item in GOLDEN_RESULTS
+        item["label"] for item in GOLDEN_RESULTS
     ]
     assert [
         entity.label
         for entity in gliner_biomed.to_canonical(round_tripped, text=GOLDEN_TEXT)
-    ] == [
-        entity.label
-        for entity in entities
-    ]
+    ] == [entity.label for entity in entities]
 
 
 def test_merge_with_openmed_routes_through_merger_and_adds_adapter_spans(monkeypatch):

@@ -18,7 +18,6 @@ from ._pii import (
     value,
 )
 
-
 _PHILTER_TO_CANONICAL = {
     "AGE": "AGE",
     "CONTACT": "PHONE",
@@ -197,10 +196,14 @@ def _phi_records(result: Any) -> list[Any]:
 
 
 def _looks_like_record(result: Any) -> bool:
-    return value(result, ("start", "begin", "start_char")) is not None and value(
-        result,
-        ("stop", "end", "end_char"),
-    ) is not None
+    return (
+        value(result, ("start", "begin", "start_char")) is not None
+        and value(
+            result,
+            ("stop", "end", "end_char"),
+        )
+        is not None
+    )
 
 
 def _canonical_label(label: str) -> str:

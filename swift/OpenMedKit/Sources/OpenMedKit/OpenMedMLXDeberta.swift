@@ -215,7 +215,8 @@ final class OpenMedDisentangledSelfAttention: Module {
     private func transposeForScores(_ array: MLXArray) -> MLXArray {
         let batchSize = array.dim(0)
         let seqLen = array.dim(1)
-        return array
+        return
+            array
             .reshaped(batchSize, seqLen, numAttentionHeads, attentionHeadSize)
             .transposed(0, 2, 1, 3)
             .reshaped(batchSize * numAttentionHeads, seqLen, attentionHeadSize)
@@ -228,12 +229,14 @@ final class OpenMedDisentangledSelfAttention: Module {
         relativeEmbeddings: MLXArray,
         scaleFactor: Int
     ) -> MLXArray {
-        var relativePosition = relativePosition ?? openMedBuildRelativePosition(
-            queryLayer: queryLayer,
-            keyLayer: keyLayer,
-            bucketSize: positionBuckets,
-            maxPosition: maxRelativePositions
-        )
+        var relativePosition =
+            relativePosition
+            ?? openMedBuildRelativePosition(
+                queryLayer: queryLayer,
+                keyLayer: keyLayer,
+                bucketSize: positionBuckets,
+                maxPosition: maxRelativePositions
+            )
 
         if relativePosition.ndim == 2 {
             relativePosition = relativePosition.expandedDimensions(axes: [0, 1])
@@ -320,16 +323,18 @@ final class OpenMedDisentangledSelfAttention: Module {
                 sqrt(Float(positionQueryLayer.dim(-1) * scaleFactor)),
                 like: p2cAttention
             )
-            let p2cScore = takeAlong(p2cAttention, p2cIndex, axis: -1)
+            let p2cScore =
+                takeAlong(p2cAttention, p2cIndex, axis: -1)
                 .transposed(0, 2, 1)
                 / p2cScale
             score = score.map { $0 + p2cScore } ?? p2cScore
         }
 
-        return score ?? MLXArray.zeros(
-            [queryLayer.dim(0), queryLayer.dim(1), keyLayer.dim(1)],
-            type: Float.self
-        )
+        return score
+            ?? MLXArray.zeros(
+                [queryLayer.dim(0), queryLayer.dim(1), keyLayer.dim(1)],
+                type: Float.self
+            )
     }
 
     func callAsFunction(
@@ -359,13 +364,15 @@ final class OpenMedDisentangledSelfAttention: Module {
         var attentionScores = queryLayer.matmul(keyLayer.transposed(0, 2, 1) / scale)
 
         if relativeAttention, let relativeEmbeddings {
-            attentionScores = attentionScores + disentangledAttentionBias(
-                queryLayer: queryLayer,
-                keyLayer: keyLayer,
-                relativePosition: relativePosition,
-                relativeEmbeddings: relativeEmbeddings,
-                scaleFactor: scaleFactor
-            )
+            attentionScores =
+                attentionScores
+                + disentangledAttentionBias(
+                    queryLayer: queryLayer,
+                    keyLayer: keyLayer,
+                    relativePosition: relativePosition,
+                    relativeEmbeddings: relativeEmbeddings,
+                    scaleFactor: scaleFactor
+                )
         }
 
         let batchSize = hiddenStates.dim(0)
@@ -384,7 +391,8 @@ final class OpenMedDisentangledSelfAttention: Module {
             openMedFloatScalar(-3.4028235e38, like: attentionScores)
         )
         let attentionProbs = softmax(attentionScores, axis: -1)
-        let contextLayer = attentionProbs
+        let contextLayer =
+            attentionProbs
             .reshaped(batchSize * numAttentionHeads, queryLen, keyLen)
             .matmul(valueLayer)
             .reshaped(batchSize, numAttentionHeads, queryLen, attentionHeadSize)
@@ -541,7 +549,8 @@ final class OpenMedDebertaV2Encoder: Module {
 
     private func getAttentionMask(_ attentionMask: MLXArray) -> MLXArray {
         if attentionMask.ndim <= 2 {
-            return attentionMask
+            return
+                attentionMask
                 .expandedDimensions(axis: 1)
                 .expandedDimensions(axis: 3)
                 * attentionMask

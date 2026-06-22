@@ -6,7 +6,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "scripts" / "release" / "check_license_policy.py"
 
@@ -29,7 +28,9 @@ def test_current_non_dev_dependencies_are_permissive():
 
     assert results
     assert not [result for result in results if not result.allowed]
-    assert {result.entry.name for result in results if result.entry.group == "dev"} == set()
+    assert {
+        result.entry.name for result in results if result.entry.group == "dev"
+    } == set()
 
 
 def test_gpl_dependency_fails_policy(tmp_path):
@@ -118,7 +119,10 @@ cli = ["cli-package>=1"]
         },
     )
 
-    assert {result.entry.name for result in results} == {"runtime-package", "cli-package"}
+    assert {result.entry.name for result in results} == {
+        "runtime-package",
+        "cli-package",
+    }
     assert all(result.allowed for result in results)
 
 

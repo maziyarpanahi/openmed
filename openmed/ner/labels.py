@@ -8,13 +8,14 @@ from importlib import resources
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional
 
-
 _RESOURCE_PACKAGE = "openmed.zero_shot.data.label_maps"
 _DEFAULT_RESOURCE = "defaults.json"
 _GENERIC_DOMAIN = "generic"
 
 
-def load_default_label_map(overrides_path: Optional[Path] = None) -> Dict[str, List[str]]:
+def load_default_label_map(
+    overrides_path: Optional[Path] = None,
+) -> Dict[str, List[str]]:
     """Load the curated default label map.
 
     Args:
@@ -34,9 +35,11 @@ def load_default_label_map(overrides_path: Optional[Path] = None) -> Dict[str, L
 
 @lru_cache()
 def _load_from_resource() -> Mapping[str, Iterable[str]]:
-    with resources.files(_RESOURCE_PACKAGE).joinpath(_DEFAULT_RESOURCE).open(
-        "r", encoding="utf-8"
-    ) as handle:
+    with (
+        resources.files(_RESOURCE_PACKAGE)
+        .joinpath(_DEFAULT_RESOURCE)
+        .open("r", encoding="utf-8") as handle
+    ):
         return json.load(handle)
 
 
@@ -45,9 +48,7 @@ def _load_from_path(path: Path) -> Mapping[str, Iterable[str]]:
     return json.loads(text)
 
 
-def _normalise_label_map(
-    raw: Mapping[str, Iterable[str]]
-) -> Dict[str, List[str]]:
+def _normalise_label_map(raw: Mapping[str, Iterable[str]]) -> Dict[str, List[str]]:
     normalised: Dict[str, List[str]] = {}
     for domain, labels in raw.items():
         norm_domain = _normalise_domain(domain)
@@ -76,7 +77,9 @@ def _deduplicate_labels(labels: Iterable[str]) -> List[str]:
     return cleaned
 
 
-def available_domains(label_map: Optional[Mapping[str, Iterable[str]]] = None) -> List[str]:
+def available_domains(
+    label_map: Optional[Mapping[str, Iterable[str]]] = None,
+) -> List[str]:
     mapping = label_map or load_default_label_map()
     return sorted(mapping.keys())
 

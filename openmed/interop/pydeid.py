@@ -18,7 +18,6 @@ from ._pii import (
     value,
 )
 
-
 _CANONICAL_TO_PYDEID = {
     "AGE": "Age",
     "DATE": "Date",
@@ -99,7 +98,9 @@ def _record_to_entity(
     text: str | None,
     config: PyDeidAdapterConfig,
 ) -> PIIEntity:
-    start = coerce_int(value(record, ("phi_start", "start", "begin")), field="phi_start")
+    start = coerce_int(
+        value(record, ("phi_start", "start", "begin")), field="phi_start"
+    )
     end = coerce_int(value(record, ("phi_end", "end", "stop")), field="phi_end")
     source_types = _source_types(record)
     source_label = source_types[0] if source_types else "PHI"
@@ -178,10 +179,14 @@ def _phi_records(result: Any) -> list[Any]:
 
 
 def _looks_like_record(result: Any) -> bool:
-    return value(result, ("phi_start", "start", "begin")) is not None and value(
-        result,
-        ("phi_end", "end", "stop"),
-    ) is not None
+    return (
+        value(result, ("phi_start", "start", "begin")) is not None
+        and value(
+            result,
+            ("phi_end", "end", "stop"),
+        )
+        is not None
+    )
 
 
 def _source_types(record: Any) -> list[str]:

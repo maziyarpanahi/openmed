@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 from openmed.core.pii import PIIEntity
-from openmed.interop import get_adapter
-from openmed.interop import pydeid
+from openmed.interop import get_adapter, pydeid
 
-
-GOLDEN_TEXT = (
-    "John Doe visited City Hospital on 2024-01-02. Call 555-123-4567."
-)
+GOLDEN_TEXT = "John Doe visited City Hospital on 2024-01-02. Call 555-123-4567."
 
 
 def _span(text: str, types: list[str]) -> dict[str, object]:
@@ -54,8 +50,7 @@ def test_to_canonical_preserves_offsets_and_uses_canonical_labels():
         "555-123-4567",
     ]
     assert [(entity.start, entity.end) for entity in entities] == [
-        (item["phi_start"], item["phi_end"])
-        for item in GOLDEN_RESULTS
+        (item["phi_start"], item["phi_end"]) for item in GOLDEN_RESULTS
     ]
     assert all(entity.metadata["adapter"] == "pydeid" for entity in entities)
 
@@ -66,16 +61,11 @@ def test_from_canonical_round_trip_preserves_pydeid_labels():
     round_tripped = pydeid.from_canonical(entities)
 
     assert [item["types"] for item in round_tripped] == [
-        item["types"]
-        for item in GOLDEN_RESULTS
+        item["types"] for item in GOLDEN_RESULTS
     ]
     assert [
-        entity.label
-        for entity in pydeid.to_canonical(round_tripped, text=GOLDEN_TEXT)
-    ] == [
-        entity.label
-        for entity in entities
-    ]
+        entity.label for entity in pydeid.to_canonical(round_tripped, text=GOLDEN_TEXT)
+    ] == [entity.label for entity in entities]
 
 
 def test_merge_with_openmed_routes_through_merger_and_adds_adapter_spans(monkeypatch):
