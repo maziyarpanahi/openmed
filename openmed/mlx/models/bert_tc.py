@@ -22,8 +22,7 @@ try:
     import mlx.nn as nn
 except ImportError:
     raise ImportError(
-        "MLX is required for this module. "
-        "Install with: pip install openmed[mlx]"
+        "MLX is required for this module. Install with: pip install openmed[mlx]"
     )
 
 
@@ -36,10 +35,12 @@ class BertEmbeddings(nn.Module):
         type_vocab_size = int(config.get("type_vocab_size", 2) or 0)
 
         self.word_embeddings = nn.Embedding(
-            config["vocab_size"], config["hidden_size"],
+            config["vocab_size"],
+            config["hidden_size"],
         )
         self.position_embeddings = nn.Embedding(
-            config["max_position_embeddings"], config["hidden_size"],
+            config["max_position_embeddings"],
+            config["hidden_size"],
         )
         self.token_type_embeddings = (
             nn.Embedding(type_vocab_size, config["hidden_size"])
@@ -86,9 +87,21 @@ class BertAttention(nn.Module):
     ) -> mx.array:
         B, L, _ = x.shape
 
-        queries = self.query_proj(x).reshape(B, L, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
-        keys = self.key_proj(x).reshape(B, L, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
-        values = self.value_proj(x).reshape(B, L, self.num_heads, self.head_dim).transpose(0, 2, 1, 3)
+        queries = (
+            self.query_proj(x)
+            .reshape(B, L, self.num_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
+        keys = (
+            self.key_proj(x)
+            .reshape(B, L, self.num_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
+        values = (
+            self.value_proj(x)
+            .reshape(B, L, self.num_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
 
         scale = math.sqrt(self.head_dim)
         scores = (queries @ keys.transpose(0, 1, 3, 2)) / scale
@@ -153,7 +166,8 @@ class BertForTokenClassification(nn.Module):
         self.encoder = BertEncoder(config)
         self.dropout = nn.Dropout(p=config.get("hidden_dropout_prob", 0.1))
         self.classifier = nn.Linear(
-            config["hidden_size"], config["num_labels"],
+            config["hidden_size"],
+            config["num_labels"],
         )
         self.config = config
 

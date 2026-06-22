@@ -79,8 +79,6 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
    - [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
    - [Release Streams & Channels](./release/semver-and-channels.md) – model artifact and library release policy.
    - [Generative Model Policy](./generative-model-policy.md) – approved and prohibited model-assisted workflows.
-   - [Dataset Access Plan](https://github.com/maziyarpanahi/openmed/blob/master/PLANS/V2/DATASET_ACCESS_PLAN.md) – public, DUA-gated, and synthetic data handling.
-   - [Risk Register & Non-Goals](https://github.com/maziyarpanahi/openmed/blob/master/PLANS/V2/RISK_REGISTER_AND_NON_GOALS.md) – release risks, hard invariants, and scope boundaries.
 
 Need something that is not here yet? Drop an issue on GitHub and mention the missing recipe. Every addition is just a
 Markdown file away.

@@ -36,12 +36,13 @@ authors = [
 
 [project.optional-dependencies]
 dev = [
-  "flake8>=7.0",
+  "pre-commit>=4.0",
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
   "fastapi>=0.110",
   "httpx>=0.27",
+  "ruff==0.15.18",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -52,6 +53,16 @@ cli = [
 
 mcp = [
   "mcp>=1.9",
+]
+
+presidio = [
+  "presidio-analyzer>=2.2.354,<3",
+]
+
+multimodal = [
+  "pdfplumber>=0.11",
+  "python-docx>=1.1",
+  "Pillow>=10.0",
 ]
 
 hf = [
@@ -135,3 +146,34 @@ python_files = [
 testpaths = [
   "tests",
 ]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+extend-exclude = [
+  "examples/notebooks",
+]
+
+[tool.ruff.lint]
+select = [
+  "E9",
+  "F63",
+  "F7",
+  "F82",
+  "I",
+]
+fixable = ["I"]
+unfixable = [
+  "E9",
+  "F63",
+  "F7",
+  "F82",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["openmed"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

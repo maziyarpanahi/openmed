@@ -1,9 +1,9 @@
 """Configuration management for OpenMed."""
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Dict, Any, Union, List
-import os
+from typing import Any, Dict, List, Optional, Union
 
 # Environment variable used to override the config file location
 CONFIG_ENV_VAR = "OPENMED_CONFIG"
@@ -90,11 +90,17 @@ class OpenMedConfig:
 
         env_use_med_tok = os.getenv("OPENMED_USE_MEDICAL_TOKENIZER")
         if env_use_med_tok is not None:
-            self.use_medical_tokenizer = env_use_med_tok.lower() not in {"0", "false", "no"}
+            self.use_medical_tokenizer = env_use_med_tok.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
 
         env_exceptions = os.getenv("OPENMED_MEDICAL_TOKENIZER_EXCEPTIONS")
         if env_exceptions:
-            self.medical_tokenizer_exceptions = [item.strip() for item in env_exceptions.split(",") if item.strip()]
+            self.medical_tokenizer_exceptions = [
+                item.strip() for item in env_exceptions.split(",") if item.strip()
+            ]
 
         # Check for profile environment variable
         env_profile = os.getenv(PROFILE_ENV_VAR)
@@ -106,9 +112,16 @@ class OpenMedConfig:
         """Create config from dictionary."""
         # Filter out unknown keys
         valid_keys = {
-            "default_org", "cache_dir", "device", "hf_token",
-            "log_level", "timeout", "use_medical_tokenizer",
-            "medical_tokenizer_exceptions", "backend", "profile"
+            "default_org",
+            "cache_dir",
+            "device",
+            "hf_token",
+            "log_level",
+            "timeout",
+            "use_medical_tokenizer",
+            "medical_tokenizer_exceptions",
+            "backend",
+            "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
         return cls(**filtered)

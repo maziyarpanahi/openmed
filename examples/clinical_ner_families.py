@@ -3,10 +3,10 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
-import os
 from typing import Any
 
 from openmed import analyze_text
@@ -15,7 +15,6 @@ from openmed.core.model_registry import (
     get_models_by_category,
     get_recommended_models,
 )
-
 
 NER_FAMILIES = ("Disease", "Pharmaceutical", "Oncology")
 DEFAULT_TIER = "accurate"
@@ -51,7 +50,9 @@ def select_model_for_family(
         if model.model_id in recommended_ids:
             return FamilySelection(family=family, model=model, source=f"{tier} tier")
 
-    return FamilySelection(family=family, model=family_models[0], source="category fallback")
+    return FamilySelection(
+        family=family, model=family_models[0], source="category fallback"
+    )
 
 
 def selected_families(

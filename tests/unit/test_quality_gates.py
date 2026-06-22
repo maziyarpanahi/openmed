@@ -11,13 +11,14 @@ from openmed.core.quality_gates import (
     detect_overlapping_entities,
     resolve_overlapping_entities,
     validate_entity_spans,
+    validate_entity_spans_strict,
 )
 from openmed.processing.outputs import EntityPrediction
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _ent(text, label="NAME", start=0, end=None, confidence=0.9, metadata=None):
     if end is None:
@@ -94,9 +95,15 @@ class TestValidateEntitySpans:
     def test_text_mismatch_warns(self):
         text = "Patient John Doe visited"
         # Entity claims text is "Jane Doe" but span points to "John Doe"
-        entities = [EntityPrediction(
-            text="Jane Doe", label="NAME", start=8, end=16, confidence=0.9,
-        )]
+        entities = [
+            EntityPrediction(
+                text="Jane Doe",
+                label="NAME",
+                start=8,
+                end=16,
+                confidence=0.9,
+            )
+        ]
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             validate_entity_spans(entities, text)
@@ -107,9 +114,13 @@ class TestValidateEntitySpans:
 
     def test_entities_without_offsets_skipped(self):
         text = "Hello"
-        entities = [EntityPrediction(
-            text="Hello", label="GREETING", confidence=0.9,
-        )]
+        entities = [
+            EntityPrediction(
+                text="Hello",
+                label="GREETING",
+                confidence=0.9,
+            )
+        ]
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             validate_entity_spans(entities, text)
@@ -126,16 +137,25 @@ class TestValidateEntitySpans:
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             validate_entity_spans(entities, text)
-            assert len([x for x in w if issubclass(x.category, SpanValidationWarning)]) == 1
+            assert (
+                len([x for x in w if issubclass(x.category, SpanValidationWarning)])
+                == 1
+            )
         assert entities[0].metadata["span_valid"] is True
         assert entities[1].metadata["span_valid"] is False
 
     def test_preserves_existing_metadata(self):
         text = "John"
-        entities = [EntityPrediction(
-            text="John", label="NAME", start=0, end=4, confidence=0.9,
-            metadata={"source": "model"},
-        )]
+        entities = [
+            EntityPrediction(
+                text="John",
+                label="NAME",
+                start=0,
+                end=4,
+                confidence=0.9,
+                metadata={"source": "model"},
+            )
+        ]
         validate_entity_spans(entities, text)
         assert entities[0].metadata["source"] == "model"
         assert entities[0].metadata["span_valid"] is True
@@ -308,6 +328,24 @@ class TestResolveOverlappingEntities:
         assert len(entities) == 2
         assert len(detect_overlapping_entities(entities)) == 1
 
+    def test_strict_validation_returns_scored_structured_output(self):
+        text = "Patient John Doe visited"
+        entities = [
+            _ent("John Doe", label="PERSON", start=8, end=16),
+            _ent("Jane", label="PERSON", start=8, end=12),
+            _ent("missing", label="ID_NUM", start=30, end=37),
+        ]
+
+        result = validate_entity_spans_strict(entities, text)
+
+        assert result.passed is False
+        assert result.total_spans == 3
+        assert result.invalid_spans == 2
+        assert result.valid_spans == 1
+        assert result.overlaps_resolved == 1
+        assert result.to_dict()["offending_spans"][0]["problems"]
+        assert result.to_dict()["overlap_findings"][0]["first"]["label"] == "PERSON"
+
 
 # ---------------------------------------------------------------------------
 # Integration: _fix_entity_spans output
@@ -319,10 +357,15 @@ class TestIntegrationWithFixEntitySpans:
 
     def test_fix_entity_spans_output_passes_validation(self):
         from openmed.processing.outputs import OutputFormatter
+
         text = "Patient John visited on 2024-01-15"
         entities = [
             EntityPrediction(
-                text="Joh", label="NAME", start=8, end=11, confidence=0.9,
+                text="Joh",
+                label="NAME",
+                start=8,
+                end=11,
+                confidence=0.9,
             ),
         ]
         fixed = OutputFormatter._fix_entity_spans(entities, text)
@@ -336,11 +379,16 @@ class TestIntegrationWithFixEntitySpans:
     def test_combining_mark_span_extension(self):
         """Spans should extend through accented/combining-mark characters."""
         from openmed.processing.outputs import OutputFormatter
+
         text = "Patient José visited"
         # Tokenizer returns truncated span "Jos"
         entities = [
             EntityPrediction(
-                text="Jos", label="NAME", start=8, end=11, confidence=0.9,
+                text="Jos",
+                label="NAME",
+                start=8,
+                end=11,
+                confidence=0.9,
             ),
         ]
         fixed = OutputFormatter._fix_entity_spans(entities, text)
@@ -351,9 +399,15 @@ class TestIntegrationWithFixEntitySpans:
         """Entities where only whitespace differs should not trigger WARNING."""
         text = "Hello  World"
         # Entity text has single space but span covers double space
-        entities = [EntityPrediction(
-            text="Hello World", label="GREETING", start=0, end=12, confidence=0.9,
-        )]
+        entities = [
+            EntityPrediction(
+                text="Hello World",
+                label="GREETING",
+                start=0,
+                end=12,
+                confidence=0.9,
+            )
+        ]
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             validate_entity_spans(entities, text)
