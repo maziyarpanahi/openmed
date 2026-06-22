@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+import re
 from pathlib import Path
 
 import pytest
@@ -12,12 +12,19 @@ from openmed.core.pii import deidentify
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 from openmed.risk import risk_report
 
-
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_DIR = ROOT / "tests" / "fixtures" / "risk"
 NEGATION_TRAPS = FIXTURE_DIR / "negation_traps.jsonl"
 UNIQUENESS = FIXTURE_DIR / "quasi_identifier_uniqueness.jsonl"
-FORBIDDEN_FIXTURE_MARKERS = ("DUA", "UMLS", "SNOMED")
+FORBIDDEN_FIXTURE_MARKERS = (
+    "cpt",
+    "dua",
+    "i2b2",
+    "mimic",
+    "n2c2",
+    "snomed",
+    "umls",
+)
 
 
 def test_fixture_files_exist_and_are_synthetic():
@@ -29,9 +36,12 @@ def test_fixture_files_exist_and_are_synthetic():
         assert meta["version"] == 1
         assert rows
         assert all(row.get("synthetic") is True for row in rows)
-        text = path.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8").casefold()
         for marker in FORBIDDEN_FIXTURE_MARKERS:
-            assert marker not in text
+            assert (
+                re.search(rf"(?<![a-z0-9]){re.escape(marker)}(?![a-z0-9])", text)
+                is None
+            )
 
 
 def test_negation_trap_suite_has_zero_critical_leakage(monkeypatch):
@@ -101,7 +111,7 @@ def _run_negation_case(row: dict, monkeypatch) -> dict:
             text=text,
             entities=list(entities),
             model_name="risk-regression-fixture",
-            timestamp=datetime.now().isoformat(),
+            timestamp="2026-06-22T00:00:00",
         )
 
     monkeypatch.setattr("openmed.core.pii.extract_pii", fake_extract_pii)
