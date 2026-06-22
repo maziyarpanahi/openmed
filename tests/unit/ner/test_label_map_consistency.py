@@ -66,6 +66,18 @@ class TestDefaultsJsonInvariants:
     def test_generic_domain_has_labels(self, label_maps):
         assert len(label_maps["generic"]) >= 1
 
+    def test_procedures_domain_exists(self):
+        assert "procedures" in available_domains()
+        assert get_default_labels("procedures")
+
+    def test_procedure_text_routes_to_procedures_category(self):
+        suggestions = get_model_suggestions(
+            "Patient underwent laparoscopic cholecystectomy with an implant."
+        )
+
+        assert suggestions
+        assert suggestions[0][1].category == "Procedures"
+
     def test_labels_follow_consistent_style(self, label_maps):
         """Every domain label is a single letters-only token (no spaces/digits)."""
         for domain, labels in label_maps.items():

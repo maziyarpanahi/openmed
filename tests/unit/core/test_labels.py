@@ -8,6 +8,7 @@ from openmed.core.labels import (
     CREDIT_CARD,
     DATE,
     DATE_OF_BIRTH,
+    DEVICE,
     EMAIL,
     FIRST_NAME,
     GENDER,
@@ -24,6 +25,7 @@ from openmed.core.labels import (
     OTHER,
     PERSON,
     PHONE,
+    PROCEDURE,
     SSN,
     STREET_ADDRESS,
     URL,
@@ -70,6 +72,11 @@ class TestEnglishLabels:
             ("zip", ZIPCODE),
             ("postal_code", ZIPCODE),
             ("credit_debit_card", CREDIT_CARD),
+            ("procedure", PROCEDURE),
+            ("surgery", PROCEDURE),
+            ("diagnostic procedure", PROCEDURE),
+            ("device", DEVICE),
+            ("implant", DEVICE),
         ],
     )
     def test_english_lowercase(self, label, expected):

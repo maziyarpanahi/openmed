@@ -83,6 +83,11 @@ JOB_TITLE: Final = "JOB_TITLE"
 JOB_DEPARTMENT: Final = "JOB_DEPARTMENT"
 OCCUPATION: Final = "OCCUPATION"
 
+#: Clinical concepts
+PROCEDURE: Final = "PROCEDURE"
+DEVICE: Final = "DEVICE"
+APPROACH: Final = "APPROACH"
+
 #: Tech
 IP_ADDRESS: Final = "IP_ADDRESS"
 MAC_ADDRESS: Final = "MAC_ADDRESS"
@@ -155,6 +160,9 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         JOB_TITLE,
         JOB_DEPARTMENT,
         OCCUPATION,
+        PROCEDURE,
+        DEVICE,
+        APPROACH,
         IP_ADDRESS,
         MAC_ADDRESS,
         USER_AGENT,
@@ -308,6 +316,10 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     JOB_TITLE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     JOB_DEPARTMENT: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     OCCUPATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
+    # Clinical concepts
+    PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    DEVICE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    APPROACH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
     # Tech
     IP_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     MAC_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
@@ -371,6 +383,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     JOB_TITLE: HIPAA_UNIQUE_IDENTIFIER,
     JOB_DEPARTMENT: HIPAA_UNIQUE_IDENTIFIER,
     OCCUPATION: HIPAA_UNIQUE_IDENTIFIER,
+    # Clinical concepts
+    PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVICE: HIPAA_DEVICE_IDENTIFIER,
+    APPROACH: HIPAA_UNIQUE_IDENTIFIER,
     # Tech
     IP_ADDRESS: HIPAA_IP_ADDRESS,
     MAC_ADDRESS: HIPAA_DEVICE_IDENTIFIER,
@@ -537,6 +553,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "department": JOB_DEPARTMENT,
     "occupation": OCCUPATION,
     "profession": OCCUPATION,
+    # Clinical concepts
+    "procedure": PROCEDURE,
+    "surgery": PROCEDURE,
+    "surgicalprocedure": PROCEDURE,
+    "diagnosticprocedure": PROCEDURE,
+    "operation": PROCEDURE,
+    "intervention": PROCEDURE,
+    "device": DEVICE,
+    "implant": DEVICE,
+    "catheter": DEVICE,
+    "approach": APPROACH,
     # Tech
     "ipaddress": IP_ADDRESS,
     "ip": IP_ADDRESS,
@@ -734,6 +761,9 @@ __all__ = [
     "JOB_TITLE",
     "JOB_DEPARTMENT",
     "OCCUPATION",
+    "PROCEDURE",
+    "DEVICE",
+    "APPROACH",
     "IP_ADDRESS",
     "MAC_ADDRESS",
     "USER_AGENT",
