@@ -143,15 +143,25 @@ def normalize_model_config(
             normalized.get("encoder_hidden_size", normalized.get("hidden_size", 768)),
         )
         normalized.setdefault("dropout", normalized.get("hidden_dropout_prob", 0.1))
-        normalized.setdefault("embed_ent_token", normalized.get("embed_ent_token", True))
-        normalized.setdefault("embed_class_token", normalized.get("embed_class_token", True))
-        normalized.setdefault("num_rnn_layers", normalized.get("num_rnn_layers", 0) or 0)
+        normalized.setdefault(
+            "embed_ent_token", normalized.get("embed_ent_token", True)
+        )
+        normalized.setdefault(
+            "embed_class_token", normalized.get("embed_class_token", True)
+        )
+        normalized.setdefault(
+            "num_rnn_layers", normalized.get("num_rnn_layers", 0) or 0
+        )
         normalized.setdefault("class_token_index", normalized.get("class_token_index"))
         normalized.setdefault("rel_token_index", normalized.get("rel_token_index"))
         normalized.setdefault("text_token_index", normalized.get("text_token_index"))
-        normalized.setdefault("example_token_index", normalized.get("example_token_index"))
+        normalized.setdefault(
+            "example_token_index", normalized.get("example_token_index")
+        )
         normalized.setdefault("max_width", normalized.get("max_width", 12))
-        normalized.setdefault("pooling_strategy", normalized.get("pooling_strategy", "first"))
+        normalized.setdefault(
+            "pooling_strategy", normalized.get("pooling_strategy", "first")
+        )
         normalized.setdefault(
             "class_token_pooling",
             normalized.get("class_token_pooling", "first"),
@@ -187,10 +197,14 @@ def normalize_model_config(
         normalized.setdefault("_mlx_position_offset", 0)
     elif source_model_type in {"roberta", "xlm-roberta"}:
         normalized.setdefault("type_vocab_size", 1)
-        normalized.setdefault("_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1)
+        normalized.setdefault(
+            "_mlx_position_offset", int(normalized.get("pad_token_id", 1)) + 1
+        )
     elif family == "openai-privacy-filter":
         normalized.setdefault("num_experts", normalized.get("num_local_experts", 128))
-        normalized.setdefault("experts_per_token", normalized.get("num_experts_per_tok", 4))
+        normalized.setdefault(
+            "experts_per_token", normalized.get("num_experts_per_tok", 4)
+        )
         normalized.setdefault("swiglu_limit", normalized.get("swiglu_limit", 7.0))
         normalized.setdefault("rms_norm_eps", normalized.get("rms_norm_eps", 1e-5))
         rope_parameters = normalized.get("rope_parameters") or {}
@@ -239,13 +253,18 @@ def build_model(
 
         return BertForTokenClassification(config)
 
-    if family == "deberta-v2" and resolve_artifact_task(config, manifest=manifest) == "token-classification":
+    if (
+        family == "deberta-v2"
+        and resolve_artifact_task(config, manifest=manifest) == "token-classification"
+    ):
         from openmed.mlx.models.deberta_v2_tc import DebertaV2ForTokenClassification
 
         return DebertaV2ForTokenClassification(config)
 
     if family == "openai-privacy-filter":
-        from openmed.mlx.models.privacy_filter import OpenAIPrivacyFilterForTokenClassification
+        from openmed.mlx.models.privacy_filter import (
+            OpenAIPrivacyFilterForTokenClassification,
+        )
 
         return OpenAIPrivacyFilterForTokenClassification(config)
 
@@ -323,8 +342,7 @@ def load_model(model_path: str | Path):
         import mlx.core as mx
     except ImportError:
         raise ImportError(
-            "MLX is required for this module. "
-            "Install with: pip install openmed[mlx]"
+            "MLX is required for this module. Install with: pip install openmed[mlx]"
         )
 
     model_path = Path(model_path)
@@ -332,7 +350,9 @@ def load_model(model_path: str | Path):
     manifest, config = load_artifact_config(model_path)
     config = normalize_model_config(config, manifest=manifest)
 
-    candidate_paths = resolve_weight_candidates(model_path, config=config, manifest=manifest)
+    candidate_paths = resolve_weight_candidates(
+        model_path, config=config, manifest=manifest
+    )
     weights_path = next((path for path in candidate_paths if path.exists()), None)
     if weights_path is None:
         raise FileNotFoundError(

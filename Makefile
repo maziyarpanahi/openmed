@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install test docs-serve docs-build docs-stage docs-deploy
+.PHONY: help build publish release clean install lint format format-check lint-swift format-swift quality test docs-serve docs-build docs-stage docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -23,6 +23,33 @@ clean: ## Clean build artifacts
 install: ## Install the package locally
 	@echo "📦 Installing package locally..."
 	pip install -e .
+
+lint: ## Run Ruff lint checks
+	@echo "🔎 Running Ruff lint checks..."
+	ruff check .
+
+format: ## Apply Ruff import fixes and formatting
+	@echo "🎨 Formatting Python code with Ruff..."
+	ruff check --fix .
+	ruff format .
+
+format-check: ## Check Ruff formatting without modifying files
+	@echo "🔎 Checking Ruff formatting..."
+	ruff format --check .
+
+lint-swift: ## Run Swift format lint checks for OpenMedKit
+	@echo "🔎 Running Swift format lint checks..."
+	scripts/lint_swift.sh
+
+format-swift: ## Apply Swift formatting for OpenMedKit
+	@echo "🎨 Formatting Swift code with swift-format..."
+	scripts/format_swift.sh
+
+quality: lint format-check test ## Run the local quality gate
+
+test: ## Run the test suite
+	@echo "🧪 Running tests..."
+	pytest
 
 docs-serve: ## Run the MkDocs dev server with live reload
 	@echo "📚 Serving docs at http://127.0.0.1:8008 ..."

@@ -1,15 +1,16 @@
 """Tests for PII entity merger with context-aware scoring."""
 
 import pytest
+
 from openmed.core.pii_entity_merger import (
     PIIPattern,
-    validate_ssn,
-    validate_luhn,
-    validate_npi,
-    validate_phone_us,
     find_context_words,
     find_semantic_units,
     merge_entities_with_semantic_units,
+    validate_luhn,
+    validate_npi,
+    validate_phone_us,
+    validate_ssn,
 )
 
 
@@ -40,8 +41,8 @@ class TestValidators:
         """Test invalid US phone numbers."""
         assert validate_phone_us("(055) 123-4567") == False  # Area code starts with 0
         assert validate_phone_us("(155) 123-4567") == False  # Area code starts with 1
-        assert validate_phone_us("555-023-4567") == False    # Exchange starts with 0
-        assert validate_phone_us("555-123-456") == False     # Too short
+        assert validate_phone_us("555-023-4567") == False  # Exchange starts with 0
+        assert validate_phone_us("555-123-456") == False  # Too short
 
     def test_validate_luhn_valid(self):
         """Test valid credit card numbers with Luhn checksum."""
@@ -62,7 +63,7 @@ class TestValidators:
     def test_validate_npi_invalid(self):
         """Test invalid NPI numbers."""
         assert validate_npi("1234567890") == False  # Wrong checksum
-        assert validate_npi("123456789") == False   # Too short
+        assert validate_npi("123456789") == False  # Too short
 
 
 class TestContextDetection:
@@ -72,12 +73,12 @@ class TestContextDetection:
         """Test finding context words near entity."""
         text = "Patient SSN: 123-45-6789"
         # SSN is at positions 13-24
-        assert find_context_words(text, 13, 24, ['ssn', 'social security']) == True
+        assert find_context_words(text, 13, 24, ["ssn", "social security"]) == True
 
     def test_find_context_words_not_found(self):
         """Test when context words are not present."""
         text = "Patient ID: 123-45-6789"
-        assert find_context_words(text, 12, 23, ['ssn', 'social security']) == False
+        assert find_context_words(text, 12, 23, ["ssn", "social security"]) == False
 
     def test_find_context_words_outside_window(self):
         """Test context words outside the search window."""
@@ -85,15 +86,21 @@ class TestContextDetection:
         ssn_start = 303
         ssn_end = 314
         # SSN keyword is 150 chars away, outside default 100-char window
-        assert find_context_words(text, ssn_start, ssn_end, ['ssn'], context_window=100) == False
+        assert (
+            find_context_words(text, ssn_start, ssn_end, ["ssn"], context_window=100)
+            == False
+        )
         # But found with larger window
-        assert find_context_words(text, ssn_start, ssn_end, ['ssn'], context_window=200) == True
+        assert (
+            find_context_words(text, ssn_start, ssn_end, ["ssn"], context_window=200)
+            == True
+        )
 
     def test_find_context_words_word_boundary(self):
         """Test that context matching respects word boundaries."""
         text = "Assignment number: 123-45-6789"
         # Should NOT match "ssn" inside "assignment"
-        assert find_context_words(text, 19, 30, ['ssn']) == False
+        assert find_context_words(text, 19, 30, ["ssn"]) == False
 
 
 class TestSemanticUnitsWithScoring:
@@ -105,13 +112,13 @@ class TestSemanticUnitsWithScoring:
 
         patterns = [
             PIIPattern(
-                r'\b\d{3}-\d{2}-\d{4}\b',
-                'ssn',
+                r"\b\d{3}-\d{2}-\d{4}\b",
+                "ssn",
                 priority=10,
                 base_score=0.3,
-                context_words=['ssn', 'social security'],
+                context_words=["ssn", "social security"],
                 context_boost=0.55,
-                validator=validate_ssn
+                validator=validate_ssn,
             )
         ]
 
@@ -119,8 +126,8 @@ class TestSemanticUnitsWithScoring:
         assert len(units) == 1
         start, end, entity_type, score, pattern = units[0][:5]
 
-        assert entity_type == 'ssn'
-        assert text[start:end] == '123-45-6789'
+        assert entity_type == "ssn"
+        assert text[start:end] == "123-45-6789"
         # Should have boosted score: 0.3 + 0.55 = 0.85
         assert score >= 0.8  # Allow small tolerance
 
@@ -130,13 +137,13 @@ class TestSemanticUnitsWithScoring:
 
         patterns = [
             PIIPattern(
-                r'\b\d{3}-\d{2}-\d{4}\b',
-                'ssn',
+                r"\b\d{3}-\d{2}-\d{4}\b",
+                "ssn",
                 priority=10,
                 base_score=0.3,
-                context_words=['ssn', 'social security'],
+                context_words=["ssn", "social security"],
                 context_boost=0.55,
-                validator=validate_ssn
+                validator=validate_ssn,
             )
         ]
 
@@ -144,7 +151,7 @@ class TestSemanticUnitsWithScoring:
         assert len(units) == 1
         start, end, entity_type, score, pattern = units[0][:5]
 
-        assert entity_type == 'ssn'
+        assert entity_type == "ssn"
         # Should have only base score: 0.3
         assert 0.25 <= score <= 0.35
 
@@ -154,13 +161,13 @@ class TestSemanticUnitsWithScoring:
 
         patterns = [
             PIIPattern(
-                r'\b\d{3}-\d{2}-\d{4}\b',
-                'ssn',
+                r"\b\d{3}-\d{2}-\d{4}\b",
+                "ssn",
                 priority=10,
                 base_score=0.3,
-                context_words=['ssn', 'social security'],
+                context_words=["ssn", "social security"],
                 context_boost=0.55,
-                validator=validate_ssn
+                validator=validate_ssn,
             )
         ]
 
@@ -179,29 +186,29 @@ class TestSemanticUnitsWithScoring:
 
         patterns = [
             PIIPattern(
-                r'\b\d{10}\b',
-                'phone_number',
+                r"\b\d{10}\b",
+                "phone_number",
                 priority=5,
                 base_score=0.2,
-                context_words=['phone', 'tel', 'telephone'],
+                context_words=["phone", "tel", "telephone"],
                 context_boost=0.5,
-                validator=validate_phone_us
+                validator=validate_phone_us,
             ),
             PIIPattern(
-                r'\b\d{10}\b',
-                'npi',
+                r"\b\d{10}\b",
+                "npi",
                 priority=6,  # Higher priority
                 base_score=0.15,
-                context_words=['npi', 'national provider', 'provider'],
+                context_words=["npi", "national provider", "provider"],
                 context_boost=0.65,
-                validator=validate_npi
+                validator=validate_npi,
             ),
         ]
 
         units = find_semantic_units(text_npi, patterns)
         # Should detect as NPI (higher priority, has context)
         assert len(units) == 1
-        assert units[0][2] == 'npi'  # entity_type
+        assert units[0][2] == "npi"  # entity_type
         assert units[0][3] >= 0.7  # Good score with context
 
 
@@ -214,34 +221,40 @@ class TestMergeWithContextAwareScoring:
 
         # Model predictions (fragmented)
         entities = [
-            {'entity_type': 'ssn', 'score': 0.9, 'start': 13, 'end': 16, 'word': '123'},
-            {'entity_type': 'ssn', 'score': 0.85, 'start': 17, 'end': 19, 'word': '45'},
-            {'entity_type': 'ssn', 'score': 0.88, 'start': 20, 'end': 24, 'word': '6789'},
+            {"entity_type": "ssn", "score": 0.9, "start": 13, "end": 16, "word": "123"},
+            {"entity_type": "ssn", "score": 0.85, "start": 17, "end": 19, "word": "45"},
+            {
+                "entity_type": "ssn",
+                "score": 0.88,
+                "start": 20,
+                "end": 24,
+                "word": "6789",
+            },
         ]
 
         patterns = [
             PIIPattern(
-                r'\b\d{3}-\d{2}-\d{4}\b',
-                'ssn',
+                r"\b\d{3}-\d{2}-\d{4}\b",
+                "ssn",
                 priority=10,
                 base_score=0.3,
-                context_words=['ssn', 'social security'],
+                context_words=["ssn", "social security"],
                 context_boost=0.55,
-                validator=validate_ssn
+                validator=validate_ssn,
             )
         ]
 
         merged = merge_entities_with_semantic_units(entities, text, patterns=patterns)
 
         assert len(merged) == 1
-        assert merged[0]['entity_type'] == 'ssn'
-        assert merged[0]['word'] == '123-45-6789'
-        assert merged[0]['start'] == 13
-        assert merged[0]['end'] == 24
+        assert merged[0]["entity_type"] == "ssn"
+        assert merged[0]["word"] == "123-45-6789"
+        assert merged[0]["start"] == 13
+        assert merged[0]["end"] == 24
 
         # Score should be combination of model (~0.877) and pattern (0.85 with context)
         # final = 0.6 * 0.877 + 0.4 * 0.85 = 0.526 + 0.34 = 0.866
-        assert 0.8 <= merged[0]['score'] <= 0.95
+        assert 0.8 <= merged[0]["score"] <= 0.95
 
     def test_merge_with_default_patterns(self):
         """Test merging with default PII_PATTERNS from module."""
@@ -249,23 +262,37 @@ class TestMergeWithContextAwareScoring:
 
         # Model predictions
         entities = [
-            {'entity_type': 'date', 'score': 0.8, 'start': 5, 'end': 7, 'word': '01'},
-            {'entity_type': 'date', 'score': 0.75, 'start': 7, 'end': 15, 'word': '/15/1970'},
-            {'entity_type': 'email', 'score': 0.95, 'start': 24, 'end': 40, 'word': 'john@example.com'},
+            {"entity_type": "date", "score": 0.8, "start": 5, "end": 7, "word": "01"},
+            {
+                "entity_type": "date",
+                "score": 0.75,
+                "start": 7,
+                "end": 15,
+                "word": "/15/1970",
+            },
+            {
+                "entity_type": "email",
+                "score": 0.95,
+                "start": 24,
+                "end": 40,
+                "word": "john@example.com",
+            },
         ]
 
         # Use default patterns (PII_PATTERNS)
-        merged = merge_entities_with_semantic_units(entities, text, use_semantic_patterns=True)
+        merged = merge_entities_with_semantic_units(
+            entities, text, use_semantic_patterns=True
+        )
 
         # Should have merged the date fragments
-        date_entities = [e for e in merged if e['entity_type'] == 'date']
-        email_entities = [e for e in merged if e['entity_type'] == 'email']
+        date_entities = [e for e in merged if e["entity_type"] == "date"]
+        email_entities = [e for e in merged if e["entity_type"] == "email"]
 
         assert len(date_entities) == 1
-        assert date_entities[0]['word'] == '01/15/1970'
+        assert date_entities[0]["word"] == "01/15/1970"
 
         assert len(email_entities) == 1
-        assert email_entities[0]['word'] == 'john@example.com'
+        assert email_entities[0]["word"] == "john@example.com"
 
 
 class TestMultilingualPatterns:
@@ -275,34 +302,34 @@ class TestMultilingualPatterns:
         """Test normalize_label handles national ID types."""
         from openmed.core.pii_entity_merger import normalize_label
 
-        assert normalize_label('national_id') == 'national_id'
-        assert normalize_label('nir') == 'national_id'
-        assert normalize_label('insee') == 'national_id'
-        assert normalize_label('steuer_id') == 'national_id'
-        assert normalize_label('steuernummer') == 'national_id'
-        assert normalize_label('codice_fiscale') == 'national_id'
-        assert normalize_label('cpf') == 'national_id'
-        assert normalize_label('cnpj') == 'national_id'
+        assert normalize_label("national_id") == "national_id"
+        assert normalize_label("nir") == "national_id"
+        assert normalize_label("insee") == "national_id"
+        assert normalize_label("steuer_id") == "national_id"
+        assert normalize_label("steuernummer") == "national_id"
+        assert normalize_label("codice_fiscale") == "national_id"
+        assert normalize_label("cpf") == "national_id"
+        assert normalize_label("cnpj") == "national_id"
 
     def test_normalize_label_postcode_variants(self):
         """Test normalize_label handles postcode variants."""
         from openmed.core.pii_entity_merger import normalize_label
 
-        assert normalize_label('postcode') == 'postcode'
-        assert normalize_label('zipcode') == 'postcode'
-        assert normalize_label('zip') == 'postcode'
-        assert normalize_label('postal_code') == 'postcode'
+        assert normalize_label("postcode") == "postcode"
+        assert normalize_label("zipcode") == "postcode"
+        assert normalize_label("zip") == "postcode"
+        assert normalize_label("postal_code") == "postcode"
 
     def test_is_more_specific_national_id(self):
         """Test is_more_specific with national_id hierarchy."""
         from openmed.core.pii_entity_merger import is_more_specific
 
-        assert is_more_specific('nir', 'national_id') is True
-        assert is_more_specific('steuer_id', 'national_id') is True
-        assert is_more_specific('codice_fiscale', 'national_id') is True
-        assert is_more_specific('cpf', 'national_id') is True
-        assert is_more_specific('cnpj', 'national_id') is True
-        assert is_more_specific('national_id', 'nir') is False
+        assert is_more_specific("nir", "national_id") is True
+        assert is_more_specific("steuer_id", "national_id") is True
+        assert is_more_specific("codice_fiscale", "national_id") is True
+        assert is_more_specific("cpf", "national_id") is True
+        assert is_more_specific("cnpj", "national_id") is True
+        assert is_more_specific("national_id", "nir") is False
 
     def test_french_date_pattern_with_context(self):
         """Test French date pattern detection with context scoring."""
@@ -310,14 +337,15 @@ class TestMultilingualPatterns:
 
         text = "Patient né le 15/01/1970"
         fr_date_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["fr"]
+            p
+            for p in LANGUAGE_PII_PATTERNS["fr"]
             if p.entity_type == "date" and "\\d{1,2}/\\d{1,2}" in p.pattern
         ]
 
         units = find_semantic_units(text, fr_date_patterns)
         assert len(units) >= 1
         # Should detect "15/01/1970"
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert "15/01/1970" in matched_text
 
     def test_german_date_pattern_dot_format(self):
@@ -326,13 +354,12 @@ class TestMultilingualPatterns:
 
         text = "Geburtsdatum: 15.01.1970"
         de_date_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["de"]
-            if p.entity_type == "date"
+            p for p in LANGUAGE_PII_PATTERNS["de"] if p.entity_type == "date"
         ]
 
         units = find_semantic_units(text, de_date_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert "15.01.1970" in matched_text
 
     def test_italian_codice_fiscale_pattern(self):
@@ -341,13 +368,12 @@ class TestMultilingualPatterns:
 
         text = "Codice fiscale: RSSMRA85M01H501Z"
         it_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["it"]
-            if p.entity_type == "national_id"
+            p for p in LANGUAGE_PII_PATTERNS["it"] if p.entity_type == "national_id"
         ]
 
         units = find_semantic_units(text, it_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert matched_text == "RSSMRA85M01H501Z"
 
     def test_merge_with_french_patterns(self):
@@ -356,21 +382,36 @@ class TestMultilingualPatterns:
 
         text = "Né le 15/01/1970, email: patient@exemple.fr"
         entities = [
-            {'entity_type': 'date', 'score': 0.8, 'start': 6, 'end': 8, 'word': '15'},
-            {'entity_type': 'date', 'score': 0.75, 'start': 8, 'end': 16, 'word': '/01/1970'},
-            {'entity_type': 'email', 'score': 0.95, 'start': 25, 'end': 43, 'word': 'patient@exemple.fr'},
+            {"entity_type": "date", "score": 0.8, "start": 6, "end": 8, "word": "15"},
+            {
+                "entity_type": "date",
+                "score": 0.75,
+                "start": 8,
+                "end": 16,
+                "word": "/01/1970",
+            },
+            {
+                "entity_type": "email",
+                "score": 0.95,
+                "start": 25,
+                "end": 43,
+                "word": "patient@exemple.fr",
+            },
         ]
 
         fr_patterns = get_patterns_for_language("fr")
         merged = merge_entities_with_semantic_units(
-            entities, text, patterns=fr_patterns, use_semantic_patterns=True,
+            entities,
+            text,
+            patterns=fr_patterns,
+            use_semantic_patterns=True,
         )
 
-        date_entities = [e for e in merged if 'date' in e['entity_type'].lower()]
-        email_entities = [e for e in merged if e['entity_type'] == 'email']
+        date_entities = [e for e in merged if "date" in e["entity_type"].lower()]
+        email_entities = [e for e in merged if e["entity_type"] == "email"]
 
         assert len(date_entities) == 1
-        assert date_entities[0]['word'] == '15/01/1970'
+        assert date_entities[0]["word"] == "15/01/1970"
         assert len(email_entities) == 1
 
     def test_pattern_label_overrides_conflicting_model_label(self):
@@ -379,7 +420,13 @@ class TestMultilingualPatterns:
 
         text = "BSN: 123456782"
         entities = [
-            {'entity_type': 'ssn', 'score': 0.88, 'start': 5, 'end': 14, 'word': '123456782'},
+            {
+                "entity_type": "ssn",
+                "score": 0.88,
+                "start": 5,
+                "end": 14,
+                "word": "123456782",
+            },
         ]
 
         nl_patterns = get_patterns_for_language("nl")
@@ -392,7 +439,7 @@ class TestMultilingualPatterns:
         )
 
         assert len(merged) == 1
-        assert merged[0]['entity_type'] == 'national_id'
+        assert merged[0]["entity_type"] == "national_id"
 
     def test_merge_can_disable_semantic_only_matches(self):
         """Semantic regex should not invent entities when disabled."""
@@ -410,7 +457,13 @@ class TestMultilingualPatterns:
         """Regex may expand spans without upgrading to a new label family."""
         text = "DOB: 01/15/1970"
         entities = [
-            {'entity_type': 'private_date', 'score': 0.92, 'start': 8, 'end': 15, 'word': '/15/1970'},
+            {
+                "entity_type": "private_date",
+                "score": 0.92,
+                "start": 8,
+                "end": 15,
+                "word": "/15/1970",
+            },
         ]
 
         merged = merge_entities_with_semantic_units(
@@ -421,10 +474,10 @@ class TestMultilingualPatterns:
         )
 
         assert len(merged) == 1
-        assert merged[0]['entity_type'] == 'private_date'
-        assert merged[0]['word'] == '01/15/1970'
-        assert merged[0]['start'] == 5
-        assert merged[0]['end'] == 15
+        assert merged[0]["entity_type"] == "private_date"
+        assert merged[0]["word"] == "01/15/1970"
+        assert merged[0]["start"] == 5
+        assert merged[0]["end"] == 15
 
     def test_dutch_bsn_pattern(self):
         """Test Dutch BSN pattern detection."""
@@ -432,13 +485,12 @@ class TestMultilingualPatterns:
 
         text = "BSN: 123456782"
         nl_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["nl"]
-            if p.entity_type == "national_id"
+            p for p in LANGUAGE_PII_PATTERNS["nl"] if p.entity_type == "national_id"
         ]
 
         units = find_semantic_units(text, nl_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert matched_text == "123456782"
 
     def test_hindi_phone_pattern(self):
@@ -447,13 +499,12 @@ class TestMultilingualPatterns:
 
         text = "फ़ोन: +91 9876543210"
         hi_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["hi"]
-            if p.entity_type == "phone_number"
+            p for p in LANGUAGE_PII_PATTERNS["hi"] if p.entity_type == "phone_number"
         ]
 
         units = find_semantic_units(text, hi_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert matched_text.endswith("9876543210")
 
     def test_telugu_pin_code_pattern(self):
@@ -462,13 +513,12 @@ class TestMultilingualPatterns:
 
         text = "పిన్ కోడ్: 500001"
         te_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["te"]
-            if p.entity_type == "postcode"
+            p for p in LANGUAGE_PII_PATTERNS["te"] if p.entity_type == "postcode"
         ]
 
         units = find_semantic_units(text, te_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert matched_text == "500001"
 
     def test_portuguese_cpf_pattern(self):
@@ -477,13 +527,12 @@ class TestMultilingualPatterns:
 
         text = "CPF: 123.456.789-09"
         pt_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["pt"]
-            if p.entity_type == "national_id"
+            p for p in LANGUAGE_PII_PATTERNS["pt"] if p.entity_type == "national_id"
         ]
 
         units = find_semantic_units(text, pt_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert matched_text == "123.456.789-09"
 
     def test_portuguese_phone_pattern(self):
@@ -492,15 +541,14 @@ class TestMultilingualPatterns:
 
         text = "Telefone: +351 912 345 678"
         pt_patterns = [
-            p for p in LANGUAGE_PII_PATTERNS["pt"]
-            if p.entity_type == "phone_number"
+            p for p in LANGUAGE_PII_PATTERNS["pt"] if p.entity_type == "phone_number"
         ]
 
         units = find_semantic_units(text, pt_patterns)
         assert len(units) >= 1
-        matched_text = text[units[0][0]:units[0][1]]
+        matched_text = text[units[0][0] : units[0][1]]
         assert matched_text == "+351 912 345 678"
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

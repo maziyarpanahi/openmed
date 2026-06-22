@@ -75,7 +75,10 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
    - [Zero-shot Toolkit](./zero-shot-ner.md) when you need GLiNER workflows.
    - [Performance Profiling](./profiling.md) for timing and optimization.
    - [Examples](./examples.md) and [Testing & QA](./testing.md) for day-to-day operations.
-4. [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
+4. Project operations:
+   - [Contributing & Releases](./contributing.md) – how we cut releases, publish docs, and keep CI green.
+   - [Release Streams & Channels](./release/semver-and-channels.md) – model artifact and library release policy.
+   - [Generative Model Policy](./generative-model-policy.md) – approved and prohibited model-assisted workflows.
 
 Need something that is not here yet? Drop an issue on GitHub and mention the missing recipe. Every addition is just a
 Markdown file away.

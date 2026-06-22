@@ -7,14 +7,14 @@ from datetime import datetime
 from typing import Any
 from unittest.mock import patch
 
-import openmed
 import pytest
 from fastapi.testclient import TestClient
 
+import openmed
 from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.processing.outputs import EntityPrediction, PredictionResult
-from openmed.service.app import create_app
 from openmed.service import runtime as service_runtime
+from openmed.service.app import create_app
 
 
 class FakeLoader:
@@ -94,7 +94,9 @@ def _sample_prediction_result() -> PredictionResult:
     )
 
 
-def _sample_deid_result(mapping=None, *, method: str = "mask") -> DeidentificationResult:
+def _sample_deid_result(
+    mapping=None, *, method: str = "mask"
+) -> DeidentificationResult:
     pii_entity = PIIEntity(
         text="Maria Garcia",
         label="NAME",
@@ -154,7 +156,9 @@ def test_health_returns_ok_and_version(client):
     assert payload["profile"] == "test"
 
 
-def test_analyze_success_returns_prediction_result_shape(client, monkeypatch, fake_loader_cls):
+def test_analyze_success_returns_prediction_result_shape(
+    client, monkeypatch, fake_loader_cls
+):
     result = _sample_prediction_result()
 
     def fake_analyze(*args, **kwargs):
@@ -166,7 +170,10 @@ def test_analyze_success_returns_prediction_result_shape(client, monkeypatch, fa
 
     response = client.post(
         "/analyze",
-        json={"text": "Paciente: Maria Garcia", "model_name": "disease_detection_superclinical"},
+        json={
+            "text": "Paciente: Maria Garcia",
+            "model_name": "disease_detection_superclinical",
+        },
     )
 
     assert response.status_code == 200
@@ -218,14 +225,18 @@ def test_invalid_max_text_length_env_falls_back_to_default(monkeypatch):
 
 
 def test_analyze_invalid_confidence_threshold_returns_validation_error(client):
-    response = client.post("/analyze", json={"text": "sample", "confidence_threshold": 1.5})
+    response = client.post(
+        "/analyze", json={"text": "sample", "confidence_threshold": 1.5}
+    )
 
     payload = _assert_error_payload(response, 422, "validation_error")
     assert payload["error"]["details"][0]["field"] == "body.confidence_threshold"
 
 
 def test_analyze_invalid_model_name_returns_validation_error(client):
-    response = client.post("/analyze", json={"text": "sample", "model_name": "bad model"})
+    response = client.post(
+        "/analyze", json={"text": "sample", "model_name": "bad model"}
+    )
 
     payload = _assert_error_payload(response, 422, "validation_error")
     assert payload["error"]["details"][0]["field"] == "body.model_name"
@@ -405,7 +416,9 @@ def test_pii_deidentify_shift_dates_alias_promotes_method(client, monkeypatch):
     assert response.json()["method"] == "shift_dates"
 
 
-def test_pii_deidentify_invalid_shift_dates_combination_returns_validation_error(client):
+def test_pii_deidentify_invalid_shift_dates_combination_returns_validation_error(
+    client,
+):
     response = client.post(
         "/pii/deidentify",
         json={
@@ -475,9 +488,11 @@ def test_service_timeouts_return_gateway_timeout(
 
     if patch_target == "deidentify":
         slow_call = lambda *args, **kwargs: _sample_deid_result()
+
         def timed_deidentify(*args, **kwargs):
             time.sleep(0.05)
             return _sample_deid_result()
+
         monkeypatch.setattr(openmed, patch_target, timed_deidentify)
     else:
         monkeypatch.setattr(openmed, patch_target, slow_call)
@@ -551,7 +566,9 @@ def test_preload_model_load_failure_fails_startup(monkeypatch):
     FakeLoader.reset()
     monkeypatch.setattr(service_runtime, "ModelLoader", FailingLoader)
     monkeypatch.setenv("OPENMED_PROFILE", "test")
-    monkeypatch.setenv("OPENMED_SERVICE_PRELOAD_MODELS", "disease_detection_superclinical")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_PRELOAD_MODELS", "disease_detection_superclinical"
+    )
     app = create_app()
 
     with pytest.raises(ValueError, match="Could not load model"):
@@ -560,7 +577,9 @@ def test_preload_model_load_failure_fails_startup(monkeypatch):
 
 
 def test_pii_extract_rejects_attacker_controlled_privacy_filter_model_name(
-    client, monkeypatch, fake_loader_cls,
+    client,
+    monkeypatch,
+    fake_loader_cls,
 ):
     """CVE-2026-47117 regression: a request with an attacker-controlled
     repo name whose path contains "privacy-filter" must NOT route through
@@ -568,13 +587,18 @@ def test_pii_extract_rejects_attacker_controlled_privacy_filter_model_name(
     trust_remote_code=True). It should fall through to the standard PII
     loader, which never enables custom-code execution.
     """
-    monkeypatch.setattr(openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result())
+    monkeypatch.setattr(
+        openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result()
+    )
 
-    with patch(
-        "openmed.torch.privacy_filter.PrivacyFilterTorchPipeline",
-    ) as MockPipeline, patch(
-        "openmed.core.backends.create_privacy_filter_pipeline",
-    ) as mock_factory:
+    with (
+        patch(
+            "openmed.torch.privacy_filter.PrivacyFilterTorchPipeline",
+        ) as MockPipeline,
+        patch(
+            "openmed.core.backends.create_privacy_filter_pipeline",
+        ) as mock_factory,
+    ):
         response = client.post(
             "/pii/extract",
             json={
@@ -590,17 +614,24 @@ def test_pii_extract_rejects_attacker_controlled_privacy_filter_model_name(
 
 
 def test_pii_deidentify_rejects_attacker_controlled_privacy_filter_model_name(
-    client, monkeypatch, fake_loader_cls,
+    client,
+    monkeypatch,
+    fake_loader_cls,
 ):
     """CVE-2026-47117 regression: same as the /pii/extract case but for the
     /pii/deidentify endpoint, which reaches the same vulnerable code path."""
-    monkeypatch.setattr(openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result())
+    monkeypatch.setattr(
+        openmed, "analyze_text", lambda *args, **kwargs: _sample_prediction_result()
+    )
 
-    with patch(
-        "openmed.torch.privacy_filter.PrivacyFilterTorchPipeline",
-    ) as MockPipeline, patch(
-        "openmed.core.backends.create_privacy_filter_pipeline",
-    ) as mock_factory:
+    with (
+        patch(
+            "openmed.torch.privacy_filter.PrivacyFilterTorchPipeline",
+        ) as MockPipeline,
+        patch(
+            "openmed.core.backends.create_privacy_filter_pipeline",
+        ) as mock_factory,
+    ):
         response = client.post(
             "/pii/deidentify",
             json={
@@ -618,7 +649,9 @@ def test_pii_deidentify_rejects_attacker_controlled_privacy_filter_model_name(
 
 def test_second_request_reuses_shared_warmed_pipeline(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
-    monkeypatch.setenv("OPENMED_SERVICE_PRELOAD_MODELS", "disease_detection_superclinical")
+    monkeypatch.setenv(
+        "OPENMED_SERVICE_PRELOAD_MODELS", "disease_detection_superclinical"
+    )
 
     def fake_analyze(*args, **kwargs):
         kwargs["loader"].create_pipeline(
@@ -642,7 +675,9 @@ def test_second_request_reuses_shared_warmed_pipeline(monkeypatch, fake_loader_c
     assert fake_loader_cls.instances[0].pipeline_creations == 1
 
 
-def test_keep_alive_zero_unloads_pipeline_after_request(client, monkeypatch, fake_loader_cls):
+def test_keep_alive_zero_unloads_pipeline_after_request(
+    client, monkeypatch, fake_loader_cls
+):
     def fake_analyze(*args, **kwargs):
         kwargs["loader"].create_pipeline(
             kwargs["model_name"],

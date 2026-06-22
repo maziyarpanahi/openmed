@@ -146,7 +146,8 @@ final class OpenMedBertForTokenClassification: Module {
         let embedded = embeddings(inputs, tokenTypeIDs: tokenTypeIDs)
         let mask: MLXArray?
         if let attentionMask {
-            mask = attentionMask
+            mask =
+                attentionMask
                 .asType(embedded.dtype)
                 .expandedDimensions(axes: [1, 2])
                 .log()

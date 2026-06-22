@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Optional, Union
 
+from openmed.core.policy import canonical_policy_name
 from openmed.utils.validation import (
     validate_confidence_threshold,
     validate_model_name,
@@ -66,6 +67,12 @@ def _normalize_confidence_threshold(value: Optional[float]) -> Optional[float]:
     return validate_confidence_threshold(value)
 
 
+def _normalize_policy_name(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return canonical_policy_name(str(value))
+
+
 def _validate_keep_alive_value(value: Any) -> Any:
     parse_keep_alive(value)
     return value
@@ -94,6 +101,7 @@ class _StrictModel(BaseModel):
     if ConfigDict is not None:
         model_config = ConfigDict(extra="forbid")
     else:  # pragma: no cover
+
         class Config:
             extra = "forbid"
 
@@ -107,7 +115,9 @@ if PYDANTIC_V2:
         model_name: str = "disease_detection_superclinical"
         confidence_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0)
         group_entities: bool = False
-        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = "simple"
+        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = (
+            "simple"
+        )
         sentence_detection: bool = True
         sentence_language: str = "en"
         sentence_clean: bool = False
@@ -126,14 +136,15 @@ if PYDANTIC_V2:
 
         @field_validator("confidence_threshold")
         @classmethod
-        def _validate_confidence_threshold(cls, value: Optional[float]) -> Optional[float]:
+        def _validate_confidence_threshold(
+            cls, value: Optional[float]
+        ) -> Optional[float]:
             return _normalize_confidence_threshold(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
 
     class PIIExtractRequest(_StrictModel):
         """Request schema for /pii/extract."""
@@ -168,7 +179,6 @@ if PYDANTIC_V2:
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
-
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
 
@@ -180,6 +190,7 @@ if PYDANTIC_V2:
         shift_dates: Optional[bool] = None
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
+        policy: Optional[str] = None
         use_smart_merging: bool = True
         use_safety_sweep: bool = True
         lang: PIILanguage = "en"
@@ -203,6 +214,11 @@ if PYDANTIC_V2:
             assert normalized is not None
             return normalized
 
+        @field_validator("policy", mode="before")
+        @classmethod
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
@@ -214,7 +230,6 @@ if PYDANTIC_V2:
             for field_name, value in values.items():
                 setattr(self, field_name, value)
             return self
-
 
     class ModelUnloadRequest(_StrictModel):
         """Request schema for /models/unload."""
@@ -244,7 +259,9 @@ else:
         model_name: str = "disease_detection_superclinical"
         confidence_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0)
         group_entities: bool = False
-        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = "simple"
+        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = (
+            "simple"
+        )
         sentence_detection: bool = True
         sentence_language: str = "en"
         sentence_clean: bool = False
@@ -260,13 +277,14 @@ else:
             return _normalize_model_name(value)
 
         @validator("confidence_threshold")
-        def _validate_confidence_threshold(cls, value: Optional[float]) -> Optional[float]:
+        def _validate_confidence_threshold(
+            cls, value: Optional[float]
+        ) -> Optional[float]:
             return _normalize_confidence_threshold(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
 
     class PIIExtractRequest(_StrictModel):
         """Request schema for /pii/extract."""
@@ -297,7 +315,6 @@ else:
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
-
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
 
@@ -309,6 +326,7 @@ else:
         shift_dates: Optional[bool] = None
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
+        policy: Optional[str] = None
         use_smart_merging: bool = True
         use_safety_sweep: bool = True
         lang: PIILanguage = "en"
@@ -329,6 +347,10 @@ else:
             assert normalized is not None
             return normalized
 
+        @validator("policy", pre=True)
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
@@ -336,7 +358,6 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
-
 
     class ModelUnloadRequest(_StrictModel):
         """Request schema for /models/unload."""

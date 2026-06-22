@@ -3,14 +3,18 @@
 import pytest
 
 from openmed.core.model_registry import (
-    OPENMED_MODELS,
     CATEGORIES,
+    OPENMED_MODELS,
     ModelInfo,
-    get_pii_models_by_language,
     get_default_pii_model,
+    get_pii_models_by_language,
     load_manifest_rows,
 )
-from openmed.core.pii_i18n import DEFAULT_PII_MODELS, LANGUAGE_NAMES, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    DEFAULT_PII_MODELS,
+    LANGUAGE_NAMES,
+    SUPPORTED_LANGUAGES,
+)
 
 
 class TestRegistryCompleteness:

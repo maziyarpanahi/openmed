@@ -117,7 +117,7 @@ function moonSVG() {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>`;
 }
 
-/* ---------- PHI Demo (cycles through 7 of the 12 languages OpenMed supports) ------ */
+/* ---------- PHI Demo (cycles through 7 of the 16 languages OpenMed supports) ------ */
 const PHI_SAMPLES = [
     {
         lang: "en",
@@ -334,19 +334,35 @@ for entity in entities {
 }`,
 };
 
-const PY_KEYWORDS = /\b(from|import|for|in|print|if|else|return|def|class|with|as|try|except|True|False|None)\b/g;
-const SWIFT_KEYWORDS = /\b(import|let|var|try|await|struct|class|func|if|else|return|guard)\b/g;
+const PY_KEYWORDS = "from|import|for|in|print|if|else|return|def|class|with|as|try|except|True|False|None";
+const SWIFT_KEYWORDS = "import|let|var|try|await|struct|class|func|if|else|return|guard";
+
+function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 function highlight(src, lang) {
-    const kwRe = lang === "Swift" ? SWIFT_KEYWORDS : PY_KEYWORDS;
-    return src
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|"""[\s\S]*?""")/g, '<span class="str">$1</span>')
-        .replace(/(#[^\n]*)/g, '<span class="cm">$1</span>')
-        .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="num">$1</span>')
-        .replace(kwRe, '<span class="kw">$1</span>');
+    const kw = lang === "Swift" ? SWIFT_KEYWORDS : PY_KEYWORDS;
+    // Single pass: each token is consumed once, so keywords never match
+    // inside strings, comments, or the class="…" attributes we emit.
+    const re = new RegExp(
+        '("""[\\s\\S]*?"""|"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\')' + // 1 string
+        '|(#[^\\n]*)' +                                                      // 2 comment
+        '|\\b(\\d+(?:\\.\\d+)?)\\b' +                                        // 3 number
+        '|\\b(' + kw + ')\\b',                                               // 4 keyword
+        'g'
+    );
+    let out = "", last = 0, m;
+    while ((m = re.exec(src)) !== null) {
+        out += escapeHtml(src.slice(last, m.index));
+        if (m[1] !== undefined) out += '<span class="str">' + escapeHtml(m[1]) + '</span>';
+        else if (m[2] !== undefined) out += '<span class="cm">' + escapeHtml(m[2]) + '</span>';
+        else if (m[3] !== undefined) out += '<span class="num">' + escapeHtml(m[3]) + '</span>';
+        else if (m[4] !== undefined) out += '<span class="kw">' + escapeHtml(m[4]) + '</span>';
+        last = m.index + m[0].length;
+    }
+    out += escapeHtml(src.slice(last));
+    return out;
 }
 
 function initCodePlayground() {
@@ -392,6 +408,24 @@ function initCodePlayground() {
 
     function render() {
         body.innerHTML = highlight(CODE_SNIPPETS[active], active);
+    }
+
+    const installBtn = panel.querySelector(".code-install-copy");
+    if (installBtn) {
+        installBtn.addEventListener("click", async () => {
+            try {
+                await navigator.clipboard.writeText(installBtn.dataset.copy || "pip install openmed");
+                installBtn.textContent = "copied ✓";
+                installBtn.classList.add("copied");
+                setTimeout(() => {
+                    installBtn.textContent = "copy";
+                    installBtn.classList.remove("copied");
+                }, 1400);
+            } catch (err) {
+                installBtn.textContent = "copy failed";
+                setTimeout(() => { installBtn.textContent = "copy"; }, 1400);
+            }
+        });
     }
 }
 
@@ -448,21 +482,35 @@ function initScrollSpy() {
     const links = document.querySelectorAll(".nav-links a[href^='#']");
     if (!links.length) return;
 
-    const map = new Map();
+    const entries = [];
     links.forEach(a => {
         const id = a.getAttribute("href").slice(1);
         const section = document.getElementById(id);
-        if (section) map.set(section, a);
+        if (section) entries.push({ section, link: a });
     });
+    if (!entries.length) return;
 
-    const obs = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                links.forEach(l => l.classList.remove("active"));
-                map.get(entry.target)?.classList.add("active");
+    let ticking = false;
+    function update() {
+        ticking = false;
+        const line = window.scrollY + window.innerHeight * 0.28;
+        const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+
+        let currentLink = null;
+        if (atBottom) {
+            currentLink = entries[entries.length - 1].link;
+        } else {
+            for (const { section, link } of entries) {
+                if (section.offsetTop <= line) currentLink = link;
             }
-        });
-    }, { rootMargin: "-40% 0px -55% 0px" });
+        }
+        links.forEach(l => l.classList.toggle("active", l === currentLink));
+    }
 
-    map.forEach((_, section) => obs.observe(section));
+    function onScroll() {
+        if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    update();
 }
