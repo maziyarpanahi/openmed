@@ -31,9 +31,27 @@ a FHIRPath-style location).
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
 
-__all__ = ["to_operation_outcome", "from_validation_result"]
+__all__ = ["OperationOutcomeIssue", "to_operation_outcome", "from_validation_result"]
+
+
+@dataclass(frozen=True)
+class OperationOutcomeIssue:
+    """OpenMed-owned issue shape that maps directly to ``OperationOutcome.issue``.
+
+    ``severity`` and ``code`` must already be FHIR R4 issue-severity and
+    issue-type codes. ``expression`` is a FHIRPath-style location and is emitted
+    as R4 ``issue.expression``.
+    """
+
+    severity: str
+    code: str
+    diagnostics: str | None = None
+    expression: str | Sequence[str] | None = None
+
 
 # FHIR R4 ``issue-severity`` value set.
 # https://hl7.org/fhir/R4/valueset-issue-severity.html
@@ -77,8 +95,6 @@ _ISSUE_TYPES = frozenset(
     }
 )
 
-# Default issue type when a caller supplies an issue without one.
-_DEFAULT_CODE = "processing"
 # Default issue type for validator/conformance findings (a structural problem).
 _DEFAULT_VALIDATION_CODE = "invalid"
 
@@ -91,10 +107,10 @@ def to_operation_outcome(issues: Any) -> dict[str, Any]:
 
     Args:
         issues: An iterable of issue-like items, a single issue mapping, or
-            ``None``. Each item may be a mapping or a duck-typed object exposing
-            ``severity``, ``code``, optional ``diagnostics``, and an optional
-            FHIRPath location as ``expression`` (str or list) or ``expressions``
-            (list). Plain strings are treated as the issue's ``diagnostics``.
+            ``None``. Each item may be an :class:`OperationOutcomeIssue`, a
+            mapping, or a duck-typed object exposing ``severity`` and ``code``,
+            optional ``diagnostics``/``message``, and an optional FHIRPath
+            location as ``expression`` (str or list) or ``expressions`` (list).
 
     Returns:
         A ``resourceType=OperationOutcome`` mapping with one ``issue`` per input
@@ -102,9 +118,10 @@ def to_operation_outcome(issues: Any) -> dict[str, Any]:
         ``informational`` "all-ok" issue is returned.
 
     Raises:
+        TypeError: If an issue item is not mapping/object shaped.
         ValueError: If an issue carries a severity outside the FHIR
-            ``issue-severity`` value set or a code outside the ``issue-type``
-            value set.
+            ``issue-severity`` value set, a code outside the ``issue-type``
+            value set, or omits required ``severity``/``code`` fields.
     """
 
     built = [_build_issue(raw) for raw in _iter_issues(issues)]
@@ -139,14 +156,30 @@ def from_validation_result(result: Any) -> dict[str, Any]:
 
 # --- internal helpers -------------------------------------------------------
 
-# (attribute/key, severity, default issue-type) for the bucket-style results.
+# (attribute/key, severity, default issue-type) for bucket-style results.
 _RESULT_BUCKETS = (
+    ("fatal", "fatal", _DEFAULT_VALIDATION_CODE),
     ("fatals", "fatal", _DEFAULT_VALIDATION_CODE),
+    ("error", "error", _DEFAULT_VALIDATION_CODE),
     ("errors", "error", _DEFAULT_VALIDATION_CODE),
+    ("warning", "warning", _DEFAULT_VALIDATION_CODE),
     ("warnings", "warning", _DEFAULT_VALIDATION_CODE),
+    ("info", "information", "informational"),
     ("information", "information", "informational"),
     ("informational", "information", "informational"),
 )
+
+_DIAGNOSTIC_KEYS = ("diagnostics", "message", "detail")
+_EXPRESSION_KEYS = (
+    "expressions",
+    "expression",
+    "path",
+    "fhir_path",
+    "fhirpath",
+    "field",
+    "location",  # accepted as legacy input only; never emitted as R4 location
+)
+_MISSING = object()
 
 
 def _iter_issues(issues: Any) -> list[Any]:
@@ -173,16 +206,28 @@ def _extract_issues(result: Any) -> list[Any]:
 
     issues = _get(result, "issues")
     if issues is not None:
-        return list(issues)
+        return _iter_issues(issues)
 
     collected: list[Any] = []
     for attr, severity, default_code in _RESULT_BUCKETS:
         bucket = _get(result, attr)
         if not bucket:
             continue
-        for item in bucket:
+        for item in _iter_bucket(bucket):
             collected.append(_bucket_issue(item, severity, default_code))
     return collected
+
+
+def _iter_bucket(bucket: Any) -> list[Any]:
+    """Normalise a severity bucket into raw entries without splitting strings."""
+
+    if isinstance(bucket, Mapping):
+        return [bucket]
+    if isinstance(bucket, (str, bytes)):
+        return [bucket.decode() if isinstance(bucket, bytes) else bucket]
+    if isinstance(bucket, Iterable):
+        return list(bucket)
+    return [bucket]
 
 
 def _bucket_issue(item: Any, severity: str, default_code: str) -> dict[str, Any]:
@@ -192,15 +237,16 @@ def _bucket_issue(item: Any, severity: str, default_code: str) -> dict[str, Any]
         return {"severity": severity, "code": default_code, "diagnostics": item}
     if isinstance(item, Mapping):
         merged = dict(item)
-        merged.setdefault("severity", severity)
-        merged.setdefault("code", default_code)
+        if merged.get("severity") is None:
+            merged["severity"] = severity
+        if merged.get("code") is None:
+            merged["code"] = default_code
         return merged
     return {
-        "severity": _get(item, "severity", severity),
-        "code": _get(item, "code", default_code),
-        "diagnostics": _get(item, "diagnostics"),
-        "expression": _get(item, "expression"),
-        "expressions": _get(item, "expressions"),
+        "severity": _get(item, "severity") or severity,
+        "code": _get(item, "code") or default_code,
+        "diagnostics": _first_present(item, _DIAGNOSTIC_KEYS),
+        "expression": _first_present(item, _EXPRESSION_KEYS),
     }
 
 
@@ -209,21 +255,21 @@ def _build_issue(raw: Any) -> dict[str, Any]:
 
     The OpenMed-owned issue shape is ``severity`` (required), ``code``
     (required), optional ``diagnostics``, and an optional FHIRPath location
-    given as either ``expression`` (str or list) or ``expressions`` (list). A
-    bare string is treated as the issue ``diagnostics``. The emitted R4 issue
-    always uses ``expression`` (``location`` is deprecated in R4 and never
-    emitted).
+    given as either ``expression`` (str or list) or ``expressions`` (list). The
+    emitted R4 issue always uses ``expression`` (``location`` is deprecated in
+    R4 and never emitted).
     """
 
-    if isinstance(raw, str):
-        severity, code, diagnostics, expression = "error", _DEFAULT_CODE, raw, None
-    else:
-        severity = _get(raw, "severity", "error")
-        code = _get(raw, "code", _DEFAULT_CODE)
-        diagnostics = _get(raw, "diagnostics")
-        expression = _get(raw, "expressions")
-        if expression is None:
-            expression = _get(raw, "expression")
+    if isinstance(raw, (str, bytes)) or not _is_issue_like(raw):
+        raise TypeError(
+            "each issue must be a mapping, OperationOutcomeIssue, or object "
+            "with severity/code fields"
+        )
+
+    severity = _required(raw, "severity")
+    code = _required(raw, "code")
+    diagnostics = _first_present(raw, _DIAGNOSTIC_KEYS)
+    expression = _first_present(raw, _EXPRESSION_KEYS)
 
     issue: dict[str, Any] = {
         "severity": _normalize_severity(severity),
@@ -235,6 +281,24 @@ def _build_issue(raw: Any) -> dict[str, Any]:
     if expressions:
         issue["expression"] = expressions
     return issue
+
+
+def _is_issue_like(raw: Any) -> bool:
+    """Return whether ``raw`` can reasonably represent one issue."""
+
+    return isinstance(raw, (OperationOutcomeIssue, Mapping)) or (
+        _get(raw, "severity", _MISSING) is not _MISSING
+        or _get(raw, "code", _MISSING) is not _MISSING
+    )
+
+
+def _required(obj: Any, key: str) -> Any:
+    """Read a required issue field from ``obj``."""
+
+    value = _get(obj, key, _MISSING)
+    if value is _MISSING or value is None:
+        raise ValueError(f"issue {key!r} is required")
+    return value
 
 
 def _all_ok_issue() -> dict[str, Any]:
@@ -280,10 +344,26 @@ def _normalize_expression(expression: Any) -> list[str]:
     if expression is None:
         return []
     if isinstance(expression, str):
+        expression = expression.strip()
         return [expression] if expression else []
     if isinstance(expression, (list, tuple)):
-        return [str(item) for item in expression if item is not None and str(item)]
-    return [str(expression)]
+        return [
+            normalized
+            for item in expression
+            if item is not None and (normalized := str(item).strip())
+        ]
+    normalized = str(expression).strip()
+    return [normalized] if normalized else []
+
+
+def _first_present(obj: Any, keys: Sequence[str]) -> Any:
+    """Return the first non-``None`` key/attribute value from ``obj``."""
+
+    for key in keys:
+        value = _get(obj, key, _MISSING)
+        if value is not _MISSING and value is not None:
+            return value
+    return None
 
 
 def _get(obj: Any, key: str, default: Any = None) -> Any:
