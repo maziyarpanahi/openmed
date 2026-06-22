@@ -18,6 +18,7 @@ nav:
       - REST Service (MVP): rest-service.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
+      - Biomedical NER Families: ner-families.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
