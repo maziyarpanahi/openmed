@@ -14,7 +14,6 @@ from .arbitration import (
 )
 from .schemas.span import OpenMedSpan
 
-
 Detector = Callable[..., Sequence[OpenMedSpan]]
 OfflineHook = Callable[[str, Any], bool | None]
 
@@ -113,9 +112,8 @@ class CascadeRouter:
             or self.policy_profile
             or ("strict_no_leak" if strict or recall else "balanced")
         )
-        selected_mode = (
-            self.arbitration_mode_override
-            or arbitration_mode(strict_no_leak=strict or recall)
+        selected_mode = self.arbitration_mode_override or arbitration_mode(
+            strict_no_leak=strict or recall
         )
 
         stage_results: list[CascadeStageResult] = []
@@ -129,9 +127,7 @@ class CascadeRouter:
             context=context,
             reason="always",
         )
-        stage_results.append(
-            CascadeStageResult(R0_RULES, "rules", r0_spans, "always")
-        )
+        stage_results.append(CascadeStageResult(R0_RULES, "rules", r0_spans, "always"))
         all_spans.extend(r0_spans)
 
         r1_spans = self._run_detector(
@@ -162,7 +158,9 @@ class CascadeRouter:
                 context=context,
                 reason=r2_reason,
             )
-            stage_results.append(CascadeStageResult(R2_BASE, "base", r2_spans, r2_reason))
+            stage_results.append(
+                CascadeStageResult(R2_BASE, "base", r2_spans, r2_reason)
+            )
             all_spans.extend(r2_spans)
 
         r3_reason = self._r3_reason(
@@ -249,7 +247,10 @@ class CascadeRouter:
             raise RuntimeError(f"{route} detector is not local-only")
         if bool(getattr(detector, "allows_network", False)):
             raise RuntimeError(f"{route} detector is not local-only")
-        if self.offline_hook is not None and self.offline_hook(route, detector) is False:
+        if (
+            self.offline_hook is not None
+            and self.offline_hook(route, detector) is False
+        ):
             raise RuntimeError(f"{route} detector failed offline assertion")
 
     def _doc_type(self, context: Any, doc_type: str | None) -> str | None:

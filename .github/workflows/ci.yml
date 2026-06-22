@@ -25,8 +25,41 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
-  test:
+  lint:
     needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip packages
+      uses: actions/cache@v5
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-lint-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-lint-
+          ${{ runner.os }}-pip-
+
+    - name: Install lint dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Lint with Ruff
+      run: |
+        ruff check --output-format=github .
+
+    - name: Check Ruff formatting
+      run: |
+        ruff format --check .
+
+  test:
+    needs: [repo-policy, lint]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -59,13 +92,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
-
-    - name: Lint with flake8
-      run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 openmed --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Exit-zero treats all errors as warnings
-        flake8 openmed --count --exit-zero --max-complexity=10 --max-line-length=88 --statistics
 
     - name: Test with pytest
       run: |
@@ -186,7 +212,7 @@ jobs:
           .
 
   build:
-    needs: [repo-policy, test, security, secret-scan]
+    needs: [repo-policy, lint, test, security, secret-scan]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6

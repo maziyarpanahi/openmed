@@ -37,7 +37,9 @@ def test_human_review_can_accept_single_model_span():
     text = "Patient Jordan Smith was discharged."
     span = {"start": 8, "end": 20, "label": "PERSON", "score": 0.91}
 
-    decision = weak_label_document(text, {"teacher_a": [span]}, human_reviewed_spans=[span])
+    decision = weak_label_document(
+        text, {"teacher_a": [span]}, human_reviewed_spans=[span]
+    )
 
     assert len(decision.accepted_spans) == 1
     assert decision.accepted_spans[0].metadata["accepted_by"] == "human_review"
@@ -79,7 +81,9 @@ def test_validators_can_reject_agreed_span():
 
     assert decision.accepted_spans == ()
     assert len(decision.rejected_spans) == 1
-    assert decision.rejected_spans[0].metadata["rejection_reason"] == "validator_rejected"
+    assert (
+        decision.rejected_spans[0].metadata["rejection_reason"] == "validator_rejected"
+    )
 
 
 def test_adjudication_queue_drains_items():

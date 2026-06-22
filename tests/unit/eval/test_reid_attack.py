@@ -176,7 +176,8 @@ def test_benchmark_pii_reid_cli_writes_report_and_leaderboard(
     assert result == 0
     stdout_payload = json.loads(capsys.readouterr().out)
     disk_payload = json.loads(report_path.read_text(encoding="utf-8"))
-    assert stdout_payload["metrics"]["reid_leakage"] == disk_payload["metrics"][
-        "reid_leakage"
-    ]
+    assert (
+        stdout_payload["metrics"]["reid_leakage"]
+        == disk_payload["metrics"]["reid_leakage"]
+    )
     assert "reid_leakage_rate" in leaderboard_path.read_text(encoding="utf-8")

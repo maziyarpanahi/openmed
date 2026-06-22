@@ -6,9 +6,8 @@ import json
 import re
 from pathlib import Path
 
-from scripts.manifest import generate_manifest
 from openmed.core import model_registry
-
+from scripts.manifest import generate_manifest
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = ROOT / "models.jsonl"
@@ -68,7 +67,9 @@ def test_every_manifest_row_matches_schema():
         assert row["arxiv"] is None or isinstance(row["arxiv"], str)
         assert row["license"] is None or isinstance(row["license"], str)
         assert re.fullmatch(r"sha256:[0-9a-f]{64}", row["reproducibility_hash"])
-        assert row["released"] is None or re.fullmatch(r"\d{4}-\d{2}-\d{2}", row["released"])
+        assert row["released"] is None or re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}", row["released"]
+        )
 
 
 def test_registry_model_ids_are_derived_from_manifest():

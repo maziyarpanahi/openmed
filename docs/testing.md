@@ -17,6 +17,9 @@ Configure these markers via `pytest.ini` entries in `pyproject.toml`.
 
 ```bash
 uv pip install ".[dev,hf]"
+make lint
+make format-check
+make lint-swift             # for Swift/OpenMedKit changes
 pytest                      # fast unit/integration mix
 pytest -m "not slow"        # default behaviour
 pytest -m slow              # only long-running cases
@@ -29,7 +32,8 @@ uv pip install ".[gliner]"
 python scripts/smoke_gliner.py --limit 2 --threshold 0.4 --adapter
 ```
 
-`tests/run-tests.sh` stitches together typical workflows (lint, unit tests, smoke scripts). Use it as the baseline for CI.
+`tests/run-tests.sh` stitches together lint, format checks, unit tests, and slow smoke checks. Use it as the baseline
+for CI.
 
 ## Docs & API checks
 

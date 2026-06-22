@@ -29,7 +29,6 @@ import time
 from openmed import deidentify, extract_pii
 from openmed.core.backends import select_privacy_filter_backend
 
-
 SAMPLE_TEXTS = [
     (
         "Discharge note",
@@ -69,7 +68,7 @@ def run_extraction(text: str, model_name: str) -> None:
         confidence_threshold=0.5,
     )
     elapsed = time.perf_counter() - started
-    print(f"  Detected {len(result.entities)} entities in {elapsed*1000:.1f} ms")
+    print(f"  Detected {len(result.entities)} entities in {elapsed * 1000:.1f} ms")
     for ent in result.entities[:8]:
         print(f"    {ent.label:24s} {ent.text!r}  conf={ent.confidence:.2f}")
     if len(result.entities) > 8:
@@ -79,13 +78,20 @@ def run_extraction(text: str, model_name: str) -> None:
 
 def run_deidentification(text: str, model_name: str) -> None:
     print("  Deidentified (mask):")
-    masked = deidentify(text, method="mask", model_name=model_name,
-                        confidence_threshold=0.5)
+    masked = deidentify(
+        text, method="mask", model_name=model_name, confidence_threshold=0.5
+    )
     print(f"    {masked.deidentified_text}")
     print()
     print("  Deidentified (replace, consistent=True, seed=42):")
-    replaced = deidentify(text, method="replace", model_name=model_name,
-                          consistent=True, seed=42, confidence_threshold=0.5)
+    replaced = deidentify(
+        text,
+        method="replace",
+        model_name=model_name,
+        consistent=True,
+        seed=42,
+        confidence_threshold=0.5,
+    )
     print(f"    {replaced.deidentified_text}")
     print()
 
@@ -97,9 +103,15 @@ MODEL_IDS = (
 
 
 def main() -> None:
-    if os.environ.get("OPENMED_PRIVACY_FILTER_DOWNLOAD", "").lower() not in {"1", "true", "yes"}:
+    if os.environ.get("OPENMED_PRIVACY_FILTER_DOWNLOAD", "").lower() not in {
+        "1",
+        "true",
+        "yes",
+    }:
         print("WARNING: OPENMED_PRIVACY_FILTER_DOWNLOAD is not set.")
-        print("If the privacy-filter model is not already cached, the call below will fail.")
+        print(
+            "If the privacy-filter model is not already cached, the call below will fail."
+        )
         print("Set OPENMED_PRIVACY_FILTER_DOWNLOAD=1 to allow first-run downloads.")
         print()
 

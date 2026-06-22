@@ -50,13 +50,12 @@ def convert(
         Path to the created ``.mlpackage``.
     """
     try:
-        import torch
         import coremltools as ct
-        from transformers import AutoTokenizer, AutoModelForTokenClassification
+        import torch
+        from transformers import AutoModelForTokenClassification, AutoTokenizer
     except ImportError as e:
         raise ImportError(
-            f"Missing dependency: {e}. "
-            "Install with: pip install openmed[coreml]"
+            f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
         )
 
     output_path = Path(output_path)
@@ -65,7 +64,8 @@ def convert(
     logger.info("Loading HuggingFace model %s ...", model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
     model = AutoModelForTokenClassification.from_pretrained(
-        model_id, cache_dir=cache_dir,
+        model_id,
+        cache_dir=cache_dir,
     )
     model.eval()
 
@@ -108,8 +108,7 @@ def convert(
     logger.info("Converting to CoreML (%s precision) ...", compute_precision)
 
     ct_precision = (
-        ct.precision.FLOAT16 if compute_precision == "float16"
-        else ct.precision.FLOAT32
+        ct.precision.FLOAT16 if compute_precision == "float16" else ct.precision.FLOAT32
     )
 
     mlmodel = ct.convert(
@@ -118,14 +117,24 @@ def convert(
             ct.TensorType(
                 name="input_ids",
                 shape=ct.Shape(
-                    shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=128)),
+                    shape=(
+                        1,
+                        ct.RangeDim(
+                            lower_bound=1, upper_bound=max_seq_length, default=128
+                        ),
+                    ),
                 ),
                 dtype=int,
             ),
             ct.TensorType(
                 name="attention_mask",
                 shape=ct.Shape(
-                    shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=128)),
+                    shape=(
+                        1,
+                        ct.RangeDim(
+                            lower_bound=1, upper_bound=max_seq_length, default=128
+                        ),
+                    ),
                 ),
                 dtype=int,
             ),
@@ -188,23 +197,30 @@ def main():
         description="Convert a HuggingFace token-classification model to CoreML format",
     )
     parser.add_argument(
-        "--model", required=True,
+        "--model",
+        required=True,
         help="HuggingFace model ID",
     )
     parser.add_argument(
-        "--output", required=True,
+        "--output",
+        required=True,
         help="Output path for .mlpackage file",
     )
     parser.add_argument(
-        "--max-seq-length", type=int, default=512,
+        "--max-seq-length",
+        type=int,
+        default=512,
         help="Maximum input sequence length (default: 512)",
     )
     parser.add_argument(
-        "--precision", choices=["float16", "float32"], default="float16",
+        "--precision",
+        choices=["float16", "float32"],
+        default="float16",
         help="Compute precision (default: float16 for Neural Engine)",
     )
     parser.add_argument(
-        "--cache-dir", default=None,
+        "--cache-dir",
+        default=None,
         help="HuggingFace model cache directory",
     )
     parser.add_argument(

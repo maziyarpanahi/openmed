@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from openmed import BatchProcessor
 
-
 TEXTS = [
     "Patient John Doe, DOB 01/15/1970, phone (555) 123-4567.",
     "Jane Roe emailed jane.roe@example.org from Boston.",

@@ -14,7 +14,6 @@ from .adjudication import (
     make_adjudication_item,
 )
 
-
 SpanValidator = Callable[["WeakLabelSpan"], bool]
 ActiveLearningHook = Callable[[AdjudicationItem], None]
 
@@ -44,14 +43,18 @@ class WeakLabelSpan:
             "text": self.text,
         }
 
-    def to_candidate(self, sources: Iterable[str] | None = None) -> AdjudicationCandidate:
+    def to_candidate(
+        self, sources: Iterable[str] | None = None
+    ) -> AdjudicationCandidate:
         return AdjudicationCandidate(
             start=self.start,
             end=self.end,
             label=self.label,
             text=self.text,
             score=self.score,
-            sources=tuple(sorted(set(sources or ([self.source] if self.source else [])))),
+            sources=tuple(
+                sorted(set(sources or ([self.source] if self.source else [])))
+            ),
             metadata=dict(self.metadata),
         )
 
@@ -108,13 +111,21 @@ def weak_label_document(
         if key in reviewed_keys or bool(representative.metadata.get("human_reviewed")):
             accepted.append(_with_metadata(representative, accepted_by="human_review"))
             continue
-        if len(sources) >= min_agreeing_models and _validators_accept(representative, validators):
-            accepted.append(_with_metadata(representative, accepted_by="inter_model_agreement"))
+        if len(sources) >= min_agreeing_models and _validators_accept(
+            representative, validators
+        ):
+            accepted.append(
+                _with_metadata(representative, accepted_by="inter_model_agreement")
+            )
             continue
         if len(sources) < min_agreeing_models:
-            rejected.append(_with_metadata(representative, rejection_reason="single_model"))
+            rejected.append(
+                _with_metadata(representative, rejection_reason="single_model")
+            )
         else:
-            rejected.append(_with_metadata(representative, rejection_reason="validator_rejected"))
+            rejected.append(
+                _with_metadata(representative, rejection_reason="validator_rejected")
+            )
 
     adjudication_items: list[AdjudicationItem] = []
     for group in _disagreement_groups(spans):
@@ -126,8 +137,7 @@ def weak_label_document(
         item = make_adjudication_item(
             text=text,
             candidates=[
-                span.to_candidate(_sources_for_key(by_key, span.key))
-                for span in group
+                span.to_candidate(_sources_for_key(by_key, span.key)) for span in group
             ],
             reason="inter_model_disagreement",
             record_id=record_id,
@@ -218,11 +228,15 @@ def _with_metadata(span: WeakLabelSpan, **updates: Any) -> WeakLabelSpan:
     )
 
 
-def _validators_accept(span: WeakLabelSpan, validators: Sequence[SpanValidator]) -> bool:
+def _validators_accept(
+    span: WeakLabelSpan, validators: Sequence[SpanValidator]
+) -> bool:
     return all(validator(span) for validator in validators)
 
 
-def _disagreement_groups(spans: Sequence[WeakLabelSpan]) -> list[tuple[WeakLabelSpan, ...]]:
+def _disagreement_groups(
+    spans: Sequence[WeakLabelSpan],
+) -> list[tuple[WeakLabelSpan, ...]]:
     groups: list[tuple[WeakLabelSpan, ...]] = []
     for index, span in enumerate(spans):
         conflicts = [

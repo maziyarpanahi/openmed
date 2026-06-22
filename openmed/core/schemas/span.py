@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import copy
-import hmac
 import hashlib
+import hmac
 import json
 import re
 from dataclasses import dataclass, field
@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.labels import CANONICAL_LABELS, policy_label_for
-
 
 CURRENT_SCHEMA_VERSION = 1
 SCHEMA_PACKAGE = "openmed.core.schemas.json"
@@ -78,11 +77,15 @@ class OpenMedSpan:
         if self.score is not None and not 0.0 <= float(self.score) <= 1.0:
             raise ValueError("score must be between 0.0 and 1.0")
 
-        object.__setattr__(self, "regulatory_tags", tuple(map(str, self.regulatory_tags)))
+        object.__setattr__(
+            self, "regulatory_tags", tuple(map(str, self.regulatory_tags))
+        )
         object.__setattr__(self, "evidence", _plain_mapping(self.evidence))
         object.__setattr__(self, "metadata", _plain_mapping(self.metadata))
         if self.policy_label is None:
-            object.__setattr__(self, "policy_label", policy_label_for(self.canonical_label))
+            object.__setattr__(
+                self, "policy_label", policy_label_for(self.canonical_label)
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize this span to a JSON-compatible dictionary."""
@@ -247,7 +250,9 @@ def compare_schema_drift(
     state = _schema_state(schema)
     snapshot_state = dict((snapshot or load_schema_snapshot()).get(name) or {})
     snapshot_version = snapshot_state.get("schema_version")
-    version_bumped = snapshot_version is not None and state["schema_version"] != snapshot_version
+    version_bumped = (
+        snapshot_version is not None and state["schema_version"] != snapshot_version
+    )
     removed_required = tuple(
         sorted(set(snapshot_state.get("required", ())) - set(state["required"]))
     )
@@ -262,7 +267,9 @@ def compare_schema_drift(
     return SchemaDriftResult(
         schema_name=name,
         schema_version=int(state["schema_version"]),
-        snapshot_version=int(snapshot_version) if snapshot_version is not None else None,
+        snapshot_version=int(snapshot_version)
+        if snapshot_version is not None
+        else None,
         fingerprint=str(state["fingerprint"]),
         snapshot_fingerprint=snapshot_state.get("fingerprint"),
         version_bumped=version_bumped,

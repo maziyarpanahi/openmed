@@ -12,8 +12,8 @@ from openmed.core.models import ModelLoader
 from .exceptions import MissingDependencyError
 from .families import (
     ModelFamily,
-    ensure_gliner_available,
     ensure_gliner2_available,
+    ensure_gliner_available,
     load_gliner2_handle,
 )
 from .families.gliner import GLiNERHandle, load_gliner_handle
@@ -136,7 +136,9 @@ def _lookup_model(model_id: str, index: ModelIndex) -> ModelRecord:
     raise ValueError(f"Model '{model_id}' not found in index.")
 
 
-def _resolve_labels(request: NerRequest, record: ModelRecord) -> Tuple[List[str], Optional[str]]:
+def _resolve_labels(
+    request: NerRequest, record: ModelRecord
+) -> Tuple[List[str], Optional[str]]:
     if request.labels:
         labels = [label.strip() for label in request.labels if label.strip()]
         return labels, request.domain
@@ -219,7 +221,11 @@ def _convert_gliner_entity(item: Any) -> Entity:
         score = float(item.get("score", 0.0))
         text = item.get("text") or item.get("span_text") or ""
         group = item.get("group")
-        extras = {k: v for k, v in item.items() if k not in {"text", "start", "end", "label", "score", "group", "span"}}
+        extras = {
+            k: v
+            for k, v in item.items()
+            if k not in {"text", "start", "end", "label", "score", "group", "span"}
+        }
     else:
         raise TypeError("Unexpected GLiNER entity format.")
 
@@ -270,7 +276,21 @@ def _convert_hf_entity(item: Dict[str, Any]) -> Entity:
     start = int(item.get("start", 0))
     end = int(item.get("end", start + len(text)))
     group = item.get("group")
-    extras = {k: v for k, v in item.items() if k not in {"entity", "entity_group", "score", "word", "text", "start", "end", "group"}}
+    extras = {
+        k: v
+        for k, v in item.items()
+        if k
+        not in {
+            "entity",
+            "entity_group",
+            "score",
+            "word",
+            "text",
+            "start",
+            "end",
+            "group",
+        }
+    }
 
     return Entity(
         text=text,

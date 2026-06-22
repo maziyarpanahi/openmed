@@ -19,7 +19,6 @@ import torch
 
 from openmed.core.models import ModelLoader
 
-
 # --- Custom tokenization (fast, dependency-free) ----------------------------
 
 TOKEN_PATTERN = re.compile(
@@ -38,10 +37,14 @@ class CustomToken:
 
 def custom_tokenize(text: str) -> List[CustomToken]:
     """Regex tokenizer that returns text plus character offsets."""
-    return [CustomToken(m.group(0), m.start(), m.end()) for m in TOKEN_PATTERN.finditer(text)]
+    return [
+        CustomToken(m.group(0), m.start(), m.end())
+        for m in TOKEN_PATTERN.finditer(text)
+    ]
 
 
 # --- Alignment logic --------------------------------------------------------
+
 
 def map_wordpieces_to_custom(
     wordpiece_tokens: List[str],
@@ -69,6 +72,7 @@ def map_wordpieces_to_custom(
 
 
 # --- Demo -------------------------------------------------------------------
+
 
 def main():
     # Use a text that actually contains oncology/clinical entities.
@@ -107,7 +111,9 @@ def main():
     wp_tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"][0])
     id2label = model.config.id2label
 
-    mapped = map_wordpieces_to_custom(wp_tokens, offsets, pred_ids, id2label, custom_tokens)
+    mapped = map_wordpieces_to_custom(
+        wp_tokens, offsets, pred_ids, id2label, custom_tokens
+    )
 
     # --- Display ----------------------------------------------------------------
     print(f"Model: {model_key}\n")

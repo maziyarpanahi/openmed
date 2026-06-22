@@ -73,6 +73,7 @@ ALLOW_DOWNLOAD_ENV = os.getenv("OPENMED_PRIVACY_FILTER_DOWNLOAD", "").lower() in
 # Request models
 # ---------------------------------------------------------------------------
 
+
 class RunRequest(BaseModel):
     text: str = Field(..., description="Free-form text to deidentify.")
     mode: Literal["mask", "randomize"] = Field(default="mask")
@@ -84,6 +85,7 @@ class RunRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Pipeline lifecycle — load both pipelines once
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class LoadedPipeline:
@@ -100,6 +102,7 @@ def _load_pipelines(download: bool) -> tuple[LoadedPipeline, LoadedPipeline]:
     flipping the toggle invalidates and lets a previously-failed download
     retry."""
     from huggingface_hub import snapshot_download
+
     from openmed.mlx.inference import PrivacyFilterMLXPipeline
 
     prior_hf_offline = os.environ.get("HF_HUB_OFFLINE")
@@ -165,6 +168,7 @@ def _load_pipelines(download: bool) -> tuple[LoadedPipeline, LoadedPipeline]:
 # Inference + de-identification helpers
 # ---------------------------------------------------------------------------
 
+
 def _entities_from_pipeline(pipeline: Any, text: str) -> list[dict[str, Any]]:
     raw = pipeline(text)
     entities: list[dict[str, Any]] = []
@@ -194,7 +198,7 @@ def _mask_text(text: str, entities: list[dict[str, Any]]) -> str:
     for ent in entities:
         if ent["start"] < cursor:
             continue
-        parts.append(text[cursor:ent["start"]])
+        parts.append(text[cursor : ent["start"]])
         parts.append(f"[{ent['label'].upper()}]")
         cursor = ent["end"]
     parts.append(text[cursor:])
@@ -225,7 +229,7 @@ def _randomize_text(
     for ent in entities:
         if ent["start"] < cursor:
             continue
-        parts.append(text[cursor:ent["start"]])
+        parts.append(text[cursor : ent["start"]])
         parts.append(surrogate_for(ent["label"], ent["text"]))
         cursor = ent["end"]
     parts.append(text[cursor:])
@@ -256,7 +260,9 @@ def _process_side(
     inference_s = time.perf_counter() - started
 
     masked = _mask_text(text, entities)
-    randomized, surrogate_map = _randomize_text(text, entities, seed=seed, locale=locale)
+    randomized, surrogate_map = _randomize_text(
+        text, entities, seed=seed, locale=locale
+    )
     annotated = _entities_with_surrogates(entities, surrogate_map)
 
     return {
@@ -331,26 +337,52 @@ def api_run(payload: RunRequest) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         return {
             "status": "error",
-            "openmed": {"entities": [], "masked": text, "randomized": text, "stats": {}},
-            "baseline": {"entities": [], "masked": text, "randomized": text, "stats": {}},
+            "openmed": {
+                "entities": [],
+                "masked": text,
+                "randomized": text,
+                "stats": {},
+            },
+            "baseline": {
+                "entities": [],
+                "masked": text,
+                "randomized": text,
+                "stats": {},
+            },
             "stats": {"tokens": len(re.findall(r"\S+", text))},
             "note": f"Model load failed: {type(exc).__name__}: {exc}",
         }
 
     try:
         openmed_result = _process_side(
-            left, text,
-            mode=payload.mode, seed=payload.seed, locale=payload.locale,
+            left,
+            text,
+            mode=payload.mode,
+            seed=payload.seed,
+            locale=payload.locale,
         )
         baseline_result = _process_side(
-            right, text,
-            mode=payload.mode, seed=payload.seed, locale=payload.locale,
+            right,
+            text,
+            mode=payload.mode,
+            seed=payload.seed,
+            locale=payload.locale,
         )
     except Exception as exc:  # noqa: BLE001
         return {
             "status": "error",
-            "openmed": {"entities": [], "masked": text, "randomized": text, "stats": {}},
-            "baseline": {"entities": [], "masked": text, "randomized": text, "stats": {}},
+            "openmed": {
+                "entities": [],
+                "masked": text,
+                "randomized": text,
+                "stats": {},
+            },
+            "baseline": {
+                "entities": [],
+                "masked": text,
+                "randomized": text,
+                "stats": {},
+            },
             "stats": {"tokens": len(re.findall(r"\S+", text))},
             "note": f"Inference failed: {type(exc).__name__}: {exc}",
         }

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Final
 
-
 TIERS: Final[dict[str, dict[str, int | str]]] = {
     "Tiny": {
         "ram_mb_max": 350,

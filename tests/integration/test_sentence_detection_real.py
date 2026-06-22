@@ -20,7 +20,7 @@ def test_sentence_detection_short_text_consistency(tmp_path):
     torch = pytest.importorskip("torch", exc_type=ImportError)  # noqa: F841
     _skip_if_env_disabled()
 
-    from openmed import analyze_text, OpenMedConfig, ModelLoader
+    from openmed import ModelLoader, OpenMedConfig, analyze_text
 
     cache_dir = tmp_path / "hf-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -44,7 +44,11 @@ def test_sentence_detection_short_text_consistency(tmp_path):
     result_no = analyze_text(text, sentence_detection=False, **common_kwargs)
 
     def _to_span(result) -> Tuple[Tuple[int, int, str], ...]:
-        return tuple(sorted((ent.start or -1, ent.end or -1, ent.label) for ent in result.entities))
+        return tuple(
+            sorted(
+                (ent.start or -1, ent.end or -1, ent.label) for ent in result.entities
+            )
+        )
 
     assert _to_span(result_sd) == _to_span(result_no)
 
@@ -56,7 +60,7 @@ def test_sentence_detection_filters_placeholders(tmp_path):
     torch = pytest.importorskip("torch", exc_type=ImportError)  # noqa: F841
     _skip_if_env_disabled()
 
-    from openmed import analyze_text, OpenMedConfig, ModelLoader
+    from openmed import ModelLoader, OpenMedConfig, analyze_text
 
     cache_dir = tmp_path / "hf-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)

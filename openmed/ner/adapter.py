@@ -12,8 +12,7 @@ from .infer import Entity
 class TokenizerProvider(Protocol):  # pragma: no cover - protocol definition
     """Protocol representing objects that can yield a tokenizer."""
 
-    def get_tokenizer(self) -> Any:
-        ...
+    def get_tokenizer(self) -> Any: ...
 
 
 @dataclass
@@ -108,7 +107,9 @@ def to_token_classification(
     if groups:
         metadata["groups"] = groups
 
-    return TokenClassificationResult(tokens=annotations, scheme=scheme_upper, metadata=metadata)
+    return TokenClassificationResult(
+        tokens=annotations, scheme=scheme_upper, metadata=metadata
+    )
 
 
 def _tokenize(text: str, tokenizer: Any) -> List[Tuple[str, int, int]]:
@@ -197,7 +198,9 @@ def _overlaps(
     return token_start < entity_end and token_end > entity_start
 
 
-def _label_for_position(label: str, position: int, span_length: int, scheme: str) -> str:
+def _label_for_position(
+    label: str, position: int, span_length: int, scheme: str
+) -> str:
     if scheme == "BIO":
         prefix = "B" if position == 0 else "I"
         return f"{prefix}-{label}"

@@ -6,18 +6,33 @@ from openmed.ner.adapter import to_token_classification
 from openmed.ner.infer import Entity
 
 
-def make_entity(text: str, start: int, end: int, label: str, score: float = 0.9, group: str | None = None) -> Entity:
-    return Entity(text=text, start=start, end=end, label=label, score=score, group=group)
+def make_entity(
+    text: str,
+    start: int,
+    end: int,
+    label: str,
+    score: float = 0.9,
+    group: str | None = None,
+) -> Entity:
+    return Entity(
+        text=text, start=start, end=end, label=label, score=score, group=group
+    )
 
 
 def test_to_token_classification_bio_scheme() -> None:
-    entities = [make_entity("Aspirin", 0, 7, "Drug"), make_entity("fever", 15, 20, "Disease")]
+    entities = [
+        make_entity("Aspirin", 0, 7, "Drug"),
+        make_entity("fever", 15, 20, "Disease"),
+    ]
     text = "Aspirin treats fever."
     result = to_token_classification(entities, text, scheme="BIO")
     labels = result.labels()
     assert labels[0] == "B-Drug"
     assert "I-Drug" not in labels
-    assert any(label.startswith("B-Disease") or label.startswith("I-Disease") for label in labels)
+    assert any(
+        label.startswith("B-Disease") or label.startswith("I-Disease")
+        for label in labels
+    )
 
 
 def test_to_token_classification_bilou_scheme() -> None:

@@ -7,7 +7,6 @@ from pathlib import Path
 from openmed.cli import COMPLIANCE_CAVEAT, main_module
 from openmed.eval import TIERS
 
-
 ROOT = Path(__file__).resolve().parents[3]
 REQUIRED_FIELDS = {"ram_mb_max", "p50_ms_max", "p95_ms_max", "default_format"}
 

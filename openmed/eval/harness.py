@@ -19,7 +19,6 @@ from openmed.eval.metrics import (
 )
 from openmed.eval.report import BenchmarkReport
 
-
 ModelRunner = Callable[["BenchmarkFixture", str, str], Iterable[Any]]
 
 
@@ -77,7 +76,9 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     raw = json.loads(fixture_path.read_text(encoding="utf-8"))
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):
-        raise ValueError("benchmark fixture JSON must be a list or contain a fixtures list")
+        raise ValueError(
+            "benchmark fixture JSON must be a list or contain a fixtures list"
+        )
     fixtures = [BenchmarkFixture.from_mapping(row) for row in rows]
     _validate_unique_fixture_ids(fixtures)
     return fixtures
@@ -155,14 +156,12 @@ def run_benchmark(
                 predicted_spans=predicted_spans,
                 latency_ms=latency_ms,
             )
-    )
+        )
 
     gold_spans, predicted_spans, corpus_text = _corpus_coordinates(fixtures, results)
     peak_rss_end = _peak_rss_bytes()
     rss_values = [
-        value
-        for value in (peak_rss_start, peak_rss_end)
-        if value is not None
+        value for value in (peak_rss_start, peak_rss_end) if value is not None
     ]
     peak_rss = max(rss_values) if rss_values else None
     metrics = compute_metrics_bundle(
@@ -186,7 +185,9 @@ def run_benchmark(
         )
 
     report_metadata = dict(metadata or {})
-    report_metadata.setdefault("fixture_ids", [fixture.fixture_id for fixture in fixtures])
+    report_metadata.setdefault(
+        "fixture_ids", [fixture.fixture_id for fixture in fixtures]
+    )
     return BenchmarkReport(
         suite=suite,
         model_name=model_name,

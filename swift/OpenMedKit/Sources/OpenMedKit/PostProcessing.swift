@@ -719,14 +719,15 @@ public enum PostProcessing {
             let label = token.label
             guard label != "O" else {
                 if let curLabel = currentLabel {
-                    entities.append(makeEntity(
-                        label: curLabel,
-                        start: currentStart,
-                        end: currentEnd,
-                        scores: currentScores,
-                        text: text,
-                        strategy: strategy
-                    ))
+                    entities.append(
+                        makeEntity(
+                            label: curLabel,
+                            start: currentStart,
+                            end: currentEnd,
+                            scores: currentScores,
+                            text: text,
+                            strategy: strategy
+                        ))
                     currentLabel = nil
                     currentScores = []
                 }
@@ -748,14 +749,15 @@ public enum PostProcessing {
 
             if isBeginning || currentLabel == nil || currentLabel != entityType {
                 if let curLabel = currentLabel {
-                    entities.append(makeEntity(
-                        label: curLabel,
-                        start: currentStart,
-                        end: currentEnd,
-                        scores: currentScores,
-                        text: text,
-                        strategy: strategy
-                    ))
+                    entities.append(
+                        makeEntity(
+                            label: curLabel,
+                            start: currentStart,
+                            end: currentEnd,
+                            scores: currentScores,
+                            text: text,
+                            strategy: strategy
+                        ))
                 }
 
                 currentLabel = entityType
@@ -769,14 +771,15 @@ public enum PostProcessing {
         }
 
         if let curLabel = currentLabel {
-            entities.append(makeEntity(
-                label: curLabel,
-                start: currentStart,
-                end: currentEnd,
-                scores: currentScores,
-                text: text,
-                strategy: strategy
-            ))
+            entities.append(
+                makeEntity(
+                    label: curLabel,
+                    start: currentStart,
+                    end: currentEnd,
+                    scores: currentScores,
+                    text: text,
+                    strategy: strategy
+                ))
         }
 
         return repairEntitySpans(entities, text: text)
@@ -798,24 +801,24 @@ public enum PostProcessing {
 
             var extended = 0
             while end < textLength,
-                  extended < 10,
-                  let character = character(at: end, in: text),
-                  isWordLike(character)
+                extended < 10,
+                let character = character(at: end, in: text),
+                isWordLike(character)
             {
                 end += 1
                 extended += 1
             }
 
             while start < end,
-                  let character = character(at: start, in: text),
-                  character.isWhitespace
+                let character = character(at: start, in: text),
+                character.isWhitespace
             {
                 start += 1
             }
 
             while end > start,
-                  let character = character(at: end - 1, in: text),
-                  character.isWhitespace
+                let character = character(at: end - 1, in: text),
+                character.isWhitespace
             {
                 end -= 1
             }
@@ -910,7 +913,8 @@ public enum PostProcessing {
                 if matchingModelLabel {
                     finalLabel = dominantLabel
                 } else {
-                    finalLabel = isMoreSpecific(label: dominantLabel, than: unit.entityType)
+                    finalLabel =
+                        isMoreSpecific(label: dominantLabel, than: unit.entityType)
                         ? dominantLabel
                         : unit.entityType
                 }
@@ -967,8 +971,8 @@ public enum PostProcessing {
             for match in matches {
                 let matchedRange: NSRange
                 if let captureGroup = pattern.captureGroup,
-                   captureGroup > 0,
-                   captureGroup < match.numberOfRanges
+                    captureGroup > 0,
+                    captureGroup < match.numberOfRanges
                 {
                     matchedRange = match.range(at: captureGroup)
                 } else {
@@ -976,7 +980,8 @@ public enum PostProcessing {
                 }
 
                 guard matchedRange.location != NSNotFound,
-                      let range = Range(matchedRange, in: text) else {
+                    let range = Range(matchedRange, in: text)
+                else {
                     continue
                 }
 
@@ -994,12 +999,12 @@ public enum PostProcessing {
                 var score = pattern.baseScore
 
                 if !pattern.contextWords.isEmpty,
-                   findContextWords(
-                    in: text,
-                    start: start,
-                    end: end,
-                    contextWords: pattern.contextWords
-                   )
+                    findContextWords(
+                        in: text,
+                        start: start,
+                        end: end,
+                        contextWords: pattern.contextWords
+                    )
                 {
                     score = min(1.0, score + pattern.contextBoost)
                 }

@@ -14,7 +14,6 @@ import openmed
 from openmed.cli import main as cli_entry
 from openmed.cli import main_module
 
-
 ROOT = Path(__file__).resolve().parents[3]
 
 
@@ -90,7 +89,13 @@ def test_tui_entry_invokes_openmed_tui(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "openmed.tui", fake_tui)
 
     result = main_module.main(
-        ["tui", "--model", "disease_detection_superclinical", "--confidence-threshold", "0.6"]
+        [
+            "tui",
+            "--model",
+            "disease_detection_superclinical",
+            "--confidence-threshold",
+            "0.6",
+        ]
     )
 
     assert result == 0

@@ -13,7 +13,7 @@ let package = Package(
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        ),
+        )
     ],
     dependencies: [
         // swift-transformers for HuggingFace-compatible tokenization

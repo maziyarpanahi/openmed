@@ -131,7 +131,9 @@ def bump_version(current_version: str, bump: str) -> str:
     try:
         major, minor, patch = [int(part) for part in current_version.split(".")]
     except ValueError as exc:
-        raise ValueError(f"Expected SemVer version X.Y.Z, got {current_version!r}") from exc
+        raise ValueError(
+            f"Expected SemVer version X.Y.Z, got {current_version!r}"
+        ) from exc
 
     if bump == "major":
         return f"{major + 1}.0.0"
@@ -176,7 +178,9 @@ def render_changelog(
         lines.extend(["", f"### {section}", "", *entries])
 
     if len(lines) == 1:
-        lines.extend(["", "### Changed", "", "- No user-facing conventional commits found."])
+        lines.extend(
+            ["", "### Changed", "", "- No user-facing conventional commits found."]
+        )
 
     return "\n".join(lines).rstrip() + "\n"
 
