@@ -1,12 +1,18 @@
 """Unit tests for utility functions."""
 
-import pytest
-from unittest.mock import patch, Mock
 import logging
-from openmed.utils.logging import setup_logging, get_logger, OpenMedLogger
+from unittest.mock import Mock, patch
+
+import pytest
+
+from openmed.utils.logging import OpenMedLogger, get_logger, setup_logging
 from openmed.utils.validation import (
-    validate_input, validate_model_name, validate_confidence_threshold,
-    validate_output_format, validate_batch_size, sanitize_filename
+    sanitize_filename,
+    validate_batch_size,
+    validate_confidence_threshold,
+    validate_input,
+    validate_model_name,
+    validate_output_format,
 )
 
 
@@ -34,10 +40,10 @@ class TestLogging:
     def test_openmed_logger(self):
         """Test OpenMedLogger class."""
         logger = OpenMedLogger("test")
-        assert hasattr(logger, 'logger')
-        assert hasattr(logger, 'log_model_loading')
-        assert hasattr(logger, 'log_processing')
-        assert hasattr(logger, 'log_predictions')
+        assert hasattr(logger, "logger")
+        assert hasattr(logger, "log_model_loading")
+        assert hasattr(logger, "log_processing")
+        assert hasattr(logger, "log_predictions")
 
     def test_openmed_logger_methods(self):
         """Test OpenMedLogger methods don't raise errors."""
@@ -126,9 +132,13 @@ class TestValidation:
 
     def test_validate_model_name_empty_parts(self):
         """Test validate_model_name with empty organization or model."""
-        with pytest.raises(ValueError, match="Organization and model name cannot be empty"):
+        with pytest.raises(
+            ValueError, match="Organization and model name cannot be empty"
+        ):
             validate_model_name("/model")
-        with pytest.raises(ValueError, match="Organization and model name cannot be empty"):
+        with pytest.raises(
+            ValueError, match="Organization and model name cannot be empty"
+        ):
             validate_model_name("org/")
 
     def test_validate_model_name_invalid_characters(self):
@@ -152,9 +162,13 @@ class TestValidation:
 
     def test_validate_confidence_threshold_out_of_range(self):
         """Test validate_confidence_threshold with out of range values."""
-        with pytest.raises(ValueError, match="Confidence threshold must be between 0.0 and 1.0"):
+        with pytest.raises(
+            ValueError, match="Confidence threshold must be between 0.0 and 1.0"
+        ):
             validate_confidence_threshold(-0.1)
-        with pytest.raises(ValueError, match="Confidence threshold must be between 0.0 and 1.0"):
+        with pytest.raises(
+            ValueError, match="Confidence threshold must be between 0.0 and 1.0"
+        ):
             validate_confidence_threshold(1.1)
 
     def test_validate_output_format_valid(self):
@@ -231,7 +245,7 @@ class TestValidation:
 class TestSuspiciousContentDetection:
     """Test cases for suspicious content detection."""
 
-    @patch('openmed.utils.validation._contains_suspicious_content')
+    @patch("openmed.utils.validation._contains_suspicious_content")
     def test_validate_input_suspicious_content(self, mock_suspicious):
         """Test validate_input detects suspicious content."""
         mock_suspicious.return_value = True

@@ -24,8 +24,7 @@ try:
     import mlx.nn as nn
 except ImportError:
     raise ImportError(
-        "MLX is required for this module. "
-        "Install with: pip install openmed[mlx]"
+        "MLX is required for this module. Install with: pip install openmed[mlx]"
     )
 
 
@@ -114,25 +113,30 @@ class DebertaV2Embeddings(nn.Module):
 
         if self.position_biased_input:
             self.position_embeddings = nn.Embedding(
-                config["max_position_embeddings"], self.embedding_size,
+                config["max_position_embeddings"],
+                self.embedding_size,
             )
         else:
             self.position_embeddings = None
 
         if config.get("type_vocab_size", 0) > 0:
             self.token_type_embeddings = nn.Embedding(
-                config["type_vocab_size"], self.embedding_size,
+                config["type_vocab_size"],
+                self.embedding_size,
             )
         else:
             self.token_type_embeddings = None
 
         if self.embedding_size != config["hidden_size"]:
-            self.embed_proj = nn.Linear(self.embedding_size, config["hidden_size"], bias=False)
+            self.embed_proj = nn.Linear(
+                self.embedding_size, config["hidden_size"], bias=False
+            )
         else:
             self.embed_proj = None
 
         self.LayerNorm = nn.LayerNorm(
-            config["hidden_size"], eps=config.get("layer_norm_eps", 1e-7),
+            config["hidden_size"],
+            eps=config.get("layer_norm_eps", 1e-7),
         )
         self.dropout = nn.Dropout(p=config.get("hidden_dropout_prob", 0.1))
 
@@ -196,24 +200,34 @@ class DisentangledSelfAttention(nn.Module):
             if self.max_relative_positions < 1:
                 self.max_relative_positions = config["max_position_embeddings"]
             self.pos_ebd_size = (
-                self.position_buckets if self.position_buckets > 0 else self.max_relative_positions
+                self.position_buckets
+                if self.position_buckets > 0
+                else self.max_relative_positions
             )
             self.pos_dropout = nn.Dropout(p=config.get("hidden_dropout_prob", 0.1))
 
             if not self.share_att_key:
                 if "c2p" in self.pos_att_type:
-                    self.pos_key_proj = nn.Linear(config["hidden_size"], self.all_head_size)
+                    self.pos_key_proj = nn.Linear(
+                        config["hidden_size"], self.all_head_size
+                    )
                 if "p2c" in self.pos_att_type:
-                    self.pos_query_proj = nn.Linear(config["hidden_size"], self.all_head_size)
+                    self.pos_query_proj = nn.Linear(
+                        config["hidden_size"], self.all_head_size
+                    )
 
         self.dropout = nn.Dropout(p=config.get("attention_probs_dropout_prob", 0.1))
 
     def transpose_for_scores(self, x: mx.array) -> mx.array:
         """Reshape [B, L, H] projections to [B*heads, L, head_dim]."""
         batch_size, seq_len, _ = x.shape
-        x = x.reshape(batch_size, seq_len, self.num_attention_heads, self.attention_head_size)
+        x = x.reshape(
+            batch_size, seq_len, self.num_attention_heads, self.attention_head_size
+        )
         x = x.transpose(0, 2, 1, 3)
-        return x.reshape(batch_size * self.num_attention_heads, seq_len, self.attention_head_size)
+        return x.reshape(
+            batch_size * self.num_attention_heads, seq_len, self.attention_head_size
+        )
 
     def disentangled_attention_bias(
         self,
@@ -248,19 +262,23 @@ class DisentangledSelfAttention(nn.Module):
         batch_size = query_layer.shape[0] // self.num_attention_heads
         if self.share_att_key:
             pos_query_layer = _repeat_batches(
-                self.transpose_for_scores(self.query_proj(rel_embeddings)), batch_size,
+                self.transpose_for_scores(self.query_proj(rel_embeddings)),
+                batch_size,
             )
             pos_key_layer = _repeat_batches(
-                self.transpose_for_scores(self.key_proj(rel_embeddings)), batch_size,
+                self.transpose_for_scores(self.key_proj(rel_embeddings)),
+                batch_size,
             )
         else:
             if "c2p" in self.pos_att_type:
                 pos_key_layer = _repeat_batches(
-                    self.transpose_for_scores(self.pos_key_proj(rel_embeddings)), batch_size,
+                    self.transpose_for_scores(self.pos_key_proj(rel_embeddings)),
+                    batch_size,
                 )
             if "p2c" in self.pos_att_type:
                 pos_query_layer = _repeat_batches(
-                    self.transpose_for_scores(self.pos_query_proj(rel_embeddings)), batch_size,
+                    self.transpose_for_scores(self.pos_query_proj(rel_embeddings)),
+                    batch_size,
                 )
 
         score = None
@@ -290,12 +308,16 @@ class DisentangledSelfAttention(nn.Module):
                 mx.squeeze(p2c_pos, axis=0),
                 (query_layer.shape[0], key_layer.shape[-2], key_layer.shape[-2]),
             ).astype(mx.int32)
-            p2c_score = mx.take_along_axis(p2c_att, p2c_index, axis=-1).transpose(0, 2, 1)
+            p2c_score = mx.take_along_axis(p2c_att, p2c_index, axis=-1).transpose(
+                0, 2, 1
+            )
             p2c_score = p2c_score / math.sqrt(pos_query_layer.shape[-1] * scale_factor)
             score = p2c_score if score is None else score + p2c_score
 
         if score is None:
-            return mx.zeros((query_layer.shape[0], query_layer.shape[1], key_layer.shape[1]))
+            return mx.zeros(
+                (query_layer.shape[0], query_layer.shape[1], key_layer.shape[1])
+            )
         return score
 
     def __call__(
@@ -336,19 +358,32 @@ class DisentangledSelfAttention(nn.Module):
         query_len = query_layer.shape[1]
         key_len = key_layer.shape[1]
         attention_scores = attention_scores.reshape(
-            batch_size, self.num_attention_heads, query_len, key_len,
+            batch_size,
+            self.num_attention_heads,
+            query_len,
+            key_len,
         )
 
         mask = attention_mask > 0
-        min_value = mx.array(mx.finfo(attention_scores.dtype).min, dtype=attention_scores.dtype)
+        min_value = mx.array(
+            mx.finfo(attention_scores.dtype).min, dtype=attention_scores.dtype
+        )
         attention_scores = mx.where(mask, attention_scores, min_value)
 
         attention_probs = self.dropout(mx.softmax(attention_scores, axis=-1))
-        context_layer = attention_probs.reshape(
-            batch_size * self.num_attention_heads, query_len, key_len,
-        ) @ value_layer
+        context_layer = (
+            attention_probs.reshape(
+                batch_size * self.num_attention_heads,
+                query_len,
+                key_len,
+            )
+            @ value_layer
+        )
         context_layer = context_layer.reshape(
-            batch_size, self.num_attention_heads, query_len, self.attention_head_size,
+            batch_size,
+            self.num_attention_heads,
+            query_len,
+            self.attention_head_size,
         )
         context_layer = context_layer.transpose(0, 2, 1, 3)
         return context_layer.reshape(batch_size, query_len, self.all_head_size)
@@ -427,7 +462,9 @@ class DebertaV2Encoder(nn.Module):
 
     def __init__(self, config: dict) -> None:
         super().__init__()
-        self.layer = [DebertaV2Layer(config) for _ in range(config["num_hidden_layers"])]
+        self.layer = [
+            DebertaV2Layer(config) for _ in range(config["num_hidden_layers"])
+        ]
         self.relative_attention = config.get("relative_attention", False)
         self.position_buckets = config.get("position_buckets", -1)
         self.max_relative_positions = config.get("max_relative_positions", -1)
@@ -446,7 +483,8 @@ class DebertaV2Encoder(nn.Module):
         ]
         if "layer_norm" in self.norm_rel_ebd:
             self.LayerNorm = nn.LayerNorm(
-                config["hidden_size"], eps=config.get("layer_norm_eps", 1e-7),
+                config["hidden_size"],
+                eps=config.get("layer_norm_eps", 1e-7),
             )
 
     def get_rel_embedding(self) -> Optional[mx.array]:

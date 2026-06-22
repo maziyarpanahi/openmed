@@ -8,7 +8,6 @@ from typing import Any, Callable
 from openmed.core.labels import normalize_label
 from openmed.core.pii import PIIEntity
 
-
 Merger = Callable[..., list[dict[str, Any]]]
 
 
@@ -127,8 +126,9 @@ def merge_with_openmed_entities(
     if not entities:
         return []
 
+    source_dicts = [_entity_to_merger_dict(entity) for entity in entities]
     merged = merger(
-        [_entity_to_merger_dict(entity) for entity in entities],
+        source_dicts,
         text,
         use_semantic_patterns=use_semantic_patterns,
         prefer_model_labels=True,
@@ -137,7 +137,9 @@ def merge_with_openmed_entities(
     )
     return [
         _merger_dict_to_entity(item, text)
-        for item in _resolve_overlaps(merged)
+        for item in _resolve_overlaps(
+            [_restore_provenance(item, source_dicts) for item in merged]
+        )
     ]
 
 
@@ -165,6 +167,7 @@ def _copy_entities(
                 hash_value=entity.hash_value,
                 reversible_id=entity.reversible_id,
                 metadata=metadata,
+                sources=list(entity.sources or [source]),
             )
         )
     return copied
@@ -178,6 +181,7 @@ def _entity_to_merger_dict(entity: PIIEntity) -> dict[str, Any]:
         "end": int(entity.end or 0),
         "word": entity.text,
         "metadata": dict(entity.metadata or {}),
+        "sources": list(entity.sources or []),
     }
 
 
@@ -189,6 +193,9 @@ def _merger_dict_to_entity(item: Mapping[str, Any], text: str) -> PIIEntity:
     metadata = dict(item.get("metadata") or {})
     metadata.setdefault("adapter", "openmed")
     metadata.setdefault("source", metadata["adapter"])
+    sources = list(item.get("sources") or metadata.get("source_adapters") or [])
+    if not sources:
+        sources = [metadata["source"]]
     return PIIEntity(
         text=surface,
         label=label,
@@ -198,14 +205,61 @@ def _merger_dict_to_entity(item: Mapping[str, Any], text: str) -> PIIEntity:
         entity_type=label,
         original_text=surface,
         metadata=metadata,
+        sources=sources,
     )
+
+
+def _restore_provenance(
+    item: Mapping[str, Any],
+    source_entities: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any]:
+    restored = dict(item)
+    if restored.get("metadata") and restored.get("sources"):
+        return restored
+
+    overlapping = [
+        source
+        for source in source_entities
+        if int(restored["start"]) < int(source["end"])
+        and int(restored["end"]) > int(source["start"])
+    ]
+    if not overlapping:
+        return restored
+
+    metadata = dict(restored.get("metadata") or {})
+    adapters: list[str] = []
+    sources: list[str] = []
+    for source in overlapping:
+        source_metadata = dict(source.get("metadata") or {})
+        adapter = str(
+            source_metadata.get("adapter") or source_metadata.get("source") or "openmed"
+        )
+        if adapter not in adapters:
+            adapters.append(adapter)
+        for source_name in source.get("sources") or [adapter]:
+            source_text = str(source_name)
+            if source_text not in sources:
+                sources.append(source_text)
+        for key, value_ in source_metadata.items():
+            if key not in metadata:
+                metadata[key] = value_
+
+    if adapters:
+        metadata["adapter"] = adapters[0] if len(adapters) == 1 else "merged"
+        metadata["source"] = metadata["adapter"]
+        metadata["source_adapters"] = adapters
+    restored["metadata"] = metadata
+    restored["sources"] = sources or adapters
+    return restored
 
 
 def _resolve_overlaps(
     items: Sequence[Mapping[str, Any]],
 ) -> list[Mapping[str, Any]]:
     winners: list[Mapping[str, Any]] = []
-    for item in sorted(items, key=lambda entry: (int(entry["start"]), int(entry["end"]))):
+    for item in sorted(
+        items, key=lambda entry: (int(entry["start"]), int(entry["end"]))
+    ):
         overlaps = [
             existing
             for existing in winners

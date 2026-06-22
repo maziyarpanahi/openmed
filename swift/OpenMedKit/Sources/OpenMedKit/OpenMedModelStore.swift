@@ -48,7 +48,8 @@ public enum OpenMedModelStore {
         cacheDirectory: URL? = nil
     ) async throws -> URL {
         let cacheRoot = try cacheDirectory ?? defaultCacheDirectory()
-        let modelDirectory = cacheRoot
+        let modelDirectory =
+            cacheRoot
             .appending(path: sanitizedPathComponent(repoID), directoryHint: .isDirectory)
             .appending(path: sanitizedPathComponent(revision), directoryHint: .isDirectory)
         try FileManager.default.createDirectory(
@@ -137,7 +138,8 @@ public enum OpenMedModelStore {
         cacheDirectory: URL? = nil
     ) throws -> URL {
         let cacheRoot = try cacheDirectory ?? defaultCacheDirectory()
-        return cacheRoot
+        return
+            cacheRoot
             .appending(path: sanitizedPathComponent(repoID), directoryHint: .isDirectory)
             .appending(path: sanitizedPathComponent(revision), directoryHint: .isDirectory)
     }
@@ -211,16 +213,19 @@ public enum OpenMedModelStore {
         let data = try Data(contentsOf: manifestURL)
         let manifest = try JSONDecoder().decode(OpenMedMLXManifest.self, from: data)
 
-        let requiredFiles = [manifest.configPath] + manifest.tokenizer.files.map {
-            tokenizerRelativePath(basePath: manifest.tokenizer.path, fileName: $0)
-        }
+        let requiredFiles =
+            [manifest.configPath]
+            + manifest.tokenizer.files.map {
+                tokenizerRelativePath(basePath: manifest.tokenizer.path, fileName: $0)
+            }
         let hasWeights = manifest.availableWeights.contains {
             FileManager.default.fileExists(atPath: modelDirectory.appending(path: $0).path)
         }
 
-        return hasWeights && requiredFiles.allSatisfy {
-            FileManager.default.fileExists(atPath: modelDirectory.appending(path: $0).path)
-        }
+        return hasWeights
+            && requiredFiles.allSatisfy {
+                FileManager.default.fileExists(atPath: modelDirectory.appending(path: $0).path)
+            }
     }
 
     private static func markArtifactReadyIfComplete(at modelDirectory: URL) throws {
@@ -257,9 +262,11 @@ public enum OpenMedModelStore {
                 relativePath: fileName,
                 destinationURL: modelDirectory.appending(path: fileName)
             )
-            hasWeights = hasWeights || didDownload || FileManager.default.fileExists(
-                atPath: modelDirectory.appending(path: fileName).path
-            )
+            hasWeights =
+                hasWeights || didDownload
+                || FileManager.default.fileExists(
+                    atPath: modelDirectory.appending(path: fileName).path
+                )
         }
         guard hasWeights else {
             throw OpenMedModelStoreError.missingWeights(modelDirectory)
@@ -283,7 +290,8 @@ public enum OpenMedModelStore {
                 appropriateFor: nil,
                 create: true
             )
-        return base
+        return
+            base
             .appending(path: "OpenMed", directoryHint: .isDirectory)
             .appending(path: "MLXModels", directoryHint: .isDirectory)
     }
@@ -355,9 +363,11 @@ public enum OpenMedModelStore {
         let encodedRepo = encodePath(repoID)
         let encodedRevision = encodePath(revision)
         let encodedPath = encodePath(relativePath)
-        guard let url = URL(
-            string: "https://huggingface.co/\(encodedRepo)/resolve/\(encodedRevision)/\(encodedPath)?download=1"
-        ) else {
+        guard
+            let url = URL(
+                string: "https://huggingface.co/\(encodedRepo)/resolve/\(encodedRevision)/\(encodedPath)?download=1"
+            )
+        else {
             throw OpenMedModelStoreError.invalidResponse(
                 URL(fileURLWithPath: "/\(repoID)/\(relativePath)")
             )

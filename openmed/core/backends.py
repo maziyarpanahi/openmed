@@ -10,7 +10,16 @@ from __future__ import annotations
 import logging
 import platform
 import warnings
-from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    runtime_checkable,
+)
 
 logger = logging.getLogger(__name__)
 _warned_substitutions: set[str] = set()
@@ -54,6 +63,7 @@ class HuggingFaceBackend:
 
     def is_available(self) -> bool:
         from openmed.core.models import HF_AVAILABLE
+
         return HF_AVAILABLE
 
     def create_pipeline(
@@ -64,6 +74,7 @@ class HuggingFaceBackend:
         **kwargs: Any,
     ) -> Callable:
         from openmed.core.models import ModelLoader
+
         loader = ModelLoader(self._config)
         return loader._create_hf_pipeline(
             model_name,
@@ -84,6 +95,7 @@ class MLXBackend:
             return False
         try:
             import mlx.core  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -96,6 +108,7 @@ class MLXBackend:
         **kwargs: Any,
     ) -> Callable:
         from openmed.mlx.inference import create_mlx_pipeline
+
         return create_mlx_pipeline(
             model_name,
             aggregation_strategy=aggregation_strategy,
@@ -134,8 +147,7 @@ def get_backend(
         backend = _BACKENDS[name](config)
         if not backend.is_available():
             raise RuntimeError(
-                f"Backend {name!r} is not available. "
-                f"Install its dependencies first."
+                f"Backend {name!r} is not available. Install its dependencies first."
             )
         return backend
 
@@ -204,6 +216,7 @@ def select_privacy_filter_backend(
         # Some artifacts identify as MLX only via their on-disk metadata.
         try:
             from .pii import _is_privacy_filter_artifact_path
+
             is_mlx_artifact = _is_privacy_filter_artifact_path(model_name)
         except ImportError:  # pragma: no cover
             is_mlx_artifact = False
@@ -255,12 +268,14 @@ def create_privacy_filter_pipeline(model_name: str) -> Callable:
 
     if backend == "mlx":
         from openmed.mlx.inference import create_mlx_pipeline
+
         return create_mlx_pipeline(actual_model)
 
     from openmed.torch.privacy_filter import (
         PrivacyFilterTorchPipeline,
         is_trusted_for_remote_code,
     )
+
     # ``trust_remote_code=True`` is required to import the custom modeling
     # code shipped inside first-party privacy-filter repos. Only enable it
     # when the resolved model is on the allowlist; the pipeline itself

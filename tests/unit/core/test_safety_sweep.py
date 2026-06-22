@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 from openmed.core.anonymizer.providers import clinical_ids
 from openmed.core.labels import ID_SUBTYPE_NPI
-from openmed.core.pii_entity_merger import PIIPattern
 from openmed.core.pii import deidentify
+from openmed.core.pii_entity_merger import PIIPattern
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.core.safety_sweep import (
     SAFETY_SWEEP_PATTERNS_VERSION,
@@ -60,10 +60,7 @@ def test_safety_sweep_recovers_ml_missed_deterministic_identifiers():
 
 
 def test_safety_sweep_rejects_invalid_checksum_identifiers():
-    text = (
-        "Card 4111 1111 1111 1112. "
-        "IBAN GB83 WEST 1234 5698 7654 32."
-    )
+    text = "Card 4111 1111 1111 1112. IBAN GB83 WEST 1234 5698 7654 32."
 
     swept = _swept_by_label(safety_sweep(text, []))
 

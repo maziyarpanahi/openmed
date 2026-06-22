@@ -18,7 +18,6 @@ from ._pii import (
     value,
 )
 
-
 DEFAULT_MODEL_ID = "Ihor/gliner-biomed-large-v1.0"
 DEFAULT_LABELS = (
     "person",
@@ -83,7 +82,9 @@ def to_canonical(
     entities: list[PIIEntity] = []
     search_from = 0
     for record in _entity_records(result):
-        entity = _record_to_entity(record, text=text, config=cfg, search_from=search_from)
+        entity = _record_to_entity(
+            record, text=text, config=cfg, search_from=search_from
+        )
         entities.append(entity)
         search_from = int(entity.end or search_from)
     return entities

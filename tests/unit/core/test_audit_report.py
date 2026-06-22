@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from openmed.core.audit import (
     AuditReport,
     AuditSpan,
     DetectorInfo,
+    hash_text,
     recompute_repro_hash,
     verify_repro_hash,
-    hash_text,
 )
 
 
@@ -94,6 +96,24 @@ def test_report_sign_verify_and_tamper_detection():
     tampered.spans[0].canonical_label = "EMAIL"
 
     assert not tampered.verify("release-key")
+
+
+@pytest.mark.parametrize("key", [None, "", b""])
+def test_report_sign_rejects_missing_or_empty_hmac_key(key):
+    with pytest.raises(ValueError, match="non-empty HMAC release key"):
+        _report().sign(key)
+
+
+def test_unsigned_report_verify_returns_false_with_valid_key():
+    assert not _report().verify("release-key")
+
+
+@pytest.mark.parametrize("key", [None, "", b""])
+def test_report_verify_rejects_missing_or_empty_hmac_key(key):
+    report = _report().sign("release-key")
+
+    with pytest.raises(ValueError, match="non-empty HMAC release key"):
+        report.verify(key)
 
 
 def test_review_bundle_excludes_full_document_and_span_text():

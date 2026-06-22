@@ -62,8 +62,7 @@ def _normalise_component(value: Any) -> Any:
         return {"sha256": hashlib.sha256(value).hexdigest()}
     if isinstance(value, Mapping):
         return {
-            str(key): _normalise_component(value[key])
-            for key in sorted(value, key=str)
+            str(key): _normalise_component(value[key]) for key in sorted(value, key=str)
         }
     if isinstance(value, (list, tuple)):
         return [_normalise_component(item) for item in value]

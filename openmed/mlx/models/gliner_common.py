@@ -9,8 +9,7 @@ try:
     import mlx.nn as nn
 except ImportError:
     raise ImportError(
-        "MLX is required for this module. "
-        "Install with: pip install openmed[mlx]"
+        "MLX is required for this module. Install with: pip install openmed[mlx]"
     )
 
 
@@ -103,7 +102,9 @@ def extract_marker_embeddings(
 
     for batch_index in range(batch_size):
         row_ids = input_ids[batch_index].tolist()
-        raw_positions = [idx for idx, token_id in enumerate(row_ids) if token_id == marker_token_id]
+        raw_positions = [
+            idx for idx, token_id in enumerate(row_ids) if token_id == marker_token_id
+        ]
         if not raw_positions:
             rows.append(mx.zeros((0, embed_dim), dtype=token_embeds.dtype))
             masks.append([])
@@ -137,7 +138,9 @@ def extract_word_embeddings(
 
     for batch_index in range(batch_size):
         word_mask = words_mask[batch_index].tolist()
-        token_positions = [idx for idx, word_index in enumerate(word_mask) if word_index > 0]
+        token_positions = [
+            idx for idx, word_index in enumerate(word_mask) if word_index > 0
+        ]
         if not token_positions:
             rows.append(mx.zeros((0, embed_dim), dtype=token_embeds.dtype))
             masks.append([])
@@ -174,14 +177,8 @@ def build_candidate_span_indices(
         mask_rows.append([1 if end < length else 0 for _, end in spans])
 
     max_spans = max(max_spans, 1)
-    padded_spans = [
-        spans + [[0, 0]] * (max_spans - len(spans))
-        for spans in span_rows
-    ]
-    padded_masks = [
-        masks + [0] * (max_spans - len(masks))
-        for masks in mask_rows
-    ]
+    padded_spans = [spans + [[0, 0]] * (max_spans - len(spans)) for spans in span_rows]
+    padded_masks = [masks + [0] * (max_spans - len(masks)) for masks in mask_rows]
     return (
         mx.array(padded_spans, dtype=mx.int32),
         mx.array(padded_masks, dtype=mx.bool_),
@@ -242,13 +239,9 @@ def build_all_entity_pairs(
         tail_rows.append(span_rep[batch_index][pair_array[:, 1]])
 
     max_pairs = max(max_pairs, 1)
-    padded_pairs = [
-        pairs + [[0, 0]] * (max_pairs - len(pairs))
-        for pairs in pair_rows
-    ]
+    padded_pairs = [pairs + [[0, 0]] * (max_pairs - len(pairs)) for pairs in pair_rows]
     padded_pair_masks = [
-        mask + [0] * (max_pairs - len(mask))
-        for mask in pair_mask_rows
+        mask + [0] * (max_pairs - len(mask)) for mask in pair_mask_rows
     ]
 
     return (
@@ -280,7 +273,9 @@ class TokenLevelSpanResult:
         return [True] * len(self.spans)
 
 
-def _has_flat_overlap(span: TokenLevelSpan, selected: list[TokenLevelSpan], multi_label: bool) -> bool:
+def _has_flat_overlap(
+    span: TokenLevelSpan, selected: list[TokenLevelSpan], multi_label: bool
+) -> bool:
     for existing in selected:
         if span.start == existing.start and span.end == existing.end:
             if not multi_label:
@@ -291,16 +286,17 @@ def _has_flat_overlap(span: TokenLevelSpan, selected: list[TokenLevelSpan], mult
     return False
 
 
-def _has_nested_overlap(span: TokenLevelSpan, selected: list[TokenLevelSpan], multi_label: bool) -> bool:
+def _has_nested_overlap(
+    span: TokenLevelSpan, selected: list[TokenLevelSpan], multi_label: bool
+) -> bool:
     for existing in selected:
         if span.start == existing.start and span.end == existing.end:
             if not multi_label:
                 return True
             continue
         is_disjoint = span.start > existing.end or existing.start > span.end
-        is_nested = (
-            (span.start <= existing.start and span.end >= existing.end)
-            or (existing.start <= span.start and existing.end >= span.end)
+        is_nested = (span.start <= existing.start and span.end >= existing.end) or (
+            existing.start <= span.start and existing.end >= span.end
         )
         if not (is_disjoint or is_nested):
             return True
@@ -340,7 +336,9 @@ def decode_token_level_spans(
             ends: list[int] = []
             inside_scores: list[float] = []
             for token_index in range(sequence_length):
-                start_score, end_score, inside_score = sample_scores[token_index][class_index]
+                start_score, end_score, inside_score = sample_scores[token_index][
+                    class_index
+                ]
                 if start_score > threshold:
                     starts.append(token_index)
                 if end_score > threshold:

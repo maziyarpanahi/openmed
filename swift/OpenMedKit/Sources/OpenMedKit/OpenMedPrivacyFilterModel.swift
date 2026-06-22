@@ -152,7 +152,7 @@ private func privacyFilterSwiGLU(
     return (glu / (1.0 + exp(-alpha * glu))) * (linear + 1.0)
 }
 
-fileprivate class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
+private class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
     fileprivate let numExperts: Int
     fileprivate let inputSize: Int
     fileprivate let outputSize: Int
@@ -205,7 +205,7 @@ fileprivate class OpenMedPrivacyFilterExpertLinear: Module, Quantizable {
     }
 }
 
-fileprivate final class OpenMedPrivacyFilterQuantizedExpertLinear:
+private final class OpenMedPrivacyFilterQuantizedExpertLinear:
     OpenMedPrivacyFilterExpertLinear, Quantized
 {
     let groupSize: Int
@@ -334,7 +334,8 @@ private func privacyFilterLocalAttention(
 
     var scores = einsum("bthqd,btwhd->bthqw", query, keyWindows).asType(.float32)
     let offsets = MLXArray.arange(window, dtype: .int32) - Int32(leftContext)
-    let positions = MLXArray.arange(numTokens, dtype: .int32).expandedDimensions(axis: 1)
+    let positions =
+        MLXArray.arange(numTokens, dtype: .int32).expandedDimensions(axis: 1)
         + offsets.expandedDimensions(axis: 0)
     var valid = ((positions .>= 0) & (positions .< Int32(numTokens)))
         .expandedDimensions(axes: [0, 2, 3])
@@ -394,7 +395,8 @@ private final class OpenMedPrivacyFilterAttentionBlock: Module {
         self.rightContext = configuration.bidirectionalRightContext
         self.qkScale = 1.0 / sqrt(sqrt(Float(configuration.headDim)))
         self.rope = OpenMedPrivacyFilterRotaryEmbedding(configuration)
-        let qkvSize = configuration.headDim
+        let qkvSize =
+            configuration.headDim
             * (configuration.numAttentionHeads + 2 * configuration.numKeyValueHeads)
 
         _norm.wrappedValue = OpenMedPrivacyFilterRMSNorm(
@@ -492,7 +494,8 @@ private final class OpenMedPrivacyFilterMLPBlock: Module {
             privacyFilterExpertInput(hidden, for: out),
             expertIndices: expertIndices
         ).asType(.float32)
-        let mixed = sum(output * expertWeights.expandedDimensions(axis: -1), axis: 1)
+        let mixed =
+            sum(output * expertWeights.expandedDimensions(axis: -1), axis: 1)
             * Float(expertsPerToken)
         return input + mixed.reshaped(batchShape + [hiddenSize]).asType(input.dtype)
     }
@@ -581,7 +584,7 @@ final class OpenMedPrivacyFilterForTokenClassification: Module {
             },
             apply: { layer, groupSize, bits, mode in
                 if let expert = layer as? OpenMedPrivacyFilterExpertLinear,
-                   !(expert is OpenMedPrivacyFilterQuantizedExpertLinear)
+                    !(expert is OpenMedPrivacyFilterQuantizedExpertLinear)
                 {
                     return OpenMedPrivacyFilterQuantizedExpertLinear(
                         numExperts: expert.numExperts,

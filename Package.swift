@@ -12,7 +12,7 @@ let package = Package(
         .library(
             name: "OpenMedKit",
             targets: ["OpenMedKit"]
-        ),
+        )
     ],
     dependencies: [
         .package(

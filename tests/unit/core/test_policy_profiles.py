@@ -7,9 +7,9 @@ import pytest
 from openmed.core.arbitration import MODE_HIGH_RECALL_UNION
 from openmed.core.cascade import R3_ACCURATE, CascadeRouter
 from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.pii import deidentify
 from openmed.core.pipeline import Pipeline
 from openmed.core.policy import CANONICAL_POLICY_NAMES, load_policy
-from openmed.core.pii import deidentify
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 

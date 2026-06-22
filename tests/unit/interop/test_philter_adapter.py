@@ -1,13 +1,9 @@
 from __future__ import annotations
 
 from openmed.core.pii import PIIEntity
-from openmed.interop import get_adapter
-from openmed.interop import philter
+from openmed.interop import get_adapter, philter
 
-
-GOLDEN_TEXT = (
-    "John Doe visited City Hospital on 2024-01-02. Call 555-123-4567."
-)
+GOLDEN_TEXT = "John Doe visited City Hospital on 2024-01-02. Call 555-123-4567."
 
 
 def _span(text: str, phi_type: str) -> dict[str, object]:
@@ -52,8 +48,7 @@ def test_to_canonical_preserves_offsets_and_uses_canonical_labels():
         "555-123-4567",
     ]
     assert [(entity.start, entity.end) for entity in entities] == [
-        (item["start"], item["stop"])
-        for item in GOLDEN_RESULTS
+        (item["start"], item["stop"]) for item in GOLDEN_RESULTS
     ]
     assert all(entity.metadata["adapter"] == "philter" for entity in entities)
 
@@ -64,16 +59,11 @@ def test_from_canonical_round_trip_preserves_philter_labels():
     round_tripped = philter.from_canonical(entities)
 
     assert [item["phi_type"] for item in round_tripped] == [
-        item["phi_type"]
-        for item in GOLDEN_RESULTS
+        item["phi_type"] for item in GOLDEN_RESULTS
     ]
     assert [
-        entity.label
-        for entity in philter.to_canonical(round_tripped, text=GOLDEN_TEXT)
-    ] == [
-        entity.label
-        for entity in entities
-    ]
+        entity.label for entity in philter.to_canonical(round_tripped, text=GOLDEN_TEXT)
+    ] == [entity.label for entity in entities]
 
 
 def test_merge_with_openmed_routes_through_merger_and_adds_adapter_spans(monkeypatch):
@@ -106,3 +96,29 @@ def test_merge_with_openmed_routes_through_merger_and_adds_adapter_spans(monkeyp
         ("2024-01-02", "DATE"),
     ]
     assert calls[0][2]["prefer_model_labels"] is True
+
+
+def test_merge_with_openmed_preserves_provenance_on_real_semantic_merge():
+    date_start = GOLDEN_TEXT.index("2024-01-02")
+    openmed_entity = PIIEntity(
+        text="2024",
+        label="DATE",
+        entity_type="DATE",
+        start=date_start,
+        end=date_start + len("2024"),
+        confidence=0.70,
+        metadata={"adapter": "openmed", "source": "openmed"},
+        sources=["openmed"],
+    )
+
+    merged = philter.merge_with_openmed(
+        [openmed_entity],
+        [_span("2024-01-02", "DATE")],
+        text=GOLDEN_TEXT,
+    )
+
+    date_entity = next(entity for entity in merged if entity.text == "2024-01-02")
+    assert date_entity.metadata["adapter"] == "merged"
+    assert date_entity.metadata["source_adapters"] == ["openmed", "philter"]
+    assert date_entity.metadata["philter_phi_type"] == "DATE"
+    assert date_entity.sources == ["openmed", "philter"]

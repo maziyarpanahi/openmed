@@ -173,6 +173,16 @@ _CATEGORY_ENTITY_TYPES = {
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        "CARDIAC_FINDING",
+        "ECG_FINDING",
+        "EJECTION_FRACTION",
+        "CARDIAC_PROCEDURE",
+        "CARDIAC_DEVICE",
+        "ANATOMY",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -180,9 +190,7 @@ _LEGACY_MODEL_ALIASES = {
     "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": [
         "disease_detection_superclinical"
     ],
-    "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M": [
-        "disease_detection_tiny"
-    ],
+    "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M": ["disease_detection_tiny"],
     "OpenMed/OpenMed-NER-PharmaDetect-SuperClinical-434M": [
         "pharma_detection_superclinical"
     ],
@@ -192,33 +200,25 @@ _LEGACY_MODEL_ALIASES = {
     "OpenMed/OpenMed-NER-OncologyDetect-SuperClinical-434M": [
         "oncology_detection_superclinical"
     ],
-    "OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M": [
-        "oncology_detection_tiny"
-    ],
+    "OpenMed/OpenMed-NER-OncologyDetect-TinyMed-65M": ["oncology_detection_tiny"],
     "OpenMed/OpenMed-NER-AnatomyDetect-ElectraMed-109M": [
         "anatomy_detection_electramed"
     ],
     "OpenMed/OpenMed-NER-GenomeDetect-BioClinical-108M": [
         "genome_detection_bioclinical"
     ],
-    "OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M": [
-        "chemical_detection_pubmed"
-    ],
+    "OpenMed/OpenMed-NER-ChemicalDetect-PubMed-335M": ["chemical_detection_pubmed"],
     "OpenMed/OpenMed-NER-SpeciesDetect-BioClinical-108M": [
         "species_detection_bioclinical"
     ],
-    "OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M": [
-        "protein_detection_pubmed"
-    ],
+    "OpenMed/OpenMed-NER-ProteinDetect-PubMed-109M": ["protein_detection_pubmed"],
     "OpenMed/OpenMed-NER-PathologyDetect-ModernClinical-395M": [
         "pathology_detection_modern"
     ],
     "OpenMed/OpenMed-NER-BloodCancerDetect-SuperClinical-434M": [
         "blood_cancer_detection"
     ],
-    "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": [
-        "dna_detection_supermedical"
-    ],
+    "OpenMed/OpenMed-NER-DNADetect-SuperMedical-125M": ["dna_detection_supermedical"],
     "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1": ["pii_detection"],
 }
 
@@ -442,7 +442,9 @@ def _registry_key(row: Dict[str, Any]) -> str:
     return _slug(_repo_name(row["repo_id"]))
 
 
-def _unique_key(base_key: str, row: Dict[str, Any], registry: Dict[str, ModelInfo]) -> str:
+def _unique_key(
+    base_key: str, row: Dict[str, Any], registry: Dict[str, ModelInfo]
+) -> str:
     if base_key not in registry:
         return base_key
 
@@ -597,7 +599,8 @@ def get_models_by_category(category: str) -> List[ModelInfo]:
 def get_models_by_size(size_category: str) -> List[ModelInfo]:
     """Get models by size category (Tiny, Small, Medium, Large, XLarge)."""
     return [
-        model for model in OPENMED_MODELS.values()
+        model
+        for model in OPENMED_MODELS.values()
         if model.size_category == size_category
     ]
 
@@ -624,53 +627,74 @@ def get_all_models() -> Dict[str, ModelInfo]:
     return OPENMED_MODELS.copy()
 
 
+_CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
+    "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
+        "Privacy",
+        "Contains PII/de-identification terms",
+    ),
+    "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
+        "Oncology",
+        "Contains cancer/oncology terms",
+    ),
+    "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
+        "Pharmaceutical",
+        "Contains pharmaceutical terms",
+    ),
+    "gene|dna|protein|mutation|chromosome": (
+        "Genomics",
+        "Contains genomic/genetic terms",
+    ),
+    "ecg|ekg|ejection fraction|arrhythmia|stent|pacemaker|murmur|st elevation|echocardiogram|cardiac|cardiolog": (
+        "Cardiology",
+        "Contains cardiology terms",
+    ),
+    "heart|lung|brain|liver|kidney|organ": (
+        "Anatomy",
+        "Contains anatomical terms",
+    ),
+    "bacteria|virus|organism|species": (
+        "Species",
+        "Contains organism/species terms",
+    ),
+    "disease|condition|disorder|syndrome": (
+        "Disease",
+        "Contains disease/condition terms",
+    ),
+    "pathology|histology|biopsy": (
+        "Pathology",
+        "Contains pathological terms",
+    ),
+    "blood|lymph|leukemia|lymphoma": (
+        "Hematology",
+        "Contains hematological terms",
+    ),
+}
+
+
+def _match_categories(text: str) -> List[Tuple[str, str]]:
+    """Return ``(category, reason)`` pairs whose keywords match ``text``.
+
+    This is the routing layer behind :func:`get_model_suggestions`. It reports
+    a category whenever the text matches its keywords, independently of whether
+    any model is registered for that category (e.g. ``Cardiology`` has keyword
+    routing but no registered model yet).
+    """
+
+    text_lower = text.lower()
+    return [
+        (category, reason)
+        for pattern, (category, reason) in _CATEGORY_KEYWORDS.items()
+        if re.search(pattern, text_lower)
+    ]
+
+
 def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
     """Suggest appropriate models based on text content."""
-    text_lower = text.lower()
     suggestions: List[Tuple[str, ModelInfo, str]] = []
-    keywords = {
-        "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
-            "Privacy",
-            "Contains PII/de-identification terms",
-        ),
-        "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
-            "Oncology",
-            "Contains cancer/oncology terms",
-        ),
-        "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
-            "Pharmaceutical",
-            "Contains pharmaceutical terms",
-        ),
-        "gene|dna|protein|mutation|chromosome": (
-            "Genomics",
-            "Contains genomic/genetic terms",
-        ),
-        "heart|lung|brain|liver|kidney|organ": (
-            "Anatomy",
-            "Contains anatomical terms",
-        ),
-        "bacteria|virus|organism|species": (
-            "Species",
-            "Contains organism/species terms",
-        ),
-        "disease|condition|disorder|syndrome": (
-            "Disease",
-            "Contains disease/condition terms",
-        ),
-        "pathology|histology|biopsy": (
-            "Pathology",
-            "Contains pathological terms",
-        ),
-        "blood|lymph|leukemia|lymphoma": (
-            "Hematology",
-            "Contains hematological terms",
-        ),
-    }
 
-    for pattern, (category, reason) in keywords.items():
-        if re.search(pattern, text_lower):
-            for key in CATEGORIES.get(category, [])[:3]:
-                suggestions.append((key, OPENMED_MODELS[key], reason))
+    for category, reason in _match_categories(text):
+        for key in CATEGORIES.get(category, [])[:3]:
+            suggestions.append((key, OPENMED_MODELS[key], reason))
 
     if not suggestions:
         for key in SIZE_RECOMMENDATIONS.get("balanced", [])[:3]:

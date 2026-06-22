@@ -101,6 +101,7 @@ class _StrictModel(BaseModel):
     if ConfigDict is not None:
         model_config = ConfigDict(extra="forbid")
     else:  # pragma: no cover
+
         class Config:
             extra = "forbid"
 
@@ -114,7 +115,9 @@ if PYDANTIC_V2:
         model_name: str = "disease_detection_superclinical"
         confidence_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0)
         group_entities: bool = False
-        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = "simple"
+        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = (
+            "simple"
+        )
         sentence_detection: bool = True
         sentence_language: str = "en"
         sentence_clean: bool = False
@@ -133,14 +136,15 @@ if PYDANTIC_V2:
 
         @field_validator("confidence_threshold")
         @classmethod
-        def _validate_confidence_threshold(cls, value: Optional[float]) -> Optional[float]:
+        def _validate_confidence_threshold(
+            cls, value: Optional[float]
+        ) -> Optional[float]:
             return _normalize_confidence_threshold(value)
 
         @field_validator("keep_alive", mode="before")
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
 
     class PIIExtractRequest(_StrictModel):
         """Request schema for /pii/extract."""
@@ -174,7 +178,6 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
 
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
@@ -228,7 +231,6 @@ if PYDANTIC_V2:
                 setattr(self, field_name, value)
             return self
 
-
     class ModelUnloadRequest(_StrictModel):
         """Request schema for /models/unload."""
 
@@ -257,7 +259,9 @@ else:
         model_name: str = "disease_detection_superclinical"
         confidence_threshold: Optional[float] = Field(default=0.0, ge=0.0, le=1.0)
         group_entities: bool = False
-        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = "simple"
+        aggregation_strategy: Optional[Literal["simple", "first", "average", "max"]] = (
+            "simple"
+        )
         sentence_detection: bool = True
         sentence_language: str = "en"
         sentence_clean: bool = False
@@ -273,13 +277,14 @@ else:
             return _normalize_model_name(value)
 
         @validator("confidence_threshold")
-        def _validate_confidence_threshold(cls, value: Optional[float]) -> Optional[float]:
+        def _validate_confidence_threshold(
+            cls, value: Optional[float]
+        ) -> Optional[float]:
             return _normalize_confidence_threshold(value)
 
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
 
     class PIIExtractRequest(_StrictModel):
         """Request schema for /pii/extract."""
@@ -309,7 +314,6 @@ else:
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
-
 
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
@@ -354,7 +358,6 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
-
 
     class ModelUnloadRequest(_StrictModel):
         """Request schema for /models/unload."""

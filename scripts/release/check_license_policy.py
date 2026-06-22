@@ -29,6 +29,8 @@ ALLOWED_LICENSE_MARKERS = (
     "BSD-2-CLAUSE",
     "BSD-3-CLAUSE",
     "ISC",
+    "HPND",
+    "HISTORICAL PERMISSION NOTICE AND DISCLAIMER",
 )
 
 DISALLOWED_LICENSE_MARKERS = (
@@ -66,10 +68,13 @@ REVIEWED_LICENSES = {
     "mkdocstrings": "ISC",
     "mlx": "MIT",
     "philter-ucsf": "BSD-3-Clause",
+    "pdfplumber": "MIT",
+    "pillow": "HPND",
     "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
     "pydeid": "MIT",
+    "python-docx": "MIT",
     "rich": "MIT",
     "safetensors": "Apache-2.0",
     "tiktoken": "MIT",
@@ -113,11 +118,15 @@ def dependency_name(requirement: str) -> str:
 
     match = NAME_RE.match(requirement)
     if not match:
-        raise ValueError(f"Cannot parse dependency name from requirement: {requirement!r}")
+        raise ValueError(
+            f"Cannot parse dependency name from requirement: {requirement!r}"
+        )
     return normalize_name(match.group(1))
 
 
-def iter_installable_requirements(pyproject: Mapping[str, object]) -> list[RequirementEntry]:
+def iter_installable_requirements(
+    pyproject: Mapping[str, object],
+) -> list[RequirementEntry]:
     """Return direct non-dev dependencies from project metadata."""
 
     project = pyproject.get("project", {})
@@ -131,7 +140,9 @@ def iter_installable_requirements(pyproject: Mapping[str, object]) -> list[Requi
         if not isinstance(dependencies, list):
             raise ValueError("[project].dependencies must be a list")
         entries.extend(
-            RequirementEntry("default", str(requirement), dependency_name(str(requirement)))
+            RequirementEntry(
+                "default", str(requirement), dependency_name(str(requirement))
+            )
             for requirement in dependencies
         )
 
@@ -143,9 +154,13 @@ def iter_installable_requirements(pyproject: Mapping[str, object]) -> list[Requi
             if normalize_name(str(group)) in EXCLUDED_OPTIONAL_GROUPS:
                 continue
             if not isinstance(requirements, list):
-                raise ValueError(f"[project.optional-dependencies].{group} must be a list")
+                raise ValueError(
+                    f"[project.optional-dependencies].{group} must be a list"
+                )
             entries.extend(
-                RequirementEntry(str(group), str(requirement), dependency_name(str(requirement)))
+                RequirementEntry(
+                    str(group), str(requirement), dependency_name(str(requirement))
+                )
                 for requirement in requirements
             )
 
@@ -213,7 +228,10 @@ def is_allowed_license(name: str, license_text: str) -> tuple[bool, str]:
     is_bridge_exception = normalized_name in GPL_BRIDGE_EXCEPTIONS
 
     if is_bridge_exception and has_disallowed and "ELASTIC" not in license_text.upper():
-        return True, f"allowed only as bridge exception: {GPL_BRIDGE_EXCEPTIONS[normalized_name]}"
+        return (
+            True,
+            f"allowed only as bridge exception: {GPL_BRIDGE_EXCEPTIONS[normalized_name]}",
+        )
 
     if has_disallowed:
         return False, "license is not allowed for bundled or in-process dependencies"
