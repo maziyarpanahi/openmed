@@ -41,8 +41,8 @@ Not reversible by itself — pass `keep_mapping=True` and use `reidentify()`
 
 ```python
 result = deidentify("Call 555-1234", method="remove")
-print(result.deidentified_text)
-# Call
+print(repr(result.deidentified_text))
+# 'Call '
 ```
 
 Use this when you don't need positional alignment with the original text
@@ -58,7 +58,7 @@ result = deidentify(
     seed=42,
 )
 print(result.deidentified_text)
-# Email: <a realistic, fake-but-valid-looking address>
+# Email: asnyder@example.com
 ```
 
 Best for sharing data with downstream tools that expect well-formed values
