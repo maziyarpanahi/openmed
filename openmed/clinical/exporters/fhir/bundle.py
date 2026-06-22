@@ -99,8 +99,6 @@ def to_bundle(
     return {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
 
 
-
-
 def _rewrite_references(node: Any, reference_map: Mapping[str, str]) -> Any:
     """Deep-copy ``node``, rewriting in-Bundle references to their ``fullUrl``.
 
