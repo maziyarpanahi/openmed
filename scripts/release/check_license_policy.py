@@ -29,6 +29,8 @@ ALLOWED_LICENSE_MARKERS = (
     "BSD-2-CLAUSE",
     "BSD-3-CLAUSE",
     "ISC",
+    "HPND",
+    "HISTORICAL PERMISSION NOTICE AND DISCLAIMER",
 )
 
 DISALLOWED_LICENSE_MARKERS = (
@@ -65,10 +67,13 @@ REVIEWED_LICENSES = {
     "mkdocs-minify-plugin": "MIT",
     "mkdocstrings": "ISC",
     "mlx": "MIT",
+    "pdfplumber": "MIT",
+    "pillow": "HPND",
     "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
     "python-doctr": "Apache-2.0",
+    "python-docx": "MIT",
     "rich": "MIT",
     "safetensors": "Apache-2.0",
     "tiktoken": "MIT",

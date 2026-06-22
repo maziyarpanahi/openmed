@@ -59,19 +59,19 @@ presidio = [
   "presidio-analyzer>=2.2.354,<3",
 ]
 
+multimodal = [
+  "pdfplumber>=0.11",
+  "python-docx>=1.1",
+  "Pillow>=10.0",
+  "python-doctr>=1.0",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
   "accelerate>=0.29",
   "tokenizers>=0.15"
 ]
-
-
-multimodal = [
-  "python-doctr>=1.0",
-]
-
-
 
 service = [
   "fastapi>=0.110",
