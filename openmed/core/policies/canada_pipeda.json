@@ -1,6 +1,6 @@
 {
     "schema_version":  1,
-    "name":  "gdpr_pseudonymization",
+    "name":  "canada_pipeda",
     "posture":  "gdpr_pseudonymization",
     "threshold_profile":  "balanced",
     "default_action":  "replace",
