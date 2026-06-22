@@ -55,6 +55,9 @@ The public runtime focuses on automatic preparation at first use. OpenMed's broa
 
 ## Architecture Coverage
 
+For a format-by-format view of MLX, CoreML, ONNX, Transformers.js, and GGUF
+support, see the [export format support matrix](export-matrix.md).
+
 As of May 4, 2026, the current public MLX path covers these families:
 
 - `bert`

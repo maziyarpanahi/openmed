@@ -36,6 +36,7 @@ nav:
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
       - CoreML Packaging: coreml-export.md
+      - Export Format Matrix: export-matrix.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - FAQ: faq.md

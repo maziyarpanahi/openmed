@@ -4,6 +4,9 @@ Use CoreML when you need a bundled Apple model package for **Swift/iOS/macOS app
 
 OpenMedKit is the public Swift runtime and supports both MLX and CoreML backends. The universal OpenMed-to-CoreML packaging workflow is still being generalized across the model collection, so conversion should be treated as **active platform work**, not a stable public release surface yet.
 
+For the current architecture-by-format limits across MLX, CoreML, ONNX,
+Transformers.js, and GGUF, see the [export format support matrix](export-matrix.md).
+
 ## Current Status
 
 As of April 4, 2026:
