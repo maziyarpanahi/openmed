@@ -110,6 +110,7 @@ def test_deidentification_redacts_original_nfc_changed_entity_surface():
         use_safety_sweep=False,
     ).run(text, method="mask")
     entity = result.deidentification_result.pii_entities[0]
+    span = result.spans[0]
 
     assert result.deidentification_result.original_text == text
     assert entity.original_text == "Jose\u0301 Garcia"
@@ -118,6 +119,11 @@ def test_deidentification_redacts_original_nfc_changed_entity_surface():
         text.index("Jose\u0301 Garcia"),
         text.index("Jose\u0301 Garcia") + len("Jose\u0301 Garcia"),
     )
+    assert (span.start, span.end) == (entity.start, entity.end)
+    assert "normalized_text" not in (entity.metadata or {})
+    assert "normalized_text" not in span.metadata
+    assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
+    assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
     assert result.redacted_text == "Patient [NAME] visited"
 
 
@@ -147,6 +153,7 @@ def test_deidentification_redacts_original_collapsed_whitespace_entity_surface()
         use_safety_sweep=False,
     ).run(text, method="mask")
     entity = result.deidentification_result.pii_entities[0]
+    span = result.spans[0]
 
     assert result.deidentification_result.original_text == text
     assert entity.original_text == "John   Doe"
@@ -155,6 +162,11 @@ def test_deidentification_redacts_original_collapsed_whitespace_entity_surface()
         text.index("John   Doe"),
         text.index("John   Doe") + len("John   Doe"),
     )
+    assert (span.start, span.end) == (entity.start, entity.end)
+    assert "normalized_text" not in (entity.metadata or {})
+    assert "normalized_text" not in span.metadata
+    assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
+    assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
     assert result.redacted_text == "Patient [NAME] visited"
 
 
