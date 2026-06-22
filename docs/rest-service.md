@@ -248,8 +248,11 @@ docker run --rm -p 8080:8080 \
 
 ### Docker Compose
 
-Use the provided `docker-compose.yml` to build and start the service with a single command.
-The Compose setup maps port **8080**, sets `OPENMED_PROFILE=prod`, and persists the HF model cache in a named volume so models are not re-downloaded on restart.
+Use the provided `docker-compose.yml` to build and start the service with a
+single command. The Compose setup maps port **8080**, sets
+`OPENMED_PROFILE=prod`, and persists the Hugging Face cache in a named volume.
+`OPENMED_CACHE_DIR` points inside that mounted cache so service model downloads
+are reused across restarts.
 
 ```bash
 docker compose up -d
@@ -262,10 +265,16 @@ docker compose ps
 # The STATUS column should show "(healthy)"
 ```
 
-Stop and clean up:
+Stop the container:
 
 ```bash
 docker compose down
+```
+
+To remove the persisted model cache too, delete the named volume:
+
+```bash
+docker compose down --volumes
 ```
 
 Smoke check:
@@ -274,4 +283,7 @@ Smoke check:
 curl http://127.0.0.1:8080/health
 ```
 
-> **Tip:** For sensitive environment variables (e.g. `HF_TOKEN`), store them in a `.env` file and add `.env` to `.gitignore` — never commit secrets to version control.
+Optional values such as `HF_TOKEN`, `OPENMED_PROFILE`,
+`OPENMED_CACHE_DIR`, and `OPENMED_SERVICE_PRELOAD_MODELS` can be supplied from a
+local `.env` file. Keep `.env` ignored and never commit secrets to version
+control.
