@@ -68,7 +68,7 @@ hf = [
 
 
 multimodal = [
-  "python-doctr",
+  "python-doctr>=1.0",
 ]
 
 

@@ -68,6 +68,7 @@ REVIEWED_LICENSES = {
     "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
+    "python-doctr": "Apache-2.0",
     "rich": "MIT",
     "safetensors": "Apache-2.0",
     "tiktoken": "MIT",
