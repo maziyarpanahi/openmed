@@ -12,7 +12,6 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from openmed.core.model_registry import MANIFEST_PATH, load_manifest_rows
 
-
 MEDIAN_AGE_TARGET_DAYS = 30
 TIMESTAMP_FIELDS = (
     "released",

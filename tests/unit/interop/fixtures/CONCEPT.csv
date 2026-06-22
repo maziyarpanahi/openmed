@@ -1,0 +1,4 @@
+concept_id	concept_name	domain_id	vocabulary_id	concept_class_id	standard_concept	concept_code	valid_start_date	valid_end_date	invalid_reason
+1001	Example condition alpha	Condition	TESTVOCAB	Clinical Finding	S	T-100	20200101	20991231	VALID
+1002	Example condition beta	Condition	TESTVOCAB	Clinical Finding	S	T-200	20200101	20991231	VALID
+2001	Example medicine beta	Drug	RXTEST	Ingredient	S	RX-200	20200101	20991231	VALID

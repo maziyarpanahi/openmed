@@ -97,7 +97,7 @@ def segment_text(
         for sentence in sentences:
             sent_text = getattr(sentence, "sent", None)
             if sent_text is None:
-                sent_text = text[sentence.start:sentence.end]
+                sent_text = text[sentence.start : sentence.end]
             spans.append(
                 SentenceSpan(
                     sent_text,

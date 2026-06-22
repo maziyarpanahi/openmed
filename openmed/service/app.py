@@ -6,12 +6,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Mapping, Optional
 
-import openmed
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+import openmed
 
 from .runtime import ServiceRuntime
 from .schemas import (
@@ -238,7 +239,9 @@ def create_app() -> FastAPI:
         return await _run_with_timeout(runtime, _operation)
 
     @app.post("/pii/extract")
-    async def pii_extract(payload: PIIExtractRequest, request: Request) -> Dict[str, Any]:
+    async def pii_extract(
+        payload: PIIExtractRequest, request: Request
+    ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
 
         def _operation() -> Dict[str, Any]:
@@ -269,7 +272,9 @@ def create_app() -> FastAPI:
     return app
 
 
-def _analyze_payload(payload: AnalyzeRequest, runtime: ServiceRuntime) -> Dict[str, Any]:
+def _analyze_payload(
+    payload: AnalyzeRequest, runtime: ServiceRuntime
+) -> Dict[str, Any]:
     result = openmed.analyze_text(
         payload.text,
         model_name=payload.model_name,
@@ -308,6 +313,11 @@ def _pii_deidentify_payload(
     payload: PIIDeidentifyRequest,
     runtime: ServiceRuntime,
 ) -> Dict[str, Any]:
+    from openmed.core.policy import canonical_policy_name, load_policy
+
+    policy_name = canonical_policy_name(payload.policy) if payload.policy else None
+    policy_profile = load_policy(policy_name) if policy_name is not None else None
+
     result = openmed.deidentify(
         payload.text,
         method=payload.method,
@@ -323,10 +333,14 @@ def _pii_deidentify_payload(
         lang=payload.lang,
         normalize_accents=payload.normalize_accents,
         loader=runtime.get_loader(),
+        policy=policy_name,
     )
 
     response = _result_to_dict(result)
-    if payload.keep_mapping and getattr(result, "mapping", None):
+    should_emit_mapping = payload.keep_mapping or bool(
+        policy_profile is not None and policy_profile.keep_mapping
+    )
+    if should_emit_mapping and getattr(result, "mapping", None):
         response["mapping"] = result.mapping
     return response
 

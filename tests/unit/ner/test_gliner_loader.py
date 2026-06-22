@@ -33,7 +33,9 @@ def test_load_gliner_handle_uses_from_pretrained(monkeypatch):
     monkeypatch.setattr(gliner_module, "ensure_gliner_available", lambda: None)
     monkeypatch.setattr("importlib.import_module", lambda name: fake_module)
 
-    handle = gliner_module.load_gliner_handle("gliner-model", cache_dir="/tmp/cache", token="abc")
+    handle = gliner_module.load_gliner_handle(
+        "gliner-model", cache_dir="/tmp/cache", token="abc"
+    )
     assert handle.model is fake_model
     assert FakeGLiNER.calls[0][0] == "gliner-model"
     assert FakeGLiNER.calls[0][1]["cache_dir"] == "/tmp/cache"

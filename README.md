@@ -121,7 +121,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.6.0"),
 ]
 ```
 
@@ -347,8 +347,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:1.6.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.6.0
 ```
 
 ```bash
@@ -375,8 +375,9 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | | | |
 |---|---|---|
 | [Getting Started](https://openmed.life/docs/) | [Analyze Text](https://openmed.life/docs/analyze-text) | [Model Registry](https://openmed.life/docs/model-registry) |
-| [PII Detection Guide](examples/notebooks/PII_Detection_Complete_Guide.ipynb) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
+| [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
+| [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 
 ---
 
@@ -408,7 +409,7 @@ OpenMed builds on excellent open-source work — particular thanks to **OpenAI**
 
 ## License
 
-Released under the [Apache-2.0 License](LICENSE).
+Released under the [Apache-2.0 License](LICENSE). Third-party asset notices are recorded in [NOTICE](NOTICE).
 
 ## Citation
 

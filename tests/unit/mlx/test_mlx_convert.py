@@ -10,6 +10,7 @@ import json
 import sys
 import types
 from pathlib import Path
+
 import pytest
 
 from openmed.mlx.convert import remap_key
@@ -63,14 +64,10 @@ class TestWeightKeyRemapping:
         )
 
     def test_output_dense_to_linear2(self):
-        assert ".linear2." in remap_key(
-            "bert.encoder.layer.0.output.dense.weight"
-        )
+        assert ".linear2." in remap_key("bert.encoder.layer.0.output.dense.weight")
 
     def test_output_layernorm_to_ln2(self):
-        assert ".ln2." in remap_key(
-            "bert.encoder.layer.0.output.LayerNorm.weight"
-        )
+        assert ".ln2." in remap_key("bert.encoder.layer.0.output.LayerNorm.weight")
 
     def test_encoder_layers(self):
         result = remap_key("bert.encoder.layer.5.intermediate.dense.bias")
@@ -130,7 +127,6 @@ class TestWeightKeyRemapping:
             "distilbert",
         )
         assert result == "encoder.layers.0.ln2.weight"
-
 
     def test_remap_all_hf_keys(self):
         """Verify that remap_key handles all common HF BERT keys."""
@@ -327,6 +323,7 @@ class TestSaveNumpyModel:
 
     def test_saves_weights_and_config(self, tmp_path):
         import numpy as np
+
         from openmed.mlx.convert import save_numpy_model
 
         weights = {
@@ -340,9 +337,7 @@ class TestSaveNumpyModel:
 
         output = save_numpy_model(weights, config, tmp_path / "model")
         expected_name = (
-            "weights.safetensors"
-            if _SAFETENSORS_NUMPY_AVAILABLE
-            else "weights.npz"
+            "weights.safetensors" if _SAFETENSORS_NUMPY_AVAILABLE else "weights.npz"
         )
         assert (output / expected_name).exists()
         assert (output / "config.json").exists()
@@ -355,6 +350,7 @@ class TestSaveNumpyModel:
 
     def test_weights_loadable(self, tmp_path):
         import numpy as np
+
         from openmed.mlx.convert import save_numpy_model
 
         original_w = np.random.randn(3, 64).astype(np.float32)
@@ -372,17 +368,22 @@ class TestSaveNumpyModel:
             )
         else:
             loaded = np.load(str(output / "weights.npz"))
-            np.testing.assert_array_almost_equal(loaded["classifier.weight"], original_w)
+            np.testing.assert_array_almost_equal(
+                loaded["classifier.weight"], original_w
+            )
 
     def test_creates_parent_dirs(self, tmp_path):
         import numpy as np
+
         from openmed.mlx.convert import save_numpy_model
 
         weights = {"w": np.array([1.0, 2.0], dtype=np.float32)}
         config = {"num_labels": 1}
 
         output = save_numpy_model(weights, config, tmp_path / "a" / "b" / "model")
-        assert (output / "weights.safetensors").exists() or (output / "weights.npz").exists()
+        assert (output / "weights.safetensors").exists() or (
+            output / "weights.npz"
+        ).exists()
 
     def test_writes_manifest_and_tokenizer_assets_when_source_model_id_provided(
         self,
@@ -390,6 +391,7 @@ class TestSaveNumpyModel:
         monkeypatch,
     ):
         import numpy as np
+
         from openmed.mlx.convert import save_numpy_model
 
         class FakeTokenizer:
@@ -436,6 +438,7 @@ class TestSaveNumpyModel:
     def test_falls_back_to_npz_when_safetensors_save_fails(self, tmp_path, monkeypatch):
         import numpy as np
         import safetensors.numpy as st_numpy
+
         from openmed.mlx.convert import save_numpy_model
 
         def raise_on_save(*args, **kwargs):
@@ -468,9 +471,12 @@ class TestModelTypeResolution:
     def test_resolves_deberta_from_architecture(self):
         from openmed.mlx.models import resolve_model_type
 
-        assert resolve_model_type(
-            {"architectures": ["DebertaV2ForTokenClassification"]},
-        ) == "deberta-v2"
+        assert (
+            resolve_model_type(
+                {"architectures": ["DebertaV2ForTokenClassification"]},
+            )
+            == "deberta-v2"
+        )
 
     def test_resolves_roberta_to_bert_family(self):
         from openmed.mlx.models import resolve_model_type

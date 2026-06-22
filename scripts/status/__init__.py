@@ -1,0 +1,1 @@
+"""Status artifact generation scripts."""
