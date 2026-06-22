@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-06-22
+
 ### Added
 
 - Added a policy-aware de-identification runtime with canonical `OpenMedSpan` schema contracts, a ten-stage `Pipeline`, detector arbitration/cascade routing, calibrated per-label/language/policy thresholds, deterministic safety sweep backstops, and six bundled policy profiles (`hipaa_safe_harbor`, `hipaa_expert_review_assist`, `gdpr_pseudonymization`, `research_limited_dataset`, `strict_no_leak`, `clinical_minimal_redaction`).
@@ -33,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `method="shift_dates"` now shifts dates for the default English model instead of masking them. `_redact_entity` (and the `keep_mapping` occurrence counter) compared the raw `entity.entity_type` against the literal `"DATE"`, but the default model `OpenMed-PII-SuperClinical-Small-44M-v1` emits a lowercase `date` label, so date spans silently fell through to `[DATE]` placeholders. Date detection now uses the canonical label (`entity.canonical_label`, falling back to `normalize_label`), guarded by a regression test.
+- Fixed `method="shift_dates"` to recognize canonical date labels before redaction, so lowercase `date` output from the default English PII model and `date_of_birth` labels are shifted instead of masked; `keep_mapping` no longer treats shifted dates as mask placeholders.
+- FHIR Bundle assembly now rejects duplicate `ResourceType/id` values instead of silently overwriting the earlier resource in the internal reference map. Duplicate resources raise a `ValueError` that names the colliding key, preventing downstream references from being rewritten to the wrong Bundle entry.
 - REST/MCP request schemas now accept `ar`, `ja`, and `tr` for the `lang` field. These languages have published PII models and are listed in `SUPPORTED_LANGUAGES`, but the `lang` `Literal` in `openmed/service/schemas.py` was never updated, so the service rejected them with a 422 even though the Python API and the models worked. The four `lang` annotations now share a single `PIILanguage` alias kept in sync with `SUPPORTED_LANGUAGES` (guarded by a regression test).
 - Fixed case-insensitive `trust_remote_code` allowlist matching for first-party and environment-configured privacy-filter repositories.
 - Fixed Feb 29 date shifting when `keep_year=True` targets a non-leap year.
@@ -47,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a protected `hf-publish` environment and `HF_WRITE_TOKEN` policy for model publishing.
 - Added dependency license policy, `pip-audit` security gate with time-boxed ignores, and gitleaks CI/pre-commit secret scanning with a canary fixture.
+- Hardened de-identification audit report signing so `AuditReport.sign()` and `AuditReport.verify()` require a non-empty HMAC key. `None`, empty strings, and empty byte strings now raise `ValueError` instead of producing or accepting weak signatures.
+
+### Tests
+
+- Added FHIR Bundle regression coverage for empty resource lists across transaction, collection, and batch Bundles, and for dangling references that should remain unchanged when the referenced resource is absent from the Bundle.
 
 ### Notes
 
@@ -831,7 +839,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/maziyarpanahi/openmed/compare/v1.5.5...v1.6.0
 [0.6.1]: https://github.com/OpenMed/openmed/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/OpenMed/openmed/compare/v0.5.8...v0.6.0
 [0.5.8]: https://github.com/OpenMed/openmed/compare/v0.5.7...v0.5.8
