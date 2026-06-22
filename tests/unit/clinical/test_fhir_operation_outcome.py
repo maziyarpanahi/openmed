@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from openmed.clinical.exporters.fhir import (
+    OperationOutcomeIssue,
     from_validation_result,
     to_operation_outcome,
 )
@@ -67,12 +68,24 @@ class TestToOperationOutcome:
         assert len(outcome["issue"]) == 1
         assert outcome["issue"][0]["severity"] == "fatal"
 
-    def test_string_issue_becomes_diagnostics(self):
-        outcome = to_operation_outcome(["something went wrong"])
-        issue = outcome["issue"][0]
-        assert issue["severity"] == "error"
-        assert issue["code"] == "processing"
-        assert issue["diagnostics"] == "something went wrong"
+    def test_dataclass_issue_maps_to_outcome(self):
+        outcome = to_operation_outcome(
+            [
+                OperationOutcomeIssue(
+                    severity="error",
+                    code="processing",
+                    diagnostics="Could not process Bundle.entry[0]",
+                    expression="Bundle.entry[0]",
+                )
+            ]
+        )
+
+        assert outcome["issue"][0] == {
+            "severity": "error",
+            "code": "processing",
+            "diagnostics": "Could not process Bundle.entry[0]",
+            "expression": ["Bundle.entry[0]"],
+        }
 
     def test_severity_is_case_normalised(self):
         outcome = to_operation_outcome([{"severity": "Warning", "code": "invalid"}])
@@ -112,9 +125,41 @@ class TestToOperationOutcome:
         with pytest.raises(ValueError, match="invalid issue code"):
             to_operation_outcome([{"severity": "error", "code": "not-a-code"}])
 
+    def test_missing_severity_raises(self):
+        with pytest.raises(ValueError, match="issue 'severity' is required"):
+            to_operation_outcome([{"code": "invalid"}])
+
+    def test_missing_code_raises(self):
+        with pytest.raises(ValueError, match="issue 'code' is required"):
+            to_operation_outcome([{"severity": "error"}])
+
+    def test_unsupported_issue_item_raises(self):
+        with pytest.raises(TypeError, match="severity/code fields"):
+            to_operation_outcome([123])
+
+    def test_string_issue_item_rejected(self):
+        with pytest.raises(TypeError, match="severity/code fields"):
+            to_operation_outcome(["something went wrong"])
+
     def test_string_argument_rejected(self):
         with pytest.raises(TypeError):
             to_operation_outcome("oops")
+
+    def test_legacy_location_input_is_emitted_as_expression(self):
+        outcome = to_operation_outcome(
+            [
+                {
+                    "severity": "warning",
+                    "code": "structure",
+                    "diagnostics": "Deprecated path key",
+                    "location": "Patient.name",
+                }
+            ]
+        )
+
+        issue = outcome["issue"][0]
+        assert issue["expression"] == ["Patient.name"]
+        assert "location" not in issue
 
 
 @dataclass
@@ -192,4 +237,53 @@ class TestFromValidationResult:
             "severity": "fatal",
             "code": "structure",
             "diagnostics": "bad json",
+        }
+
+    def test_mapping_result_with_single_issue_mapping(self):
+        result = {
+            "issues": {
+                "severity": "error",
+                "code": "invalid",
+                "diagnostics": "Malformed Patient resource",
+            }
+        }
+
+        outcome = from_validation_result(result)
+
+        assert outcome["issue"] == [
+            {
+                "severity": "error",
+                "code": "invalid",
+                "diagnostics": "Malformed Patient resource",
+            }
+        ]
+
+    def test_bucket_string_is_not_split_into_characters(self):
+        outcome = from_validation_result({"errors": "Patient.name is required"})
+
+        assert outcome["issue"] == [
+            {
+                "severity": "error",
+                "code": "invalid",
+                "diagnostics": "Patient.name is required",
+            }
+        ]
+
+    def test_bucket_entries_accept_message_and_path_aliases(self):
+        result = {
+            "warnings": [
+                {
+                    "message": "Unmapped code",
+                    "path": "Observation.code.coding[0]",
+                }
+            ]
+        }
+
+        outcome = from_validation_result(result)
+
+        assert outcome["issue"][0] == {
+            "severity": "warning",
+            "code": "invalid",
+            "diagnostics": "Unmapped code",
+            "expression": ["Observation.code.coding[0]"],
         }
