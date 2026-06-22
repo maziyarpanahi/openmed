@@ -87,8 +87,26 @@ def test_single_modifier_hit_string_is_supported():
     assert resolve_negation("sepsis", "no evidence of") == NEGATED
 
 
+def test_negation_cues_match_case_insensitively():
+    assert resolve_negation("NO EVIDENCE OF pneumonia") == NEGATED
+    assert resolve_negation("Pneumonia Cannot Be Excluded") == AFFIRMED
+
+
 def test_modifier_hits_do_not_create_cues_across_fragments():
     assert resolve_negation("n", ["o evidence of pneumonia"]) == AFFIRMED
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "notable pneumonia",
+        "nonelective surgery",
+        "deniesing typo",
+        "nose pain",
+    ],
+)
+def test_short_negation_cues_respect_word_boundaries(text):
+    assert resolve_negation(text) == AFFIRMED
 
 
 def test_span_context_result_exposes_negation_field():
