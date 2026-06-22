@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
 from typing import Any, Mapping
-import json
 
 from .arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION
 from .labels import CANONICAL_LABELS, POLICY_LABELS, normalize_label, policy_label_for
 from .schemas.span import ACTION_VALUES
-
 
 CURRENT_POLICY_SCHEMA_VERSION = 1
 

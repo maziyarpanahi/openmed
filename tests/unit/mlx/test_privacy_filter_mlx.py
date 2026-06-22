@@ -88,7 +88,9 @@ def _stable_privacy_weights(config: dict):
     import mlx.core as mx
     from mlx.utils import tree_flatten
 
-    from openmed.mlx.models.privacy_filter import OpenAIPrivacyFilterForTokenClassification
+    from openmed.mlx.models.privacy_filter import (
+        OpenAIPrivacyFilterForTokenClassification,
+    )
 
     model = OpenAIPrivacyFilterForTokenClassification(config)
     weights = {}
@@ -105,8 +107,7 @@ def _stable_privacy_weights(config: dict):
             for dim in shape:
                 numel *= dim
             weights[key] = (
-                mx.arange(numel, dtype=mx.float32).reshape(shape)
-                / max(numel - 1, 1)
+                mx.arange(numel, dtype=mx.float32).reshape(shape) / max(numel - 1, 1)
                 - 0.5
             ) * 0.5
     return weights
@@ -120,25 +121,40 @@ def _write_mlx_artifact(path, config: dict, weights: dict) -> None:
     mx.save_safetensors(path / "weights.safetensors", weights)
 
 
-@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for model resolver tests")
+@pytest.mark.skipif(
+    not _MLX_AVAILABLE, reason="MLX is required for model resolver tests"
+)
 def test_resolves_privacy_filter_model_family():
     from openmed.mlx.models import resolve_model_type
 
-    assert resolve_model_type({"model_type": "openai_privacy_filter"}) == "openai-privacy-filter"
-    assert resolve_model_type({"model_type": "privacy_filter"}) == "openai-privacy-filter"
+    assert (
+        resolve_model_type({"model_type": "openai_privacy_filter"})
+        == "openai-privacy-filter"
+    )
+    assert (
+        resolve_model_type({"model_type": "privacy_filter"}) == "openai-privacy-filter"
+    )
     assert (
         resolve_model_type(
             {"model_type": "bert"},
-            manifest={"task": "token-classification", "family": "openai-privacy-filter"},
+            manifest={
+                "task": "token-classification",
+                "family": "openai-privacy-filter",
+            },
         )
         == "openai-privacy-filter"
     )
 
 
-@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for model forward tests")
+@pytest.mark.skipif(
+    not _MLX_AVAILABLE, reason="MLX is required for model forward tests"
+)
 def test_privacy_filter_tiny_forward_shape():
     import mlx.core as mx
-    from openmed.mlx.models.privacy_filter import OpenAIPrivacyFilterForTokenClassification
+
+    from openmed.mlx.models.privacy_filter import (
+        OpenAIPrivacyFilterForTokenClassification,
+    )
 
     model = OpenAIPrivacyFilterForTokenClassification(_privacy_config())
 
@@ -158,7 +174,9 @@ def test_privacy_filter_q8_loader_matches_bf16_fixture(tmp_path):
     from mlx.utils import tree_flatten
 
     from openmed.mlx.models import load_model
-    from openmed.mlx.models.privacy_filter import OpenAIPrivacyFilterForTokenClassification
+    from openmed.mlx.models.privacy_filter import (
+        OpenAIPrivacyFilterForTokenClassification,
+    )
 
     bf16_config = _privacy_quant_config()
     bf16_config.pop("_mlx_quantization")
@@ -178,14 +196,18 @@ def test_privacy_filter_q8_loader_matches_bf16_fixture(tmp_path):
     q8_model = load_model(tmp_path / "q8")
     input_ids = mx.array([[1, 2, 3, 4, 5, 6]], dtype=mx.int32)
     attention_mask = mx.ones((1, 6), dtype=mx.bool_)
-    bf16_logits = bf16_model(input_ids, attention_mask=attention_mask).astype(mx.float32)
+    bf16_logits = bf16_model(input_ids, attention_mask=attention_mask).astype(
+        mx.float32
+    )
     q8_logits = q8_model(input_ids, attention_mask=attention_mask).astype(mx.float32)
     mx.eval(bf16_logits, q8_logits)
 
     assert bf16_logits.shape == q8_logits.shape == (1, 6, 5)
     assert bool(mx.all(mx.isfinite(q8_logits)).item())
     assert float(mx.max(mx.abs(bf16_logits - q8_logits)).item()) < 0.01
-    assert bool(mx.all(mx.argmax(bf16_logits, axis=-1) == mx.argmax(q8_logits, axis=-1)).item())
+    assert bool(
+        mx.all(mx.argmax(bf16_logits, axis=-1) == mx.argmax(q8_logits, axis=-1)).item()
+    )
 
 
 def test_viterbi_rejects_invalid_inside_start():
@@ -208,7 +230,9 @@ def test_viterbi_rejects_invalid_inside_start():
     assert decoded == [4]
 
 
-@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests")
+@pytest.mark.skipif(
+    not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests"
+)
 def test_privacy_filter_grouped_decode_handles_bioes():
     from openmed.core.decoding import build_label_info
     from openmed.mlx.inference import PrivacyFilterMLXPipeline
@@ -256,7 +280,9 @@ def test_privacy_filter_grouped_decode_handles_bioes():
     ]
 
 
-@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests")
+@pytest.mark.skipif(
+    not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline decode tests"
+)
 def test_privacy_filter_batch_path_runs_one_model_call():
     import mlx.core as mx
 
@@ -308,7 +334,9 @@ def test_privacy_filter_batch_path_runs_one_model_call():
     ]
 
 
-@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline dispatch tests")
+@pytest.mark.skipif(
+    not _MLX_AVAILABLE, reason="MLX is required for MLX pipeline dispatch tests"
+)
 @pytest.mark.parametrize(
     "manifest_family,source_model_id",
     [
@@ -362,14 +390,19 @@ def test_dispatches_privacy_filter_pipeline(tmp_path, manifest_family, source_mo
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not _MLX_AVAILABLE, reason="MLX is required for real artifact smoke tests")
+@pytest.mark.skipif(
+    not _MLX_AVAILABLE, reason="MLX is required for real artifact smoke tests"
+)
 def test_privacy_filter_real_artifact_smoke(monkeypatch):
     import os
+
     from openmed.mlx.inference import create_mlx_pipeline
 
     artifact = os.environ.get("OPENMED_PRIVACY_FILTER_MLX_ARTIFACT")
     if not artifact:
-        pytest.skip("Set OPENMED_PRIVACY_FILTER_MLX_ARTIFACT to run the real artifact smoke test")
+        pytest.skip(
+            "Set OPENMED_PRIVACY_FILTER_MLX_ARTIFACT to run the real artifact smoke test"
+        )
 
     pipe = create_mlx_pipeline(artifact)
     entities = pipe(

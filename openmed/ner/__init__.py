@@ -6,30 +6,30 @@ and persist a structured metadata index for downstream tooling.
 
 from __future__ import annotations
 
-from .indexing import (
-    ModelRecord,
-    ModelIndex,
-    build_index,
-    discover_models,
-    write_index,
-    load_index,
-)
+from .adapter import TokenAnnotation, TokenClassificationResult, to_token_classification
 from .exceptions import MissingDependencyError
 from .families import (
     ModelFamily,
-    ensure_gliner_available,
-    is_gliner_available,
     ensure_gliner2_available,
+    ensure_gliner_available,
     is_gliner2_available,
+    is_gliner_available,
 )
+from .indexing import (
+    ModelIndex,
+    ModelRecord,
+    build_index,
+    discover_models,
+    load_index,
+    write_index,
+)
+from .infer import Entity, NerRequest, NerResponse, infer
 from .labels import (
     available_domains,
     get_default_labels,
     load_default_label_map,
     reload_default_label_map,
 )
-from .infer import Entity, NerRequest, NerResponse, infer
-from .adapter import TokenAnnotation, TokenClassificationResult, to_token_classification
 
 __all__ = [
     "ModelRecord",

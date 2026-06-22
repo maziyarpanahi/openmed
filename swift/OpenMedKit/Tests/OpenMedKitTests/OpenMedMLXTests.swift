@@ -3,11 +3,13 @@ import MLX
 import Tokenizers
 import XCTest
 import ZIPFoundation
-#if canImport(AppKit) && canImport(Vision)
-import AppKit
-import Vision
-#endif
+
 @testable import OpenMedKit
+
+#if canImport(AppKit) && canImport(Vision)
+    import AppKit
+    import Vision
+#endif
 
 final class OpenMedMLXTests: XCTestCase {
 
@@ -253,10 +255,12 @@ final class OpenMedMLXTests: XCTestCase {
             maxTokens: 128
         )
 
-        XCTAssertEqual(encoded.tokenIDs, [
-            5444, 1308, 382, 44045, 16627, 326, 922, 3719, 382, 134271, 640, 68671,
-            81309, 1136, 13,
-        ])
+        XCTAssertEqual(
+            encoded.tokenIDs,
+            [
+                5444, 1308, 382, 44045, 16627, 326, 922, 3719, 382, 134271, 640, 68671,
+                81309, 1136, 13,
+            ])
         let tokenPieces = encoded.charStarts.indices.map { index in
             let lower = encoded.decodedText.index(
                 encoded.decodedText.startIndex,
@@ -268,10 +272,12 @@ final class OpenMedMLXTests: XCTestCase {
             )
             return String(encoded.decodedText[lower..<upper])
         }
-        XCTAssertEqual(tokenPieces, [
-            "My", " name", " is", " Alice", " Smith", " and", " my", " email",
-            " is", " alice", ".s", "mith", "@example", ".com", ".",
-        ])
+        XCTAssertEqual(
+            tokenPieces,
+            [
+                "My", " name", " is", " Alice", " Smith", " and", " my", " email",
+                " is", " alice", ".s", "mith", "@example", ".com", ".",
+            ])
     }
 
     func testPrivacyFilterViterbiRejectsInvalidInsideStart() {
@@ -469,7 +475,8 @@ final class OpenMedMLXTests: XCTestCase {
         let preparedConfigData = try Data(
             contentsOf: preparedDirectory.appending(path: "tokenizer_config.json")
         )
-        let preparedConfig = try JSONSerialization.jsonObject(with: preparedConfigData)
+        let preparedConfig =
+            try JSONSerialization.jsonObject(with: preparedConfigData)
             as? [String: Any]
 
         XCTAssertEqual(preparedConfig?["tokenizer_class"] as? String, "T5Tokenizer")
@@ -525,14 +532,16 @@ final class OpenMedMLXTests: XCTestCase {
             maxWidth: 2
         )
 
-        XCTAssertEqual(spans.index.asArray(Int32.self).map(Int.init), [
-            0, 0,
-            0, 1,
-            1, 1,
-            1, 2,
-            2, 2,
-            2, 3,
-        ])
+        XCTAssertEqual(
+            spans.index.asArray(Int32.self).map(Int.init),
+            [
+                0, 0,
+                0, 1,
+                1, 1,
+                1, 2,
+                2, 2,
+                2, 3,
+            ])
         XCTAssertEqual(spans.mask.asArray(Bool.self), [true, true, true, true, true, false])
     }
 
@@ -673,84 +682,95 @@ final class OpenMedMLXTests: XCTestCase {
     }
 
     #if canImport(AppKit) && canImport(Vision)
-    func testSampleClinicalDocumentPIIEndToEnd() async throws {
-        try requireUsableMLXRuntime()
+        func testSampleClinicalDocumentPIIEndToEnd() async throws {
+            try requireUsableMLXRuntime()
 
-        let repoID = "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
-        let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
-        guard cacheState == .ready else {
-            throw XCTSkip(
-                "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache to run this smoke test."
+            let repoID = "OpenMed/OpenMed-PII-LiteClinical-Small-66M-v1-mlx"
+            let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
+            guard cacheState == .ready else {
+                throw XCTSkip(
+                    "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache to run this smoke test."
+                )
+            }
+
+            let ocrText = try Self.extractSampleClinicalDocumentOCRText()
+            let artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
+            let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: artifactURL))
+
+            let rawEntities = try openmed.analyzeText(ocrText, confidenceThreshold: 0.0)
+            let piiEntities = try openmed.extractPII(
+                ocrText,
+                confidenceThreshold: 0.0,
+                useSmartMerging: true
+            )
+
+            print("=== SAMPLE OCR TEXT ===")
+            print(ocrText)
+            print("=== SAMPLE RAW ENTITIES ===")
+            print(rawEntities.map(\.description).joined(separator: "\n"))
+            print("=== SAMPLE FINAL PII ENTITIES ===")
+            print(piiEntities.map(\.description).joined(separator: "\n"))
+
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
+                "Expected patient full name in \(piiEntities)"
+            )
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "phone_number" && $0.text == "(720) 555-0148" },
+                "Expected patient phone number in \(piiEntities)"
+            )
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "phone_number" && $0.text == "(720) 555-0193" },
+                "Expected emergency contact phone number in \(piiEntities)"
+            )
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "email" && $0.text == "jordan.whitfield@samplemail.test" },
+                "Expected email in \(piiEntities)"
+            )
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "date_of_birth" && $0.text == "07/22/1984" },
+                "Expected DOB in \(piiEntities)"
+            )
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "medical_record_number" && $0.text == "SRMC-7741920" },
+                "Expected MRN in \(piiEntities)"
+            )
+            XCTAssertTrue(
+                piiEntities.contains { $0.label == "street_address" && $0.text == "4471 Lantern Ridge Ct, Aurora, CO 80016" },
+                "Expected street address in \(piiEntities)"
             )
         }
 
-        let ocrText = try Self.extractSampleClinicalDocumentOCRText()
-        let artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
-        let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: artifactURL))
+        func testSampleClinicalDocumentGLiNERMedicationCoverageAtDemoThreshold() async throws {
+            try requireUsableMLXRuntime()
 
-        let rawEntities = try openmed.analyzeText(ocrText, confidenceThreshold: 0.0)
-        let piiEntities = try openmed.extractPII(
-            ocrText,
-            confidenceThreshold: 0.0,
-            useSmartMerging: true
-        )
-
-        print("=== SAMPLE OCR TEXT ===")
-        print(ocrText)
-        print("=== SAMPLE RAW ENTITIES ===")
-        print(rawEntities.map(\.description).joined(separator: "\n"))
-        print("=== SAMPLE FINAL PII ENTITIES ===")
-        print(piiEntities.map(\.description).joined(separator: "\n"))
-
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "full_name" && $0.text == "Whitfield, Jordan A." },
-            "Expected patient full name in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "phone_number" && $0.text == "(720) 555-0148" },
-            "Expected patient phone number in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "phone_number" && $0.text == "(720) 555-0193" },
-            "Expected emergency contact phone number in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "email" && $0.text == "jordan.whitfield@samplemail.test" },
-            "Expected email in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "date_of_birth" && $0.text == "07/22/1984" },
-            "Expected DOB in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "medical_record_number" && $0.text == "SRMC-7741920" },
-            "Expected MRN in \(piiEntities)"
-        )
-        XCTAssertTrue(
-            piiEntities.contains { $0.label == "street_address" && $0.text == "4471 Lantern Ridge Ct, Aurora, CO 80016" },
-            "Expected street address in \(piiEntities)"
-        )
-    }
-
-    func testSampleClinicalDocumentGLiNERMedicationCoverageAtDemoThreshold() async throws {
-        try requireUsableMLXRuntime()
-
-        let repoID = "OpenMed/gliner-multi-pii-v1-mlx"
-        let artifactURL: URL
-        if let artifactPath = ProcessInfo.processInfo.environment["OPENMED_GLINER_SPAN_ARTIFACT"],
-           !artifactPath.isEmpty {
-            artifactURL = URL(fileURLWithPath: (artifactPath as NSString).expandingTildeInPath)
-        } else if let homeDirectory = FileManager.default.homeDirectoryForCurrentUser as URL? {
-            let localCacheArtifactURL = homeDirectory
-                .appending(path: ".cache")
-                .appending(path: "openmed-mlx")
-                .appending(path: "OpenMed")
-                .appending(path: "gliner-multi-pii-v1-mlx")
-                .appending(path: "main")
-            if FileManager.default.fileExists(
-                atPath: localCacheArtifactURL.appending(path: "openmed-mlx.json").path
-            ) {
-                artifactURL = localCacheArtifactURL
+            let repoID = "OpenMed/gliner-multi-pii-v1-mlx"
+            let artifactURL: URL
+            if let artifactPath = ProcessInfo.processInfo.environment["OPENMED_GLINER_SPAN_ARTIFACT"],
+                !artifactPath.isEmpty
+            {
+                artifactURL = URL(fileURLWithPath: (artifactPath as NSString).expandingTildeInPath)
+            } else if let homeDirectory = FileManager.default.homeDirectoryForCurrentUser as URL? {
+                let localCacheArtifactURL =
+                    homeDirectory
+                    .appending(path: ".cache")
+                    .appending(path: "openmed-mlx")
+                    .appending(path: "OpenMed")
+                    .appending(path: "gliner-multi-pii-v1-mlx")
+                    .appending(path: "main")
+                if FileManager.default.fileExists(
+                    atPath: localCacheArtifactURL.appending(path: "openmed-mlx.json").path
+                ) {
+                    artifactURL = localCacheArtifactURL
+                } else {
+                    let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
+                    guard cacheState == .ready else {
+                        throw XCTSkip(
+                            "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
+                        )
+                    }
+                    artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
+                }
             } else {
                 let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
                 guard cacheState == .ready else {
@@ -760,119 +780,113 @@ final class OpenMedMLXTests: XCTestCase {
                 }
                 artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
             }
-        } else {
-            let cacheState = try OpenMedModelStore.mlxModelCacheState(repoID: repoID)
-            guard cacheState == .ready else {
-                throw XCTSkip(
-                    "Cache \(cacheState.rawValue) for \(repoID). Download the artifact into the OpenMed MLX cache or set OPENMED_GLINER_SPAN_ARTIFACT to run this smoke test."
-                )
-            }
-            artifactURL = try OpenMedModelStore.cachedMLXModelDirectory(repoID: repoID)
+
+            let labels = [
+                "symptom",
+                "condition",
+                "medical history",
+                "medication",
+                "dosage",
+                "allergy",
+                "treatment",
+                "procedure",
+                "follow-up plan",
+                "care plan",
+                "care setting",
+                "work status",
+            ]
+            let ocrText = try Self.extractSampleClinicalDocumentOCRText()
+            let pipeline = try OpenMedZeroShotNER(modelDirectoryURL: artifactURL)
+
+            // Characterize the current demo note so we can distinguish model windowing
+            // behavior from Swift runtime regressions.
+            let fullNoteEntities = try pipeline.extract(
+                ocrText,
+                labels: labels,
+                threshold: 0.6,
+                flatNER: true
+            )
+            let fullNoteMedications =
+                fullNoteEntities
+                .filter { $0.label == "medication" }
+                .map { $0.text.lowercased() }
+
+            XCTAssertTrue(
+                fullNoteMedications.contains { $0.contains("metformin") },
+                "Expected metformin in \(fullNoteMedications)"
+            )
+            XCTAssertTrue(
+                fullNoteMedications.contains { $0.contains("lisinopril") },
+                "Expected lisinopril in \(fullNoteMedications)"
+            )
+            XCTAssertTrue(
+                fullNoteMedications.contains { $0.contains("sumatriptan") },
+                "Expected sumatriptan in \(fullNoteMedications)"
+            )
+            XCTAssertFalse(
+                fullNoteMedications.contains { $0.contains("atorvastatin") },
+                "The long OCR note currently drops atorvastatin at the demo threshold, which helps distinguish model-confidence issues from runtime regressions."
+            )
+            XCTAssertFalse(
+                fullNoteMedications.contains { $0.contains("ibuprofen") },
+                "The current long OCR note should drop later-plan medication mentions when they fall outside the GLiNER window."
+            )
+
+            let homeMedicationSnippet = """
+                HOME MEDICATIONS
+                Metformin 500 mg twice daily, lisinopril 10 mg daily, atorvastatin 20 mg nightly, and sumatriptan 50 mg as needed for migraine.
+                """
+            let homeMedicationEntities = try pipeline.extract(
+                homeMedicationSnippet,
+                labels: labels,
+                threshold: 0.6,
+                flatNER: true
+            )
+            let homeMedicationMatches =
+                homeMedicationEntities
+                .filter { $0.label == "medication" }
+                .map { $0.text.lowercased() }
+
+            XCTAssertTrue(
+                homeMedicationMatches.contains { $0.contains("metformin") },
+                "Expected metformin in the focused medication snippet: \(homeMedicationMatches)"
+            )
+            XCTAssertTrue(
+                homeMedicationMatches.contains { $0.contains("lisinopril") },
+                "Expected lisinopril in the focused medication snippet: \(homeMedicationMatches)"
+            )
+            XCTAssertTrue(
+                homeMedicationMatches.contains { $0.contains("atorvastatin") },
+                "Expected atorvastatin in the focused medication snippet: \(homeMedicationMatches)"
+            )
+            XCTAssertTrue(
+                homeMedicationMatches.contains { $0.contains("sumatriptan") },
+                "Expected sumatriptan in the focused medication snippet: \(homeMedicationMatches)"
+            )
+
+            let planSnippet = """
+                Continue oral hydration, ibuprofen 400 mg every 6 hours as needed, ondansetron 4 mg every 8 hours as needed for nausea.
+                """
+            let planEntities = try pipeline.extract(
+                planSnippet,
+                labels: labels,
+                threshold: 0.6,
+                flatNER: true
+            )
+            let planMedications =
+                planEntities
+                .filter { $0.label == "medication" }
+                .map { $0.text.lowercased() }
+
+            XCTAssertTrue(
+                planMedications.contains { $0.contains("ibuprofen") },
+                "Expected ibuprofen once the plan snippet fits in the model window: \(planMedications)"
+            )
+            XCTAssertTrue(
+                planMedications.contains { $0.contains("ondansetron") },
+                "Expected ondansetron once the plan snippet fits in the model window: \(planMedications)"
+            )
         }
-
-        let labels = [
-            "symptom",
-            "condition",
-            "medical history",
-            "medication",
-            "dosage",
-            "allergy",
-            "treatment",
-            "procedure",
-            "follow-up plan",
-            "care plan",
-            "care setting",
-            "work status",
-        ]
-        let ocrText = try Self.extractSampleClinicalDocumentOCRText()
-        let pipeline = try OpenMedZeroShotNER(modelDirectoryURL: artifactURL)
-
-        // Characterize the current demo note so we can distinguish model windowing
-        // behavior from Swift runtime regressions.
-        let fullNoteEntities = try pipeline.extract(
-            ocrText,
-            labels: labels,
-            threshold: 0.6,
-            flatNER: true
-        )
-        let fullNoteMedications = fullNoteEntities
-            .filter { $0.label == "medication" }
-            .map { $0.text.lowercased() }
-
-        XCTAssertTrue(
-            fullNoteMedications.contains { $0.contains("metformin") },
-            "Expected metformin in \(fullNoteMedications)"
-        )
-        XCTAssertTrue(
-            fullNoteMedications.contains { $0.contains("lisinopril") },
-            "Expected lisinopril in \(fullNoteMedications)"
-        )
-        XCTAssertTrue(
-            fullNoteMedications.contains { $0.contains("sumatriptan") },
-            "Expected sumatriptan in \(fullNoteMedications)"
-        )
-        XCTAssertFalse(
-            fullNoteMedications.contains { $0.contains("atorvastatin") },
-            "The long OCR note currently drops atorvastatin at the demo threshold, which helps distinguish model-confidence issues from runtime regressions."
-        )
-        XCTAssertFalse(
-            fullNoteMedications.contains { $0.contains("ibuprofen") },
-            "The current long OCR note should drop later-plan medication mentions when they fall outside the GLiNER window."
-        )
-
-        let homeMedicationSnippet = """
-        HOME MEDICATIONS
-        Metformin 500 mg twice daily, lisinopril 10 mg daily, atorvastatin 20 mg nightly, and sumatriptan 50 mg as needed for migraine.
-        """
-        let homeMedicationEntities = try pipeline.extract(
-            homeMedicationSnippet,
-            labels: labels,
-            threshold: 0.6,
-            flatNER: true
-        )
-        let homeMedicationMatches = homeMedicationEntities
-            .filter { $0.label == "medication" }
-            .map { $0.text.lowercased() }
-
-        XCTAssertTrue(
-            homeMedicationMatches.contains { $0.contains("metformin") },
-            "Expected metformin in the focused medication snippet: \(homeMedicationMatches)"
-        )
-        XCTAssertTrue(
-            homeMedicationMatches.contains { $0.contains("lisinopril") },
-            "Expected lisinopril in the focused medication snippet: \(homeMedicationMatches)"
-        )
-        XCTAssertTrue(
-            homeMedicationMatches.contains { $0.contains("atorvastatin") },
-            "Expected atorvastatin in the focused medication snippet: \(homeMedicationMatches)"
-        )
-        XCTAssertTrue(
-            homeMedicationMatches.contains { $0.contains("sumatriptan") },
-            "Expected sumatriptan in the focused medication snippet: \(homeMedicationMatches)"
-        )
-
-        let planSnippet = """
-        Continue oral hydration, ibuprofen 400 mg every 6 hours as needed, ondansetron 4 mg every 8 hours as needed for nausea.
-        """
-        let planEntities = try pipeline.extract(
-            planSnippet,
-            labels: labels,
-            threshold: 0.6,
-            flatNER: true
-        )
-        let planMedications = planEntities
-            .filter { $0.label == "medication" }
-            .map { $0.text.lowercased() }
-
-        XCTAssertTrue(
-            planMedications.contains { $0.contains("ibuprofen") },
-            "Expected ibuprofen once the plan snippet fits in the model window: \(planMedications)"
-        )
-        XCTAssertTrue(
-            planMedications.contains { $0.contains("ondansetron") },
-            "Expected ondansetron once the plan snippet fits in the model window: \(planMedications)"
-        )
-    }
     #endif
 
     func testLocalGLiNERSpanArtifactRunsNativeNER() throws {
@@ -940,58 +954,60 @@ final class OpenMedMLXTests: XCTestCase {
     }
 
     #if canImport(AppKit) && canImport(Vision)
-    private static func extractSampleClinicalDocumentOCRText() throws -> String {
-        let imageURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appending(path: "OpenMedScanDemo/OpenMedScanDemo/Assets.xcassets/SampleClinicalDocument.imageset/sample-clinical-document.png")
+        private static func extractSampleClinicalDocumentOCRText() throws -> String {
+            let imageURL = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appending(path: "OpenMedScanDemo/OpenMedScanDemo/Assets.xcassets/SampleClinicalDocument.imageset/sample-clinical-document.png")
 
-        guard let image = NSImage(contentsOf: imageURL) else {
-            XCTFail("Missing sample clinical document image at \(imageURL.path)")
-            return ""
+            guard let image = NSImage(contentsOf: imageURL) else {
+                XCTFail("Missing sample clinical document image at \(imageURL.path)")
+                return ""
+            }
+
+            var rect = NSRect(origin: .zero, size: image.size)
+            guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
+                XCTFail("Unable to create CGImage for sample clinical document")
+                return ""
+            }
+
+            let request = VNRecognizeTextRequest()
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+            request.recognitionLanguages = ["en-US"]
+
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            try handler.perform([request])
+
+            let observations = (request.results ?? []).sorted(by: recognitionSort)
+            let lines = observations.compactMap { observation in
+                observation.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            return
+                lines
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
         }
 
-        var rect = NSRect(origin: .zero, size: image.size)
-        guard let cgImage = image.cgImage(forProposedRect: &rect, context: nil, hints: nil) else {
-            XCTFail("Unable to create CGImage for sample clinical document")
-            return ""
+        private static func recognitionSort(
+            lhs: VNRecognizedTextObservation,
+            rhs: VNRecognizedTextObservation
+        ) -> Bool {
+            let lhsBox = lhs.boundingBox
+            let rhsBox = rhs.boundingBox
+            let verticalOverlap = min(lhsBox.maxY, rhsBox.maxY) - max(lhsBox.minY, rhsBox.minY)
+            let centerDelta = abs(lhsBox.midY - rhsBox.midY)
+            let sameLineThreshold = max(0.004, max(lhsBox.height, rhsBox.height) * 0.65)
+            let sameLine =
+                verticalOverlap > min(lhsBox.height, rhsBox.height) * 0.2
+                || centerDelta <= sameLineThreshold
+
+            if sameLine { return lhsBox.minX < rhsBox.minX }
+            return lhsBox.midY > rhsBox.midY
         }
-
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-        request.recognitionLanguages = ["en-US"]
-
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        try handler.perform([request])
-
-        let observations = (request.results ?? []).sorted(by: recognitionSort)
-        let lines = observations.compactMap { observation in
-            observation.topCandidates(1).first?.string.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        return lines
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
-    }
-
-    private static func recognitionSort(
-        lhs: VNRecognizedTextObservation,
-        rhs: VNRecognizedTextObservation
-    ) -> Bool {
-        let lhsBox = lhs.boundingBox
-        let rhsBox = rhs.boundingBox
-        let verticalOverlap = min(lhsBox.maxY, rhsBox.maxY) - max(lhsBox.minY, rhsBox.minY)
-        let centerDelta = abs(lhsBox.midY - rhsBox.midY)
-        let sameLineThreshold = max(0.004, max(lhsBox.height, rhsBox.height) * 0.65)
-        let sameLine = verticalOverlap > min(lhsBox.height, rhsBox.height) * 0.2
-            || centerDelta <= sameLineThreshold
-
-        if sameLine { return lhsBox.minX < rhsBox.minX }
-        return lhsBox.midY > rhsBox.midY
-    }
     #endif
 
     private static var isSwiftPMCLI: Bool {
@@ -1008,10 +1024,12 @@ final class OpenMedMLXTests: XCTestCase {
             ) {
                 return true
             }
-            guard let enumerator = FileManager.default.enumerator(
-                at: resourceURL,
-                includingPropertiesForKeys: nil
-            ) else {
+            guard
+                let enumerator = FileManager.default.enumerator(
+                    at: resourceURL,
+                    includingPropertiesForKeys: nil
+                )
+            else {
                 continue
             }
             for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "default.metallib" {
@@ -1024,10 +1042,12 @@ final class OpenMedMLXTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         let buildDirectory = packageRoot.appending(path: ".build", directoryHint: .isDirectory)
-        guard let enumerator = FileManager.default.enumerator(
-            at: buildDirectory,
-            includingPropertiesForKeys: nil
-        ) else {
+        guard
+            let enumerator = FileManager.default.enumerator(
+                at: buildDirectory,
+                includingPropertiesForKeys: nil
+            )
+        else {
             return false
         }
         for case let fileURL as URL in enumerator where fileURL.lastPathComponent == "default.metallib" {
@@ -1043,12 +1063,14 @@ final class OpenMedMLXTests: XCTestCase {
         promptSpec: [String: Any]? = nil,
         in directory: URL? = nil
     ) throws -> URL {
-        let directory = try directory ?? FileManager.default.url(
-            for: .itemReplacementDirectory,
-            in: .userDomainMask,
-            appropriateFor: FileManager.default.temporaryDirectory,
-            create: true
-        )
+        let directory =
+            try directory
+            ?? FileManager.default.url(
+                for: .itemReplacementDirectory,
+                in: .userDomainMask,
+                appropriateFor: FileManager.default.temporaryDirectory,
+                create: true
+            )
 
         try "{}".write(to: directory.appending(path: "tokenizer.json"), atomically: true, encoding: .utf8)
         try "{}".write(
@@ -1281,8 +1303,8 @@ final class OpenMedMLXTests: XCTestCase {
         try JSONSerialization.data(
             withJSONObject: [
                 "model": [
-                    "type": modelType,
-                ],
+                    "type": modelType
+                ]
             ],
             options: [.prettyPrinted]
         )
@@ -1291,7 +1313,7 @@ final class OpenMedMLXTests: XCTestCase {
     private func makeTokenizerConfig(tokenizerClass: String) throws -> Data {
         try JSONSerialization.data(
             withJSONObject: [
-                "tokenizer_class": tokenizerClass,
+                "tokenizer_class": tokenizerClass
             ],
             options: [.prettyPrinted]
         )

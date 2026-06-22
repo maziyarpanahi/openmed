@@ -76,7 +76,9 @@ def read_manifest(model_dir: str | Path) -> dict[str, Any] | None:
         return json.load(f)
 
 
-def load_artifact_config(model_dir: str | Path) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+def load_artifact_config(
+    model_dir: str | Path,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     """Return ``(manifest, config)`` for a converted MLX artifact."""
     model_dir = Path(model_dir)
     manifest = read_manifest(model_dir)
@@ -153,9 +155,19 @@ def write_manifest(
     """Write ``openmed-mlx.json`` for a converted artifact."""
     model_dir = Path(model_dir)
     preferred_format = config.get("_mlx_weights_format", "safetensors")
-    preferred_weights = "weights.safetensors" if preferred_format == "safetensors" else "weights.npz"
-    fallback_weights = ["weights.npz"] if preferred_weights == "weights.safetensors" else ["weights.safetensors"]
-    available_weights = [name for name in (preferred_weights, *fallback_weights) if (model_dir / name).exists()]
+    preferred_weights = (
+        "weights.safetensors" if preferred_format == "safetensors" else "weights.npz"
+    )
+    fallback_weights = (
+        ["weights.npz"]
+        if preferred_weights == "weights.safetensors"
+        else ["weights.safetensors"]
+    )
+    available_weights = [
+        name
+        for name in (preferred_weights, *fallback_weights)
+        if (model_dir / name).exists()
+    ]
 
     tokenizer_files = tokenizer_files or find_tokenizer_files(model_dir)
     family = (
@@ -173,7 +185,9 @@ def write_manifest(
         "family": family,
         "source_model_id": source_model_id,
         "config_path": "config.json",
-        "label_map_path": "id2label.json" if (model_dir / "id2label.json").exists() else None,
+        "label_map_path": "id2label.json"
+        if (model_dir / "id2label.json").exists()
+        else None,
         "preferred_weights": preferred_weights,
         "fallback_weights": fallback_weights,
         "available_weights": available_weights,

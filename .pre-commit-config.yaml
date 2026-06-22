@@ -1,10 +1,11 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        exclude: ^mkdocs\.yml$
       - id: check-added-large-files
         args: ['--maxkb=3000']
       - id: check-case-conflict
@@ -14,22 +15,23 @@ repos:
       - id: mixed-line-ending
         args: ['--fix=lf']
 
-  - repo: https://github.com/pycqa/flake8
-    rev: 6.0.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.18
     hooks:
-      - id: flake8
-        args: [--max-line-length=88, --extend-ignore=E203,W503]
-        additional_dependencies: [flake8-docstrings]
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
 
   - repo: https://github.com/pycqa/bandit
-    rev: 1.7.4
+    rev: 1.9.4
     hooks:
       - id: bandit
-        args: [-c, pyproject.toml]
+        args: [-c, pyproject.toml, --severity-level, high, --confidence-level, medium]
+        files: ^openmed/.*\.py$
         additional_dependencies: ["bandit[toml]"]
 
-  - repo: https://github.com/pycqa/pydocstyle
-    rev: 6.3.0
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
     hooks:
-      - id: pydocstyle
-        args: [--convention=google]
+      - id: gitleaks
+        args: [--config=.gitleaks.toml]

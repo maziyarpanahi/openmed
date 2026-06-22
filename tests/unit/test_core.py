@@ -1,8 +1,10 @@
 """Unit tests for core functionality."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+
 from openmed.core.config import OpenMedConfig, get_config, set_config
 from openmed.core.models import ModelLoader, load_model
 from openmed.processing.sentences import SentenceSpan
@@ -21,22 +23,14 @@ class TestOpenMedConfig:
 
     def test_custom_config(self):
         """Test custom configuration values."""
-        config = OpenMedConfig(
-            default_org="TestOrg",
-            log_level="DEBUG",
-            timeout=60
-        )
+        config = OpenMedConfig(default_org="TestOrg", log_level="DEBUG", timeout=60)
         assert config.default_org == "TestOrg"
         assert config.log_level == "DEBUG"
         assert config.timeout == 60
 
     def test_from_dict(self):
         """Test creating config from dictionary."""
-        config_dict = {
-            "default_org": "TestOrg",
-            "log_level": "DEBUG",
-            "timeout": 120
-        }
+        config_dict = {"default_org": "TestOrg", "log_level": "DEBUG", "timeout": 120}
         config = OpenMedConfig.from_dict(config_dict)
         assert config.default_org == "TestOrg"
         assert config.log_level == "DEBUG"
@@ -59,20 +53,20 @@ class TestOpenMedConfig:
 class TestModelLoader:
     """Test cases for ModelLoader."""
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_init_with_config(self, sample_config):
         """Test ModelLoader initialization with config."""
         loader = ModelLoader(sample_config)
         assert loader.config == sample_config
 
-    @patch('openmed.core.models.HF_AVAILABLE', False)
+    @patch("openmed.core.models.HF_AVAILABLE", False)
     def test_init_without_transformers(self):
         """Test ModelLoader initialization without transformers."""
         with pytest.raises(ImportError, match="HuggingFace transformers is required"):
             ModelLoader()
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.get_all_models')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.get_all_models")
     def test_list_available_models(self, mock_get_all_models):
         """Test listing available models."""
         mock_get_all_models.return_value = {
@@ -87,8 +81,8 @@ class TestModelLoader:
         assert "OpenMed/model1" in models
         assert "OpenMed/model2" in models
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.get_all_models', return_value={})
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.get_all_models", return_value={})
     def test_list_models_empty_registry(self, mock_get_all_models):
         """Test listing when the committed registry has no entries."""
         loader = ModelLoader()
@@ -96,8 +90,8 @@ class TestModelLoader:
 
         assert models == []
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.get_all_models')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.get_all_models")
     def test_list_available_models_include_remote_compat(self, mock_get_all_models):
         """Ensure registry listing ignores remote discovery while keeping the flag."""
         mock_get_all_models.return_value = {
@@ -109,7 +103,7 @@ class TestModelLoader:
 
         assert models == ["OpenMed/model1"]
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_resolve_model_name_preserves_local_directory_without_separator(
         self,
         tmp_path,
@@ -124,10 +118,10 @@ class TestModelLoader:
 
         assert loader._resolve_model_name("local_model") == "local_model"
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.AutoConfig')
-    @patch('openmed.core.models.AutoTokenizer')
-    @patch('openmed.core.models.AutoModelForTokenClassification')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.AutoConfig")
+    @patch("openmed.core.models.AutoTokenizer")
+    @patch("openmed.core.models.AutoModelForTokenClassification")
     def test_load_model_uses_local_files_only_for_local_path(
         self,
         mock_model_class,
@@ -166,8 +160,8 @@ class TestModelLoader:
             is True
         )
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.pipeline')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.pipeline")
     def test_create_pipeline_uses_local_files_only_for_local_path(
         self,
         mock_pipeline,
@@ -185,8 +179,8 @@ class TestModelLoader:
         assert kwargs["model"] == str(model_dir)
         assert kwargs["local_files_only"] is True
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.AutoTokenizer')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.AutoTokenizer")
     def test_get_max_sequence_length_from_tokenizer(
         self,
         mock_auto_tokenizer,
@@ -203,8 +197,8 @@ class TestModelLoader:
 
         assert max_len == 384
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.AutoTokenizer')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.AutoTokenizer")
     def test_get_max_sequence_length_uses_local_files_only_for_local_path(
         self,
         mock_auto_tokenizer,
@@ -230,14 +224,11 @@ class TestModelLoader:
             is True
         )
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.AutoTokenizer')
-    @patch('openmed.core.models.AutoConfig')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.AutoTokenizer")
+    @patch("openmed.core.models.AutoConfig")
     def test_get_max_sequence_length_falls_back_to_config(
-        self,
-        mock_auto_config,
-        mock_auto_tokenizer,
-        *_
+        self, mock_auto_config, mock_auto_tokenizer, *_
     ):
         """Configuration attributes provide a fallback when tokenizer lacks data."""
 
@@ -256,7 +247,7 @@ class TestModelLoader:
 class TestGetModelMaxLengthFunction:
     """Tests for the top-level get_model_max_length helper."""
 
-    @patch('openmed.ModelLoader')
+    @patch("openmed.ModelLoader")
     def test_get_model_max_length_wrapper(self, mock_loader_cls):
         instance = Mock()
         instance.get_max_sequence_length.return_value = 256
@@ -271,7 +262,7 @@ class TestGetModelMaxLengthFunction:
 class TestAnalyzeTextBehaviour:
     """Behavioural tests for the public analyze_text helper."""
 
-    @patch('openmed.ModelLoader')
+    @patch("openmed.ModelLoader")
     def test_analyze_text_accepts_model_id_alias_for_local_path(
         self,
         mock_loader_cls,
@@ -317,9 +308,9 @@ class TestAnalyzeTextBehaviour:
                 model_id="OpenMed/other-model",
             )
 
-    @patch('openmed.processing.sentences.segment_text')
-    @patch('openmed.format_predictions')
-    @patch('openmed.ModelLoader')
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.format_predictions")
+    @patch("openmed.ModelLoader")
     def test_analyze_text_attaches_max_length(
         self,
         mock_loader_cls,
@@ -333,7 +324,9 @@ class TestAnalyzeTextBehaviour:
         loader.get_max_sequence_length.return_value = 256
         mock_loader_cls.return_value = loader
         mock_format_predictions.return_value = "ok"
-        mock_segment_text.return_value = [SentenceSpan("sample text", 0, len("sample text"))]
+        mock_segment_text.return_value = [
+            SentenceSpan("sample text", 0, len("sample text"))
+        ]
 
         from openmed import analyze_text
 
@@ -349,9 +342,9 @@ class TestAnalyzeTextBehaviour:
         assert kwargs["metadata"]["sentence_detection"] is True
         assert pipeline.tokenizer.model_max_length == 256
 
-    @patch('openmed.processing.sentences.segment_text')
-    @patch('openmed.format_predictions')
-    @patch('openmed.ModelLoader')
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.format_predictions")
+    @patch("openmed.ModelLoader")
     def test_analyze_text_respects_truncation_flag(
         self,
         mock_loader_cls,
@@ -364,7 +357,9 @@ class TestAnalyzeTextBehaviour:
         loader.get_max_sequence_length.return_value = 1024
         mock_loader_cls.return_value = loader
         mock_format_predictions.return_value = "ok"
-        mock_segment_text.return_value = [SentenceSpan("sample text", 0, len("sample text"))]
+        mock_segment_text.return_value = [
+            SentenceSpan("sample text", 0, len("sample text"))
+        ]
         pipeline.tokenizer = Mock()
 
         from openmed import analyze_text
@@ -384,8 +379,8 @@ class TestAnalyzeTextBehaviour:
         loader.get_max_sequence_length.assert_not_called()
         assert pipeline.tokenizer.model_max_length == 0
 
-    @patch('openmed.processing.sentences.segment_text')
-    @patch('openmed.ModelLoader')
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.ModelLoader")
     def test_sentence_detection_attaches_metadata(
         self,
         mock_loader_cls,
@@ -441,9 +436,9 @@ class TestAnalyzeTextBehaviour:
         assert result.metadata["sentence_detection"] is True
         assert pipeline.tokenizer.model_max_length == 384
 
-    @patch('openmed.processing.sentences.segment_text')
-    @patch('openmed.format_predictions')
-    @patch('openmed.ModelLoader')
+    @patch("openmed.processing.sentences.segment_text")
+    @patch("openmed.format_predictions")
+    @patch("openmed.ModelLoader")
     def test_sentence_detection_batches_large_inputs(
         self,
         mock_loader_cls,
@@ -451,9 +446,13 @@ class TestAnalyzeTextBehaviour:
         mock_segment_text,
     ):
         loader = Mock()
-        sentences_fixture = Path(__file__).resolve().parents[1] / "fixtures" / "long_clinical_note.txt"
+        sentences_fixture = (
+            Path(__file__).resolve().parents[1] / "fixtures" / "long_clinical_note.txt"
+        )
         long_text = sentences_fixture.read_text().strip()
-        sentence_lines = [line.strip() for line in long_text.splitlines() if line.strip()]
+        sentence_lines = [
+            line.strip() for line in long_text.splitlines() if line.strip()
+        ]
 
         segments = []
         cursor = 0
@@ -485,11 +484,13 @@ class TestAnalyzeTextBehaviour:
         fmt_kwargs = mock_format_predictions.call_args.kwargs
         assert fmt_kwargs["metadata"]["sentence_count"] == len(segments)
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.AutoConfig')
-    @patch('openmed.core.models.AutoTokenizer')
-    @patch('openmed.core.models.AutoModelForTokenClassification')
-    def test_load_model_success(self, mock_model_class, mock_tokenizer_class, mock_config_class):
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.AutoConfig")
+    @patch("openmed.core.models.AutoTokenizer")
+    @patch("openmed.core.models.AutoModelForTokenClassification")
+    def test_load_model_success(
+        self, mock_model_class, mock_tokenizer_class, mock_config_class
+    ):
         """Test successful model loading."""
         # Setup mocks
         mock_config = Mock()
@@ -515,8 +516,8 @@ class TestAnalyzeTextBehaviour:
         assert result["tokenizer"] == mock_tokenizer
         assert result["config"] == mock_config
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.AutoConfig')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.AutoConfig")
     def test_load_model_failure(self, mock_config_class):
         """Test model loading failure."""
         mock_config_class.from_pretrained.side_effect = Exception("Model not found")
@@ -525,8 +526,8 @@ class TestAnalyzeTextBehaviour:
         with pytest.raises(ValueError, match="Could not load model"):
             loader.load_model("nonexistent-model")
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.pipeline')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.pipeline")
     def test_create_pipeline(self, mock_pipeline):
         """Test pipeline creation."""
         mock_pipeline_instance = Mock()
@@ -535,11 +536,11 @@ class TestAnalyzeTextBehaviour:
         loader = ModelLoader(OpenMedConfig(backend="hf"))
 
         # Mock the load_model method
-        with patch.object(loader, 'load_model') as mock_load:
+        with patch.object(loader, "load_model") as mock_load:
             mock_load.return_value = {
                 "model": Mock(),
                 "tokenizer": Mock(),
-                "config": Mock()
+                "config": Mock(),
             }
 
             result = loader.create_pipeline("test-model")
@@ -547,8 +548,8 @@ class TestAnalyzeTextBehaviour:
             assert result == mock_pipeline_instance
             mock_pipeline.assert_called_once()
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.pipeline')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.pipeline")
     def test_create_pipeline_reuses_cached_pipeline(self, mock_pipeline):
         """Repeated pipeline creation should reuse the cached pipeline."""
         first_pipeline = Mock()
@@ -564,7 +565,7 @@ class TestAnalyzeTextBehaviour:
         assert result_two is first_pipeline
         mock_pipeline.assert_called_once()
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_unload_model_releases_matching_cache_entries(self):
         """Unloading one model should keep other cached models intact."""
         loader = ModelLoader(OpenMedConfig(default_org="OpenMed"))
@@ -590,7 +591,7 @@ class TestAnalyzeTextBehaviour:
         assert (other_name, "token-classification", "simple") in loader._pipelines
         release_memory.assert_called_once()
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_unload_all_models_clears_all_cache_entries(self):
         """Unloading all models should clear every loader cache."""
         loader = ModelLoader()
@@ -608,14 +609,16 @@ class TestAnalyzeTextBehaviour:
         assert loader._pipelines == {}
         release_memory.assert_called_once()
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_loaded_models_reports_cache_counts_by_model(self):
         """Loaded model reporting should aggregate cache state by model id."""
         loader = ModelLoader()
         loader._models["OpenMed/test-model"] = Mock()
         loader._tokenizers["OpenMed/test-model"] = Mock()
         loader._pipelines[("OpenMed/test-model", "token-classification")] = Mock()
-        loader._pipelines[("OpenMed/test-model", "token-classification", "max")] = Mock()
+        loader._pipelines[("OpenMed/test-model", "token-classification", "max")] = (
+            Mock()
+        )
 
         assert loader.loaded_models() == {
             "OpenMed/test-model": {
@@ -625,8 +628,8 @@ class TestAnalyzeTextBehaviour:
             }
         }
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.backends.get_backend')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends.get_backend")
     def test_create_pipeline_dispatches_non_hf_backend(self, mock_get_backend):
         """Non-HF backends should be routed through the backend registry."""
         backend = Mock()
@@ -644,9 +647,9 @@ class TestAnalyzeTextBehaviour:
             use_fast_tokenizer=True,
         )
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.models.pipeline')
-    @patch('openmed.core.backends.get_backend')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.models.pipeline")
+    @patch("openmed.core.backends.get_backend")
     def test_create_pipeline_auto_falls_back_to_hf_when_backend_fails(
         self,
         mock_get_backend,
@@ -663,8 +666,8 @@ class TestAnalyzeTextBehaviour:
         assert result is mock_pipeline.return_value
         mock_pipeline.assert_called_once()
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
-    @patch('openmed.core.backends.get_backend')
+    @patch("openmed.core.models.HF_AVAILABLE", True)
+    @patch("openmed.core.backends.get_backend")
     def test_create_pipeline_explicit_backend_does_not_fallback(
         self,
         mock_get_backend,
@@ -678,7 +681,7 @@ class TestAnalyzeTextBehaviour:
         with pytest.raises(RuntimeError, match="mlx failed"):
             loader.create_pipeline("test-model", aggregation_strategy="simple")
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_get_model_info_success(self):
         """Test successful model info retrieval from the committed registry."""
         loader = ModelLoader()
@@ -687,7 +690,7 @@ class TestAnalyzeTextBehaviour:
         assert result is not None
         assert result.model_id == "OpenMed/OpenMed-NER-DiseaseDetect-TinyMed-135M"
 
-    @patch('openmed.core.models.HF_AVAILABLE', True)
+    @patch("openmed.core.models.HF_AVAILABLE", True)
     def test_get_model_info_failure(self):
         """Test model info lookup failure."""
         loader = ModelLoader()
@@ -699,7 +702,7 @@ class TestAnalyzeTextBehaviour:
 class TestLoadModelFunction:
     """Test cases for the load_model convenience function."""
 
-    @patch('openmed.core.models.ModelLoader')
+    @patch("openmed.core.models.ModelLoader")
     def test_load_model_function(self, mock_loader_class):
         """Test the load_model convenience function."""
         mock_loader = Mock()

@@ -23,9 +23,10 @@ public class NERPipeline {
 
         let data = try Data(contentsOf: id2labelURL)
         let raw = try JSONDecoder().decode([String: String].self, from: data)
-        self.id2label = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in
-            Int(k).map { ($0, v) }
-        })
+        self.id2label = Dictionary(
+            uniqueKeysWithValues: raw.compactMap { k, v in
+                Int(k).map { ($0, v) }
+            })
     }
 
     private static func resolveModelURL(_ modelURL: URL) throws -> URL {
@@ -74,7 +75,8 @@ public class NERPipeline {
         let output = try model.prediction(from: inputFeatures)
 
         guard let logitsValue = output.featureValue(for: "logits"),
-              let logits = logitsValue.multiArrayValue else {
+            let logits = logitsValue.multiArrayValue
+        else {
             throw NERPipelineError.missingOutput("logits")
         }
 
@@ -105,22 +107,24 @@ public class NERPipeline {
             let label = id2label[maxLabelId] ?? "O"
 
             if label != "O" {
-                tokenPredictions.append(PostProcessing.TokenPrediction(
-                    labelId: maxLabelId,
-                    label: label,
-                    score: score,
-                    startOffset: offset.0,
-                    endOffset: offset.1
-                ))
+                tokenPredictions.append(
+                    PostProcessing.TokenPrediction(
+                        labelId: maxLabelId,
+                        label: label,
+                        score: score,
+                        startOffset: offset.0,
+                        endOffset: offset.1
+                    ))
             } else {
                 // Still pass "O" tokens for boundary detection
-                tokenPredictions.append(PostProcessing.TokenPrediction(
-                    labelId: maxLabelId,
-                    label: "O",
-                    score: score,
-                    startOffset: offset.0,
-                    endOffset: offset.1
-                ))
+                tokenPredictions.append(
+                    PostProcessing.TokenPrediction(
+                        labelId: maxLabelId,
+                        label: "O",
+                        score: score,
+                        startOffset: offset.0,
+                        endOffset: offset.1
+                    ))
             }
         }
 

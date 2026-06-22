@@ -22,7 +22,24 @@ def git_ls_files(pattern: str) -> list[str]:
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"git ls-files failed for {pattern}")
+        raise RuntimeError(
+            result.stderr.strip() or f"git ls-files failed for {pattern}"
+        )
+    return [line for line in result.stdout.splitlines() if line]
+
+
+def git_tracked_ignored_files() -> list[str]:
+    """Return tracked files that are also matched by standard ignore rules."""
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--ignored", "--exclude-standard"],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or "git ls-files ignored check failed")
     return [line for line in result.stdout.splitlines() if line]
 
 
@@ -57,18 +74,32 @@ def main() -> int:
             path for path in git_ls_files(pattern) if path not in deleted
         )
 
-    if forbidden_files:
+    deleted_files = git_deleted_files(".")
+    tracked_ignored_files = [
+        path for path in git_tracked_ignored_files() if path not in deleted_files
+    ]
+
+    if forbidden_files or tracked_ignored_files:
         print("Repository policy failed:", file=sys.stderr)
-        print(
-            "- tracked release-note drafts are not allowed; move release notes into CHANGELOG.md instead",
-            file=sys.stderr,
-        )
-        for path in sorted(set(forbidden_files)):
-            print(f"- remove tracked file: {path}", file=sys.stderr)
+        if forbidden_files:
+            print(
+                "- tracked release-note drafts are not allowed; move release notes into CHANGELOG.md instead",
+                file=sys.stderr,
+            )
+            for path in sorted(set(forbidden_files)):
+                print(f"- remove tracked file: {path}", file=sys.stderr)
+        if tracked_ignored_files:
+            print(
+                "- tracked ignored files are not allowed; remove them from the index or update .gitignore",
+                file=sys.stderr,
+            )
+            for path in sorted(set(tracked_ignored_files)):
+                print(f"- remove tracked ignored file: {path}", file=sys.stderr)
         return 1
 
     print("Repository policy passed")
     print("- no tracked RELEASE_NOTE* files found")
+    print("- no tracked ignored files found")
     return 0
 
 

@@ -103,8 +103,7 @@ def test_chunk_boundary_fixture_crosses_max_length_window_and_keeps_global_offse
 def test_checksum_fixture_has_valid_gold_ids_and_invalid_hard_negatives():
     fixture = _one("checksum_ids")
     gold_by_type = {
-        span.metadata["identifier_type"]: span.text
-        for span in fixture.gold_spans
+        span.metadata["identifier_type"]: span.text for span in fixture.gold_spans
     }
     hard_negatives = {
         item["identifier_type"]: item["text"]
@@ -139,7 +138,9 @@ def test_date_arithmetic_fixture_preserves_intervals_after_shift_dates():
 
 
 def _one(category: str) -> GoldenFixture:
-    matches = [fixture for fixture in load_golden_fixtures() if fixture.category == category]
+    matches = [
+        fixture for fixture in load_golden_fixtures() if fixture.category == category
+    ]
     assert len(matches) == 1
     return matches[0]
 
@@ -162,6 +163,5 @@ def _has_overlap(spans) -> bool:
 def _interval_days(values: list[str]) -> list[int]:
     parsed = [date.fromisoformat(value) for value in values]
     return [
-        (parsed[index + 1] - parsed[index]).days
-        for index in range(len(parsed) - 1)
+        (parsed[index + 1] - parsed[index]).days for index in range(len(parsed) - 1)
     ]

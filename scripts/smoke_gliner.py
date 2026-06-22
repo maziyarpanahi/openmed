@@ -23,7 +23,6 @@ from openmed.ner import (
 )
 from openmed.ner.families import ModelFamily
 
-
 DEFAULT_SAMPLE_TEXTS: Dict[str, str] = {
     "biomedical": "Imatinib inhibits BCR-ABL in chronic myeloid leukemia patients.",
     "clinical": "The patient received 5mg of warfarin daily after knee surgery.",
@@ -74,7 +73,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if not is_gliner_available():
-        parser.error("GLiNER dependencies unavailable. Install with `pip install .[gliner]`.")
+        parser.error(
+            "GLiNER dependencies unavailable. Install with `pip install .[gliner]`."
+        )
 
     try:
         index = load_index(args.index)

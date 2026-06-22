@@ -3,10 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-import openmed
 import pytest
 from fastapi.testclient import TestClient
 
+import openmed
 from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app

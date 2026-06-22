@@ -20,7 +20,6 @@ from __future__ import annotations
 import re
 from typing import Final, FrozenSet, Mapping, cast
 
-
 # ---------------------------------------------------------------------------
 # Canonical taxonomy
 # ---------------------------------------------------------------------------
@@ -96,20 +95,75 @@ IMEI: Final = "IMEI"
 OTHER: Final = "OTHER"
 
 
-CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset({
-    PERSON, FIRST_NAME, LAST_NAME, MIDDLE_NAME, PREFIX, USERNAME,
-    EMAIL, PHONE, URL,
-    LOCATION, STREET_ADDRESS, BUILDING_NUMBER, ZIPCODE, GPS_COORDINATES,
-    ORDINAL_DIRECTION,
-    DATE, DATE_OF_BIRTH, TIME, AGE,
-    ID_NUM, SSN, ACCOUNT_NUMBER, PASSWORD, PIN, API_KEY,
-    CREDIT_CARD, CREDIT_CARD_ISSUER, CVV, IBAN, BIC, AMOUNT, CURRENCY,
-    BITCOIN_ADDRESS, ETHEREUM_ADDRESS, LITECOIN_ADDRESS, MASKED_NUMBER,
-    GENDER, EYE_COLOR, HEIGHT,
-    ORGANIZATION, JOB_TITLE, JOB_DEPARTMENT, OCCUPATION,
-    IP_ADDRESS, MAC_ADDRESS, USER_AGENT, VIN, VEHICLE_REGISTRATION, IMEI,
-    OTHER,
-})
+# Optional sub-type metadata for labels that still normalize to ID_NUM.
+ID_SUBTYPE_MRN: Final = "mrn"
+ID_SUBTYPE_NPI: Final = "npi"
+ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
+ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
+ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
+    {
+        ID_SUBTYPE_MRN,
+        ID_SUBTYPE_NPI,
+        ID_SUBTYPE_NATIONAL_ID,
+        ID_SUBTYPE_SSN_ADJACENT,
+    }
+)
+
+
+CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        PERSON,
+        FIRST_NAME,
+        LAST_NAME,
+        MIDDLE_NAME,
+        PREFIX,
+        USERNAME,
+        EMAIL,
+        PHONE,
+        URL,
+        LOCATION,
+        STREET_ADDRESS,
+        BUILDING_NUMBER,
+        ZIPCODE,
+        GPS_COORDINATES,
+        ORDINAL_DIRECTION,
+        DATE,
+        DATE_OF_BIRTH,
+        TIME,
+        AGE,
+        ID_NUM,
+        SSN,
+        ACCOUNT_NUMBER,
+        PASSWORD,
+        PIN,
+        API_KEY,
+        CREDIT_CARD,
+        CREDIT_CARD_ISSUER,
+        CVV,
+        IBAN,
+        BIC,
+        AMOUNT,
+        CURRENCY,
+        BITCOIN_ADDRESS,
+        ETHEREUM_ADDRESS,
+        LITECOIN_ADDRESS,
+        MASKED_NUMBER,
+        GENDER,
+        EYE_COLOR,
+        HEIGHT,
+        ORGANIZATION,
+        JOB_TITLE,
+        JOB_DEPARTMENT,
+        OCCUPATION,
+        IP_ADDRESS,
+        MAC_ADDRESS,
+        USER_AGENT,
+        VIN,
+        VEHICLE_REGISTRATION,
+        IMEI,
+        OTHER,
+    }
+)
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +173,13 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset({
 DIRECT_IDENTIFIER: Final = "DIRECT_IDENTIFIER"
 QUASI_IDENTIFIER: Final = "QUASI_IDENTIFIER"
 CLINICAL_CONCEPT: Final = "CLINICAL_CONCEPT"
-POLICY_LABELS: Final[FrozenSet[str]] = frozenset({
-    DIRECT_IDENTIFIER,
-    QUASI_IDENTIFIER,
-    CLINICAL_CONCEPT,
-})
+POLICY_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        DIRECT_IDENTIFIER,
+        QUASI_IDENTIFIER,
+        CLINICAL_CONCEPT,
+    }
+)
 
 RISK_LOW: Final = "low"
 RISK_MEDIUM: Final = "medium"
@@ -162,26 +218,28 @@ HIPAA_BIOMETRIC_IDENTIFIER: Final = "BIOMETRIC_IDENTIFIER"
 HIPAA_FULL_FACE_PHOTO: Final = "FULL_FACE_PHOTO"
 HIPAA_UNIQUE_IDENTIFIER: Final = "UNIQUE_IDENTIFIER"
 
-HIPAA_SAFE_HARBOR_CLASSES: Final[FrozenSet[str]] = frozenset({
-    HIPAA_NAME,
-    HIPAA_GEOGRAPHIC_SUBDIVISION,
-    HIPAA_DATE_ELEMENT,
-    HIPAA_TELEPHONE_NUMBER,
-    HIPAA_FAX_NUMBER,
-    HIPAA_EMAIL_ADDRESS,
-    HIPAA_SOCIAL_SECURITY_NUMBER,
-    HIPAA_MEDICAL_RECORD_NUMBER,
-    HIPAA_HEALTH_PLAN_BENEFICIARY_NUMBER,
-    HIPAA_ACCOUNT_NUMBER,
-    HIPAA_CERTIFICATE_LICENSE_NUMBER,
-    HIPAA_VEHICLE_IDENTIFIER,
-    HIPAA_DEVICE_IDENTIFIER,
-    HIPAA_URL,
-    HIPAA_IP_ADDRESS,
-    HIPAA_BIOMETRIC_IDENTIFIER,
-    HIPAA_FULL_FACE_PHOTO,
-    HIPAA_UNIQUE_IDENTIFIER,
-})
+HIPAA_SAFE_HARBOR_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        HIPAA_NAME,
+        HIPAA_GEOGRAPHIC_SUBDIVISION,
+        HIPAA_DATE_ELEMENT,
+        HIPAA_TELEPHONE_NUMBER,
+        HIPAA_FAX_NUMBER,
+        HIPAA_EMAIL_ADDRESS,
+        HIPAA_SOCIAL_SECURITY_NUMBER,
+        HIPAA_MEDICAL_RECORD_NUMBER,
+        HIPAA_HEALTH_PLAN_BENEFICIARY_NUMBER,
+        HIPAA_ACCOUNT_NUMBER,
+        HIPAA_CERTIFICATE_LICENSE_NUMBER,
+        HIPAA_VEHICLE_IDENTIFIER,
+        HIPAA_DEVICE_IDENTIFIER,
+        HIPAA_URL,
+        HIPAA_IP_ADDRESS,
+        HIPAA_BIOMETRIC_IDENTIFIER,
+        HIPAA_FULL_FACE_PHOTO,
+        HIPAA_UNIQUE_IDENTIFIER,
+    }
+)
 
 _NO_SYSTEM_HINTS: Final[tuple[str, ...]] = ()
 
@@ -206,12 +264,10 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     MIDDLE_NAME: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     PREFIX: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     USERNAME: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
-
     # Contact
     EMAIL: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     PHONE: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     URL: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
-
     # Location
     LOCATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     STREET_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
@@ -219,13 +275,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ZIPCODE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     GPS_COORDINATES: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     ORDINAL_DIRECTION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
-
     # Time
     DATE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     DATE_OF_BIRTH: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     TIME: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     AGE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
-
     # Identifiers
     ID_NUM: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     SSN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
@@ -233,7 +287,6 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     PASSWORD: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     PIN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     API_KEY: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
-
     # Financial
     CREDIT_CARD: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     CREDIT_CARD_ISSUER: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
@@ -246,18 +299,15 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     ETHEREUM_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     LITECOIN_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     MASKED_NUMBER: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
-
     # Demographics
     GENDER: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     EYE_COLOR: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     HEIGHT: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
-
     # Work
     ORGANIZATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     JOB_TITLE: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     JOB_DEPARTMENT: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
     OCCUPATION: _label_metadata(QUASI_IDENTIFIER, RISK_MEDIUM),
-
     # Tech
     IP_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     MAC_ADDRESS: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
@@ -265,7 +315,6 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     VIN: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     VEHICLE_REGISTRATION: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
     IMEI: _label_metadata(DIRECT_IDENTIFIER, RISK_HIGH),
-
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -278,12 +327,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     MIDDLE_NAME: HIPAA_NAME,
     PREFIX: HIPAA_NAME,
     USERNAME: HIPAA_UNIQUE_IDENTIFIER,
-
     # Contact
     EMAIL: HIPAA_EMAIL_ADDRESS,
     PHONE: HIPAA_TELEPHONE_NUMBER,
     URL: HIPAA_URL,
-
     # Location
     LOCATION: HIPAA_GEOGRAPHIC_SUBDIVISION,
     STREET_ADDRESS: HIPAA_GEOGRAPHIC_SUBDIVISION,
@@ -291,13 +338,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     ZIPCODE: HIPAA_GEOGRAPHIC_SUBDIVISION,
     GPS_COORDINATES: HIPAA_GEOGRAPHIC_SUBDIVISION,
     ORDINAL_DIRECTION: HIPAA_GEOGRAPHIC_SUBDIVISION,
-
     # Time
     DATE: HIPAA_DATE_ELEMENT,
     DATE_OF_BIRTH: HIPAA_DATE_ELEMENT,
     TIME: HIPAA_DATE_ELEMENT,
     AGE: HIPAA_DATE_ELEMENT,
-
     # Identifiers
     ID_NUM: HIPAA_UNIQUE_IDENTIFIER,
     SSN: HIPAA_SOCIAL_SECURITY_NUMBER,
@@ -305,7 +350,6 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     PASSWORD: HIPAA_UNIQUE_IDENTIFIER,
     PIN: HIPAA_UNIQUE_IDENTIFIER,
     API_KEY: HIPAA_UNIQUE_IDENTIFIER,
-
     # Financial
     CREDIT_CARD: HIPAA_ACCOUNT_NUMBER,
     CREDIT_CARD_ISSUER: HIPAA_UNIQUE_IDENTIFIER,
@@ -318,18 +362,15 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     ETHEREUM_ADDRESS: HIPAA_ACCOUNT_NUMBER,
     LITECOIN_ADDRESS: HIPAA_ACCOUNT_NUMBER,
     MASKED_NUMBER: HIPAA_ACCOUNT_NUMBER,
-
     # Demographics
     GENDER: HIPAA_UNIQUE_IDENTIFIER,
     EYE_COLOR: HIPAA_UNIQUE_IDENTIFIER,
     HEIGHT: HIPAA_UNIQUE_IDENTIFIER,
-
     # Work
     ORGANIZATION: HIPAA_UNIQUE_IDENTIFIER,
     JOB_TITLE: HIPAA_UNIQUE_IDENTIFIER,
     JOB_DEPARTMENT: HIPAA_UNIQUE_IDENTIFIER,
     OCCUPATION: HIPAA_UNIQUE_IDENTIFIER,
-
     # Tech
     IP_ADDRESS: HIPAA_IP_ADDRESS,
     MAC_ADDRESS: HIPAA_DEVICE_IDENTIFIER,
@@ -337,7 +378,6 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     VIN: HIPAA_VEHICLE_IDENTIFIER,
     VEHICLE_REGISTRATION: HIPAA_VEHICLE_IDENTIFIER,
     IMEI: HIPAA_DEVICE_IDENTIFIER,
-
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -402,7 +442,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "title": PREFIX,
     "username": USERNAME,
     "userhandle": USERNAME,
-
     # Contact
     "email": EMAIL,
     "emailaddress": EMAIL,
@@ -414,7 +453,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "urlpersonal": URL,
     "website": URL,
     "personalurl": URL,
-
     # Location
     "location": LOCATION,
     "city": LOCATION,
@@ -435,7 +473,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "gpscoordinates": GPS_COORDINATES,
     "gps": GPS_COORDINATES,
     "ordinaldirection": ORDINAL_DIRECTION,
-
     # Time
     "date": DATE,
     "dateofbirth": DATE_OF_BIRTH,
@@ -443,7 +480,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "birthdate": DATE_OF_BIRTH,
     "time": TIME,
     "age": AGE,
-
     # Identifiers
     "idnum": ID_NUM,
     "id": ID_NUM,
@@ -469,7 +505,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "password": PASSWORD,
     "pin": PIN,
     "apikey": API_KEY,
-
     # Financial
     "creditcard": CREDIT_CARD,
     "creditdebitcard": CREDIT_CARD,
@@ -488,13 +523,11 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "ethereumaddress": ETHEREUM_ADDRESS,
     "litecoinaddress": LITECOIN_ADDRESS,
     "maskednumber": MASKED_NUMBER,
-
     # Demographics
     "gender": GENDER,
     "sex": GENDER,
     "eyecolor": EYE_COLOR,
     "height": HEIGHT,
-
     # Work
     "organization": ORGANIZATION,
     "company": ORGANIZATION,
@@ -504,7 +537,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "department": JOB_DEPARTMENT,
     "occupation": OCCUPATION,
     "profession": OCCUPATION,
-
     # Tech
     "ipaddress": IP_ADDRESS,
     "ip": IP_ADDRESS,
@@ -514,6 +546,23 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "vrm": VEHICLE_REGISTRATION,
     "licenseplate": VEHICLE_REGISTRATION,
     "imei": IMEI,
+}
+
+
+ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
+    "medicalrecordnumber": ID_SUBTYPE_MRN,
+    "mrn": ID_SUBTYPE_MRN,
+    "npi": ID_SUBTYPE_NPI,
+    "nationalid": ID_SUBTYPE_NATIONAL_ID,
+    "cpf": ID_SUBTYPE_NATIONAL_ID,
+    "cnpj": ID_SUBTYPE_NATIONAL_ID,
+    "nir": ID_SUBTYPE_NATIONAL_ID,
+    "steuerid": ID_SUBTYPE_NATIONAL_ID,
+    "codicefiscale": ID_SUBTYPE_NATIONAL_ID,
+    "dni": ID_SUBTYPE_NATIONAL_ID,
+    "nie": ID_SUBTYPE_NATIONAL_ID,
+    "bsn": ID_SUBTYPE_NATIONAL_ID,
+    "aadhaar": ID_SUBTYPE_NATIONAL_ID,
 }
 
 
@@ -576,6 +625,18 @@ def normalize_label(label: str, lang: str = "en") -> str:
     return OTHER
 
 
+def id_subtype_for(label: str, lang: str = "en") -> str | None:
+    """Return optional ID_NUM subtype metadata for a source label.
+
+    The canonical taxonomy remains flat: all values returned by this helper
+    still normalize to ``ID_NUM``. Callers that only need canonical labels
+    should continue to use :func:`normalize_label`.
+    """
+    if normalize_label(label, lang=lang) != ID_NUM:
+        return None
+    return ID_ALIAS_SUBTYPES.get(_key(label))
+
+
 def _metadata_for(label: str, lang: str = "en") -> Mapping[str, object]:
     return LABEL_METADATA[normalize_label(label, lang=lang)]
 
@@ -606,6 +667,13 @@ _validate_label_metadata()
 __all__ = [
     "CANONICAL_LABELS",
     "normalize_label",
+    "id_subtype_for",
+    "ID_ALIAS_SUBTYPES",
+    "ID_SUBTYPES",
+    "ID_SUBTYPE_MRN",
+    "ID_SUBTYPE_NPI",
+    "ID_SUBTYPE_NATIONAL_ID",
+    "ID_SUBTYPE_SSN_ADJACENT",
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
     "POLICY_LABELS",
@@ -623,19 +691,54 @@ __all__ = [
     "system_hints_for",
     "hipaa_class_for",
     # canonical label constants
-    "PERSON", "FIRST_NAME", "LAST_NAME", "MIDDLE_NAME", "PREFIX", "USERNAME",
-    "EMAIL", "PHONE", "URL",
-    "LOCATION", "STREET_ADDRESS", "BUILDING_NUMBER", "ZIPCODE",
-    "GPS_COORDINATES", "ORDINAL_DIRECTION",
-    "DATE", "DATE_OF_BIRTH", "TIME", "AGE",
-    "ID_NUM", "SSN", "ACCOUNT_NUMBER", "PASSWORD", "PIN", "API_KEY",
-    "CREDIT_CARD", "CREDIT_CARD_ISSUER", "CVV", "IBAN", "BIC",
-    "AMOUNT", "CURRENCY",
-    "BITCOIN_ADDRESS", "ETHEREUM_ADDRESS", "LITECOIN_ADDRESS",
+    "PERSON",
+    "FIRST_NAME",
+    "LAST_NAME",
+    "MIDDLE_NAME",
+    "PREFIX",
+    "USERNAME",
+    "EMAIL",
+    "PHONE",
+    "URL",
+    "LOCATION",
+    "STREET_ADDRESS",
+    "BUILDING_NUMBER",
+    "ZIPCODE",
+    "GPS_COORDINATES",
+    "ORDINAL_DIRECTION",
+    "DATE",
+    "DATE_OF_BIRTH",
+    "TIME",
+    "AGE",
+    "ID_NUM",
+    "SSN",
+    "ACCOUNT_NUMBER",
+    "PASSWORD",
+    "PIN",
+    "API_KEY",
+    "CREDIT_CARD",
+    "CREDIT_CARD_ISSUER",
+    "CVV",
+    "IBAN",
+    "BIC",
+    "AMOUNT",
+    "CURRENCY",
+    "BITCOIN_ADDRESS",
+    "ETHEREUM_ADDRESS",
+    "LITECOIN_ADDRESS",
     "MASKED_NUMBER",
-    "GENDER", "EYE_COLOR", "HEIGHT",
-    "ORGANIZATION", "JOB_TITLE", "JOB_DEPARTMENT", "OCCUPATION",
-    "IP_ADDRESS", "MAC_ADDRESS", "USER_AGENT", "VIN",
-    "VEHICLE_REGISTRATION", "IMEI",
+    "GENDER",
+    "EYE_COLOR",
+    "HEIGHT",
+    "ORGANIZATION",
+    "JOB_TITLE",
+    "JOB_DEPARTMENT",
+    "OCCUPATION",
+    "IP_ADDRESS",
+    "MAC_ADDRESS",
+    "USER_AGENT",
+    "VIN",
+    "VEHICLE_REGISTRATION",
+    "IMEI",
     "OTHER",
 ]

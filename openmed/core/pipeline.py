@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
-import unicodedata
 
 from .labels import hipaa_class_for, normalize_label, policy_label_for
-from .pii_entity_merger import PIIPattern, PII_PATTERNS
+from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
-
 
 STAGE_NAMES: tuple[str, ...] = (
     "normalize",
@@ -57,7 +56,9 @@ class OffsetMap:
             return len(self.normalized_to_original), len(self.normalized_to_original)
         return min(mapped), max(mapped) + 1
 
-    def normalized_span_to_original_offsets(self, start: int, end: int) -> tuple[int, int]:
+    def normalized_span_to_original_offsets(
+        self, start: int, end: int
+    ) -> tuple[int, int]:
         if start == end:
             if start >= len(self.normalized_to_original_span):
                 terminal = (
@@ -158,6 +159,8 @@ class Pipeline:
         policy_profile: str | None = None,
         policy: Any = None,
         threshold_matrix: Mapping[str, Any] | None = None,
+        calibration_thresholds_path: str | None = None,
+        calibration_thresholds: Mapping[str, Any] | Any | None = None,
         score_calibrator: Any = None,
         arbitration_label_floors: Mapping[str, float] | None = None,
         high_recall_label_floors: Mapping[str, float] | None = None,
@@ -195,6 +198,10 @@ class Pipeline:
         self.strict_no_leak = strict_no_leak
         self.policy_profile = policy_profile
         self.threshold_matrix = threshold_matrix
+        self.calibration_thresholds = _load_calibration_thresholds(
+            calibration_thresholds=calibration_thresholds,
+            calibration_thresholds_path=calibration_thresholds_path,
+        )
         self.score_calibrator = score_calibrator
         self.arbitration_label_floors = arbitration_label_floors
         self.high_recall_label_floors = high_recall_label_floors
@@ -215,6 +222,7 @@ class Pipeline:
         seed: Optional[int] = None,
         locale: Optional[str] = None,
         doc_id: str | None = None,
+        audit: bool = False,
     ) -> PipelineResult:
         from . import pii
 
@@ -316,6 +324,7 @@ class Pipeline:
             )
 
             pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
+            self._apply_calibration_thresholds(pii_result, route)
             model_spans = self._entities_to_spans(
                 getattr(pii_result, "entities", ()),
                 normalized.normalized_text,
@@ -351,12 +360,19 @@ class Pipeline:
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
+            previous_metadata = dict(getattr(pii_result, "metadata", None) or {})
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 [span for span in policy_spans if span.action != ACTION_KEEP],
                 model_name=f"policy:{self.policy.name}",
             )
             _attach_policy_metadata(pii_result, self.policy)
+            if "calibration_thresholds" in previous_metadata:
+                metadata = dict(getattr(pii_result, "metadata", None) or {})
+                metadata["calibration_thresholds"] = previous_metadata[
+                    "calibration_thresholds"
+                ]
+                pii_result.metadata = metadata
 
         sweep_spans, sweep_metadata = self.stage9_safety_sweep(
             normalized.normalized_text,
@@ -386,13 +402,18 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            model_name=route.model_name,
+            confidence_threshold=self.confidence_threshold,
+            normalize_accents=self.normalize_accents,
+            use_smart_merging=self.use_smart_merging,
+            use_safety_sweep=self.use_safety_sweep,
             reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
             policy_name=self.policy.name if self.policy is not None else None,
+            policy=self.policy.name if self.policy is not None else "hipaa_safe_harbor",
+            audit=audit,
         )
         final_spans = (
-            sweep_spans
-            if self.policy is not None
-            else (sweep_spans or policy_spans)
+            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
         stage_results.append(
             PipelineStageResult(
@@ -573,6 +594,58 @@ class Pipeline:
             stage=STAGE_NAMES[5],
         )
 
+    def _apply_calibration_thresholds(
+        self,
+        pii_result: Any,
+        route: LanguageRoute,
+    ) -> None:
+        if self.calibration_thresholds is None:
+            return
+
+        result_model = str(getattr(pii_result, "model_name", None) or route.model_name)
+        active = self.calibration_thresholds.active_for(
+            model_id=result_model,
+            language=route.lang,
+        )
+        retained = []
+        filtered = 0
+        for entity in getattr(pii_result, "entities", ()):
+            label = normalize_label(str(getattr(entity, "label", "") or ""), route.lang)
+            threshold = self.calibration_thresholds.lookup(
+                label,
+                route.lang,
+                model_id=result_model,
+                default=self.confidence_threshold,
+            )
+            active[label] = threshold
+            metadata = dict(getattr(entity, "metadata", None) or {})
+            metadata["calibration_threshold"] = {
+                "threshold": threshold,
+                "source": self.calibration_thresholds.source_path or "inline",
+                "schema_version": self.calibration_thresholds.schema_version,
+                "model_id": result_model,
+                "language": route.lang,
+            }
+            entity.metadata = metadata
+            if float(getattr(entity, "confidence", 0.0) or 0.0) >= threshold:
+                retained.append(entity)
+            else:
+                filtered += 1
+
+        pii_result.entities = retained
+        if hasattr(pii_result, "num_entities"):
+            pii_result.num_entities = len(retained)
+        metadata = dict(getattr(pii_result, "metadata", None) or {})
+        metadata["calibration_thresholds"] = {
+            "active": active,
+            "filtered_entities": filtered,
+            "source": self.calibration_thresholds.source_path or "inline",
+            "schema_version": self.calibration_thresholds.schema_version,
+            "model_id": result_model,
+            "suite": self.calibration_thresholds.suite,
+        }
+        pii_result.metadata = metadata
+
     def stage7_arbitration(
         self,
         spans: Sequence[OpenMedSpan],
@@ -664,8 +737,15 @@ class Pipeline:
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        model_name: str,
+        confidence_threshold: float,
+        normalize_accents: Optional[bool],
+        use_smart_merging: bool,
+        use_safety_sweep: bool,
         reversible_ids: bool = False,
         policy_name: Optional[str] = None,
+        policy: str = "hipaa_safe_harbor",
+        audit: bool = False,
     ) -> Any:
         from . import pii
 
@@ -680,8 +760,15 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+            normalize_accents=normalize_accents,
+            use_smart_merging=use_smart_merging,
+            use_safety_sweep=use_safety_sweep,
             reversible_ids=reversible_ids,
             policy_name=policy_name,
+            policy=policy,
+            audit=audit,
         )
 
     def _entities_to_spans(
@@ -714,7 +801,9 @@ class Pipeline:
                     entity_type=label or canonical,
                     canonical_label=canonical,
                     policy_label=policy_label_for(canonical, lang=context.route.lang),
-                    regulatory_tags=(hipaa_class_for(canonical, lang=context.route.lang),),
+                    regulatory_tags=(
+                        hipaa_class_for(canonical, lang=context.route.lang),
+                    ),
                     score=float(getattr(entity, "confidence", 0.0) or 0.0),
                     detector=detector,
                     evidence=_evidence_for_entity(entity),
@@ -737,7 +826,9 @@ class Pipeline:
             "language": context.route.lang,
             "script": context.route.script,
             "model_name": context.route.model_name,
-            "input_text_hash": hmac_text_hash(context.normalized_text, self.hmac_secret),
+            "input_text_hash": hmac_text_hash(
+                context.normalized_text, self.hmac_secret
+            ),
             "redacted_text_hash": hmac_text_hash(redacted_text, self.hmac_secret),
             "normalized_length": len(context.normalized_text),
             "redacted_length": len(redacted_text),
@@ -835,7 +926,11 @@ def _deterministic_patterns(lang: str) -> list[PIIPattern]:
 def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
     start = getattr(entity, "start", None)
     end = getattr(entity, "end", None)
-    if isinstance(start, int) and isinstance(end, int) and 0 <= start <= end <= len(text):
+    if (
+        isinstance(start, int)
+        and isinstance(end, int)
+        and 0 <= start <= end <= len(text)
+    ):
         return start, end
 
     surface = str(getattr(entity, "text", "") or "")
@@ -925,7 +1020,9 @@ def _redacted_char_count(entities: Sequence[Any]) -> int:
     return total
 
 
-def _cascade_stage_spans(cascade_result: Any, routes: set[str]) -> tuple[OpenMedSpan, ...]:
+def _cascade_stage_spans(
+    cascade_result: Any, routes: set[str]
+) -> tuple[OpenMedSpan, ...]:
     spans: list[OpenMedSpan] = []
     for stage in getattr(cascade_result, "stage_results", ()):
         if getattr(stage, "route", None) in routes:
@@ -947,7 +1044,7 @@ def _prediction_result_from_spans(
         text=text,
         entities=[
             EntityPrediction(
-                text=text[span.start:span.end],
+                text=text[span.start : span.end],
                 label=span.entity_type or span.canonical_label,
                 start=span.start,
                 end=span.end,
@@ -963,6 +1060,23 @@ def _prediction_result_from_spans(
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def _load_calibration_thresholds(
+    *,
+    calibration_thresholds: Mapping[str, Any] | Any | None,
+    calibration_thresholds_path: str | None,
+) -> Any | None:
+    if calibration_thresholds is not None:
+        from openmed.eval.calibrate import coerce_calibration_thresholds
+
+        return coerce_calibration_thresholds(calibration_thresholds)
+    if calibration_thresholds_path is None:
+        return None
+
+    from openmed.eval.calibrate import load_calibration_thresholds
+
+    return load_calibration_thresholds(calibration_thresholds_path)
 
 
 def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:

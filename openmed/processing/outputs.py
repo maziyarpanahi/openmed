@@ -1,11 +1,12 @@
 """Output formatting utilities for OpenMed."""
 
+import html as html_mod
 import json
-import unicodedata
-from typing import List, Dict, Any, Optional, Union, Tuple
-from dataclasses import dataclass, asdict
-from datetime import datetime
 import logging
+import unicodedata
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +56,7 @@ def _to_int(value: Any) -> Optional[int]:
 @dataclass
 class EntityPrediction:
     """Represents a single entity prediction."""
+
     text: str
     label: str
     confidence: float
@@ -77,6 +79,7 @@ class EntityPrediction:
 @dataclass
 class PredictionResult:
     """Represents the complete prediction result."""
+
     text: str
     entities: List[EntityPrediction]
     model_name: str
@@ -95,10 +98,12 @@ class PredictionResult:
 class OutputFormatter:
     """Formats model predictions into various output formats."""
 
-    def __init__(self,
-                 include_confidence: bool = True,
-                 confidence_threshold: float = 0.0,
-                 group_entities: bool = False):
+    def __init__(
+        self,
+        include_confidence: bool = True,
+        confidence_threshold: float = 0.0,
+        group_entities: bool = False,
+    ):
         """Initialize output formatter.
 
         Args:
@@ -116,7 +121,7 @@ class OutputFormatter:
         predictions: List[Dict[str, Any]],
         original_text: str,
         model_name: str = "unknown",
-        **kwargs
+        **kwargs,
     ) -> PredictionResult:
         """Format raw model predictions into structured output.
 
@@ -170,11 +175,7 @@ class OutputFormatter:
 
             entity_text = normalized_text
 
-            raw_label = (
-                pred.get("entity_group")
-                or pred.get("entity")
-                or ""
-            )
+            raw_label = pred.get("entity_group") or pred.get("entity") or ""
             clean_label = raw_label.replace("B-", "").replace("I-", "")
             label = clean_label or raw_label or "UNKNOWN"
 
@@ -195,13 +196,14 @@ class OutputFormatter:
                 confidence=score,
                 start=_to_int(adjusted_start if adjusted_start is not None else start),
                 end=_to_int(adjusted_end if adjusted_end is not None else end),
-                metadata=span_metadata
+                metadata=span_metadata,
             )
             entities.append(entity)
 
         if original_text:
             entities = self._fix_entity_spans(entities, original_text)
             from openmed.core.quality_gates import validate_entity_spans
+
             validate_entity_spans(entities, original_text)
 
         if self.group_entities:
@@ -213,7 +215,7 @@ class OutputFormatter:
             model_name=model_name,
             timestamp=datetime.now().isoformat(),
             processing_time=kwargs.get("processing_time"),
-            metadata=kwargs.get("metadata", {})
+            metadata=kwargs.get("metadata", {}),
         )
 
         # Reset reference to avoid leaking state across calls
@@ -230,7 +232,7 @@ class OutputFormatter:
         non-Latin scripts (Hindi, Telugu, etc.).
         """
         cat = unicodedata.category(ch)
-        return cat[0] in ('L', 'M', 'N')
+        return cat[0] in ("L", "M", "N")
 
     @staticmethod
     def _fix_entity_spans(
@@ -271,14 +273,16 @@ class OutputFormatter:
 
             span_text = text[start:end]
             if span_text and not span_text.isspace():
-                fixed.append(EntityPrediction(
-                    text=span_text,
-                    label=e.label,
-                    confidence=e.confidence,
-                    start=start,
-                    end=end,
-                    metadata=e.metadata,
-                ))
+                fixed.append(
+                    EntityPrediction(
+                        text=span_text,
+                        label=e.label,
+                        confidence=e.confidence,
+                        start=start,
+                        end=end,
+                        metadata=e.metadata,
+                    )
+                )
             else:
                 fixed.append(e)
         return fixed
@@ -288,7 +292,12 @@ class OutputFormatter:
         if not text:
             return ""
 
-        cleaned = text.replace("▁", " ").replace("Ġ", " ").replace("Ċ", " ").replace("@@", " ")
+        cleaned = (
+            text.replace("▁", " ")
+            .replace("Ġ", " ")
+            .replace("Ċ", " ")
+            .replace("@@", " ")
+        )
 
         while cleaned.startswith("##"):
             cleaned = cleaned[2:]
@@ -301,8 +310,7 @@ class OutputFormatter:
         return " ".join(cleaned.split())
 
     def _group_adjacent_entities(
-        self,
-        entities: List[EntityPrediction]
+        self, entities: List[EntityPrediction]
     ) -> List[EntityPrediction]:
         """Group adjacent entities of the same type.
 
@@ -321,12 +329,8 @@ class OutputFormatter:
         for entity in entities[1:]:
             last_entity = current_group[-1]
 
-            last_sentence = (
-                last_entity.metadata or {}
-            ).get("sentence_index")
-            current_sentence = (
-                entity.metadata or {}
-            ).get("sentence_index")
+            last_sentence = (last_entity.metadata or {}).get("sentence_index")
+            current_sentence = (entity.metadata or {}).get("sentence_index")
 
             # Check if entities are adjacent and same label
             if (
@@ -356,10 +360,7 @@ class OutputFormatter:
 
         return grouped
 
-    def _merge_entities(
-        self,
-        entities: List[EntityPrediction]
-    ) -> EntityPrediction:
+    def _merge_entities(self, entities: List[EntityPrediction]) -> EntityPrediction:
         """Merge multiple entities into one.
 
         Args:
@@ -407,7 +408,7 @@ class OutputFormatter:
             confidence=avg_confidence,
             start=start,
             end=end,
-            metadata=merged_metadata
+            metadata=merged_metadata,
         )
 
     def to_json(self, result: PredictionResult, indent: int = 2) -> str:
@@ -432,23 +433,23 @@ class OutputFormatter:
             HTML string.
         """
         html = f'<div class="openmed-result">\n'
-        html += f'<h3>Analysis Results</h3>\n'
-        html += f'<p><strong>Model:</strong> {result.model_name}</p>\n'
-        html += f'<p><strong>Timestamp:</strong> {result.timestamp}</p>\n'
+        html += f"<h3>Analysis Results</h3>\n"
+        html += f"<p><strong>Model:</strong> {html_mod.escape(str(result.model_name))}</p>\n"
+        html += f"<p><strong>Timestamp:</strong> {html_mod.escape(str(result.timestamp))}</p>\n"
 
         if result.processing_time:
-            html += f'<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n'
+            html += f"<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n"
 
         html += f'<div class="text-content">\n'
 
         # Highlight entities in text
-        highlighted_text = result.text
+        highlighted_text = html_mod.escape(result.text)
         offset = 0
 
         # Sort entities by start position
         sorted_entities = sorted(
             [e for e in result.entities if e.start is not None and e.end is not None],
-            key=lambda x: x.start
+            key=lambda x: x.start,
         )
 
         for entity in sorted_entities:
@@ -457,36 +458,40 @@ class OutputFormatter:
 
             color = self._get_entity_color(entity.label)
 
-            highlight_start = f'<span class="entity entity-{entity.label.lower()}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {entity.label}, Confidence: {entity.confidence:.3f}">'
-            highlight_end = '</span>'
+            highlight_start = f'<span class="entity entity-{html_mod.escape(entity.label.lower())}" style="background-color: {color}; padding: 2px 4px; border-radius: 3px;" title="Label: {html_mod.escape(entity.label)}, Confidence: {entity.confidence:.3f}">'
+            highlight_end = "</span>"
 
             highlighted_text = (
-                highlighted_text[:start] +
-                highlight_start +
-                highlighted_text[start:end] +
-                highlight_end +
-                highlighted_text[end:]
+                highlighted_text[:start]
+                + highlight_start
+                + highlighted_text[start:end]
+                + highlight_end
+                + highlighted_text[end:]
             )
 
             offset += len(highlight_start) + len(highlight_end)
 
-        html += f'<p>{highlighted_text}</p>\n'
-        html += f'</div>\n'
+        html += f"<p>{highlighted_text}</p>\n"
+        html += f"</div>\n"
 
         # Entity summary
         if result.entities:
             html += f'<div class="entity-summary">\n'
-            html += f'<h4>Detected Entities ({len(result.entities)})</h4>\n'
-            html += f'<ul>\n'
+            html += f"<h4>Detected Entities ({len(result.entities)})</h4>\n"
+            html += f"<ul>\n"
 
             for entity in result.entities:
-                confidence_str = f" (confidence: {entity.confidence:.3f})" if self.include_confidence else ""
-                html += f'<li><strong>{entity.label}:</strong> {entity.text}{confidence_str}</li>\n'
+                confidence_str = (
+                    f" (confidence: {entity.confidence:.3f})"
+                    if self.include_confidence
+                    else ""
+                )
+                html += f"<li><strong>{html_mod.escape(entity.label)}:</strong> {html_mod.escape(entity.text)}{confidence_str}</li>\n"
 
-            html += f'</ul>\n'
-            html += f'</div>\n'
+            html += f"</ul>\n"
+            html += f"</div>\n"
 
-        html += f'</div>\n'
+        html += f"</div>\n"
         return html
 
     def _get_entity_color(self, label: str) -> str:
@@ -508,7 +513,7 @@ class OutputFormatter:
             "medication": "#FFE4F0",
             "condition": "#E4F0FF",
             "procedure": "#F0FFE4",
-            "anatomy": "#F5F5DC"
+            "anatomy": "#F5F5DC",
         }
         return colors.get(label.lower(), "#F0F0F0")
 
@@ -532,7 +537,7 @@ class OutputFormatter:
                 "model_name": result.model_name,
                 "timestamp": result.timestamp,
                 "processing_time": result.processing_time,
-                "original_text": result.text
+                "original_text": result.text,
             }
             if entity.metadata:
                 sentence_index = entity.metadata.get("sentence_index")
@@ -554,7 +559,7 @@ def format_predictions(
     original_text: str,
     model_name: str = "unknown",
     output_format: str = "dict",
-    **kwargs
+    **kwargs,
 ) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
     """Convenience function to format predictions.
 
