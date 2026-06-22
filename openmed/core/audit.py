@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 _HASH_ALGORITHM = "sha256"
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 

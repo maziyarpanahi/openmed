@@ -1,12 +1,13 @@
 """Tokenization utilities for OpenMed."""
 
-from dataclasses import dataclass
-from typing import List, Dict, Any, Optional, Tuple, Union, Iterable
 import logging
 import re
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 try:
     from transformers import PreTrainedTokenizer
+
     HF_AVAILABLE = True
 except (ImportError, OSError):
     HF_AVAILABLE = False
@@ -55,7 +56,10 @@ def medical_tokenize(
     """
     exceptions_set = {e for e in (exceptions or []) if e}
     if not exceptions_set:
-        return [SpanToken(m.group(0), m.start(), m.end()) for m in _MEDICAL_TOKEN_PATTERN.finditer(text)]
+        return [
+            SpanToken(m.group(0), m.start(), m.end())
+            for m in _MEDICAL_TOKEN_PATTERN.finditer(text)
+        ]
 
     protected: List[Tuple[int, int]] = []
     for exc in sorted(exceptions_set, key=len, reverse=True):
@@ -72,7 +76,10 @@ def medical_tokenize(
             start = idx + len(exc)
 
     if not protected:
-        return [SpanToken(m.group(0), m.start(), m.end()) for m in _MEDICAL_TOKEN_PATTERN.finditer(text)]
+        return [
+            SpanToken(m.group(0), m.start(), m.end())
+            for m in _MEDICAL_TOKEN_PATTERN.finditer(text)
+        ]
 
     protected.sort()
     tokens: List[SpanToken] = []
@@ -80,14 +87,18 @@ def medical_tokenize(
     for s, e in protected:
         if cursor < s:
             for m in _MEDICAL_TOKEN_PATTERN.finditer(text[cursor:s]):
-                tokens.append(SpanToken(m.group(0), m.start() + cursor, m.end() + cursor))
+                tokens.append(
+                    SpanToken(m.group(0), m.start() + cursor, m.end() + cursor)
+                )
         tokens.append(SpanToken(text[s:e], s, e))
         cursor = e
     if cursor < len(text):
         for m in _MEDICAL_TOKEN_PATTERN.finditer(text[cursor:]):
             tokens.append(SpanToken(m.group(0), m.start() + cursor, m.end() + cursor))
 
-    return [t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start]
+    return [
+        t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start
+    ]
 
 
 def remap_predictions_to_tokens(
@@ -146,7 +157,11 @@ def remap_predictions_to_tokens(
         scores = [token_scores[i]]
         meta = token_meta[i] or {}
         j = i + 1
-        while j < len(tokens) and token_labels[j] == label and tokens[j].start <= end + gap:
+        while (
+            j < len(tokens)
+            and token_labels[j] == label
+            and tokens[j].start <= end + gap
+        ):
             end = tokens[j].end
             scores.append(token_scores[j])
             if not meta and token_meta[j]:
@@ -168,8 +183,9 @@ def remap_predictions_to_tokens(
     return remapped
 
 
-
-def _is_reasonable_length(value: Optional[int], threshold: int = _UNSET_MAX_LENGTH_SENTINEL) -> bool:
+def _is_reasonable_length(
+    value: Optional[int], threshold: int = _UNSET_MAX_LENGTH_SENTINEL
+) -> bool:
     if value is None:
         return False
     try:
@@ -251,9 +267,7 @@ class TokenizationHelper:
         self.tokenizer = tokenizer
 
     def tokenize_with_alignment(
-        self,
-        text: str,
-        return_word_ids: bool = True
+        self, text: str, return_word_ids: bool = True
     ) -> Dict[str, Any]:
         """Tokenize text while maintaining word alignment.
 
@@ -275,7 +289,7 @@ class TokenizationHelper:
             padding=True,
             return_offsets_mapping=True,
             return_overflowing_tokens=True,
-            return_special_tokens_mask=True
+            return_special_tokens_mask=True,
         )
 
         result = {
@@ -296,7 +310,7 @@ class TokenizationHelper:
         predictions: List[Any],
         word_ids: List[Optional[int]],
         text: str,
-        aggregation_strategy: str = "first"
+        aggregation_strategy: str = "first",
     ) -> List[Tuple[str, Any]]:
         """Align token-level predictions to word-level predictions.
 
@@ -334,7 +348,9 @@ class TokenizationHelper:
                 if aggregation_strategy == "first":
                     final_pred = preds[0]
                 elif aggregation_strategy == "max":
-                    final_pred = max(preds) if isinstance(preds[0], (int, float)) else preds[0]
+                    final_pred = (
+                        max(preds) if isinstance(preds[0], (int, float)) else preds[0]
+                    )
                 elif aggregation_strategy == "average":
                     if isinstance(preds[0], (int, float)):
                         final_pred = sum(preds) / len(preds)
@@ -348,9 +364,7 @@ class TokenizationHelper:
         return result
 
     def create_attention_masks(
-        self,
-        input_ids: List[List[int]],
-        pad_token_id: int
+        self, input_ids: List[List[int]], pad_token_id: int
     ) -> List[List[int]]:
         """Create attention masks for batched inputs.
 
@@ -371,7 +385,7 @@ class TokenizationHelper:
         self,
         sequences: List[str],
         max_length: int,
-        truncation_strategy: str = "longest_first"
+        truncation_strategy: str = "longest_first",
     ) -> List[str]:
         """Truncate sequences to fit within max_length.
 
@@ -394,7 +408,9 @@ class TokenizationHelper:
             else:
                 if truncation_strategy == "longest_first":
                     truncated_tokens = tokens[:max_length]
-                    truncated_text = self.tokenizer.convert_tokens_to_string(truncated_tokens)
+                    truncated_text = self.tokenizer.convert_tokens_to_string(
+                        truncated_tokens
+                    )
                     truncated.append(truncated_text)
                 else:
                     truncated.append(seq)  # Don't truncate
@@ -406,7 +422,7 @@ class TokenizationHelper:
         texts: List[str],
         max_length: int = 512,
         padding: bool = True,
-        truncation: bool = True
+        truncation: bool = True,
     ) -> Dict[str, Any]:
         """Batch encode multiple texts.
 
@@ -427,5 +443,5 @@ class TokenizationHelper:
             max_length=max_length,
             padding=padding,
             truncation=truncation,
-            return_tensors="pt"
+            return_tensors="pt",
         )

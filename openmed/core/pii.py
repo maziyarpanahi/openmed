@@ -31,24 +31,24 @@ Example:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Literal, TYPE_CHECKING, Sequence
-from datetime import datetime, timedelta
-from functools import lru_cache
 import hashlib
 import json
 import random
 import re
 import unicodedata
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence
 
-from .config import OpenMedConfig
 from ..processing.outputs import EntityPrediction, PredictionResult
+from .config import OpenMedConfig
 
 if TYPE_CHECKING:
-    from .audit import AuditReport
     from .anonymizer import Anonymizer
+    from .audit import AuditReport
     from .models import ModelLoader
 
 # Type alias for de-identification methods
@@ -161,7 +161,9 @@ class DeidentificationResult:
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"})
+_DAY_FIRST_LANGS = frozenset(
+    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"}
+)
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
 # Repository-prefix allowlist for org/model identifiers that route through the
@@ -216,7 +218,14 @@ def _is_privacy_filter_artifact_path(model_name: str) -> bool:
         except (OSError, json.JSONDecodeError):
             continue
 
-        for key in ("family", "_mlx_family", "_mlx_model_type", "model_type", "source_model_id", "_name_or_path"):
+        for key in (
+            "family",
+            "_mlx_family",
+            "_mlx_model_type",
+            "model_type",
+            "source_model_id",
+            "_name_or_path",
+        ):
             if _looks_like_privacy_filter_identifier(payload.get(key)):
                 return True
 
@@ -258,7 +267,11 @@ def _prediction_result_from_privacy_filter_raw(
         # When accent normalization happened upstream, span indices match
         # the stripped text. The pipeline ran on ``text`` so spans align
         # with ``text``; remap to ``original_text`` if they're equal-length.
-        span_text = (original_text if do_normalize else text)[start:end] if end > start else item.get("word", "")
+        span_text = (
+            (original_text if do_normalize else text)[start:end]
+            if end > start
+            else item.get("word", "")
+        )
         entities.append(
             EntityPrediction(
                 text=span_text,
@@ -379,8 +392,7 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
 
     if lang not in SUPPORTED_LANGUAGES:
         raise ValueError(
-            f"Unsupported language '{lang}'. "
-            f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
         )
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
@@ -408,9 +420,9 @@ def _prepare_pii_text(
 
 def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> None:
     """Apply semantic-unit PII merging in place."""
+    from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
     from .pii_i18n import get_patterns_for_language
-    from ..processing.outputs import EntityPrediction
 
     lang_patterns = get_patterns_for_language(lang)
     entity_dicts = [
@@ -479,10 +491,9 @@ def _extract_pii_batch(
     if not prepared:
         return []
 
-    uses_privacy_filter = (
-        _looks_like_privacy_filter_identifier(effective_model)
-        or _is_privacy_filter_artifact_path(effective_model)
-    )
+    uses_privacy_filter = _looks_like_privacy_filter_identifier(
+        effective_model
+    ) or _is_privacy_filter_artifact_path(effective_model)
 
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
@@ -534,7 +545,7 @@ def _extract_pii_batch(
                 result.text = original_text
                 result.entities = [
                     EntityPrediction(
-                        text=original_text[e.start:e.end],
+                        text=original_text[e.start : e.end],
                         label=e.label,
                         start=e.start,
                         end=e.end,
@@ -650,12 +661,12 @@ def _apply_safety_sweep_to_result(
     lang: str,
 ) -> int:
     """Run the deterministic sweep and record its net span contribution."""
+    from .quality_gates import validate_entity_spans
     from .safety_sweep import (
         SAFETY_SWEEP_PATTERNS_VERSION,
         SAFETY_SWEEP_SOURCE,
         safety_sweep,
     )
-    from .quality_gates import validate_entity_spans
 
     before_count = len(pii_result.entities)
     pii_result.entities = safety_sweep(text, pii_result.entities, lang=lang)
@@ -773,10 +784,12 @@ def _detector_infos(
     return detectors
 
 
-def _context_window(text: str, start: int, end: int, *, size: int = 32) -> dict[str, str]:
+def _context_window(
+    text: str, start: int, end: int, *, size: int = 32
+) -> dict[str, str]:
     return {
-        "before": text[max(0, start - size):start],
-        "after": text[end:min(len(text), end + size)],
+        "before": text[max(0, start - size) : start],
+        "after": text[end : min(len(text), end + size)],
     }
 
 
@@ -932,15 +945,17 @@ def _build_audit_report(
     use_safety_sweep: bool,
     policy: str,
 ) -> Any:
-    from .audit import AuditReport, hash_text, manifest_hash
-    from .safety_sweep import SAFETY_SWEEP_PATTERNS_VERSION, SAFETY_SWEEP_SOURCE
-    from .labels import normalize_label
     from ..__about__ import __version__
+    from .audit import AuditReport, hash_text, manifest_hash
+    from .labels import normalize_label
+    from .safety_sweep import SAFETY_SWEEP_PATTERNS_VERSION, SAFETY_SWEEP_SOURCE
 
     thresholds = _active_calibration_thresholds(pii_result, lang=lang)
     thresholds.update(
         {
-            normalize_label(entity.label, lang): float(entity.threshold or confidence_threshold)
+            normalize_label(entity.label, lang): float(
+                entity.threshold or confidence_threshold
+            )
             for entity in pii_entities
         }
     )
@@ -972,7 +987,9 @@ def _build_audit_report(
             use_safety_sweep=use_safety_sweep,
         ),
         safety_sweep=sweep_metadata,
-        spans=[_audit_span_from_entity(original_text, entity) for entity in pii_entities],
+        spans=[
+            _audit_span_from_entity(original_text, entity) for entity in pii_entities
+        ],
         thresholds=thresholds,
         residual_risk=_risk_summary(
             original_text=original_text,
@@ -1070,6 +1087,20 @@ def _build_deidentification_result(
 
     deidentified = text
     mapping = {} if keep_mapping else None
+    entity_occurrence_indexes: dict[int, int] = {}
+    if keep_mapping:
+        entity_type_counts: dict[str, int] = {}
+        for entity in sorted(pii_entities, key=lambda e: e.start):
+            entity_method = _entity_redaction_method(entity, effective_method)
+            if entity_method in {"mask", "remove"} or (
+                entity_method == "shift_dates" and entity.entity_type != "DATE"
+            ):
+                entity_type_counts[entity.entity_type] = (
+                    entity_type_counts.get(entity.entity_type, 0) + 1
+                )
+                entity_occurrence_indexes[id(entity)] = entity_type_counts[
+                    entity.entity_type
+                ]
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
@@ -1083,6 +1114,19 @@ def _build_deidentification_result(
             lang=lang,
             anonymizer=anonymizer,
         )
+
+        if keep_mapping and entity_method == "remove":
+            redacted = f"[{entity.entity_type}_REMOVED]"
+
+        # Only make repeated placeholders unique for reversible mappings. Plain
+        # masking/removal without keep_mapping keeps the legacy redacted text.
+        occurrence_index = entity_occurrence_indexes.get(id(entity), 1)
+        if keep_mapping and redacted and occurrence_index > 1:
+            if redacted.endswith("]"):
+                redacted = f"{redacted[:-1]}_{occurrence_index}]"
+            else:
+                redacted = f"{redacted}_{occurrence_index}"
+
         entity.redacted_text = redacted
         if reversible_ids:
             entity.reversible_id = _build_reversible_id(
@@ -1429,13 +1473,11 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "PATIENT": "NAME",
     "doctor": "NAME",
     "DOCTOR": "NAME",
-
     # Phone variants
     "phone_number": "PHONE",
     "PHONE": "PHONE",
     "phone": "PHONE",
     "PHONENUMBER": "PHONE",
-
     # Location variants
     "city": "LOCATION",
     "CITY": "LOCATION",
@@ -1445,7 +1487,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "COUNTRY": "LOCATION",
     "location": "LOCATION",
     "LOCATION": "LOCATION",
-
     # Address variants
     "street_address": "STREET_ADDRESS",
     "STREET": "STREET_ADDRESS",
@@ -1453,7 +1494,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "STREETADDRESS": "STREET_ADDRESS",
     "address": "STREET_ADDRESS",
     "ADDRESS": "STREET_ADDRESS",
-
     # Date variants
     "date": "DATE",
     "DATE": "DATE",
@@ -1462,7 +1502,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "dateofbirth": "DATE",
     "dob": "DATE",
     "DOB": "DATE",
-
     # ID variants
     "id_num": "ID_NUM",
     "ID_NUM": "ID_NUM",
@@ -1476,7 +1515,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "CNPJ": "ID_NUM",
     "medical_record_number": "ID_NUM",
     "MEDICAL_RECORD_NUMBER": "ID_NUM",
-
     # Other
     "email": "EMAIL",
     "EMAIL": "EMAIL",
@@ -1532,6 +1570,7 @@ def _resolve_fake_data_key(entity_type: str, lang: str = "en") -> str:
         return direct
 
     from .labels import normalize_label
+
     canonical = normalize_label(entity_type, lang)
     return _CANONICAL_TO_FAKE_KEY.get(canonical, entity_type.upper())
 
@@ -1563,7 +1602,8 @@ def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
 
 
 def _parse_localized_month_date(
-    date_str: str, lang: str,
+    date_str: str,
+    lang: str,
 ) -> tuple[datetime, str] | None:
     """Parse localized month-name dates that dateutil may not understand."""
     from .pii_i18n import LANGUAGE_MONTH_NAMES
@@ -1589,7 +1629,9 @@ def _parse_localized_month_date(
     if not match:
         return None
 
-    month_lookup = {name.casefold(): index + 1 for index, name in enumerate(month_names)}
+    month_lookup = {
+        name.casefold(): index + 1 for index, name in enumerate(month_names)
+    }
     month_name = match.group("month").casefold()
     month = month_lookup.get(month_name)
     if month is None:
@@ -1610,12 +1652,16 @@ def _parse_localized_month_date(
 
 
 def _format_localized_month_date(
-    new_date: datetime, lang: str, style: str,
+    new_date: datetime,
+    lang: str,
+    style: str,
 ) -> str:
     """Render a localized month-name date using the language month table."""
     from .pii_i18n import LANGUAGE_MONTH_NAMES
 
-    month_name = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])[new_date.month - 1]
+    month_name = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])[
+        new_date.month - 1
+    ]
 
     if style == "day_month_year_de":
         return f"{new_date.day} de {month_name} de {new_date.year}"
@@ -1640,7 +1686,10 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
 
 
 def _shift_date(
-    date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
+    date_str: str,
+    shift_days: int,
+    keep_year: bool = True,
+    lang: str = "en",
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -1703,7 +1752,10 @@ def _shift_date(
 
 
 def _shift_date_basic(
-    date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
+    date_str: str,
+    shift_days: int,
+    keep_year: bool = True,
+    lang: str = "en",
 ) -> str:
     """Basic date shifting without dateutil dependency.
 
@@ -1783,11 +1835,17 @@ def _shift_date_basic(
                     sep = "-"
 
                 if order == "mdy":
-                    return f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
+                    return (
+                        f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
+                    )
                 elif order == "ymd":
-                    return f"{shifted.year}{sep}{shifted.month:02d}{sep}{shifted.day:02d}"
+                    return (
+                        f"{shifted.year}{sep}{shifted.month:02d}{sep}{shifted.day:02d}"
+                    )
                 else:
-                    return f"{shifted.day:02d}{sep}{shifted.month:02d}{sep}{shifted.year}"
+                    return (
+                        f"{shifted.day:02d}{sep}{shifted.month:02d}{sep}{shifted.year}"
+                    )
 
             except (ValueError, OverflowError):
                 continue
@@ -1796,7 +1854,9 @@ def _shift_date_basic(
 
 
 def _format_date_like_original(
-    original: str, new_date: datetime, lang: str = "en",
+    original: str,
+    new_date: datetime,
+    lang: str = "en",
 ) -> str:
     """Format a datetime to match the original string's format.
 
@@ -1851,7 +1911,9 @@ def _format_date_like_original(
             # "15 januari 2020" / "15. Januar 2020" / localized day-month-year
             if re.match(r"\d+\.?\s+[^\W\d_]+\s+\d{4}", original_stripped, re.UNICODE):
                 return f"{new_date.day} {month_name} {new_date.year}"
-            if re.match(r"\d+\s+de\s+[^\W\d_]+\s+de\s+\d{4}", original_stripped, re.UNICODE):
+            if re.match(
+                r"\d+\s+de\s+[^\W\d_]+\s+de\s+\d{4}", original_stripped, re.UNICODE
+            ):
                 return f"{new_date.day} de {month_name} de {new_date.year}"
             if re.match(r"[^\W\d_]+\s+\d+,?\s+\d{4}", original_stripped, re.UNICODE):
                 return f"{month_name} {new_date.day}, {new_date.year}"

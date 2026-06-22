@@ -29,7 +29,9 @@ def test_clinical_ner_families_selects_three_registry_families():
         "Oncology",
     }
     assert all(selection.source == "accurate tier" for selection in selections)
-    assert all(selection.model.model_id.startswith("OpenMed/") for selection in selections)
+    assert all(
+        selection.model.model_id.startswith("OpenMed/") for selection in selections
+    )
 
 
 def test_clinical_ner_families_uses_mocked_analyzer_without_network(

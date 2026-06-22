@@ -4,24 +4,6 @@ Intended contents include harness.py, metrics.py, suites/, golden/, report.py,
 calibrate.py, and release_gates.py.
 """
 
-from openmed.eval.harness import BenchmarkFixture, FixtureResult, run_benchmark, run_suite
-from openmed.eval.metrics import (
-    DEVICE_TIERS,
-    EvalSpan,
-    compute_character_recall,
-    compute_clinical_utility_loss,
-    compute_date_shift_consistency,
-    compute_exact_span_f1,
-    compute_latency_summary,
-    compute_leakage_rate,
-    compute_metrics_bundle,
-    compute_over_redaction_loss,
-    compute_recall_slices,
-    compute_relaxed_span_f1,
-    compute_resource_metrics,
-    compute_surrogate_consistency,
-)
-from openmed.eval.report import BenchmarkReport
 from openmed.eval.attacks.reid import (
     ReidAttackResult,
     generate_reid_leaderboard,
@@ -44,6 +26,34 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.harness import (
+    BenchmarkFixture,
+    FixtureResult,
+    run_benchmark,
+    run_suite,
+)
+from openmed.eval.metrics import (
+    DEVICE_TIERS,
+    EvalSpan,
+    compute_character_recall,
+    compute_clinical_utility_loss,
+    compute_date_shift_consistency,
+    compute_exact_span_f1,
+    compute_latency_summary,
+    compute_leakage_rate,
+    compute_metrics_bundle,
+    compute_over_redaction_loss,
+    compute_recall_slices,
+    compute_relaxed_span_f1,
+    compute_resource_metrics,
+    compute_surrogate_consistency,
+)
+from openmed.eval.quant_delta import (
+    INT4_RECALL_DELTA_LIMIT,
+    INT8_RECALL_DELTA_LIMIT,
+    QuantRecallDeltaResult,
+    evaluate_quant_recall_delta,
+)
 from openmed.eval.release_gates import (
     QUARANTINED,
     RELEASABLE,
@@ -52,8 +62,8 @@ from openmed.eval.release_gates import (
     ModelStewardConfig,
     ReleaseGate,
 )
+from openmed.eval.report import BenchmarkReport
 from openmed.eval.tiers import TIERS
-
 
 __all__ = [
     "BenchmarkFixture",
@@ -68,8 +78,11 @@ __all__ = [
     "FixtureResult",
     "GateCheck",
     "GateReport",
+    "INT4_RECALL_DELTA_LIMIT",
+    "INT8_RECALL_DELTA_LIMIT",
     "ModelStewardConfig",
     "QUARANTINED",
+    "QuantRecallDeltaResult",
     "ReidAttackResult",
     "RELEASABLE",
     "ReleaseGate",
@@ -89,6 +102,7 @@ __all__ = [
     "compute_resource_metrics",
     "compute_surrogate_consistency",
     "default_suite_calibration_samples",
+    "evaluate_quant_recall_delta",
     "fit_calibration_thresholds",
     "generate_reid_leaderboard",
     "load_calibration_samples",

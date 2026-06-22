@@ -20,8 +20,8 @@ Example:
 from __future__ import annotations
 
 import re
-from typing import List, Dict, Any, Tuple, Optional, Callable
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 @dataclass
@@ -49,13 +49,18 @@ class PIIPattern:
     flags: int = re.IGNORECASE
     base_score: float = 0.5  # Score when pattern matches without context
     context_boost: float = 0.35  # Additional score when context words found
-    context_words: List[str] = field(default_factory=list)  # Keywords that boost confidence
-    validator: Optional[Callable[[str], bool]] = None  # Validation function (e.g., checksum)
+    context_words: List[str] = field(
+        default_factory=list
+    )  # Keywords that boost confidence
+    validator: Optional[Callable[[str], bool]] = (
+        None  # Validation function (e.g., checksum)
+    )
 
 
 # ============================================================================
 # Validation Functions (inspired by Presidio's checksum approach)
 # ============================================================================
+
 
 def validate_ssn(ssn_text: str) -> bool:
     """Validate SSN format and basic rules.
@@ -143,224 +148,333 @@ PII_PATTERNS = [
     # Dates (highest priority - most specific first)
     # Dates are common, so moderate base score
     PIIPattern(
-        r'\b\d{4}-\d{2}-\d{2}\b',
-        'date',
+        r"\b\d{4}-\d{2}-\d{2}\b",
+        "date",
         priority=10,
         base_score=0.6,
-        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
-        context_boost=0.3
+        context_words=[
+            "dob",
+            "birth",
+            "born",
+            "date of birth",
+            "birthdate",
+            "deceased",
+            "died",
+            "admitted",
+            "discharged",
+        ],
+        context_boost=0.3,
     ),
     PIIPattern(
-        r'\b\d{1,2}/\d{1,2}/\d{2,4}\b',
-        'date',
+        r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",
+        "date",
         priority=9,
         base_score=0.6,
-        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
-        context_boost=0.3
+        context_words=[
+            "dob",
+            "birth",
+            "born",
+            "date of birth",
+            "birthdate",
+            "deceased",
+            "died",
+            "admitted",
+            "discharged",
+        ],
+        context_boost=0.3,
     ),
     PIIPattern(
-        r'\b\d{1,2}-\d{1,2}-\d{2,4}\b',
-        'date',
+        r"\b\d{1,2}-\d{1,2}-\d{2,4}\b",
+        "date",
         priority=9,
         base_score=0.6,
-        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
-        context_boost=0.3
+        context_words=[
+            "dob",
+            "birth",
+            "born",
+            "date of birth",
+            "birthdate",
+            "deceased",
+            "died",
+            "admitted",
+            "discharged",
+        ],
+        context_boost=0.3,
     ),
     PIIPattern(
-        r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}\b',
-        'date',
+        r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2},? \d{4}\b",
+        "date",
         priority=8,
         base_score=0.7,
-        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
-        context_boost=0.25
+        context_words=[
+            "dob",
+            "birth",
+            "born",
+            "date of birth",
+            "birthdate",
+            "deceased",
+            "died",
+            "admitted",
+            "discharged",
+        ],
+        context_boost=0.25,
     ),
     PIIPattern(
-        r'\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\b',
-        'date',
+        r"\b\d{1,2} (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\b",
+        "date",
         priority=8,
         base_score=0.7,
-        context_words=['dob', 'birth', 'born', 'date of birth', 'birthdate', 'deceased', 'died', 'admitted', 'discharged'],
-        context_boost=0.25
+        context_words=[
+            "dob",
+            "birth",
+            "born",
+            "date of birth",
+            "birthdate",
+            "deceased",
+            "died",
+            "admitted",
+            "discharged",
+        ],
+        context_boost=0.25,
     ),
-
     # SSN (very specific pattern with validation)
     PIIPattern(
-        r'\b\d{3}-\d{2}-\d{4}\b',
-        'ssn',
+        r"\b\d{3}-\d{2}-\d{4}\b",
+        "ssn",
         priority=10,
         base_score=0.3,  # Low without context - could be other IDs
-        context_words=['ssn', 'social security', 'social security number', 'ss#', 'ss number'],
+        context_words=[
+            "ssn",
+            "social security",
+            "social security number",
+            "ss#",
+            "ss number",
+        ],
         context_boost=0.55,  # High boost with context (0.3 + 0.55 = 0.85)
-        validator=validate_ssn
+        validator=validate_ssn,
     ),
     PIIPattern(
-        r'\b\d{3}\s\d{2}\s\d{4}\b',
-        'ssn',
+        r"\b\d{3}\s\d{2}\s\d{4}\b",
+        "ssn",
         priority=9,
         base_score=0.3,
-        context_words=['ssn', 'social security', 'social security number', 'ss#', 'ss number'],
+        context_words=[
+            "ssn",
+            "social security",
+            "social security number",
+            "ss#",
+            "ss number",
+        ],
         context_boost=0.55,
-        validator=validate_ssn
+        validator=validate_ssn,
     ),
-
     # Phone numbers with validation
     PIIPattern(
-        r'\b\(\d{3}\)\s*\d{3}[-.\s]?\d{4}\b',
-        'phone_number',
+        r"\b\(\d{3}\)\s*\d{3}[-.\s]?\d{4}\b",
+        "phone_number",
         priority=9,
         base_score=0.6,  # Format is pretty specific
-        context_words=['phone', 'tel', 'telephone', 'cell', 'mobile', 'fax', 'call', 'contact'],
+        context_words=[
+            "phone",
+            "tel",
+            "telephone",
+            "cell",
+            "mobile",
+            "fax",
+            "call",
+            "contact",
+        ],
         context_boost=0.3,
-        validator=validate_phone_us
+        validator=validate_phone_us,
     ),
     PIIPattern(
-        r'\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b',
-        'phone_number',
+        r"\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b",
+        "phone_number",
         priority=8,
         base_score=0.5,
-        context_words=['phone', 'tel', 'telephone', 'cell', 'mobile', 'fax', 'call', 'contact'],
+        context_words=[
+            "phone",
+            "tel",
+            "telephone",
+            "cell",
+            "mobile",
+            "fax",
+            "call",
+            "contact",
+        ],
         context_boost=0.35,
-        validator=validate_phone_us
+        validator=validate_phone_us,
     ),
     PIIPattern(
-        r'\b\d{10}\b',
-        'phone_number',
+        r"\b\d{10}\b",
+        "phone_number",
         priority=5,  # Low priority - ambiguous (could be NPI, account, etc.)
         base_score=0.2,  # Very low base score
-        context_words=['phone', 'tel', 'telephone', 'cell', 'mobile', 'fax', 'call', 'contact'],
+        context_words=[
+            "phone",
+            "tel",
+            "telephone",
+            "cell",
+            "mobile",
+            "fax",
+            "call",
+            "contact",
+        ],
         context_boost=0.5,  # Needs context to be confident
-        validator=validate_phone_us
+        validator=validate_phone_us,
     ),
-
     # NPI - 10 digit with specific validation
     PIIPattern(
-        r'\b\d{10}\b',
-        'npi',
+        r"\b\d{10}\b",
+        "npi",
         priority=6,  # Slightly higher than phone for 10-digit
         base_score=0.15,  # Very low - needs context OR validation
-        context_words=['npi', 'national provider', 'provider number', 'provider id', 'provider identifier'],
+        context_words=[
+            "npi",
+            "national provider",
+            "provider number",
+            "provider id",
+            "provider identifier",
+        ],
         context_boost=0.65,  # Strong boost with context
-        validator=validate_npi
+        validator=validate_npi,
     ),
-
     # Email addresses (very specific pattern)
     PIIPattern(
-        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-        'email',
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
+        "email",
         priority=10,
         base_score=0.9,  # Email pattern is very specific
-        context_words=['email', 'e-mail', 'contact', 'mail'],
-        context_boost=0.1
+        context_words=["email", "e-mail", "contact", "mail"],
+        context_boost=0.1,
     ),
-
     # ZIP codes (US)
     PIIPattern(
-        r'\b\d{5}(?:-\d{4})?\b',
-        'postcode',
+        r"\b\d{5}(?:-\d{4})?\b",
+        "postcode",
         priority=7,
         base_score=0.4,  # Could be other 5-digit numbers
-        context_words=['zip', 'zipcode', 'zip code', 'postal', 'postal code'],
-        context_boost=0.45
+        context_words=["zip", "zipcode", "zip code", "postal", "postal code"],
+        context_boost=0.45,
     ),
-
     # Credit card with Luhn validation
     PIIPattern(
-        r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b',
-        'credit_debit_card',
+        r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b",
+        "credit_debit_card",
         priority=8,
         base_score=0.4,
-        context_words=['card', 'credit', 'debit', 'visa', 'mastercard', 'amex', 'discover', 'payment'],
+        context_words=[
+            "card",
+            "credit",
+            "debit",
+            "visa",
+            "mastercard",
+            "amex",
+            "discover",
+            "payment",
+        ],
         context_boost=0.4,
-        validator=validate_luhn
+        validator=validate_luhn,
     ),
-
     # IBANs with ISO 13616 checksum validation
     PIIPattern(
-        r'\b[A-Z]{2}\d{2}(?:[\s-]?[A-Z0-9]){11,30}\b',
-        'iban',
+        r"\b[A-Z]{2}\d{2}(?:[\s-]?[A-Z0-9]){11,30}\b",
+        "iban",
         priority=9,
         base_score=0.85,
-        context_words=['iban', 'bank account', 'account', 'routing', 'wire'],
+        context_words=["iban", "bank account", "account", "routing", "wire"],
         context_boost=0.1,
-        validator=validate_iban
+        validator=validate_iban,
     ),
-
     # Account numbers when explicitly labeled in context
     PIIPattern(
-        r'\b(?:account number|account #|acct\.|acct|account)[:\s#-]*[A-Z0-9][A-Z0-9-]{5,23}\b',
-        'account_number',
+        r"\b(?:account number|account #|acct\.|acct|account)[:\s#-]*[A-Z0-9][A-Z0-9-]{5,23}\b",
+        "account_number",
         priority=8,
         base_score=0.75,
-        context_words=['account', 'acct', 'account number', 'bank', 'billing'],
+        context_words=["account", "acct", "account number", "bank", "billing"],
         context_boost=0.15,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     ),
-
     # Medical record numbers (common formats)
     PIIPattern(
-        r'\b(?:MRN|mrn)[:\s#]*\d{6,10}\b',
-        'medical_record_number',
+        r"\b(?:MRN|mrn)[:\s#]*\d{6,10}\b",
+        "medical_record_number",
         priority=9,
         base_score=0.8,  # "MRN" prefix is strong indicator
-        context_words=['medical record', 'patient id', 'patient number', 'record number'],
-        context_boost=0.15
+        context_words=[
+            "medical record",
+            "patient id",
+            "patient number",
+            "record number",
+        ],
+        context_boost=0.15,
     ),
     PIIPattern(
-        r'\b[A-Z]{2,3}\d{6,9}\b',
-        'medical_record_number',
+        r"\b[A-Z]{2,3}\d{6,9}\b",
+        "medical_record_number",
         priority=5,
         base_score=0.3,  # Generic pattern
-        context_words=['mrn', 'medical record', 'patient id', 'patient number', 'record number'],
-        context_boost=0.5
+        context_words=[
+            "mrn",
+            "medical record",
+            "patient id",
+            "patient number",
+            "record number",
+        ],
+        context_boost=0.5,
     ),
-
     # Street addresses (basic - number + street)
     PIIPattern(
-        r'\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way)\b',
-        'street_address',
+        r"\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way)\b",
+        "street_address",
         priority=7,
         base_score=0.7,  # Street suffix is good indicator
-        context_words=['address', 'street', 'resides', 'residence', 'lives at', 'located at'],
+        context_words=[
+            "address",
+            "street",
+            "resides",
+            "residence",
+            "lives at",
+            "located at",
+        ],
         context_boost=0.2,
-        flags=re.IGNORECASE
+        flags=re.IGNORECASE,
     ),
-
     # URLs
     PIIPattern(
-        r'\b(?:https?://)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?\b',
-        'url',
+        r"\b(?:https?://)?(?:www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?\b",
+        "url",
         priority=8,
         base_score=0.8,
-        context_words=['url', 'website', 'link', 'webpage'],
-        context_boost=0.15
+        context_words=["url", "website", "link", "webpage"],
+        context_boost=0.15,
     ),
-
     # IP addresses
     PIIPattern(
-        r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
-        'ipv4',
+        r"\b(?:\d{1,3}\.){3}\d{1,3}\b",
+        "ipv4",
         priority=7,
         base_score=0.6,
-        context_words=['ip', 'ip address', 'address', 'server', 'host'],
-        context_boost=0.3
+        context_words=["ip", "ip address", "address", "server", "host"],
+        context_boost=0.3,
     ),
     PIIPattern(
-        r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b',
-        'ipv6',
+        r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b",
+        "ipv6",
         priority=8,
         base_score=0.85,  # IPv6 pattern is very specific
-        context_words=['ip', 'ipv6', 'ip address', 'address', 'server', 'host'],
-        context_boost=0.15
+        context_words=["ip", "ipv6", "ip address", "address", "server", "host"],
+        context_boost=0.15,
     ),
-
     # MAC addresses
     PIIPattern(
-        r'\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b',
-        'mac_address',
+        r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b",
+        "mac_address",
         priority=8,
         base_score=0.75,
-        context_words=['mac', 'mac address', 'hardware address'],
-        context_boost=0.2
+        context_words=["mac", "mac address", "hardware address"],
+        context_boost=0.2,
     ),
 ]
 
@@ -369,12 +483,9 @@ PII_PATTERNS = [
 # Context Detection (inspired by Presidio's LemmaContextAwareEnhancer)
 # ============================================================================
 
+
 def find_context_words(
-    text: str,
-    start: int,
-    end: int,
-    context_words: List[str],
-    context_window: int = 100
+    text: str, start: int, end: int, context_words: List[str], context_window: int = 100
 ) -> bool:
     """Check if context words appear near the matched entity.
 
@@ -415,15 +526,14 @@ def find_context_words(
 
         # Check word boundaries (avoid partial matches like "ssn" in "assign")
         # Use word boundary pattern
-        if re.search(r'\b' + re.escape(word_lower) + r'\b', context_text):
+        if re.search(r"\b" + re.escape(word_lower) + r"\b", context_text):
             return True
 
     return False
 
 
 def find_semantic_units(
-    text: str,
-    patterns: Optional[List[PIIPattern]] = None
+    text: str, patterns: Optional[List[PIIPattern]] = None
 ) -> List[Tuple[int, int, str, float, PIIPattern]]:
     """Find semantic units in text using regex patterns with context-aware scoring.
 
@@ -467,7 +577,7 @@ def find_semantic_units(
             if overlaps:
                 continue
 
-            matched_text = text[match.start():match.end()]
+            matched_text = text[match.start() : match.end()]
 
             # Calculate score with context awareness
             score = pii_pattern.base_score
@@ -475,10 +585,7 @@ def find_semantic_units(
             # Check for context words (like Presidio)
             if pii_pattern.context_words:
                 has_context = find_context_words(
-                    text,
-                    match.start(),
-                    match.end(),
-                    pii_pattern.context_words
+                    text, match.start(), match.end(), pii_pattern.context_words
                 )
                 if has_context:
                     score = min(1.0, score + pii_pattern.context_boost)
@@ -492,14 +599,16 @@ def find_semantic_units(
                     score = score * 0.3  # Reduce to 30% confidence
                     validated = False
 
-            units.append((
-                match.start(),
-                match.end(),
-                pii_pattern.entity_type,
-                score,
-                pii_pattern,
-                validated,
-            ))
+            units.append(
+                (
+                    match.start(),
+                    match.end(),
+                    pii_pattern.entity_type,
+                    score,
+                    pii_pattern,
+                    validated,
+                )
+            )
 
     # Sort by start position
     units.sort(key=lambda x: x[0])
@@ -507,8 +616,7 @@ def find_semantic_units(
 
 
 def calculate_dominant_label(
-    entities: List[Dict[str, Any]],
-    tie_breaker: str = 'confidence'
+    entities: List[Dict[str, Any]], tie_breaker: str = "confidence"
 ) -> Tuple[str, float]:
     """Calculate the dominant label from a list of entities.
 
@@ -536,11 +644,11 @@ def calculate_dominant_label(
     label_confidences = {}
 
     for entity in entities:
-        label = entity['entity_type']
+        label = entity["entity_type"]
         label_counts[label] = label_counts.get(label, 0) + 1
         if label not in label_confidences:
             label_confidences[label] = []
-        label_confidences[label].append(entity['score'])
+        label_confidences[label].append(entity["score"])
 
     # Find most frequent
     max_count = max(label_counts.values())
@@ -548,7 +656,7 @@ def calculate_dominant_label(
 
     if len(candidates) == 1:
         dominant_label = candidates[0]
-    elif tie_breaker == 'confidence':
+    elif tie_breaker == "confidence":
         # Break tie by highest average confidence
         avg_confidences = {
             label: sum(label_confidences[label]) / len(label_confidences[label])
@@ -558,12 +666,12 @@ def calculate_dominant_label(
     else:  # tie_breaker == 'first'
         # Use first occurrence
         for entity in entities:
-            if entity['entity_type'] in candidates:
-                dominant_label = entity['entity_type']
+            if entity["entity_type"] in candidates:
+                dominant_label = entity["entity_type"]
                 break
 
     # Calculate average confidence
-    avg_confidence = sum(e['score'] for e in entities) / len(entities)
+    avg_confidence = sum(e["score"] for e in entities) / len(entities)
 
     return dominant_label, avg_confidence
 
@@ -607,14 +715,14 @@ def merge_entities_with_semantic_units(
     """
     if not use_semantic_patterns:
         # Just return entities as-is if not using patterns
-        return sorted(entities, key=lambda x: x['start'])
+        return sorted(entities, key=lambda x: x["start"])
 
     # Find semantic units
     semantic_units = find_semantic_units(text, patterns)
 
     if not semantic_units:
         # No semantic units found, return original entities
-        return sorted(entities, key=lambda x: x['start'])
+        return sorted(entities, key=lambda x: x["start"])
 
     merged = []
     used_entities = set()
@@ -623,42 +731,57 @@ def merge_entities_with_semantic_units(
     for unit_tuple in semantic_units:
         # Unpack with backwards-compat for 5-element tuples (pre-v0.6.4)
         if len(unit_tuple) >= 6:
-            unit_start, unit_end, unit_type, unit_score, unit_pattern, unit_validated = unit_tuple[:6]
+            (
+                unit_start,
+                unit_end,
+                unit_type,
+                unit_score,
+                unit_pattern,
+                unit_validated,
+            ) = unit_tuple[:6]
         else:
             unit_start, unit_end, unit_type, unit_score, unit_pattern = unit_tuple[:5]
             unit_validated = True
         # Find all entities that overlap with this semantic unit
         overlapping = []
         for i, entity in enumerate(entities):
-            if entity['start'] < unit_end and entity['end'] > unit_start:
+            if entity["start"] < unit_end and entity["end"] > unit_start:
                 overlapping.append((i, entity))
 
         if overlapping:
             # Calculate dominant label from model predictions
             overlapping_entities = [e for _, e in overlapping]
-            dominant_label, model_avg_confidence = calculate_dominant_label(overlapping_entities)
+            dominant_label, model_avg_confidence = calculate_dominant_label(
+                overlapping_entities
+            )
 
             # Decide which label to use
             if not allow_label_expansion:
                 final_label = dominant_label
             elif prefer_model_labels:
-                if (
-                    normalize_label(dominant_label) == normalize_label(unit_type)
-                    or is_more_specific(dominant_label, unit_type)
-                ):
+                if normalize_label(dominant_label) == normalize_label(
+                    unit_type
+                ) or is_more_specific(dominant_label, unit_type):
                     final_label = dominant_label
                 else:
                     final_label = unit_type
             else:
                 # Use pattern's label if it matches any model prediction
-                model_labels = set(e['entity_type'] for e in overlapping_entities)
+                model_labels = set(e["entity_type"] for e in overlapping_entities)
                 # Normalize labels for comparison (handle variations)
-                if any(normalize_label(unit_type) == normalize_label(ml) for ml in model_labels):
+                if any(
+                    normalize_label(unit_type) == normalize_label(ml)
+                    for ml in model_labels
+                ):
                     final_label = dominant_label
                 else:
                     # Pattern type doesn't match model - prefer more specific label
                     # e.g., 'date_of_birth' is more specific than 'date'
-                    final_label = dominant_label if is_more_specific(dominant_label, unit_type) else unit_type
+                    final_label = (
+                        dominant_label
+                        if is_more_specific(dominant_label, unit_type)
+                        else unit_type
+                    )
 
             # Combine model confidence with pattern confidence.
             # When pattern validation failed, heavily discount the pattern
@@ -671,27 +794,31 @@ def merge_entities_with_semantic_units(
                 final_confidence = (0.9 * model_avg_confidence) + (0.1 * unit_score)
 
             # Create merged entity
-            merged.append({
-                'entity_type': final_label,
-                'score': final_confidence,
-                'start': unit_start,
-                'end': unit_end,
-                'word': text[unit_start:unit_end],
-                'merged_from': len(overlapping)
-            })
+            merged.append(
+                {
+                    "entity_type": final_label,
+                    "score": final_confidence,
+                    "start": unit_start,
+                    "end": unit_end,
+                    "word": text[unit_start:unit_end],
+                    "merged_from": len(overlapping),
+                }
+            )
 
             # Mark entities as used
             for i, _ in overlapping:
                 used_entities.add(i)
         elif allow_semantic_only_matches:
-            merged.append({
-                'entity_type': unit_type,
-                'score': unit_score,
-                'start': unit_start,
-                'end': unit_end,
-                'word': text[unit_start:unit_end],
-                'merged_from': 0
-            })
+            merged.append(
+                {
+                    "entity_type": unit_type,
+                    "score": unit_score,
+                    "start": unit_start,
+                    "end": unit_end,
+                    "word": text[unit_start:unit_end],
+                    "merged_from": 0,
+                }
+            )
 
     # Add non-overlapping entities as-is
     for i, entity in enumerate(entities):
@@ -699,7 +826,7 @@ def merge_entities_with_semantic_units(
             merged.append(entity)
 
     # Sort by start position
-    merged.sort(key=lambda x: x['start'])
+    merged.sort(key=lambda x: x["start"])
     return merged
 
 
@@ -717,42 +844,58 @@ def normalize_label(label: str) -> str:
     label_lower = label.lower()
 
     # Normalize date variants
-    if 'date' in label_lower:
-        return 'date'
+    if "date" in label_lower:
+        return "date"
 
     # Normalize phone variants
-    if 'phone' in label_lower or 'fax' in label_lower:
-        return 'phone'
+    if "phone" in label_lower or "fax" in label_lower:
+        return "phone"
 
     # Normalize address variants
-    if 'address' in label_lower:
-        return 'address'
+    if "address" in label_lower:
+        return "address"
 
     # Normalize ID variants
-    if label_lower in ('ssn', 'social_security', 'social_security_number'):
-        return 'ssn'
+    if label_lower in ("ssn", "social_security", "social_security_number"):
+        return "ssn"
 
     # Normalize national ID variants
-    if label_lower in ('national_id', 'nir', 'insee', 'steuer_id',
-                        'steuernummer', 'codice_fiscale',
-                        'bsn', 'dni', 'nie', 'aadhaar', 'cpf', 'cnpj'):
-        return 'national_id'
+    if label_lower in (
+        "national_id",
+        "nir",
+        "insee",
+        "steuer_id",
+        "steuernummer",
+        "codice_fiscale",
+        "bsn",
+        "dni",
+        "nie",
+        "aadhaar",
+        "cpf",
+        "cnpj",
+    ):
+        return "national_id"
 
     # Normalize postal code variants
-    if label_lower in ('postcode', 'zipcode', 'zip', 'postal_code'):
-        return 'postcode'
+    if label_lower in ("postcode", "zipcode", "zip", "postal_code"):
+        return "postcode"
 
     # Normalize medical record variants
-    if label_lower in ('medical_record_number', 'mrn', 'medical_record'):
-        return 'medical_record'
+    if label_lower in ("medical_record_number", "mrn", "medical_record"):
+        return "medical_record"
 
     # Normalize account variants
-    if label_lower in ('account_number', 'account'):
-        return 'account'
+    if label_lower in ("account_number", "account"):
+        return "account"
 
     # Normalize payment card variants
-    if label_lower in ('credit_debit_card', 'credit_card', 'debit_card', 'payment_card'):
-        return 'payment_card'
+    if label_lower in (
+        "credit_debit_card",
+        "credit_card",
+        "debit_card",
+        "payment_card",
+    ):
+        return "payment_card"
 
     return label_lower
 
@@ -777,19 +920,26 @@ def is_more_specific(label1: str, label2: str) -> bool:
 
     # Specific label hierarchies
     specificity_hierarchy = {
-        'date': ['date_of_birth', 'date_time'],
-        'name': ['first_name', 'last_name', 'full_name'],
-        'phone': ['phone_number', 'fax_number', 'mobile_number'],
-        'address': ['street_address', 'home_address', 'billing_address'],
-        'id': ['ssn', 'medical_record_number', 'account_number', 'employee_id'],
-        'national_id': [
-            'nir', 'insee', 'steuer_id', 'steuernummer',
-            'codice_fiscale', 'cpf', 'cnpj',
+        "date": ["date_of_birth", "date_time"],
+        "name": ["first_name", "last_name", "full_name"],
+        "phone": ["phone_number", "fax_number", "mobile_number"],
+        "address": ["street_address", "home_address", "billing_address"],
+        "id": ["ssn", "medical_record_number", "account_number", "employee_id"],
+        "national_id": [
+            "nir",
+            "insee",
+            "steuer_id",
+            "steuernummer",
+            "codice_fiscale",
+            "cpf",
+            "cnpj",
         ],
     }
 
     for general, specific_list in specificity_hierarchy.items():
-        if normalize_label(label2) == general and label1_lower in [s.lower() for s in specific_list]:
+        if normalize_label(label2) == general and label1_lower in [
+            s.lower() for s in specific_list
+        ]:
             return True
 
     return False

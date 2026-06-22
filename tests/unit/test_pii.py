@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import builtins
-import pytest
-from unittest.mock import MagicMock, patch
 from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from openmed.core.pii import (
-    extract_pii,
-    deidentify,
-    reidentify,
-    PIIEntity,
     DeidentificationResult,
-    _redact_entity,
+    PIIEntity,
     _generate_fake_pii,
+    _redact_entity,
     _shift_date,
     _strip_accents,
+    deidentify,
+    extract_pii,
+    reidentify,
 )
 from openmed.processing.outputs import EntityPrediction, PredictionResult
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -30,9 +30,15 @@ from openmed.processing.outputs import EntityPrediction, PredictionResult
 def mock_pii_entities():
     """Mock PII entities for testing."""
     return [
-        EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95),
-        EntityPrediction(text="555-1234", label="PHONE", start=20, end=28, confidence=0.90),
-        EntityPrediction(text="john@email.com", label="EMAIL", start=32, end=46, confidence=0.92),
+        EntityPrediction(
+            text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+        ),
+        EntityPrediction(
+            text="555-1234", label="PHONE", start=20, end=28, confidence=0.90
+        ),
+        EntityPrediction(
+            text="john@email.com", label="EMAIL", start=32, end=46, confidence=0.92
+        ),
     ]
 
 
@@ -200,7 +206,10 @@ class TestExtractPII:
     def test_extract_pii_calls_analyze_text(self, mock_analyze):
         """Test extract_pii calls analyze_text with correct parameters."""
         mock_analyze.return_value = PredictionResult(
-            text="Test text", entities=[], model_name="test_model", timestamp=datetime.now().isoformat()
+            text="Test text",
+            entities=[],
+            model_name="test_model",
+            timestamp=datetime.now().isoformat(),
         )
 
         extract_pii(
@@ -219,7 +228,9 @@ class TestExtractPII:
         )
 
     @patch("openmed.analyze_text")
-    def test_extract_pii_returns_analysis_result(self, mock_analyze, mock_analyze_result):
+    def test_extract_pii_returns_analysis_result(
+        self, mock_analyze, mock_analyze_result
+    ):
         """Test extract_pii returns PredictionResult."""
         mock_analyze.return_value = mock_analyze_result
 
@@ -235,19 +246,28 @@ class TestExtractPII:
     def test_extract_pii_default_model(self, mock_analyze):
         """Test extract_pii uses default model."""
         mock_analyze.return_value = PredictionResult(
-            text="Test", entities=[], model_name="default", timestamp=datetime.now().isoformat()
+            text="Test",
+            entities=[],
+            model_name="default",
+            timestamp=datetime.now().isoformat(),
         )
 
         extract_pii("Test")
 
         call_args = mock_analyze.call_args
-        assert call_args[1]["model_name"] == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+        assert (
+            call_args[1]["model_name"]
+            == "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+        )
 
     @patch("openmed.analyze_text")
     def test_extract_pii_forwards_loader(self, mock_analyze):
         """Test extract_pii forwards an explicit loader."""
         mock_analyze.return_value = PredictionResult(
-            text="Test", entities=[], model_name="default", timestamp=datetime.now().isoformat()
+            text="Test",
+            entities=[],
+            model_name="default",
+            timestamp=datetime.now().isoformat(),
         )
         loader = MagicMock()
 
@@ -261,14 +281,21 @@ class TestExtractPII:
         rather than ``analyze_text``, and skip the regex smart-merging layer
         entirely (the model already does Viterbi-constrained span construction).
         """
-        with patch("openmed.core.backends.create_privacy_filter_pipeline") as mock_be, \
-             patch(
-                 "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
-                 return_value=[],
-             ) as mock_merge:
+        with (
+            patch("openmed.core.backends.create_privacy_filter_pipeline") as mock_be,
+            patch(
+                "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
+                return_value=[],
+            ) as mock_merge,
+        ):
             mock_be.return_value = lambda text: [
-                {"entity_group": "SSN", "score": 0.95, "word": "123-45-6789",
-                 "start": 13, "end": 24}
+                {
+                    "entity_group": "SSN",
+                    "score": 0.95,
+                    "word": "123-45-6789",
+                    "start": 13,
+                    "end": 24,
+                }
             ]
             result = extract_pii(
                 "Patient SSN: 123-45-6789",
@@ -287,7 +314,9 @@ class TestExtractPII:
         assert result.entities[0].label == "SSN"
 
     @patch("openmed.analyze_text")
-    def test_extract_pii_local_privacy_filter_artifact_routes_through_dispatcher(self, mock_analyze, tmp_path):
+    def test_extract_pii_local_privacy_filter_artifact_routes_through_dispatcher(
+        self, mock_analyze, tmp_path
+    ):
         """Local MLX artifacts identified by manifest also bypass smart merging."""
         artifact_dir = tmp_path / "artifact"
         artifact_dir.mkdir()
@@ -295,11 +324,13 @@ class TestExtractPII:
             '{"task":"token-classification","family":"openai-privacy-filter"}'
         )
 
-        with patch("openmed.core.backends.create_privacy_filter_pipeline") as mock_be, \
-             patch(
-                 "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
-                 return_value=[],
-             ) as mock_merge:
+        with (
+            patch("openmed.core.backends.create_privacy_filter_pipeline") as mock_be,
+            patch(
+                "openmed.core.pii_entity_merger.merge_entities_with_semantic_units",
+                return_value=[],
+            ) as mock_merge,
+        ):
             mock_be.return_value = lambda text: []
             extract_pii(
                 "Patient MRN: ABC-123",
@@ -326,9 +357,12 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="Patient John Doe",
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95)
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+                )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("Patient John Doe", method="mask")
@@ -344,9 +378,12 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="Call 555-1234",
             entities=[
-                EntityPrediction(text="555-1234", label="PHONE", start=5, end=13, confidence=0.90)
+                EntityPrediction(
+                    text="555-1234", label="PHONE", start=5, end=13, confidence=0.90
+                )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("Call 555-1234", method="remove")
@@ -368,7 +405,8 @@ class TestDeidentify:
                     confidence=0.92,
                 )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("Email: test@example.com", method="replace")
@@ -382,9 +420,12 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="Patient John Doe",
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95)
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+                )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("Patient John Doe", method="hash")
@@ -399,10 +440,15 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="John Doe at 555-1234",
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=0, end=8, confidence=0.95),
-                EntityPrediction(text="555-1234", label="PHONE", start=12, end=20, confidence=0.90),
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=0, end=8, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="555-1234", label="PHONE", start=12, end=20, confidence=0.90
+                ),
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("John Doe at 555-1234", method="mask")
@@ -416,9 +462,12 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="Patient John Doe",
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95)
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+                )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("Patient John Doe", method="mask", keep_mapping=True)
@@ -433,9 +482,12 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="Patient John Doe",
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95)
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+                )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("Patient John Doe", method="mask", keep_mapping=False)
@@ -446,7 +498,10 @@ class TestDeidentify:
     def test_deidentify_empty_text(self, mock_extract):
         """Test deidentify handles empty text."""
         mock_extract.return_value = PredictionResult(
-            text="", entities=[], model_name="test", timestamp=datetime.now().isoformat()
+            text="",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("", method="mask")
@@ -458,7 +513,10 @@ class TestDeidentify:
     def test_deidentify_no_entities(self, mock_extract):
         """Test deidentify handles text with no PII."""
         mock_extract.return_value = PredictionResult(
-            text="No PII here", entities=[], model_name="test", timestamp=datetime.now().isoformat()
+            text="No PII here",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("No PII here", method="mask")
@@ -470,7 +528,10 @@ class TestDeidentify:
     def test_deidentify_confidence_threshold(self, mock_extract):
         """Test deidentify uses custom confidence threshold."""
         mock_extract.return_value = PredictionResult(
-            text="Test", entities=[], model_name="test", timestamp=datetime.now().isoformat()
+            text="Test",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         deidentify("Test", confidence_threshold=0.8)
@@ -483,7 +544,10 @@ class TestDeidentify:
     def test_deidentify_forwards_loader(self, mock_extract):
         """Test deidentify forwards an explicit loader to extract_pii."""
         mock_extract.return_value = PredictionResult(
-            text="Test", entities=[], model_name="test", timestamp=datetime.now().isoformat()
+            text="Test",
+            entities=[],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
         loader = MagicMock()
 
@@ -497,7 +561,9 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="DOB 01/15/2020",
             entities=[
-                EntityPrediction(text="01/15/2020", label="DATE", start=4, end=14, confidence=0.95)
+                EntityPrediction(
+                    text="01/15/2020", label="DATE", start=4, end=14, confidence=0.95
+                )
             ],
             model_name="test",
             timestamp=datetime.now().isoformat(),
@@ -518,7 +584,9 @@ class TestDeidentify:
         mock_extract.return_value = PredictionResult(
             text="DOB 01/15/2020",
             entities=[
-                EntityPrediction(text="01/15/2020", label="DATE", start=4, end=14, confidence=0.95)
+                EntityPrediction(
+                    text="01/15/2020", label="DATE", start=4, end=14, confidence=0.95
+                )
             ],
             model_name="test",
             timestamp=datetime.now().isoformat(),
@@ -891,7 +959,10 @@ class TestMultilingualPII:
             timestamp=datetime.now().isoformat(),
         )
 
-        extract_pii("\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f 15/03/1985", lang="ar")
+        extract_pii(
+            "\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u064a\u0644\u0627\u062f 15/03/1985",
+            lang="ar",
+        )
 
         call_args = mock_analyze.call_args
         assert "Arabic" in call_args[1]["model_name"]
@@ -972,7 +1043,11 @@ class TestMultilingualPII:
             text="Patient Marie Dupont",
             entities=[
                 EntityPrediction(
-                    text="Marie Dupont", label="NAME", start=8, end=20, confidence=0.95,
+                    text="Marie Dupont",
+                    label="NAME",
+                    start=8,
+                    end=20,
+                    confidence=0.95,
                 )
             ],
             model_name="test",
@@ -996,7 +1071,11 @@ class TestMultilingualPII:
             text="Patient Marie Dupont",
             entities=[
                 EntityPrediction(
-                    text="Marie Dupont", label="NAME", start=8, end=20, confidence=0.95,
+                    text="Marie Dupont",
+                    label="NAME",
+                    start=8,
+                    end=20,
+                    confidence=0.95,
                 )
             ],
             model_name="test",
@@ -1028,66 +1107,77 @@ class TestMultilingualPII:
         """Test fake PII generation with French locale."""
         result = _generate_fake_pii("NAME", lang="fr")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["fr"]["NAME"]
 
     def test_generate_fake_pii_german(self):
         """Test fake PII generation with German locale."""
         result = _generate_fake_pii("NAME", lang="de")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["de"]["NAME"]
 
     def test_generate_fake_pii_dutch(self):
         """Test fake PII generation with Dutch locale."""
         result = _generate_fake_pii("NAME", lang="nl")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["nl"]["NAME"]
 
     def test_generate_fake_pii_hindi(self):
         """Test fake PII generation with Hindi locale."""
         result = _generate_fake_pii("NAME", lang="hi")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["hi"]["NAME"]
 
     def test_generate_fake_pii_telugu(self):
         """Test fake PII generation with Telugu locale."""
         result = _generate_fake_pii("NAME", lang="te")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["te"]["NAME"]
 
     def test_generate_fake_pii_portuguese(self):
         """Test fake PII generation with Portuguese locale."""
         result = _generate_fake_pii("NAME", lang="pt")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["pt"]["NAME"]
 
     def test_generate_fake_pii_arabic(self):
         """Test fake PII generation with Arabic locale."""
         result = _generate_fake_pii("NAME", lang="ar")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["ar"]["NAME"]
 
     def test_generate_fake_pii_japanese(self):
         """Test fake PII generation with Japanese locale."""
         result = _generate_fake_pii("NAME", lang="ja")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["ja"]["NAME"]
 
     def test_generate_fake_pii_turkish(self):
         """Test fake PII generation with Turkish locale."""
         result = _generate_fake_pii("NAME", lang="tr")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["tr"]["NAME"]
 
     def test_generate_fake_pii_portuguese_cpf(self):
         """Test CPF labels use Portuguese fake ID data."""
         result = _generate_fake_pii("cpf", lang="pt")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["pt"]["ID_NUM"]
 
     def test_generate_fake_pii_fallback_to_english(self):
         """Test fake PII falls back to English for missing types."""
         result = _generate_fake_pii("USERNAME", lang="fr")
         from openmed.core.pii_i18n import LANGUAGE_FAKE_DATA
+
         assert result in LANGUAGE_FAKE_DATA["fr"]["USERNAME"]
 
     def test_generate_fake_pii_unknown_type_returns_placeholder(self):
@@ -1202,7 +1292,10 @@ class TestStripAccents:
         assert _strip_accents("pingüino") == "pinguino"
 
     def test_strip_preserves_digits_and_punctuation(self):
-        assert _strip_accents("DNI: 12345678Z, teléfono: +34 612") == "DNI: 12345678Z, telefono: +34 612"
+        assert (
+            _strip_accents("DNI: 12345678Z, teléfono: +34 612")
+            == "DNI: 12345678Z, telefono: +34 612"
+        )
 
 
 class TestAccentNormalization:
@@ -1214,7 +1307,13 @@ class TestAccentNormalization:
         mock_analyze.return_value = PredictionResult(
             text="Maria Lopez",
             entities=[
-                EntityPrediction(text="Maria Lopez", label="first_name", start=0, end=11, confidence=0.95),
+                EntityPrediction(
+                    text="Maria Lopez",
+                    label="first_name",
+                    start=0,
+                    end=11,
+                    confidence=0.95,
+                ),
             ],
             model_name="test",
             timestamp=datetime.now().isoformat(),
@@ -1236,8 +1335,12 @@ class TestAccentNormalization:
         mock_analyze.return_value = PredictionResult(
             text="Maria Lopez",
             entities=[
-                EntityPrediction(text="Mari", label="first_name", start=0, end=4, confidence=0.95),
-                EntityPrediction(text="Lope", label="last_name", start=6, end=10, confidence=0.93),
+                EntityPrediction(
+                    text="Mari", label="first_name", start=0, end=4, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="Lope", label="last_name", start=6, end=10, confidence=0.93
+                ),
             ],
             model_name="test",
             timestamp=datetime.now().isoformat(),
@@ -1247,6 +1350,7 @@ class TestAccentNormalization:
         # NOT inside extract_pii. Since we mock analyze_text, the fix is bypassed.
         # So we pre-apply it manually to simulate the real pipeline.
         from openmed.processing.outputs import OutputFormatter
+
         fixed_entities = OutputFormatter._fix_entity_spans(
             mock_analyze.return_value.entities, "Maria Lopez"
         )
@@ -1322,10 +1426,15 @@ class TestIntegration:
         mock_extract.return_value = PredictionResult(
             text=original_text,
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=8, end=16, confidence=0.95),
-                EntityPrediction(text="555-1234", label="PHONE", start=20, end=28, confidence=0.90),
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="555-1234", label="PHONE", start=20, end=28, confidence=0.90
+                ),
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         # De-identify
@@ -1343,9 +1452,12 @@ class TestIntegration:
         mock_extract.return_value = PredictionResult(
             text="John Doe",
             entities=[
-                EntityPrediction(text="John Doe", label="NAME", start=0, end=8, confidence=0.95)
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=0, end=8, confidence=0.95
+                )
             ],
-            model_name="test", timestamp=datetime.now().isoformat(),
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
         )
 
         result = deidentify("John Doe", method="mask")
@@ -1358,3 +1470,243 @@ class TestIntegration:
         assert "method" in result_dict
         assert "timestamp" in result_dict
         assert "num_entities_redacted" in result_dict
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_mask(self, mock_extract):
+        """Test round-trip with two distinct PERSON entities using mask (#204, #222)."""
+        original_text = "Dr. Alice Smith met Bob Jones today"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith", label="NAME", start=4, end=15, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="Bob Jones", label="NAME", start=20, end=29, confidence=0.93
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        # First NAME -> [NAME], second NAME -> [NAME_2]
+        assert deid_result.deidentified_text == "Dr. [NAME] met [NAME_2] today"
+        assert deid_result.mapping is not None
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_repeated_mask_without_mapping_keeps_default_placeholders(
+        self, mock_extract
+    ):
+        """Repeated mask output is unchanged when no reversible mapping is requested."""
+        original_text = "Dr. Alice Smith met Bob Jones today"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith",
+                    label="NAME",
+                    start=4,
+                    end=15,
+                    confidence=0.95,
+                ),
+                EntityPrediction(
+                    text="Bob Jones",
+                    label="NAME",
+                    start=20,
+                    end=29,
+                    confidence=0.93,
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=False)
+
+        assert deid_result.deidentified_text == "Dr. [NAME] met [NAME] today"
+        assert [entity.redacted_text for entity in deid_result.pii_entities] == [
+            "[NAME]",
+            "[NAME]",
+        ]
+        assert deid_result.mapping is None
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_dates_mask(self, mock_extract):
+        """Test round-trip with two distinct DATE entities using mask."""
+        original_text = "Born 1990-01-15 seen 2024-06-20"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="1990-01-15", label="DATE", start=5, end=15, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="2024-06-20", label="DATE", start=21, end=31, confidence=0.92
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        assert "[DATE]" in deid_result.deidentified_text
+        assert "[DATE_2]" in deid_result.deidentified_text
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_mixed_repeated_and_unique(self, mock_extract):
+        """Test round-trip with mixed repeated and unique entity types."""
+        original_text = "Alice and Bob called 555-1234 on 2024-01-01"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice", label="NAME", start=0, end=5, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="Bob", label="NAME", start=10, end=13, confidence=0.93
+                ),
+                EntityPrediction(
+                    text="555-1234", label="PHONE", start=21, end=29, confidence=0.90
+                ),
+                EntityPrediction(
+                    text="2024-01-01", label="DATE", start=33, end=43, confidence=0.91
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        assert "[NAME]" in deid_result.deidentified_text
+        assert "[NAME_2]" in deid_result.deidentified_text
+        assert "[PHONE]" in deid_result.deidentified_text
+        assert "[DATE]" in deid_result.deidentified_text
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_hash(self, mock_extract):
+        """Test round-trip with two PERSON entities using hash method."""
+        original_text = "Alice Smith and Bob Jones"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith", label="NAME", start=0, end=11, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="Bob Jones", label="NAME", start=16, end=25, confidence=0.93
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="hash", keep_mapping=True)
+        # Hash produces unique values per text, so no counter needed
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_replace(self, mock_extract):
+        """Test round-trip with two PERSON entities using replace method."""
+        original_text = "Alice Smith and Bob Jones"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith",
+                    label="NAME",
+                    start=0,
+                    end=11,
+                    confidence=0.95,
+                ),
+                EntityPrediction(
+                    text="Bob Jones",
+                    label="NAME",
+                    start=16,
+                    end=25,
+                    confidence=0.93,
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(
+            original_text,
+            method="replace",
+            keep_mapping=True,
+            consistent=True,
+            seed=123,
+        )
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_two_persons_remove(self, mock_extract):
+        """Test round-trip with two PERSON entities using remove method."""
+        original_text = "Alice Smith and Bob Jones"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="Alice Smith",
+                    label="NAME",
+                    start=0,
+                    end=11,
+                    confidence=0.95,
+                ),
+                EntityPrediction(
+                    text="Bob Jones",
+                    label="NAME",
+                    start=16,
+                    end=25,
+                    confidence=0.93,
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="remove", keep_mapping=True)
+
+        assert deid_result.deidentified_text == "[NAME_REMOVED] and [NAME_REMOVED_2]"
+        assert deid_result.mapping == {
+            "[NAME_REMOVED]": "Alice Smith",
+            "[NAME_REMOVED_2]": "Bob Jones",
+        }
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_roundtrip_single_entity_unchanged(self, mock_extract):
+        """Test that single entities still produce simple placeholders (no counter)."""
+        original_text = "Patient John Doe"
+        mock_extract.return_value = PredictionResult(
+            text=original_text,
+            entities=[
+                EntityPrediction(
+                    text="John Doe", label="NAME", start=8, end=16, confidence=0.95
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        deid_result = deidentify(original_text, method="mask", keep_mapping=True)
+        # Single entity should NOT have a counter suffix
+        assert deid_result.deidentified_text == "Patient [NAME]"
+        assert "[NAME_2]" not in deid_result.deidentified_text
+
+        reidentified = reidentify(deid_result.deidentified_text, deid_result.mapping)
+        assert reidentified == original_text
