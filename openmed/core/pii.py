@@ -16,11 +16,8 @@ Example:
     >>>
     >>> # Extract PII entities
     >>> result = extract_pii("Dr. Smith called John Doe at 555-1234")
-    >>> for entity in result.entities:
-    ...     print(f"{entity.label}: {entity.text}")
-    NAME: Dr. Smith
-    NAME: John Doe
-    PHONE: 555-1234
+    >>> len(result.entities) > 0
+    True
 
     >>> # De-identify with masking
     >>> deid = deidentify(
@@ -34,22 +31,24 @@ Example:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Dict, Optional, Literal, TYPE_CHECKING, Sequence
-from datetime import datetime, timedelta
-from functools import lru_cache
 import hashlib
 import json
 import random
 import re
 import unicodedata
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence
 
+from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
-from ..processing.outputs import EntityPrediction
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
+    from .audit import AuditReport
     from .models import ModelLoader
 
 # Type alias for de-identification methods
@@ -70,12 +69,20 @@ class PIIEntity(EntityPrediction):
         redacted_text: Replacement text after de-identification
         original_text: Original text before redaction
         hash_value: Consistent hash for entity linking
+        reversible_id: Optional reversible pseudonymization handle
     """
 
     entity_type: str = ""
     redacted_text: Optional[str] = None
     original_text: Optional[str] = None
     hash_value: Optional[str] = None
+    reversible_id: Optional[str] = None
+    canonical_label: Optional[str] = None
+    sources: list[str] = field(default_factory=list)
+    evidence: dict[str, Any] = field(default_factory=dict)
+    threshold: Optional[float] = None
+    action: Optional[str] = None
+    surrogate: Optional[str] = None
 
     def __post_init__(self):
         """Initialize entity_type from label if not set."""
@@ -103,6 +110,7 @@ class DeidentificationResult:
     timestamp: datetime
     mapping: Optional[dict[str, str]] = None
     metadata: Optional[dict[str, Any]] = None
+    audit_report: Optional["AuditReport"] = None
 
     def to_dict(self) -> dict:
         """Convert result to dictionary format.
@@ -122,7 +130,18 @@ class DeidentificationResult:
                     "end": e.end,
                     "confidence": e.confidence,
                     "redacted_text": e.redacted_text,
+                    "canonical_label": e.canonical_label,
+                    "sources": list(e.sources),
+                    "evidence": e.evidence,
+                    "threshold": e.threshold,
+                    "action": e.action,
+                    "surrogate": e.surrogate,
                     "metadata": e.metadata or {},
+                    **(
+                        {"reversible_id": e.reversible_id}
+                        if e.reversible_id is not None
+                        else {}
+                    ),
                 }
                 for e in self.pii_entities
             ],
@@ -130,6 +149,9 @@ class DeidentificationResult:
             "timestamp": self.timestamp.isoformat(),
             "num_entities_redacted": len(self.pii_entities),
             "metadata": self.metadata or {},
+            "audit_report": (
+                self.audit_report.to_dict() if self.audit_report is not None else None
+            ),
         }
 
 
@@ -139,7 +161,9 @@ class DeidentificationResult:
 _ACCENT_NORMALIZE_LANGS = frozenset({"es"})
 
 _DEFAULT_EN_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
-_DAY_FIRST_LANGS = frozenset({"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"})
+_DAY_FIRST_LANGS = frozenset(
+    {"fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "tr"}
+)
 _PRIVACY_FILTER_FAMILY_ALIASES = frozenset({"openai-privacy-filter", "privacy-filter"})
 
 # Repository-prefix allowlist for org/model identifiers that route through the
@@ -194,7 +218,14 @@ def _is_privacy_filter_artifact_path(model_name: str) -> bool:
         except (OSError, json.JSONDecodeError):
             continue
 
-        for key in ("family", "_mlx_family", "_mlx_model_type", "model_type", "source_model_id", "_name_or_path"):
+        for key in (
+            "family",
+            "_mlx_family",
+            "_mlx_model_type",
+            "model_type",
+            "source_model_id",
+            "_name_or_path",
+        ):
             if _looks_like_privacy_filter_identifier(payload.get(key)):
                 return True
 
@@ -236,7 +267,11 @@ def _prediction_result_from_privacy_filter_raw(
         # When accent normalization happened upstream, span indices match
         # the stripped text. The pipeline ran on ``text`` so spans align
         # with ``text``; remap to ``original_text`` if they're equal-length.
-        span_text = (original_text if do_normalize else text)[start:end] if end > start else item.get("word", "")
+        span_text = (
+            (original_text if do_normalize else text)[start:end]
+            if end > start
+            else item.get("word", "")
+        )
         entities.append(
             EntityPrediction(
                 text=span_text,
@@ -357,8 +392,7 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
 
     if lang not in SUPPORTED_LANGUAGES:
         raise ValueError(
-            f"Unsupported language '{lang}'. "
-            f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
         )
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
@@ -386,9 +420,9 @@ def _prepare_pii_text(
 
 def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> None:
     """Apply semantic-unit PII merging in place."""
+    from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
     from .pii_i18n import get_patterns_for_language
-    from ..processing.outputs import EntityPrediction
 
     lang_patterns = get_patterns_for_language(lang)
     entity_dicts = [
@@ -457,10 +491,9 @@ def _extract_pii_batch(
     if not prepared:
         return []
 
-    uses_privacy_filter = (
-        _looks_like_privacy_filter_identifier(effective_model)
-        or _is_privacy_filter_artifact_path(effective_model)
-    )
+    uses_privacy_filter = _looks_like_privacy_filter_identifier(
+        effective_model
+    ) or _is_privacy_filter_artifact_path(effective_model)
 
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
@@ -512,7 +545,7 @@ def _extract_pii_batch(
                 result.text = original_text
                 result.entities = [
                     EntityPrediction(
-                        text=original_text[e.start:e.end],
+                        text=original_text[e.start : e.end],
                         label=e.label,
                         start=e.start,
                         end=e.end,
@@ -545,7 +578,7 @@ def extract_pii(
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
-):
+) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
     Uses token classification models to detect personally identifiable information
@@ -575,14 +608,12 @@ def extract_pii(
         loader: Optional shared model loader to reuse warmed pipelines.
 
     Returns:
-        AnalysisResult with detected PII entities
+        PredictionResult with detected PII entities
 
     Example:
         >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
-        >>> for entity in result.entities:
-        ...     print(f"{entity.label}: {entity.text}")
-        date_of_birth: 01/15/1970
-        ssn: 123-45-6789
+        >>> len(result.entities) > 0
+        True
 
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
@@ -630,12 +661,12 @@ def _apply_safety_sweep_to_result(
     lang: str,
 ) -> int:
     """Run the deterministic sweep and record its net span contribution."""
+    from .quality_gates import validate_entity_spans
     from .safety_sweep import (
         SAFETY_SWEEP_PATTERNS_VERSION,
         SAFETY_SWEEP_SOURCE,
         safety_sweep,
     )
-    from .quality_gates import validate_entity_spans
 
     before_count = len(pii_result.entities)
     pii_result.entities = safety_sweep(text, pii_result.entities, lang=lang)
@@ -653,6 +684,326 @@ def _apply_safety_sweep_to_result(
     return added_count
 
 
+_AUDIT_TEXT_KEYS = {
+    "text",
+    "word",
+    "value",
+    "surface",
+    "replacement",
+    "original_text",
+    "deidentified_text",
+}
+
+
+def _sanitize_audit_evidence(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _sanitize_audit_evidence(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+            if str(key).lower() not in _AUDIT_TEXT_KEYS
+        }
+    if isinstance(value, list):
+        return [_sanitize_audit_evidence(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_audit_evidence(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _entity_sources(entity: Any) -> list[str]:
+    metadata = getattr(entity, "metadata", None) or {}
+    source = str(metadata.get("source", "")).strip()
+    if source == "safety_sweep":
+        return ["safety_sweep"]
+    if source == "locale_rule":
+        return ["locale_rule"]
+    return ["ml"]
+
+
+def _entity_evidence(
+    entity: Any,
+    *,
+    pii_result: Any,
+    model_name: str,
+    lang: str,
+) -> dict[str, Any]:
+    metadata = _sanitize_audit_evidence(getattr(entity, "metadata", None) or {})
+    evidence = {
+        "raw_label": getattr(entity, "label", ""),
+        "language": lang,
+        "metadata": metadata,
+    }
+    if "ml" in _entity_sources(entity):
+        evidence["model_id"] = getattr(pii_result, "model_name", None) or model_name
+    return evidence
+
+
+def _model_format(model_id: str) -> str:
+    if not model_id:
+        return "unknown"
+    lowered = model_id.lower()
+    if lowered.endswith(".mlmodel") or "coreml" in lowered:
+        return "coreml"
+    if "mlx" in lowered or _is_privacy_filter_artifact_path(model_id):
+        return "mlx"
+    if _looks_like_privacy_filter_identifier(model_id):
+        return "privacy_filter"
+    return "transformers"
+
+
+def _detector_infos(
+    pii_result: Any,
+    *,
+    model_name: str,
+    use_safety_sweep: bool,
+) -> list[Any]:
+    from .audit import DetectorInfo
+    from .safety_sweep import SAFETY_SWEEP_PATTERNS_VERSION
+
+    metadata = getattr(pii_result, "metadata", None) or {}
+    result_model = str(getattr(pii_result, "model_name", None) or model_name)
+    detectors = [
+        DetectorInfo(
+            source="ml",
+            model_id=result_model,
+            model_format=_model_format(result_model),
+            commit=metadata.get("model_commit"),
+        )
+    ]
+    if use_safety_sweep:
+        detectors.append(
+            DetectorInfo(
+                source="safety_sweep",
+                model_id="safety_sweep",
+                model_format="rules",
+                commit=None,
+                metadata={"patterns_version": SAFETY_SWEEP_PATTERNS_VERSION},
+            )
+        )
+    return detectors
+
+
+def _context_window(
+    text: str, start: int, end: int, *, size: int = 32
+) -> dict[str, str]:
+    return {
+        "before": text[max(0, start - size) : start],
+        "after": text[end : min(len(text), end + size)],
+    }
+
+
+def _audit_span_from_entity(text: str, entity: PIIEntity) -> Any:
+    from .audit import AuditSpan, hash_text
+
+    start = int(entity.start or 0)
+    end = int(entity.end or start)
+    return AuditSpan(
+        start=start,
+        end=end,
+        label=entity.label,
+        canonical_label=entity.canonical_label or entity.entity_type,
+        sources=list(entity.sources),
+        confidence=float(entity.confidence),
+        threshold=float(entity.threshold or 0.0),
+        action=entity.action or "",
+        surrogate=entity.surrogate,
+        text_hash=hash_text(text[start:end]),
+        evidence=dict(entity.evidence),
+        context=_context_window(text, start, end),
+    )
+
+
+def _span_record(entity: PIIEntity) -> dict[str, Any]:
+    return {
+        "label": entity.label,
+        "canonical_label": entity.canonical_label or entity.entity_type,
+        "start": entity.start,
+        "end": entity.end,
+        "metadata": {
+            "source": list(entity.sources),
+            **(entity.metadata or {}),
+        },
+    }
+
+
+def _projected_leakage(spans: Sequence[PIIEntity]) -> float:
+    if not spans:
+        return 0.0
+    residual = sum(max(0.0, 1.0 - float(span.confidence)) for span in spans)
+    return round(min(1.0, residual / len(spans)), 6)
+
+
+def _risk_summary(
+    *,
+    original_text: str,
+    deidentified_text: str,
+    spans: Sequence[PIIEntity],
+) -> dict[str, Any]:
+    from ..risk import risk_report
+
+    report = risk_report(
+        {"text": deidentified_text},
+        original={
+            "text": original_text,
+            "entities": [_span_record(entity) for entity in spans],
+        },
+    )
+    record_score = max(
+        float(report.get("leakage_rate", 0.0)),
+        float(report.get("reid_rate", 0.0)),
+    )
+    if report.get("k_min") == 1:
+        record_score = max(record_score, 1.0)
+    return {
+        "projected_leakage": _projected_leakage(spans),
+        "risk_report_record_score": round(record_score, 6),
+        "risk_report": report,
+    }
+
+
+def _resolved_audit_profile(
+    *,
+    method: DeidentificationMethod,
+    model_name: str,
+    confidence_threshold: float,
+    keep_year: bool,
+    keep_mapping: bool,
+    lang: str,
+    normalize_accents: Optional[bool],
+    use_smart_merging: bool,
+    use_safety_sweep: bool,
+) -> dict[str, Any]:
+    return {
+        "method": method,
+        "model_name": model_name,
+        "confidence_threshold": float(confidence_threshold),
+        "keep_year": bool(keep_year),
+        "keep_mapping": bool(keep_mapping),
+        "language": lang,
+        "normalize_accents": normalize_accents,
+        "use_smart_merging": bool(use_smart_merging),
+        "use_safety_sweep": bool(use_safety_sweep),
+    }
+
+
+def _active_calibration_thresholds(
+    pii_result: Any,
+    *,
+    lang: str,
+) -> dict[str, float]:
+    from .labels import normalize_label
+
+    metadata = getattr(pii_result, "metadata", None) or {}
+    calibration = metadata.get("calibration_thresholds")
+    if not isinstance(calibration, Mapping):
+        return {}
+    active = calibration.get("active")
+    if not isinstance(active, Mapping):
+        return {}
+
+    thresholds: dict[str, float] = {}
+    for label, value in active.items():
+        try:
+            thresholds[normalize_label(str(label), lang)] = float(value)
+        except (TypeError, ValueError):
+            continue
+    return thresholds
+
+
+def _entity_threshold(
+    entity: Any,
+    *,
+    canonical_label: str,
+    active_thresholds: Mapping[str, float],
+    fallback: float,
+) -> float:
+    metadata = getattr(entity, "metadata", None) or {}
+    calibration = metadata.get("calibration_threshold")
+    if isinstance(calibration, Mapping):
+        try:
+            return float(calibration["threshold"])
+        except (KeyError, TypeError, ValueError):
+            pass
+    return float(active_thresholds.get(canonical_label, fallback))
+
+
+def _build_audit_report(
+    *,
+    original_text: str,
+    deidentified_text: str,
+    pii_result: Any,
+    pii_entities: Sequence[PIIEntity],
+    effective_method: DeidentificationMethod,
+    model_name: str,
+    confidence_threshold: float,
+    keep_year: bool,
+    keep_mapping: bool,
+    lang: str,
+    normalize_accents: Optional[bool],
+    use_smart_merging: bool,
+    use_safety_sweep: bool,
+    policy: str,
+) -> Any:
+    from ..__about__ import __version__
+    from .audit import AuditReport, hash_text, manifest_hash
+    from .labels import normalize_label
+    from .safety_sweep import SAFETY_SWEEP_PATTERNS_VERSION, SAFETY_SWEEP_SOURCE
+
+    thresholds = _active_calibration_thresholds(pii_result, lang=lang)
+    thresholds.update(
+        {
+            normalize_label(entity.label, lang): float(
+                entity.threshold or confidence_threshold
+            )
+            for entity in pii_entities
+        }
+    )
+    if not thresholds:
+        thresholds["DEFAULT"] = float(confidence_threshold)
+
+    metadata = getattr(pii_result, "metadata", None) or {}
+    sweep_metadata = dict(metadata.get("safety_sweep") or {})
+    sweep_metadata.setdefault("source", SAFETY_SWEEP_SOURCE)
+    sweep_metadata.setdefault("patterns_version", SAFETY_SWEEP_PATTERNS_VERSION)
+    sweep_metadata.setdefault("enabled", bool(use_safety_sweep))
+
+    return AuditReport(
+        policy=policy,
+        resolved_profile=_resolved_audit_profile(
+            method=effective_method,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+            keep_year=keep_year,
+            keep_mapping=keep_mapping,
+            lang=lang,
+            normalize_accents=normalize_accents,
+            use_smart_merging=use_smart_merging,
+            use_safety_sweep=use_safety_sweep,
+        ),
+        detectors=_detector_infos(
+            pii_result,
+            model_name=model_name,
+            use_safety_sweep=use_safety_sweep,
+        ),
+        safety_sweep=sweep_metadata,
+        spans=[
+            _audit_span_from_entity(original_text, entity) for entity in pii_entities
+        ],
+        thresholds=thresholds,
+        residual_risk=_risk_summary(
+            original_text=original_text,
+            deidentified_text=deidentified_text,
+            spans=pii_entities,
+        ),
+        openmed_version=__version__,
+        manifest_hash=manifest_hash(),
+        document_length=len(original_text),
+        input_hash=hash_text(original_text),
+        deidentified_text_hash=hash_text(deidentified_text),
+    )
+
+
 def _build_deidentification_result(
     text: str,
     pii_result: Any,
@@ -665,21 +1016,55 @@ def _build_deidentification_result(
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    model_name: str = _DEFAULT_EN_MODEL,
+    confidence_threshold: float = 0.7,
+    normalize_accents: Optional[bool] = None,
+    use_smart_merging: bool = True,
+    use_safety_sweep: bool = True,
+    reversible_ids: bool = False,
+    policy_name: Optional[str] = None,
+    policy: str = "hipaa_safe_harbor",
+    audit: bool = False,
 ) -> DeidentificationResult:
     """Build a de-identification result from an existing PII result."""
-    pii_entities = [
-        PIIEntity(
-            text=e.text,
-            label=e.label,
-            start=e.start,
-            end=e.end,
-            confidence=e.confidence,
-            metadata=_copy_metadata(getattr(e, "metadata", None)),
-            entity_type=e.label,
-            original_text=e.text,
+    from .labels import normalize_label
+    from .quality_gates import resolve_overlapping_entities
+
+    resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
+    pii_result.entities = resolved_entities
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(resolved_entities)
+
+    active_thresholds = _active_calibration_thresholds(pii_result, lang=lang)
+    pii_entities = []
+    for e in pii_result.entities:
+        canonical_label = normalize_label(e.label, lang)
+        pii_entities.append(
+            PIIEntity(
+                text=e.text,
+                label=e.label,
+                start=e.start,
+                end=e.end,
+                confidence=e.confidence,
+                metadata=_copy_metadata(getattr(e, "metadata", None)),
+                entity_type=e.label,
+                original_text=e.text,
+                canonical_label=canonical_label,
+                sources=_entity_sources(e),
+                evidence=_entity_evidence(
+                    e,
+                    pii_result=pii_result,
+                    model_name=model_name,
+                    lang=lang,
+                ),
+                threshold=_entity_threshold(
+                    e,
+                    canonical_label=canonical_label,
+                    active_thresholds=active_thresholds,
+                    fallback=confidence_threshold,
+                ),
+            ),
         )
-        for e in pii_result.entities
-    ]
 
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
@@ -687,7 +1072,9 @@ def _build_deidentification_result(
         date_shift_days = random.randint(-365, 365)
 
     anonymizer = None
-    if effective_method == "replace":
+    if effective_method == "replace" or any(
+        _entity_policy_action(entity) == "replace" for entity in pii_entities
+    ):
         from .anonymizer import Anonymizer
 
         effective_consistent = consistent or seed is not None
@@ -700,19 +1087,54 @@ def _build_deidentification_result(
 
     deidentified = text
     mapping = {} if keep_mapping else None
+    entity_occurrence_indexes: dict[int, int] = {}
+    if keep_mapping:
+        entity_type_counts: dict[str, int] = {}
+        for entity in sorted(pii_entities, key=lambda e: e.start):
+            entity_method = _entity_redaction_method(entity, effective_method)
+            if entity_method in {"mask", "remove"} or (
+                entity_method == "shift_dates" and entity.entity_type != "DATE"
+            ):
+                entity_type_counts[entity.entity_type] = (
+                    entity_type_counts.get(entity.entity_type, 0) + 1
+                )
+                entity_occurrence_indexes[id(entity)] = entity_type_counts[
+                    entity.entity_type
+                ]
 
     for entity in redaction_entities:
+        entity_method = _entity_redaction_method(entity, effective_method)
         redacted = _redact_entity(
             entity,
-            effective_method,
+            entity_method,
             keep_year=keep_year,
             date_shift_days=(
-                date_shift_days if effective_method == "shift_dates" else None
+                date_shift_days if entity_method == "shift_dates" else None
             ),
             lang=lang,
             anonymizer=anonymizer,
         )
+
+        if keep_mapping and entity_method == "remove":
+            redacted = f"[{entity.entity_type}_REMOVED]"
+
+        # Only make repeated placeholders unique for reversible mappings. Plain
+        # masking/removal without keep_mapping keeps the legacy redacted text.
+        occurrence_index = entity_occurrence_indexes.get(id(entity), 1)
+        if keep_mapping and redacted and occurrence_index > 1:
+            if redacted.endswith("]"):
+                redacted = f"{redacted[:-1]}_{occurrence_index}]"
+            else:
+                redacted = f"{redacted}_{occurrence_index}"
+
         entity.redacted_text = redacted
+        if reversible_ids:
+            entity.reversible_id = _build_reversible_id(
+                entity,
+                policy_name=policy_name,
+            )
+        entity.action = entity_method
+        entity.surrogate = redacted if redacted else None
 
         deidentified = (
             deidentified[: entity.start] + redacted + deidentified[entity.end :]
@@ -720,6 +1142,25 @@ def _build_deidentification_result(
 
         if keep_mapping and mapping is not None:
             mapping[redacted] = entity.original_text or entity.text
+
+    audit_report = None
+    if audit:
+        audit_report = _build_audit_report(
+            original_text=text,
+            deidentified_text=deidentified,
+            pii_result=pii_result,
+            pii_entities=pii_entities,
+            effective_method=effective_method,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
+            keep_year=keep_year,
+            keep_mapping=keep_mapping,
+            lang=lang,
+            normalize_accents=normalize_accents,
+            use_smart_merging=use_smart_merging,
+            use_safety_sweep=use_safety_sweep,
+            policy=policy,
+        )
 
     return DeidentificationResult(
         original_text=text,
@@ -729,7 +1170,44 @@ def _build_deidentification_result(
         timestamp=datetime.now(),
         mapping=mapping,
         metadata=_copy_metadata(getattr(pii_result, "metadata", None)),
+        audit_report=audit_report,
     )
+
+
+def _entity_policy_action(entity: PIIEntity) -> Optional[str]:
+    metadata = entity.metadata or {}
+    policy_action = metadata.get("policy_action")
+    if not isinstance(policy_action, dict):
+        return None
+    action = policy_action.get("action")
+    return str(action) if action is not None else None
+
+
+def _entity_redaction_method(
+    entity: PIIEntity,
+    fallback: DeidentificationMethod,
+) -> DeidentificationMethod:
+    action = _entity_policy_action(entity)
+    if action == "replace":
+        return "replace"
+    if action == "hash":
+        return "hash"
+    if action in {"mask", "redact"}:
+        return "mask"
+    return fallback
+
+
+def _build_reversible_id(
+    entity: PIIEntity,
+    *,
+    policy_name: Optional[str],
+) -> str:
+    original = entity.original_text or entity.text
+    material = (
+        f"{policy_name or 'policy'}|{entity.entity_type}|"
+        f"{entity.start}|{entity.end}|{original}"
+    )
+    return "rev_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:24]
 
 
 def _deidentify_batch(
@@ -783,13 +1261,19 @@ def _deidentify_batch(
             text,
             pii_result,
             effective_method=effective_method,
+            model_name=model_name,
+            confidence_threshold=confidence_threshold,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
             keep_mapping=keep_mapping,
             lang=lang,
+            normalize_accents=normalize_accents,
+            use_smart_merging=use_smart_merging,
+            use_safety_sweep=use_safety_sweep,
             consistent=consistent,
             seed=seed,
             locale=locale,
+            policy="hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
     ]
@@ -814,7 +1298,10 @@ def deidentify(
     seed: Optional[int] = None,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
-) -> DeidentificationResult:
+    policy: Optional[str] = None,
+    calibration_thresholds_path: Optional[str | Path] = None,
+    audit: bool = False,
+) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
     Implements multiple de-identification strategies for HIPAA compliance:
@@ -855,9 +1342,17 @@ def deidentify(
             ``consistent=True`` replacements. Implies ``consistent=True``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"``. When ``None``, derived from ``lang``.
+        policy: Optional policy profile name controlling arbitration, action
+            selection, mandatory safety sweep behavior, and reversible mapping.
+        calibration_thresholds_path: Optional thresholds.json artifact path
+            or artifact directory. When provided, per-label calibrated
+            thresholds filter model detections and appear in audit output.
+        audit: Return a deterministic AuditReport instead of the
+            DeidentificationResult.
 
     Returns:
-        DeidentificationResult with original and de-identified text
+        DeidentificationResult with original and de-identified text, or
+        AuditReport when ``audit=True``.
 
     Example:
         >>> result = deidentify(
@@ -872,38 +1367,39 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
-    text = text.strip()
-    effective_method = _resolve_deidentification_method(
-        method,
-        shift_dates,
-        date_shift_days,
-    )
-    pii_result = extract_pii(
-        text,
-        model_name,
-        confidence_threshold,
-        config,
-        use_smart_merging,
+    from .pipeline import Pipeline
+
+    pipeline = Pipeline(
+        model_name=model_name,
+        confidence_threshold=confidence_threshold,
+        config=config,
+        use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        use_safety_sweep=use_safety_sweep,
         loader=loader,
+        policy=policy,
+        calibration_thresholds_path=(
+            str(calibration_thresholds_path)
+            if calibration_thresholds_path is not None
+            else None
+        ),
     )
-
-    if use_safety_sweep:
-        _apply_safety_sweep_to_result(text, pii_result, lang=lang)
-
-    return _build_deidentification_result(
+    result = pipeline.run(
         text,
-        pii_result,
-        effective_method=effective_method,
+        method=method,
         keep_year=keep_year,
+        shift_dates=shift_dates,
         date_shift_days=date_shift_days,
         keep_mapping=keep_mapping,
-        lang=lang,
         consistent=consistent,
         seed=seed,
         locale=locale,
+        audit=audit,
     )
+    if audit and result.deidentification_result.audit_report is not None:
+        return result.deidentification_result.audit_report
+    return result.deidentification_result
 
 
 def _redact_entity(
@@ -977,13 +1473,11 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "PATIENT": "NAME",
     "doctor": "NAME",
     "DOCTOR": "NAME",
-
     # Phone variants
     "phone_number": "PHONE",
     "PHONE": "PHONE",
     "phone": "PHONE",
     "PHONENUMBER": "PHONE",
-
     # Location variants
     "city": "LOCATION",
     "CITY": "LOCATION",
@@ -993,7 +1487,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "COUNTRY": "LOCATION",
     "location": "LOCATION",
     "LOCATION": "LOCATION",
-
     # Address variants
     "street_address": "STREET_ADDRESS",
     "STREET": "STREET_ADDRESS",
@@ -1001,7 +1494,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "STREETADDRESS": "STREET_ADDRESS",
     "address": "STREET_ADDRESS",
     "ADDRESS": "STREET_ADDRESS",
-
     # Date variants
     "date": "DATE",
     "DATE": "DATE",
@@ -1010,7 +1502,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "dateofbirth": "DATE",
     "dob": "DATE",
     "DOB": "DATE",
-
     # ID variants
     "id_num": "ID_NUM",
     "ID_NUM": "ID_NUM",
@@ -1024,7 +1515,6 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "CNPJ": "ID_NUM",
     "medical_record_number": "ID_NUM",
     "MEDICAL_RECORD_NUMBER": "ID_NUM",
-
     # Other
     "email": "EMAIL",
     "EMAIL": "EMAIL",
@@ -1080,6 +1570,7 @@ def _resolve_fake_data_key(entity_type: str, lang: str = "en") -> str:
         return direct
 
     from .labels import normalize_label
+
     canonical = normalize_label(entity_type, lang)
     return _CANONICAL_TO_FAKE_KEY.get(canonical, entity_type.upper())
 
@@ -1111,7 +1602,8 @@ def _generate_fake_pii(entity_type: str, lang: str = "en") -> str:
 
 
 def _parse_localized_month_date(
-    date_str: str, lang: str,
+    date_str: str,
+    lang: str,
 ) -> tuple[datetime, str] | None:
     """Parse localized month-name dates that dateutil may not understand."""
     from .pii_i18n import LANGUAGE_MONTH_NAMES
@@ -1137,7 +1629,9 @@ def _parse_localized_month_date(
     if not match:
         return None
 
-    month_lookup = {name.casefold(): index + 1 for index, name in enumerate(month_names)}
+    month_lookup = {
+        name.casefold(): index + 1 for index, name in enumerate(month_names)
+    }
     month_name = match.group("month").casefold()
     month = month_lookup.get(month_name)
     if month is None:
@@ -1158,12 +1652,16 @@ def _parse_localized_month_date(
 
 
 def _format_localized_month_date(
-    new_date: datetime, lang: str, style: str,
+    new_date: datetime,
+    lang: str,
+    style: str,
 ) -> str:
     """Render a localized month-name date using the language month table."""
     from .pii_i18n import LANGUAGE_MONTH_NAMES
 
-    month_name = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])[new_date.month - 1]
+    month_name = LANGUAGE_MONTH_NAMES.get(lang, LANGUAGE_MONTH_NAMES["en"])[
+        new_date.month - 1
+    ]
 
     if style == "day_month_year_de":
         return f"{new_date.day} de {month_name} de {new_date.year}"
@@ -1188,7 +1686,10 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
 
 
 def _shift_date(
-    date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
+    date_str: str,
+    shift_days: int,
+    keep_year: bool = True,
+    lang: str = "en",
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -1251,7 +1752,10 @@ def _shift_date(
 
 
 def _shift_date_basic(
-    date_str: str, shift_days: int, keep_year: bool = True, lang: str = "en",
+    date_str: str,
+    shift_days: int,
+    keep_year: bool = True,
+    lang: str = "en",
 ) -> str:
     """Basic date shifting without dateutil dependency.
 
@@ -1331,11 +1835,17 @@ def _shift_date_basic(
                     sep = "-"
 
                 if order == "mdy":
-                    return f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
+                    return (
+                        f"{shifted.month:02d}{sep}{shifted.day:02d}{sep}{shifted.year}"
+                    )
                 elif order == "ymd":
-                    return f"{shifted.year}{sep}{shifted.month:02d}{sep}{shifted.day:02d}"
+                    return (
+                        f"{shifted.year}{sep}{shifted.month:02d}{sep}{shifted.day:02d}"
+                    )
                 else:
-                    return f"{shifted.day:02d}{sep}{shifted.month:02d}{sep}{shifted.year}"
+                    return (
+                        f"{shifted.day:02d}{sep}{shifted.month:02d}{sep}{shifted.year}"
+                    )
 
             except (ValueError, OverflowError):
                 continue
@@ -1344,7 +1854,9 @@ def _shift_date_basic(
 
 
 def _format_date_like_original(
-    original: str, new_date: datetime, lang: str = "en",
+    original: str,
+    new_date: datetime,
+    lang: str = "en",
 ) -> str:
     """Format a datetime to match the original string's format.
 
@@ -1399,7 +1911,9 @@ def _format_date_like_original(
             # "15 januari 2020" / "15. Januar 2020" / localized day-month-year
             if re.match(r"\d+\.?\s+[^\W\d_]+\s+\d{4}", original_stripped, re.UNICODE):
                 return f"{new_date.day} {month_name} {new_date.year}"
-            if re.match(r"\d+\s+de\s+[^\W\d_]+\s+de\s+\d{4}", original_stripped, re.UNICODE):
+            if re.match(
+                r"\d+\s+de\s+[^\W\d_]+\s+de\s+\d{4}", original_stripped, re.UNICODE
+            ):
                 return f"{new_date.day} de {month_name} de {new_date.year}"
             if re.match(r"[^\W\d_]+\s+\d+,?\s+\d{4}", original_stripped, re.UNICODE):
                 return f"{month_name} {new_date.day}, {new_date.year}"

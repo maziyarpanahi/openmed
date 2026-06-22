@@ -25,7 +25,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Layer 1: identifier matching
 # ---------------------------------------------------------------------------
@@ -49,6 +48,7 @@ class TestPrivacyFilterIdentifierMatching:
     )
     def test_attacker_controlled_names_are_not_recognized(self, attacker_name):
         from openmed.core.pii import _looks_like_privacy_filter_identifier
+
         assert _looks_like_privacy_filter_identifier(attacker_name) is False
 
     @pytest.mark.parametrize(
@@ -68,6 +68,7 @@ class TestPrivacyFilterIdentifierMatching:
     )
     def test_first_party_names_are_still_recognized(self, trusted_name):
         from openmed.core.pii import _looks_like_privacy_filter_identifier
+
         assert _looks_like_privacy_filter_identifier(trusted_name) is True
 
     @pytest.mark.parametrize(
@@ -76,11 +77,13 @@ class TestPrivacyFilterIdentifierMatching:
     )
     def test_family_aliases_are_recognized(self, alias):
         from openmed.core.pii import _looks_like_privacy_filter_identifier
+
         assert _looks_like_privacy_filter_identifier(alias) is True
 
     @pytest.mark.parametrize("falsy", ["", None, "   "])
     def test_blank_inputs_are_not_recognized(self, falsy):
         from openmed.core.pii import _looks_like_privacy_filter_identifier
+
         assert _looks_like_privacy_filter_identifier(falsy) is False
 
 
@@ -95,6 +98,7 @@ class TestPrivacyFilterTorchPipelineGate:
 
     def test_attacker_name_with_trust_remote_code_raises(self):
         from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+
         with pytest.raises(ValueError, match="trusted-remote-code allowlist"):
             PrivacyFilterTorchPipeline(
                 "attacker/foo-privacy-filter-bar",
@@ -107,6 +111,7 @@ class TestPrivacyFilterTorchPipelineGate:
         captured = {}
         with _patched_transformers(captured):
             from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+
             PrivacyFilterTorchPipeline("openai/privacy-filter")
         assert captured["tokenizer_kwargs"]["trust_remote_code"] is False
         assert captured["model_kwargs"]["trust_remote_code"] is False
@@ -115,6 +120,7 @@ class TestPrivacyFilterTorchPipelineGate:
         captured = {}
         with _patched_transformers(captured):
             from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+
             PrivacyFilterTorchPipeline(
                 "openai/privacy-filter",
                 trust_remote_code=True,
@@ -128,6 +134,7 @@ class TestPrivacyFilterTorchPipelineGate:
         captured = {}
         with _patched_transformers(captured):
             from openmed.torch.privacy_filter import PrivacyFilterTorchPipeline
+
             PrivacyFilterTorchPipeline(
                 "openmed/privacy-filter-multilingual",
                 trust_remote_code=True,
@@ -152,6 +159,7 @@ class TestIsTrustedForRemoteCode:
     )
     def test_hardcoded_first_party_models_are_trusted(self, trusted):
         from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         assert is_trusted_for_remote_code(trusted) is True
 
     @pytest.mark.parametrize(
@@ -167,10 +175,12 @@ class TestIsTrustedForRemoteCode:
     def test_other_models_are_not_trusted(self, attacker, monkeypatch):
         monkeypatch.delenv("OPENMED_TRUSTED_REMOTE_CODE_MODELS", raising=False)
         from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         assert is_trusted_for_remote_code(attacker) is False
 
     def test_env_var_extends_allowlist(self, monkeypatch):
         from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         monkeypatch.setenv(
             "OPENMED_TRUSTED_REMOTE_CODE_MODELS",
             "my-org/my-fork,other-org/another-fork ,  ,",
@@ -184,6 +194,7 @@ class TestIsTrustedForRemoteCode:
         """Issue #205 — env-var allowlist entries should match regardless
         of the case the caller supplies."""
         from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         monkeypatch.setenv(
             "OPENMED_TRUSTED_REMOTE_CODE_MODELS",
             "My-Org/My-Fork",
@@ -194,6 +205,7 @@ class TestIsTrustedForRemoteCode:
     def test_env_var_unset_does_not_trust_extras(self, monkeypatch):
         monkeypatch.delenv("OPENMED_TRUSTED_REMOTE_CODE_MODELS", raising=False)
         from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         assert is_trusted_for_remote_code("my-org/my-fork") is False
 
     def test_local_privacy_filter_artifact_is_trusted(self, tmp_path):
@@ -206,9 +218,10 @@ class TestIsTrustedForRemoteCode:
             json.dumps({"model_type": "openai-privacy-filter"})
         )
 
-        from openmed.torch.privacy_filter import is_trusted_for_remote_code
         # Clear the lru_cache so the tmp_path is actually probed.
         from openmed.core import pii as _pii
+        from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         _pii._is_privacy_filter_artifact_path.cache_clear()
 
         assert is_trusted_for_remote_code(str(artifact)) is True
@@ -216,11 +229,10 @@ class TestIsTrustedForRemoteCode:
     def test_local_unrelated_artifact_is_not_trusted(self, tmp_path):
         artifact = tmp_path / "not-a-privacy-filter"
         artifact.mkdir()
-        (artifact / "config.json").write_text(
-            json.dumps({"model_type": "bert"})
-        )
-        from openmed.torch.privacy_filter import is_trusted_for_remote_code
+        (artifact / "config.json").write_text(json.dumps({"model_type": "bert"}))
         from openmed.core import pii as _pii
+        from openmed.torch.privacy_filter import is_trusted_for_remote_code
+
         _pii._is_privacy_filter_artifact_path.cache_clear()
 
         assert is_trusted_for_remote_code(str(artifact)) is False
@@ -237,8 +249,11 @@ class TestCreatePrivacyFilterPipelineRemoteCodeOptIn:
 
     def test_trusted_model_passes_trust_remote_code_true(self):
         from openmed.core.backends import create_privacy_filter_pipeline
-        with patch("openmed.core.backends.MLXBackend.is_available", return_value=False), \
-             patch("openmed.torch.privacy_filter.PrivacyFilterTorchPipeline") as MockPF:
+
+        with (
+            patch("openmed.core.backends.MLXBackend.is_available", return_value=False),
+            patch("openmed.torch.privacy_filter.PrivacyFilterTorchPipeline") as MockPF,
+        ):
             MockPF.return_value = lambda _text: []
             create_privacy_filter_pipeline("openai/privacy-filter")
             MockPF.assert_called_once_with(
@@ -250,8 +265,11 @@ class TestCreatePrivacyFilterPipelineRemoteCodeOptIn:
         """Defense in depth: even if Layer 1 ever routes an untrusted name
         here, the dispatcher must not opt in to trust_remote_code."""
         from openmed.core.backends import create_privacy_filter_pipeline
-        with patch("openmed.core.backends.MLXBackend.is_available", return_value=False), \
-             patch("openmed.torch.privacy_filter.PrivacyFilterTorchPipeline") as MockPF:
+
+        with (
+            patch("openmed.core.backends.MLXBackend.is_available", return_value=False),
+            patch("openmed.torch.privacy_filter.PrivacyFilterTorchPipeline") as MockPF,
+        ):
             MockPF.return_value = lambda _text: []
             create_privacy_filter_pipeline("attacker/foo-privacy-filter-bar")
             MockPF.assert_called_once_with(

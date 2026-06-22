@@ -8,6 +8,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
+from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
     build_model,
@@ -55,7 +56,10 @@ _ROBERTA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("roberta.embeddings.LayerNorm.", "embeddings.norm."),
     ("xlm_roberta.embeddings.word_embeddings.", "embeddings.word_embeddings."),
     ("xlm_roberta.embeddings.position_embeddings.", "embeddings.position_embeddings."),
-    ("xlm_roberta.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
+    (
+        "xlm_roberta.embeddings.token_type_embeddings.",
+        "embeddings.token_type_embeddings.",
+    ),
     ("xlm_roberta.embeddings.LayerNorm.", "embeddings.norm."),
     ("roberta.pooler.", "_pooler."),
     ("xlm_roberta.pooler.", "_pooler."),
@@ -116,6 +120,7 @@ def _convert_opf_weights(state_dict: dict) -> dict:
     6. Expert weight layout: HF stores as ``[E, in, out]``, same as MLX (no transpose needed)
     """
     import re
+
     import numpy as np
 
     out: dict[str, np.ndarray] = {}
@@ -125,15 +130,19 @@ def _convert_opf_weights(state_dict: dict) -> dict:
     for hf_key, arr in state_dict.items():
         # classifier head
         if hf_key == "score.weight":
-            out["unembedding.weight"] = arr; continue
+            out["unembedding.weight"] = arr
+            continue
         if hf_key == "score.bias":
-            out["unembedding.bias"] = arr; continue
+            out["unembedding.bias"] = arr
+            continue
 
         # top-level
         if hf_key == "model.embed_tokens.weight":
-            out["embedding.weight"] = arr; continue
+            out["embedding.weight"] = arr
+            continue
         if hf_key == "model.norm.weight":
-            out["norm.scale"] = arr; continue
+            out["norm.scale"] = arr
+            continue
 
         m = re.match(r"^model\.layers\.(\d+)\.(.*)", hf_key)
         if m is None:
@@ -142,19 +151,24 @@ def _convert_opf_weights(state_dict: dict) -> dict:
 
         # RMSNorms
         if rest == "input_layernorm.weight":
-            out[f"block.{n}.attn.norm.scale"] = arr; continue
+            out[f"block.{n}.attn.norm.scale"] = arr
+            continue
         if rest == "post_attention_layernorm.weight":
-            out[f"block.{n}.mlp.norm.scale"] = arr; continue
+            out[f"block.{n}.mlp.norm.scale"] = arr
+            continue
 
         # attention sinks
         if rest == "self_attn.sinks":
-            out[f"block.{n}.attn.sinks"] = arr; continue
+            out[f"block.{n}.attn.sinks"] = arr
+            continue
 
         # output projection
         if rest == "self_attn.o_proj.weight":
-            out[f"block.{n}.attn.out.weight"] = arr; continue
+            out[f"block.{n}.attn.out.weight"] = arr
+            continue
         if rest == "self_attn.o_proj.bias":
-            out[f"block.{n}.attn.out.bias"] = arr; continue
+            out[f"block.{n}.attn.out.bias"] = arr
+            continue
 
         # Q / K / V — collect for fusion
         m2 = re.match(r"self_attn\.(q|k|v)_proj\.(weight|bias)", rest)
@@ -165,24 +179,32 @@ def _convert_opf_weights(state_dict: dict) -> dict:
 
         # MLP router → gate
         if rest == "mlp.router.weight":
-            out[f"block.{n}.mlp.gate.weight"] = arr; continue
+            out[f"block.{n}.mlp.gate.weight"] = arr
+            continue
         if rest == "mlp.router.bias":
-            out[f"block.{n}.mlp.gate.bias"] = arr; continue
+            out[f"block.{n}.mlp.gate.bias"] = arr
+            continue
 
         # expert weights: HF stores as [E, in_features, out_features] — same as MLX, no transpose needed
         if rest == "mlp.experts.gate_up_proj":
-            out[f"block.{n}.mlp.swiglu.weight"] = arr; continue
+            out[f"block.{n}.mlp.swiglu.weight"] = arr
+            continue
         if rest == "mlp.experts.gate_up_proj_bias":
-            out[f"block.{n}.mlp.swiglu.bias"] = arr; continue
+            out[f"block.{n}.mlp.swiglu.bias"] = arr
+            continue
         if rest == "mlp.experts.down_proj":
-            out[f"block.{n}.mlp.out.weight"] = arr; continue
+            out[f"block.{n}.mlp.out.weight"] = arr
+            continue
         if rest == "mlp.experts.down_proj_bias":
-            out[f"block.{n}.mlp.out.bias"] = arr; continue
+            out[f"block.{n}.mlp.out.bias"] = arr
+            continue
 
     # fuse Q / K / V into a single QKV linear per layer
     for n, projs in qkv.items():
         for param in ("weight", "bias"):
-            parts = [projs[p][param] for p in ("q", "k", "v") if param in projs.get(p, {})]
+            parts = [
+                projs[p][param] for p in ("q", "k", "v") if param in projs.get(p, {})
+            ]
             if parts:
                 out[f"block.{n}.attn.qkv.{param}"] = np.concatenate(parts, axis=0)
 
@@ -261,12 +283,12 @@ def _validate_opf_weights(weights: dict[str, Any], config: dict[str, Any]) -> No
     for key, expected_shape in expected_shapes.items():
         actual_shape = getattr(weights[key], "shape", None)
         if actual_shape is not None and tuple(actual_shape) != expected_shape:
-            bad_shapes.append(f"{key}: expected {expected_shape}, got {tuple(actual_shape)}")
+            bad_shapes.append(
+                f"{key}: expected {expected_shape}, got {tuple(actual_shape)}"
+            )
 
     if bad_shapes:
-        raise ValueError(
-            "Invalid OPF MLX weight shapes: " + "; ".join(bad_shapes[:8])
-        )
+        raise ValueError("Invalid OPF MLX weight shapes: " + "; ".join(bad_shapes[:8]))
 
 
 def _infer_source_model_type(key: str, model_type: str | None) -> str:
@@ -400,7 +422,10 @@ def save_mlx_model(
         config_to_save.pop("_mlx_quantization", None)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
-        for candidate in (output_dir / "weights.safetensors", output_dir / "weights.npz"):
+        for candidate in (
+            output_dir / "weights.safetensors",
+            output_dir / "weights.npz",
+        ):
             if candidate != keep_path and candidate.exists():
                 candidate.unlink()
 
@@ -459,7 +484,10 @@ def save_numpy_model(
     config_to_save = dict(config)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
-        for candidate in (output_dir / "weights.safetensors", output_dir / "weights.npz"):
+        for candidate in (
+            output_dir / "weights.safetensors",
+            output_dir / "weights.npz",
+        ):
             if candidate != keep_path and candidate.exists():
                 candidate.unlink()
 
@@ -550,13 +578,22 @@ def convert(
     output_dir: str | Path,
     quantize_bits: int | None = None,
     cache_dir: str | None = None,
+    publish_to_hub: bool = False,
+    publish_repo_id: str | None = None,
+    publish_org: str = "OpenMed",
+    publish_version: int = 1,
+    publish_manifest_path: str | Path | None = None,
+    publish_token_env: str = "HF_WRITE_TOKEN",
+    publish_private: bool = False,
+    publish_overwrite_existing: bool = False,
 ) -> Path:
     """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
 
     try:
         import mlx.core  # noqa: F401
-        return save_mlx_model(
+
+        output_path = save_mlx_model(
             weights,
             config,
             output_dir,
@@ -570,13 +607,39 @@ def convert(
                 "MLX not available — skipping quantization. "
                 "Install mlx for quantization support."
             )
-        return save_numpy_model(
+        output_path = save_numpy_model(
             weights,
             config,
             output_dir,
             source_model_id=model_id,
             cache_dir=cache_dir,
         )
+
+    if publish_to_hub:
+        result = publish_artifact(
+            artifact_dir=output_path,
+            source_model_id=model_id,
+            format_name=_publish_format(quantize_bits),
+            repo_id=publish_repo_id,
+            org=publish_org,
+            version=publish_version,
+            token_env=publish_token_env,
+            manifest_path=publish_manifest_path,
+            private=publish_private,
+            skip_existing=not publish_overwrite_existing,
+        )
+        if result.skipped:
+            logger.info("Skipped existing Hub repo %s", result.repo_id)
+        else:
+            logger.info("Published MLX artifact to %s", result.repo_id)
+
+    return output_path
+
+
+def _publish_format(quantize_bits: int | None) -> str:
+    if quantize_bits is None:
+        return "mlx-fp"
+    return f"mlx-{quantize_bits}bit"
 
 
 def main() -> None:
@@ -605,10 +668,64 @@ def main() -> None:
         default=None,
         help="Hugging Face cache directory",
     )
+    parser.add_argument(
+        "--publish-to-hub",
+        action="store_true",
+        help="Publish the converted artifact after a successful conversion",
+    )
+    parser.add_argument(
+        "--publish-repo-id",
+        default=None,
+        help="Explicit target repo id for publishing",
+    )
+    parser.add_argument(
+        "--publish-org",
+        default="OpenMed",
+        help="Target organization for derived publish repo ids",
+    )
+    parser.add_argument(
+        "--publish-version",
+        type=int,
+        default=1,
+        help="Version suffix used when the source repo is not already versioned",
+    )
+    parser.add_argument(
+        "--publish-manifest",
+        default=None,
+        help="JSONL manifest path to append or update after publishing",
+    )
+    parser.add_argument(
+        "--publish-token-env",
+        default="HF_WRITE_TOKEN",
+        help="Environment variable containing the Hub write token",
+    )
+    parser.add_argument(
+        "--publish-private",
+        action="store_true",
+        help="Create the target repo as private when it does not exist",
+    )
+    parser.add_argument(
+        "--publish-overwrite-existing",
+        action="store_true",
+        help="Upload into an existing target repo instead of skipping it",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
-    convert(args.model, args.output, args.quantize, args.cache_dir)
+    convert(
+        args.model,
+        args.output,
+        args.quantize,
+        args.cache_dir,
+        publish_to_hub=args.publish_to_hub,
+        publish_repo_id=args.publish_repo_id,
+        publish_org=args.publish_org,
+        publish_version=args.publish_version,
+        publish_manifest_path=args.publish_manifest,
+        publish_token_env=args.publish_token_env,
+        publish_private=args.publish_private,
+        publish_overwrite_existing=args.publish_overwrite_existing,
+    )
 
 
 if __name__ == "__main__":

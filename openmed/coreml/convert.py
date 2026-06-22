@@ -17,6 +17,8 @@ import logging
 from pathlib import Path
 from typing import Optional
 
+from openmed.core.hf_publish import publish_artifact
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +28,14 @@ def convert(
     max_seq_length: int = 512,
     compute_precision: str = "float16",
     cache_dir: Optional[str] = None,
+    publish_to_hub: bool = False,
+    publish_repo_id: str | None = None,
+    publish_org: str = "OpenMed",
+    publish_version: int = 1,
+    publish_manifest_path: str | Path | None = None,
+    publish_token_env: str = "HF_WRITE_TOKEN",
+    publish_private: bool = False,
+    publish_overwrite_existing: bool = False,
 ) -> Path:
     """Convert a HuggingFace token-classification model to CoreML.
 
@@ -40,13 +50,12 @@ def convert(
         Path to the created ``.mlpackage``.
     """
     try:
-        import torch
         import coremltools as ct
-        from transformers import AutoTokenizer, AutoModelForTokenClassification
+        import torch
+        from transformers import AutoModelForTokenClassification, AutoTokenizer
     except ImportError as e:
         raise ImportError(
-            f"Missing dependency: {e}. "
-            "Install with: pip install openmed[coreml]"
+            f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
         )
 
     output_path = Path(output_path)
@@ -55,7 +64,8 @@ def convert(
     logger.info("Loading HuggingFace model %s ...", model_id)
     tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
     model = AutoModelForTokenClassification.from_pretrained(
-        model_id, cache_dir=cache_dir,
+        model_id,
+        cache_dir=cache_dir,
     )
     model.eval()
 
@@ -98,8 +108,7 @@ def convert(
     logger.info("Converting to CoreML (%s precision) ...", compute_precision)
 
     ct_precision = (
-        ct.precision.FLOAT16 if compute_precision == "float16"
-        else ct.precision.FLOAT32
+        ct.precision.FLOAT16 if compute_precision == "float16" else ct.precision.FLOAT32
     )
 
     mlmodel = ct.convert(
@@ -108,14 +117,24 @@ def convert(
             ct.TensorType(
                 name="input_ids",
                 shape=ct.Shape(
-                    shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=128)),
+                    shape=(
+                        1,
+                        ct.RangeDim(
+                            lower_bound=1, upper_bound=max_seq_length, default=128
+                        ),
+                    ),
                 ),
                 dtype=int,
             ),
             ct.TensorType(
                 name="attention_mask",
                 shape=ct.Shape(
-                    shape=(1, ct.RangeDim(lower_bound=1, upper_bound=max_seq_length, default=128)),
+                    shape=(
+                        1,
+                        ct.RangeDim(
+                            lower_bound=1, upper_bound=max_seq_length, default=128
+                        ),
+                    ),
                 ),
                 dtype=int,
             ),
@@ -153,6 +172,23 @@ def convert(
         json.dump({str(k): v for k, v in id2label.items()}, f, indent=2)
 
     logger.info("CoreML model saved to %s", output_path)
+    if publish_to_hub:
+        result = publish_artifact(
+            artifact_dir=output_path,
+            source_model_id=model_id,
+            format_name="coreml",
+            repo_id=publish_repo_id,
+            org=publish_org,
+            version=publish_version,
+            token_env=publish_token_env,
+            manifest_path=publish_manifest_path,
+            private=publish_private,
+            skip_existing=not publish_overwrite_existing,
+        )
+        if result.skipped:
+            logger.info("Skipped existing Hub repo %s", result.repo_id)
+        else:
+            logger.info("Published CoreML artifact to %s", result.repo_id)
     return output_path
 
 
@@ -161,24 +197,72 @@ def main():
         description="Convert a HuggingFace token-classification model to CoreML format",
     )
     parser.add_argument(
-        "--model", required=True,
+        "--model",
+        required=True,
         help="HuggingFace model ID",
     )
     parser.add_argument(
-        "--output", required=True,
+        "--output",
+        required=True,
         help="Output path for .mlpackage file",
     )
     parser.add_argument(
-        "--max-seq-length", type=int, default=512,
+        "--max-seq-length",
+        type=int,
+        default=512,
         help="Maximum input sequence length (default: 512)",
     )
     parser.add_argument(
-        "--precision", choices=["float16", "float32"], default="float16",
+        "--precision",
+        choices=["float16", "float32"],
+        default="float16",
         help="Compute precision (default: float16 for Neural Engine)",
     )
     parser.add_argument(
-        "--cache-dir", default=None,
+        "--cache-dir",
+        default=None,
         help="HuggingFace model cache directory",
+    )
+    parser.add_argument(
+        "--publish-to-hub",
+        action="store_true",
+        help="Publish the converted artifact after a successful conversion",
+    )
+    parser.add_argument(
+        "--publish-repo-id",
+        default=None,
+        help="Explicit target repo id for publishing",
+    )
+    parser.add_argument(
+        "--publish-org",
+        default="OpenMed",
+        help="Target organization for derived publish repo ids",
+    )
+    parser.add_argument(
+        "--publish-version",
+        type=int,
+        default=1,
+        help="Version suffix used when the source repo is not already versioned",
+    )
+    parser.add_argument(
+        "--publish-manifest",
+        default=None,
+        help="JSONL manifest path to append or update after publishing",
+    )
+    parser.add_argument(
+        "--publish-token-env",
+        default="HF_WRITE_TOKEN",
+        help="Environment variable containing the Hub write token",
+    )
+    parser.add_argument(
+        "--publish-private",
+        action="store_true",
+        help="Create the target repo as private when it does not exist",
+    )
+    parser.add_argument(
+        "--publish-overwrite-existing",
+        action="store_true",
+        help="Upload into an existing target repo instead of skipping it",
     )
     args = parser.parse_args()
 
@@ -189,6 +273,14 @@ def main():
         max_seq_length=args.max_seq_length,
         compute_precision=args.precision,
         cache_dir=args.cache_dir,
+        publish_to_hub=args.publish_to_hub,
+        publish_repo_id=args.publish_repo_id,
+        publish_org=args.publish_org,
+        publish_version=args.publish_version,
+        publish_manifest_path=args.publish_manifest,
+        publish_token_env=args.publish_token_env,
+        publish_private=args.publish_private,
+        publish_overwrite_existing=args.publish_overwrite_existing,
     )
 
 

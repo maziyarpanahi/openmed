@@ -28,7 +28,8 @@ Brief description of what this PR does.
 - [ ] I have updated the CHANGELOG.md
 
 ## Code Quality
-- [ ] My code follows the style guidelines of this project
+- [ ] I ran `make format`, `make lint`, and `make format-check`
+- [ ] For Swift/OpenMedKit changes, I ran `make format-swift` and `make lint-swift`
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] My changes generate no new warnings

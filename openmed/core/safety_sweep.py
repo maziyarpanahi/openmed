@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
-import re
 
-from .pii_entity_merger import PIIPattern, PII_PATTERNS, find_context_words
 from ..processing.outputs import EntityPrediction
-
+from .anonymizer.providers.clinical_ids import id_subtype_for_entity_type
+from .pii_entity_merger import PII_PATTERNS, PIIPattern, find_context_words
+from .quality_gates import resolve_overlapping_entities
 
 SAFETY_SWEEP_SOURCE = "safety_sweep"
 SAFETY_SWEEP_PATTERNS_VERSION = "safety-sweep-v1"
@@ -78,14 +79,19 @@ def _confidence(text: str, start: int, end: int, pattern: PIIPattern) -> float:
 
 
 def _candidate_metadata(candidate: _Candidate) -> dict[str, Any]:
+    id_subtype = id_subtype_for_entity_type(candidate.label)
+    safety_sweep_metadata: dict[str, Any] = {
+        "entity_type": candidate.label,
+        "confidence": candidate.confidence,
+        "pattern": candidate.pattern.pattern,
+    }
+    if id_subtype is not None:
+        safety_sweep_metadata["id_subtype"] = id_subtype
     return {
         "source": SAFETY_SWEEP_SOURCE,
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
-        "safety_sweep": {
-            "entity_type": candidate.label,
-            "confidence": candidate.confidence,
-            "pattern": candidate.pattern.pattern,
-        },
+        "safety_sweep": safety_sweep_metadata,
+        **({"id_subtype": id_subtype} if id_subtype is not None else {}),
     }
 
 
@@ -134,13 +140,16 @@ def safety_sweep(
     """Add deterministic structured identifier spans not covered by ML spans.
 
     Existing spans always win. Sweep candidates that overlap any supplied span,
-    or any higher-ranked sweep candidate, are discarded so callers receive a
+    or any higher-ranked sweep candidate, are discarded. Existing overlapping
+    spans are resolved by the quality-gate policy so callers receive a
     non-overlapping span set.
     """
     existing = list(spans)
     selected: list[_Candidate] = []
     active_spans: list[Any] = list(existing)
-    sweep_patterns = list(patterns) if patterns is not None else _patterns_for_language(lang)
+    sweep_patterns = (
+        list(patterns) if patterns is not None else _patterns_for_language(lang)
+    )
 
     for candidate in _collect_candidates(text, sweep_patterns):
         if _overlaps(candidate.start, candidate.end, active_spans):
@@ -158,10 +167,7 @@ def safety_sweep(
         active_spans.append(entity)
         existing.append(entity)
 
-    if not selected:
-        return existing
-
-    return sorted(
+    ordered = sorted(
         existing,
         key=lambda span: (
             _span_value(span, "start") is None,
@@ -169,6 +175,7 @@ def safety_sweep(
             _span_value(span, "end") or 0,
         ),
     )
+    return resolve_overlapping_entities(ordered)
 
 
 __all__ = [

@@ -7,14 +7,19 @@ and model registry entity_types to catch configuration drift.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 
+from openmed.core.model_registry import (
+    _CATEGORY_ENTITY_TYPES,
+    OPENMED_MODELS,
+    _match_categories,
+    get_model_suggestions,
+)
+from openmed.core.pii_entity_merger import is_more_specific, normalize_label
 from openmed.ner.labels import available_domains, get_default_labels
-from openmed.core.pii_entity_merger import normalize_label, is_more_specific
-from openmed.core.model_registry import OPENMED_MODELS, get_model_suggestions
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -42,7 +47,6 @@ def label_maps():
 
 
 class TestDefaultsJsonInvariants:
-
     def test_every_domain_has_at_least_one_label(self, label_maps):
         for domain, labels in label_maps.items():
             assert len(labels) >= 1, f"Domain {domain!r} has no labels"
@@ -74,6 +78,73 @@ class TestDefaultsJsonInvariants:
         assert suggestions
         assert suggestions[0][1].category == "Procedures"
 
+    def test_labels_follow_consistent_style(self, label_maps):
+        """Every domain label is a single letters-only token (no spaces/digits)."""
+        for domain, labels in label_maps.items():
+            for label in labels:
+                assert re.fullmatch(r"[A-Za-z]+", label), (
+                    f"Domain {domain!r} label {label!r} drifts from the "
+                    "letters-only display-label style"
+                )
+
+
+# ---------------------------------------------------------------------------
+# Cardiology domain (issue #317)
+# ---------------------------------------------------------------------------
+
+
+class TestCardiologyDomain:
+    EXPECTED_LABELS = [
+        "CardiacFinding",
+        "ECGFinding",
+        "EjectionFraction",
+        "CardiacProcedure",
+        "CardiacDevice",
+        "Anatomy",
+    ]
+
+    def test_cardiology_in_available_domains(self):
+        assert "cardiology" in available_domains()
+
+    def test_get_default_labels_returns_cardiology_set(self):
+        labels = get_default_labels("cardiology")
+        assert labels  # non-empty
+        assert labels == self.EXPECTED_LABELS
+
+    def test_cardiology_labels_have_no_duplicates(self):
+        labels = get_default_labels("cardiology")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Cardiology routing in model_registry (issue #317)
+# ---------------------------------------------------------------------------
+
+
+class TestCardiologyRouting:
+    CARDIO_TEXT = "Echocardiogram shows reduced ejection fraction of 35%"
+
+    def test_match_categories_routes_cardiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.CARDIO_TEXT)
+        ]
+        assert "Cardiology" in categories
+
+    def test_cardiology_is_registry_metadata_not_a_live_category(self):
+        # Forward metadata for future models; no Cardiology model exists today.
+        assert "Cardiology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Cardiology" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_cardiology(self):
+        # With no Cardiology model registered, suggestions fall back to general
+        # medical models rather than surfacing unrelated cardiology results.
+        suggestions = get_model_suggestions(self.CARDIO_TEXT)
+        assert suggestions  # still returns something useful
+        assert all(info.category != "Cardiology" for _key, info, _reason in suggestions)
+
 
 # ---------------------------------------------------------------------------
 # normalize_label idempotency
@@ -81,46 +152,48 @@ class TestDefaultsJsonInvariants:
 
 
 class TestNormalizeLabelIdempotency:
-
-    @pytest.mark.parametrize("label", [
-        "date_of_birth",
-        "phone_number",
-        "email",
-        "ssn",
-        "social_security_number",
-        "national_id",
-        "nir",
-        "insee",
-        "steuer_id",
-        "steuernummer",
-        "codice_fiscale",
-        "bsn",
-        "dni",
-        "nie",
-        "aadhaar",
-        "cpf",
-        "cnpj",
-        "postcode",
-        "zipcode",
-        "zip",
-        "postal_code",
-        "address",
-        "street_address",
-        "fax",
-        "first_name",
-        "last_name",
-        "date",
-        "phone",
-        "medical_record_number",
-        "mrn",
-        "medical_record",
-        "account_number",
-        "account",
-        "credit_debit_card",
-        "credit_card",
-        "debit_card",
-        "payment_card",
-    ])
+    @pytest.mark.parametrize(
+        "label",
+        [
+            "date_of_birth",
+            "phone_number",
+            "email",
+            "ssn",
+            "social_security_number",
+            "national_id",
+            "nir",
+            "insee",
+            "steuer_id",
+            "steuernummer",
+            "codice_fiscale",
+            "bsn",
+            "dni",
+            "nie",
+            "aadhaar",
+            "cpf",
+            "cnpj",
+            "postcode",
+            "zipcode",
+            "zip",
+            "postal_code",
+            "address",
+            "street_address",
+            "fax",
+            "first_name",
+            "last_name",
+            "date",
+            "phone",
+            "medical_record_number",
+            "mrn",
+            "medical_record",
+            "account_number",
+            "account",
+            "credit_debit_card",
+            "credit_card",
+            "debit_card",
+            "payment_card",
+        ],
+    )
     def test_normalize_is_idempotent(self, label):
         once = normalize_label(label)
         twice = normalize_label(once)
@@ -136,7 +209,6 @@ class TestNormalizeLabelIdempotency:
 
 
 class TestSpecificityHierarchy:
-
     HIERARCHY = {
         "date": ["date_of_birth", "date_time"],
         "name": ["first_name", "last_name", "full_name"],
@@ -144,8 +216,13 @@ class TestSpecificityHierarchy:
         "address": ["street_address", "home_address", "billing_address"],
         "id": ["ssn", "medical_record_number", "account_number", "employee_id"],
         "national_id": [
-            "nir", "insee", "steuer_id", "steuernummer",
-            "codice_fiscale", "cpf", "cnpj",
+            "nir",
+            "insee",
+            "steuer_id",
+            "steuernummer",
+            "codice_fiscale",
+            "cpf",
+            "cnpj",
         ],
     }
 
@@ -178,10 +255,10 @@ class TestSpecificityHierarchy:
 
 
 class TestModelRegistryEntityTypes:
-
     def _pii_models(self):
         return {
-            key: info for key, info in OPENMED_MODELS.items()
+            key: info
+            for key, info in OPENMED_MODELS.items()
             if key.startswith("pii_") and info.entity_types
         }
 
@@ -210,18 +287,20 @@ class TestModelRegistryEntityTypes:
     def test_at_least_one_pii_model_per_supported_language(self):
         """Every supported language should have at least one PII model in the registry."""
         from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
         for lang in SUPPORTED_LANGUAGES:
             if lang == "en":
                 # English models don't have a language infix
                 assert any(
-                    k.startswith("pii_") and not any(
+                    k.startswith("pii_")
+                    and not any(
                         f"pii_{l}_" in k for l in SUPPORTED_LANGUAGES if l != "en"
                     )
                     for k in pii_keys
                 ), "No English PII model found"
             else:
                 # Non-English keys use pii_{lang}_ prefix, e.g. pii_de_superclinical_small
-                assert any(
-                    k.startswith(f"pii_{lang}_") for k in pii_keys
-                ), f"No PII model found for language {lang!r}"
+                assert any(k.startswith(f"pii_{lang}_") for k in pii_keys), (
+                    f"No PII model found for language {lang!r}"
+                )

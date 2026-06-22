@@ -1,7 +1,7 @@
 {
   "biomedical": ["Disease", "Drug", "Gene", "Organism"],
   "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
-  "procedures": ["Procedure", "Surgery", "Diagnostic procedure", "Device", "Approach"],
+  "procedures": ["Procedure", "Surgery", "DiagnosticProcedure", "Device", "Approach"],
   "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
   "finance": ["Company", "Ticker", "Instrument", "Event"],
   "legal": ["Case", "Court", "Judge", "Statute"],
@@ -13,5 +13,6 @@
   "education": ["Course", "Topic", "Institution", "Degree"],
   "social": ["Person", "Handle", "Hashtag", "URL"],
   "public_health": ["Condition", "Intervention", "Outcome", "Population"],
+  "cardiology": ["CardiacFinding", "ECGFinding", "EjectionFraction", "CardiacProcedure", "CardiacDevice", "Anatomy"],
   "generic": ["Person", "Organization", "Location", "Date"]
 }
