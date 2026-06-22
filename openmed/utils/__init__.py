@@ -1,21 +1,21 @@
 """Utility functions for OpenMed."""
 
-from .logging import setup_logging, get_logger
-from .validation import validate_input, validate_model_name
+from .logging import get_logger, setup_logging
 from .profiling import (
+    BatchMetrics,
+    InferenceMetrics,
     Profiler,
     ProfileReport,
-    TimingResult,
-    InferenceMetrics,
-    BatchMetrics,
     Timer,
-    get_profiler,
-    enable_profiling,
+    TimingResult,
     disable_profiling,
+    enable_profiling,
     get_profile_report,
+    get_profiler,
     profile,
     timed,
 )
+from .validation import validate_input, validate_model_name
 
 __all__ = [
     "setup_logging",

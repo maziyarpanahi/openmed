@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import OpenMedKit
 
 final class PostProcessingTests: XCTestCase {
@@ -87,7 +88,7 @@ final class PostProcessingTests: XCTestCase {
     func testRepairEntitySpansExtendsTruncatedEnd() {
         let text = "Patient Maria Garcia"
         let entities = [
-            EntityPrediction(label: "NAME", text: "Mari", confidence: 0.9, start: 8, end: 12),
+            EntityPrediction(label: "NAME", text: "Mari", confidence: 0.9, start: 8, end: 12)
         ]
 
         let repaired = PostProcessing.repairEntitySpans(entities, text: text)
@@ -136,7 +137,7 @@ final class PostProcessingTests: XCTestCase {
     func testMergePIIEntitiesUpgradesGenericDateToDOBWhenSemanticMatchIsSpecific() {
         let text = "DOB\n03/14/1981"
         let entities = [
-            EntityPrediction(label: "date", text: "03/14/1981", confidence: 0.91, start: 4, end: 14),
+            EntityPrediction(label: "date", text: "03/14/1981", confidence: 0.91, start: 4, end: 14)
         ]
 
         let merged = PostProcessing.mergePIIEntities(entities, text: text)
@@ -149,7 +150,7 @@ final class PostProcessingTests: XCTestCase {
     func testMergePIIEntitiesKeepsNonSemanticEntities() {
         let text = "Patient John Doe arrived"
         let entities = [
-            EntityPrediction(label: "first_name", text: "John Doe", confidence: 0.95, start: 8, end: 16),
+            EntityPrediction(label: "first_name", text: "John Doe", confidence: 0.95, start: 8, end: 16)
         ]
 
         let merged = PostProcessing.mergePIIEntities(entities, text: text)
@@ -159,8 +160,8 @@ final class PostProcessingTests: XCTestCase {
 
     func testMergePIIEntitiesAddsSemanticOnlyShowcaseMatches() {
         let text = """
-        Patient: John Doe, DOB: 01/15/1970, SSN: 000-00-0000, MRN: MRN-TEST-88421, Address: 123 Example Street, Apt 4B, Springfield, CA 90000, Phone: (555) 010-2244, Email: john.doe@example.test, Insurance ID: TEST-POLICY-778291, Driver License: DLT-TEST-442190, Passport: P-TEST-998877, Emergency Contact: Jane Doe, (555) 010-7788, Employer: Example Manufacturing LLC, Employee ID: EMP-20481, Bank Account: ACCT-TEST-55667788, Routing: 000000000.
-        """
+            Patient: John Doe, DOB: 01/15/1970, SSN: 000-00-0000, MRN: MRN-TEST-88421, Address: 123 Example Street, Apt 4B, Springfield, CA 90000, Phone: (555) 010-2244, Email: john.doe@example.test, Insurance ID: TEST-POLICY-778291, Driver License: DLT-TEST-442190, Passport: P-TEST-998877, Emergency Contact: Jane Doe, (555) 010-7788, Employer: Example Manufacturing LLC, Employee ID: EMP-20481, Bank Account: ACCT-TEST-55667788, Routing: 000000000.
+            """
 
         let merged = PostProcessing.mergePIIEntities([], text: text)
 
@@ -183,32 +184,32 @@ final class PostProcessingTests: XCTestCase {
 
     func testMergePIIEntitiesRecoversStructuredOCRHeaderFields() {
         let text = """
-        OM
-        OpenMed Bayview Outpatient Center
-        390 Harbor Clinical Plaza • San Diego, CA 92111 • (415) 555-0100|
-        Emeraencv Department Follow-Up
-        Visit Date: 04/16/2026
-        PATIENT NAME
-        Eleanor Ruiz
-        eleanor.ruiz@sampleclinic.test
-        EMAIL
-        DOB
-        03/14/1981
-        HMO-99318442
-        INSURANCE ID
-        MRN
-        MRN-448271
-        EMPLOYER
-        Blue Harbor Foods
-        ADDRESS
-        1942 Harbor View Drive, Marseille, CA 92111
-        EMERGENCY CONTACT
-        Martin Ruiz, (415) 555-0199
-        PHONE
-        (415) 555-0142
-        PRIMARY CLINICAN
-        Dr. Maya Shah, MD
-        """
+            OM
+            OpenMed Bayview Outpatient Center
+            390 Harbor Clinical Plaza • San Diego, CA 92111 • (415) 555-0100|
+            Emeraencv Department Follow-Up
+            Visit Date: 04/16/2026
+            PATIENT NAME
+            Eleanor Ruiz
+            eleanor.ruiz@sampleclinic.test
+            EMAIL
+            DOB
+            03/14/1981
+            HMO-99318442
+            INSURANCE ID
+            MRN
+            MRN-448271
+            EMPLOYER
+            Blue Harbor Foods
+            ADDRESS
+            1942 Harbor View Drive, Marseille, CA 92111
+            EMERGENCY CONTACT
+            Martin Ruiz, (415) 555-0199
+            PHONE
+            (415) 555-0142
+            PRIMARY CLINICAN
+            Dr. Maya Shah, MD
+            """
 
         let merged = PostProcessing.mergePIIEntities([], text: text)
 
@@ -227,30 +228,30 @@ final class PostProcessingTests: XCTestCase {
 
     func testMergePIIEntitiesRecoversCurrentDischargeSummaryHeaderFields() {
         let text = """
-        PATIENT NAME
-        Whitfield, Jordan A.
-        DOB
-        07/22/1984
-        MRN
-        SRMC-7741920
-        ENCOUNTER #
-        ENC-20260601-3382
-        ACCOUNT #
-        ACC-55810394
-        INSURANCE
-        Summit Health PPO, Member ID
-        SHP-66201845, Group 4471
-        EMERGENCY CONTACT
-        Dana Whitfield (spouse), (720) 555-0193
-        PCP
-        Priya Nandakumar, MD
-        PCP NPI
-        1841992307
-        Document ID
-        SRMC-DS-20260601-3382
-        ELECTRONICALLY SIGNED
-        Maya Shah, MD
-        """
+            PATIENT NAME
+            Whitfield, Jordan A.
+            DOB
+            07/22/1984
+            MRN
+            SRMC-7741920
+            ENCOUNTER #
+            ENC-20260601-3382
+            ACCOUNT #
+            ACC-55810394
+            INSURANCE
+            Summit Health PPO, Member ID
+            SHP-66201845, Group 4471
+            EMERGENCY CONTACT
+            Dana Whitfield (spouse), (720) 555-0193
+            PCP
+            Priya Nandakumar, MD
+            PCP NPI
+            1841992307
+            Document ID
+            SRMC-DS-20260601-3382
+            ELECTRONICALLY SIGNED
+            Maya Shah, MD
+            """
 
         let merged = PostProcessing.mergePIIEntities([], text: text)
 
@@ -281,13 +282,13 @@ final class PostProcessingTests: XCTestCase {
 
     func testMergePIIEntitiesRecoversSurnameFirstPatientHeader() {
         let text = """
-        PATIENT NAME
-        Whitfield, Jordan A.
-        DOB
-        07/22/1984
-        MRN
-        SRMC-7741920
-        """
+            PATIENT NAME
+            Whitfield, Jordan A.
+            DOB
+            07/22/1984
+            MRN
+            SRMC-7741920
+            """
 
         let merged = PostProcessing.mergePIIEntities([], text: text)
 
@@ -299,9 +300,9 @@ final class PostProcessingTests: XCTestCase {
 
     func testMergePIIEntitiesRecoversSurnameFirstInlinePatient() {
         let text = """
-        Patient: Whitfield, Jordan A.
-        DOB: 07/22/1984
-        """
+            Patient: Whitfield, Jordan A.
+            DOB: 07/22/1984
+            """
 
         let merged = PostProcessing.mergePIIEntities([], text: text)
 
@@ -313,11 +314,11 @@ final class PostProcessingTests: XCTestCase {
 
     func testMergePIIEntitiesExpandsSurnameFirstPatientHeaderOverlapWithoutLabelExpansion() {
         let text = """
-        PATIENT NAME
-        Whitfield, Jordan A.
-        DOB
-        07/22/1984
-        """
+            PATIENT NAME
+            Whitfield, Jordan A.
+            DOB
+            07/22/1984
+            """
         let modelText = "Jordan"
         let range = try! XCTUnwrap(text.range(of: modelText))
         let start = text.distance(from: text.startIndex, to: range.lowerBound)
@@ -329,7 +330,7 @@ final class PostProcessingTests: XCTestCase {
                 confidence: 0.72,
                 start: start,
                 end: end
-            ),
+            )
         ]
 
         let merged = PostProcessing.mergePIIEntities(
@@ -361,7 +362,7 @@ final class PostProcessingTests: XCTestCase {
     func testMergePIIEntitiesCanPreserveModelLabelTaxonomy() {
         let text = "DOB: 01/15/1970"
         let entities = [
-            EntityPrediction(label: "private_date", text: "/15/1970", confidence: 0.92, start: 7, end: 15),
+            EntityPrediction(label: "private_date", text: "/15/1970", confidence: 0.92, start: 7, end: 15)
         ]
 
         let merged = PostProcessing.mergePIIEntities(

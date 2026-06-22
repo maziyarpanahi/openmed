@@ -24,7 +24,7 @@ def test_get_default_labels_known_domain() -> None:
 
 def test_get_default_labels_fallback_to_generic(tmp_path) -> None:
     override = tmp_path / "defaults.json"
-    override.write_text("{\"generic\": [\"Person\"]}", encoding="utf-8")
+    override.write_text('{"generic": ["Person"]}', encoding="utf-8")
     label_map = load_default_label_map(override)
     labels = get_default_labels("unknown", label_map=label_map)
     assert labels == ["Person"]

@@ -168,7 +168,9 @@ def test_baseline_key_uses_family_tier_format_dimensions() -> None:
     assert baseline_key("General", None, "coreml") == "general::none::coreml"
 
 
-def test_publish_artifact_updates_manifest_and_baseline(tmp_path: Path, monkeypatch) -> None:
+def test_publish_artifact_updates_manifest_and_baseline(
+    tmp_path: Path, monkeypatch
+) -> None:
     artifact = _write_artifact(tmp_path)
     manifest = tmp_path / "models.jsonl"
     baseline = tmp_path / "baseline.json"
@@ -186,7 +188,9 @@ def test_publish_artifact_updates_manifest_and_baseline(tmp_path: Path, monkeypa
         git_sha="abc123",
     )
 
-    rows = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
+    ]
     store = load_baseline_store(baseline)
     entry = require_baseline("General", None, "mlx-fp", store=store)
 
