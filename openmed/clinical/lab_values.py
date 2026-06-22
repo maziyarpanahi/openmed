@@ -1,4 +1,10 @@
-"""Utilities for parsing and interpreting clinical lab value ranges."""
+"""Utilities for parsing and interpreting clinical lab value ranges.
+
+Derived abnormal flags are heuristic convenience metadata for downstream
+structuring. They are not a substitute for the source laboratory's own flagging
+or for clinical review. Unit conversion and critical thresholds beyond explicit
+flags are intentionally out of scope.
+"""
 
 from __future__ import annotations
 
@@ -21,9 +27,17 @@ _BOUND_RE = re.compile(
 )
 
 _EXPLICIT_FLAG_ALIASES: dict[str, AbnormalFlag] = {
+    "c": "critical",
+    "crit": "critical",
     "critical": "critical",
+    "critical high": "critical",
+    "critical low": "critical",
     "l": "low",
+    "low": "low",
     "h": "high",
+    "high": "high",
+    "n": "normal",
+    "normal": "normal",
 }
 
 
@@ -83,7 +97,13 @@ def derive_abnormal_flag(
     reference_range: Mapping[str, Any] | None,
     explicit_flag: str | None = None,
 ) -> AbnormalFlag:
-    """Derive an abnormality flag from a value and parsed reference range."""
+    """Derive a heuristic abnormality flag from a value and reference range.
+
+    Explicit ``H``/``L``/``critical`` style flags take precedence. Otherwise
+    the numeric value is compared against the parsed bounds. Non-numeric
+    values, unparseable ranges, and unknown explicit flags return ``"unknown"``
+    rather than fabricating a bound or clinical interpretation.
+    """
     normalized_flag = _normalize_explicit_flag(explicit_flag)
     if normalized_flag is not None:
         return normalized_flag
@@ -120,7 +140,7 @@ def _coerce_float(value: Any) -> float | None:
         return None
     if isinstance(value, int | float):
         return float(value)
-    match = _NUMBER_RE.search(str(value).strip())
+    match = _NUMBER_RE.fullmatch(str(value).strip())
     if match is None:
         return None
     return float(match.group(0))
