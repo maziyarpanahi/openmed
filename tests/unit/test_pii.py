@@ -579,6 +579,89 @@ class TestDeidentify:
         assert result.deidentified_text == "DOB 02/14/2020"
 
     @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_uses_lowercase_default_model_label(
+        self, mock_extract
+    ):
+        """Default English model lowercase ``date`` labels must shift."""
+        mock_extract.return_value = PredictionResult(
+            text="DOB 01/15/2020",
+            entities=[
+                EntityPrediction(
+                    text="01/15/2020", label="date", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="OpenMed-PII-SuperClinical-Small-44M-v1",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            "DOB 01/15/2020",
+            method="shift_dates",
+            date_shift_days=30,
+        )
+
+        assert result.deidentified_text == "DOB 02/14/2020"
+        assert "[DATE]" not in result.deidentified_text
+        assert "[date]" not in result.deidentified_text
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_recognizes_date_of_birth_label(self, mock_extract):
+        """Raw ``date_of_birth`` labels normalize to a date label before shifting."""
+        mock_extract.return_value = PredictionResult(
+            text="DOB 01/15/2020",
+            entities=[
+                EntityPrediction(
+                    text="01/15/2020",
+                    label="date_of_birth",
+                    start=4,
+                    end=14,
+                    confidence=0.95,
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            "DOB 01/15/2020",
+            method="shift_dates",
+            date_shift_days=30,
+        )
+
+        assert result.deidentified_text == "DOB 02/14/2020"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_shift_dates_keep_mapping_does_not_suffix_shifted_dates(self, mock_extract):
+        """Shifted dates should not be counted as mask placeholders."""
+        text = "DOB 01/15/2020 and 01/16/2020"
+        mock_extract.return_value = PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text="01/15/2020", label="date", start=4, end=14, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="01/16/2020", label="date", start=19, end=29, confidence=0.95
+                ),
+            ],
+            model_name="OpenMed-PII-SuperClinical-Small-44M-v1",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            text,
+            method="shift_dates",
+            date_shift_days=30,
+            keep_mapping=True,
+        )
+
+        assert result.deidentified_text == "DOB 02/14/2020 and 02/15/2020"
+        assert result.mapping == {
+            "02/14/2020": "01/15/2020",
+            "02/15/2020": "01/16/2020",
+        }
+
+    @patch("openmed.core.pii.extract_pii")
     def test_deidentify_shift_dates_alias_promotes_method(self, mock_extract):
         """Test the legacy shift_dates boolean is treated as an alias."""
         mock_extract.return_value = PredictionResult(
@@ -692,6 +775,25 @@ class TestRedactEntity:
         )
         result = _redact_entity(entity, "shift_dates", date_shift_days=30)
         assert result == "[NAME]"
+
+    def test_redact_shift_dates_uses_canonical_label(self):
+        """shift_dates must shift dates whose raw label is not literally 'DATE'.
+
+        The default English model emits a lowercase ``date`` label; comparing
+        the raw ``entity_type`` to ``"DATE"`` made such dates silently fall
+        through to masking. Regression test for the canonical-label fix.
+        """
+        entity = PIIEntity(
+            text="01/15/2020",
+            label="date",
+            start=0,
+            end=10,
+            confidence=0.90,
+            entity_type="date",
+            canonical_label="DATE",
+        )
+        result = _redact_entity(entity, "shift_dates", date_shift_days=30)
+        assert result == "02/14/2020"
 
 
 # ---------------------------------------------------------------------------
