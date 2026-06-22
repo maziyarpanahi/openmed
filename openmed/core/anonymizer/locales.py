@@ -64,14 +64,14 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te"})
 # asserts that and the round-trip.
 NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "en": ("en_US", "ssn"),
-    "fr": ("fr_FR", "ssn"),               # NIR / INSEE
+    "fr": ("fr_FR", "ssn"),  # NIR / INSEE
     "de": ("de_DE", "german_steuer_id"),  # Steuer-ID
-    "it": ("it_IT", "ssn"),               # Codice Fiscale
-    "es": ("es_ES", "nie"),               # NIE
-    "nl": ("nl_NL", "ssn"),               # BSN
-    "hi": ("hi_IN", "aadhaar"),           # Aadhaar (Verhoeff)
-    "te": ("en_IN", "aadhaar"),           # Aadhaar via approximate en_IN
-    "pt": ("pt_BR", "cpf"),               # CPF (registered validators are Brazilian)
+    "it": ("it_IT", "ssn"),  # Codice Fiscale
+    "es": ("es_ES", "nie"),  # NIE
+    "nl": ("nl_NL", "ssn"),  # BSN
+    "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
+    "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
+    "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
 }
 
 _warned: set[str] = set()
