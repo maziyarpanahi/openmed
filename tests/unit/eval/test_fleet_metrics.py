@@ -15,7 +15,6 @@ from openmed.eval.fleet_metrics import (
     write_fleet_freshness_artifact,
 )
 
-
 AS_OF = date(2026, 6, 14)
 
 

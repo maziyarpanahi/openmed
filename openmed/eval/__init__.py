@@ -4,7 +4,34 @@ Intended contents include harness.py, metrics.py, suites/, golden/, report.py,
 calibrate.py, and release_gates.py.
 """
 
-from openmed.eval.harness import BenchmarkFixture, FixtureResult, run_benchmark, run_suite
+from openmed.eval.attacks.reid import (
+    ReidAttackResult,
+    generate_reid_leaderboard,
+    render_reid_leaderboard,
+    run_reid_attack,
+    run_reid_benchmark,
+)
+from openmed.eval.calibrate import (
+    CalibrationArtifactPaths,
+    CalibrationGroupReport,
+    CalibrationReport,
+    CalibrationSample,
+    CalibrationThresholdSet,
+    artifact_dir_for,
+    build_thresholds_payload,
+    coerce_calibration_thresholds,
+    default_suite_calibration_samples,
+    fit_calibration_thresholds,
+    load_calibration_samples,
+    load_calibration_thresholds,
+    write_calibration_artifacts,
+)
+from openmed.eval.harness import (
+    BenchmarkFixture,
+    FixtureResult,
+    run_benchmark,
+    run_suite,
+)
 from openmed.eval.metrics import (
     DEVICE_TIERS,
     EvalSpan,
@@ -21,15 +48,47 @@ from openmed.eval.metrics import (
     compute_resource_metrics,
     compute_surrogate_consistency,
 )
+from openmed.eval.quant_delta import (
+    INT4_RECALL_DELTA_LIMIT,
+    INT8_RECALL_DELTA_LIMIT,
+    QuantRecallDeltaResult,
+    evaluate_quant_recall_delta,
+)
+from openmed.eval.release_gates import (
+    QUARANTINED,
+    RELEASABLE,
+    GateCheck,
+    GateReport,
+    ModelStewardConfig,
+    ReleaseGate,
+)
 from openmed.eval.report import BenchmarkReport
-
+from openmed.eval.tiers import TIERS
 
 __all__ = [
     "BenchmarkFixture",
     "BenchmarkReport",
+    "CalibrationArtifactPaths",
+    "CalibrationGroupReport",
+    "CalibrationReport",
+    "CalibrationSample",
+    "CalibrationThresholdSet",
     "DEVICE_TIERS",
     "EvalSpan",
     "FixtureResult",
+    "GateCheck",
+    "GateReport",
+    "INT4_RECALL_DELTA_LIMIT",
+    "INT8_RECALL_DELTA_LIMIT",
+    "ModelStewardConfig",
+    "QUARANTINED",
+    "QuantRecallDeltaResult",
+    "ReidAttackResult",
+    "RELEASABLE",
+    "ReleaseGate",
+    "artifact_dir_for",
+    "build_thresholds_payload",
+    "coerce_calibration_thresholds",
     "compute_character_recall",
     "compute_clinical_utility_loss",
     "compute_date_shift_consistency",
@@ -42,6 +101,17 @@ __all__ = [
     "compute_relaxed_span_f1",
     "compute_resource_metrics",
     "compute_surrogate_consistency",
+    "default_suite_calibration_samples",
+    "evaluate_quant_recall_delta",
+    "fit_calibration_thresholds",
+    "generate_reid_leaderboard",
+    "load_calibration_samples",
+    "load_calibration_thresholds",
+    "render_reid_leaderboard",
     "run_benchmark",
+    "run_reid_attack",
+    "run_reid_benchmark",
     "run_suite",
+    "TIERS",
+    "write_calibration_artifacts",
 ]

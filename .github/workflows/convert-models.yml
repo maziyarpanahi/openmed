@@ -31,10 +31,10 @@ jobs:
     if: contains(github.event.inputs.formats, 'mlx')
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.12"
 
@@ -58,7 +58,7 @@ jobs:
       run: ls -la mlx-output/
 
     - name: Upload MLX model
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: mlx-model
         path: mlx-output/
@@ -69,10 +69,10 @@ jobs:
     if: contains(github.event.inputs.formats, 'coreml')
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.12"
 
@@ -91,7 +91,7 @@ jobs:
       run: ls -la ./OpenMedModel.mlpackage/
 
     - name: Upload CoreML model
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: coreml-model
         path: |
@@ -118,10 +118,10 @@ jobs:
       url: https://huggingface.co/OpenMed
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.12"
 
@@ -141,7 +141,7 @@ jobs:
 
     - name: Download MLX model
       if: contains(github.event.inputs.formats, 'mlx')
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: mlx-model
         path: publish-artifacts/mlx-output
@@ -162,11 +162,18 @@ jobs:
           --model "${{ github.event.inputs.model_id }}" \
           --artifact-dir publish-artifacts/mlx-output \
           --format "$FORMAT" \
-          --manifest models.jsonl
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
 
     - name: Download CoreML model
       if: contains(github.event.inputs.formats, 'coreml')
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: coreml-model
         path: publish-artifacts/coreml-output
@@ -180,10 +187,22 @@ jobs:
           --model "${{ github.event.inputs.model_id }}" \
           --artifact-dir publish-artifacts/coreml-output \
           --format coreml \
-          --manifest models.jsonl
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
 
-    - name: Upload publish manifest snapshot
-      uses: actions/upload-artifact@v4
+    - name: Upload publish status snapshot
+      uses: actions/upload-artifact@v7
       with:
         name: published-model-manifest
-        path: models.jsonl
+        path: |
+          models.jsonl
+          gates/baseline.json
+          docs/benchmarks/
+          docs/leaderboard/
+          docs/status/

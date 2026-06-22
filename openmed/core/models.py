@@ -4,16 +4,15 @@ import gc
 import logging
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Optional, Union, List, Dict, Any, Tuple, TYPE_CHECKING
-
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
 try:
     from transformers import (
-        AutoTokenizer,
-        AutoModelForTokenClassification,
         AutoConfig,
+        AutoModelForTokenClassification,
+        AutoTokenizer,
         pipeline,
     )
 
@@ -37,10 +36,12 @@ if TYPE_CHECKING:
 from .config import get_config
 from .model_registry import (
     OPENMED_MODELS,
-    get_model_info,
-    get_models_by_category,
-    get_model_suggestions,
     get_all_models,
+    get_model_info,
+    get_model_suggestions,
+    get_models_by_category,
+)
+from .model_registry import (
     ModelInfo as RegistryModelInfo,
 )
 
@@ -333,7 +334,9 @@ class ModelLoader:
             self._pipelines.pop(key, None)
 
         removed_models = int(self._models.pop(full_model_name, None) is not None)
-        removed_tokenizers = int(self._tokenizers.pop(full_model_name, None) is not None)
+        removed_tokenizers = int(
+            self._tokenizers.pop(full_model_name, None) is not None
+        )
         released = {
             "model_name": full_model_name,
             "models": removed_models,
@@ -561,7 +564,9 @@ class ModelLoader:
             try:
                 mps.empty_cache()
             except Exception:
-                logger.debug("Failed to clear MPS cache after unloading model", exc_info=True)
+                logger.debug(
+                    "Failed to clear MPS cache after unloading model", exc_info=True
+                )
 
 
 # Convenience function for quick model loading

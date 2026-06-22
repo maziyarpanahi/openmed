@@ -14,12 +14,14 @@ class TestCoreMLConvertModule:
 
     def test_module_importable(self):
         from openmed.coreml import convert
+
         assert hasattr(convert, "convert")
         assert hasattr(convert, "main")
 
     def test_convert_signature(self):
         """convert() should accept model_id, output_path, and options."""
         import inspect
+
         from openmed.coreml.convert import convert
 
         sig = inspect.signature(convert)
@@ -31,4 +33,5 @@ class TestCoreMLConvertModule:
 
     def test_main_exists(self):
         from openmed.coreml.convert import main
+
         assert callable(main)

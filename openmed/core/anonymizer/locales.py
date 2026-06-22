@@ -17,7 +17,6 @@ from __future__ import annotations
 import warnings
 from typing import Final, Mapping
 
-
 # Default Faker locale per OpenMed language code.
 LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "en": "en_US",

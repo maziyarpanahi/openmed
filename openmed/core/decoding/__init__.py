@@ -7,8 +7,8 @@ standard library — no torch, no mlx.
 
 from .spans import refine_privacy_filter_span, trim_span_whitespace
 from .viterbi import (
-    TokenLabelInfo,
     VITERBI_BIAS_KEYS,
+    TokenLabelInfo,
     build_label_info,
     labels_to_token_spans,
     viterbi_decode,

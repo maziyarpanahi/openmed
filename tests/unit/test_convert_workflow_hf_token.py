@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 CONVERT_WORKFLOW = ROOT / ".github" / "workflows" / "convert-models.yml"
 HF_TOKEN_POLICY = ROOT / "docs" / "security" / "hf-token-policy.md"
@@ -34,13 +33,13 @@ def test_convert_workflow_fails_publish_job_when_hf_token_is_missing():
 def test_convert_workflow_publishes_downloaded_conversion_artifacts():
     workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
 
-    assert "actions/download-artifact@v4" in workflow
+    assert "actions/download-artifact@v8" in workflow
     assert "name: mlx-model" in workflow
     assert "name: coreml-model" in workflow
     assert "python -m openmed.core.hf_publish" in workflow
     assert "--artifact-dir publish-artifacts/mlx-output" in workflow
     assert "--artifact-dir publish-artifacts/coreml-output" in workflow
-    assert "--format \"$FORMAT\"" in workflow
+    assert '--format "$FORMAT"' in workflow
     assert "--format coreml" in workflow
     assert "published-model-manifest" in workflow
 
