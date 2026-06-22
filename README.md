@@ -276,7 +276,7 @@ deidentify(text, method="shift_dates", date_shift_days=180)
   <sub><b>Batch processing</b> — up to <b>3.3×</b> higher throughput on CPU and <b>2.2×</b> on MLX vs. one document at a time.</sub>
 </div>
 
-[Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization](docs/anonymization.md)
+[Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization quickstart](docs/anonymization.md#quickstart-choosing-a-method)
 
 <details>
 <summary><b>Privacy Filter family</b> — three model families on the OpenAI Privacy Filter architecture</summary>
