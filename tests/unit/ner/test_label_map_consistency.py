@@ -7,12 +7,19 @@ and model registry entity_types to catch configuration drift.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
 
-from openmed.core.model_registry import OPENMED_MODELS
+from openmed.core.model_registry import (
+    _CATEGORY_ENTITY_TYPES,
+    OPENMED_MODELS,
+    _match_categories,
+    get_model_suggestions,
+)
 from openmed.core.pii_entity_merger import is_more_specific, normalize_label
+from openmed.ner.labels import available_domains, get_default_labels
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -58,6 +65,73 @@ class TestDefaultsJsonInvariants:
 
     def test_generic_domain_has_labels(self, label_maps):
         assert len(label_maps["generic"]) >= 1
+
+    def test_labels_follow_consistent_style(self, label_maps):
+        """Every domain label is a single letters-only token (no spaces/digits)."""
+        for domain, labels in label_maps.items():
+            for label in labels:
+                assert re.fullmatch(r"[A-Za-z]+", label), (
+                    f"Domain {domain!r} label {label!r} drifts from the "
+                    "letters-only display-label style"
+                )
+
+
+# ---------------------------------------------------------------------------
+# Cardiology domain (issue #317)
+# ---------------------------------------------------------------------------
+
+
+class TestCardiologyDomain:
+    EXPECTED_LABELS = [
+        "CardiacFinding",
+        "ECGFinding",
+        "EjectionFraction",
+        "CardiacProcedure",
+        "CardiacDevice",
+        "Anatomy",
+    ]
+
+    def test_cardiology_in_available_domains(self):
+        assert "cardiology" in available_domains()
+
+    def test_get_default_labels_returns_cardiology_set(self):
+        labels = get_default_labels("cardiology")
+        assert labels  # non-empty
+        assert labels == self.EXPECTED_LABELS
+
+    def test_cardiology_labels_have_no_duplicates(self):
+        labels = get_default_labels("cardiology")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Cardiology routing in model_registry (issue #317)
+# ---------------------------------------------------------------------------
+
+
+class TestCardiologyRouting:
+    CARDIO_TEXT = "Echocardiogram shows reduced ejection fraction of 35%"
+
+    def test_match_categories_routes_cardiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.CARDIO_TEXT)
+        ]
+        assert "Cardiology" in categories
+
+    def test_cardiology_is_registry_metadata_not_a_live_category(self):
+        # Forward metadata for future models; no Cardiology model exists today.
+        assert "Cardiology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Cardiology" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_cardiology(self):
+        # With no Cardiology model registered, suggestions fall back to general
+        # medical models rather than surfacing unrelated cardiology results.
+        suggestions = get_model_suggestions(self.CARDIO_TEXT)
+        assert suggestions  # still returns something useful
+        assert all(info.category != "Cardiology" for _key, info, _reason in suggestions)
 
 
 # ---------------------------------------------------------------------------
