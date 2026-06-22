@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from openmed.core.hf_publish import DEFAULT_MODEL_CARD_COMMIT_MESSAGE, publish_model_card
+from openmed.core.hf_publish import (
+    DEFAULT_MODEL_CARD_COMMIT_MESSAGE,
+    publish_model_card,
+)
 from openmed.core.model_card import render_model_card, write_model_card
-
 
 ROOT = Path(__file__).resolve().parents[3]
 GOLDEN = ROOT / "tests" / "fixtures" / "model_card_expected.md"
@@ -66,7 +68,9 @@ def test_write_model_card_writes_readme_from_row(tmp_path):
 
 
 def test_contributor_sparse_fixture_renders_current_model_card():
-    row = json.loads((CONTRIBUTOR_FIXTURES / "sparse_ner.json").read_text(encoding="utf-8"))
+    row = json.loads(
+        (CONTRIBUTOR_FIXTURES / "sparse_ner.json").read_text(encoding="utf-8")
+    )
     card = render_model_card(row)
 
     assert "# OpenMed-NER-AnatomyDetect-TinyMed-135M" in card

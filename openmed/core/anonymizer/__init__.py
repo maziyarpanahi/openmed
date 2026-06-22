@@ -40,6 +40,7 @@ def register_clinical_provider(provider: Any) -> None:
     per-instance scoping.
     """
     from .providers import clinical_ids
+
     if not hasattr(clinical_ids, "_extra_providers"):
         clinical_ids._extra_providers = []  # type: ignore[attr-defined]
     clinical_ids._extra_providers.append(provider)  # type: ignore[attr-defined]

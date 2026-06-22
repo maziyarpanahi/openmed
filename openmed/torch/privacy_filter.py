@@ -29,11 +29,13 @@ logger = logging.getLogger(__name__)
 # (OpenMed and openmed resolve to the same org).  Normalising both sides
 # prevents a user-supplied "openmed/privacy-filter-multilingual" from failing
 # to match the hard-coded "OpenMed/..." entry.
-TRUSTED_REMOTE_CODE_MODELS = frozenset({
-    "openai/privacy-filter",
-    "openmed/privacy-filter-multilingual",
-    "openmed/privacy-filter-nemotron",
-})
+TRUSTED_REMOTE_CODE_MODELS = frozenset(
+    {
+        "openai/privacy-filter",
+        "openmed/privacy-filter-multilingual",
+        "openmed/privacy-filter-nemotron",
+    }
+)
 
 # Operators with custom fine-tunes can extend the allowlist with a
 # comma-separated list of HuggingFace repo IDs. Empty entries are ignored.
@@ -42,9 +44,7 @@ _ALLOWLIST_ENV_VAR = "OPENMED_TRUSTED_REMOTE_CODE_MODELS"
 
 def _env_allowlist() -> frozenset[str]:
     raw = os.getenv(_ALLOWLIST_ENV_VAR, "")
-    return frozenset(
-        part.strip().lower() for part in raw.split(",") if part.strip()
-    )
+    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
 
 
 def is_trusted_for_remote_code(model_name: str) -> bool:
@@ -70,6 +70,7 @@ def is_trusted_for_remote_code(model_name: str) -> bool:
     # Local path check is deferred (it touches the filesystem) and imported
     # lazily to avoid a circular import with openmed.core.pii.
     from openmed.core.pii import _is_privacy_filter_artifact_path
+
     return _is_privacy_filter_artifact_path(model_name)
 
 
@@ -158,7 +159,8 @@ class PrivacyFilterTorchPipeline:
             trust_remote_code=trust_remote_code,
         )
         self.model = AutoModelForTokenClassification.from_pretrained(
-            model_name, **load_kwargs,
+            model_name,
+            **load_kwargs,
         )
         self.model.to(resolved_device)
         self.model.eval()
@@ -205,8 +207,7 @@ class PrivacyFilterTorchPipeline:
                 ]
             )
             return [
-                next(normalized_iter) if item and item.strip() else []
-                for item in texts
+                next(normalized_iter) if item and item.strip() else [] for item in texts
             ]
 
         if not text or not text.strip():
@@ -224,7 +225,11 @@ class PrivacyFilterTorchPipeline:
         if expected_count == 1:
             if raw_batch == []:
                 return [[]]
-            if isinstance(raw_batch, list) and raw_batch and isinstance(raw_batch[0], dict):
+            if (
+                isinstance(raw_batch, list)
+                and raw_batch
+                and isinstance(raw_batch[0], dict)
+            ):
                 return [raw_batch]
             if isinstance(raw_batch, list) and len(raw_batch) == 1:
                 return [raw_batch[0] or []]

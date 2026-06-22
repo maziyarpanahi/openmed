@@ -12,6 +12,7 @@
   "education": ["Course", "Topic", "Institution", "Degree"],
   "social": ["Person", "Handle", "Hashtag", "URL"],
   "public_health": ["Condition", "Intervention", "Outcome", "Population"],
-  "generic": ["Person", "Organization", "Location", "Date"],
-  "microbiology": ["Microorganism", "Antibiotic", "Susceptibility", "Specimen source", "Culture result"]
+  "cardiology": ["CardiacFinding", "ECGFinding", "EjectionFraction", "CardiacProcedure", "CardiacDevice", "Anatomy"],
+  "microbiology": ["Microorganism", "Antibiotic", "Susceptibility", "SpecimenSource", "CultureResult"],
+  "generic": ["Person", "Organization", "Location", "Date"]
 }

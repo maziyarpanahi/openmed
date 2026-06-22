@@ -1,5 +1,5 @@
-from importlib import resources
 import json
+from importlib import resources
 
 from openmed.core.arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION, arbitrate
 from openmed.core.cascade import R2_BASE, CascadeRouter
@@ -111,8 +111,7 @@ def test_fit_and_update_thresholds_return_valid_versioned_matrix():
     validate_threshold_matrix(updated)
     assert updated["schema_version"] == matrix["schema_version"] + 1
     assert (
-        lookup_threshold("EMAIL", "en", "balanced", matrix=updated)["keep_floor"]
-        == 0.4
+        lookup_threshold("EMAIL", "en", "balanced", matrix=updated)["keep_floor"] == 0.4
     )
 
 

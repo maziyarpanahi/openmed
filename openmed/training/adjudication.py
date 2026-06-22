@@ -82,7 +82,9 @@ def make_adjudication_item(
     metadata: Mapping[str, Any] | None = None,
 ) -> AdjudicationItem:
     candidates_tuple = tuple(candidates)
-    priority = 1.0 + max((candidate.score for candidate in candidates_tuple), default=0.0)
+    priority = 1.0 + max(
+        (candidate.score for candidate in candidates_tuple), default=0.0
+    )
     return AdjudicationItem(
         text=text,
         candidates=candidates_tuple,

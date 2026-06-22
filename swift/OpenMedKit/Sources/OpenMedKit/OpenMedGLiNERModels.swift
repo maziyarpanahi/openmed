@@ -493,7 +493,8 @@ final class OpenMedGLiClassUniEncoderModel: Module {
             var rowEmbeddings = [MLXArray]()
 
             for (classIndex, classPosition) in classPositions.enumerated() {
-                let startPosition = configuration.embedClassToken
+                let startPosition =
+                    configuration.embedClassToken
                     ? classPosition
                     : min(classPosition + 1, seqLength - 1)
                 let endPosition =

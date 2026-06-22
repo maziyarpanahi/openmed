@@ -271,7 +271,11 @@ def _span_problems(entity: Any, text: str) -> list[str] | None:
                 logger.info(
                     "SpanValidation: Entity %r @ [%d:%d]: "
                     "whitespace-only text difference (span=%r, stored=%r)",
-                    _entity_label(entity), start, end, actual, entity_text,
+                    _entity_label(entity),
+                    start,
+                    end,
+                    actual,
+                    entity_text,
                 )
             else:
                 problems.append(
@@ -309,10 +313,7 @@ def validate_entity_spans(
 
         # --- report ---
         if problems:
-            msg = (
-                f"Entity {entity.label!r} @ [{start}:{end}]: "
-                + "; ".join(problems)
-            )
+            msg = f"Entity {entity.label!r} @ [{start}:{end}]: " + "; ".join(problems)
             logger.warning("SpanValidation: %s", msg)
             warnings.warn(msg, SpanValidationWarning, stacklevel=2)
 
@@ -432,8 +433,7 @@ def resolve_overlapping_entities(
         selected_bounds.append((start, end))
 
     resolved: list[tuple[int, EntityT, int | None, int | None]] = [
-        (index, entity, start, end)
-        for index, entity, start, end in selected
+        (index, entity, start, end) for index, entity, start, end in selected
     ]
     resolved.extend((index, entity, None, None) for index, entity in unresolved)
 
@@ -456,10 +456,7 @@ def detect_overlapping_entities(
     Entities without ``start``/``end`` offsets are skipped.
     """
     # Filter to entities that have offsets.
-    with_offsets = [
-        e for e in entities
-        if e.start is not None and e.end is not None
-    ]
+    with_offsets = [e for e in entities if e.start is not None and e.end is not None]
     sorted_ents = sorted(with_offsets, key=lambda e: (e.start, e.end))
 
     overlaps: List[Tuple["EntityPrediction", "EntityPrediction"]] = []

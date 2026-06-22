@@ -14,7 +14,6 @@ from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.processing.outputs import EntityPrediction
 
-
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
 
 
@@ -295,7 +294,11 @@ def normalize_eval_span(
         or default_device
     )
     text = _read_value(data, "text")
-    if text is None and source_text is not None and 0 <= start <= end <= len(source_text):
+    if (
+        text is None
+        and source_text is not None
+        and 0 <= start <= end <= len(source_text)
+    ):
         text = source_text[start:end]
 
     language = str(raw_language)
@@ -380,13 +383,17 @@ def compute_leakage_rate(
         leaked_by_device[span.device] += leaked
 
     label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, leaked_by_label)
-    language_keys = _slice_keys(SUPPORTED_LANGUAGES, total_by_language, leaked_by_language)
+    language_keys = _slice_keys(
+        SUPPORTED_LANGUAGES, total_by_language, leaked_by_language
+    )
     device_keys = _slice_keys(DEVICE_TIERS, total_by_device, leaked_by_device)
 
     return LeakageMetrics(
         overall=_safe_rate(leaked_chars, total_chars, zero_denominator=0.0),
         by_label=_rate_map(label_keys, leaked_by_label, total_by_label, 0.0),
-        by_language=_rate_map(language_keys, leaked_by_language, total_by_language, 0.0),
+        by_language=_rate_map(
+            language_keys, leaked_by_language, total_by_language, 0.0
+        ),
         by_device=_rate_map(device_keys, leaked_by_device, total_by_device, 0.0),
         leaked_chars=leaked_chars,
         total_chars=total_chars,
@@ -472,13 +479,17 @@ def compute_recall_slices(
         covered_by_device[span.device] += covered
 
     label_keys = _slice_keys(CANONICAL_LABELS, total_by_label, covered_by_label)
-    language_keys = _slice_keys(SUPPORTED_LANGUAGES, total_by_language, covered_by_language)
+    language_keys = _slice_keys(
+        SUPPORTED_LANGUAGES, total_by_language, covered_by_language
+    )
     device_keys = _slice_keys(DEVICE_TIERS, total_by_device, covered_by_device)
 
     return RecallSlices(
         overall=_safe_rate(covered_chars, total_chars, zero_denominator=1.0),
         by_label=_rate_map(label_keys, covered_by_label, total_by_label, 1.0),
-        by_language=_rate_map(language_keys, covered_by_language, total_by_language, 1.0),
+        by_language=_rate_map(
+            language_keys, covered_by_language, total_by_language, 1.0
+        ),
         by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
         covered_chars=covered_chars,
         total_chars=total_chars,
@@ -550,7 +561,8 @@ def compute_relaxed_span_f1(
         candidates = [
             (index, pred_span)
             for index, pred_span in enumerate(predicted)
-            if index not in matched_predictions and _label_aware_overlap(gold_span, pred_span)
+            if index not in matched_predictions
+            and _label_aware_overlap(gold_span, pred_span)
         ]
         if not candidates:
             continue
@@ -966,7 +978,9 @@ def _safe_rate(
     return float(numerator) / float(denominator)
 
 
-def _f1_from_counts(true_positives: int, predicted_count: int, gold_count: int) -> F1Metrics:
+def _f1_from_counts(
+    true_positives: int, predicted_count: int, gold_count: int
+) -> F1Metrics:
     false_positives = predicted_count - true_positives
     false_negatives = gold_count - true_positives
     precision = _safe_rate(true_positives, predicted_count, zero_denominator=1.0)
@@ -988,7 +1002,9 @@ def _f1_from_counts(true_positives: int, predicted_count: int, gold_count: int) 
 def _label_aware_overlap(gold_span: EvalSpan, pred_span: EvalSpan) -> bool:
     if gold_span.label != pred_span.label:
         return False
-    overlaps = detect_overlapping_entities([gold_span.to_entity(), pred_span.to_entity()])
+    overlaps = detect_overlapping_entities(
+        [gold_span.to_entity(), pred_span.to_entity()]
+    )
     return bool(overlaps)
 
 
@@ -1047,7 +1063,9 @@ def _rate_map(
     zero_denominator: float,
 ) -> dict[str, float]:
     return {
-        key: _safe_rate(numerators.get(key, 0), denominators.get(key, 0), zero_denominator)
+        key: _safe_rate(
+            numerators.get(key, 0), denominators.get(key, 0), zero_denominator
+        )
         for key in keys
     }
 

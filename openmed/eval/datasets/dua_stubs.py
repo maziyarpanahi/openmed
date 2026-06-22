@@ -8,7 +8,6 @@ from typing import Mapping
 
 from .public import DatasetLoadResult
 
-
 DUA_GATED_CORPORA: tuple[str, ...] = (
     "i2b2",
     "n2c2",
@@ -54,7 +53,9 @@ def dua_stub_for(name: str) -> DUACorpusStub:
     return DUACorpusStub(key)
 
 
-def load_dua_corpus(name: str, credentialed_path: str | Path | None = None) -> DatasetLoadResult:
+def load_dua_corpus(
+    name: str, credentialed_path: str | Path | None = None
+) -> DatasetLoadResult:
     return dua_stub_for(name).load(credentialed_path)
 
 

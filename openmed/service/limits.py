@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-
 SERVICE_MAX_TEXT_LENGTH_ENV_VAR = "OPENMED_SERVICE_MAX_TEXT_LENGTH"
 DEFAULT_MAX_TEXT_LENGTH = 1_000_000
 

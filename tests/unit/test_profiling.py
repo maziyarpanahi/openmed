@@ -1,20 +1,21 @@
 """Unit tests for performance profiling utilities."""
 
 import time
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from openmed.utils.profiling import (
+    BatchMetrics,
+    InferenceMetrics,
     Profiler,
     ProfileReport,
-    TimingResult,
-    InferenceMetrics,
-    BatchMetrics,
     Timer,
-    get_profiler,
-    enable_profiling,
+    TimingResult,
     disable_profiling,
+    enable_profiling,
     get_profile_report,
+    get_profiler,
     profile,
     timed,
 )
