@@ -17,9 +17,10 @@ from openmed.core.baseline import (
 )
 from openmed.core.model_registry import MANIFEST_PATH
 
-
 DEFAULT_CARD_DIR = Path(__file__).resolve().parents[2] / "docs" / "model-cards"
-DEFAULT_ROLLBACK_LOG_PATH = Path(__file__).resolve().parents[2] / "gates" / "rollback-log.jsonl"
+DEFAULT_ROLLBACK_LOG_PATH = (
+    Path(__file__).resolve().parents[2] / "gates" / "rollback-log.jsonl"
+)
 DEFAULT_STATUS_PATH = DEFAULT_CARD_DIR / "release-status.json"
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -136,7 +137,11 @@ def rollback_manifest_pointer(
     current_index = max(candidates, key=lambda index: _active_rank(rows[index], index))
     current_row = copy.deepcopy(rows[current_index])
     baseline_index = next(
-        (index for index, row in enumerate(rows) if row.get("repo_id") == baseline_repo_id),
+        (
+            index
+            for index, row in enumerate(rows)
+            if row.get("repo_id") == baseline_repo_id
+        ),
         None,
     )
     target_row = _target_row(
@@ -233,8 +238,12 @@ def write_model_card(
     path.parent.mkdir(parents=True, exist_ok=True)
     formats = ", ".join(str(item) for item in row.get("formats", []))
     labels = row.get("canonical_labels") or []
-    labels_text = ", ".join(str(label) for label in labels) if labels else "None declared"
-    benchmark = row.get("benchmark") if isinstance(row.get("benchmark"), Mapping) else {}
+    labels_text = (
+        ", ".join(str(label) for label in labels) if labels else "None declared"
+    )
+    benchmark = (
+        row.get("benchmark") if isinstance(row.get("benchmark"), Mapping) else {}
+    )
     lines = [
         f"# {row.get('repo_id')}",
         "",
@@ -478,7 +487,9 @@ def _active_rank(row: Mapping[str, Any], index: int) -> tuple[str, int]:
 
 
 def _leaderboard_entry(row: Mapping[str, Any]) -> dict[str, Any]:
-    benchmark = row.get("benchmark") if isinstance(row.get("benchmark"), Mapping) else {}
+    benchmark = (
+        row.get("benchmark") if isinstance(row.get("benchmark"), Mapping) else {}
+    )
     micro_f1 = benchmark.get("micro_f1")
     recall = benchmark.get("recall")
     return {
