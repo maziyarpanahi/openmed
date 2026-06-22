@@ -56,7 +56,10 @@ _ROBERTA_KEY_REPLACEMENTS: list[Tuple[str, str]] = [
     ("roberta.embeddings.LayerNorm.", "embeddings.norm."),
     ("xlm_roberta.embeddings.word_embeddings.", "embeddings.word_embeddings."),
     ("xlm_roberta.embeddings.position_embeddings.", "embeddings.position_embeddings."),
-    ("xlm_roberta.embeddings.token_type_embeddings.", "embeddings.token_type_embeddings."),
+    (
+        "xlm_roberta.embeddings.token_type_embeddings.",
+        "embeddings.token_type_embeddings.",
+    ),
     ("xlm_roberta.embeddings.LayerNorm.", "embeddings.norm."),
     ("roberta.pooler.", "_pooler."),
     ("xlm_roberta.pooler.", "_pooler."),
@@ -117,6 +120,7 @@ def _convert_opf_weights(state_dict: dict) -> dict:
     6. Expert weight layout: HF stores as ``[E, in, out]``, same as MLX (no transpose needed)
     """
     import re
+
     import numpy as np
 
     out: dict[str, np.ndarray] = {}
@@ -126,15 +130,19 @@ def _convert_opf_weights(state_dict: dict) -> dict:
     for hf_key, arr in state_dict.items():
         # classifier head
         if hf_key == "score.weight":
-            out["unembedding.weight"] = arr; continue
+            out["unembedding.weight"] = arr
+            continue
         if hf_key == "score.bias":
-            out["unembedding.bias"] = arr; continue
+            out["unembedding.bias"] = arr
+            continue
 
         # top-level
         if hf_key == "model.embed_tokens.weight":
-            out["embedding.weight"] = arr; continue
+            out["embedding.weight"] = arr
+            continue
         if hf_key == "model.norm.weight":
-            out["norm.scale"] = arr; continue
+            out["norm.scale"] = arr
+            continue
 
         m = re.match(r"^model\.layers\.(\d+)\.(.*)", hf_key)
         if m is None:
@@ -143,19 +151,24 @@ def _convert_opf_weights(state_dict: dict) -> dict:
 
         # RMSNorms
         if rest == "input_layernorm.weight":
-            out[f"block.{n}.attn.norm.scale"] = arr; continue
+            out[f"block.{n}.attn.norm.scale"] = arr
+            continue
         if rest == "post_attention_layernorm.weight":
-            out[f"block.{n}.mlp.norm.scale"] = arr; continue
+            out[f"block.{n}.mlp.norm.scale"] = arr
+            continue
 
         # attention sinks
         if rest == "self_attn.sinks":
-            out[f"block.{n}.attn.sinks"] = arr; continue
+            out[f"block.{n}.attn.sinks"] = arr
+            continue
 
         # output projection
         if rest == "self_attn.o_proj.weight":
-            out[f"block.{n}.attn.out.weight"] = arr; continue
+            out[f"block.{n}.attn.out.weight"] = arr
+            continue
         if rest == "self_attn.o_proj.bias":
-            out[f"block.{n}.attn.out.bias"] = arr; continue
+            out[f"block.{n}.attn.out.bias"] = arr
+            continue
 
         # Q / K / V — collect for fusion
         m2 = re.match(r"self_attn\.(q|k|v)_proj\.(weight|bias)", rest)
@@ -166,24 +179,32 @@ def _convert_opf_weights(state_dict: dict) -> dict:
 
         # MLP router → gate
         if rest == "mlp.router.weight":
-            out[f"block.{n}.mlp.gate.weight"] = arr; continue
+            out[f"block.{n}.mlp.gate.weight"] = arr
+            continue
         if rest == "mlp.router.bias":
-            out[f"block.{n}.mlp.gate.bias"] = arr; continue
+            out[f"block.{n}.mlp.gate.bias"] = arr
+            continue
 
         # expert weights: HF stores as [E, in_features, out_features] — same as MLX, no transpose needed
         if rest == "mlp.experts.gate_up_proj":
-            out[f"block.{n}.mlp.swiglu.weight"] = arr; continue
+            out[f"block.{n}.mlp.swiglu.weight"] = arr
+            continue
         if rest == "mlp.experts.gate_up_proj_bias":
-            out[f"block.{n}.mlp.swiglu.bias"] = arr; continue
+            out[f"block.{n}.mlp.swiglu.bias"] = arr
+            continue
         if rest == "mlp.experts.down_proj":
-            out[f"block.{n}.mlp.out.weight"] = arr; continue
+            out[f"block.{n}.mlp.out.weight"] = arr
+            continue
         if rest == "mlp.experts.down_proj_bias":
-            out[f"block.{n}.mlp.out.bias"] = arr; continue
+            out[f"block.{n}.mlp.out.bias"] = arr
+            continue
 
     # fuse Q / K / V into a single QKV linear per layer
     for n, projs in qkv.items():
         for param in ("weight", "bias"):
-            parts = [projs[p][param] for p in ("q", "k", "v") if param in projs.get(p, {})]
+            parts = [
+                projs[p][param] for p in ("q", "k", "v") if param in projs.get(p, {})
+            ]
             if parts:
                 out[f"block.{n}.attn.qkv.{param}"] = np.concatenate(parts, axis=0)
 
@@ -262,12 +283,12 @@ def _validate_opf_weights(weights: dict[str, Any], config: dict[str, Any]) -> No
     for key, expected_shape in expected_shapes.items():
         actual_shape = getattr(weights[key], "shape", None)
         if actual_shape is not None and tuple(actual_shape) != expected_shape:
-            bad_shapes.append(f"{key}: expected {expected_shape}, got {tuple(actual_shape)}")
+            bad_shapes.append(
+                f"{key}: expected {expected_shape}, got {tuple(actual_shape)}"
+            )
 
     if bad_shapes:
-        raise ValueError(
-            "Invalid OPF MLX weight shapes: " + "; ".join(bad_shapes[:8])
-        )
+        raise ValueError("Invalid OPF MLX weight shapes: " + "; ".join(bad_shapes[:8]))
 
 
 def _infer_source_model_type(key: str, model_type: str | None) -> str:
@@ -401,7 +422,10 @@ def save_mlx_model(
         config_to_save.pop("_mlx_quantization", None)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
-        for candidate in (output_dir / "weights.safetensors", output_dir / "weights.npz"):
+        for candidate in (
+            output_dir / "weights.safetensors",
+            output_dir / "weights.npz",
+        ):
             if candidate != keep_path and candidate.exists():
                 candidate.unlink()
 
@@ -460,7 +484,10 @@ def save_numpy_model(
     config_to_save = dict(config)
 
     def _cleanup_other_weight_files(keep_path: Path) -> None:
-        for candidate in (output_dir / "weights.safetensors", output_dir / "weights.npz"):
+        for candidate in (
+            output_dir / "weights.safetensors",
+            output_dir / "weights.npz",
+        ):
             if candidate != keep_path and candidate.exists():
                 candidate.unlink()
 
@@ -565,6 +592,7 @@ def convert(
 
     try:
         import mlx.core  # noqa: F401
+
         output_path = save_mlx_model(
             weights,
             config,

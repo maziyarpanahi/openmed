@@ -12,6 +12,10 @@ from openmed.core.labels import (
     FIRST_NAME,
     GENDER,
     ID_NUM,
+    ID_SUBTYPE_MRN,
+    ID_SUBTYPE_NATIONAL_ID,
+    ID_SUBTYPE_NPI,
+    ID_SUBTYPES,
     IP_ADDRESS,
     LAST_NAME,
     LOCATION,
@@ -25,7 +29,12 @@ from openmed.core.labels import (
     URL,
     USERNAME,
     ZIPCODE,
+    hipaa_class_for,
+    id_subtype_for,
     normalize_label,
+    policy_label_for,
+    risk_level_for,
+    system_hints_for,
 )
 
 
@@ -191,21 +200,132 @@ class TestEdgeCases:
         for lang in ("en", "fr", "de", "it", "es", "nl", "hi", "te", "pt"):
             assert normalize_label("first_name", lang=lang) == FIRST_NAME
 
+    def test_top_level_label_import_stability(self):
+        from openmed import CANONICAL_LABELS as top_level_labels
+        from openmed import normalize_label as top_level_normalize
+
+        assert top_level_labels is CANONICAL_LABELS
+        assert top_level_normalize("id_num") == ID_NUM
+
+    def test_policy_accessors_import(self):
+        assert policy_label_for("ID_NUM") == "DIRECT_IDENTIFIER"
+        assert risk_level_for("ID_NUM") == "high"
+        assert system_hints_for("ID_NUM") == ()
+        assert hipaa_class_for("ID_NUM") == "UNIQUE_IDENTIFIER"
+
+
+class TestIdentifierSubtypes:
+    @pytest.mark.parametrize(
+        "label,expected_subtype",
+        [
+            ("medical_record_number", ID_SUBTYPE_MRN),
+            ("mrn", ID_SUBTYPE_MRN),
+            ("npi", ID_SUBTYPE_NPI),
+            ("national_id", ID_SUBTYPE_NATIONAL_ID),
+            ("nationalid", ID_SUBTYPE_NATIONAL_ID),
+            ("cpf", ID_SUBTYPE_NATIONAL_ID),
+            ("cnpj", ID_SUBTYPE_NATIONAL_ID),
+            ("nir", ID_SUBTYPE_NATIONAL_ID),
+            ("steuerid", ID_SUBTYPE_NATIONAL_ID),
+            ("codicefiscale", ID_SUBTYPE_NATIONAL_ID),
+            ("dni", ID_SUBTYPE_NATIONAL_ID),
+            ("nie", ID_SUBTYPE_NATIONAL_ID),
+            ("bsn", ID_SUBTYPE_NATIONAL_ID),
+            ("aadhaar", ID_SUBTYPE_NATIONAL_ID),
+            ("B-CPF", ID_SUBTYPE_NATIONAL_ID),
+        ],
+    )
+    def test_id_aliases_keep_canonical_id_num_with_subtype(
+        self,
+        label,
+        expected_subtype,
+    ):
+        assert normalize_label(label) == ID_NUM
+        assert id_subtype_for(label) == expected_subtype
+        assert expected_subtype in ID_SUBTYPES
+
+    def test_flat_canonical_id_num_consumers_are_unchanged(self):
+        assert normalize_label("mrn") == ID_NUM
+        assert normalize_label("npi") == ID_NUM
+        assert policy_label_for("mrn") == "DIRECT_IDENTIFIER"
+        assert risk_level_for("npi") == "high"
+
+    def test_non_id_num_labels_have_no_id_subtype(self):
+        assert id_subtype_for("ssn") is None
+        assert id_subtype_for("email") is None
+        assert id_subtype_for("id_num") is None
+        assert normalize_label("ssn") == SSN
+
+    def test_clinical_id_provider_exposes_regex_subtype_mapping(self):
+        from openmed.core.anonymizer.providers import clinical_ids
+
+        assert clinical_ids.id_subtype_for_entity_type("medical_record_number") == (
+            ID_SUBTYPE_MRN
+        )
+        assert clinical_ids.id_subtype_for_entity_type("npi") == ID_SUBTYPE_NPI
+        assert clinical_ids.id_subtype_for_entity_type("aadhaar") == (
+            ID_SUBTYPE_NATIONAL_ID
+        )
+
 
 class TestRegistryCoverage:
     """The 52 Portuguese registry labels all map to canonical names."""
 
     PORTUGUESE_REGISTRY_LABELS = [
-        "ACCOUNTNAME", "AGE", "AMOUNT", "BANKACCOUNT", "BIC", "BITCOINADDRESS",
-        "BUILDINGNUMBER", "CITY", "COUNTY", "CREDITCARD", "CREDITCARDISSUER",
-        "CURRENCY", "CURRENCYCODE", "CURRENCYNAME", "CURRENCYSYMBOL", "CVV",
-        "DATE", "DATEOFBIRTH", "EMAIL", "ETHEREUMADDRESS", "EYECOLOR",
-        "FIRSTNAME", "GENDER", "GPSCOORDINATES", "HEIGHT", "IBAN", "IMEI",
-        "IPADDRESS", "JOBDEPARTMENT", "JOBTITLE", "LASTNAME", "LITECOINADDRESS",
-        "MACADDRESS", "MASKEDNUMBER", "MIDDLENAME", "OCCUPATION",
-        "ORDINALDIRECTION", "ORGANIZATION", "PASSWORD", "PHONE", "PIN",
-        "PREFIX", "SECONDARYADDRESS", "SEX", "SSN", "STATE", "STREET",
-        "TIME", "URL", "USERAGENT", "USERNAME", "VIN", "VRM", "ZIPCODE",
+        "ACCOUNTNAME",
+        "AGE",
+        "AMOUNT",
+        "BANKACCOUNT",
+        "BIC",
+        "BITCOINADDRESS",
+        "BUILDINGNUMBER",
+        "CITY",
+        "COUNTY",
+        "CREDITCARD",
+        "CREDITCARDISSUER",
+        "CURRENCY",
+        "CURRENCYCODE",
+        "CURRENCYNAME",
+        "CURRENCYSYMBOL",
+        "CVV",
+        "DATE",
+        "DATEOFBIRTH",
+        "EMAIL",
+        "ETHEREUMADDRESS",
+        "EYECOLOR",
+        "FIRSTNAME",
+        "GENDER",
+        "GPSCOORDINATES",
+        "HEIGHT",
+        "IBAN",
+        "IMEI",
+        "IPADDRESS",
+        "JOBDEPARTMENT",
+        "JOBTITLE",
+        "LASTNAME",
+        "LITECOINADDRESS",
+        "MACADDRESS",
+        "MASKEDNUMBER",
+        "MIDDLENAME",
+        "OCCUPATION",
+        "ORDINALDIRECTION",
+        "ORGANIZATION",
+        "PASSWORD",
+        "PHONE",
+        "PIN",
+        "PREFIX",
+        "SECONDARYADDRESS",
+        "SEX",
+        "SSN",
+        "STATE",
+        "STREET",
+        "TIME",
+        "URL",
+        "USERAGENT",
+        "USERNAME",
+        "VIN",
+        "VRM",
+        "ZIPCODE",
     ]
 
     def test_all_portuguese_labels_have_canonical_mapping(self):

@@ -12,13 +12,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from openmed.core.baseline import update_baseline_entry
+from openmed.core.baseline import load_baseline_store, update_baseline_entry
+from openmed.core.model_card import DEFAULT_ARXIV, render_model_card, write_model_card
+from openmed.core.model_registry import load_manifest_rows
 from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
-
+from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
 
 DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
 DEFAULT_MANIFEST_PATH = Path("models.jsonl")
+DEFAULT_MODEL_CARD_COMMIT_MESSAGE = "Update generated model card"
 
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=$|-)")
 _SAFE_REPO_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -91,7 +94,8 @@ def build_manifest_row(
     artifact_hash = artifact_sha256(artifact_dir)
     manifest_format = _manifest_format_name(format_name)
     reproducibility_hash = compute_reproducibility_hash(
-        recipe=recipe or _default_repro_recipe(
+        recipe=recipe
+        or _default_repro_recipe(
             repo_id=repo_id,
             format_name=manifest_format,
             artifact_hash=artifact_hash,
@@ -118,7 +122,7 @@ def build_manifest_row(
         "formats": [manifest_format],
         "canonical_labels": labels,
         "benchmark": {"dataset": None, "micro_f1": None, "recall": None},
-        "arxiv": None,
+        "arxiv": DEFAULT_ARXIV,
         "license": "apache-2.0",
         "reproducibility_hash": reproducibility_hash,
         "released": released,
@@ -150,8 +154,30 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
 
     with path.open("w", encoding="utf-8") as handle:
         for manifest_row in rows:
-            handle.write(json.dumps(manifest_row, sort_keys=False, separators=(",", ":")))
+            handle.write(
+                json.dumps(manifest_row, sort_keys=False, separators=(",", ":"))
+            )
             handle.write("\n")
+
+
+def publish_model_card(
+    row: dict[str, Any],
+    *,
+    token: str | None = None,
+    api: Any | None = None,
+    commit_message: str | None = None,
+) -> Any:
+    """Render and upload a manifest row as ``README.md`` for its model repo."""
+
+    api = api or _load_hf_api()
+    return api.upload_file(
+        path_or_fileobj=render_model_card(row).encode("utf-8"),
+        path_in_repo="README.md",
+        repo_id=row["repo_id"],
+        repo_type="model",
+        token=token,
+        commit_message=commit_message or DEFAULT_MODEL_CARD_COMMIT_MESSAGE,
+    )
 
 
 def publish_artifact(
@@ -167,6 +193,12 @@ def publish_artifact(
     manifest_path: str | Path | None = None,
     baseline_path: str | Path | None = None,
     baseline_metrics: dict[str, Any] | None = None,
+    benchmark_report_paths: list[str | Path] | None = None,
+    benchmarks_dir: str | Path | None = None,
+    leaderboard_dir: str | Path | None = None,
+    status_output_path: str | Path | None = None,
+    smoke_status: str = "green",
+    smoke_failure_reason: str | None = None,
     api: Any | None = None,
     private: bool = False,
     skip_existing: bool = True,
@@ -190,6 +222,17 @@ def publish_artifact(
     )
     api = api or _load_hf_api()
     resolved_git_sha = git_sha or resolve_git_sha()
+    row = build_manifest_row(
+        repo_id=repo_id,
+        source_model_id=source_model_id,
+        artifact_dir=artifact_dir,
+        format_name=format_name,
+        released=released,
+        recipe=recipe,
+        data_manifest=data_manifest,
+        git_sha=resolved_git_sha,
+    )
+    write_model_card(artifact_dir / "README.md", row)
 
     skipped = False
     if skip_existing and _repo_exists(api, repo_id=repo_id, token=token):
@@ -210,16 +253,6 @@ def publish_artifact(
             commit_message=f"Publish {format_name} artifact",
         )
 
-    row = build_manifest_row(
-        repo_id=repo_id,
-        source_model_id=source_model_id,
-        artifact_dir=artifact_dir,
-        format_name=format_name,
-        released=released,
-        recipe=recipe,
-        data_manifest=data_manifest,
-        git_sha=resolved_git_sha,
-    )
     if manifest_path is not None:
         append_manifest_row(manifest_path, row)
     if baseline_path is not None:
@@ -228,7 +261,9 @@ def publish_artifact(
             family=str(row["family"]),
             tier=row.get("tier"),
             format_name=str(row["formats"][0]),
-            metrics=baseline_metrics if baseline_metrics is not None else row["benchmark"],
+            metrics=baseline_metrics
+            if baseline_metrics is not None
+            else row["benchmark"],
             reproducibility_hash=str(row["reproducibility_hash"]),
             repo_id=str(row["repo_id"]),
             source_model_id=source_model_id,
@@ -239,6 +274,21 @@ def publish_artifact(
                 "base_model": row.get("base_model"),
                 "task": row.get("task"),
             },
+        )
+    if any((benchmarks_dir, leaderboard_dir, status_output_path)):
+        if manifest_path is None or baseline_path is None:
+            raise HfPublishError(
+                "manifest and baseline paths are required to refresh status outputs"
+            )
+        _refresh_status_outputs(
+            manifest_path=manifest_path,
+            baseline_path=baseline_path,
+            benchmark_report_paths=benchmark_report_paths or [],
+            benchmarks_dir=benchmarks_dir,
+            leaderboard_dir=leaderboard_dir,
+            status_output_path=status_output_path,
+            smoke_status=smoke_status,
+            smoke_failure_reason=smoke_failure_reason,
         )
 
     return PublishResult(
@@ -258,10 +308,14 @@ def artifact_sha256(path: str | Path) -> str:
 
     digest = hashlib.sha256()
     root = path if path.is_dir() else path.parent
-    paths = [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
+    paths = (
+        [path] if path.is_file() else sorted(p for p in path.rglob("*") if p.is_file())
+    )
 
     for file_path in paths:
         relative = file_path.relative_to(root).as_posix()
+        if relative == "README.md":
+            continue
         digest.update(relative.encode("utf-8"))
         digest.update(b"\0")
         with file_path.open("rb") as handle:
@@ -277,7 +331,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Publish one converted OpenMed model artifact to the Hub.",
     )
     parser.add_argument("--model", required=True, help="Source model id")
-    parser.add_argument("--artifact-dir", required=True, help="Converted artifact directory")
+    parser.add_argument(
+        "--artifact-dir", required=True, help="Converted artifact directory"
+    )
     parser.add_argument(
         "--format",
         required=True,
@@ -286,7 +342,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--repo-id", default=None, help="Explicit target repo id")
     parser.add_argument("--org", default=DEFAULT_ORG, help="Target organization")
-    parser.add_argument("--version", type=int, default=1, help="Version suffix for new repos")
+    parser.add_argument(
+        "--version", type=int, default=1, help="Version suffix for new repos"
+    )
     parser.add_argument(
         "--manifest",
         default=str(DEFAULT_MANIFEST_PATH),
@@ -301,6 +359,38 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--baseline-metrics",
         default=None,
         help="Optional JSON object, or @file, with metrics for the baseline entry",
+    )
+    parser.add_argument(
+        "--benchmark-report",
+        action="append",
+        default=[],
+        help="BenchmarkReport JSON file used to refresh status artifacts",
+    )
+    parser.add_argument(
+        "--benchmarks-dir",
+        default=None,
+        help="Optional docs/benchmarks output directory to refresh",
+    )
+    parser.add_argument(
+        "--leaderboard-dir",
+        default=None,
+        help="Optional docs/leaderboard output directory to refresh",
+    )
+    parser.add_argument(
+        "--status-output",
+        default=None,
+        help="Optional status Markdown output path to refresh",
+    )
+    parser.add_argument(
+        "--smoke-status",
+        choices=["green", "red"],
+        default="green",
+        help="Smoke-test status rendered into the status page",
+    )
+    parser.add_argument(
+        "--smoke-failure-reason",
+        default=None,
+        help="Optional smoke-test failure reason rendered for red status",
     )
     parser.add_argument(
         "--git-sha",
@@ -340,6 +430,12 @@ def main(argv: list[str] | None = None) -> None:
         baseline_metrics=_parse_json_object_arg(args.baseline_metrics)
         if args.baseline_metrics
         else None,
+        benchmark_report_paths=args.benchmark_report,
+        benchmarks_dir=args.benchmarks_dir,
+        leaderboard_dir=args.leaderboard_dir,
+        status_output_path=args.status_output,
+        smoke_status=args.smoke_status,
+        smoke_failure_reason=args.smoke_failure_reason,
         private=args.private,
         skip_existing=not args.overwrite_existing,
         git_sha=args.git_sha,
@@ -383,7 +479,9 @@ def _source_repo_name(source_model_id: str) -> str:
     name = source_model_id.rstrip("/").rsplit("/", 1)[-1]
     name = _SAFE_REPO_RE.sub("-", name).strip(".-_")
     if not name:
-        raise HfPublishError(f"could not derive target repo name from {source_model_id!r}")
+        raise HfPublishError(
+            f"could not derive target repo name from {source_model_id!r}"
+        )
     return name
 
 
@@ -427,6 +525,46 @@ def _parse_json_object_arg(value: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise HfPublishError("--baseline-metrics must be a JSON object")
     return payload
+
+
+def _refresh_status_outputs(
+    *,
+    manifest_path: str | Path,
+    baseline_path: str | Path,
+    benchmark_report_paths: list[str | Path],
+    benchmarks_dir: str | Path | None,
+    leaderboard_dir: str | Path | None,
+    status_output_path: str | Path | None,
+    smoke_status: str,
+    smoke_failure_reason: str | None,
+) -> None:
+    manifest_rows = load_manifest_rows(Path(manifest_path))
+    baseline_store = load_baseline_store(Path(baseline_path))
+    reports = read_reports(benchmark_report_paths)
+    if benchmarks_dir is not None:
+        write_benchmark_cards(
+            reports,
+            benchmarks_dir,
+            manifest_rows=manifest_rows,
+        )
+    if leaderboard_dir is not None:
+        write_leaderboard(
+            leaderboard_dir,
+            manifest_rows=manifest_rows,
+            reports=reports,
+            baseline_store=baseline_store,
+        )
+    if status_output_path is not None:
+        from scripts.status.generate_status import write_status_page
+
+        write_status_page(
+            status_output_path,
+            manifest_rows=manifest_rows,
+            baseline_store=baseline_store,
+            reports=reports,
+            smoke_status=smoke_status,
+            smoke_failure_reason=smoke_failure_reason,
+        )
 
 
 def _default_repro_recipe(
@@ -485,7 +623,10 @@ def _languages(repo_id: str) -> list[str]:
 
 
 def _tier(repo_id: str) -> str | None:
-    match = re.search(r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])", repo_id)
+    match = re.search(
+        r"(?<![A-Za-z])(TinyMed|Tiny|Small|Base|Medium|Large|XLarge)(?![A-Za-z])",
+        repo_id,
+    )
     if not match:
         return None
     value = match.group(1)

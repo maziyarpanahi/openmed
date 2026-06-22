@@ -380,9 +380,7 @@ def load_index(path: Optional[Path] = None) -> ModelIndex:
 
     source_dir_raw = meta.get("source_dir")
     source_dir = (
-        Path(source_dir_raw)
-        if isinstance(source_dir_raw, str)
-        else index_path.parent
+        Path(source_dir_raw) if isinstance(source_dir_raw, str) else index_path.parent
     )
 
     return ModelIndex(

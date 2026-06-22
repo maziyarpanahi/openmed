@@ -30,7 +30,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-
 BASELINE_SCHEMA_VERSION = 1
 BASELINE_PATH = Path(__file__).resolve().parents[2] / "gates" / "baseline.json"
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -94,7 +93,9 @@ def get_baseline(
 ) -> dict[str, Any] | None:
     """Return a baseline entry for ``(family, tier, format)`` or ``None``."""
 
-    payload = copy.deepcopy(dict(store)) if store is not None else load_baseline_store(path)
+    payload = (
+        copy.deepcopy(dict(store)) if store is not None else load_baseline_store(path)
+    )
     validate_baseline_store(payload)
     entry = payload["entries"].get(baseline_key(family, tier, format_name))
     return copy.deepcopy(entry) if entry is not None else None
@@ -220,7 +221,9 @@ def _validate_entry(key: str, entry: Any) -> None:
     if not _SHA256_RE.fullmatch(str(entry["reproducibility_hash"])):
         raise BaselineError(f"baseline entry {key!r} has invalid reproducibility_hash")
     if "released" in entry and entry["released"] is not None:
-        if not isinstance(entry["released"], str) or not _DATE_RE.fullmatch(entry["released"]):
+        if not isinstance(entry["released"], str) or not _DATE_RE.fullmatch(
+            entry["released"]
+        ):
             raise BaselineError(f"baseline entry {key!r} released must be YYYY-MM-DD")
 
 

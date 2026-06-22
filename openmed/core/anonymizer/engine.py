@@ -38,10 +38,10 @@ from .locales import resolve_locale
 from .providers import register_clinical_providers
 from .registry import LABEL_GENERATORS
 
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class AnonymizerConfig:
@@ -70,6 +70,7 @@ class AnonymizerConfig:
 # ---------------------------------------------------------------------------
 # Anonymizer
 # ---------------------------------------------------------------------------
+
 
 class Anonymizer:
     """Generate locale-aware, optionally deterministic surrogate PII values."""

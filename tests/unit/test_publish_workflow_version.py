@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
@@ -46,9 +45,13 @@ def test_only_publish_workflow_runs_hatch_publish():
 def test_publish_workflow_keeps_release_gates():
     workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
 
+    assert "fetch-depth: 0" in workflow
     assert "tags:\n      - 'v*'" in workflow
     assert "workflow_dispatch:" in workflow
     assert "python scripts/release/check_repo_policy.py" in workflow
+    assert "Compute release metadata" in workflow
+    assert "python scripts/release/changelog.py" in workflow
+    assert "steps.release_metadata.outputs.next_version" in workflow
     assert "Verify version matches tag" in workflow
     assert "twine check dist/*" in workflow
     assert "name: pypi" in workflow

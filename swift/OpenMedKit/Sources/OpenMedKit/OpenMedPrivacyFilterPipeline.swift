@@ -276,8 +276,8 @@ final class OpenMedPrivacyFilterTokenizer {
             var index = 0
             while index < word.count {
                 if index < word.count - 1,
-                   word[index] == bestPair.left,
-                   word[index + 1] == bestPair.right
+                    word[index] == bestPair.left,
+                    word[index + 1] == bestPair.right
                 {
                     merged.append(bestPair.left + bestPair.right)
                     index += 2
@@ -457,7 +457,8 @@ enum OpenMedPrivacyFilterViterbi {
                 var bestIndex = 0
                 var bestScore = -Float.infinity
                 for previousIndex in 0..<numClasses {
-                    let score = currentScores[previousIndex]
+                    let score =
+                        currentScores[previousIndex]
                         + scores.transition[previousIndex][nextIndex]
                     if score > bestScore {
                         bestScore = score
@@ -637,7 +638,7 @@ final class OpenMedPrivacyFilterPipeline {
             throw OpenMedMLXRuntimeError.unsupportedPlatform
         }
         guard artifact.task == .tokenClassification,
-              artifact.family == .openaiPrivacyFilter
+            artifact.family == .openaiPrivacyFilter
         else {
             throw OpenMedPrivacyFilterError.unsupportedArtifact(artifact.manifest.family)
         }
@@ -714,8 +715,8 @@ final class OpenMedPrivacyFilterPipeline {
         var entities = [EntityPrediction]()
         for span in spans {
             guard span.tokenStart >= 0,
-                  span.tokenStart < span.tokenEnd,
-                  span.tokenEnd <= charStarts.count
+                span.tokenStart < span.tokenEnd,
+                span.tokenEnd <= charStarts.count
             else {
                 continue
             }
@@ -776,10 +777,12 @@ final class OpenMedPrivacyFilterPipeline {
         ]
 
         for candidate in patterns where normalizedLabel.contains(candidate.hint) {
-            guard let match = span.range(
-                of: candidate.pattern,
-                options: [.regularExpression, .caseInsensitive]
-            ) else {
+            guard
+                let match = span.range(
+                    of: candidate.pattern,
+                    options: [.regularExpression, .caseInsensitive]
+                )
+            else {
                 continue
             }
             let lowerOffset = span.distance(from: span.startIndex, to: match.lowerBound)
@@ -893,8 +896,8 @@ final class OpenMedPrivacyFilterPipeline {
 
     private func character(at offset: Int, in text: String) -> Character? {
         guard offset >= 0,
-              let index = text.index(text.startIndex, offsetBy: offset, limitedBy: text.endIndex),
-              index < text.endIndex
+            let index = text.index(text.startIndex, offsetBy: offset, limitedBy: text.endIndex),
+            index < text.endIndex
         else {
             return nil
         }
@@ -902,9 +905,11 @@ final class OpenMedPrivacyFilterPipeline {
     }
 
     private func substring(_ text: String, start: Int, end: Int) -> String {
-        let lower = text.index(text.startIndex, offsetBy: max(0, start), limitedBy: text.endIndex)
+        let lower =
+            text.index(text.startIndex, offsetBy: max(0, start), limitedBy: text.endIndex)
             ?? text.endIndex
-        let upper = text.index(text.startIndex, offsetBy: max(start, end), limitedBy: text.endIndex)
+        let upper =
+            text.index(text.startIndex, offsetBy: max(start, end), limitedBy: text.endIndex)
             ?? text.endIndex
         guard lower <= upper else {
             return ""
