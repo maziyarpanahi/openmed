@@ -1,23 +1,34 @@
 from __future__ import annotations
 
+import importlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-import importlib
-
 import pytest
 
 infer_module = importlib.import_module("openmed.ner.infer")
-from openmed.ner.infer import Entity, NerRequest, infer
 from openmed.ner.indexing import ModelIndex, ModelRecord
+from openmed.ner.infer import Entity, NerRequest, infer
 
 
 class DummyPipeline:
     def __call__(self, text: str):
         return [
-            {"entity_group": "Drug", "score": 0.9, "word": "Aspirin", "start": 0, "end": 7},
-            {"entity_group": "Disease", "score": 0.4, "word": "fever", "start": 11, "end": 16},
+            {
+                "entity_group": "Drug",
+                "score": 0.9,
+                "word": "Aspirin",
+                "start": 0,
+                "end": 7,
+            },
+            {
+                "entity_group": "Disease",
+                "score": 0.4,
+                "word": "fever",
+                "start": 11,
+                "end": 16,
+            },
         ]
 
 
@@ -32,7 +43,9 @@ class DummyGLiNERHandle:
 
     def predict_entities(self, text: str, labels=None, threshold=0.5, flat_ner=True):
         if labels:
-            return [entity for entity in self._entities if entity.get("label") in labels]
+            return [
+                entity for entity in self._entities if entity.get("label") in labels
+            ]
         return self._entities
 
 
@@ -54,11 +67,15 @@ def sample_index(tmp_path: Path) -> ModelIndex:
             path=str(tmp_path / "hf-generic"),
         ),
     )
-    return ModelIndex(models=records, generated_at=datetime.now(timezone.utc), source_dir=tmp_path)
+    return ModelIndex(
+        models=records, generated_at=datetime.now(timezone.utc), source_dir=tmp_path
+    )
 
 
 def test_infer_non_gliner_threshold(sample_index: ModelIndex) -> None:
-    request = NerRequest(model_id="hf-generic", text="Aspirin treats fever", threshold=0.5)
+    request = NerRequest(
+        model_id="hf-generic", text="Aspirin treats fever", threshold=0.5
+    )
     response = infer(request, index=sample_index, loader=DummyLoader())
     assert len(response.entities) == 1
     assert response.entities[0].label == "Drug"
@@ -86,7 +103,9 @@ def test_infer_label_precedence(sample_index: ModelIndex, monkeypatch) -> None:
     assert {entity.label for entity in response.entities} == {"Drug"}
 
 
-def test_infer_fallback_to_default_labels(sample_index: ModelIndex, monkeypatch) -> None:
+def test_infer_fallback_to_default_labels(
+    sample_index: ModelIndex, monkeypatch
+) -> None:
     mock_entities = [
         {"text": "Imatinib", "start": 0, "end": 8, "label": "Drug", "score": 0.8},
     ]

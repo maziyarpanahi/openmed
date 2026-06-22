@@ -13,8 +13,8 @@ The OpenMed PII collection includes 33 specialized models ranging from:
 - XLarge (560-600MB) for maximum coverage
 """
 
-from openmed import extract_pii, deidentify
-from openmed.core.model_registry import get_models_by_category, get_model_info
+from openmed import deidentify, extract_pii
+from openmed.core.model_registry import get_model_info, get_models_by_category
 
 
 def print_header(title):
@@ -54,10 +54,10 @@ def compare_pii_models():
 
     # Select diverse models for comparison
     models_to_test = [
-        ('pii_clinical_e5_small', 'Fastest (33MB)'),
-        ('pii_superclinical_small', 'Fast (44MB)'),
-        ('pii_superclinical_base', 'Balanced (184MB)'),
-        ('pii_superclinical_large', 'Accurate (434MB)'),
+        ("pii_clinical_e5_small", "Fastest (33MB)"),
+        ("pii_superclinical_small", "Fast (44MB)"),
+        ("pii_superclinical_base", "Balanced (184MB)"),
+        ("pii_superclinical_large", "Accurate (434MB)"),
     ]
 
     print(f"\nTesting {len(models_to_test)} different PII models on clinical text...")
@@ -78,7 +78,7 @@ def compare_pii_models():
             sample_text,
             model_name=model_key,
             use_smart_merging=True,
-            confidence_threshold=0.3
+            confidence_threshold=0.3,
         )
 
         print(f"\nFound {len(result.entities)} PII entities:")
@@ -101,30 +101,32 @@ def demonstrate_deidentification():
 
     print_header("De-identification Methods Comparison")
 
-    sample_text = "Patient John Doe (DOB: 01/15/1970, SSN: 123-45-6789) was seen on 03/20/2024."
+    sample_text = (
+        "Patient John Doe (DOB: 01/15/1970, SSN: 123-45-6789) was seen on 03/20/2024."
+    )
 
     print(f"\nOriginal text:")
     print(f"  {sample_text}")
 
     # Use the flagship model for de-identification
-    model = 'pii_superclinical_large'
+    model = "pii_superclinical_large"
 
     methods = [
-        ('mask', 'Replace with placeholders'),
-        ('remove', 'Remove PII completely'),
-        ('hash', 'Cryptographic hashing'),
-        ('shift_dates', 'Shift dates by 180 days'),
+        ("mask", "Replace with placeholders"),
+        ("remove", "Remove PII completely"),
+        ("hash", "Cryptographic hashing"),
+        ("shift_dates", "Shift dates by 180 days"),
     ]
 
     for method, description in methods:
-        kwargs = {'date_shift_days': 180} if method == 'shift_dates' else {}
+        kwargs = {"date_shift_days": 180} if method == "shift_dates" else {}
 
         result = deidentify(
             sample_text,
             method=method,
             model_name=model,
             use_smart_merging=True,
-            **kwargs
+            **kwargs,
         )
 
         print(f"\n{method.upper()} ({description}):")
@@ -136,7 +138,7 @@ def list_all_pii_models():
 
     print_header("All Available PII Models")
 
-    all_pii = get_models_by_category('Privacy')
+    all_pii = get_models_by_category("Privacy")
 
     # Organize by size
     by_size = {}
@@ -147,7 +149,7 @@ def list_all_pii_models():
         by_size[size].append(model)
 
     # Display by size category
-    size_order = ['Tiny', 'Small', 'Medium', 'Large', 'XLarge']
+    size_order = ["Tiny", "Small", "Medium", "Large", "XLarge"]
 
     for size in size_order:
         if size in by_size:
@@ -168,18 +170,28 @@ def show_usage_recommendations():
     print_header("Model Recommendations by Use Case")
 
     recommendations = [
-        ("Real-time Processing", "pii_clinical_e5_small",
-         "Ultra-fast inference for production systems"),
-        ("Balanced Performance", "pii_superclinical_base",
-         "Good accuracy with reasonable speed"),
-        ("Maximum Accuracy", "pii_superclinical_large",
-         "Best performance for critical applications"),
-        ("Long Documents", "pii_clinical_longformer",
-         "Optimized for lengthy clinical notes"),
-        ("European Data", "pii_euro_med",
-         "GDPR-compliant for European healthcare"),
-        ("Multilingual", "pii_msuper_clinical",
-         "Cross-language PII detection"),
+        (
+            "Real-time Processing",
+            "pii_clinical_e5_small",
+            "Ultra-fast inference for production systems",
+        ),
+        (
+            "Balanced Performance",
+            "pii_superclinical_base",
+            "Good accuracy with reasonable speed",
+        ),
+        (
+            "Maximum Accuracy",
+            "pii_superclinical_large",
+            "Best performance for critical applications",
+        ),
+        (
+            "Long Documents",
+            "pii_clinical_longformer",
+            "Optimized for lengthy clinical notes",
+        ),
+        ("European Data", "pii_euro_med", "GDPR-compliant for European healthcare"),
+        ("Multilingual", "pii_msuper_clinical", "Cross-language PII detection"),
     ]
 
     for use_case, model_key, description in recommendations:

@@ -7,22 +7,30 @@ __all__ = [
     "CONFIG_SCHEMA_VERSION",
     "MAX_LORA_TRAINABLE_RATIO",
     "PRESET_BY_MODE",
-    "HARD_NEGATIVE_CATEGORIES",
+    "AdjudicationCandidate",
+    "AdjudicationItem",
+    "AdjudicationQueue",
     "DryRunResult",
+    "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
     "HardNegativeSampler",
     "RecipeConfigError",
     "TrainingRecipeConfig",
+    "WeakLabelDecision",
+    "WeakLabelSpan",
     "config_hash",
     "count_hard_negatives",
     "dry_run_recipe",
     "load_preset",
+    "make_adjudication_item",
+    "normalize_weak_span",
     "requires_hard_negative_sampler",
     "run_recipe",
     "runtime_dependencies",
     "sample_hard_negatives",
     "sampler_for_recipe",
+    "weak_label_document",
 ]
 
 
@@ -54,4 +62,20 @@ def __getattr__(name: str) -> Any:
     }:
         hard_negatives = import_module(".hard_negatives", __name__)
         return getattr(hard_negatives, name)
+    if name in {
+        "AdjudicationCandidate",
+        "AdjudicationItem",
+        "AdjudicationQueue",
+        "make_adjudication_item",
+    }:
+        adjudication = import_module(".adjudication", __name__)
+        return getattr(adjudication, name)
+    if name in {
+        "WeakLabelDecision",
+        "WeakLabelSpan",
+        "normalize_weak_span",
+        "weak_label_document",
+    }:
+        weak_labeling = import_module(".weak_labeling", __name__)
+        return getattr(weak_labeling, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

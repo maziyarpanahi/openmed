@@ -24,16 +24,25 @@ or emits a US-style format unrelated to the requested locale's actual ID:
 
 from __future__ import annotations
 
-import re
 import random
+import re
 from typing import Sequence
 
 from faker.providers import BaseProvider
+
+from openmed.core.labels import id_subtype_for
+
+
+def id_subtype_for_entity_type(entity_type: str) -> str | None:
+    """Return ID_NUM subtype metadata for regex/checksum entity labels."""
+
+    return id_subtype_for(entity_type)
 
 
 # ---------------------------------------------------------------------------
 # Shared deterministic validators
 # ---------------------------------------------------------------------------
+
 
 def _digits_only(text: str) -> str:
     return re.sub(r"[^0-9]", "", text)
@@ -147,27 +156,78 @@ def generate_ssn(*, rng: random.Random | None = None) -> str:
 
 
 _IBAN_LENGTHS = {
-    "AD": 24, "AE": 23, "AL": 28, "AT": 20, "AZ": 28,
-    "BA": 20, "BE": 16, "BG": 22, "BH": 22, "BR": 29, "BY": 28,
-    "CH": 21, "CR": 22, "CY": 28, "CZ": 24,
-    "DE": 22, "DK": 18, "DO": 28,
-    "EE": 20, "EG": 29, "ES": 24,
-    "FI": 18, "FO": 18, "FR": 27,
-    "GB": 22, "GE": 22, "GI": 23, "GL": 18, "GR": 27, "GT": 28,
-    "HR": 21, "HU": 28,
-    "IE": 22, "IL": 23, "IS": 26, "IT": 27,
+    "AD": 24,
+    "AE": 23,
+    "AL": 28,
+    "AT": 20,
+    "AZ": 28,
+    "BA": 20,
+    "BE": 16,
+    "BG": 22,
+    "BH": 22,
+    "BR": 29,
+    "BY": 28,
+    "CH": 21,
+    "CR": 22,
+    "CY": 28,
+    "CZ": 24,
+    "DE": 22,
+    "DK": 18,
+    "DO": 28,
+    "EE": 20,
+    "EG": 29,
+    "ES": 24,
+    "FI": 18,
+    "FO": 18,
+    "FR": 27,
+    "GB": 22,
+    "GE": 22,
+    "GI": 23,
+    "GL": 18,
+    "GR": 27,
+    "GT": 28,
+    "HR": 21,
+    "HU": 28,
+    "IE": 22,
+    "IL": 23,
+    "IS": 26,
+    "IT": 27,
     "JO": 30,
-    "KW": 30, "KZ": 20,
-    "LB": 28, "LC": 32, "LI": 21, "LT": 20, "LU": 20, "LV": 21,
-    "MC": 27, "MD": 24, "ME": 22, "MK": 19, "MR": 27, "MT": 31, "MU": 30,
-    "NL": 18, "NO": 15,
-    "PK": 24, "PL": 28, "PS": 29, "PT": 25,
+    "KW": 30,
+    "KZ": 20,
+    "LB": 28,
+    "LC": 32,
+    "LI": 21,
+    "LT": 20,
+    "LU": 20,
+    "LV": 21,
+    "MC": 27,
+    "MD": 24,
+    "ME": 22,
+    "MK": 19,
+    "MR": 27,
+    "MT": 31,
+    "MU": 30,
+    "NL": 18,
+    "NO": 15,
+    "PK": 24,
+    "PL": 28,
+    "PS": 29,
+    "PT": 25,
     "QA": 29,
-    "RO": 24, "RS": 22,
-    "SA": 24, "SC": 31, "SE": 24, "SI": 19, "SK": 24, "SM": 27,
-    "TN": 24, "TR": 26,
+    "RO": 24,
+    "RS": 22,
+    "SA": 24,
+    "SC": 31,
+    "SE": 24,
+    "SI": 19,
+    "SK": 24,
+    "SM": 27,
+    "TN": 24,
+    "TR": 26,
     "UA": 29,
-    "VA": 22, "VG": 24,
+    "VA": 22,
+    "VG": 24,
     "XK": 20,
 }
 
@@ -252,6 +312,7 @@ class AadhaarProvider(BaseProvider):
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
+
 class GermanSteuerIdProvider(BaseProvider):
     """Generates 11-digit German Steuer-IDs that pass our validator.
 
@@ -283,6 +344,7 @@ class GermanSteuerIdProvider(BaseProvider):
 # Medical Record Number (opaque, but recognizably MRN-shaped)
 # ---------------------------------------------------------------------------
 
+
 class MedicalRecordNumberProvider(BaseProvider):
     """Generates plausible medical record numbers (``MRN-1234567``)."""
 
@@ -293,6 +355,7 @@ class MedicalRecordNumberProvider(BaseProvider):
 # ---------------------------------------------------------------------------
 # US National Provider Identifier (10 digits, Luhn over "80840" prefix)
 # ---------------------------------------------------------------------------
+
 
 def _luhn_check_digit(digits: Sequence[int]) -> int:
     total = 0
@@ -321,6 +384,7 @@ class NPIProvider(BaseProvider):
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
+
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     faker.add_provider(AadhaarProvider)
@@ -337,6 +401,7 @@ __all__ = [
     "generate_luhn_identifier",
     "generate_npi",
     "generate_ssn",
+    "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",
     "validate_luhn",

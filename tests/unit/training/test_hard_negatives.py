@@ -20,7 +20,9 @@ def test_generator_emits_all_required_categories():
     assert {example.category for example in examples} == set(HARD_NEGATIVE_CATEGORIES)
     assert all(example.text for example in examples)
     assert all(example.to_training_item()["labels"] == [] for example in examples)
-    assert all(example.to_training_item()["is_hard_negative"] is True for example in examples)
+    assert all(
+        example.to_training_item()["is_hard_negative"] is True for example in examples
+    )
 
 
 def test_structurally_valid_fake_ids_use_clinical_id_validators():
@@ -69,6 +71,18 @@ def test_sampler_does_not_duplicate_existing_hard_negatives():
 
     assert len(sampled) == len(fixture_batch)
     assert count_hard_negatives(sampled) == 1
+
+
+def test_sample_hard_negatives_noops_when_recipe_flag_is_false():
+    fixture_batch = ({"text": "Plain negative row.", "labels": []},)
+
+    sampled = sample_hard_negatives(
+        fixture_batch,
+        recipe_config={"hard_negatives_required": False},
+    )
+
+    assert sampled == fixture_batch
+    assert count_hard_negatives(sampled) == 0
 
 
 def test_recipe_flag_controls_sampler_requirement():

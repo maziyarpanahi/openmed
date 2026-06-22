@@ -9,7 +9,6 @@ from typing import Any, Mapping, Sequence
 
 from openmed.core.anonymizer.providers import clinical_ids
 
-
 PROVIDER_FACILITY_NAME = "provider_facility_name"
 CLINICAL_ABBREVIATION_OR_DRUG_NAME = "clinical_abbreviation_or_drug_name"
 LAB_DOSAGE_ACCOUNT_LIKE_VALUE = "lab_dosage_account_like_value"
@@ -146,7 +145,9 @@ class HardNegativeGenerator:
             ("luhn", clinical_ids.generate_luhn_identifier, clinical_ids.validate_luhn),
             ("ssn", clinical_ids.generate_ssn, clinical_ids.validate_ssn),
         )
-        subtype, generate_value, validator = generators[self._fake_id_index % len(generators)]
+        subtype, generate_value, validator = generators[
+            self._fake_id_index % len(generators)
+        ]
         self._fake_id_index += 1
         value = generate_value(rng=self._rng)
         if not validator(value):
@@ -160,7 +161,9 @@ class HardNegativeGenerator:
         )
 
     def _next_category(self) -> str:
-        category = HARD_NEGATIVE_CATEGORIES[self._category_index % len(HARD_NEGATIVE_CATEGORIES)]
+        category = HARD_NEGATIVE_CATEGORIES[
+            self._category_index % len(HARD_NEGATIVE_CATEGORIES)
+        ]
         self._category_index += 1
         return category
 
@@ -188,7 +191,9 @@ class HardNegativeSampler:
         """Return a batch with the configured hard-negative minimum satisfied."""
 
         items = [_copy_item(item) for item in batch]
-        if recipe_config is not None and not requires_hard_negative_sampler(recipe_config):
+        if recipe_config is not None and not requires_hard_negative_sampler(
+            recipe_config
+        ):
             return tuple(items)
 
         existing = count_hard_negatives(items)
@@ -224,6 +229,8 @@ def sample_hard_negatives(
     """Convenience wrapper for adding hard negatives to a batch."""
 
     if recipe_config is not None:
+        if not requires_hard_negative_sampler(recipe_config):
+            return tuple(_copy_item(item) for item in batch)
         sampler = sampler_for_recipe(
             recipe_config,
             seed=seed,

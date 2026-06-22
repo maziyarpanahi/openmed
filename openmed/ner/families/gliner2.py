@@ -71,7 +71,8 @@ def _safe_import(module_name: str, *, require_v2: bool = False) -> bool:
                 return False
         # Heuristic: v2 exposes GLiNERMultiTask / FastGLiNER classes.
         if not any(
-            hasattr(module, attr) for attr in ("GLiNERMultiTask", "FastGLiNER", "GLiNER")
+            hasattr(module, attr)
+            for attr in ("GLiNERMultiTask", "FastGLiNER", "GLiNER")
         ):
             return False
     return True
