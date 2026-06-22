@@ -1408,13 +1408,13 @@ def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
     ``entity.entity_type`` holds the raw model label, whose spelling and case
     vary across models (the default English model emits lowercase ``"date"``),
     so comparing it to the literal ``"DATE"`` misses dates for most models. The
-    canonical label normalizes these to ``DATE``; fall back to normalizing the
-    raw label when ``canonical_label`` is unset.
+    canonical label normalizes these to a date label; fall back to normalizing
+    the raw label when ``canonical_label`` is unset.
     """
-    from .labels import DATE, normalize_label
+    from .labels import DATE, DATE_OF_BIRTH, normalize_label
 
     canonical = entity.canonical_label or normalize_label(entity.entity_type, lang)
-    return canonical == DATE
+    return canonical in {DATE, DATE_OF_BIRTH}
 
 
 def _redact_entity(
