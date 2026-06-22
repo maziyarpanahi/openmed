@@ -1,3 +1,4 @@
+import unicodedata
 from datetime import datetime
 
 from openmed.core.pipeline import Pipeline
@@ -33,6 +34,128 @@ def test_normalized_offsets_remap_combining_characters_to_original_positions():
         normalized_e,
         normalized_e + 1,
     ) == (original_e, original_combining + 1)
+
+
+def test_normalized_span_round_trips_nfc_length_change_to_original_surface():
+    text = "Patient Jose\u0301 Garcia visited"
+    document = Pipeline().stage1_normalize(text)
+    normalized_surface = "José Garcia"
+    normalized_start = document.normalized_text.index(normalized_surface)
+    normalized_end = normalized_start + len(normalized_surface)
+
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    original_surface = text[original_start:original_end]
+
+    assert original_surface == "Jose\u0301 Garcia"
+    assert unicodedata.normalize("NFC", original_surface) == normalized_surface
+    assert document.offset_map.original_span_to_normalized(
+        original_start,
+        original_end,
+    ) == (normalized_start, normalized_end)
+
+
+def test_normalized_span_round_trips_collapsed_whitespace_to_original_surface():
+    text = "Patient John   Doe visited"
+    document = Pipeline().stage1_normalize(text)
+    normalized_surface = "John Doe"
+    normalized_start = document.normalized_text.index(normalized_surface)
+    normalized_end = normalized_start + len(normalized_surface)
+
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    original_surface = text[original_start:original_end]
+
+    assert original_surface == "John   Doe"
+    assert Pipeline().stage1_normalize(original_surface).normalized_text == (
+        normalized_surface
+    )
+    assert document.offset_map.original_span_to_normalized(
+        original_start,
+        original_end,
+    ) == (normalized_start, normalized_end)
+
+
+def test_deidentification_redacts_original_nfc_changed_entity_surface():
+    text = "Patient Jose\u0301 Garcia visited"
+
+    def model_detector(text, **kwargs):
+        entity_text = "José Garcia"
+        start = text.index(entity_text)
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text=entity_text,
+                    label="NAME",
+                    start=start,
+                    end=start + len(entity_text),
+                    confidence=0.95,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp=datetime.now().isoformat(),
+        )
+
+    result = Pipeline(
+        model_detector=model_detector,
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+    entity = result.deidentification_result.pii_entities[0]
+
+    assert result.deidentification_result.original_text == text
+    assert entity.original_text == "Jose\u0301 Garcia"
+    assert entity.text == "Jose\u0301 Garcia"
+    assert (entity.start, entity.end) == (
+        text.index("Jose\u0301 Garcia"),
+        text.index("Jose\u0301 Garcia") + len("Jose\u0301 Garcia"),
+    )
+    assert result.redacted_text == "Patient [NAME] visited"
+
+
+def test_deidentification_redacts_original_collapsed_whitespace_entity_surface():
+    text = "Patient John   Doe visited"
+
+    def model_detector(text, **kwargs):
+        entity_text = "John Doe"
+        start = text.index(entity_text)
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text=entity_text,
+                    label="NAME",
+                    start=start,
+                    end=start + len(entity_text),
+                    confidence=0.95,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp=datetime.now().isoformat(),
+        )
+
+    result = Pipeline(
+        model_detector=model_detector,
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+    entity = result.deidentification_result.pii_entities[0]
+
+    assert result.deidentification_result.original_text == text
+    assert entity.original_text == "John   Doe"
+    assert entity.text == "John   Doe"
+    assert (entity.start, entity.end) == (
+        text.index("John   Doe"),
+        text.index("John   Doe") + len("John   Doe"),
+    )
+    assert result.redacted_text == "Patient [NAME] visited"
 
 
 def test_luhn_valid_mrn_is_detected_before_model_stage_runs():
