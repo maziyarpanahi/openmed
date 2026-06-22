@@ -13,6 +13,9 @@ from typing import Any
 
 _HASH_ALGORITHM = "sha256"
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
+_MISSING_KEY_ERROR = (
+    "A non-empty HMAC release key is required for audit signing and verification"
+)
 
 
 def _canonical_json(data: Any) -> str:
@@ -48,16 +51,18 @@ def manifest_hash(path: Path | None = None) -> str:
         return _sha256_bytes(b"")
 
 
-def _key_bytes(key: bytes | str) -> bytes:
+def _key_bytes(key: bytes | str | None) -> bytes:
+    if key is None:
+        raise ValueError(_MISSING_KEY_ERROR)
     if isinstance(key, bytes):
         if not key:
-            raise ValueError("Signing key must not be empty")
+            raise ValueError(_MISSING_KEY_ERROR)
         return key
     if isinstance(key, str):
         if not key:
-            raise ValueError("Signing key must not be empty")
+            raise ValueError(_MISSING_KEY_ERROR)
         return key.encode("utf-8")
-    raise TypeError("Signing key must be str or bytes")
+    raise TypeError("Signing key must be str, bytes, or None")
 
 
 @dataclass
@@ -272,8 +277,13 @@ class AuditReport:
     def from_json(cls, data: str | bytes) -> "AuditReport":
         return cls.from_dict(json.loads(data))
 
-    def sign(self, key: bytes | str, *, key_id: str = "release") -> "AuditReport":
-        """Sign the report with a release key and return ``self``."""
+    def sign(
+        self,
+        key: bytes | str | None,
+        *,
+        key_id: str = "release",
+    ) -> "AuditReport":
+        """Sign the report with a non-empty release HMAC key and return ``self``."""
         self.repro_hash = self.recompute_repro_hash()
         message = _canonical_json(
             self._payload(include_repro_hash=True, include_signature=False)
@@ -288,12 +298,13 @@ class AuditReport:
 
     def verify(
         self,
-        key: bytes | str,
+        key: bytes | str | None,
         *,
         original_text: str | None = None,
         deidentified_text: str | None = None,
     ) -> bool:
-        """Verify the signature and reproducibility hash."""
+        """Verify the signature and reproducibility hash with a non-empty key."""
+        key_bytes = _key_bytes(key)
         if original_text is not None and hash_text(original_text) != self.input_hash:
             return False
         if (
@@ -309,7 +320,7 @@ class AuditReport:
         message = _canonical_json(
             self._payload(include_repro_hash=True, include_signature=False)
         ).encode("utf-8")
-        expected = hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest()
+        expected = hmac.new(key_bytes, message, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, self.signature.value)
 
     def export_review_bundle(self) -> dict[str, Any]:
