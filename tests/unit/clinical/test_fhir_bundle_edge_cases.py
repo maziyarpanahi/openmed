@@ -5,8 +5,6 @@ were not explicitly verified: empty input handling and dangling reference
 preservation.
 """
 
-import pytest
-
 from openmed.clinical.exporters.fhir import to_bundle
 
 
@@ -84,7 +82,9 @@ class TestDanglingReferences:
 
         # Dangling references preserved verbatim
         assert condition["encounter"]["reference"] == "Encounter/missing"
-        assert condition["evidence"][0]["detail"][0]["reference"] == "Observation/absent"
+        assert (
+            condition["evidence"][0]["detail"][0]["reference"] == "Observation/absent"
+        )
 
     def test_multiple_dangling_references_same_resource(self):
         """Multiple dangling references on one resource are all preserved."""
