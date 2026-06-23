@@ -1,21 +1,17 @@
 import re
-from typing import Dict, Any, Optional, Union
+from typing import Any, Dict, Optional, Union
 
-# ADVISORY DISCLAIMER: Derived flags are heuristic and not a substitute 
+# ADVISORY DISCLAIMER: Derived flags are heuristic and not a substitute
 # for the originating laboratory's own formal diagnostic flagging.
+
 
 def parse_reference_range(text: str) -> Dict[str, Any]:
     """
     Parses a reference range text string into numeric boundary limits.
     Supports formats like '135-145', '0.5 - 1.2', '<5', '>10'.
     """
-    result = {
-        "low": None, 
-        "high": None, 
-        "low_inclusive": True, 
-        "high_inclusive": True
-    }
-    
+    result = {"low": None, "high": None, "low_inclusive": True, "high_inclusive": True}
+
     if not text or not isinstance(text, str):
         return result
 
@@ -46,9 +42,9 @@ def parse_reference_range(text: str) -> Dict[str, Any]:
 
 
 def derive_abnormal_flag(
-    value: Union[int, float, str], 
-    reference_range: Dict[str, Any], 
-    explicit_flag: Optional[str] = None
+    value: Union[int, float, str],
+    reference_range: Dict[str, Any],
+    explicit_flag: Optional[str] = None,
 ) -> str:
     """
     Derives clinical abnormality status based on parsed bounds or explicit flags.
