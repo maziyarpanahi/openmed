@@ -1069,7 +1069,7 @@ def _build_deidentification_result(
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
     if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = random.randint(-365, 365)
+        date_shift_days = _random_nonzero_shift()
 
     anonymizer = None
     if effective_method == "replace" or any(
@@ -1698,6 +1698,23 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
     except ValueError:
         # The only date that can fail here is Feb 29 -> a non-leap year.
         return date_value.replace(year=year, month=2, day=28)
+
+
+def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
+    """Return a random non-zero day offset in ``[low, high]`` excluding 0.
+
+    A zero-day shift would leave clinical dates unchanged, silently defeating
+    de-identification, so the auto-selected offset must never be 0.
+
+    Args:
+        low: Minimum (most-negative) shift in days, inclusive.
+        high: Maximum (most-positive) shift in days, inclusive.
+
+    Returns:
+        A non-zero integer day offset within the range.
+    """
+    sign = random.choice((-1, 1))
+    return sign * random.randint(1, high)
 
 
 def _shift_date(

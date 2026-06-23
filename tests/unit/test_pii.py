@@ -12,6 +12,7 @@ from openmed.core.pii import (
     DeidentificationResult,
     PIIEntity,
     _generate_fake_pii,
+    _random_nonzero_shift,
     _redact_entity,
     _shift_date,
     _strip_accents,
@@ -703,6 +704,41 @@ class TestDeidentify:
                 date_shift_days=30,
             )
 
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_auto_shift_dates_never_echoes_original_date(self, mock_extract):
+        """Auto-selected shift_dates offsets must never be a no-op.
+
+        ``date_shift_days=None`` used to fall back to ``random.randint(-365,
+        365)``, which is inclusive of 0 and silently left every date in the
+        document unchanged about 1 run in 731. Repeat the auto-selected path
+        enough times that the old bug would almost certainly have surfaced,
+        and assert the shifted date never equals the original.
+
+        ``keep_year=False`` keeps this deterministic: shifting a date by any
+        non-zero number of days always changes the calendar date, so this
+        assertion can never flake on a leap-year edge case.
+        """
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        for _ in range(200):
+            result = deidentify(
+                f"DOB {original}",
+                method="shift_dates",
+                date_shift_days=None,
+                keep_year=False,
+            )
+            assert original not in result.deidentified_text
+
 
 # ---------------------------------------------------------------------------
 # _redact_entity Tests
@@ -876,6 +912,27 @@ class TestShiftDate:
         """
         result = _shift_date("02/28/2019", 366, keep_year=True)
         assert result == "02/28/2019"
+
+
+# ---------------------------------------------------------------------------
+# _random_nonzero_shift Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRandomNonzeroShift:
+    """Tests for the _random_nonzero_shift helper function."""
+
+    def test_random_nonzero_shift_never_zero(self):
+        """Every draw must be non-zero and within the default ±365 range."""
+        draws = {_random_nonzero_shift() for _ in range(10_000)}
+        assert 0 not in draws
+        assert all(-365 <= d <= 365 for d in draws)
+
+    def test_random_nonzero_shift_respects_custom_high(self):
+        """A narrower ``high`` bound must still exclude 0."""
+        draws = {_random_nonzero_shift(low=-10, high=10) for _ in range(2_000)}
+        assert 0 not in draws
+        assert all(-10 <= d <= 10 for d in draws)
 
 
 # ---------------------------------------------------------------------------
