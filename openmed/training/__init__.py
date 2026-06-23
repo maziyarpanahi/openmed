@@ -11,17 +11,25 @@ __all__ = [
     "AdjudicationItem",
     "AdjudicationQueue",
     "DryRunResult",
+    "HARD_NEGATIVE_CATEGORIES",
+    "HardNegativeExample",
+    "HardNegativeGenerator",
+    "HardNegativeSampler",
     "RecipeConfigError",
     "TrainingRecipeConfig",
     "WeakLabelDecision",
     "WeakLabelSpan",
     "config_hash",
+    "count_hard_negatives",
     "dry_run_recipe",
     "load_preset",
     "make_adjudication_item",
     "normalize_weak_span",
+    "requires_hard_negative_sampler",
     "run_recipe",
     "runtime_dependencies",
+    "sample_hard_negatives",
+    "sampler_for_recipe",
     "weak_label_document",
 ]
 
@@ -42,6 +50,18 @@ def __getattr__(name: str) -> Any:
     }:
         recipe = import_module(".recipe", __name__)
         return getattr(recipe, name)
+    if name in {
+        "HARD_NEGATIVE_CATEGORIES",
+        "HardNegativeExample",
+        "HardNegativeGenerator",
+        "HardNegativeSampler",
+        "count_hard_negatives",
+        "requires_hard_negative_sampler",
+        "sample_hard_negatives",
+        "sampler_for_recipe",
+    }:
+        hard_negatives = import_module(".hard_negatives", __name__)
+        return getattr(hard_negatives, name)
     if name in {
         "AdjudicationCandidate",
         "AdjudicationItem",
