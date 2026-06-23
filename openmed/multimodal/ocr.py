@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Protocol, runtime_checkable
 
 from .base import ExtractedDocument, register_handler
@@ -111,8 +112,23 @@ class TesseractEngine:
 
     def recognize(self, image: Any) -> OcrResult:
         pytesseract = _import_backend("pytesseract", _TESSERACT_HINT)
-        loaded = _load_image(image)
-        data = pytesseract.image_to_data(loaded, output_type=pytesseract.Output.DICT)
+        loaded = _load_tesseract_image(image)
+        try:
+            data = pytesseract.image_to_data(
+                loaded, output_type=pytesseract.Output.DICT
+            )
+        except Exception as exc:
+            tesseract_error = getattr(
+                getattr(pytesseract, "pytesseract", None),
+                "TesseractNotFoundError",
+                None,
+            )
+            if tesseract_error is not None and isinstance(exc, tesseract_error):
+                raise MissingDependencyError(
+                    dependency="tesseract", instruction=_TESSERACT_HINT
+                ) from exc
+            raise
+
         words: list[OcrWord] = []
         for i, text in enumerate(data["text"]):
             text = text.strip()
@@ -121,12 +137,13 @@ class TesseractEngine:
             left, top = float(data["left"][i]), float(data["top"][i])
             width, height = float(data["width"][i]), float(data["height"][i])
             conf = float(data["conf"][i])
+            page_nums = data.get("page_num")
             words.append(
                 OcrWord(
                     text=text,
                     bbox=(left, top, left + width, top + height),
                     confidence=max(conf, 0.0) / 100.0,
-                    page=int(data.get("page_num", [0])[i]) if "page_num" in data else 0,
+                    page=_zero_based_page(page_nums[i]) if page_nums else 0,
                 )
             )
         return OcrResult(words=tuple(words), metadata={"engine": self.name})
@@ -140,10 +157,10 @@ class PaddleOcrEngine:
     def recognize(self, image: Any) -> OcrResult:
         paddleocr = _import_backend("paddleocr", _PADDLE_HINT)
         engine = paddleocr.PaddleOCR(show_log=False)
-        loaded = _load_image(image)
+        loaded = _load_paddle_image(image)
         predictions = engine.ocr(loaded)
         words: list[OcrWord] = []
-        for page_index, page in enumerate(predictions or []):
+        for page_index, page in _iter_paddle_pages(predictions):
             for box, (text, confidence) in page or []:
                 xs = [point[0] for point in box]
                 ys = [point[1] for point in box]
@@ -158,14 +175,50 @@ class PaddleOcrEngine:
         return OcrResult(words=tuple(words), metadata={"engine": self.name})
 
 
-def _load_image(image: Any) -> Any:
-    """Load a path/bytes into a PIL image; pass through anything else."""
-    from pathlib import Path
-
+def _load_tesseract_image(image: Any) -> Any:
+    """Load a path/bytes into a PIL image for pytesseract; pass through others."""
     if isinstance(image, (str, Path)):
         PIL_Image = _import_backend("PIL.Image", _TESSERACT_HINT)
         return PIL_Image.open(image)
     return image
+
+
+def _load_paddle_image(image: Any) -> Any:
+    """Normalize pathlib paths for PaddleOCR without forcing Pillow."""
+    if isinstance(image, Path):
+        return str(image)
+    return image
+
+
+def _zero_based_page(page_num: Any) -> int:
+    """Convert OCR backend page numbers to the SourceSpan zero-based contract."""
+    return max(int(page_num) - 1, 0)
+
+
+def _looks_like_paddle_detection(item: Any) -> bool:
+    if not isinstance(item, (list, tuple)) or len(item) != 2:
+        return False
+    box, text_confidence = item
+    if not isinstance(box, (list, tuple)) or not box:
+        return False
+    first_point = box[0]
+    return (
+        isinstance(first_point, (list, tuple))
+        and len(first_point) >= 2
+        and isinstance(text_confidence, (list, tuple))
+        and len(text_confidence) >= 2
+    )
+
+
+def _iter_paddle_pages(predictions: Any) -> Iterable[tuple[int, Any]]:
+    """Yield page-indexed PaddleOCR detections for common v2 output shapes."""
+    if not predictions:
+        return ()
+    if isinstance(predictions, (list, tuple)) and _looks_like_paddle_detection(
+        predictions[0]
+    ):
+        return ((0, predictions),)
+    return enumerate(predictions)
 
 
 EngineFactory = Callable[[], OcrEngine]
