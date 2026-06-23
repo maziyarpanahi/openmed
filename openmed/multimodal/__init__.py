@@ -18,6 +18,19 @@ from .base import (
 )
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 
+# Importing the OCR module registers image-format handlers with the dispatcher
+# so ``redact_document`` can route scans/images. It stays import-light: OCR
+# backends (and Pillow) are only imported when an engine actually runs. Only the
+# data types are re-exported here; the ``ocr()`` entry point is left in the
+# submodule (``openmed.multimodal.ocr``) to avoid shadowing it with a function.
+from .ocr import (
+    FakeOcrEngine,
+    OcrEngine,
+    OcrResult,
+    OcrWord,
+    register_ocr_engine,
+)
+
 __all__ = [
     "ExtractedDocument",
     "SourceSpan",
@@ -26,4 +39,9 @@ __all__ = [
     "ensure_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "OcrResult",
+    "OcrWord",
+    "OcrEngine",
+    "FakeOcrEngine",
+    "register_ocr_engine",
 ]
