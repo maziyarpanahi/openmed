@@ -16,6 +16,13 @@ from .context import (
     resolve_temporality,
     resolve_uncertainty,
 )
+from .lab_values import (
+    LAB_FLAG_ADVISORY,
+    AbnormalFlag,
+    ReferenceRange,
+    derive_abnormal_flag,
+    parse_reference_range,
+)
 
 __all__ = [
     "RECENT",
@@ -28,4 +35,9 @@ __all__ = [
     "UNCERTAIN",
     "CERTAINTY_VALUES",
     "resolve_uncertainty",
+    "AbnormalFlag",
+    "ReferenceRange",
+    "LAB_FLAG_ADVISORY",
+    "parse_reference_range",
+    "derive_abnormal_flag",
 ]
