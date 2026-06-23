@@ -25,6 +25,10 @@ Use the smallest extra that matches your runtime:
 - `openmed[hf]` for the standard Python model runtime.
 - `openmed[hf,service]` when you need the REST service.
 - `openmed[mlx]` for Python MLX acceleration on Apple Silicon.
+- `openmed[multimodal]` for document/image intake and Tesseract OCR; install
+  the system `tesseract` binary separately (`brew install tesseract` on macOS
+  or `sudo apt-get install tesseract-ocr` on Debian/Ubuntu).
+- `openmed[ocr-paddle]` for the heavier optional PaddleOCR backend.
 
 Start with the [Quick Start](getting-started.md), then use
 [Configuration & Validation](configuration.md) for cache paths, device selection, profiles, and environment overrides.

@@ -21,6 +21,21 @@ uv pip install ".[hf,gliner]"      # add GLiNER + transformers
 uv pip install ".[dev]"            # pytest + coverage + linting
 ```
 
+For scanned images and document OCR, install the multimodal extra plus the
+system Tesseract binary:
+
+```bash
+uv pip install ".[multimodal]"
+brew install tesseract             # macOS
+sudo apt-get install tesseract-ocr # Debian/Ubuntu
+```
+
+PaddleOCR is available as a heavier opt-in OCR backend:
+
+```bash
+uv pip install ".[ocr-paddle]"
+```
+
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
 ```bash
