@@ -108,6 +108,7 @@ coreml = [
 onnx = [
   "onnx>=1.14",
   "onnxruntime>=1.16",
+  "onnxscript>=0.1.0",
   "torch>=2.0",
   "transformers>=4.50",
 ]

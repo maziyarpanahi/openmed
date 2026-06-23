@@ -84,7 +84,9 @@ def test_convert_orchestrates_artifacts_and_multi_format_publish(
 
     def fake_publish_artifact(**kwargs):
         publish_calls.append(kwargs)
-        return types.SimpleNamespace(skipped=False, repo_id="OpenMed/test-model-v1-onnx")
+        return types.SimpleNamespace(
+            skipped=False, repo_id="OpenMed/test-model-v1-onnx"
+        )
 
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_webgpu", fake_export_webgpu)
@@ -157,3 +159,105 @@ def test_export_webgpu_converts_to_fp16_and_preserves_io_types(
     assert output_path.read_bytes() == b"fp16"
     assert saved["model"]["keep_io_types"] is True
     assert checked
+
+
+def test_export_onnx_uses_torch_two_dynamic_shapes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    module = _convert_module()
+    output_path = tmp_path / "model.onnx"
+    export_call = {}
+
+    torch_mod = types.ModuleType("torch")
+
+    class Module:
+        def __init__(self) -> None:
+            pass
+
+        def eval(self) -> None:
+            pass
+
+    class NoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_dim(name, *, min=None, max=None):
+        return {"name": name, "min": min, "max": max}
+
+    def fake_export(
+        model,
+        args,
+        f,
+        *,
+        input_names=None,
+        output_names=None,
+        opset_version=None,
+        dynamo=True,
+        dynamic_shapes=None,
+        dynamic_axes=None,
+        do_constant_folding=True,
+    ):
+        export_call.update(
+            {
+                "args": args,
+                "input_names": input_names,
+                "output_names": output_names,
+                "opset_version": opset_version,
+                "dynamo": dynamo,
+                "dynamic_shapes": dynamic_shapes,
+                "dynamic_axes": dynamic_axes,
+                "do_constant_folding": do_constant_folding,
+            }
+        )
+        Path(f).write_bytes(b"onnx")
+
+    torch_mod.nn = types.SimpleNamespace(Module=Module)
+    torch_mod.no_grad = NoGrad
+    torch_mod.export = types.SimpleNamespace(Dim=fake_dim)
+    torch_mod.onnx = types.SimpleNamespace(export=fake_export)
+
+    class FakeTokenizer:
+        def __call__(self, texts, **kwargs):
+            assert len(texts) == 2
+            return {
+                "input_ids": [[101, 102], [101, 102]],
+                "attention_mask": [[1, 1], [1, 1]],
+            }
+
+    class FakeModel(Module):
+        pass
+
+    transformers_mod = types.ModuleType("transformers")
+    transformers_mod.AutoTokenizer = types.SimpleNamespace(
+        from_pretrained=lambda *args, **kwargs: FakeTokenizer()
+    )
+    transformers_mod.AutoModelForTokenClassification = types.SimpleNamespace(
+        from_pretrained=lambda *args, **kwargs: FakeModel()
+    )
+
+    onnx_mod = types.ModuleType("onnx")
+    onnx_mod.load = lambda path: {"path": path}
+    onnx_mod.checker = types.SimpleNamespace(check_model=lambda model: None)
+
+    monkeypatch.setitem(sys.modules, "torch", torch_mod)
+    monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+    monkeypatch.setitem(sys.modules, "onnx", onnx_mod)
+
+    assert module.export_onnx("OpenMed/test-model", output_path, max_seq_length=32)
+
+    assert export_call["dynamo"] is True
+    assert export_call["dynamic_axes"] is None
+    assert export_call["dynamic_shapes"] == {
+        "input_ids": {
+            0: {"name": "batch", "min": 1, "max": None},
+            1: {"name": "sequence", "min": 1, "max": 32},
+        },
+        "attention_mask": {
+            0: {"name": "batch", "min": 1, "max": None},
+            1: {"name": "sequence", "min": 1, "max": 32},
+        },
+    }

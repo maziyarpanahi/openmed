@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import logging
 from dataclasses import dataclass
@@ -82,7 +83,7 @@ def export_onnx(
     model.eval()
 
     sample = tokenizer(
-        sample_text,
+        [sample_text, sample_text],
         max_length=max_seq_length,
         padding="max_length",
         truncation=True,
@@ -96,7 +97,12 @@ def export_onnx(
             self.base_model = base_model
             self.include_token_type_ids = include_token_type_ids
 
-        def forward(self, input_ids: Any, attention_mask: Any, token_type_ids: Any = None) -> Any:
+        def forward(
+            self,
+            input_ids: Any,
+            attention_mask: Any,
+            token_type_ids: Any = None,
+        ) -> Any:
             inputs = {
                 "input_ids": input_ids,
                 "attention_mask": attention_mask,
@@ -114,20 +120,26 @@ def export_onnx(
         input_names.append("token_type_ids")
         example_inputs = (*example_inputs, sample["token_type_ids"])
 
-    dynamic_axes = {
-        name: {0: "batch", 1: "sequence"} for name in [*input_names, "logits"]
-    }
-
     with torch.no_grad():
+        export_kwargs = {
+            "input_names": input_names,
+            "output_names": ["logits"],
+            "opset_version": opset,
+            "do_constant_folding": True,
+        }
+        export_kwargs.update(
+            _dynamic_export_kwargs(
+                torch,
+                export_fn=torch.onnx.export,
+                input_names=input_names,
+                max_seq_length=max_seq_length,
+            )
+        )
         torch.onnx.export(
             wrapper,
             example_inputs,
             str(output_path),
-            input_names=input_names,
-            output_names=["logits"],
-            dynamic_axes=dynamic_axes,
-            opset_version=opset,
-            do_constant_folding=True,
+            **export_kwargs,
         )
 
     _check_onnx_model(output_path)
@@ -272,7 +284,9 @@ def save_source_assets(
     id2label = config.get("id2label")
     if isinstance(id2label, Mapping):
         with (output_dir / "id2label.json").open("w", encoding="utf-8") as handle:
-            json.dump({str(key): value for key, value in id2label.items()}, handle, indent=2)
+            json.dump(
+                {str(key): value for key, value in id2label.items()}, handle, indent=2
+            )
 
     tokenizer_files: list[str] = []
     try:
@@ -318,7 +332,9 @@ def write_export_manifest(
         "family": family,
         "source_model_id": source_model_id,
         "config_path": "config.json",
-        "label_map_path": "id2label.json" if (output_dir / "id2label.json").exists() else None,
+        "label_map_path": "id2label.json"
+        if (output_dir / "id2label.json").exists()
+        else None,
         "artifacts": [artifact.to_manifest(output_dir) for artifact in artifacts],
         "max_sequence_length": config.get("max_sequence_length")
         or config.get("max_position_embeddings", 512),
@@ -356,12 +372,46 @@ def _dedupe_keep_order(items: Sequence[str]) -> list[str]:
     return result
 
 
+def _dynamic_export_kwargs(
+    torch_module: Any,
+    *,
+    export_fn: Any,
+    input_names: Sequence[str],
+    max_seq_length: int,
+) -> dict[str, Any]:
+    """Return Torch ONNX dynamic-shape kwargs for the installed exporter."""
+
+    parameters = inspect.signature(export_fn).parameters
+    if "dynamo" in parameters and "dynamic_shapes" in parameters:
+        batch_dim = torch_module.export.Dim("batch", min=1)
+        sequence_dim = torch_module.export.Dim(
+            "sequence",
+            min=1,
+            max=max_seq_length,
+        )
+        return {
+            "dynamo": True,
+            "dynamic_shapes": {
+                name: {0: batch_dim, 1: sequence_dim} for name in input_names
+            },
+        }
+
+    dynamic_axes = {
+        name: {0: "batch", 1: "sequence"} for name in [*input_names, "logits"]
+    }
+    return {"dynamic_axes": dynamic_axes}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert a Hugging Face token-classification model to ONNX artifacts",
     )
-    parser.add_argument("--model", required=True, help="Source model ID or local directory")
-    parser.add_argument("--output", required=True, help="Output directory for artifacts")
+    parser.add_argument(
+        "--model", required=True, help="Source model ID or local directory"
+    )
+    parser.add_argument(
+        "--output", required=True, help="Output directory for artifacts"
+    )
     parser.add_argument(
         "--no-webgpu",
         action="store_true",
@@ -374,13 +424,17 @@ def main() -> None:
         help="Maximum input sequence length",
     )
     parser.add_argument("--opset", type=int, default=18, help="ONNX opset version")
-    parser.add_argument("--cache-dir", default=None, help="Hugging Face cache directory")
+    parser.add_argument(
+        "--cache-dir", default=None, help="Hugging Face cache directory"
+    )
     parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
     )
-    parser.add_argument("--publish-repo-id", default=None, help="Explicit target repo id")
+    parser.add_argument(
+        "--publish-repo-id", default=None, help="Explicit target repo id"
+    )
     parser.add_argument("--publish-org", default="OpenMed", help="Target organization")
     parser.add_argument(
         "--publish-version",

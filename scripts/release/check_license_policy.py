@@ -69,6 +69,7 @@ REVIEWED_LICENSES = {
     "mlx": "MIT",
     "onnx": "Apache-2.0",
     "onnxruntime": "MIT",
+    "onnxscript": "MIT",
     "paddleocr": "Apache-2.0",
     "pdfplumber": "MIT",
     "pillow": "HPND",
