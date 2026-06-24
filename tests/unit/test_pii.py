@@ -13,6 +13,7 @@ from openmed.core.pii import (
     PIIEntity,
     _format_date_like_original,
     _generate_fake_pii,
+    _random_nonzero_shift,
     _redact_entity,
     _shift_date,
     _strip_accents,
@@ -704,6 +705,69 @@ class TestDeidentify:
                 date_shift_days=30,
             )
 
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_auto_shift_dates_retries_zero_offset(
+        self, mock_extract, monkeypatch
+    ):
+        """Auto-selected shift_dates offsets must never be a no-op.
+
+        ``date_shift_days=None`` used to fall back to ``random.randint(-365,
+        365)``, which is inclusive of 0 and silently left every date in the
+        document unchanged. Force the first draw to 0 so the regression is
+        deterministic.
+        """
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+        draws = iter([0, 30])
+
+        def fake_randint(low, high):
+            assert (low, high) == (-365, 365)
+            return next(draws)
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        result = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=None,
+            keep_year=False,
+        )
+
+        assert result.deidentified_text == "DOB 02/14/2020"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_explicit_zero_shift_remains_allowed(self, mock_extract):
+        """An explicit caller-supplied zero shift is a deliberate no-op."""
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=0,
+            keep_year=False,
+        )
+
+        assert result.deidentified_text == f"DOB {original}"
+
 
 # ---------------------------------------------------------------------------
 # _redact_entity Tests
@@ -934,6 +998,51 @@ class TestFormatDateLikeOriginal:
             "03/15/2022", datetime(2022, 4, 14), lang="en"
         )
         assert result == "04/14/2022"
+
+
+# ---------------------------------------------------------------------------
+# _random_nonzero_shift Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRandomNonzeroShift:
+    """Tests for the _random_nonzero_shift helper function."""
+
+    def test_random_nonzero_shift_retries_zero(self, monkeypatch):
+        """A zero draw must be retried until a non-zero offset is selected."""
+        calls = []
+        draws = iter([0, -7])
+
+        def fake_randint(low, high):
+            calls.append((low, high))
+            return next(draws)
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        assert _random_nonzero_shift(low=-10, high=10) == -7
+        assert calls == [(-10, 10), (-10, 10)]
+
+    def test_random_nonzero_shift_respects_one_sided_ranges(self, monkeypatch):
+        """Ranges that do not contain zero should be passed through unchanged."""
+        calls = []
+        draws = iter([-3, 4])
+
+        def fake_randint(low, high):
+            calls.append((low, high))
+            return next(draws)
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        assert _random_nonzero_shift(low=-10, high=-1) == -3
+        assert _random_nonzero_shift(low=1, high=10) == 4
+        assert calls == [(-10, -1), (1, 10)]
+
+    def test_random_nonzero_shift_rejects_invalid_ranges(self):
+        """The configured range must contain at least one non-zero value."""
+        with pytest.raises(ValueError, match="low must be less"):
+            _random_nonzero_shift(low=10, high=-10)
+        with pytest.raises(ValueError, match="non-zero shift"):
+            _random_nonzero_shift(low=0, high=0)
 
 
 # ---------------------------------------------------------------------------

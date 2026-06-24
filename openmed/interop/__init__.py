@@ -23,6 +23,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "langchain": AdapterSpec(
+        name="langchain",
+        module="openmed.interop.langchain",
+        extra="langchain",
+        description="LangChain redaction runnable adapter",
+    ),
     "presidio": AdapterSpec(
         name="presidio",
         module="openmed.interop.presidio",
