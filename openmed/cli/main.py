@@ -759,7 +759,7 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
         else:
             fixtures = load_suite_fixtures(suite)
             metadata = suite_metadata(suite)
-    except (RuntimeError, ValueError) as exc:
+    except (PermissionError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to load benchmark suite: {exc}\n")
         return 1
 
