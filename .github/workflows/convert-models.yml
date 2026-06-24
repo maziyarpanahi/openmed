@@ -44,15 +44,34 @@ jobs:
         pip install -e ".[mlx,hf]"
 
     - name: Convert model to MLX
+      env:
+        MODEL_ID: ${{ github.event.inputs.model_id }}
+        QUANTIZE: ${{ github.event.inputs.quantize }}
       run: |
-        QUANTIZE_ARG=""
-        if [ "${{ github.event.inputs.quantize }}" != "none" ]; then
-          QUANTIZE_ARG="--quantize ${{ github.event.inputs.quantize }}"
+        set -euo pipefail
+
+        if [[ ! "$MODEL_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          echo "::error title=Invalid model_id::Use a Hugging Face repo id such as org/model with letters, numbers, dots, underscores, and hyphens."
+          exit 1
         fi
+
+        case "$QUANTIZE" in
+          none)
+            QUANTIZE_ARGS=()
+            ;;
+          4|8)
+            QUANTIZE_ARGS=(--quantize "$QUANTIZE")
+            ;;
+          *)
+            echo "::error title=Invalid quantize::Use one of: none, 4, 8."
+            exit 1
+            ;;
+        esac
+
         python -m openmed.mlx.convert \
-          --model "${{ github.event.inputs.model_id }}" \
+          --model "$MODEL_ID" \
           --output ./mlx-output \
-          $QUANTIZE_ARG
+          "${QUANTIZE_ARGS[@]}"
 
     - name: List output files
       run: ls -la mlx-output/
@@ -82,9 +101,18 @@ jobs:
         pip install -e ".[coreml]"
 
     - name: Convert model to CoreML
+      env:
+        MODEL_ID: ${{ github.event.inputs.model_id }}
       run: |
+        set -euo pipefail
+
+        if [[ ! "$MODEL_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          echo "::error title=Invalid model_id::Use a Hugging Face repo id such as org/model with letters, numbers, dots, underscores, and hyphens."
+          exit 1
+        fi
+
         python -m openmed.coreml.convert \
-          --model "${{ github.event.inputs.model_id }}" \
+          --model "$MODEL_ID" \
           --output ./OpenMedModel.mlpackage
 
     - name: List output files
@@ -150,16 +178,34 @@ jobs:
       if: contains(github.event.inputs.formats, 'mlx')
       env:
         HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        MODEL_ID: ${{ github.event.inputs.model_id }}
+        QUANTIZE: ${{ github.event.inputs.quantize }}
       run: |
+        set -euo pipefail
+
+        if [[ ! "$MODEL_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          echo "::error title=Invalid model_id::Use a Hugging Face repo id such as org/model with letters, numbers, dots, underscores, and hyphens."
+          exit 1
+        fi
+
         FORMAT="mlx-fp"
-        if [ "${{ github.event.inputs.quantize }}" = "8" ]; then
-          FORMAT="mlx-8bit"
-        fi
-        if [ "${{ github.event.inputs.quantize }}" = "4" ]; then
-          FORMAT="mlx-4bit"
-        fi
+        case "$QUANTIZE" in
+          none)
+            ;;
+          8)
+            FORMAT="mlx-8bit"
+            ;;
+          4)
+            FORMAT="mlx-4bit"
+            ;;
+          *)
+            echo "::error title=Invalid quantize::Use one of: none, 4, 8."
+            exit 1
+            ;;
+        esac
+
         python -m openmed.core.hf_publish \
-          --model "${{ github.event.inputs.model_id }}" \
+          --model "$MODEL_ID" \
           --artifact-dir publish-artifacts/mlx-output \
           --format "$FORMAT" \
           --manifest models.jsonl \
@@ -182,9 +228,17 @@ jobs:
       if: contains(github.event.inputs.formats, 'coreml')
       env:
         HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+        MODEL_ID: ${{ github.event.inputs.model_id }}
       run: |
+        set -euo pipefail
+
+        if [[ ! "$MODEL_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+          echo "::error title=Invalid model_id::Use a Hugging Face repo id such as org/model with letters, numbers, dots, underscores, and hyphens."
+          exit 1
+        fi
+
         python -m openmed.core.hf_publish \
-          --model "${{ github.event.inputs.model_id }}" \
+          --model "$MODEL_ID" \
           --artifact-dir publish-artifacts/coreml-output \
           --format coreml \
           --manifest models.jsonl \
