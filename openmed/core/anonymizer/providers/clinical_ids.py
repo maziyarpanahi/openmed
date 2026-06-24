@@ -10,14 +10,16 @@ validators):
   - ``nl_NL.ssn()``  (BSN)        valid
   - ``fr_FR.ssn()``  (NIR)        valid
   - ``it_IT.ssn()``  (Codice Fiscale) valid
-  - ``es_ES.nie()``               valid
 
 Custom providers below cover the gaps where Faker either has no built-in
-or emits a US-style format unrelated to the requested locale's actual ID:
+or emits a US-style format unrelated to the requested locale's actual ID.
+They also replace generators whose checksums are valid but not instance-seed
+deterministic:
 
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -141,6 +143,21 @@ def generate_npi(*, rng: random.Random | None = None) -> str:
     prefixed = [8, 0, 8, 4, 0, *body]
     check_digit = _luhn_check_digit(prefixed)
     return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+_SPANISH_NIE_PREFIX_VALUES = {"X": "0", "Y": "1", "Z": "2"}
+
+
+def generate_spanish_nie(*, rng: random.Random | None = None) -> str:
+    """Generate a Spanish NIE with a valid modulo-23 check letter."""
+
+    source = rng or random.Random()
+    prefix = source.choice(tuple(_SPANISH_NIE_PREFIX_VALUES))
+    digits = f"{source.randint(0, 9999999):07d}"
+    number = int(_SPANISH_NIE_PREFIX_VALUES[prefix] + digits)
+    check = _SPANISH_DNI_LETTERS[number % len(_SPANISH_DNI_LETTERS)]
+    return f"{prefix}{digits}{check}"
 
 
 def generate_ssn(*, rng: random.Random | None = None) -> str:
@@ -309,6 +326,18 @@ class AadhaarProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Spanish NIE (prefix + 7 digits + modulo-23 check letter)
+# ---------------------------------------------------------------------------
+
+
+class SpanishNIEProvider(BaseProvider):
+    """Generates Spanish NIE values using Faker's instance RNG."""
+
+    def nie(self) -> str:
+        return generate_spanish_nie(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -388,6 +417,7 @@ class NPIProvider(BaseProvider):
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     faker.add_provider(AadhaarProvider)
+    faker.add_provider(SpanishNIEProvider)
     faker.add_provider(GermanSteuerIdProvider)
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(NPIProvider)
@@ -398,8 +428,10 @@ __all__ = [
     "GermanSteuerIdProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "SpanishNIEProvider",
     "generate_luhn_identifier",
     "generate_npi",
+    "generate_spanish_nie",
     "generate_ssn",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
