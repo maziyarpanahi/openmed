@@ -177,9 +177,13 @@ def write_manifest(
         or "unknown"
     )
     task = config.get("_mlx_task", "token-classification")
+    quantization = config.get("_mlx_quantization")
+    quant_bits = quantization.get("bits") if isinstance(quantization, dict) else None
+    format_name = f"mlx-{quant_bits}bit" if quant_bits in {4, 8} else "mlx-fp"
 
     manifest = {
         "format": MANIFEST_FORMAT,
+        "formats": [format_name],
         "format_version": MANIFEST_VERSION,
         "task": task,
         "family": family,
@@ -192,7 +196,7 @@ def write_manifest(
         "fallback_weights": fallback_weights,
         "available_weights": available_weights,
         "weights_format": preferred_format,
-        "quantization": config.get("_mlx_quantization"),
+        "quantization": quantization,
         "max_sequence_length": config.get("max_position_embeddings", 512),
         "tokenizer": {
             "path": ".",

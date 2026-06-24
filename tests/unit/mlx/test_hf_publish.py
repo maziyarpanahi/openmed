@@ -12,6 +12,7 @@ import pytest
 from openmed.core.hf_publish import (
     HfPublishError,
     append_manifest_row,
+    build_manifest_row,
     publish_artifact,
     target_repo_id,
 )
@@ -117,6 +118,21 @@ def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(
     assert rows[0]["canonical_labels"] == ["PERSON", "DATE"]
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", rows[0]["reproducibility_hash"])
     assert "secret-token" not in json.dumps(rows[0])
+
+
+def test_manifest_row_can_record_multiple_runtime_formats(tmp_path):
+    artifact = _write_mlx_artifact(tmp_path)
+
+    row = build_manifest_row(
+        repo_id="OpenMed/test-model-v1-onnx",
+        source_model_id="OpenMed/test-model",
+        artifact_dir=artifact,
+        format_name="onnx",
+        formats=["onnx", "webgpu", "onnx"],
+        git_sha="abc123",
+    )
+
+    assert row["formats"] == ["onnx", "webgpu"]
 
 
 def test_publish_artifact_skips_existing_repo_without_upload(tmp_path, monkeypatch):
