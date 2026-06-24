@@ -197,6 +197,40 @@ class ClinicalContextResult:
     negation: Negation
 
 
+@dataclass(frozen=True)
+class ClinicalAssertion:
+    """Advisory per-span clinical assertion axes for downstream grounding.
+
+    This record composes the ConText axis decisions currently needed by
+    downstream FHIR/OMOP grounding without building FHIR, OMOP, or other
+    clinical records here. A ``"historical"`` temporality maps downstream to an
+    inactive or resolved FHIR ``clinicalStatus``. A ``"hypothetical"`` span is
+    not asserted as present. An ``"uncertain"`` certainty maps downstream to
+    ``verificationStatus=provisional``.
+
+    ``negation`` and ``experiencer`` are optional extension points for sibling
+    axes and remain unset when those axes are not part of this composition.
+    Outputs are advisory annotations for review and downstream processing, not
+    clinical decisions and not medical-device instructions.
+    """
+
+    temporality: str
+    certainty: Certainty
+    negation: Negation | None = None
+    experiencer: str | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        """Return a compact dictionary, omitting axes that are not set."""
+
+        values = {
+            "temporality": self.temporality,
+            "certainty": self.certainty,
+            "negation": self.negation,
+            "experiencer": self.experiencer,
+        }
+        return {key: value for key, value in values.items() if value is not None}
+
+
 def _text_of(obj: Any) -> str:
     """Best-effort extraction of cue/span text from heterogeneous inputs."""
 
@@ -314,6 +348,18 @@ def resolve_span_context(
     )
 
 
+def assert_context_axes(
+    span: Any,
+    modifier_hits: Any = None,
+) -> ClinicalAssertion:
+    """Return the composed clinical assertion axes for ``span``."""
+
+    return ClinicalAssertion(
+        temporality=resolve_temporality(span, modifier_hits),
+        certainty=resolve_uncertainty(span, modifier_hits),
+    )
+
+
 __all__ = [
     "AFFIRMED",
     "NEGATED",
@@ -322,6 +368,7 @@ __all__ = [
     "NEGATION_CUES",
     "PSEUDO_NEGATION_CUES",
     "ClinicalContextResult",
+    "ClinicalAssertion",
     "RECENT",
     "HISTORICAL",
     "HYPOTHETICAL",
@@ -337,4 +384,5 @@ __all__ = [
     "resolve_uncertainty",
     "resolve_negation",
     "resolve_span_context",
+    "assert_context_axes",
 ]
