@@ -11,6 +11,7 @@ import pytest
 from openmed.core.pii import (
     DeidentificationResult,
     PIIEntity,
+    _format_date_like_original,
     _generate_fake_pii,
     _redact_entity,
     _shift_date,
@@ -876,6 +877,43 @@ class TestShiftDate:
         """
         result = _shift_date("02/28/2019", 366, keep_year=True)
         assert result == "02/28/2019"
+
+
+# ---------------------------------------------------------------------------
+# _format_date_like_original Tests
+# ---------------------------------------------------------------------------
+
+
+class TestFormatDateLikeOriginal:
+    """Tests for the _format_date_like_original helper function.
+
+    Called directly rather than through _shift_date/deidentify: this function
+    is only reachable when python-dateutil is importable, which is not the
+    case in this project's own dev/CI install (``pip install -e ".[dev]"``
+    does not pull in python-dateutil). Testing it directly keeps coverage of
+    this code path independent of whether dateutil happens to be installed.
+    """
+
+    def test_us_slash_two_digit_year_keeps_slash_shape(self):
+        """A 2-digit-year US date must not fall through to the ISO default."""
+        result = _format_date_like_original(
+            "03/15/22", datetime(2022, 4, 14), lang="en"
+        )
+        assert result == "04/14/2022"
+
+    def test_eu_dash_two_digit_year_keeps_dash_shape(self):
+        """A 2-digit-year EU dash date must not fall through to the ISO default."""
+        result = _format_date_like_original(
+            "15-03-22", datetime(2022, 4, 14), lang="fr"
+        )
+        assert result == "14-04-2022"
+
+    def test_four_digit_year_unaffected(self):
+        """Widening the year group must not change the existing 4-digit case."""
+        result = _format_date_like_original(
+            "03/15/2022", datetime(2022, 4, 14), lang="en"
+        )
+        assert result == "04/14/2022"
 
 
 # ---------------------------------------------------------------------------
