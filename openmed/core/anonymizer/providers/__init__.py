@@ -11,13 +11,25 @@ from .clinical_ids import (
     GermanSteuerIdProvider,
     MedicalRecordNumberProvider,
     NPIProvider,
+    SpanishDNIProvider,
     register_clinical_providers,
+)
+from .registry_ids import (
+    ID_PROVIDER_REGISTRY,
+    NationalIdSpec,
+    get_national_id,
+    register_national_id,
 )
 
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "ID_PROVIDER_REGISTRY",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "NationalIdSpec",
+    "SpanishDNIProvider",
+    "get_national_id",
     "register_clinical_providers",
+    "register_national_id",
 ]

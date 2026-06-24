@@ -18,6 +18,7 @@ or emits a US-style format unrelated to the requested locale's actual ID:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -341,6 +342,21 @@ class GermanSteuerIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Spanish DNI (8 digits + modulo-23 letter)
+# ---------------------------------------------------------------------------
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+
+
+class SpanishDNIProvider(BaseProvider):
+    """Generates Spanish DNI values that pass the existing validator."""
+
+    def dni(self) -> str:
+        number = self.generator.random.randint(0, 99_999_999)
+        return f"{number:08d}{_SPANISH_DNI_LETTERS[number % 23]}"
+
+
+# ---------------------------------------------------------------------------
 # Medical Record Number (opaque, but recognizably MRN-shaped)
 # ---------------------------------------------------------------------------
 
@@ -387,10 +403,11 @@ class NPIProvider(BaseProvider):
 
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
-    faker.add_provider(AadhaarProvider)
-    faker.add_provider(GermanSteuerIdProvider)
+    from .registry_ids import national_id_faker_provider_classes
+
+    for provider in national_id_faker_provider_classes():
+        faker.add_provider(provider)
     faker.add_provider(MedicalRecordNumberProvider)
-    faker.add_provider(NPIProvider)
 
 
 __all__ = [
@@ -398,6 +415,7 @@ __all__ = [
     "GermanSteuerIdProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "SpanishDNIProvider",
     "generate_luhn_identifier",
     "generate_npi",
     "generate_ssn",
