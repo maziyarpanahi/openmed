@@ -862,6 +862,26 @@ class TestShiftDate:
         result = _shift_date("01/15/2020", -30)
         assert result == "12/16/2020"  # With keep_year=True (default)
 
+    def test_shift_date_two_digit_year_preserves_separator_and_order(self):
+        """2-digit trailing years should keep slash/dash shape after shifting."""
+        assert _shift_date("03/15/22", 30, lang="en") == "04/14/2022"
+        assert _shift_date("15-03-22", 30, lang="fr") == "14-04-2022"
+
+    def test_shift_date_two_digit_year_without_dateutil(self, monkeypatch):
+        """The default fallback path should also handle 2-digit years."""
+
+        original_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "dateutil" or name.startswith("dateutil."):
+                raise ImportError("dateutil unavailable")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        assert _shift_date("03/15/22", 30, lang="en") == "04/14/2022"
+        assert _shift_date("15-03-22", 30, lang="fr") == "14-04-2022"
+
     def test_shift_date_invalid_format(self):
         """Test shift_date with unparseable format returns placeholder."""
         result = _shift_date("not-a-date", 30)

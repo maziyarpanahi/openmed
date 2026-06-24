@@ -1789,14 +1789,14 @@ def _shift_date_basic(
     if lang in _DAY_FIRST_LANGS - {"de"}:
         # European: DD/MM/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "de":
         # German: DD.MM.YYYY
         patterns = [
             (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "ja":
@@ -1804,14 +1804,14 @@ def _shift_date_basic(
         # JAPANESE_PII_PATTERNS regex, not here).
         patterns = [
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
     else:
         # US/English: MM/DD/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "mdy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
 
     for pattern, order in patterns:
