@@ -23,6 +23,7 @@ from ..core.config import (
     set_config,
 )
 from ..core.model_registry import get_model_info
+from ..core.model_search import ModelSearchResult, search_models
 from .calibrate import add_calibrate_command
 
 _ANALYZE_TEXT = None
@@ -98,6 +99,13 @@ COMPLIANCE_CAVEAT = (
     "No de-identification tool can guarantee compliance or zero residual risk. "
     "Validate locally before any production or clinical use."
 )
+
+
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be greater than or equal to 0")
+    return parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -417,6 +425,43 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Registry key defined in openmed.core.model_registry.",
     )
     models_info.set_defaults(handler=_handle_models_info)
+
+    models_search = models_sub.add_parser(
+        "search",
+        help="Search the canonical model manifest.",
+    )
+    models_search.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="Case-insensitive substring matched against repo_id or family.",
+    )
+    models_search.add_argument("--task", help="Filter by model task.")
+    models_search.add_argument("--language", help="Filter by language code.")
+    models_search.add_argument("--tier", help="Filter by model tier.")
+    models_search.add_argument(
+        "--max-params",
+        type=_non_negative_int,
+        default=None,
+        help="Maximum parameter count. Unknown counts are retained by default.",
+    )
+    models_search.add_argument(
+        "--min-params",
+        type=_non_negative_int,
+        default=None,
+        help="Minimum parameter count.",
+    )
+    models_search.add_argument(
+        "--format",
+        help="Filter by runtime format or device, such as mlx, coreml, onnx, or pytorch.",
+    )
+    models_search.add_argument("--license", help="Filter by SPDX license string.")
+    models_search.add_argument(
+        "--require-params",
+        action="store_true",
+        help="Exclude manifest rows with unknown parameter counts.",
+    )
+    models_search.set_defaults(handler=_handle_models_search)
 
     models_freshness = models_sub.add_parser(
         "freshness",
@@ -799,6 +844,83 @@ def _parse_model_args(values: Sequence[str]) -> list[str]:
     for value in values:
         models.extend(item.strip() for item in value.split(",") if item.strip())
     return models
+
+
+def _handle_models_search(args: argparse.Namespace) -> int:
+    if (
+        args.min_params is not None
+        and args.max_params is not None
+        and args.min_params > args.max_params
+    ):
+        sys.stderr.write("--min-params must be less than or equal to --max-params\n")
+        return 2
+
+    try:
+        results = search_models(
+            task=args.task,
+            language=args.language,
+            tier=args.tier,
+            max_params=args.max_params,
+            min_params=args.min_params,
+            format=args.format,
+            license=args.license,
+            query=args.query,
+            require_params=args.require_params,
+        )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to search models: {exc}\n")
+        return 1
+
+    if not results:
+        sys.stderr.write("No models matched the search filters.\n")
+        return 1
+
+    sys.stdout.write(_format_model_search_table(results))
+    return 0
+
+
+def _format_model_search_table(results: Sequence[ModelSearchResult]) -> str:
+    columns = (
+        ("repo_id", "repo_id"),
+        ("family", "family"),
+        ("task", "task"),
+        ("languages", "languages"),
+        ("tier", "tier"),
+        ("params", "params"),
+        ("formats", "formats"),
+        ("license", "license"),
+    )
+    rows = [
+        {
+            "repo_id": result.repo_id,
+            "family": result.family or "-",
+            "task": result.task or "-",
+            "languages": ",".join(result.languages) or "-",
+            "tier": result.tier or "-",
+            "params": _format_param_count(result.param_count),
+            "formats": ",".join(result.formats) or "-",
+            "license": result.license or "-",
+        }
+        for result in results
+    ]
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+
+    header = "  ".join(header.ljust(widths[key]) for key, header in columns)
+    separator = "  ".join("-" * widths[key] for key, _header in columns)
+    body = [
+        "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+        for row in rows
+    ]
+    return "\n".join([header, separator, *body]) + "\n"
+
+
+def _format_param_count(param_count: int | None) -> str:
+    if param_count is None:
+        return "unknown"
+    return f"{param_count:,}"
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
