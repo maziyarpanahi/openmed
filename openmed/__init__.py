@@ -47,6 +47,7 @@ from .core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
 )
+from .core.results import AnalyzeResult
 from .processing import (
     BatchItem,
     BatchItemResult,
@@ -143,7 +144,7 @@ def analyze_text(
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
     **pipeline_kwargs: Any,
-) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
+) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
     """Run a token-classification model on ``text`` and format the predictions.
 
     Args:
@@ -173,7 +174,8 @@ def analyze_text(
             :meth:`openmed.core.models.ModelLoader.create_pipeline`.
 
     Returns:
-        Prediction result in the requested ``output_format``.
+        Analyze result for ``"dict"`` output, otherwise the requested rendered
+        format.
     """
 
     validated_text = validate_input(text)
@@ -521,13 +523,16 @@ def analyze_text(
 
     fmt_output = validate_output_format(output_format)
 
-    return format_predictions(
+    result = format_predictions(
         flattened_predictions,
         validated_text,
         model_name=validated_model,
         output_format=fmt_output,
         **fmt_kwargs,
     )
+    if fmt_output == "dict" and isinstance(result, PredictionResult):
+        return AnalyzeResult.from_prediction_result(result)
+    return result
 
 
 __all__ = [
@@ -548,6 +553,7 @@ __all__ = [
     "process_batch",
     "AdvancedNERProcessor",
     "create_advanced_processor",
+    "AnalyzeResult",
     "PredictionResult",
     "setup_logging",
     "get_logger",
