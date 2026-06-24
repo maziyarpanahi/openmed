@@ -63,6 +63,19 @@ from openmed.eval.release_gates import (
     ReleaseGate,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.robustness import (
+    DEFAULT_PERTURBATIONS,
+    Perturbation,
+    RobustnessReport,
+    RobustnessVariant,
+    case_flip_perturbation,
+    character_typo_perturbation,
+    identity_perturbation,
+    ocr_noise_perturbation,
+    perturb_fixture,
+    robustness_report,
+    whitespace_noise_perturbation,
+)
 from openmed.eval.tiers import TIERS
 
 __all__ = [
@@ -74,6 +87,7 @@ __all__ = [
     "CalibrationSample",
     "CalibrationThresholdSet",
     "DEVICE_TIERS",
+    "DEFAULT_PERTURBATIONS",
     "EvalSpan",
     "FixtureResult",
     "GateCheck",
@@ -85,9 +99,14 @@ __all__ = [
     "QuantRecallDeltaResult",
     "ReidAttackResult",
     "RELEASABLE",
+    "Perturbation",
     "ReleaseGate",
+    "RobustnessReport",
+    "RobustnessVariant",
     "artifact_dir_for",
     "build_thresholds_payload",
+    "case_flip_perturbation",
+    "character_typo_perturbation",
     "coerce_calibration_thresholds",
     "compute_character_recall",
     "compute_clinical_utility_loss",
@@ -105,13 +124,18 @@ __all__ = [
     "evaluate_quant_recall_delta",
     "fit_calibration_thresholds",
     "generate_reid_leaderboard",
+    "identity_perturbation",
     "load_calibration_samples",
     "load_calibration_thresholds",
+    "ocr_noise_perturbation",
+    "perturb_fixture",
     "render_reid_leaderboard",
+    "robustness_report",
     "run_benchmark",
     "run_reid_attack",
     "run_reid_benchmark",
     "run_suite",
     "TIERS",
+    "whitespace_noise_perturbation",
     "write_calibration_artifacts",
 ]
