@@ -418,6 +418,42 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     )
     models_info.set_defaults(handler=_handle_models_info)
 
+    models_freshness = models_sub.add_parser(
+        "freshness",
+        help="Compute freshness metrics from the canonical model manifest.",
+    )
+    models_freshness.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Path to a model manifest JSONL file.",
+    )
+    models_freshness.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Optional path to write the metrics artifact.",
+    )
+    models_freshness.add_argument(
+        "--format",
+        dest="artifact_format",
+        choices=["json", "markdown"],
+        default="json",
+        help="Artifact format to print or write.",
+    )
+    models_freshness.add_argument(
+        "--as-of",
+        default=None,
+        help="Reference date in YYYY-MM-DD format. Defaults to today in UTC.",
+    )
+    models_freshness.add_argument(
+        "--target-days",
+        type=int,
+        default=None,
+        help="Reference median-age target in days.",
+    )
+    models_freshness.set_defaults(handler=_handle_models_freshness)
+
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     config_parser = subparsers.add_parser(
@@ -811,6 +847,53 @@ def _handle_models_info(args: argparse.Namespace) -> int:
     if max_length is not None:
         payload["max_length"] = max_length
     sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
+    return 0
+
+
+def _handle_models_freshness(args: argparse.Namespace) -> int:
+    from openmed.eval.fleet_metrics import (
+        MEDIAN_AGE_TARGET_DAYS,
+        compute_fleet_freshness_from_manifest,
+        write_fleet_freshness_artifact,
+    )
+
+    manifest_path = args.manifest
+    target_days = (
+        args.target_days if args.target_days is not None else MEDIAN_AGE_TARGET_DAYS
+    )
+    try:
+        if manifest_path is None:
+            metrics = compute_fleet_freshness_from_manifest(
+                as_of=args.as_of,
+                median_age_target_days=target_days,
+            )
+        else:
+            metrics = compute_fleet_freshness_from_manifest(
+                manifest_path,
+                as_of=args.as_of,
+                median_age_target_days=target_days,
+            )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to compute fleet freshness metrics: {exc}\n")
+        return 1
+
+    if args.output:
+        try:
+            write_fleet_freshness_artifact(
+                metrics,
+                args.output,
+                output_format=args.artifact_format,
+            )
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write metrics artifact: {exc}\n")
+            return 1
+        sys.stdout.write(f"Fleet freshness metrics written to: {args.output}\n")
+        return 0
+
+    if args.artifact_format == "json":
+        sys.stdout.write(f"{metrics.to_json()}\n")
+    else:
+        sys.stdout.write(metrics.to_markdown())
     return 0
 
 
