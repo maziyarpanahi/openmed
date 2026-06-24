@@ -23,6 +23,7 @@ from ..core.config import (
     set_config,
 )
 from ..core.model_registry import get_model_info
+from .active_learning import add_active_learning_command
 from .calibrate import add_calibrate_command
 
 _ANALYZE_TEXT = None
@@ -128,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    add_active_learning_command(subparsers)
     add_calibrate_command(subparsers)
     return parser
 

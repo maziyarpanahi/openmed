@@ -10,6 +10,9 @@ __all__ = [
     "AdjudicationCandidate",
     "AdjudicationItem",
     "AdjudicationQueue",
+    "ActiveLearningCandidate",
+    "ActiveLearningQueue",
+    "CRITICAL_LABELS",
     "DryRunResult",
     "DIRECTID_CONTRACT_REF",
     "DIRECTID_FAMILY",
@@ -88,6 +91,13 @@ def __getattr__(name: str) -> Any:
     }:
         hard_negatives = import_module(".hard_negatives", __name__)
         return getattr(hard_negatives, name)
+    if name in {
+        "ActiveLearningCandidate",
+        "ActiveLearningQueue",
+        "CRITICAL_LABELS",
+    }:
+        active_learning = import_module(".active_learning", __name__)
+        return getattr(active_learning, name)
     if name in {
         "AdjudicationCandidate",
         "AdjudicationItem",
