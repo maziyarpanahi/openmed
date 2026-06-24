@@ -72,6 +72,10 @@ ocr-paddle = [
   "paddleocr>=2.7",
 ]
 
+awq = [
+  "autoawq>=0.2.9",
+]
+
 langchain = [
   "langchain-core>=0.2,<1",
 ]
