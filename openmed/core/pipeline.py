@@ -714,7 +714,7 @@ class Pipeline:
         if self.use_safety_sweep:
             from . import pii
 
-            spans_added = pii._apply_safety_sweep_to_result(
+            pii_result, spans_added = pii._apply_safety_sweep_to_result(
                 text,
                 pii_result,
                 lang=context.route.lang,
