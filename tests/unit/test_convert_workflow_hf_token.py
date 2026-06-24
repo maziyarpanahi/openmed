@@ -59,6 +59,14 @@ def test_convert_workflow_passes_dispatch_inputs_through_safe_env_vars():
     )
 
 
+def test_convert_workflow_keeps_dispatch_inputs_out_of_shell_blocks():
+    workflow = CONVERT_WORKFLOW.read_text(encoding="utf-8")
+    run_blocks = re.findall(r"(?m)^\s+run: \|\n((?:^\s{8,}.*\n?)+)", workflow)
+
+    assert run_blocks
+    assert "github.event.inputs" not in "\n".join(run_blocks)
+
+
 def test_hf_token_policy_documents_scope_storage_rotation_and_revocation():
     policy = HF_TOKEN_POLICY.read_text(encoding="utf-8")
 
