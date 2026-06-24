@@ -72,6 +72,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
     "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    "tr": ("tr_TR", "ssn"),  # TCKN
 }
 
 _warned: set[str] = set()
