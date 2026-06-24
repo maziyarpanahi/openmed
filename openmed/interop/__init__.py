@@ -23,6 +23,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "hl7v2": AdapterSpec(
+        name="hl7v2",
+        module="openmed.interop.hl7v2",
+        extra="",
+        description="HL7 v2 segment-aware de-identification",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
