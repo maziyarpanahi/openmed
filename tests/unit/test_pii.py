@@ -1021,10 +1021,10 @@ class TestFormatDateLikeOriginal:
     """Tests for the _format_date_like_original helper function.
 
     Called directly rather than through _shift_date/deidentify: this function
-    is only reachable when python-dateutil is importable, which is not the
-    case in this project's own dev/CI install (``pip install -e ".[dev]"``
-    does not pull in python-dateutil). Testing it directly keeps coverage of
-    this code path independent of whether dateutil happens to be installed.
+    is only reachable when python-dateutil is importable. python-dateutil is
+    now in the ``dev`` extra (see test_shift_date_dateutil_and_basic_paths_agree
+    below), but testing this helper directly still keeps its coverage
+    independent of that installation detail.
     """
 
     def test_us_slash_two_digit_year_keeps_slash_shape(self):
