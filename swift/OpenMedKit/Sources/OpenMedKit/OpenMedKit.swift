@@ -8,6 +8,12 @@ import Tokenizers
 /// Provides NER and PII detection using either CoreML or MLX models
 /// produced by the OpenMed Python library.
 ///
+/// Inference is local-first: after model and tokenizer assets are loaded from a
+/// local bundle or cache, `analyzeText(...)` and `extractPII(...)` run on-device
+/// and do not perform network I/O or telemetry. Download helpers are explicit
+/// model-preparation APIs, not inference requirements. OpenMedKit is not a
+/// medical device and does not make autonomous clinical decisions.
+///
 /// ## Quick Start
 ///
 /// ```swift
@@ -17,7 +23,7 @@ import Tokenizers
 /// let openmed = try OpenMed(backend: .mlx(modelDirectoryURL: modelDirectory))
 /// let entities = try openmed.extractPII("Patient John Doe, SSN 123-45-6789")
 /// for entity in entities {
-///     print(entity)  // [first_name] "John Doe" (8:16) conf=0.95
+///     let safeDescription = entity.description
 /// }
 /// ```
 public final class OpenMed {
@@ -121,30 +127,49 @@ public final class OpenMed {
         _ text: String,
         confidenceThreshold: Float = 0.5
     ) throws -> [EntityPrediction] {
-        let entities: [EntityPrediction]
-        switch runtime {
-        case .coreML(let pipeline):
-            let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
-            entities = try pipeline.predict(
-                inputIds: inputIDs,
-                attentionMask: attentionMask,
-                offsets: offsets,
-                text: text
-            )
-        case .mlx(let pipeline):
-            let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
-            entities = try pipeline.predict(
-                inputIDs: inputIDs,
-                attentionMask: attentionMask,
-                tokenTypeIDs: tokenTypeIDs,
-                offsets: offsets,
-                text: text
-            )
-        case .privacyFilter(let pipeline):
-            entities = try pipeline.predict(text)
-        }
+        SafeLog.log(.inferenceStarted(operation: .analyzeText))
+        do {
+            let entities: [EntityPrediction]
+            switch runtime {
+            case .coreML(let pipeline):
+                let (inputIDs, attentionMask, _, offsets) = try tokenize(text)
+                entities = try pipeline.predict(
+                    inputIds: inputIDs,
+                    attentionMask: attentionMask,
+                    offsets: offsets,
+                    text: text
+                )
+            case .mlx(let pipeline):
+                let (inputIDs, attentionMask, tokenTypeIDs, offsets) = try tokenize(text)
+                entities = try pipeline.predict(
+                    inputIDs: inputIDs,
+                    attentionMask: attentionMask,
+                    tokenTypeIDs: tokenTypeIDs,
+                    offsets: offsets,
+                    text: text
+                )
+            case .privacyFilter(let pipeline):
+                entities = try pipeline.predict(text)
+            }
 
-        return entities.filter { $0.confidence >= confidenceThreshold }
+            let filteredEntities = entities.filter { $0.confidence >= confidenceThreshold }
+            SafeLog.log(
+                .inferenceCompleted(
+                    operation: .analyzeText,
+                    entityCount: filteredEntities.count
+                )
+            )
+            return filteredEntities
+        } catch {
+            SafeLog.log(
+                .inferenceFailed(
+                    operation: .analyzeText,
+                    errorType: String(describing: type(of: error))
+                ),
+                level: .error
+            )
+            throw error
+        }
     }
 
     /// Run PII detection on the given text with OpenMed's smart post-processing.
@@ -157,30 +182,51 @@ public final class OpenMed {
         confidenceThreshold: Float = 0.5,
         useSmartMerging: Bool = true
     ) throws -> [EntityPrediction] {
-        let entities = try analyzeText(text, confidenceThreshold: confidenceThreshold)
-        let repairedEntities = PostProcessing.repairEntitySpans(entities, text: text)
+        SafeLog.log(.inferenceStarted(operation: .extractPII))
+        do {
+            let entities = try analyzeText(text, confidenceThreshold: confidenceThreshold)
+            let repairedEntities = PostProcessing.repairEntitySpans(entities, text: text)
 
-        guard useSmartMerging else {
-            return repairedEntities
-        }
+            let piiEntities: [EntityPrediction]
+            if useSmartMerging {
+                switch runtime {
+                case .privacyFilter:
+                    piiEntities = PostProcessing.mergePIIEntities(
+                        repairedEntities,
+                        text: text,
+                        useSemanticPatterns: true,
+                        preferModelLabels: true,
+                        allowSemanticOnlyMatches: false,
+                        allowSemanticLabelExpansion: false
+                    )
+                case .coreML, .mlx:
+                    piiEntities = PostProcessing.mergePIIEntities(
+                        repairedEntities,
+                        text: text,
+                        useSemanticPatterns: true,
+                        preferModelLabels: true
+                    )
+                }
+            } else {
+                piiEntities = repairedEntities
+            }
 
-        switch runtime {
-        case .privacyFilter:
-            return PostProcessing.mergePIIEntities(
-                repairedEntities,
-                text: text,
-                useSemanticPatterns: true,
-                preferModelLabels: true,
-                allowSemanticOnlyMatches: false,
-                allowSemanticLabelExpansion: false
+            SafeLog.log(
+                .inferenceCompleted(
+                    operation: .extractPII,
+                    entityCount: piiEntities.count
+                )
             )
-        case .coreML, .mlx:
-            return PostProcessing.mergePIIEntities(
-                repairedEntities,
-                text: text,
-                useSemanticPatterns: true,
-                preferModelLabels: true
+            return piiEntities
+        } catch {
+            SafeLog.log(
+                .inferenceFailed(
+                    operation: .extractPII,
+                    errorType: String(describing: type(of: error))
+                ),
+                level: .error
             )
+            throw error
         }
     }
 
@@ -196,38 +242,64 @@ public final class OpenMed {
         tokenOverlap: Int = 32,
         useSmartMerging: Bool = true
     ) throws -> [EntityPrediction] {
-        let chunks = try makeTokenChunks(
-            for: text,
-            chunkTokenLimit: chunkTokenLimit,
-            tokenOverlap: tokenOverlap
-        )
-        guard chunks.count > 1 else {
-            return try extractPII(
-                text,
-                confidenceThreshold: confidenceThreshold,
+        SafeLog.log(.inferenceStarted(operation: .extractPIIChunked))
+        do {
+            let chunks = try makeTokenChunks(
+                for: text,
+                chunkTokenLimit: chunkTokenLimit,
+                tokenOverlap: tokenOverlap
+            )
+            guard chunks.count > 1 else {
+                let piiEntities = try extractPII(
+                    text,
+                    confidenceThreshold: confidenceThreshold,
+                    useSmartMerging: useSmartMerging
+                )
+                SafeLog.log(
+                    .inferenceCompleted(
+                        operation: .extractPIIChunked,
+                        entityCount: piiEntities.count
+                    )
+                )
+                return piiEntities
+            }
+
+            var chunkEntities: [EntityPrediction] = []
+            for chunk in chunks {
+                let chunkText = Self.substring(text, start: chunk.start, end: chunk.end)
+                let entities = try extractPII(
+                    chunkText,
+                    confidenceThreshold: confidenceThreshold,
+                    useSmartMerging: useSmartMerging
+                )
+                chunkEntities.append(
+                    contentsOf: entities.compactMap { entity in
+                        Self.offset(entity, by: chunk.start, in: text)
+                    })
+            }
+
+            let piiEntities = mergeChunkedPIIEntities(
+                chunkEntities,
+                text: text,
                 useSmartMerging: useSmartMerging
             )
-        }
-
-        var chunkEntities: [EntityPrediction] = []
-        for chunk in chunks {
-            let chunkText = Self.substring(text, start: chunk.start, end: chunk.end)
-            let entities = try extractPII(
-                chunkText,
-                confidenceThreshold: confidenceThreshold,
-                useSmartMerging: useSmartMerging
+            SafeLog.log(
+                .inferenceCompleted(
+                    operation: .extractPIIChunked,
+                    entityCount: piiEntities.count
+                )
             )
-            chunkEntities.append(
-                contentsOf: entities.compactMap { entity in
-                    Self.offset(entity, by: chunk.start, in: text)
-                })
+            return piiEntities
+        } catch {
+            SafeLog.log(
+                .inferenceFailed(
+                    operation: .extractPIIChunked,
+                    errorType: String(describing: type(of: error))
+                ),
+                level: .error
+            )
+            throw error
         }
-
-        return mergeChunkedPIIEntities(
-            chunkEntities,
-            text: text,
-            useSmartMerging: useSmartMerging
-        )
     }
 
     // MARK: - Private
@@ -783,7 +855,10 @@ public final class OpenMed {
             throw TokenizerError.missingConfig
         }
 
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await OpenMedNetworkAccess.data(
+            from: url,
+            operation: .tokenizerAssetDownload
+        )
         guard let http = response as? HTTPURLResponse else {
             throw TokenizerError.missingConfig
         }
