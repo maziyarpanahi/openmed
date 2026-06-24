@@ -4,6 +4,11 @@ This module holds narrow, deterministic ConText layers that classify clinical
 spans from a target span plus optional modifier hits produced by the shared
 context engine.
 
+Negation classifies whether a clinical span is affirmed or negated. Downstream
+grounding layers map ``"negated"`` spans to FHIR
+``verificationStatus=refuted``; this module only exposes the per-span context
+axis and does not build grounded records.
+
 Temporality classifies the temporal status of a clinical span onto the original
 ConText three-value temporality scale:
 
@@ -24,7 +29,7 @@ hypothetical, or conditional. Uncertain spans are flagged, not dropped, so
 grounding layers can downweight or annotate unconfirmed conditions while still
 receiving the original span.
 
-Sibling axes (negation, experiencer) and absolute-date timeline normalization
+Sibling axes such as experiencer and absolute-date timeline normalization
 (TIMEX3) are handled by separate layers and are out of scope here.
 """
 
@@ -32,7 +37,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any, Literal
+
+Negation = Literal["affirmed", "negated"]
+
+AFFIRMED: Negation = "affirmed"
+NEGATED: Negation = "negated"
+
+#: The negation values, ordered from default asserted polarity to refuted.
+NEGATION_VALUES = (AFFIRMED, NEGATED)
 
 RECENT = "recent"
 HISTORICAL = "historical"
@@ -112,6 +126,46 @@ UNCERTAINTY_CUES = (
     "if",
 )
 
+# ConText/NegEx-style negation cues. Phrases are matched before shorter cues,
+# so "no evidence of" is counted as one negation cue rather than "no" plus a
+# second incidental phrase.
+NEGATION_CUES = (
+    "no evidence of",
+    "no evidence",
+    "no sign of",
+    "no signs of",
+    "negative for",
+    "absence of",
+    "free of",
+    "ruled out",
+    "not present",
+    "denies",
+    "denied",
+    "deny",
+    "without",
+    "absent",
+    "never",
+    "none",
+    "not",
+    "no",
+)
+
+# Pseudo-negation cues contain negation words but do not refute the target
+# concept. They are masked before true negation cues are counted.
+PSEUDO_NEGATION_CUES = (
+    "no increase",
+    "no interval increase",
+    "no significant increase",
+    "not ruled out",
+    "not yet ruled out",
+    "not completely ruled out",
+    "not been ruled out",
+    "cannot be excluded",
+    "can't be excluded",
+    "cannot exclude",
+    "can't exclude",
+)
+
 
 def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
     alternation = "|".join(
@@ -124,6 +178,23 @@ def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
 _HISTORICAL_RE = _cue_pattern(HISTORICAL_CUES)
 _HYPOTHETICAL_RE = _cue_pattern(HYPOTHETICAL_CUES)
 _UNCERTAINTY_RE = _cue_pattern(UNCERTAINTY_CUES)
+_NEGATION_RE = _cue_pattern(NEGATION_CUES)
+_PSEUDO_NEGATION_RE = _cue_pattern(PSEUDO_NEGATION_CUES)
+
+
+@dataclass(frozen=True)
+class ClinicalContextResult:
+    """Per-span ConText decision result.
+
+    ``negation="negated"`` is the downstream signal for
+    ``verificationStatus=refuted`` when a grounding/FHIR layer materializes the
+    clinical span as a Condition. This object deliberately stays at the context
+    axis layer and does not construct that grounded record.
+    """
+
+    temporality: str
+    certainty: Certainty
+    negation: Negation
 
 
 def _text_of(obj: Any) -> str:
@@ -204,7 +275,53 @@ def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
     return CERTAIN
 
 
+def _mask_pseudo_negation(text: str) -> str:
+    return _PSEUDO_NEGATION_RE.sub(lambda match: " " * len(match.group(0)), text)
+
+
+def resolve_negation(span: Any, modifier_hits: Any = None) -> Negation:
+    """Classify a clinical span as affirmed or negated.
+
+    ``span`` is the target clinical span -- a string, a span mapping with a
+    ``text``-like key, or any object exposing a ``text`` attribute.
+    ``modifier_hits`` is the optional collection of ConText negation cues
+    matched in the span's window. Each part is scanned independently so cues
+    are never created by concatenating unrelated fragments.
+
+    Pseudo-negation cues such as ``"no increase"``, ``"not ruled out"``, and
+    ``"cannot be excluded"`` are masked before true negation cues are counted.
+    An odd number of true cues returns ``"negated"``; an even number returns
+    ``"affirmed"``, which makes double-negation deterministic.
+    """
+
+    negation_cue_count = 0
+    for part in _text_parts(span, modifier_hits):
+        masked = _mask_pseudo_negation(part)
+        negation_cue_count += sum(1 for _ in _NEGATION_RE.finditer(masked))
+    return NEGATED if negation_cue_count % 2 else AFFIRMED
+
+
+def resolve_span_context(
+    span: Any,
+    modifier_hits: Any = None,
+) -> ClinicalContextResult:
+    """Return all currently implemented ConText decision axes for ``span``."""
+
+    return ClinicalContextResult(
+        temporality=resolve_temporality(span, modifier_hits),
+        certainty=resolve_uncertainty(span, modifier_hits),
+        negation=resolve_negation(span, modifier_hits),
+    )
+
+
 __all__ = [
+    "AFFIRMED",
+    "NEGATED",
+    "Negation",
+    "NEGATION_VALUES",
+    "NEGATION_CUES",
+    "PSEUDO_NEGATION_CUES",
+    "ClinicalContextResult",
     "RECENT",
     "HISTORICAL",
     "HYPOTHETICAL",
@@ -218,4 +335,6 @@ __all__ = [
     "CERTAINTY_VALUES",
     "UNCERTAINTY_CUES",
     "resolve_uncertainty",
+    "resolve_negation",
+    "resolve_span_context",
 ]
