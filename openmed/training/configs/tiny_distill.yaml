@@ -15,13 +15,14 @@ lora:
   dropout: 0.05
   target_modules: [query, value]
 label_set_ref: openmed.core.labels:CANONICAL_LABELS@policy-spine-v1
+head_contract: openmed.training.directid:DIRECTID_TINY_HEAD_CONTRACT@v1
 loss:
   name: focal_class_weighted
   focal_gamma: 2.0
   class_weighted: true
   class_weighting: inverse_frequency
   critical_label_weight: 3.0
-  critical_labels: [PERSON, FIRST_NAME, LAST_NAME, DATE_OF_BIRTH, ID_NUM, SSN, EMAIL, PHONE, STREET_ADDRESS, ACCOUNT_NUMBER, PASSWORD, API_KEY]
+  critical_labels: [ID_NUM, SSN, ACCOUNT_NUMBER, CREDIT_CARD, IBAN, EMAIL, PHONE, API_KEY]
 hard_negatives_required: true
 output_tier: tiny
 quantization:
