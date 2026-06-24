@@ -14,6 +14,10 @@ from openmed.core.labels import (
     EMAIL,
     IBAN,
     ID_NUM,
+    ID_SUBTYPE_MRN,
+    ID_SUBTYPE_NATIONAL_ID,
+    ID_SUBTYPE_NPI,
+    ID_SUBTYPES,
     PHONE,
     SSN,
     normalize_label,
@@ -44,6 +48,11 @@ DIRECTID_STRUCTURED_ID_LABELS = (
     CREDIT_CARD,
     IBAN,
     API_KEY,
+)
+DIRECTID_REQUIRED_ID_SUBTYPES = (
+    ID_SUBTYPE_MRN,
+    ID_SUBTYPE_NPI,
+    ID_SUBTYPE_NATIONAL_ID,
 )
 DIRECTID_GATE_CODES = ("G1b", "G3", "G4", "G5")
 
@@ -80,6 +89,7 @@ class DirectIDHeadContract:
     labels: tuple[str, ...]
     critical_labels: tuple[str, ...]
     structured_id_labels: tuple[str, ...]
+    id_subtypes: tuple[str, ...]
     safety_sweep_required: bool
     safety_sweep_source: str
     safety_sweep_provenance_fields: tuple[str, ...]
@@ -98,6 +108,7 @@ class DirectIDHeadContract:
             "gate_requirements": [
                 requirement.to_dict() for requirement in self.gate_requirements
             ],
+            "id_subtypes": list(self.id_subtypes),
             "label_set_ref": self.label_set_ref,
             "labels": list(self.labels),
             "optional_quantization_formats": list(self.optional_quantization_formats),
@@ -122,6 +133,7 @@ class DirectIDPresetValidation:
     tier: str
     labels: tuple[str, ...]
     critical_labels: tuple[str, ...]
+    id_subtypes: tuple[str, ...]
     gate_codes: tuple[str, ...]
     quantization_default: str
 
@@ -131,6 +143,7 @@ class DirectIDPresetValidation:
             "critical_labels": list(self.critical_labels),
             "family": self.family,
             "gate_codes": list(self.gate_codes),
+            "id_subtypes": list(self.id_subtypes),
             "labels": list(self.labels),
             "mode": self.mode,
             "preset_name": self.preset_name,
@@ -148,6 +161,7 @@ DIRECTID_TINY_HEAD_CONTRACT = DirectIDHeadContract(
     labels=DIRECTID_REQUIRED_LABELS,
     critical_labels=DIRECTID_REQUIRED_LABELS,
     structured_id_labels=DIRECTID_STRUCTURED_ID_LABELS,
+    id_subtypes=DIRECTID_REQUIRED_ID_SUBTYPES,
     safety_sweep_required=True,
     safety_sweep_source="safety_sweep",
     safety_sweep_provenance_fields=(
@@ -227,6 +241,7 @@ def validate_directid_preset(
         tier=contract.tier,
         labels=contract.labels,
         critical_labels=contract.critical_labels,
+        id_subtypes=contract.id_subtypes,
         gate_codes=contract.gate_codes(),
         quantization_default=recipe.quantization.default,
     )
@@ -250,6 +265,7 @@ def _contract_errors(contract: DirectIDHeadContract) -> list[str]:
     structured_id_labels = tuple(
         normalize_label(label) for label in contract.structured_id_labels
     )
+    id_subtypes = tuple(contract.id_subtypes)
 
     if contract.schema_version != DIRECTID_CONTRACT_VERSION:
         errors.append(
@@ -274,11 +290,22 @@ def _contract_errors(contract: DirectIDHeadContract) -> list[str]:
         errors.append(
             "labels missing required DirectID label(s): " + ", ".join(required_missing)
         )
+    label_extras = sorted(set(labels) - set(DIRECTID_REQUIRED_LABELS))
+    if label_extras:
+        errors.append(
+            "labels contains non-DirectID label(s): " + ", ".join(label_extras)
+        )
     critical_missing = sorted(set(DIRECTID_REQUIRED_LABELS) - set(critical_labels))
     if critical_missing:
         errors.append(
             "critical_labels missing required DirectID label(s): "
             + ", ".join(critical_missing)
+        )
+    critical_extras = sorted(set(critical_labels) - set(DIRECTID_REQUIRED_LABELS))
+    if critical_extras:
+        errors.append(
+            "critical_labels contains non-DirectID label(s): "
+            + ", ".join(critical_extras)
         )
     structured_missing = sorted(
         set(DIRECTID_STRUCTURED_ID_LABELS) - set(structured_id_labels)
@@ -287,6 +314,30 @@ def _contract_errors(contract: DirectIDHeadContract) -> list[str]:
         errors.append(
             "structured_id_labels missing required label(s): "
             + ", ".join(structured_missing)
+        )
+    structured_extras = sorted(
+        set(structured_id_labels) - set(DIRECTID_STRUCTURED_ID_LABELS)
+    )
+    if structured_extras:
+        errors.append(
+            "structured_id_labels contains non-DirectID structured label(s): "
+            + ", ".join(structured_extras)
+        )
+    unknown_subtypes = sorted(set(id_subtypes) - ID_SUBTYPES)
+    if unknown_subtypes:
+        errors.append(
+            "id_subtypes contains unknown value(s): " + ", ".join(unknown_subtypes)
+        )
+    missing_subtypes = sorted(set(DIRECTID_REQUIRED_ID_SUBTYPES) - set(id_subtypes))
+    if missing_subtypes:
+        errors.append(
+            "id_subtypes missing required DirectID subtype(s): "
+            + ", ".join(missing_subtypes)
+        )
+    extra_subtypes = sorted(set(id_subtypes) - set(DIRECTID_REQUIRED_ID_SUBTYPES))
+    if extra_subtypes:
+        errors.append(
+            "id_subtypes contains non-DirectID subtype(s): " + ", ".join(extra_subtypes)
         )
     non_critical = sorted(set(critical_labels) - set(labels))
     if non_critical:
@@ -354,6 +405,14 @@ def _preset_errors(
             "loss.critical_labels missing DirectID label(s): "
             + ", ".join(missing_critical)
         )
+    extra_critical = sorted(
+        set(recipe.loss.critical_labels) - set(contract.critical_labels)
+    )
+    if extra_critical:
+        errors.append(
+            "loss.critical_labels contains non-DirectID label(s): "
+            + ", ".join(extra_critical)
+        )
     return errors
 
 
@@ -393,6 +452,7 @@ __all__ = [
     "DIRECTID_FAMILY",
     "DIRECTID_GATE_CODES",
     "DIRECTID_LABEL_SET_REF",
+    "DIRECTID_REQUIRED_ID_SUBTYPES",
     "DIRECTID_REQUIRED_LABELS",
     "DIRECTID_STRUCTURED_ID_LABELS",
     "DIRECTID_TIER",
