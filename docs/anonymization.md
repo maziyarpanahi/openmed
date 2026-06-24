@@ -71,6 +71,18 @@ Three modes:
 Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
 
+`seed` also covers `method="shift_dates"`: when `date_shift_days` is left as
+`None`, the auto-selected day offset is normally random per call. Passing
+`seed=<int>` makes that offset reproducible across runs too, drawn from a
+local `random.Random(seed)` instance rather than global `random` state, so
+it has no side effects on other randomness in the same process.
+
+```python
+deidentify("Visit on 01/15/2020", method="shift_dates", seed=42)
+deidentify("Visit on 01/15/2020", method="shift_dates", seed=42)
+# Both calls produce the same shifted date.
+```
+
 ### Format preservation
 
 Phone numbers, dates, and emails preserve the structure of the original:

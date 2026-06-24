@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import builtins
+import random
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -745,6 +746,86 @@ class TestDeidentify:
         assert result.deidentified_text == "DOB 02/14/2020"
 
     @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_auto_offset_honors_seed(self, mock_extract):
+        """A seeded auto-offset must be reproducible across separate calls.
+
+        ``seed`` was already accepted by ``deidentify`` and already threaded
+        into the Anonymizer for ``method="replace"``, but the auto-selected
+        ``shift_dates`` offset ignored it entirely and always drew from
+        global ``random`` state. Two calls with the same seed must now shift
+        by the same (non-zero) number of days.
+        """
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        first = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=None,
+            keep_year=False,
+            seed=42,
+        )
+        second = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=None,
+            keep_year=False,
+            seed=42,
+        )
+
+        assert first.deidentified_text == second.deidentified_text
+        assert first.deidentified_text != f"DOB {original}"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_without_seed_uses_global_random(
+        self, mock_extract, monkeypatch
+    ):
+        """Without a seed, the auto-offset must still draw from global random.
+
+        Locks in that threading ``seed`` through to the offset draw did not
+        change the unseeded default: ``date_shift_days=None`` with no
+        ``seed`` must still call the module-level ``random.randint``
+        directly, not a freshly seeded ``random.Random`` instance.
+        """
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+        calls = []
+
+        def fake_randint(low, high):
+            calls.append((low, high))
+            return 30
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        result = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=None,
+            keep_year=False,
+        )
+
+        assert calls == [(-365, 365)]
+        assert result.deidentified_text == "DOB 02/14/2020"
+
+    @patch("openmed.core.pii.extract_pii")
     def test_deidentify_explicit_zero_shift_remains_allowed(self, mock_extract):
         """An explicit caller-supplied zero shift is a deliberate no-op."""
         original = "01/15/2020"
@@ -1043,6 +1124,32 @@ class TestRandomNonzeroShift:
             _random_nonzero_shift(low=10, high=-10)
         with pytest.raises(ValueError, match="non-zero shift"):
             _random_nonzero_shift(low=0, high=0)
+
+    def test_random_nonzero_shift_accepts_injected_rng(self):
+        """An injected ``rng`` must be used instead of global ``random``.
+
+        Two independently seeded ``random.Random`` instances with the same
+        seed must produce the same draw, proving the offset comes from the
+        injected ``rng`` rather than module-level ``random`` state (which
+        would differ run to run).
+        """
+        first = _random_nonzero_shift(rng=random.Random(42))
+        second = _random_nonzero_shift(rng=random.Random(42))
+        assert first == second
+        assert first != 0
+
+    def test_random_nonzero_shift_injected_rng_does_not_touch_global_random(
+        self, monkeypatch
+    ):
+        """Passing ``rng`` must not fall back to global ``random`` at all."""
+
+        def fail_if_called(low, high):
+            raise AssertionError("global random.randint should not be called")
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fail_if_called)
+
+        result = _random_nonzero_shift(rng=random.Random(0))
+        assert result != 0
 
 
 # ---------------------------------------------------------------------------

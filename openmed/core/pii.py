@@ -1069,7 +1069,9 @@ def _build_deidentification_result(
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
     if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = _random_nonzero_shift()
+        date_shift_days = _random_nonzero_shift(
+            rng=random.Random(seed) if seed is not None else None
+        )
 
     anonymizer = None
     if effective_method == "replace" or any(
@@ -1322,7 +1324,9 @@ def deidentify(
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random non-zero if None)
+        date_shift_days: Specific number of days to shift (random non-zero if
+            None). When ``None`` and ``seed`` is set, the auto-selected
+            offset is reproducible across runs (see ``seed``).
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1338,8 +1342,12 @@ def deidentify(
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
-        seed: Optional integer seed for cross-run reproducibility of
-            ``consistent=True`` replacements. Implies ``consistent=True``.
+        seed: Optional integer seed for cross-run reproducibility. Implies
+            ``consistent=True`` for ``method="replace"`` replacements. For
+            ``method="shift_dates"`` with ``date_shift_days=None``, also
+            makes the auto-selected day offset reproducible (drawn from a
+            local ``random.Random(seed)`` instance, not global ``random``
+            state, so it never affects unrelated randomness elsewhere).
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"``. When ``None``, derived from ``lang``.
         policy: Optional policy profile name controlling arbitration, action
@@ -1700,7 +1708,9 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
         return date_value.replace(year=year, month=2, day=28)
 
 
-def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
+def _random_nonzero_shift(
+    low: int = -365, high: int = 365, rng: Optional[random.Random] = None
+) -> int:
     """Return a random non-zero day offset in ``[low, high]`` excluding 0.
 
     A zero-day shift would leave clinical dates unchanged, silently defeating
@@ -1709,6 +1719,9 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
     Args:
         low: Minimum (most-negative) shift in days, inclusive.
         high: Maximum (most-positive) shift in days, inclusive.
+        rng: Optional ``random.Random`` instance to draw from instead of the
+            module-level ``random`` functions. Pass a seeded instance for a
+            reproducible offset; leave as ``None`` for ordinary randomness.
 
     Returns:
         A non-zero integer day offset within the range.
@@ -1718,8 +1731,9 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
     if low == high == 0:
         raise ValueError("range must contain at least one non-zero shift")
 
+    source = rng if rng is not None else random
     while True:
-        shift_days = random.randint(low, high)
+        shift_days = source.randint(low, high)
         if shift_days != 0:
             return shift_days
 
