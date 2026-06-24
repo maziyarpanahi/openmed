@@ -40,6 +40,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
+  "PyYAML>=6.0",
   "fastapi>=0.110",
   "httpx>=0.27",
   "ruff==0.15.18",
@@ -80,7 +81,8 @@ hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
   "accelerate>=0.29",
-  "tokenizers>=0.15"
+  "tokenizers>=0.15",
+  "PyYAML>=6.0"
 ]
 
 service = [

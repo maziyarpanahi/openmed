@@ -42,6 +42,7 @@ nav:
   - Project:
       - FAQ: faq.md
       - Contributing & Releases: contributing.md
+      - Model Release Queue: model-release-queue.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Release Streams & Channels: release/semver-and-channels.md
       - Generative Model Policy: generative-model-policy.md
