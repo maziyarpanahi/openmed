@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from openmed.core import model_registry
-from scripts.manifest import generate_manifest
+from scripts.manifest import enrich_manifest, generate_manifest
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = ROOT / "models.jsonl"
@@ -29,6 +29,11 @@ REQUIRED_FIELDS = {
     "reproducibility_hash",
     "released",
 }
+OPTIONAL_FIELDS = {
+    "latency_ms",
+    "peak_ram_mb",
+    "recommended_tier",
+}
 
 
 def _rows():
@@ -46,30 +51,54 @@ def test_manifest_exists_and_has_unique_repo_ids():
 
 def test_every_manifest_row_matches_schema():
     for row in _rows():
-        assert set(row) == REQUIRED_FIELDS
-        assert isinstance(row["repo_id"], str) and row["repo_id"].startswith("OpenMed/")
-        assert isinstance(row["family"], str) and row["family"]
-        assert isinstance(row["task"], str) and row["task"]
-        assert isinstance(row["languages"], list)
-        assert all(isinstance(language, str) for language in row["languages"])
-        assert row["tier"] is None or isinstance(row["tier"], str)
-        assert row["param_count"] is None or (
-            isinstance(row["param_count"], int) and row["param_count"] > 0
-        )
-        assert row["architecture"] is None or isinstance(row["architecture"], str)
-        assert row["base_model"] is None or isinstance(row["base_model"], str)
-        assert isinstance(row["formats"], list) and row["formats"]
-        assert all(isinstance(format_name, str) for format_name in row["formats"])
-        assert isinstance(row["canonical_labels"], list)
-        assert all(isinstance(label, str) for label in row["canonical_labels"])
-        assert isinstance(row["benchmark"], dict)
-        assert {"dataset", "micro_f1", "recall"} <= set(row["benchmark"])
-        assert row["arxiv"] is None or isinstance(row["arxiv"], str)
-        assert row["license"] is None or isinstance(row["license"], str)
-        assert re.fullmatch(r"sha256:[0-9a-f]{64}", row["reproducibility_hash"])
-        assert row["released"] is None or re.fullmatch(
-            r"\d{4}-\d{2}-\d{2}", row["released"]
-        )
+        _assert_manifest_row_matches_schema(row)
+
+
+def test_enriched_manifest_row_loads_and_validates(tmp_path):
+    row = _manifest_row_fixture(
+        benchmark=[
+            {
+                "suite": "shield",
+                "dataset": "openmed-golden-pii",
+                "micro_f1": 0.9823,
+                "recall": 0.991,
+                "leakage": 0.0,
+            },
+            {
+                "suite": "clinical-ner",
+                "dataset": "synthetic-clinical-ner",
+                "micro_f1": 0.901,
+                "recall": 0.887,
+                "leakage": None,
+            },
+        ],
+        latency_ms={"iphone_15_pro": 18.4, "m2_air": 7},
+        peak_ram_mb={"iphone_15_pro": 512, "m2_air": 384.5},
+        recommended_tier="phone",
+    )
+    manifest = tmp_path / "models.jsonl"
+    generate_manifest.write_jsonl([row], manifest)
+
+    loaded = model_registry.load_manifest_rows(manifest)
+    assert loaded == [row]
+    _assert_manifest_row_matches_schema(loaded[0])
+
+    registry = model_registry._build_registry(loaded)
+    info = registry["pii_fixture_tiny_65m"]
+    assert info.benchmark == row["benchmark"]
+    assert info.latency_ms == {"iphone_15_pro": 18.4, "m2_air": 7.0}
+    assert info.peak_ram_mb == {"iphone_15_pro": 512.0, "m2_air": 384.5}
+    assert info.recommended_tier == "phone"
+
+
+def test_legacy_manifest_row_without_enrichment_fields_validates():
+    row = _manifest_row_fixture()
+
+    _assert_manifest_row_matches_schema(row)
+    info = model_registry._build_registry([row])["pii_fixture_tiny_65m"]
+    assert info.latency_ms == {}
+    assert info.peak_ram_mb == {}
+    assert info.recommended_tier is None
 
 
 def test_registry_model_ids_are_derived_from_manifest():
@@ -103,6 +132,7 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     assert rows[0]["repo_id"] == FakeModel.modelId
     assert rows[0]["family"] == "NER"
     assert rows[0]["param_count"] == 135_000_000
+    assert "leakage" in rows[0]["benchmark"]
 
 
 def test_only_manifest_generator_lists_org_models():
@@ -137,3 +167,65 @@ def test_manifest_refresh_workflow_is_manual_only():
     assert "schedule:" not in text
     assert "cron:" not in text
     assert "scripts/manifest/generate_manifest.py --output models.jsonl" in text
+
+
+def _manifest_row_fixture(**overrides):
+    row = {
+        "repo_id": "OpenMed/OpenMed-PII-Fixture-Tiny-65M",
+        "family": "PII",
+        "task": "token-classification",
+        "languages": ["en"],
+        "tier": "Tiny",
+        "param_count": 65_000_000,
+        "architecture": "distilbert",
+        "base_model": None,
+        "formats": ["pytorch"],
+        "canonical_labels": ["PERSON", "DATE"],
+        "benchmark": {"dataset": None, "micro_f1": None, "recall": None},
+        "arxiv": None,
+        "license": "apache-2.0",
+        "reproducibility_hash": (
+            "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+        ),
+        "released": "2026-06-24",
+    }
+    row.update(overrides)
+    return row
+
+
+def _assert_manifest_row_matches_schema(row):
+    assert REQUIRED_FIELDS <= set(row)
+    assert set(row) <= REQUIRED_FIELDS | OPTIONAL_FIELDS
+    enrich_manifest.validate_manifest_row(row)
+    assert isinstance(row["repo_id"], str) and row["repo_id"].startswith("OpenMed/")
+    assert isinstance(row["family"], str) and row["family"]
+    assert isinstance(row["task"], str) and row["task"]
+    assert isinstance(row["languages"], list)
+    assert all(isinstance(language, str) for language in row["languages"])
+    assert row["tier"] is None or isinstance(row["tier"], str)
+    assert row["param_count"] is None or (
+        isinstance(row["param_count"], int) and row["param_count"] > 0
+    )
+    assert row["architecture"] is None or isinstance(row["architecture"], str)
+    assert row["base_model"] is None or isinstance(row["base_model"], str)
+    assert isinstance(row["formats"], list) and row["formats"]
+    assert all(isinstance(format_name, str) for format_name in row["formats"])
+    assert isinstance(row["canonical_labels"], list)
+    assert all(isinstance(label, str) for label in row["canonical_labels"])
+    _assert_benchmark_matches_schema(row["benchmark"])
+    assert row["arxiv"] is None or isinstance(row["arxiv"], str)
+    assert row["license"] is None or isinstance(row["license"], str)
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", row["reproducibility_hash"])
+    assert row["released"] is None or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}", row["released"]
+    )
+
+
+def _assert_benchmark_matches_schema(benchmark):
+    if isinstance(benchmark, dict):
+        assert {"dataset", "micro_f1", "recall"} <= set(benchmark)
+        return
+
+    assert isinstance(benchmark, list)
+    for suite in benchmark:
+        assert {"suite", "dataset", "micro_f1", "recall", "leakage"} <= set(suite)
