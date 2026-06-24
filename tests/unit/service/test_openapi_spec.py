@@ -23,8 +23,8 @@ def test_committed_openapi_spec_matches_exporter() -> None:
         ".venv/bin/python scripts/export_openapi.py."
     )
 
-    actual = DEFAULT_OUTPUT_PATH.read_bytes()
-    expected = render_openapi_spec()
+    actual = DEFAULT_OUTPUT_PATH.read_text(encoding="utf-8")
+    expected = render_openapi_spec().decode("utf-8")
 
     assert actual == expected, (
         "docs/api/openapi.json is stale. Re-run "
