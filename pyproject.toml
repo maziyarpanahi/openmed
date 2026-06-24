@@ -72,6 +72,10 @@ ocr-paddle = [
   "paddleocr>=2.7",
 ]
 
+langchain = [
+  "langchain-core>=0.2,<1",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
