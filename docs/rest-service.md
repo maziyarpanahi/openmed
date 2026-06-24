@@ -10,7 +10,7 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /pii/extract`
 - `POST /pii/deidentify`
 
-This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, model keep-alive controls, and a unified non-2xx error envelope.
+This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, and a unified non-2xx error envelope.
 
 ## Run Locally
 
@@ -41,6 +41,16 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 `OPENMED_SERVICE_PRELOAD_MODELS` is a comma-separated list of registry aliases or full Hugging Face ids. Empty entries are ignored and duplicates are removed.
 
+Optional warm-pool resident model limit:
+
+```bash
+OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
+OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+`OPENMED_SERVICE_MAX_RESIDENT_MODELS` bounds how many models remain resident in the shared warm-pool. When the limit is exceeded, the least-recently-used idle model is unloaded. Omit it for unbounded resident model caching.
+
 Optional default model keep-alive:
 
 ```bash
@@ -59,10 +69,11 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 0.
 
 ## Reliability Changes
 
-- Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and shared `ModelLoader`.
+- Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
+- `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
@@ -89,13 +100,16 @@ Returns currently cached model resources and idle-unload status:
 ```json
 {
   "default_keep_alive_seconds": 600.0,
+  "max_resident_models": 2,
+  "warm_models": ["disease_detection_superclinical"],
   "models": {
     "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": {
       "models": 0,
       "tokenizers": 0,
       "pipelines": 1,
       "active_requests": 0,
-      "keep_alive_seconds_remaining": 287.4
+      "keep_alive_seconds_remaining": 287.4,
+      "resident": true
     }
   }
 }
@@ -243,6 +257,7 @@ docker run --rm -p 8080:8080 \
   -e OPENMED_PROFILE=prod \
   -e OPENMED_SERVICE_KEEP_ALIVE=10m \
   -e OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
+  -e OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
   openmed:0.6.2
 ```
 
@@ -284,6 +299,6 @@ curl http://127.0.0.1:8080/health
 ```
 
 Optional values such as `HF_TOKEN`, `OPENMED_PROFILE`,
-`OPENMED_CACHE_DIR`, and `OPENMED_SERVICE_PRELOAD_MODELS` can be supplied from a
-local `.env` file. Keep `.env` ignored and never commit secrets to version
-control.
+`OPENMED_CACHE_DIR`, `OPENMED_SERVICE_PRELOAD_MODELS`, and
+`OPENMED_SERVICE_MAX_RESIDENT_MODELS` can be supplied from a local `.env` file.
+Keep `.env` ignored and never commit secrets to version control.

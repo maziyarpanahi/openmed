@@ -139,6 +139,7 @@ def client(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as test_client:
@@ -163,7 +164,7 @@ def test_analyze_success_returns_prediction_result_shape(
 
     def fake_analyze(*args, **kwargs):
         assert kwargs["output_format"] == "dict"
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
@@ -276,7 +277,7 @@ def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
 
     def fake_extract(*args, **kwargs):
         assert kwargs["lang"] == "es"
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "extract_pii", fake_extract)
@@ -297,7 +298,7 @@ def test_pii_extract_accepts_new_langs(client, monkeypatch, fake_loader_cls, lan
 
     def fake_extract(*args, **kwargs):
         assert kwargs["lang"] == lang
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "extract_pii", fake_extract)
@@ -340,7 +341,7 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
 
     def fake_deidentify(*args, **kwargs):
         assert kwargs["method"] == "mask"
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
@@ -362,7 +363,7 @@ def test_pii_deidentify_accepts_new_langs(client, monkeypatch, fake_loader_cls, 
 
     def fake_deidentify(*args, **kwargs):
         assert kwargs["lang"] == lang
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
@@ -508,6 +509,7 @@ def test_service_timeouts_return_gateway_timeout(
 def test_app_uses_profile_config_from_env(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "dev")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     app = create_app()
 
     with TestClient(app) as test_client:
@@ -520,6 +522,7 @@ def test_app_uses_profile_config_from_env(monkeypatch, fake_loader_cls):
 def test_app_defaults_to_prod_profile_when_env_missing(monkeypatch, fake_loader_cls):
     monkeypatch.delenv("OPENMED_PROFILE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     app = create_app()
 
     with TestClient(app) as test_client:
@@ -701,6 +704,7 @@ def test_default_keep_alive_env_unloads_pipeline_after_request(
 ):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     monkeypatch.setenv("OPENMED_SERVICE_KEEP_ALIVE", "0")
 
     def fake_analyze(*args, **kwargs):
