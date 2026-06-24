@@ -1813,14 +1813,14 @@ def _shift_date_basic(
     if lang in _DAY_FIRST_LANGS - {"de"}:
         # European: DD/MM/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "de":
         # German: DD.MM.YYYY
         patterns = [
             (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "ja":
@@ -1828,14 +1828,14 @@ def _shift_date_basic(
         # JAPANESE_PII_PATTERNS regex, not here).
         patterns = [
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
     else:
         # US/English: MM/DD/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "mdy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
 
     for pattern, order in patterns:
@@ -1920,7 +1920,7 @@ def _format_date_like_original(
         return new_date.strftime("%d.%m.%Y")
 
     # Slash-separated dates: interpretation depends on language
-    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
+    if re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
@@ -1929,7 +1929,7 @@ def _format_date_like_original(
             return new_date.strftime("%m/%d/%Y")
 
     # Dash-separated dates
-    if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
+    if re.match(r"\d{1,2}-\d{1,2}-\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             return new_date.strftime("%d-%m-%Y")
         else:
