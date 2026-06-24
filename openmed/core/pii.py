@@ -1322,7 +1322,7 @@ def deidentify(
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random if None)
+        date_shift_days: Specific number of days to shift (random non-zero if None)
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1713,8 +1713,15 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
     Returns:
         A non-zero integer day offset within the range.
     """
-    sign = random.choice((-1, 1))
-    return sign * random.randint(1, high)
+    if low > high:
+        raise ValueError("low must be less than or equal to high")
+    if low == high == 0:
+        raise ValueError("range must contain at least one non-zero shift")
+
+    while True:
+        shift_days = random.randint(low, high)
+        if shift_days != 0:
+            return shift_days
 
 
 def _shift_date(
