@@ -35,6 +35,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="presidio",
         description="Presidio RecognizerResult adapter",
     ),
+    "spacy": AdapterSpec(
+        name="spacy",
+        module="openmed.interop.spacy_component",
+        extra="spacy",
+        description="spaCy pipeline component for OpenMed PII spans",
+    ),
 }
 
 
