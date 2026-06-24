@@ -9,7 +9,7 @@ from openmed.core.cascade import R3_ACCURATE, CascadeRouter
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii import deidentify
 from openmed.core.pipeline import Pipeline
-from openmed.core.policy import CANONICAL_POLICY_NAMES, load_policy
+from openmed.core.policy import CANONICAL_POLICY_NAMES, list_policies, load_policy
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
@@ -46,6 +46,18 @@ def _patch_extract(monkeypatch, entity: EntityPrediction) -> None:
     monkeypatch.setattr(pii, "extract_pii", fake_extract)
 
 
+def _patch_extract_many(
+    monkeypatch,
+    entities: list[EntityPrediction],
+) -> None:
+    from openmed.core import pii
+
+    def fake_extract(text: str, *args: object, **kwargs: object) -> PredictionResult:
+        return _prediction(text, entities)
+
+    monkeypatch.setattr(pii, "extract_pii", fake_extract)
+
+
 def _span(label: str = "PERSON", score: float = 0.95) -> OpenMedSpan:
     return OpenMedSpan(
         doc_id="doc-1",
@@ -67,6 +79,44 @@ def test_all_policy_literals_load_and_gdpr_alias_resolves():
         assert set(profile.actions) == set(CANONICAL_LABELS)
 
     assert load_policy("gdpr").name == "gdpr_pseudonymization"
+
+
+def test_canada_pipeda_profile_and_alias_load():
+    profile = load_policy("canada_pipeda")
+
+    assert profile.name == "canada_pipeda"
+    assert load_policy("pipeda").name == "canada_pipeda"
+    assert "canada_pipeda" in list_policies()
+    assert profile.action_for("ID_NUM") == "mask"
+    assert profile.action_for("SSN") == "mask"
+    assert profile.action_for("PERSON") == "replace"
+    assert profile.keep_mapping is True
+    assert profile.reversible_id is True
+
+
+def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):
+    text = "SIN 123-456-782 health card ABCD123456"
+    _patch_extract_many(
+        monkeypatch,
+        [
+            _entity(text, "123-456-782", "ID_NUM", 0.99),
+            _entity(text, "ABCD123456", "ID_NUM", 0.99),
+        ],
+    )
+
+    result = deidentify(
+        text,
+        policy="canada_pipeda",
+        use_safety_sweep=False,
+    )
+
+    assert result.deidentified_text == "SIN [ID_NUM] health card [ID_NUM_2]"
+    assert result.mapping == {
+        "[ID_NUM]": "123-456-782",
+        "[ID_NUM_2]": "ABCD123456",
+    }
+    assert [entity.action for entity in result.pii_entities] == ["mask", "mask"]
+    assert all(entity.reversible_id for entity in result.pii_entities)
 
 
 def test_deidentify_without_policy_preserves_default_output(monkeypatch):
