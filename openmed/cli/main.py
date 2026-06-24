@@ -575,6 +575,41 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
+    clinical_parser = benchmark_sub.add_parser(
+        "clinical",
+        help="Resolve clinical benchmark suites such as DrugProt.",
+    )
+    clinical_parser.add_argument(
+        "--suite",
+        default="drugprot",
+        help="Clinical benchmark suite to load.",
+    )
+    clinical_parser.add_argument(
+        "--task",
+        choices=["ner", "relation"],
+        default="ner",
+        help="Clinical benchmark task view to load.",
+    )
+    clinical_parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Optional local DrugProt directory or zip archive.",
+    )
+    clinical_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Optional cache directory for download-on-demand public corpora.",
+    )
+    clinical_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for a JSON suite-resolution summary.",
+    )
+    clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
+
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
@@ -781,6 +816,48 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
             "reports": [report.to_dict() for report in reports],
             "suite": suite,
         }
+
+    output = json.dumps(payload, indent=2, sort_keys=True)
+    if args.output:
+        try:
+            args.output.write_text(output + "\n", encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(output + "\n")
+    return 0
+
+
+def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
+    from openmed.eval.suites import load_suite_fixtures, suite_metadata
+
+    try:
+        fixtures = load_suite_fixtures(
+            str(args.suite),
+            task=str(args.task),
+            path=args.input,
+            cache_dir=args.cache_dir,
+        )
+        metadata = suite_metadata(str(args.suite), task=str(args.task))
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load clinical benchmark suite: {exc}\n")
+        return 1
+
+    payload: dict[str, Any] = {
+        "fixture_count": len(fixtures),
+        "metadata": metadata,
+        "suite": str(args.suite),
+        "task": str(args.task),
+    }
+    if str(args.task) == "relation":
+        payload["relation_count"] = sum(
+            len(getattr(fixture, "relations", ())) for fixture in fixtures
+        )
+    else:
+        payload["span_count"] = sum(
+            len(getattr(fixture, "gold_spans", ())) for fixture in fixtures
+        )
 
     output = json.dumps(payload, indent=2, sort_keys=True)
     if args.output:
