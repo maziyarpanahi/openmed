@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -329,7 +330,9 @@ class Pipeline:
                 getattr(pii_result, "entities", ()),
                 normalized.normalized_text,
                 context,
-                default_detector=f"model:{getattr(pii_result, 'model_name', route.model_name)}",
+                default_detector=(
+                    f"model:{getattr(pii_result, 'model_name', route.model_name)}"
+                ),
                 stage=STAGE_NAMES[4],
             )
             stage_results.append(
@@ -391,9 +394,14 @@ class Pipeline:
         effective_keep_mapping = keep_mapping or bool(
             self.policy is not None and self.policy.keep_mapping
         )
-        deidentified = self.stage10_emit(
-            normalized.normalized_text,
+        emission_pii_result = _remap_pii_result_to_original(
             pii_result,
+            normalized,
+            self.hmac_secret,
+        )
+        deidentified = self.stage10_emit(
+            normalized.original_text,
+            emission_pii_result,
             effective_method=effective_method,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
@@ -415,11 +423,16 @@ class Pipeline:
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
+        emission_spans = _remap_spans_to_original(
+            final_spans,
+            normalized,
+            self.hmac_secret,
+        )
         stage_results.append(
             PipelineStageResult(
                 10,
                 STAGE_NAMES[9],
-                spans=final_spans,
+                spans=emission_spans,
                 metadata={
                     "redacted_text_hash": hmac_text_hash(
                         deidentified.deidentified_text,
@@ -432,7 +445,7 @@ class Pipeline:
         audit_record = self._audit_record(
             context,
             stage_results,
-            final_spans,
+            emission_spans,
             redacted_text=deidentified.deidentified_text,
         )
 
@@ -441,7 +454,7 @@ class Pipeline:
             normalized_text=normalized.normalized_text,
             offset_map=normalized.offset_map,
             route=route,
-            spans=final_spans,
+            spans=emission_spans,
             stage_results=tuple(stage_results),
             redacted_text=deidentified.deidentified_text,
             audit_record=audit_record,
@@ -714,7 +727,9 @@ class Pipeline:
             getattr(pii_result, "entities", ()),
             text,
             context,
-            default_detector=f"model:{getattr(pii_result, 'model_name', context.route.model_name)}",
+            default_detector=(
+                f"model:{getattr(pii_result, 'model_name', context.route.model_name)}"
+            ),
             stage=STAGE_NAMES[8],
         )
         return spans, {
@@ -1060,6 +1075,97 @@ def _prediction_result_from_spans(
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def _remap_pii_result_to_original(
+    pii_result: Any,
+    document: NormalizedDocument,
+    hmac_secret: str | bytes,
+) -> Any:
+    """Clone a normalized-text PII result with entities mapped to original text."""
+    remapped_result = copy.copy(pii_result)
+    remapped_entities = []
+    for entity in getattr(pii_result, "entities", ()):
+        remapped = _remap_entity_to_original(entity, document, hmac_secret)
+        if remapped is not None:
+            remapped_entities.append(remapped)
+    remapped_result.entities = remapped_entities
+    if hasattr(remapped_result, "text"):
+        remapped_result.text = document.original_text
+    if hasattr(remapped_result, "num_entities"):
+        remapped_result.num_entities = len(remapped_entities)
+    return remapped_result
+
+
+def _remap_entity_to_original(
+    entity: Any,
+    document: NormalizedDocument,
+    hmac_secret: str | bytes,
+) -> Any | None:
+    bounds = _entity_bounds(entity, document.normalized_text)
+    if bounds is None:
+        return None
+
+    normalized_start, normalized_end = bounds
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    original_surface = document.original_text[original_start:original_end]
+
+    remapped = copy.copy(entity)
+    remapped.start = original_start
+    remapped.end = original_end
+    remapped.text = original_surface
+
+    metadata = dict(getattr(entity, "metadata", None) or {})
+    normalized_surface = document.normalized_text[normalized_start:normalized_end]
+    metadata.pop("normalized_text", None)
+    metadata.setdefault(
+        "normalized_text_hash",
+        hmac_text_hash(normalized_surface, hmac_secret),
+    )
+    metadata.setdefault("normalized_start", normalized_start)
+    metadata.setdefault("normalized_end", normalized_end)
+    remapped.metadata = metadata
+    return remapped
+
+
+def _remap_spans_to_original(
+    spans: Sequence[OpenMedSpan],
+    document: NormalizedDocument,
+    hmac_secret: str | bytes,
+) -> tuple[OpenMedSpan, ...]:
+    remapped_spans = []
+    for span in spans:
+        original_start, original_end = (
+            document.offset_map.normalized_span_to_original_offsets(
+                span.start,
+                span.end,
+            )
+        )
+        original_surface = document.original_text[original_start:original_end]
+        normalized_surface = document.normalized_text[span.start : span.end]
+        metadata = dict(span.metadata)
+        metadata.pop("normalized_text", None)
+        metadata.setdefault("normalized_start", span.start)
+        metadata.setdefault("normalized_end", span.end)
+        metadata.setdefault(
+            "normalized_text_hash",
+            hmac_text_hash(normalized_surface, hmac_secret),
+        )
+        remapped_spans.append(
+            replace(
+                span,
+                start=original_start,
+                end=original_end,
+                text_hash=hmac_text_hash(original_surface, hmac_secret),
+                metadata=metadata,
+            )
+        )
+    return tuple(remapped_spans)
 
 
 def _load_calibration_thresholds(
