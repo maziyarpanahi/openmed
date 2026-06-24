@@ -10,12 +10,94 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
-from openmed.utils.validation import validate_model_name
+from openmed.utils.validation import validate_batch_size, validate_model_name
 
 from .keep_alive import parse_keep_alive
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
+SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
+SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
+SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
+DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
+DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
+
+_BATCHING_ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
+_BATCHING_DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
+
+
+@dataclass(frozen=True)
+class ServiceBatchingConfig:
+    """Dynamic batching settings for REST model-backed endpoints."""
+
+    enabled: bool = False
+    max_batch_size: int = DEFAULT_SERVICE_BATCH_MAX_SIZE
+    max_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
+
+
+def parse_service_batching_enabled(raw_value: Optional[str]) -> bool:
+    """Parse the dynamic-batching feature flag."""
+    if raw_value is None:
+        return False
+
+    normalized = raw_value.strip().lower()
+    if not normalized:
+        return False
+    if normalized in _BATCHING_ENABLED_VALUES:
+        return True
+    if normalized in _BATCHING_DISABLED_VALUES:
+        return False
+    raise ValueError(
+        f"{SERVICE_BATCHING_ENABLED_ENV_VAR} must be a boolean value like "
+        "'true' or 'false'"
+    )
+
+
+def parse_service_batch_max_size(raw_value: Optional[str]) -> int:
+    """Parse the configured dynamic-batching maximum size."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BATCH_MAX_SIZE
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_SIZE_ENV_VAR} must be a positive integer"
+        ) from exc
+    return validate_batch_size(parsed)
+
+
+def parse_service_batch_max_wait_ms(raw_value: Optional[str]) -> float:
+    """Parse the configured dynamic-batching wait window in milliseconds."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR} must be a non-negative number"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR} must be greater than or equal to 0"
+        )
+    return parsed
+
+
+def parse_service_batching_config() -> ServiceBatchingConfig:
+    """Read dynamic-batching settings from the current process environment."""
+    return ServiceBatchingConfig(
+        enabled=parse_service_batching_enabled(
+            os.getenv(SERVICE_BATCHING_ENABLED_ENV_VAR)
+        ),
+        max_batch_size=parse_service_batch_max_size(
+            os.getenv(SERVICE_BATCH_MAX_SIZE_ENV_VAR)
+        ),
+        max_wait_ms=parse_service_batch_max_wait_ms(
+            os.getenv(SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR)
+        ),
+    )
 
 
 def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
@@ -48,6 +130,7 @@ class ServiceRuntime:
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
     default_keep_alive_seconds: Optional[float] = None
+    batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     _loader_factory: Optional[Callable[[OpenMedConfig], ModelLoader]] = None
     _loader: Optional[ModelLoader] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
@@ -64,11 +147,13 @@ class ServiceRuntime:
         config = OpenMedConfig.from_profile(profile)
         preload_models = parse_preload_models(os.getenv(SERVICE_PRELOAD_ENV_VAR))
         keep_alive = parse_keep_alive(os.getenv(SERVICE_KEEP_ALIVE_ENV_VAR))
+        batching = parse_service_batching_config()
         return cls(
             profile=profile,
             config=config,
             preload_models=preload_models,
             default_keep_alive_seconds=keep_alive,
+            batching=batching,
             _loader_factory=ModelLoader,
         )
 
