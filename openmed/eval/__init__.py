@@ -87,6 +87,13 @@ from openmed.eval.robustness import (
     robustness_report,
     whitespace_noise_perturbation,
 )
+from openmed.eval.threshold_sweep import (
+    ThresholdSweepPoint,
+    ThresholdSweepReport,
+    build_threshold_sweep_report,
+    sweep_confidence_thresholds,
+    threshold_sweep_report,
+)
 from openmed.eval.tiers import TIERS
 
 __all__ = [
@@ -118,9 +125,12 @@ __all__ = [
     "ReleaseGate",
     "RobustnessReport",
     "RobustnessVariant",
+    "ThresholdSweepPoint",
+    "ThresholdSweepReport",
     "UNSPECIFIED_GROUP",
     "artifact_dir_for",
     "build_thresholds_payload",
+    "build_threshold_sweep_report",
     "case_flip_perturbation",
     "character_typo_perturbation",
     "coerce_calibration_thresholds",
@@ -153,6 +163,8 @@ __all__ = [
     "run_reid_attack",
     "run_reid_benchmark",
     "run_suite",
+    "sweep_confidence_thresholds",
+    "threshold_sweep_report",
     "TIERS",
     "whitespace_noise_perturbation",
     "write_calibration_artifacts",
