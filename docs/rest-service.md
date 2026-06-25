@@ -67,6 +67,26 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 0.
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`, `/pii/extract`, and `/pii/deidentify`. The default is `1,000,000` characters. Oversized requests return the standard `422` validation envelope; split larger documents client-side or route them through batch processing.
 
+Optional dynamic request batching:
+
+```bash
+OPENMED_SERVICE_BATCHING_ENABLED=true \
+OPENMED_SERVICE_BATCH_MAX_SIZE=8 \
+OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+Dynamic batching is off by default. When enabled, `/pii/extract` groups
+compatible requests and dispatches them through the PII batch helper; models
+with true batch backends get one backend batch, while model families whose
+batch helper falls back to per-text analysis still preserve per-request results.
+`/analyze` uses one backend pipeline call for compatible requests with
+`sentence_detection=false`; requests that need sentence segmentation or other
+non-batch-compatible settings are still coalesced but executed independently.
+`OPENMED_SERVICE_BATCH_MAX_SIZE` must be a positive integer.
+`OPENMED_SERVICE_BATCH_MAX_WAIT_MS` is a non-negative wait window in
+milliseconds.
+
 ## Reliability Changes
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
@@ -75,6 +95,7 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 0.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
 - `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
+- Dynamic request batching can be enabled for compatible `/analyze` and `/pii/extract` traffic with `OPENMED_SERVICE_BATCHING_ENABLED=true`.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
