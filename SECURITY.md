@@ -1,24 +1,3 @@
-<!--
-  MAINTAINER — COMPLETE BEFORE MERGING THIS PR (mirrored in the PR description):
-  [ ] 1. REQUIRED — Enable GitHub Private Vulnerability Reporting. Until it is on,
-         the reporting link below and the "Report a vulnerability" button lead to
-         a "not enabled" page: this policy would go live advertising a dead
-         channel, the exact black hole it exists to prevent.
-           Settings -> Code security -> Private vulnerability reporting, or:
-           gh api -X PUT repos/maziyarpanahi/openmed/private-vulnerability-reporting
-  [ ] 2. Confirm/adjust the Severity, Response targets (SLA), and Supported
-         Versions tables — they are proposed defaults, not commitments yet.
-  [ ] 3. Recommended — name a secondary security contact or co-maintainer for the
-         escalation path. With a single maintainer, the 14-day unresponsiveness
-         clause is the only release valve (bus-factor risk).
-  [ ] 4. Optional — add a *monitored* security email as a no-GitHub-account
-         fallback (ISO/IEC 29147 accessibility). Never publish an inbox you will
-         not actively watch — an unmonitored inbox is worse than none.
-  [ ] 5. Tag/publish 1.6.0, or set the Supported Versions table to the current
-         released line, so reporters are not told to upgrade to an untagged
-         version.
--->
-
 # Security Policy
 
 OpenMed de-identifies protected health information (PHI) and other personal data.
@@ -109,7 +88,7 @@ a public issue:
 ## Severity
 
 We triage with [CVSS v4.0](https://www.first.org/cvss/) where it applies, plus a
-privacy-impact override. _(Proposed — maintainer to confirm.)_
+privacy-impact override.
 
 | Severity | Examples |
 |---|---|
@@ -124,17 +103,17 @@ Privacy-impacting defects are never rated below **High**.
 
 Security fixes target the **latest released minor version** (currently the
 `1.6.x` line); we do not backport to end-of-life lines. Reproduce on a supported
-version before reporting. _(Proposed — maintainer to confirm the exact window.)_
+version before reporting.
 
 | Version | Supported |
 |---|---|
-| Latest minor (`1.6.x`) | ✅ Yes |
-| Older releases | ❌ Upgrade first |
+| Latest minor (`1.6.x`) | Yes |
+| Older releases | Upgrade first |
 
 ## Response targets
 
-We aim for the following timeline. _(Proposed defaults — maintainer to confirm;
-"business days" follow the maintainer's local calendar.)_
+We aim for the following timeline. "Business days" follow the maintainer's local
+calendar.
 
 | Stage | Target |
 |---|---|
