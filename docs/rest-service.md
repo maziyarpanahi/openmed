@@ -48,6 +48,38 @@ Optional profile selection (defaults to `prod`):
 OPENMED_PROFILE=dev uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
+## Browser and Host Allowlists
+
+The service is strict by default:
+
+- CORS is off unless `OPENMED_SERVICE_CORS_ORIGINS` is set. Cross-origin
+  browser requests are not granted `Access-Control-Allow-Origin` by default.
+- Trusted host checking is always on. `OPENMED_SERVICE_TRUSTED_HOSTS` defaults
+  to `localhost,127.0.0.1,[::1]`, so loopback clients pass and unexpected Host
+  headers are rejected with the standard error envelope.
+
+Both variables accept comma-separated allowlists. CORS origins must be exact
+scheme/host/port origins and cannot use wildcards. Setting
+`OPENMED_SERVICE_TRUSTED_HOSTS` replaces the loopback default, so include every
+host the service should accept.
+
+Example browser front-end configuration:
+
+```bash
+OPENMED_SERVICE_CORS_ORIGINS=http://localhost:5173 \
+OPENMED_SERVICE_TRUSTED_HOSTS=127.0.0.1,localhost \
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+```
+
+For a reverse proxy in front of the service, configure the public browser
+origin and the host header forwarded to Uvicorn:
+
+```bash
+OPENMED_SERVICE_CORS_ORIGINS=https://clinic-ui.example.com \
+OPENMED_SERVICE_TRUSTED_HOSTS=api.example.com \
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+```
+
 Optional shared model preload at startup:
 
 ```bash
@@ -112,6 +144,8 @@ milliseconds.
 - `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
 - Dynamic request batching can be enabled for compatible `/analyze` and `/pii/extract` traffic with `OPENMED_SERVICE_BATCHING_ENABLED=true`.
+- CORS remains disabled unless exact origins are listed, and Host headers are
+  checked against the configured trusted-host allowlist.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
@@ -295,6 +329,8 @@ docker run --rm -p 8080:8080 \
   -e OPENMED_SERVICE_KEEP_ALIVE=10m \
   -e OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
   -e OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
+  -e OPENMED_SERVICE_CORS_ORIGINS=http://localhost:5173 \
+  -e OPENMED_SERVICE_TRUSTED_HOSTS=127.0.0.1,localhost \
   openmed:0.6.2
 ```
 
@@ -337,5 +373,6 @@ curl http://127.0.0.1:8080/health
 
 Optional values such as `HF_TOKEN`, `OPENMED_PROFILE`,
 `OPENMED_CACHE_DIR`, `OPENMED_SERVICE_PRELOAD_MODELS`, and
-`OPENMED_SERVICE_MAX_RESIDENT_MODELS` can be supplied from a local `.env` file.
+`OPENMED_SERVICE_MAX_RESIDENT_MODELS`, `OPENMED_SERVICE_CORS_ORIGINS`, and
+`OPENMED_SERVICE_TRUSTED_HOSTS` can be supplied from a local `.env` file.
 Keep `.env` ignored and never commit secrets to version control.

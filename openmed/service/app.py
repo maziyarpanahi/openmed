@@ -12,6 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.middleware.cors import CORSMiddleware
 
 import openmed
 from openmed.processing import format_predictions
@@ -24,6 +25,12 @@ from .schemas import (
     ModelUnloadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
+)
+from .security_headers import (
+    SERVICE_CORS_HEADERS,
+    SERVICE_CORS_METHODS,
+    ErrorEnvelopeTrustedHostMiddleware,
+    parse_service_security_config,
 )
 
 SERVICE_NAME = "openmed-rest"
@@ -205,6 +212,20 @@ def create_app() -> FastAPI:
         version=openmed.__version__,
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
+    )
+    security_config = parse_service_security_config()
+    app.state.security = security_config
+    if security_config.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=security_config.cors_origins,
+            allow_methods=SERVICE_CORS_METHODS,
+            allow_headers=SERVICE_CORS_HEADERS,
+        )
+    app.add_middleware(
+        ErrorEnvelopeTrustedHostMiddleware,
+        allowed_hosts=security_config.trusted_hosts,
+        www_redirect=False,
     )
 
     @app.exception_handler(RequestValidationError)
