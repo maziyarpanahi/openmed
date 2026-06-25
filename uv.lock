@@ -3052,6 +3052,7 @@ dev = [
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "python-dateutil" },
     { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
@@ -3155,6 +3156,7 @@ requires-dist = [
     { name = "pytesseract", marker = "extra == 'multimodal'", specifier = ">=0.3.10" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
+    { name = "python-dateutil", marker = "extra == 'dev'", specifier = ">=2.8" },
     { name = "python-docx", marker = "extra == 'multimodal'", specifier = ">=1.1" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.18" },
