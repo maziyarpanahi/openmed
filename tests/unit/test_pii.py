@@ -986,6 +986,7 @@ class TestShiftDate:
             ("15.03.2022", 30, "de", False),
             ("2020-01-15", 30, "en", False),
             ("15 January 2020", 30, "en", False),
+            ("January 15, 2020", 30, "en", False),
             ("02/28/2019", 366, "en", True),
             ("01/15/2020", -30, "en", True),
         ]
@@ -1010,6 +1011,22 @@ class TestShiftDate:
         ]
 
         assert with_dateutil == without_dateutil
+
+    def test_shift_date_month_first_name_without_dateutil(self, monkeypatch):
+        """Month-first English dates must not require python-dateutil."""
+        original_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "dateutil" or name.startswith("dateutil."):
+                raise ImportError("dateutil unavailable")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        assert (
+            _shift_date("January 15, 2020", 30, keep_year=False, lang="en")
+            == "February 14, 2020"
+        )
 
 
 # ---------------------------------------------------------------------------
