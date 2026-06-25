@@ -452,7 +452,12 @@ def _parse_relation(
     entities_by_id: Mapping[str, DrugProtEntity],
 ) -> DrugProtRelation:
     pmid = str(row[0])
-    relation_type = str(row[1])
+    relation_type = str(row[1]).strip().upper()
+    if relation_type not in DRUGPROT_RELATION_TYPES:
+        allowed = ", ".join(DRUGPROT_RELATION_TYPES)
+        raise ValueError(
+            f"unknown DrugProt relation type {row[1]!r}; expected one of: {allowed}"
+        )
     arg1_id = _parse_relation_arg(str(row[2]), "Arg1")
     arg2_id = _parse_relation_arg(str(row[3]), "Arg2")
     try:
@@ -477,6 +482,13 @@ def _validate_entity(entity: DrugProtEntity, document_text: str) -> DrugProtEnti
         raise ValueError(
             "invalid DrugProt span offsets "
             f"{entity.start}:{entity.end} for text length {len(document_text)}"
+        )
+    span_text = document_text[entity.start : entity.end]
+    if span_text != entity.text:
+        raise ValueError(
+            "DrugProt span text mismatch for "
+            f"{entity.entity_id}: offsets {entity.start}:{entity.end} select "
+            f"{span_text!r}, TSV text is {entity.text!r}"
         )
     return entity
 
