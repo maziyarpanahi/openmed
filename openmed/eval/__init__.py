@@ -87,6 +87,12 @@ from openmed.eval.robustness import (
     robustness_report,
     whitespace_noise_perturbation,
 )
+from openmed.eval.scorecard import (
+    ModelScorecard,
+    render_model_scorecard,
+    write_model_scorecard,
+    write_model_scorecard_json,
+)
 from openmed.eval.tiers import TIERS
 
 __all__ = [
@@ -109,6 +115,7 @@ __all__ = [
     "GateReport",
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
+    "ModelScorecard",
     "ModelStewardConfig",
     "QUARANTINED",
     "QuantRecallDeltaResult",
@@ -148,6 +155,7 @@ __all__ = [
     "ocr_noise_perturbation",
     "perturb_fixture",
     "render_reid_leaderboard",
+    "render_model_scorecard",
     "robustness_report",
     "run_benchmark",
     "run_reid_attack",
@@ -156,4 +164,6 @@ __all__ = [
     "TIERS",
     "whitespace_noise_perturbation",
     "write_calibration_artifacts",
+    "write_model_scorecard",
+    "write_model_scorecard_json",
 ]
