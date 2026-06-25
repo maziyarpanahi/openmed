@@ -177,7 +177,7 @@
             "type": "boolean"
           },
           "keep_year": {
-            "default": true,
+            "default": false,
             "title": "Keep Year",
             "type": "boolean"
           },
