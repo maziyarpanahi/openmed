@@ -32,6 +32,16 @@ from .lab_values import (
     derive_abnormal_flag,
     parse_reference_range,
 )
+from .vital_signs import (
+    VITAL_SIGNS_ADVISORY,
+    VitalKind,
+    VitalSignComponent,
+    VitalSignComponentKind,
+    VitalSignNumber,
+    VitalSignResult,
+    empty_vital_sign_result,
+    structure_vital_sign,
+)
 
 __all__ = [
     "AFFIRMED",
@@ -58,4 +68,12 @@ __all__ = [
     "LAB_FLAG_ADVISORY",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "VitalKind",
+    "VitalSignComponentKind",
+    "VitalSignNumber",
+    "VitalSignComponent",
+    "VitalSignResult",
+    "VITAL_SIGNS_ADVISORY",
+    "empty_vital_sign_result",
+    "structure_vital_sign",
 ]
