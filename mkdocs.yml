@@ -30,6 +30,7 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Device Tiers & SLOs: tiers.md
+      - AWQ Export: export-awq.md
   - PII & De-identification:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
