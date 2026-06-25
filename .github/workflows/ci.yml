@@ -36,27 +36,25 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-lint-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-lint-
-          ${{ runner.os }}-pip-
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install lint dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python 3.11
 
     - name: Lint with Ruff
       run: |
-        ruff check --output-format=github .
+        uv run ruff check --output-format=github .
 
     - name: Check Ruff formatting
       run: |
-        ruff format --check .
+        uv run ruff format --check .
 
   test:
     needs: [repo-policy, lint]
@@ -80,18 +78,17 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip packages
-      uses: actions/cache@v6
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python ${{ matrix.python-version }}
 
     - name: Validate model manifest schema
       run: |
@@ -99,7 +96,7 @@ jobs:
 
     - name: Test with pytest
       run: |
-        pytest --cov=openmed --cov-report=xml --cov-report=term-missing
+        uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v7
@@ -120,23 +117,33 @@ jobs:
       with:
         python-version: "3.11"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install bandit[toml] pip-audit
+        uv sync --frozen --extra dev --python 3.11
 
     - name: Run Bandit report
       run: |
-        bandit -r openmed -f json -o bandit-report.json --exit-zero
+        uv run --with 'bandit[toml]' bandit -r openmed -f json -o bandit-report.json --exit-zero
 
     - name: Enforce high-severity Bandit findings
       run: |
-        bandit -r openmed --severity-level high --confidence-level medium
+        uv run --with 'bandit[toml]' bandit -r openmed --severity-level high --confidence-level medium
 
     - name: Run pip-audit dependency gate
       run: |
-        python scripts/security/pip_audit_gate.py
+        uv run \
+          --with pip-audit \
+          --with 'requests>=2.33.0' \
+          --with 'urllib3>=2.7.0' \
+          python scripts/security/pip_audit_gate.py
 
     - name: Upload security reports
       uses: actions/upload-artifact@v7
@@ -255,14 +262,17 @@ jobs:
       with:
         python-version: "3.11"
 
-    - name: Install build dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install build
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Build package
       run: |
-        python -m build
+        uv run --with build python -m build
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7
