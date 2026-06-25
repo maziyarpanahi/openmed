@@ -59,6 +59,11 @@ presidio = [
   "presidio-analyzer>=2.2.354,<3",
 ]
 
+spacy = [
+  "click>=8.0",
+  "spacy>=3.5",
+]
+
 multimodal = [
   "pdfplumber>=0.11",
   "python-docx>=1.1",
@@ -70,6 +75,10 @@ multimodal = [
 # it is opt-in rather than bundled into the general multimodal extra.
 ocr-paddle = [
   "paddleocr>=2.7",
+]
+
+awq = [
+  "autoawq>=0.2.9",
 ]
 
 langchain = [
@@ -95,6 +104,7 @@ gliner = [
 
 mlx = [
   "mlx>=0.22",
+  "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
   "transformers>=4.50",
   "tokenizers>=0.15",

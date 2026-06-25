@@ -1215,7 +1215,7 @@ def _deidentify_batch(
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -1284,7 +1284,7 @@ def deidentify(
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -1420,7 +1420,7 @@ def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
 def _redact_entity(
     entity: PIIEntity,
     method: DeidentificationMethod,
-    keep_year: bool = True,
+    keep_year: bool = False,
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
@@ -1727,7 +1727,7 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
 def _shift_date(
     date_str: str,
     shift_days: int,
-    keep_year: bool = True,
+    keep_year: bool = False,
     lang: str = "en",
 ) -> str:
     """Shift a date string by specified number of days.
@@ -1793,7 +1793,7 @@ def _shift_date(
 def _shift_date_basic(
     date_str: str,
     shift_days: int,
-    keep_year: bool = True,
+    keep_year: bool = False,
     lang: str = "en",
 ) -> str:
     """Basic date shifting without dateutil dependency.
