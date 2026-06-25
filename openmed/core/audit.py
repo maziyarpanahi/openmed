@@ -253,15 +253,22 @@ class AuditReport:
             )
         return payload
 
+    def _hash_for_spans(self, spans: list[AuditSpan]) -> str:
+        return stable_hash(
+            self._payload(
+                include_repro_hash=False,
+                include_signature=False,
+                spans=spans,
+            )
+        )
+
     def recompute_repro_hash(self) -> str:
         """Recompute the report hash without trusting the stored value.
 
         Uses the deterministic, order-invariant span ordering so two logically
         identical runs hash identically regardless of how spans were assembled.
         """
-        return stable_hash(
-            self._payload(include_repro_hash=False, include_signature=False)
-        )
+        return self._hash_for_spans(self._sorted_spans())
 
     def _legacy_repro_hash(self) -> str:
         """Recompute the hash using the stored span order (pre-sort layout).
@@ -270,13 +277,7 @@ class AuditReport:
         spans in their stored array order. This reproduces that legacy payload so
         such untampered reports can still be verified after upgrading.
         """
-        return stable_hash(
-            self._payload(
-                include_repro_hash=False,
-                include_signature=False,
-                spans=list(self.spans),
-            )
-        )
+        return self._hash_for_spans(list(self.spans))
 
     def repro_hash_matches(self) -> bool:
         """Whether the stored hash matches the deterministic or legacy payload.
@@ -289,8 +290,27 @@ class AuditReport:
             self._legacy_repro_hash(),
         )
 
+    def _serialization_spans(self) -> list[AuditSpan]:
+        """Return the span order that keeps persisted report integrity intact.
+
+        Newly produced reports serialize spans in deterministic sorted order.
+        Legacy reports that already carry a stored-order ``repro_hash`` must keep
+        that stored order when serialized, otherwise a JSON round-trip rewrites
+        the signed payload while retaining the old hash and HMAC.
+        """
+        sorted_spans = self._sorted_spans()
+        if self.repro_hash != self._hash_for_spans(sorted_spans):
+            stored_spans = list(self.spans)
+            if self.repro_hash == self._hash_for_spans(stored_spans):
+                return stored_spans
+        return sorted_spans
+
     def to_dict(self) -> dict[str, Any]:
-        return self._payload(include_repro_hash=True, include_signature=True)
+        return self._payload(
+            include_repro_hash=True,
+            include_signature=True,
+            spans=self._serialization_spans(),
+        )
 
     def to_json(self) -> str:
         return _canonical_json(self.to_dict())
@@ -377,16 +397,7 @@ class AuditReport:
         # untampered reports signed by earlier versions still verify. Both the
         # repro_hash check and the HMAC are evaluated against the same ordering.
         for spans in (self._sorted_spans(), list(self.spans)):
-            if (
-                stable_hash(
-                    self._payload(
-                        include_repro_hash=False,
-                        include_signature=False,
-                        spans=spans,
-                    )
-                )
-                != self.repro_hash
-            ):
+            if self._hash_for_spans(spans) != self.repro_hash:
                 continue
             message = _canonical_json(
                 self._payload(

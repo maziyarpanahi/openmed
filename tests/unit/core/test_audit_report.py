@@ -331,3 +331,8 @@ def test_legacy_signed_report_with_unsorted_spans_still_verifies():
     assert report.verify(key)
     assert verify_repro_hash(report)
     assert not report.verify("wrong-key")
+
+    payload = report.to_json()
+    assert [span["start"] for span in json.loads(payload)["spans"]] == [44, 8, 24]
+    assert verify_repro_hash(json.loads(payload))
+    assert AuditReport.from_json(payload).verify(key)
