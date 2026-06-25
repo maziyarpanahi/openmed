@@ -6,6 +6,13 @@ the MLX path. Use this when the host machine is not Apple Silicon, or
 when MLX is unavailable.
 """
 
+from .calibration import load_awq_calibration_texts
 from .privacy_filter import PrivacyFilterTorchPipeline
+from .quantize_awq import AwqQuantizationResult, quantize_awq
 
-__all__ = ["PrivacyFilterTorchPipeline"]
+__all__ = [
+    "AwqQuantizationResult",
+    "PrivacyFilterTorchPipeline",
+    "load_awq_calibration_texts",
+    "quantize_awq",
+]

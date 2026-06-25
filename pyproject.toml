@@ -72,6 +72,10 @@ ocr-paddle = [
   "paddleocr>=2.7",
 ]
 
+awq = [
+  "autoawq>=0.2.9",
+]
+
 langchain = [
   "langchain-core>=0.2,<1",
 ]
@@ -95,6 +99,7 @@ gliner = [
 
 mlx = [
   "mlx>=0.22",
+  "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
   "transformers>=4.50",
   "tokenizers>=0.15",

@@ -195,18 +195,45 @@ class AuditReport:
         if not self.repro_hash:
             self.repro_hash = self.recompute_repro_hash()
 
+    def _sorted_spans(self) -> list[AuditSpan]:
+        """Return spans in a stable, content-derived order for hashing/export.
+
+        Span order must not depend on detector arbitration or safety-sweep
+        sequencing: two logically identical runs that build the same spans in a
+        different order must produce identical canonical payloads (and therefore
+        identical ``repro_hash`` values). Sorting primarily by ``(start, end,
+        canonical_label, action)`` makes ordering a property of the report's
+        content rather than of how it was assembled. The canonical JSON of the
+        full span dict is appended as a total-order tie-breaker so spans that
+        collide on the primary key but differ in any other field (``label``,
+        ``sources``, ``confidence``, ``evidence``, ...) still sort
+        deterministically rather than retaining input order.
+        """
+        return sorted(
+            self.spans,
+            key=lambda span: (
+                span.start,
+                span.end,
+                span.canonical_label,
+                span.action,
+                _canonical_json(span.to_dict()),
+            ),
+        )
+
     def _payload(
         self,
         *,
         include_repro_hash: bool,
         include_signature: bool,
+        spans: list[AuditSpan] | None = None,
     ) -> dict[str, Any]:
+        span_source = self._sorted_spans() if spans is None else spans
         payload = {
             "policy": self.policy,
             "resolved_profile": copy.deepcopy(self.resolved_profile),
             "detectors": [detector.to_dict() for detector in self.detectors],
             "safety_sweep": copy.deepcopy(self.safety_sweep),
-            "spans": [span.to_dict() for span in self.spans],
+            "spans": [span.to_dict() for span in span_source],
             "thresholds": {
                 str(label): float(value)
                 for label, value in sorted(self.thresholds.items())
@@ -226,14 +253,64 @@ class AuditReport:
             )
         return payload
 
-    def recompute_repro_hash(self) -> str:
-        """Recompute the report hash without trusting the stored value."""
+    def _hash_for_spans(self, spans: list[AuditSpan]) -> str:
         return stable_hash(
-            self._payload(include_repro_hash=False, include_signature=False)
+            self._payload(
+                include_repro_hash=False,
+                include_signature=False,
+                spans=spans,
+            )
         )
 
+    def recompute_repro_hash(self) -> str:
+        """Recompute the report hash without trusting the stored value.
+
+        Uses the deterministic, order-invariant span ordering so two logically
+        identical runs hash identically regardless of how spans were assembled.
+        """
+        return self._hash_for_spans(self._sorted_spans())
+
+    def _legacy_repro_hash(self) -> str:
+        """Recompute the hash using the stored span order (pre-sort layout).
+
+        Reports signed before deterministic span ordering was introduced hashed
+        spans in their stored array order. This reproduces that legacy payload so
+        such untampered reports can still be verified after upgrading.
+        """
+        return self._hash_for_spans(list(self.spans))
+
+    def repro_hash_matches(self) -> bool:
+        """Whether the stored hash matches the deterministic or legacy payload.
+
+        Accepts the legacy stored-order hash so untampered reports produced
+        before deterministic span ordering still validate.
+        """
+        return self.repro_hash in (
+            self.recompute_repro_hash(),
+            self._legacy_repro_hash(),
+        )
+
+    def _serialization_spans(self) -> list[AuditSpan]:
+        """Return the span order that keeps persisted report integrity intact.
+
+        Newly produced reports serialize spans in deterministic sorted order.
+        Legacy reports that already carry a stored-order ``repro_hash`` must keep
+        that stored order when serialized, otherwise a JSON round-trip rewrites
+        the signed payload while retaining the old hash and HMAC.
+        """
+        sorted_spans = self._sorted_spans()
+        if self.repro_hash != self._hash_for_spans(sorted_spans):
+            stored_spans = list(self.spans)
+            if self.repro_hash == self._hash_for_spans(stored_spans):
+                return stored_spans
+        return sorted_spans
+
     def to_dict(self) -> dict[str, Any]:
-        return self._payload(include_repro_hash=True, include_signature=True)
+        return self._payload(
+            include_repro_hash=True,
+            include_signature=True,
+            spans=self._serialization_spans(),
+        )
 
     def to_json(self) -> str:
         return _canonical_json(self.to_dict())
@@ -312,16 +389,27 @@ class AuditReport:
             and hash_text(deidentified_text) != self.deidentified_text_hash
         ):
             return False
-        if self.recompute_repro_hash() != self.repro_hash:
-            return False
         if self.signature is None or self.signature.algorithm != _SIGNATURE_ALGORITHM:
             return False
 
-        message = _canonical_json(
-            self._payload(include_repro_hash=True, include_signature=False)
-        ).encode("utf-8")
-        expected = hmac.new(key_bytes, message, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, self.signature.value)
+        # Accept either the deterministic (sorted) span ordering or the legacy
+        # stored ordering used before deterministic ordering was introduced, so
+        # untampered reports signed by earlier versions still verify. Both the
+        # repro_hash check and the HMAC are evaluated against the same ordering.
+        for spans in (self._sorted_spans(), list(self.spans)):
+            if self._hash_for_spans(spans) != self.repro_hash:
+                continue
+            message = _canonical_json(
+                self._payload(
+                    include_repro_hash=True,
+                    include_signature=False,
+                    spans=spans,
+                )
+            ).encode("utf-8")
+            expected = hmac.new(key_bytes, message, hashlib.sha256).hexdigest()
+            if hmac.compare_digest(expected, self.signature.value):
+                return True
+        return False
 
     def export_review_bundle(self) -> dict[str, Any]:
         """Export reviewable spans and context windows without full text."""
@@ -345,7 +433,7 @@ class AuditReport:
                     "text_hash": span.text_hash,
                     "context": dict(span.context),
                 }
-                for span in self.spans
+                for span in self._sorted_spans()
             ],
         }
 
@@ -361,11 +449,15 @@ def recompute_repro_hash(report: AuditReport | Mapping[str, Any]) -> str:
 
 
 def verify_repro_hash(report: AuditReport | Mapping[str, Any]) -> bool:
-    """Return whether a report's stored hash matches its canonical payload."""
+    """Return whether a report's stored hash matches its canonical payload.
+
+    Accepts both the deterministic (sorted) span ordering and the legacy stored
+    ordering so untampered reports signed before deterministic ordering still
+    validate.
+    """
     if isinstance(report, AuditReport):
-        return report.recompute_repro_hash() == report.repro_hash
-    parsed = AuditReport.from_dict(report)
-    return parsed.recompute_repro_hash() == parsed.repro_hash
+        return report.repro_hash_matches()
+    return AuditReport.from_dict(report).repro_hash_matches()
 
 
 __all__ = [
