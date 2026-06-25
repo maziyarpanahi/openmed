@@ -93,6 +93,10 @@ config = OpenMedConfig(backend=None)    # Auto-detect (default)
 
 The public runtime focuses on automatic preparation at first use. OpenMed's broader cross-architecture conversion work is still being generalized privately across the full model collection.
 
+Quantized export certification is documented in
+[MLX Quantized Export Certification](export-mlx-quant.md), including INT4
+recall-delta reports and the `certified` manifest field.
+
 ## Architecture Coverage
 
 As of May 4, 2026, the current public MLX path covers these families:
