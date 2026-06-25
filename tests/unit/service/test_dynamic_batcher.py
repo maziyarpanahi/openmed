@@ -19,11 +19,40 @@ from openmed.service.batcher import DynamicBatcher
 class FakeLoader:
     """Minimal loader double for service runtime tests."""
 
+    instances: list["FakeLoader"] = []
+
     def __init__(self, config):
         self.config = config
+        self.pipeline_calls: list[list[str]] = []
+        FakeLoader.instances.append(self)
 
     def resolve_model_name(self, model_name: str) -> str:
         return model_name
+
+    def create_pipeline(self, model_name: str, **kwargs: Any):
+        del model_name, kwargs
+
+        def pipeline(texts, **call_kwargs):
+            del call_kwargs
+            batch = list(texts)
+            self.pipeline_calls.append(batch)
+            return [
+                [
+                    {
+                        "word": text,
+                        "entity_group": "TEST",
+                        "score": 0.99,
+                        "start": 0,
+                        "end": len(text),
+                    }
+                ]
+                for text in batch
+            ]
+
+        return pipeline
+
+    def get_max_sequence_length(self, *_: Any, **__: Any) -> int:
+        return 512
 
     def loaded_models(self) -> dict[str, dict[str, int]]:
         return {}
@@ -183,6 +212,68 @@ def test_pii_extract_endpoint_batches_concurrent_requests(monkeypatch):
         "charlie",
     ]
     assert calls == [(["alpha", "bravo", "charlie"], 3)]
+
+
+def test_analyze_endpoint_batches_compatible_concurrent_requests(monkeypatch):
+    _enable_batching_env(monkeypatch)
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    FakeLoader.instances.clear()
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                payload = {"sentence_detection": False}
+                return await asyncio.gather(
+                    client.post("/analyze", json={"text": "alpha", **payload}),
+                    client.post("/analyze", json={"text": "bravo", **payload}),
+                    client.post("/analyze", json={"text": "charlie", **payload}),
+                )
+
+    responses = asyncio.run(scenario())
+
+    assert [response.status_code for response in responses] == [200, 200, 200]
+    assert [response.json()["text"] for response in responses] == [
+        "alpha",
+        "bravo",
+        "charlie",
+    ]
+    assert FakeLoader.instances[0].pipeline_calls == [["alpha", "bravo", "charlie"]]
+
+
+def test_pii_extract_batches_only_compatible_request_shapes(monkeypatch):
+    _enable_batching_env(monkeypatch)
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    calls: list[tuple[list[str], str]] = []
+
+    def fake_extract_batch(texts, **kwargs: Any):
+        calls.append((list(texts), kwargs["lang"]))
+        return [_prediction_result(text) for text in texts]
+
+    monkeypatch.setattr(pii_core, "_extract_pii_batch", fake_extract_batch)
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://test",
+            ) as client:
+                return await asyncio.gather(
+                    client.post("/pii/extract", json={"text": "alpha", "lang": "en"}),
+                    client.post("/pii/extract", json={"text": "bravo", "lang": "es"}),
+                    client.post("/pii/extract", json={"text": "charlie", "lang": "en"}),
+                )
+
+    responses = asyncio.run(scenario())
+
+    assert [response.status_code for response in responses] == [200, 200, 200]
+    assert calls == [(["alpha", "charlie"], "en"), (["bravo"], "es")]
 
 
 def test_pii_extract_endpoint_isolates_one_failed_batched_input(monkeypatch):

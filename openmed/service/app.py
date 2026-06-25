@@ -14,6 +14,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import openmed
+from openmed.processing import format_predictions
+from openmed.utils.validation import validate_model_name
 
 from .batcher import BatchResult, DynamicBatcher
 from .runtime import ServiceRuntime
@@ -352,26 +354,63 @@ def _dispatch_analyze_batch_sync(
     jobs: Sequence[_AnalyzeBatchJob],
 ) -> Sequence[BatchResult[_ServicePayload]]:
     results: list[Optional[BatchResult[_ServicePayload]]] = [None] * len(jobs)
+    groups: dict[Tuple[Any, ...], list[int]] = {}
+    for index, job in enumerate(jobs):
+        groups.setdefault(_analyze_batch_key(job.payload), []).append(index)
+
+    for indexes in groups.values():
+        _dispatch_analyze_group(runtime, jobs, indexes, results)
+
+    return _completed_batch_results(results)
+
+
+def _dispatch_analyze_group(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+    indexes: Sequence[int],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
     active_jobs: list[Tuple[int, str, Any]] = []
 
-    for index, job in enumerate(jobs):
+    for index in indexes:
         try:
-            model_key = runtime.begin_model_request(job.payload.model_name)
+            model_key = runtime.begin_model_request(jobs[index].payload.model_name)
         except Exception as exc:
             results[index] = exc
         else:
-            active_jobs.append((index, model_key, job.payload.keep_alive))
+            active_jobs.append((index, model_key, jobs[index].payload.keep_alive))
 
     try:
-        for index, _, _ in active_jobs:
+        active_indexes = [index for index, _, _ in active_jobs]
+        if not active_indexes:
+            return
+
+        payloads = [jobs[index].payload for index in active_indexes]
+        if _can_backend_batch_analyze(payloads, runtime):
             try:
-                results[index] = _analyze_payload(jobs[index].payload, runtime)
-            except Exception as exc:
-                results[index] = exc
+                batch_results = _analyze_payload_batch(payloads, runtime)
+                if len(batch_results) != len(active_indexes):
+                    raise ValueError(
+                        "Analyze batch returned "
+                        f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                    )
+            except Exception:
+                for index in active_indexes:
+                    try:
+                        results[index] = _analyze_payload(jobs[index].payload, runtime)
+                    except Exception as exc:
+                        results[index] = exc
+            else:
+                for index, result in zip(active_indexes, batch_results):
+                    results[index] = result
+        else:
+            for index in active_indexes:
+                try:
+                    results[index] = _analyze_payload(jobs[index].payload, runtime)
+                except Exception as exc:
+                    results[index] = exc
     finally:
         _finish_active_batch_requests(runtime, active_jobs, results)
-
-    return _completed_batch_results(results)
 
 
 async def _dispatch_pii_extract_batch(
@@ -449,7 +488,7 @@ def _finish_active_batch_requests(
     active_jobs: Sequence[Tuple[int, str, Any]],
     results: list[Optional[BatchResult[_ServicePayload]]],
 ) -> None:
-    for index, model_key, keep_alive in reversed(active_jobs):
+    for index, model_key, keep_alive in active_jobs:
         try:
             runtime.finish_model_request(model_key, keep_alive)
         except Exception as exc:
@@ -467,6 +506,117 @@ def _completed_batch_results(
         else:
             completed.append(result)
     return completed
+
+
+def _analyze_batch_key(payload: AnalyzeRequest) -> Tuple[Any, ...]:
+    return (
+        payload.model_name,
+        payload.confidence_threshold,
+        payload.group_entities,
+        payload.aggregation_strategy,
+        payload.sentence_detection,
+        payload.sentence_language,
+        payload.sentence_clean,
+        payload.use_fast_tokenizer,
+    )
+
+
+def _can_backend_batch_analyze(
+    payloads: Sequence[AnalyzeRequest],
+    runtime: ServiceRuntime,
+) -> bool:
+    if not payloads:
+        return False
+    first = payloads[0]
+    return not first.sentence_detection and not bool(
+        getattr(runtime.config, "use_medical_tokenizer", False)
+    )
+
+
+def _normalize_batch_predictions(
+    raw_predictions: Any, expected_count: int
+) -> list[Any]:
+    if expected_count == 1:
+        if isinstance(raw_predictions, list) and (
+            not raw_predictions or isinstance(raw_predictions[0], dict)
+        ):
+            return [raw_predictions]
+        if isinstance(raw_predictions, list) and len(raw_predictions) == 1:
+            return [raw_predictions[0]]
+        return [raw_predictions]
+
+    if not isinstance(raw_predictions, list):
+        raise ValueError("Analyze backend returned a non-list batch result")
+    if len(raw_predictions) != expected_count:
+        raise ValueError(
+            "Analyze backend returned "
+            f"{len(raw_predictions)} results for {expected_count} inputs"
+        )
+    return list(raw_predictions)
+
+
+def _analyze_payload_batch(
+    payloads: Sequence[AnalyzeRequest],
+    runtime: ServiceRuntime,
+) -> list[_ServicePayload]:
+    if not payloads:
+        return []
+
+    first = payloads[0]
+    model_name = validate_model_name(first.model_name)
+    loader = runtime.get_loader()
+    pipeline = loader.create_pipeline(
+        model_name,
+        task="token-classification",
+        aggregation_strategy=first.aggregation_strategy,
+        use_fast_tokenizer=first.use_fast_tokenizer,
+    )
+
+    effective_max_length = loader.get_max_sequence_length(
+        model_name,
+        tokenizer=getattr(pipeline, "tokenizer", None),
+    )
+    tokenizer = getattr(pipeline, "tokenizer", None)
+    if tokenizer is not None and effective_max_length is not None:
+        try:
+            tokenizer.model_max_length = int(effective_max_length)
+        except Exception:
+            pass
+
+    import time
+
+    texts = [payload.text for payload in payloads]
+    start_time = time.time()
+    raw_predictions = pipeline(texts, batch_size=len(texts))
+    processing_time = time.time() - start_time
+    per_item_time = processing_time / len(texts) if texts else 0.0
+    normalized = _normalize_batch_predictions(raw_predictions, len(texts))
+
+    responses: list[_ServicePayload] = []
+    for payload, predictions in zip(payloads, normalized):
+        if predictions is None:
+            predictions = []
+        elif isinstance(predictions, dict):
+            predictions = [predictions]
+        else:
+            predictions = list(predictions)
+
+        metadata = {"sentence_detection": False}
+        if effective_max_length is not None:
+            metadata["max_length"] = effective_max_length
+        result = format_predictions(
+            predictions,
+            payload.text,
+            model_name=model_name,
+            output_format="dict",
+            include_confidence=True,
+            confidence_threshold=payload.confidence_threshold,
+            group_entities=payload.group_entities,
+            metadata=metadata,
+            processing_time=per_item_time,
+        )
+        responses.append(_result_to_dict(result))
+    return responses
 
 
 def _pii_extract_batch_key(payload: PIIExtractRequest) -> Tuple[Any, ...]:
