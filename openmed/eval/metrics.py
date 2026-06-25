@@ -264,6 +264,10 @@ def normalize_eval_span(
     metadata = _read_mapping(data, "metadata") or {}
     if not isinstance(metadata, Mapping):
         metadata = {"value": metadata}
+    metadata = dict(metadata)
+    raw_group = _read_value(data, "group")
+    if raw_group is not None and str(raw_group).strip():
+        metadata["group"] = str(raw_group).strip()
 
     start = _read_int(data, "start")
     end = _read_int(data, "end")
@@ -310,7 +314,7 @@ def normalize_eval_span(
         text=str(text or ""),
         language=language,
         device=str(raw_device),
-        metadata=dict(metadata),
+        metadata=metadata,
     )
 
 
