@@ -26,6 +26,13 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.dataset_card import (
+    DATASET_CARD_SUITES,
+    DatasetCard,
+    build_all_dataset_cards,
+    build_dataset_card,
+    render_dataset_card_markdown,
+)
 from openmed.eval.error_analysis import (
     ErrorAnalysisReport,
     ErrorSpanExample,
@@ -97,8 +104,10 @@ __all__ = [
     "CalibrationReport",
     "CalibrationSample",
     "CalibrationThresholdSet",
+    "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_PERTURBATIONS",
+    "DatasetCard",
     "EvalSpan",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
@@ -121,6 +130,8 @@ __all__ = [
     "UNSPECIFIED_GROUP",
     "artifact_dir_for",
     "build_thresholds_payload",
+    "build_all_dataset_cards",
+    "build_dataset_card",
     "case_flip_perturbation",
     "character_typo_perturbation",
     "coerce_calibration_thresholds",
@@ -148,6 +159,7 @@ __all__ = [
     "ocr_noise_perturbation",
     "perturb_fixture",
     "render_reid_leaderboard",
+    "render_dataset_card_markdown",
     "robustness_report",
     "run_benchmark",
     "run_reid_attack",
