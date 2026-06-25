@@ -21,6 +21,11 @@ AutoAWQ; the dependency is loaded only when `quantize_awq()` is called. Without
 the extra, the entry point raises an actionable install error instead of failing
 at module import time.
 
+Use a dedicated export environment for AWQ conversion. AutoAWQ manages its own
+Transformers compatibility window, so do not reuse that environment as the
+general OpenMed HF inference runtime unless you have verified the combined
+dependency set.
+
 ## Quantize
 
 ```python
