@@ -849,9 +849,9 @@ def _float_map(values: Mapping[str, Any]) -> dict[str, float]:
 
 def _artifact_relative_path(path: Path, artifact_dir: Path) -> str:
     try:
-        return str(path.relative_to(artifact_dir))
-    except ValueError:
-        return str(path)
+        return str(path.resolve().relative_to(artifact_dir.resolve()))
+    except (OSError, ValueError):
+        return path.name
 
 
 def _utc_now() -> str:
