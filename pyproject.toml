@@ -42,6 +42,7 @@ dev = [
   "jsonschema>=4.0",
   "fastapi>=0.110",
   "httpx>=0.27",
+  "python-dateutil>=2.8",
   "ruff==0.15.18",
   "tomli>=2.0; python_version < '3.11'",
 ]
