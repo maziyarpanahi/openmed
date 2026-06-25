@@ -116,15 +116,46 @@ _TEXT_SWEEP_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.IGNORECASE,
         ),
     ),
+    (
+        "DATE",
+        re.compile(
+            r"\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|"
+            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* "
+            r"\d{1,2},? \d{4}|\d{1,2} "
+            r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* "
+            r"\d{4})\b",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "ADDRESS",
+        re.compile(
+            r"\b\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+"
+            r"(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|"
+            r"Drive|Dr|Court|Ct|Way)\b",
+            re.IGNORECASE,
+        ),
+    ),
 )
+_UNSAFE_XML_DECLARATION = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class _TextPiece:
+    node: ET.Element
+    attribute: Literal["text", "tail"]
+    start: int
+    end: int
 
 
 def is_cda_document(document_or_path: str | bytes | Path) -> bool:
     """Return whether the XML input looks like a CDA ClinicalDocument."""
 
     try:
-        root = ET.fromstring(_read_xml_source(document_or_path))
-    except (ET.ParseError, OSError, UnicodeEncodeError):
+        data = _read_xml_source(document_or_path)
+        _reject_unsafe_xml(data)
+        root = ET.fromstring(data)
+    except (ET.ParseError, OSError, UnicodeEncodeError, ValueError):
         return False
 
     return _is_cda_root(root)
@@ -162,6 +193,7 @@ def redact_cda(
     """
 
     data = _read_xml_source(document_or_path)
+    _reject_unsafe_xml(data)
     _register_input_namespaces(data)
     root = ET.fromstring(data)
     if not _is_cda_root(root):
@@ -224,6 +256,11 @@ def _read_xml_source(document_or_path: str | bytes | Path) -> bytes:
         except OSError:
             pass
     return value.encode()
+
+
+def _reject_unsafe_xml(data: bytes) -> None:
+    if _UNSAFE_XML_DECLARATION.search(data):
+        raise ValueError("CDA XML with DOCTYPE or ENTITY declarations is unsupported")
 
 
 def _register_input_namespaces(data: bytes) -> None:
@@ -492,6 +529,9 @@ def _redact_narrative(
     *,
     text_redactor: TextRedactor | None,
 ) -> None:
+    pieces = _collect_text_pieces(element)
+    _redact_piece_spans(pieces, _collect_text_spans(pieces, surfaces))
+
     for node in element.iter():
         if node.text:
             node.text = _redact_text_piece(
@@ -505,6 +545,88 @@ def _redact_narrative(
                 surfaces,
                 text_redactor=text_redactor,
             )
+
+
+def _collect_text_pieces(element: ET.Element) -> list[_TextPiece]:
+    pieces: list[_TextPiece] = []
+    offset = 0
+    for node in element.iter():
+        if node.text:
+            end = offset + len(node.text)
+            pieces.append(_TextPiece(node, "text", offset, end))
+            offset = end
+        if node is not element and node.tail:
+            end = offset + len(node.tail)
+            pieces.append(_TextPiece(node, "tail", offset, end))
+            offset = end
+    return pieces
+
+
+def _collect_text_spans(
+    pieces: Sequence[_TextPiece],
+    surfaces: Mapping[str, str],
+) -> list[tuple[int, int, str]]:
+    if not pieces:
+        return []
+
+    text = "".join(str(getattr(piece.node, piece.attribute) or "") for piece in pieces)
+    candidates: list[tuple[int, int, str]] = []
+    for surface, placeholder in sorted(
+        surfaces.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        for match in re.finditer(re.escape(surface), text, re.IGNORECASE):
+            candidates.append((match.start(), match.end(), placeholder))
+
+    for label, pattern in _TEXT_SWEEP_PATTERNS:
+        for match in pattern.finditer(text):
+            candidates.append((match.start(), match.end(), f"[{label}]"))
+
+    return _non_overlapping_spans(candidates)
+
+
+def _non_overlapping_spans(
+    candidates: Sequence[tuple[int, int, str]],
+) -> list[tuple[int, int, str]]:
+    ordered = sorted(
+        candidates,
+        key=lambda item: (item[0], -(item[1] - item[0])),
+    )
+    selected: list[tuple[int, int, str]] = []
+    for start, end, placeholder in ordered:
+        if start >= end:
+            continue
+        if any(
+            start < active_end and end > active_start
+            for active_start, active_end, _ in selected
+        ):
+            continue
+        selected.append((start, end, placeholder))
+    return selected
+
+
+def _redact_piece_spans(
+    pieces: Sequence[_TextPiece],
+    spans: Sequence[tuple[int, int, str]],
+) -> None:
+    if not pieces or not spans:
+        return
+
+    for piece in pieces:
+        value = str(getattr(piece.node, piece.attribute) or "")
+        cursor = piece.start
+        parts: list[str] = []
+        for start, end, placeholder in spans:
+            if end <= piece.start or start >= piece.end:
+                continue
+            if start > cursor:
+                parts.append(value[cursor - piece.start : start - piece.start])
+            if piece.start <= start < piece.end:
+                parts.append(placeholder)
+            cursor = max(cursor, min(end, piece.end))
+        parts.append(value[cursor - piece.start :])
+        setattr(piece.node, piece.attribute, "".join(parts))
 
 
 def _redact_text_piece(
