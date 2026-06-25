@@ -92,7 +92,7 @@ jobs:
 
     - name: Validate model manifest schema
       run: |
-        python -m scripts.manifest.validate_manifest
+        uv run python -m scripts.manifest.validate_manifest
 
     - name: Test with pytest
       run: |
