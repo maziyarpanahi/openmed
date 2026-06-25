@@ -850,7 +850,7 @@ def _header_key(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.strip().lower())
 
 
-register_handler((".csv", ".tsv"), _tabular_csv_handler)
+register_handler((".csv", ".tsv"), _tabular_csv_handler, requires_multimodal=False)
 
 
 __all__ = [
