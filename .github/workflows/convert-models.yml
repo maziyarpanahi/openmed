@@ -12,7 +12,7 @@ on:
         required: false
         default: 'none'
       formats:
-        description: 'Output formats (comma-separated: mlx,coreml)'
+        description: 'Output formats (comma-separated: mlx,coreml,onnx)'
         required: false
         default: 'mlx'
       publish_to_hub:
@@ -31,7 +31,7 @@ jobs:
     if: contains(github.event.inputs.formats, 'mlx')
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -69,7 +69,7 @@ jobs:
     if: contains(github.event.inputs.formats, 'coreml')
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -98,27 +98,66 @@ jobs:
           OpenMedModel.mlpackage/
           *_id2label.json
 
+  convert-onnx:
+    name: Convert to ONNX and WebGPU
+    runs-on: ubuntu-latest
+    if: contains(github.event.inputs.formats, 'onnx')
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[onnx,hf]"
+
+    - name: Convert model to ONNX and WebGPU
+      run: |
+        python -m openmed.onnx.convert \
+          --model "${{ github.event.inputs.model_id }}" \
+          --output ./onnx-output
+
+    - name: List output files
+      run: ls -la onnx-output/
+
+    - name: Upload ONNX model
+      uses: actions/upload-artifact@v7
+      with:
+        name: onnx-model
+        path: onnx-output/
+
   publish-hf:
     name: Publish to HF
     runs-on: ubuntu-latest
     needs:
       - convert-mlx
       - convert-coreml
+      - convert-onnx
     if: >-
       ${{
         always() &&
         github.event.inputs.publish_to_hub == 'true' &&
         !cancelled() &&
-        (contains(github.event.inputs.formats, 'mlx') || contains(github.event.inputs.formats, 'coreml')) &&
+        (
+          contains(github.event.inputs.formats, 'mlx') ||
+          contains(github.event.inputs.formats, 'coreml') ||
+          contains(github.event.inputs.formats, 'onnx')
+        ) &&
         (!contains(github.event.inputs.formats, 'mlx') || needs.convert-mlx.result == 'success') &&
-        (!contains(github.event.inputs.formats, 'coreml') || needs.convert-coreml.result == 'success')
+        (!contains(github.event.inputs.formats, 'coreml') || needs.convert-coreml.result == 'success') &&
+        (!contains(github.event.inputs.formats, 'onnx') || needs.convert-onnx.result == 'success')
       }}
     environment:
       name: hf-publish
       url: https://huggingface.co/OpenMed
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -187,6 +226,32 @@ jobs:
           --model "${{ github.event.inputs.model_id }}" \
           --artifact-dir publish-artifacts/coreml-output \
           --format coreml \
+          --manifest models.jsonl \
+          --baseline gates/baseline.json \
+          --git-sha "${{ github.sha }}" \
+          --benchmark-report docs/benchmarks/golden.report.json \
+          --benchmarks-dir docs/benchmarks \
+          --leaderboard-dir docs/leaderboard \
+          --status-output docs/status/index.md \
+          --smoke-status green
+
+    - name: Download ONNX model
+      if: contains(github.event.inputs.formats, 'onnx')
+      uses: actions/download-artifact@v8
+      with:
+        name: onnx-model
+        path: publish-artifacts/onnx-output
+
+    - name: Publish ONNX and WebGPU model
+      if: contains(github.event.inputs.formats, 'onnx')
+      env:
+        HF_WRITE_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+      run: |
+        python -m openmed.core.hf_publish \
+          --model "${{ github.event.inputs.model_id }}" \
+          --artifact-dir publish-artifacts/onnx-output \
+          --format onnx \
+          --formats onnx,webgpu \
           --manifest models.jsonl \
           --baseline gates/baseline.json \
           --git-sha "${{ github.sha }}" \
