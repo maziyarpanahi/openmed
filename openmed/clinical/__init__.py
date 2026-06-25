@@ -32,6 +32,19 @@ from .lab_values import (
     derive_abnormal_flag,
     parse_reference_range,
 )
+from .problem_list import (
+    ACTIVE,
+    INACTIVE,
+    PROBLEM_CLINICAL_STATUS_VALUES,
+    PROBLEM_LIST_RECONCILIATION_ADVISORY,
+    REFUTED,
+    UNCONFIRMED,
+    ProblemClinicalStatus,
+    ProblemMention,
+    ReconciledProblem,
+    SpanOffset,
+    deduplicate_problem_list,
+)
 
 __all__ = [
     "AFFIRMED",
@@ -58,4 +71,15 @@ __all__ = [
     "LAB_FLAG_ADVISORY",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "ACTIVE",
+    "INACTIVE",
+    "UNCONFIRMED",
+    "REFUTED",
+    "PROBLEM_CLINICAL_STATUS_VALUES",
+    "PROBLEM_LIST_RECONCILIATION_ADVISORY",
+    "ProblemClinicalStatus",
+    "ProblemMention",
+    "ReconciledProblem",
+    "SpanOffset",
+    "deduplicate_problem_list",
 ]
