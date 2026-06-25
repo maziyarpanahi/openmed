@@ -53,6 +53,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
+    "autoawq": "MIT",
     "coremltools": "BSD-3-Clause",
     "faker": "MIT",
     "fastapi": "MIT",
