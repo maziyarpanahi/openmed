@@ -33,8 +33,8 @@ _SYSTEM_URI: dict[str, str] = {
     "icd-10-cm": "http://hl7.org/fhir/sid/icd-10-cm",
     "loinc": "http://loinc.org",
     "snomed": "http://snomed.info/sct",
-    "hpo": "http://purl.obolibrary.org/obo/hp.owl",
-    "mesh": "https://meshb.nlm.nih.gov",
+    "hpo": "http://human-phenotype-ontology.org",
+    "mesh": "https://www.nlm.nih.gov/mesh",
 }
 
 # Deterministic ordering for codings inside a CodeableConcept.
@@ -45,8 +45,8 @@ _DEFAULT_SYSTEM_PRIORITY: tuple[str, ...] = (
     "http://loinc.org",
     "http://www.nlm.nih.gov/research/umls/rxnorm",
     "http://hl7.org/fhir/sid/icd-10-cm",
-    "http://purl.obolibrary.org/obo/hp.owl",
-    "https://meshb.nlm.nih.gov",
+    "http://human-phenotype-ontology.org",
+    "https://www.nlm.nih.gov/mesh",
 )
 
 
@@ -153,9 +153,14 @@ def codeable_concept(
     )
     priority_index = {uri: idx for idx, uri in enumerate(priority)}
 
-    def _sort_key(c: dict[str, Any]) -> tuple[int, str]:
+    def _sort_key(c: dict[str, Any]) -> tuple[int, str, str, str]:
         uri = c.get("system", "")
-        return (priority_index.get(uri, len(priority)), uri)
+        return (
+            priority_index.get(uri, len(priority)),
+            str(uri),
+            str(c.get("code", "")),
+            str(c.get("display", "")),
+        )
 
     ordered = sorted(codings, key=_sort_key)
 
