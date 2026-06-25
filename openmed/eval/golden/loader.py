@@ -205,8 +205,12 @@ def _span_to_mapping(span: EvalSpan) -> dict[str, Any]:
         "label": span.label,
         "text": span.text,
     }
-    if span.metadata:
-        row["metadata"] = _plain_mapping(span.metadata)
+    metadata = dict(span.metadata)
+    group = metadata.pop("group", None)
+    if group is not None and str(group).strip():
+        row["group"] = str(group).strip()
+    if metadata:
+        row["metadata"] = _plain_mapping(metadata)
     return row
 
 
