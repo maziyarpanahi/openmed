@@ -581,6 +581,30 @@ class TestDeidentify:
         assert result.deidentified_text == "DOB 02/14/2020"
 
     @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_default_preserves_cross_year_interval(
+        self, mock_extract
+    ):
+        """Default shift_dates behavior must preserve intervals across years."""
+        text = "Admit 12/20/2022 discharge 01/05/2023"
+        mock_extract.return_value = PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text="12/20/2022", label="DATE", start=6, end=16, confidence=0.95
+                ),
+                EntityPrediction(
+                    text="01/05/2023", label="DATE", start=27, end=37, confidence=0.95
+                ),
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(text, method="shift_dates", date_shift_days=30)
+
+        assert result.deidentified_text == "Admit 01/19/2023 discharge 02/04/2023"
+
+    @patch("openmed.core.pii.extract_pii")
     def test_deidentify_shift_dates_uses_lowercase_default_model_label(
         self, mock_extract
     ):
@@ -924,7 +948,7 @@ class TestShiftDate:
     def test_shift_date_negative_shift(self):
         """Test date shifting backwards."""
         result = _shift_date("01/15/2020", -30)
-        assert result == "12/16/2020"  # With keep_year=True (default)
+        assert result == "12/16/2019"
 
     def test_shift_date_two_digit_year_preserves_separator_and_order(self):
         """2-digit trailing years should keep slash/dash shape after shifting."""
