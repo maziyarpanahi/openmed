@@ -1,6 +1,6 @@
 # New Contributor Onboarding
 
-Welcome! This guide walks you through your first contribution to OpenMed — from finding a `good first issue` to opening a clean pull request.
+Welcome! This guide walks you through your first contribution to OpenMed, from finding a `good first issue` to opening a clean pull request.
 
 ## 1. Find a good first issue
 
@@ -8,12 +8,16 @@ Browse the [issues page](https://github.com/maziyarpanahi/openmed/issues) and fi
 
 - Has a clear description and acceptance criteria
 - Is narrowly scoped (ideally 1–2 files)
-- Doesn't reference billing, auth, or security surfaces
+- Does not require maintainer-only credentials or access to private data
 - Has no open PRs claiming it (search `repo:maziyarpanahi/openmed "in:body #<ISSUE_NUMBER>"`)
 
 ### Claiming an issue
 
 Comment on the issue to let the maintainers know you're working on it. A short "I'd like to take this" is enough — no formal assignment is required.
+
+If the issue does not match the available templates, open a new item from the
+[issue forms](https://github.com/maziyarpanahi/openmed/issues/new/choose) and
+include the smallest reproducible scope you can.
 
 ## 2. Set up your environment
 
@@ -22,8 +26,9 @@ Comment on the issue to let the maintainers know you're working on it. A short "
 git clone https://github.com/<your-username>/openmed.git
 cd openmed
 
-# Install the dev dependencies
-uv pip install ".[dev]"
+# Create the local virtual environment and install dev dependencies
+uv venv
+uv pip install -e ".[dev]"
 
 # (Optional) Install pre-commit hooks
 pre-commit install
@@ -35,10 +40,10 @@ Before making changes, confirm the baseline passes:
 
 ```bash
 # Run the full test suite
-uv run pytest tests/ -q
+.venv/bin/python -m pytest tests/ -q
 
 # Or run a scoped subset (replace with the relevant test path)
-uv run pytest tests/core/test_pii.py -q
+.venv/bin/python -m pytest tests/unit/test_pii.py -q
 ```
 
 ## 4. Make your change
