@@ -3,32 +3,18 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from openmed.core import model_registry
+from openmed.core.manifest_schema import (
+    REQUIRED_FIELDS,
+    validate_manifest_row,
+)
 from scripts.manifest import generate_manifest
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = ROOT / "models.jsonl"
 REFRESH_WORKFLOW = ROOT / ".github" / "workflows" / "manifest-refresh.yml"
-REQUIRED_FIELDS = {
-    "repo_id",
-    "family",
-    "task",
-    "languages",
-    "tier",
-    "param_count",
-    "architecture",
-    "base_model",
-    "formats",
-    "canonical_labels",
-    "benchmark",
-    "arxiv",
-    "license",
-    "reproducibility_hash",
-    "released",
-}
 
 
 def _rows():
@@ -45,31 +31,11 @@ def test_manifest_exists_and_has_unique_repo_ids():
 
 
 def test_every_manifest_row_matches_schema():
-    for row in _rows():
+    violations = []
+    for line_number, row in enumerate(_rows(), start=1):
         assert set(row) == REQUIRED_FIELDS
-        assert isinstance(row["repo_id"], str) and row["repo_id"].startswith("OpenMed/")
-        assert isinstance(row["family"], str) and row["family"]
-        assert isinstance(row["task"], str) and row["task"]
-        assert isinstance(row["languages"], list)
-        assert all(isinstance(language, str) for language in row["languages"])
-        assert row["tier"] is None or isinstance(row["tier"], str)
-        assert row["param_count"] is None or (
-            isinstance(row["param_count"], int) and row["param_count"] > 0
-        )
-        assert row["architecture"] is None or isinstance(row["architecture"], str)
-        assert row["base_model"] is None or isinstance(row["base_model"], str)
-        assert isinstance(row["formats"], list) and row["formats"]
-        assert all(isinstance(format_name, str) for format_name in row["formats"])
-        assert isinstance(row["canonical_labels"], list)
-        assert all(isinstance(label, str) for label in row["canonical_labels"])
-        assert isinstance(row["benchmark"], dict)
-        assert {"dataset", "micro_f1", "recall"} <= set(row["benchmark"])
-        assert row["arxiv"] is None or isinstance(row["arxiv"], str)
-        assert row["license"] is None or isinstance(row["license"], str)
-        assert re.fullmatch(r"sha256:[0-9a-f]{64}", row["reproducibility_hash"])
-        assert row["released"] is None or re.fullmatch(
-            r"\d{4}-\d{2}-\d{2}", row["released"]
-        )
+        violations.extend(str(item) for item in validate_manifest_row(row, line_number))
+    assert violations == []
 
 
 def test_registry_model_ids_are_derived_from_manifest():
