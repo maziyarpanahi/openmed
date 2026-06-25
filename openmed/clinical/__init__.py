@@ -32,6 +32,13 @@ from .lab_values import (
     derive_abnormal_flag,
     parse_reference_range,
 )
+from .summary_card import (
+    CODING_COUNT_LABELS,
+    ENTITY_CATEGORY_LABELS,
+    SUMMARY_CARD_NOTE,
+    ClinicalSummaryCard,
+    build_summary_card,
+)
 
 __all__ = [
     "AFFIRMED",
@@ -58,4 +65,9 @@ __all__ = [
     "LAB_FLAG_ADVISORY",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "CODING_COUNT_LABELS",
+    "ENTITY_CATEGORY_LABELS",
+    "ClinicalSummaryCard",
+    "SUMMARY_CARD_NOTE",
+    "build_summary_card",
 ]
