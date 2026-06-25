@@ -76,6 +76,66 @@ def test_redact_cda_preserves_namespace_markup_and_structured_entries():
     assert value.get("displayName") == "No known drug allergy"
 
 
+def test_redact_cda_sweeps_narrative_only_structured_phi():
+    xml = """
+    <ClinicalDocument xmlns="urn:hl7-org:v3">
+      <templateId root="2.16.840.1.113883.10.20.22.1.1"/>
+      <component>
+        <structuredBody>
+          <component>
+            <section>
+              <text>
+                <paragraph>Seen at <content>99 Cedar Lane</content> on January 15, 2024.</paragraph>
+                <paragraph>Call 212-555-0171. MRN ABC123456.</paragraph>
+              </text>
+            </section>
+          </component>
+        </structuredBody>
+      </component>
+    </ClinicalDocument>
+    """
+
+    redacted = str(cda.redact_cda(xml, date_shift_days=30))
+
+    assert "99 Cedar Lane" not in redacted
+    assert "January 15, 2024" not in redacted
+    assert "212-555-0171" not in redacted
+    assert "ABC123456" not in redacted
+    assert "[ADDRESS]" in redacted
+    assert "[DATE]" in redacted
+
+
+def test_redact_cda_redacts_known_surface_spanning_narrative_nodes():
+    xml = """
+    <ClinicalDocument xmlns="urn:hl7-org:v3">
+      <templateId root="2.16.840.1.113883.10.20.22.1.1"/>
+      <recordTarget>
+        <patientRole>
+          <patient><name><given>Jane</given><family>Doe</family></name></patient>
+        </patientRole>
+      </recordTarget>
+      <component>
+        <structuredBody>
+          <component>
+            <section>
+              <text>
+                <paragraph><content>Jane</content> <content>Doe</content> arrived.</paragraph>
+              </text>
+            </section>
+          </component>
+        </structuredBody>
+      </component>
+    </ClinicalDocument>
+    """
+
+    redacted = str(cda.redact_cda(xml, date_shift_days=30))
+
+    assert "Jane" not in redacted
+    assert "Doe" not in redacted
+    assert "[PERSON]" in redacted
+    _parse(redacted)
+
+
 def test_redact_cda_shifts_birth_time_and_effective_times_consistently():
     root = _parse(str(cda.redact_cda(FIXTURE, date_shift_days=30)))
 
@@ -127,6 +187,22 @@ def test_cda_detection_does_not_match_generic_xml(tmp_path):
 
     assert cda.is_cda_document(FIXTURE)
     assert not cda.is_cda_document(generic)
+
+
+def test_cda_parser_rejects_doctype_and_entities():
+    xml = """
+    <!DOCTYPE ClinicalDocument [
+      <!ENTITY leak SYSTEM "file:///etc/passwd">
+    ]>
+    <ClinicalDocument xmlns="urn:hl7-org:v3">
+      <templateId root="2.16.840.1.113883.10.20.22.1.1"/>
+      <component>&leak;</component>
+    </ClinicalDocument>
+    """
+
+    assert not cda.is_cda_document(xml)
+    with pytest.raises(ValueError, match="DOCTYPE or ENTITY"):
+        cda.redact_cda(xml)
 
 
 def test_namespace_less_cda_detection_and_redaction_agree():

@@ -174,7 +174,8 @@ def register_handler(
 def _select_handler(
     path: str | Path, specs: Iterable[_HandlerSpec]
 ) -> _HandlerSpec | None:
-    for spec in specs:
+    ordered = sorted(tuple(specs), key=lambda spec: spec.detector is None)
+    for spec in ordered:
         if spec.detector is None or spec.detector(path):
             return spec
     return None
