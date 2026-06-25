@@ -340,6 +340,7 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
 
     def fake_deidentify(*args, **kwargs):
         assert kwargs["method"] == "mask"
+        assert kwargs["keep_year"] is False
         assert kwargs["loader"] is fake_loader_cls.instances[0]
         return result
 
