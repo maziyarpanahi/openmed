@@ -23,6 +23,7 @@ from ..core.config import (
     set_config,
 )
 from ..core.model_registry import get_model_info
+from ..core.model_search import ModelSearchResult, search_models
 from .calibrate import add_calibrate_command
 
 _ANALYZE_TEXT = None
@@ -100,6 +101,13 @@ COMPLIANCE_CAVEAT = (
 )
 
 
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be greater than or equal to 0")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Create the top-level CLI argument parser."""
     parser = argparse.ArgumentParser(
@@ -126,7 +134,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
     _add_benchmark_command(subparsers)
-    _add_tui_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     add_calibrate_command(subparsers)
@@ -397,24 +404,6 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.set_defaults(handler=_handle_pii_batch)
 
 
-def _add_tui_command(subparsers: argparse._SubParsersAction) -> None:
-    tui_parser = subparsers.add_parser(
-        "tui", help="Launch interactive terminal UI for clinical NER analysis."
-    )
-    tui_parser.add_argument(
-        "--model",
-        default=None,
-        help="Model registry key or Hugging Face identifier (default: disease_detection_superclinical).",
-    )
-    tui_parser.add_argument(
-        "--confidence-threshold",
-        type=float,
-        default=0.5,
-        help="Minimum confidence score for predictions (default: 0.5).",
-    )
-    tui_parser.set_defaults(handler=_handle_tui)
-
-
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
@@ -436,6 +425,91 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Registry key defined in openmed.core.model_registry.",
     )
     models_info.set_defaults(handler=_handle_models_info)
+
+    models_search = models_sub.add_parser(
+        "search",
+        help="Search the canonical model manifest.",
+    )
+    models_search.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="Case-insensitive substring matched against repo_id or family.",
+    )
+    models_search.add_argument("--task", help="Filter by model task.")
+    models_search.add_argument("--language", help="Filter by language code.")
+    models_search.add_argument("--tier", help="Filter by model tier.")
+    models_search.add_argument(
+        "--max-params",
+        type=_non_negative_int,
+        default=None,
+        help="Maximum parameter count. Unknown counts are retained by default.",
+    )
+    models_search.add_argument(
+        "--min-params",
+        type=_non_negative_int,
+        default=None,
+        help="Minimum parameter count.",
+    )
+    models_search.add_argument(
+        "--format",
+        help="Filter by runtime format or device, such as mlx, coreml, onnx, or pytorch.",
+    )
+    models_search.add_argument("--license", help="Filter by SPDX license string.")
+    models_search.add_argument(
+        "--require-params",
+        action="store_true",
+        help="Exclude manifest rows with unknown parameter counts.",
+    )
+    models_search.set_defaults(handler=_handle_models_search)
+
+    models_freshness = models_sub.add_parser(
+        "freshness",
+        help="Compute freshness metrics from the canonical model manifest.",
+    )
+    models_freshness.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Path to a model manifest JSONL file.",
+    )
+    models_freshness.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Optional path to write the metrics artifact.",
+    )
+    models_freshness.add_argument(
+        "--format",
+        dest="artifact_format",
+        choices=["json", "markdown"],
+        default="json",
+        help="Artifact format to print or write.",
+    )
+    models_freshness.add_argument(
+        "--as-of",
+        default=None,
+        help="Reference date in YYYY-MM-DD format. Defaults to today in UTC.",
+    )
+    models_freshness.add_argument(
+        "--target-days",
+        type=int,
+        default=None,
+        help="Reference median-age target in days.",
+    )
+    models_freshness.set_defaults(handler=_handle_models_freshness)
+
+    models_validate = models_sub.add_parser(
+        "validate",
+        help="Validate the canonical model manifest schema.",
+    )
+    models_validate.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Path to a model manifest JSONL file.",
+    )
+    models_validate.set_defaults(handler=_handle_models_validate)
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
@@ -558,6 +632,41 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
 
+    clinical_parser = benchmark_sub.add_parser(
+        "clinical",
+        help="Resolve clinical benchmark suites such as DrugProt.",
+    )
+    clinical_parser.add_argument(
+        "--suite",
+        default="drugprot",
+        help="Clinical benchmark suite to load.",
+    )
+    clinical_parser.add_argument(
+        "--task",
+        choices=["ner", "relation"],
+        default="ner",
+        help="Clinical benchmark task view to load.",
+    )
+    clinical_parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Optional local DrugProt directory or zip archive.",
+    )
+    clinical_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Optional cache directory for download-on-demand public corpora.",
+    )
+    clinical_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for a JSON suite-resolution summary.",
+    )
+    clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
+
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
@@ -567,64 +676,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     handler: Optional[Handler] = getattr(args, "handler", None)
 
     if handler is None:
-        return _launch_tui(model_name=None, confidence_threshold=0.5)
-
-    return handler(args)
-
-
-def _launch_tui(
-    *,
-    model_name: Optional[str],
-    confidence_threshold: float,
-) -> int:
-    try:
-        from openmed.tui import OpenMedTUI
-    except ImportError:
-        return _run_basic_tui_entry(
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-        )
-
-    app = OpenMedTUI(
-        model_name=model_name,
-        confidence_threshold=confidence_threshold,
-    )
-    app.run()
-    return 0
-
-
-def _run_basic_tui_entry(
-    *,
-    model_name: Optional[str],
-    confidence_threshold: float,
-) -> int:
-    model_display = model_name or "disease_detection_superclinical"
-    if not sys.stdin.isatty():
-        sys.stdout.write(
-            "OpenMed TUI entry is installed. Run it from an interactive "
-            "terminal to start the basic prompt.\n"
-        )
+        parser.print_help()
         return 0
 
-    sys.stdout.write(
-        "OpenMed basic terminal prompt\n"
-        f"Model: {model_display} | confidence threshold: {confidence_threshold}\n"
-        "Use 'openmed analyze --text \"...\"' for model-backed analysis.\n"
-        "Type 'quit' or press Ctrl-D to exit.\n"
-    )
-    while True:
-        try:
-            text = input("openmed> ")
-        except EOFError:
-            sys.stdout.write("\n")
-            return 0
-
-        if text.strip().lower() in {"quit", "exit", ":q"}:
-            return 0
-        if text.strip():
-            sys.stdout.write(
-                "Analysis is available through 'openmed analyze --text'.\n"
-            )
+    return handler(args)
 
 
 # ---------------------------------------------------------------------------
@@ -831,6 +886,48 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
+    from openmed.eval.suites import load_suite_fixtures, suite_metadata
+
+    try:
+        fixtures = load_suite_fixtures(
+            str(args.suite),
+            task=str(args.task),
+            path=args.input,
+            cache_dir=args.cache_dir,
+        )
+        metadata = suite_metadata(str(args.suite), task=str(args.task))
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load clinical benchmark suite: {exc}\n")
+        return 1
+
+    payload: dict[str, Any] = {
+        "fixture_count": len(fixtures),
+        "metadata": metadata,
+        "suite": str(args.suite),
+        "task": str(args.task),
+    }
+    if str(args.task) == "relation":
+        payload["relation_count"] = sum(
+            len(getattr(fixture, "relations", ())) for fixture in fixtures
+        )
+    else:
+        payload["span_count"] = sum(
+            len(getattr(fixture, "gold_spans", ())) for fixture in fixtures
+        )
+
+    output = json.dumps(payload, indent=2, sort_keys=True)
+    if args.output:
+        try:
+            args.output.write_text(output + "\n", encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(output + "\n")
+    return 0
+
+
 def _parse_model_args(values: Sequence[str]) -> list[str]:
     models: list[str] = []
     for value in values:
@@ -838,11 +935,81 @@ def _parse_model_args(values: Sequence[str]) -> list[str]:
     return models
 
 
-def _handle_tui(args: argparse.Namespace) -> int:
-    return _launch_tui(
-        model_name=args.model,
-        confidence_threshold=args.confidence_threshold,
+def _handle_models_search(args: argparse.Namespace) -> int:
+    if (
+        args.min_params is not None
+        and args.max_params is not None
+        and args.min_params > args.max_params
+    ):
+        sys.stderr.write("--min-params must be less than or equal to --max-params\n")
+        return 2
+
+    try:
+        results = search_models(
+            task=args.task,
+            language=args.language,
+            tier=args.tier,
+            max_params=args.max_params,
+            min_params=args.min_params,
+            format=args.format,
+            license=args.license,
+            query=args.query,
+            require_params=args.require_params,
+        )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to search models: {exc}\n")
+        return 1
+
+    if not results:
+        sys.stderr.write("No models matched the search filters.\n")
+        return 1
+
+    sys.stdout.write(_format_model_search_table(results))
+    return 0
+
+
+def _format_model_search_table(results: Sequence[ModelSearchResult]) -> str:
+    columns = (
+        ("repo_id", "repo_id"),
+        ("family", "family"),
+        ("task", "task"),
+        ("languages", "languages"),
+        ("tier", "tier"),
+        ("params", "params"),
+        ("formats", "formats"),
+        ("license", "license"),
     )
+    rows = [
+        {
+            "repo_id": result.repo_id,
+            "family": result.family or "-",
+            "task": result.task or "-",
+            "languages": ",".join(result.languages) or "-",
+            "tier": result.tier or "-",
+            "params": _format_param_count(result.param_count),
+            "formats": ",".join(result.formats) or "-",
+            "license": result.license or "-",
+        }
+        for result in results
+    ]
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+
+    header = "  ".join(header.ljust(widths[key]) for key, header in columns)
+    separator = "  ".join("-" * widths[key] for key, _header in columns)
+    body = [
+        "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+        for row in rows
+    ]
+    return "\n".join([header, separator, *body]) + "\n"
+
+
+def _format_param_count(param_count: int | None) -> str:
+    if param_count is None:
+        return "unknown"
+    return f"{param_count:,}"
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
@@ -892,6 +1059,73 @@ def _handle_models_info(args: argparse.Namespace) -> int:
         payload["max_length"] = max_length
     sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
     return 0
+
+
+def _handle_models_freshness(args: argparse.Namespace) -> int:
+    from openmed.eval.fleet_metrics import (
+        MEDIAN_AGE_TARGET_DAYS,
+        compute_fleet_freshness_from_manifest,
+        write_fleet_freshness_artifact,
+    )
+
+    manifest_path = args.manifest
+    target_days = (
+        args.target_days if args.target_days is not None else MEDIAN_AGE_TARGET_DAYS
+    )
+    try:
+        if manifest_path is None:
+            metrics = compute_fleet_freshness_from_manifest(
+                as_of=args.as_of,
+                median_age_target_days=target_days,
+            )
+        else:
+            metrics = compute_fleet_freshness_from_manifest(
+                manifest_path,
+                as_of=args.as_of,
+                median_age_target_days=target_days,
+            )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to compute fleet freshness metrics: {exc}\n")
+        return 1
+
+    if args.output:
+        try:
+            write_fleet_freshness_artifact(
+                metrics,
+                args.output,
+                output_format=args.artifact_format,
+            )
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write metrics artifact: {exc}\n")
+            return 1
+        sys.stdout.write(f"Fleet freshness metrics written to: {args.output}\n")
+        return 0
+
+    if args.artifact_format == "json":
+        sys.stdout.write(f"{metrics.to_json()}\n")
+    else:
+        sys.stdout.write(metrics.to_markdown())
+    return 0
+
+
+def _handle_models_validate(args: argparse.Namespace) -> int:
+    from openmed.core.manifest_schema import (
+        MANIFEST_PATH,
+        format_manifest_validation,
+        validate_manifest_file,
+    )
+
+    manifest_path = args.manifest or MANIFEST_PATH
+    try:
+        result = validate_manifest_file(manifest_path)
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read manifest: {exc}\n")
+        return 1
+
+    output = sys.stderr if result.violations else sys.stdout
+    for line in format_manifest_validation(result):
+        output.write(f"{line}\n")
+    return 0 if result.ok else 1
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:

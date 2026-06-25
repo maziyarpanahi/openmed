@@ -94,6 +94,33 @@ class TestBundleStructure:
         with pytest.raises(ValueError):
             to_bundle([{"id": "x"}], doc_id="doc-1")
 
+    def test_duplicate_resource_type_id_raises(self):
+        resources = [
+            {"resourceType": "Observation", "id": "obs1"},
+            {"resourceType": "Observation", "id": "obs1"},
+        ]
+
+        with pytest.raises(
+            ValueError, match="duplicate FHIR resource id: Observation/obs1"
+        ):
+            to_bundle(resources, doc_id="doc-1")
+
+    def test_resources_without_ids_do_not_collide(self):
+        resources = [
+            {"resourceType": "Observation", "status": "final"},
+            {
+                "resourceType": "DiagnosticReport",
+                "id": "dr1",
+                "result": [{"reference": "Observation/obs1"}],
+            },
+        ]
+
+        bundle = to_bundle(resources, doc_id="doc-1")
+
+        assert len(bundle["entry"]) == 2
+        report = bundle["entry"][1]["resource"]
+        assert report["result"][0]["reference"] == "Observation/obs1"
+
 
 class TestReferenceResolution:
     def test_internal_references_rewritten_to_full_urls(self):
@@ -209,3 +236,56 @@ def test_rewrite_references_is_pure_helper():
     assert rewritten["result"][0]["reference"] == "urn:uuid:abc"
     # original untouched
     assert node["result"][0]["reference"] == "Observation/obs1"
+
+
+class TestDuplicateResourceIds:
+    """Regression tests for duplicate ``ResourceType/id`` detection (OM-340)."""
+
+    def test_duplicate_resource_id_raises(self):
+        # Two resources with the same resourceType and id would silently
+        # overwrite each other in the reference map, corrupting cross-
+        # references. The assembler must reject this explicitly.
+        resources = [
+            {"resourceType": "Observation", "id": "obs1", "status": "final"},
+            {"resourceType": "Observation", "id": "obs1", "status": "final"},
+        ]
+        with pytest.raises(ValueError, match="duplicate resource id"):
+            to_bundle(resources, doc_id="doc-1")
+
+    def test_duplicate_id_error_names_colliding_key(self):
+        resources = [
+            {"resourceType": "Patient", "id": "pat1"},
+            {"resourceType": "Patient", "id": "pat1"},
+        ]
+        with pytest.raises(ValueError, match=r"Patient/pat1"):
+            to_bundle(resources, doc_id="doc-1")
+
+    def test_resources_without_id_do_not_collide(self):
+        # Resources without an id are unreferenceable, which is valid; two
+        # id-less resources of the same type must not raise.
+        resources = [
+            {"resourceType": "Observation", "status": "final"},
+            {"resourceType": "Observation", "status": "final"},
+        ]
+        bundle = to_bundle(resources, doc_id="doc-1")
+        assert len(bundle["entry"]) == 2
+
+    def test_same_id_different_resource_type_is_allowed(self):
+        # "Observation/1" and "Patient/1" are distinct keys, so no collision.
+        resources = [
+            {"resourceType": "Observation", "id": "1", "status": "final"},
+            {"resourceType": "Patient", "id": "1"},
+        ]
+        bundle = to_bundle(resources, doc_id="doc-1")
+        assert len(bundle["entry"]) == 2
+
+    def test_duplicate_id_raises_before_any_entry_emitted(self):
+        # The error should surface regardless of where the duplicate appears
+        # in the input sequence.
+        resources = [
+            {"resourceType": "Condition", "id": "c1"},
+            {"resourceType": "Observation", "id": "obs1"},
+            {"resourceType": "Condition", "id": "c1"},
+        ]
+        with pytest.raises(ValueError, match=r"Condition/c1"):
+            to_bundle(resources, doc_id="doc-1")

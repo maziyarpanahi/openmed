@@ -12,5 +12,8 @@
   "education": ["Course", "Topic", "Institution", "Degree"],
   "social": ["Person", "Handle", "Hashtag", "URL"],
   "public_health": ["Condition", "Intervention", "Outcome", "Population"],
+  "cardiology": ["CardiacFinding", "ECGFinding", "EjectionFraction", "CardiacProcedure", "CardiacDevice", "Anatomy"],
+  "dermatology": ["SkinLesion", "Morphology", "Distribution", "Anatomy"],
+  "ophthalmology": ["EyeFinding", "VisualAcuity", "IntraocularPressure", "Anatomy"],
   "generic": ["Person", "Organization", "Location", "Date"]
 }
