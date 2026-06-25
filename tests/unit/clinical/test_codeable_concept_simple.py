@@ -23,10 +23,10 @@ class TestSystemUri:
         assert system_uri("icd-10-cm") == "http://hl7.org/fhir/sid/icd-10-cm"
 
     def test_hpo_returns_canonical_uri(self):
-        assert system_uri("hpo") == "http://purl.obolibrary.org/obo/hp.owl"
+        assert system_uri("hpo") == "http://human-phenotype-ontology.org"
 
     def test_mesh_returns_canonical_uri(self):
-        assert system_uri("mesh") == "https://meshb.nlm.nih.gov"
+        assert system_uri("mesh") == "https://www.nlm.nih.gov/mesh"
 
     def test_lookup_is_case_insensitive(self):
         assert system_uri("RxNorm") == system_uri("rxnorm")
@@ -138,6 +138,21 @@ class TestCodeableConcept:
         result_b = codeable_concept([c_snomed, c_rxnorm])
 
         assert result_a["coding"] == result_b["coding"]
+
+    def test_same_system_codings_are_ordered_by_code_then_display(self):
+        c_beta = coding("loinc", "2000-0", "Beta")
+        c_alpha_late = coding("loinc", "3000-0", "Alpha")
+        c_alpha_early = coding("loinc", "1000-0", "Alpha")
+
+        result_a = codeable_concept([c_beta, c_alpha_late, c_alpha_early])
+        result_b = codeable_concept([c_alpha_late, c_alpha_early, c_beta])
+
+        assert result_a["coding"] == result_b["coding"]
+        assert [item["code"] for item in result_a["coding"]] == [
+            "1000-0",
+            "2000-0",
+            "3000-0",
+        ]
 
     def test_custom_system_priority_is_respected(self):
         c_snomed = coding("snomed", "372687004")
