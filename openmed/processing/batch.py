@@ -521,14 +521,14 @@ class BatchProcessor:
             )
             try:
                 on_progress(progress)
-            except Exception as e:
-                logger.warning(f"Progress callback error: {e}")
+            except Exception:
+                logger.warning("on_progress callback raised; continuing batch")
 
         if progress_callback:
             try:
                 progress_callback(completed, total, item_result)
-            except Exception as e:
-                logger.warning(f"Progress callback error: {e}")
+            except Exception:
+                logger.warning("progress_callback raised; continuing batch")
 
     def _process_batch_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
         """Process a contiguous item chunk for the selected operation."""
