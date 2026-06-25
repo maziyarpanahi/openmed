@@ -237,7 +237,7 @@ class Pipeline:
         text: str,
         *,
         method: str = "mask",
-        keep_year: bool = True,
+        keep_year: bool = False,
         shift_dates: Optional[bool] = None,
         date_shift_days: Optional[int] = None,
         keep_mapping: bool = False,
