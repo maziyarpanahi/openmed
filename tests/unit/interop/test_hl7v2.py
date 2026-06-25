@@ -93,6 +93,36 @@ def test_redacts_synthetic_oru_obx_and_nte_free_text():
     assert "GLU^Glucose^L" in redacted
 
 
+def test_free_text_deidentifier_receives_lang_for_obx_and_nte():
+    calls: list[tuple[str, str]] = []
+
+    def deidentifier(text: str, **kwargs):
+        calls.append((text, kwargs["lang"]))
+        return text.replace("Maria Garcia", "[PERSON]")
+
+    message = "\r".join(
+        [
+            "MSH|^~\\&|LAB|GOOD HOSPITAL|OPENMED|LOCAL|202401011300||ORU^R01|"
+            "MSG00006|P|2.5",
+            "OBX|1|FT|NOTE^Clinical note^L||Patient Maria Garcia called.",
+            "NTE|1||Follow-up with Maria Garcia.",
+        ]
+    )
+
+    redacted = redact_hl7v2(
+        message,
+        deidentifier=deidentifier,
+        lang="es",
+        date_shift_days=1,
+    )
+
+    assert "Maria Garcia" not in redacted
+    assert calls == [
+        ("Patient Maria Garcia called.", "es"),
+        ("Follow-up with Maria Garcia.", "es"),
+    ]
+
+
 def test_date_fields_shift_consistently_within_message():
     message = "\r".join(
         [

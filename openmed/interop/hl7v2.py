@@ -404,7 +404,12 @@ class _HL7V2Redactor:
         if value.strip() == "":
             return value
 
-        kwargs = {"method": "mask", **self.deidentify_kwargs, **rule.deidentify_kwargs}
+        kwargs = {
+            "method": "mask",
+            "lang": self.lang,
+            **self.deidentify_kwargs,
+            **rule.deidentify_kwargs,
+        }
         result = self._deidentifier_or_default()(value, **kwargs)
         if isinstance(result, str):
             return result
