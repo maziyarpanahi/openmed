@@ -14,7 +14,8 @@ That MLX story now has two surfaces:
 pip install -e ".[mlx]"
 ```
 
-This installs `mlx`, `huggingface-hub`, `transformers`, `tokenizers`, and `safetensors`.
+This installs `mlx`, `mlx-lm`, `huggingface-hub`, `transformers`,
+`tokenizers`, and `safetensors`.
 
 ## Quick Start
 
@@ -28,6 +29,45 @@ result = analyze_text(
     model_name="pii_detection",
 )
 print(result.entities)
+```
+
+### Python MLX-LM Quick Start
+
+OpenMed also exposes MLX-LM causal language models through the same
+`openmed[mlx]` extra. The first supported model is the private
+`OpenMed/laneformer-2b-it-q4-mlx` conversion of
+`kogai/laneformer-2b-it`.
+
+```python
+from openmed import generate_text
+
+response = generate_text(
+    messages=[
+        {
+            "role": "user",
+            "content": "Explain why local clinical language models matter.",
+        }
+    ],
+    model_name="OpenMed/laneformer-2b-it-q4-mlx",
+    max_tokens=128,
+)
+print(response)
+```
+
+Use `OpenMed/laneformer-2b-it-q4-mlx` to request the preconverted OpenMed MLX
+artifact explicitly. The resolver also accepts these aliases:
+
+- `kogai/laneformer-2b-it`
+- `laneformer-2b-it`
+- a local directory containing the converted MLX-LM artifact
+
+For explicit reuse across several prompts, keep the model loaded:
+
+```python
+from openmed.mlx import OpenMedMLXLanguageModel
+
+runner = OpenMedMLXLanguageModel("OpenMed/laneformer-2b-it-q4-mlx")
+print(runner.generate("Define delayed tensor parallelism.", max_tokens=128))
 ```
 
 To force a specific backend:
@@ -68,6 +108,11 @@ As of May 4, 2026, the current public MLX path covers these families:
 
 Python MLX and Swift MLX now share the same artifact contract for OpenMed PII, Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family tasks. The Arabic/Japanese/Turkish PII rollout adds 28 supported `-mlx` repos now; unsupported ModernBERT, Qwen3, and Longformer PII checkpoints remain deferred until those architectures land in the converter.
 
+MLX-LM text generation is a separate Python-only artifact contract. It uses
+MLX-LM files such as `model.safetensors`, tokenizer assets, `config.json`, and
+custom `model_file` implementations when needed. Laneformer support is
+available through `OpenMed/laneformer-2b-it-q4-mlx`.
+
 Architectures still in active rollout:
 
 - `modernbert`
@@ -80,6 +125,9 @@ That rollout is about making the converter universal and repeatable across the w
 ## Fallback Behavior
 
 If MLX is not available (non-Apple hardware, or `mlx` not installed), OpenMed automatically falls back to the HuggingFace/PyTorch backend. No code changes required.
+
+That automatic fallback applies to the token-classification backend. MLX-LM
+text generation requires `mlx-lm` and a supported MLX runtime.
 
 ## MLX and Swift Apps
 
