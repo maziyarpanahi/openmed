@@ -50,6 +50,7 @@ nav:
       - Contributing & Releases: contributing.md
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
+      - Supply Chain Controls: security/supply-chain.md
       - Release Streams & Channels: release/semver-and-channels.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md

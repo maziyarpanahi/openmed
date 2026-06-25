@@ -25,6 +25,26 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
+  lockfile-drift:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Check uv.lock matches pyproject.toml
+      run: |
+        if ! uv lock --check; then
+          echo "::error title=uv.lock is out of date::Run 'uv lock' and commit the updated uv.lock."
+          exit 1
+        fi
+
   lint:
     needs: repo-policy
     runs-on: ubuntu-latest
