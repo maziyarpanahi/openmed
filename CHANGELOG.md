@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Expanded lab reference-range parsing in `openmed.clinical.lab_values` with
+  tolerant separator/operator support and safer unknown explicit-flag handling.
 - Added a root `SECURITY.md` responsible-disclosure policy (private GitHub
   vulnerability reporting, a severity matrix, supported versions, response targets
   with a coordinated-disclosure CVE/advisory process, accidental-disclosure
