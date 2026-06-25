@@ -66,6 +66,9 @@
     "VIN": "replace",
     "VEHICLE_REGISTRATION": "replace",
     "IMEI": "replace",
+    "MICROORGANISM": "keep",
+    "ANTIBIOTIC": "keep",
+    "SUSCEPTIBILITY": "keep",
     "OTHER": "keep"
   }
 }

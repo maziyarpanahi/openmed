@@ -173,6 +173,7 @@ _CATEGORY_ENTITY_TYPES = {
     "Genomics": ["GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA"],
     "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
     "Species": ["ORGANISM", "SPECIES"],
+    "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
@@ -696,6 +697,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "heart|lung|brain|liver|kidney|organ": (
         "Anatomy",
         "Contains anatomical terms",
+    ),
+    "culture|gram\\s*stain|susceptib|\\bmic\\b|resistant|sensitive|e\\.\\s*coli|mrsa|oxacillin": (
+        "Microbiology",
+        "Contains microbiology terms",
     ),
     "bacteria|virus|organism|species": (
         "Species",
