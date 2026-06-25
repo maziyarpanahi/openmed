@@ -26,11 +26,13 @@ class PolicyName(str, Enum):
     RESEARCH_LIMITED_DATASET = "research_limited_dataset"
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
+    CANADA_PIPEDA = "canada_pipeda"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
 POLICY_ALIASES: Mapping[str, str] = {
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
+    "pipeda": PolicyName.CANADA_PIPEDA.value,
 }
 
 _ARBITRATION_MODES = frozenset({MODE_BALANCED, MODE_HIGH_RECALL_UNION})

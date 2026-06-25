@@ -94,6 +94,37 @@ def test_contributor_populated_fixture_renders_current_model_card():
     assert "`CANCER`, `TREATMENT`" in card
 
 
+def test_render_model_card_includes_distillation_evidence_when_present():
+    row = {
+        **_fixture_row(),
+        "distillation": {
+            "alpha": 0.6,
+            "critical_label_drops": ["EMAIL"],
+            "per_label_recall_delta": [
+                {
+                    "critical_drop": True,
+                    "delta": -0.02,
+                    "label": "EMAIL",
+                    "student_recall": 0.97,
+                    "teacher_recall": 0.99,
+                }
+            ],
+            "recall_gate_passed": False,
+            "student_backbone": "openmed/backbones/tiny-direct-identifier-135m",
+            "teacher_id": "teacher-local",
+            "temperature": 2.0,
+        },
+    }
+
+    card = render_model_card(row)
+
+    assert "## Distillation Evidence" in card
+    assert "| Teacher | `teacher-local` |" in card
+    assert "| Recall gate | failed |" in card
+    assert "| Critical drops | `EMAIL` |" in card
+    assert "| EMAIL | 0.9900 | 0.9700 | -0.0200 | yes |" in card
+
+
 def test_publish_model_card_uploads_rendered_readme():
     row = _fixture_row()
     captured: dict[str, object] = {}

@@ -1069,7 +1069,7 @@ def _build_deidentification_result(
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
     if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = random.randint(-365, 365)
+        date_shift_days = _random_nonzero_shift()
 
     anonymizer = None
     if effective_method == "replace" or any(
@@ -1093,7 +1093,7 @@ def _build_deidentification_result(
         for entity in sorted(pii_entities, key=lambda e: e.start):
             entity_method = _entity_redaction_method(entity, effective_method)
             if entity_method in {"mask", "remove"} or (
-                entity_method == "shift_dates" and entity.entity_type != "DATE"
+                entity_method == "shift_dates" and not _is_date_entity(entity, lang)
             ):
                 entity_type_counts[entity.entity_type] = (
                     entity_type_counts.get(entity.entity_type, 0) + 1
@@ -1215,7 +1215,7 @@ def _deidentify_batch(
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -1284,7 +1284,7 @@ def deidentify(
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -1322,7 +1322,7 @@ def deidentify(
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random if None)
+        date_shift_days: Specific number of days to shift (random non-zero if None)
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1402,10 +1402,25 @@ def deidentify(
     return result.deidentification_result
 
 
+def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
+    """Return True if ``entity`` is a DATE span.
+
+    ``entity.entity_type`` holds the raw model label, whose spelling and case
+    vary across models (the default English model emits lowercase ``"date"``),
+    so comparing it to the literal ``"DATE"`` misses dates for most models. The
+    canonical label normalizes these to a date label; fall back to normalizing
+    the raw label when ``canonical_label`` is unset.
+    """
+    from .labels import DATE, DATE_OF_BIRTH, normalize_label
+
+    canonical = entity.canonical_label or normalize_label(entity.entity_type, lang)
+    return canonical in {DATE, DATE_OF_BIRTH}
+
+
 def _redact_entity(
     entity: PIIEntity,
     method: DeidentificationMethod,
-    keep_year: bool = True,
+    keep_year: bool = False,
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
@@ -1450,7 +1465,7 @@ def _redact_entity(
 
     elif method == "shift_dates":
         # Shift dates by offset
-        if entity.entity_type == "DATE" and date_shift_days is not None:
+        if _is_date_entity(entity, lang) and date_shift_days is not None:
             return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
         else:
             # Non-date entities get masked
@@ -1616,17 +1631,39 @@ def _parse_localized_month_date(
     text = date_str.strip()
 
     if lang in {"es", "pt"}:
-        pattern = rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$"
-        style = "day_month_year_de"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$",
+                "day_month_year_de",
+            )
+        ]
     elif lang == "de":
-        pattern = rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
-        style = "day_month_year_dot"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$",
+                "day_month_year_dot",
+            )
+        ]
     else:
-        pattern = rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
-        style = "day_month_year"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$",
+                "day_month_year",
+            ),
+            (
+                rf"^(?P<month>{month_alts})\s+(?P<day>\d{{1,2}}),?\s+(?P<year>\d{{4}})$",
+                "month_day_year",
+            ),
+        ]
 
-    match = re.match(pattern, text, re.IGNORECASE)
-    if not match:
+    match = None
+    style = ""
+    for pattern, candidate_style in patterns:
+        match = re.match(pattern, text, re.IGNORECASE)
+        if match:
+            style = candidate_style
+            break
+    if match is None:
         return None
 
     month_lookup = {
@@ -1667,6 +1704,8 @@ def _format_localized_month_date(
         return f"{new_date.day} de {month_name} de {new_date.year}"
     if style == "day_month_year_dot":
         return f"{new_date.day}. {month_name} {new_date.year}"
+    if style == "month_day_year":
+        return f"{month_name} {new_date.day}, {new_date.year}"
     return f"{new_date.day} {month_name} {new_date.year}"
 
 
@@ -1685,10 +1724,34 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
         return date_value.replace(year=year, month=2, day=28)
 
 
+def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
+    """Return a random non-zero day offset in ``[low, high]`` excluding 0.
+
+    A zero-day shift would leave clinical dates unchanged, silently defeating
+    de-identification, so the auto-selected offset must never be 0.
+
+    Args:
+        low: Minimum (most-negative) shift in days, inclusive.
+        high: Maximum (most-positive) shift in days, inclusive.
+
+    Returns:
+        A non-zero integer day offset within the range.
+    """
+    if low > high:
+        raise ValueError("low must be less than or equal to high")
+    if low == high == 0:
+        raise ValueError("range must contain at least one non-zero shift")
+
+    while True:
+        shift_days = random.randint(low, high)
+        if shift_days != 0:
+            return shift_days
+
+
 def _shift_date(
     date_str: str,
     shift_days: int,
-    keep_year: bool = True,
+    keep_year: bool = False,
     lang: str = "en",
 ) -> str:
     """Shift a date string by specified number of days.
@@ -1754,7 +1817,7 @@ def _shift_date(
 def _shift_date_basic(
     date_str: str,
     shift_days: int,
-    keep_year: bool = True,
+    keep_year: bool = False,
     lang: str = "en",
 ) -> str:
     """Basic date shifting without dateutil dependency.
@@ -1774,14 +1837,14 @@ def _shift_date_basic(
     if lang in _DAY_FIRST_LANGS - {"de"}:
         # European: DD/MM/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "de":
         # German: DD.MM.YYYY
         patterns = [
             (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "ja":
@@ -1789,14 +1852,14 @@ def _shift_date_basic(
         # JAPANESE_PII_PATTERNS regex, not here).
         patterns = [
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
     else:
         # US/English: MM/DD/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "mdy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
 
     for pattern, order in patterns:
@@ -1881,7 +1944,7 @@ def _format_date_like_original(
         return new_date.strftime("%d.%m.%Y")
 
     # Slash-separated dates: interpretation depends on language
-    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
+    if re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
@@ -1890,7 +1953,7 @@ def _format_date_like_original(
             return new_date.strftime("%m/%d/%Y")
 
     # Dash-separated dates
-    if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
+    if re.match(r"\d{1,2}-\d{1,2}-\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             return new_date.strftime("%d-%m-%Y")
         else:

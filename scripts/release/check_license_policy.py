@@ -29,6 +29,8 @@ ALLOWED_LICENSE_MARKERS = (
     "BSD-2-CLAUSE",
     "BSD-3-CLAUSE",
     "ISC",
+    "HPND",
+    "HISTORICAL PERMISSION NOTICE AND DISCLAIMER",
 )
 
 DISALLOWED_LICENSE_MARKERS = (
@@ -51,6 +53,8 @@ GPL_BRIDGE_EXCEPTIONS = {
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
+    "autoawq": "MIT",
+    "click": "BSD-3-Clause",
     "coremltools": "BSD-3-Clause",
     "faker": "MIT",
     "fastapi": "MIT",
@@ -58,6 +62,7 @@ REVIEWED_LICENSES = {
     "griffe": "ISC",
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
+    "langchain-core": "MIT",
     "mcp": "MIT",
     "mkdocs": "BSD-2-Clause",
     "mkdocs-git-revision-date-localized-plugin": "MIT",
@@ -65,11 +70,21 @@ REVIEWED_LICENSES = {
     "mkdocs-minify-plugin": "MIT",
     "mkdocstrings": "ISC",
     "mlx": "MIT",
+    "mlx-lm": "MIT",
+    "onnx": "Apache-2.0",
+    "onnxruntime": "MIT",
+    "onnxscript": "MIT",
+    "paddleocr": "Apache-2.0",
+    "pdfplumber": "MIT",
+    "pillow": "HPND",
     "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
+    "pytesseract": "Apache-2.0",
+    "python-docx": "MIT",
     "rich": "MIT",
     "safetensors": "Apache-2.0",
+    "spacy": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
     "torch": "BSD-3-Clause",
