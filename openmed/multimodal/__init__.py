@@ -9,6 +9,10 @@ without the ``multimodal`` extra installed.
 
 from __future__ import annotations
 
+# Importing the CDA adapter registers content-aware XML handling. The adapter is
+# stdlib-only, so the public multimodal import path remains free of heavy deps.
+from openmed.interop import cda as _cda
+
 from .base import (
     ExtractedDocument,
     SourceSpan,

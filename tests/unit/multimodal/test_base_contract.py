@@ -110,6 +110,36 @@ class TestRedactDocumentDispatcher:
         assert isinstance(redact_document("a.htm"), ExtractedDocument)
         assert isinstance(redact_document("a.html"), ExtractedDocument)
 
+    def test_detector_handler_takes_precedence_over_generic_extension(
+        self, clean_registry, deps_present
+    ):
+        register_handler(
+            ".xml",
+            lambda path, **_: ExtractedDocument.from_blocks([{"text": "generic"}]),
+        )
+        register_handler(
+            ".xml",
+            lambda path, **_: ExtractedDocument.from_blocks([{"text": "detected"}]),
+            detector=lambda path: True,
+        )
+
+        assert redact_document("note.xml").text == "detected"
+
+    def test_generic_extension_handler_remains_fallback(
+        self, clean_registry, deps_present
+    ):
+        register_handler(
+            ".xml",
+            lambda path, **_: ExtractedDocument.from_blocks([{"text": "generic"}]),
+        )
+        register_handler(
+            ".xml",
+            lambda path, **_: ExtractedDocument.from_blocks([{"text": "detected"}]),
+            detector=lambda path: False,
+        )
+
+        assert redact_document("note.xml").text == "generic"
+
     def test_unknown_extension_raises_unsupported(self, clean_registry, deps_present):
         with pytest.raises(UnsupportedDocumentError):
             redact_document("mystery.xyz")
