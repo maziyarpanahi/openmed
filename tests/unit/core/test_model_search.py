@@ -21,6 +21,7 @@ def _row(
     param_count: int | None = 90_000_000,
     formats: list[str] | None = None,
     license: str | None = "apache-2.0",
+    benchmark: dict[str, Any] | list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "repo_id": repo_id,
@@ -33,7 +34,7 @@ def _row(
         "base_model": "OpenMed/source",
         "formats": formats if formats is not None else ["mlx-fp", "pytorch"],
         "canonical_labels": ["PERSON"],
-        "benchmark": {"dataset": "synthetic"},
+        "benchmark": benchmark if benchmark is not None else {"dataset": "synthetic"},
         "arxiv": None,
         "license": license,
         "reproducibility_hash": "sha256:test",
@@ -117,6 +118,28 @@ def test_search_models_filters_by_format_and_query(tmp_path: Path) -> None:
     results = search_models(format="mlx", query="privacy", manifest_path=manifest)
 
     assert [result.repo_id for result in results] == ["OpenMed/privacy-filter-fr-mlx"]
+
+
+def test_search_models_preserves_benchmark_suite_lists(tmp_path: Path) -> None:
+    manifest = tmp_path / "models.jsonl"
+    benchmark = [
+        {
+            "suite": "shield",
+            "dataset": "openmed-golden-pii",
+            "micro_f1": 0.9823,
+            "recall": 0.991,
+            "leakage": 0.0,
+        }
+    ]
+    _write_manifest(
+        manifest,
+        [_row("OpenMed/privacy-filter-fr-mlx", benchmark=benchmark)],
+    )
+
+    result = search_models(query="privacy", manifest_path=manifest)[0]
+
+    assert result.benchmark == benchmark
+    assert result.manifest_row["benchmark"] == benchmark
 
 
 def test_search_models_uses_local_manifest_loader_without_network(

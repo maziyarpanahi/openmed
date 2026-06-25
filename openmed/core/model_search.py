@@ -38,7 +38,7 @@ class ModelSearchResult:
     base_model: str | None = None
     formats: tuple[str, ...] = ()
     canonical_labels: tuple[str, ...] = ()
-    benchmark: Mapping[str, Any] = field(default_factory=dict)
+    benchmark: Mapping[str, Any] | list[Mapping[str, Any]] = field(default_factory=dict)
     arxiv: str | None = None
     license: str | None = None
     reproducibility_hash: str | None = None
@@ -181,7 +181,7 @@ def _result_from_row(row: Mapping[str, Any]) -> ModelSearchResult:
         canonical_labels=tuple(
             str(value) for value in _sequence(row, "canonical_labels")
         ),
-        benchmark=dict(row.get("benchmark") or {}),
+        benchmark=_benchmark_from_row(row),
         arxiv=_optional_str(row.get("arxiv")),
         license=_optional_str(row.get("license")),
         reproducibility_hash=_optional_str(row.get("reproducibility_hash")),
@@ -203,6 +203,17 @@ def _sequence(row: Mapping[str, Any], key: str) -> tuple[Any, ...]:
     if isinstance(value, list | tuple):
         return tuple(value)
     return ()
+
+
+def _benchmark_from_row(
+    row: Mapping[str, Any],
+) -> Mapping[str, Any] | list[Mapping[str, Any]]:
+    value = row.get("benchmark")
+    if isinstance(value, Mapping):
+        return dict(value)
+    if isinstance(value, list):
+        return [dict(entry) for entry in value if isinstance(entry, Mapping)]
+    return {}
 
 
 def _normalize_format(value: Any) -> str:
