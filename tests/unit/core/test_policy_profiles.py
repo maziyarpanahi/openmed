@@ -135,6 +135,16 @@ def test_unknown_policy_raises_before_detection():
         deidentify("Patient John Doe", policy="not_a_policy")
 
 
+@pytest.mark.parametrize(
+    "bad_policy", [123, {"posture": "strict"}, ["hipaa_safe_harbor"]]
+)
+def test_malformed_policy_type_raises_type_error_explaining_accepted_forms(bad_policy):
+    with pytest.raises(
+        TypeError, match="policy must be a profile name string or a PolicyProfile"
+    ):
+        load_policy(bad_policy)
+
+
 def test_strict_no_leak_forces_union_sweep_and_accurate_cascade(monkeypatch):
     text = "Visited Paris"
     _patch_extract(monkeypatch, _entity(text, "Paris", "LOCATION", 0.2))
