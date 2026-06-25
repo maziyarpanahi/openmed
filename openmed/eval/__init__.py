@@ -26,6 +26,12 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.coverage import (
+    GOLDEN_EDGE_CASE_CATEGORIES,
+    FixtureCoverageReport,
+    fixture_coverage_report,
+    golden_fixture_coverage_report,
+)
 from openmed.eval.error_analysis import (
     ErrorAnalysisReport,
     ErrorSpanExample,
@@ -105,6 +111,8 @@ __all__ = [
     "FairnessGroupMetrics",
     "FairnessReport",
     "FixtureResult",
+    "FixtureCoverageReport",
+    "GOLDEN_EDGE_CASE_CATEGORIES",
     "GateCheck",
     "GateReport",
     "INT4_RECALL_DELTA_LIMIT",
@@ -141,7 +149,9 @@ __all__ = [
     "error_report",
     "fairness_report",
     "fit_calibration_thresholds",
+    "fixture_coverage_report",
     "generate_reid_leaderboard",
+    "golden_fixture_coverage_report",
     "identity_perturbation",
     "load_calibration_samples",
     "load_calibration_thresholds",
