@@ -19,7 +19,7 @@ class LangChainRedactionConfig:
     method: str = "mask"
     model_name: str | None = None
     confidence_threshold: float = 0.7
-    keep_year: bool = True
+    keep_year: bool = False
     keep_mapping: bool = False
     use_smart_merging: bool = True
     lang: str = "en"
