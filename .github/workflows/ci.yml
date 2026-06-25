@@ -25,6 +25,10 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
+    - name: Validate GitHub Actions references
+      run: |
+        python scripts/release/check_github_actions_refs.py
+
   lint:
     needs: repo-policy
     runs-on: ubuntu-latest
