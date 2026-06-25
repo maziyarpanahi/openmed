@@ -1631,17 +1631,39 @@ def _parse_localized_month_date(
     text = date_str.strip()
 
     if lang in {"es", "pt"}:
-        pattern = rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$"
-        style = "day_month_year_de"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$",
+                "day_month_year_de",
+            )
+        ]
     elif lang == "de":
-        pattern = rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
-        style = "day_month_year_dot"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$",
+                "day_month_year_dot",
+            )
+        ]
     else:
-        pattern = rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
-        style = "day_month_year"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$",
+                "day_month_year",
+            ),
+            (
+                rf"^(?P<month>{month_alts})\s+(?P<day>\d{{1,2}}),?\s+(?P<year>\d{{4}})$",
+                "month_day_year",
+            ),
+        ]
 
-    match = re.match(pattern, text, re.IGNORECASE)
-    if not match:
+    match = None
+    style = ""
+    for pattern, candidate_style in patterns:
+        match = re.match(pattern, text, re.IGNORECASE)
+        if match:
+            style = candidate_style
+            break
+    if match is None:
         return None
 
     month_lookup = {
@@ -1682,6 +1704,8 @@ def _format_localized_month_date(
         return f"{new_date.day} de {month_name} de {new_date.year}"
     if style == "day_month_year_dot":
         return f"{new_date.day}. {month_name} {new_date.year}"
+    if style == "month_day_year":
+        return f"{month_name} {new_date.day}, {new_date.year}"
     return f"{new_date.day} {month_name} {new_date.year}"
 
 
