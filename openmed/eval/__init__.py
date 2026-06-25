@@ -87,6 +87,13 @@ from openmed.eval.robustness import (
     robustness_report,
     whitespace_noise_perturbation,
 )
+from openmed.eval.section_recall import (
+    UNSECTIONED_SECTION,
+    SectionRecallMetrics,
+    SectionRecallReport,
+    SectionSpan,
+    compute_section_recall,
+)
 from openmed.eval.tiers import TIERS
 
 __all__ = [
@@ -118,7 +125,11 @@ __all__ = [
     "ReleaseGate",
     "RobustnessReport",
     "RobustnessVariant",
+    "SectionRecallMetrics",
+    "SectionRecallReport",
+    "SectionSpan",
     "UNSPECIFIED_GROUP",
+    "UNSECTIONED_SECTION",
     "artifact_dir_for",
     "build_thresholds_payload",
     "case_flip_perturbation",
@@ -135,6 +146,7 @@ __all__ = [
     "compute_recall_slices",
     "compute_relaxed_span_f1",
     "compute_resource_metrics",
+    "compute_section_recall",
     "compute_surrogate_consistency",
     "default_suite_calibration_samples",
     "evaluate_quant_recall_delta",
