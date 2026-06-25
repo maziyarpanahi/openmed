@@ -65,6 +65,9 @@ to publish outside CI, run `make docs-deploy`; it mirrors the workflow by buildi
 - Keep user-facing docs inside `docs/`; new guides only require Markdown and optional front matter.
 - Reference exact file + section when filing doc bugs so we can reproduce quickly.
 - Prefer small pull requests that focus on a single guide or feature; CI + Pages runs on every PR.
+- **Security issues are different:** a redaction bypass or PHI/PII leak must be
+  reported privately, never as a public issue. Follow the
+  [Security & Disclosure policy](security/disclosure-policy.md).
 
 ## Governance references
 

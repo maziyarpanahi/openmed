@@ -29,7 +29,10 @@ class ModelInfo:
     architecture: Optional[str] = None
     base_model: Optional[str] = None
     formats: List[str] = field(default_factory=list)
-    benchmark: Dict[str, Any] = field(default_factory=dict)
+    benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
+    latency_ms: Dict[str, float] = field(default_factory=dict)
+    peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    recommended_tier: Optional[str] = None
     arxiv: Optional[str] = None
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
@@ -182,6 +185,15 @@ _CATEGORY_ENTITY_TYPES = {
         "EJECTION_FRACTION",
         "CARDIAC_PROCEDURE",
         "CARDIAC_DEVICE",
+        "ANATOMY",
+    ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": ["SKIN_LESION", "MORPHOLOGY", "DISTRIBUTION", "ANATOMY"],
+    "Ophthalmology": [
+        "EYE_FINDING",
+        "VISUAL_ACUITY",
+        "INTRAOCULAR_PRESSURE",
         "ANATOMY",
     ],
     "Privacy": _PII_ENTITY_TYPES,
@@ -389,12 +401,37 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         architecture=row.get("architecture"),
         base_model=row.get("base_model"),
         formats=list(row.get("formats") or []),
-        benchmark=dict(row.get("benchmark") or {}),
+        benchmark=_benchmark_from_row(row),
+        latency_ms=_number_map_from_row(row, "latency_ms"),
+        peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        recommended_tier=row.get("recommended_tier")
+        if isinstance(row.get("recommended_tier"), str)
+        else None,
         arxiv=row.get("arxiv"),
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
         released=row.get("released"),
     )
+
+
+def _benchmark_from_row(row: Dict[str, Any]) -> Dict[str, Any] | List[Dict[str, Any]]:
+    benchmark = row.get("benchmark")
+    if isinstance(benchmark, list):
+        return [dict(entry) for entry in benchmark if isinstance(entry, dict)]
+    if isinstance(benchmark, dict):
+        return dict(benchmark)
+    return {}
+
+
+def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, float]:
+    value = row.get(field_name)
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(device): float(measurement)
+        for device, measurement in value.items()
+        if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
+    }
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -648,6 +685,14 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "ecg|ekg|ejection fraction|arrhythmia|stent|pacemaker|murmur|st elevation|echocardiogram|cardiac|cardiolog": (
         "Cardiology",
         "Contains cardiology terms",
+    ),
+    "rash|lesion|macule|papule|erythema|pruritus|biopsy of skin|dermatolog|skin": (
+        "Dermatology",
+        "Contains dermatology terms",
+    ),
+    "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
+        "Ophthalmology",
+        "Contains ophthalmology terms",
     ),
     "heart|lung|brain|liver|kidney|organ": (
         "Anatomy",

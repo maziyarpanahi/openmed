@@ -23,11 +23,35 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "cda": AdapterSpec(
+        name="cda",
+        module="openmed.interop.cda",
+        extra="core",
+        description="CDA/C-CDA XML de-identification adapter",
+    ),
+    "hl7v2": AdapterSpec(
+        name="hl7v2",
+        module="openmed.interop.hl7v2",
+        extra="",
+        description="HL7 v2 segment-aware de-identification",
+    ),
+    "langchain": AdapterSpec(
+        name="langchain",
+        module="openmed.interop.langchain",
+        extra="langchain",
+        description="LangChain redaction runnable adapter",
+    ),
     "presidio": AdapterSpec(
         name="presidio",
         module="openmed.interop.presidio",
         extra="presidio",
         description="Presidio RecognizerResult adapter",
+    ),
+    "spacy": AdapterSpec(
+        name="spacy",
+        module="openmed.interop.spacy_component",
+        extra="spacy",
+        description="spaCy pipeline component for OpenMed PII spans",
     ),
 }
 

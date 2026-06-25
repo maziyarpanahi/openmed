@@ -7,6 +7,11 @@ jurisdiction, deployment controls, and counsel.
 
 No de-identification tool can guarantee compliance or zero residual risk. Validate locally before any production or clinical use.
 
+If you find a case where identifiers leak — a redaction bypass — treat it as a
+security issue and report it **privately** through the
+[Security & Disclosure policy](security/disclosure-policy.md), never as a public
+issue, and without including real patient data.
+
 ## Framework Split
 
 | Framework | What OpenMed supplies | What the user still owns |
