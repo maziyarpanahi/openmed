@@ -54,6 +54,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "autoawq": "MIT",
+    "click": "BSD-3-Clause",
     "coremltools": "BSD-3-Clause",
     "faker": "MIT",
     "fastapi": "MIT",
@@ -83,6 +84,7 @@ REVIEWED_LICENSES = {
     "python-docx": "MIT",
     "rich": "MIT",
     "safetensors": "Apache-2.0",
+    "spacy": "MIT",
     "tiktoken": "MIT",
     "tokenizers": "Apache-2.0",
     "torch": "BSD-3-Clause",
