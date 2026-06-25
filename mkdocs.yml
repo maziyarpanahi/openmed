@@ -42,6 +42,7 @@ nav:
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - FAQ: faq.md
+      - Onboarding: onboarding.md
       - Contributing & Releases: contributing.md
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
