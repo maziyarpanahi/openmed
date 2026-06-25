@@ -53,6 +53,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
+    "autoawq": "MIT",
     "coremltools": "BSD-3-Clause",
     "faker": "MIT",
     "fastapi": "MIT",
@@ -68,6 +69,7 @@ REVIEWED_LICENSES = {
     "mkdocs-minify-plugin": "MIT",
     "mkdocstrings": "ISC",
     "mlx": "MIT",
+    "mlx-lm": "MIT",
     "onnx": "Apache-2.0",
     "onnxruntime": "MIT",
     "onnxscript": "MIT",

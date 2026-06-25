@@ -30,6 +30,7 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Device Tiers & SLOs: tiers.md
+      - AWQ Export: export-awq.md
   - PII & De-identification:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
@@ -43,7 +44,9 @@ nav:
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - FAQ: faq.md
+      - Onboarding: onboarding.md
       - Contributing & Releases: contributing.md
+      - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Release Streams & Channels: release/semver-and-channels.md
       - Generative Model Policy: generative-model-policy.md
