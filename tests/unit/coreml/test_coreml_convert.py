@@ -51,6 +51,18 @@ def test_resolve_supported_model_type_accepts_architecture_hints():
     assert resolve_supported_model_type(config) == "deberta-v2"
 
 
+@pytest.mark.parametrize(
+    "model_type",
+    ["bert", "distilbert", "electra", "roberta", "xlm-roberta", "deberta-v2"],
+)
+def test_resolve_supported_model_type_accepts_supported_families(model_type: str):
+    from openmed.coreml.convert import resolve_supported_model_type
+
+    config = types.SimpleNamespace(model_type=model_type, architectures=[])
+
+    assert resolve_supported_model_type(config) == model_type
+
+
 def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):
     from openmed.coreml.convert import convert
 
@@ -97,6 +109,36 @@ def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):
         "0": "O",
         "1": "B-NAME",
     }
+    assert state.config_loads == 1
+    assert state.tokenizer_loads == 1
+    assert state.model_loads == 1
+
+
+def test_convert_uses_custom_quantized_output_path(monkeypatch, tmp_path):
+    from openmed.coreml.convert import convert
+
+    _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+    )
+    output_path = tmp_path / "privacy.mlpackage"
+    int8_path = tmp_path / "custom-int8.mlpackage"
+
+    convert(
+        "OpenMed/tiny-stub",
+        output_path,
+        max_seq_length=16,
+        quantize="int8",
+        quantized_output_path=int8_path,
+    )
+
+    assert output_path.is_dir()
+    assert int8_path.is_dir()
+    assert json.loads((tmp_path / "custom-int8_id2label.json").read_text()) == {
+        "0": "O",
+        "1": "B-NAME",
+    }
 
 
 def test_convert_rejects_unsupported_architecture(monkeypatch, tmp_path):
@@ -119,9 +161,102 @@ def test_convert_rejects_unsupported_architecture(monkeypatch, tmp_path):
     ):
         convert("OpenMed/unsupported-stub", output_path, quantize="int8")
 
+    assert state.config_loads == 1
+    assert state.tokenizer_loads == 0
+    assert state.model_loads == 0
     assert state.convert_kwargs is None
     assert not output_path.exists()
     assert not (tmp_path / "unsupported_int8.mlpackage").exists()
+
+
+def test_convert_rejects_invalid_compute_precision_before_loading(
+    monkeypatch,
+    tmp_path,
+):
+    from openmed.coreml.convert import convert
+
+    state = _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+    )
+
+    with pytest.raises(ValueError, match="compute_precision"):
+        convert(
+            "OpenMed/tiny-stub",
+            tmp_path / "privacy.mlpackage",
+            compute_precision="bfloat16",
+        )
+
+    assert state.config_loads == 0
+    assert state.tokenizer_loads == 0
+    assert state.model_loads == 0
+    assert state.convert_kwargs is None
+
+
+def test_convert_rejects_invalid_compute_units_before_loading(monkeypatch, tmp_path):
+    from openmed.coreml.convert import convert
+
+    state = _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+    )
+
+    with pytest.raises(ValueError, match="compute_units"):
+        convert(
+            "OpenMed/tiny-stub",
+            tmp_path / "privacy.mlpackage",
+            compute_units="gpuOnly",
+        )
+
+    assert state.config_loads == 0
+    assert state.tokenizer_loads == 0
+    assert state.model_loads == 0
+    assert state.convert_kwargs is None
+
+
+def test_convert_rejects_quantized_output_without_quantize_before_loading(
+    monkeypatch,
+    tmp_path,
+):
+    from openmed.coreml.convert import convert
+
+    state = _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+    )
+
+    with pytest.raises(ValueError, match="quantized_output_path requires"):
+        convert(
+            "OpenMed/tiny-stub",
+            tmp_path / "privacy.mlpackage",
+            quantized_output_path=tmp_path / "privacy-int8.mlpackage",
+        )
+
+    assert state.config_loads == 0
+    assert state.tokenizer_loads == 0
+    assert state.model_loads == 0
+    assert state.convert_kwargs is None
+
+
+def test_convert_reports_missing_coreml_optimize_for_int8(monkeypatch, tmp_path):
+    from openmed.coreml.convert import convert
+
+    _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+        include_optimizer=False,
+    )
+    output_path = tmp_path / "privacy.mlpackage"
+
+    with pytest.raises(ImportError, match="coremltools.optimize.coreml"):
+        convert("OpenMed/tiny-stub", output_path, quantize="int8")
+
+    assert output_path.is_dir()
+    assert not (tmp_path / "privacy_int8.mlpackage").exists()
 
 
 def _install_conversion_stubs(
@@ -129,11 +264,22 @@ def _install_conversion_stubs(
     *,
     model_type: str,
     architectures: list[str],
+    include_optimizer: bool = True,
 ):
     state = types.SimpleNamespace(
+        config_loads=0,
         convert_kwargs=None,
+        model_loads=0,
         palettizer_config=None,
+        tokenizer_loads=0,
     )
+
+    class FakeConfig:
+        def __init__(self):
+            self.model_type = model_type
+            self.architectures = architectures
+            self.num_labels = 2
+            self.id2label = {0: "O", 1: "B-NAME"}
 
     class FakeTorchModule:
         def eval(self):
@@ -141,12 +287,7 @@ def _install_conversion_stubs(
 
     class FakeModel(FakeTorchModule):
         def __init__(self):
-            self.config = types.SimpleNamespace(
-                model_type=model_type,
-                architectures=architectures,
-                num_labels=2,
-                id2label={0: "O", 1: "B-NAME"},
-            )
+            self.config = FakeConfig()
 
         def __call__(self, **_kwargs):
             return types.SimpleNamespace(logits="logits")
@@ -158,6 +299,18 @@ def _install_conversion_stubs(
                 "attention_mask": "attention_mask",
             }
 
+    def load_config(*_args, **_kwargs):
+        state.config_loads += 1
+        return FakeConfig()
+
+    def load_tokenizer(*_args, **_kwargs):
+        state.tokenizer_loads += 1
+        return FakeTokenizer()
+
+    def load_model(*_args, **_kwargs):
+        state.model_loads += 1
+        return FakeModel()
+
     torch_module = types.ModuleType("torch")
     torch_module.nn = types.SimpleNamespace(Module=FakeTorchModule)
     torch_module.jit = types.SimpleNamespace(
@@ -168,14 +321,18 @@ def _install_conversion_stubs(
     )
 
     transformers_module = types.ModuleType("transformers")
+    transformers_module.AutoConfig = types.SimpleNamespace(from_pretrained=load_config)
     transformers_module.AutoTokenizer = types.SimpleNamespace(
-        from_pretrained=lambda *_args, **_kwargs: FakeTokenizer()
+        from_pretrained=load_tokenizer
     )
     transformers_module.AutoModelForTokenClassification = types.SimpleNamespace(
-        from_pretrained=lambda *_args, **_kwargs: FakeModel()
+        from_pretrained=load_model
     )
 
-    coremltools_module = _fake_coremltools_module(state)
+    coremltools_module = _fake_coremltools_module(
+        state,
+        include_optimizer=include_optimizer,
+    )
 
     monkeypatch.setitem(sys.modules, "torch", torch_module)
     monkeypatch.setitem(sys.modules, "transformers", transformers_module)
@@ -183,7 +340,7 @@ def _install_conversion_stubs(
     return state
 
 
-def _fake_coremltools_module(state):
+def _fake_coremltools_module(state, *, include_optimizer: bool = True):
     coremltools_module = types.ModuleType("coremltools")
     coremltools_module.precision = types.SimpleNamespace(
         FLOAT16="FLOAT16",
@@ -208,13 +365,14 @@ def _fake_coremltools_module(state):
         return _FakeCoreMLModel(kind="int8", source=mlmodel)
 
     coremltools_module.convert = fake_convert
-    coremltools_module.optimize = types.SimpleNamespace(
-        coreml=types.SimpleNamespace(
-            OpPalettizerConfig=_FakeOpPalettizerConfig,
-            OptimizationConfig=_FakeOptimizationConfig,
-            palettize_weights=fake_palettize_weights,
+    if include_optimizer:
+        coremltools_module.optimize = types.SimpleNamespace(
+            coreml=types.SimpleNamespace(
+                OpPalettizerConfig=_FakeOpPalettizerConfig,
+                OptimizationConfig=_FakeOptimizationConfig,
+                palettize_weights=fake_palettize_weights,
+            )
         )
-    )
     return coremltools_module
 
 
