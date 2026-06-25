@@ -29,11 +29,23 @@ REQUIRED_FIELDS = frozenset(
         "released",
     }
 )
+OPTIONAL_ENRICHMENT_FIELDS = frozenset(
+    {
+        "latency_ms",
+        "peak_ram_mb",
+        "recommended_tier",
+    }
+)
+MANIFEST_FIELDS = REQUIRED_FIELDS | OPTIONAL_ENRICHMENT_FIELDS
 BENCHMARK_FIELDS = frozenset({"dataset", "micro_f1", "recall"})
+BENCHMARK_SUITE_FIELDS = frozenset(
+    {"suite", "dataset", "micro_f1", "recall", "leakage"}
+)
 
 ALLOWED_TIERS = ("Tiny", "Small", "Base", "Medium", "Large", "XLarge")
 ALLOWED_FORMATS = ("pytorch", "mlx-fp", "mlx-8bit", "onnx", "gguf", "unknown")
 ALLOWED_LICENSES = ("apache-2.0", "other")
+ALLOWED_RECOMMENDED_TIERS = ("phone", "laptop", "workstation", "server")
 
 REPRODUCIBILITY_HASH_RE = re.compile(r"sha256:[0-9a-f]{64}$")
 RELEASED_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}$")
@@ -115,7 +127,7 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
         violations.append(
             ManifestViolation(line_number, f"missing required key: {field}")
         )
-    for field in sorted(fields - REQUIRED_FIELDS):
+    for field in sorted(fields - MANIFEST_FIELDS):
         violations.append(ManifestViolation(line_number, f"unexpected key: {field}"))
 
     _validate_non_empty_string(violations, line_number, row, "family")
@@ -234,6 +246,30 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
                 ManifestViolation(line_number, "released must match YYYY-MM-DD")
             )
 
+    if "latency_ms" in row:
+        _validate_number_map(violations, line_number, row["latency_ms"], "latency_ms")
+
+    if "peak_ram_mb" in row:
+        _validate_number_map(violations, line_number, row["peak_ram_mb"], "peak_ram_mb")
+
+    if "recommended_tier" in row:
+        value = row["recommended_tier"]
+        if value is not None and not isinstance(value, str):
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    "recommended_tier must be a string or null",
+                )
+            )
+        elif value is not None and value not in ALLOWED_RECOMMENDED_TIERS:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    "recommended_tier must be one of: "
+                    f"{_allowed(ALLOWED_RECOMMENDED_TIERS, allow_null=True)}",
+                )
+            )
+
     return violations
 
 
@@ -296,8 +332,18 @@ def _validate_benchmark(
     line_number: int,
     value: Any,
 ) -> None:
-    if not isinstance(value, dict):
-        violations.append(ManifestViolation(line_number, "benchmark must be an object"))
+    if isinstance(value, list):
+        for index, suite in enumerate(value):
+            _validate_benchmark_suite(violations, line_number, suite, index)
+        return
+
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                "benchmark must be an object or suite list",
+            )
+        )
         return
 
     fields = set(value)
@@ -313,18 +359,106 @@ def _validate_benchmark(
                     "benchmark.dataset must be a string or null",
                 )
             )
-    for metric in ("micro_f1", "recall"):
-        if metric not in value or value[metric] is None:
-            continue
-        if not isinstance(value[metric], (int, float)) or isinstance(
-            value[metric], bool
-        ):
+    for metric in ("micro_f1", "recall", "leakage"):
+        _validate_metric(
+            violations, line_number, value.get(metric), f"benchmark.{metric}"
+        )
+
+
+def _validate_benchmark_suite(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    index: int,
+) -> None:
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"benchmark[{index}] must be an object",
+            )
+        )
+        return
+
+    fields = set(value)
+    for field in sorted(BENCHMARK_SUITE_FIELDS - fields):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"benchmark[{index}] missing required key: {field}",
+            )
+        )
+
+    suite = value.get("suite")
+    if not isinstance(suite, str) or not suite:
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"benchmark[{index}].suite must be a non-empty string",
+            )
+        )
+
+    dataset = value.get("dataset")
+    if dataset is not None and not isinstance(dataset, str):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"benchmark[{index}].dataset must be a string or null",
+            )
+        )
+
+    for metric in ("micro_f1", "recall", "leakage"):
+        _validate_metric(
+            violations,
+            line_number,
+            value.get(metric),
+            f"benchmark[{index}].{metric}",
+        )
+
+
+def _validate_number_map(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    field: str,
+) -> None:
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(line_number, f"{field} must be a per-device object")
+        )
+        return
+
+    for device, measurement in value.items():
+        if not isinstance(device, str) or not device:
             violations.append(
                 ManifestViolation(
                     line_number,
-                    f"benchmark.{metric} must be a number or null",
+                    f"{field} device names must be non-empty strings",
                 )
             )
+        if not _is_number(measurement) or float(measurement) < 0:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"{field}.{device} must be a non-negative number",
+                )
+            )
+
+
+def _validate_metric(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    field: str,
+) -> None:
+    if value is not None and not _is_number(value):
+        violations.append(
+            ManifestViolation(line_number, f"{field} must be a number or null")
+        )
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
 def _allowed(values: tuple[str, ...], *, allow_null: bool = False) -> str:
