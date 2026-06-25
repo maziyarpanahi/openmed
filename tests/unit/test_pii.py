@@ -986,6 +986,72 @@ class TestShiftDate:
         result = _shift_date("02/28/2019", 366, keep_year=True)
         assert result == "02/28/2019"
 
+    def test_shift_date_dateutil_and_basic_paths_agree(self, monkeypatch):
+        """The dateutil path and the no-dateutil fallback must never diverge.
+
+        _shift_date silently switches implementation based on whether
+        python-dateutil happens to be importable (see the module-level
+        try/except ImportError). #604 and #605 each had to be fixed in both
+        places independently, which means the two paths can drift apart
+        without anyone noticing. This locks them to identical output across
+        a representative format matrix, run once with dateutil available and
+        once with it blocked.
+        """
+        pytest.importorskip(
+            "dateutil",
+            reason="without dateutil installed, both halves of this test would "
+            "run the same fallback path, making the comparison meaningless",
+        )
+
+        cases = [
+            ("01/15/2020", 30, "en", True),
+            ("03/15/22", 30, "en", False),
+            ("15-03-22", 30, "fr", False),
+            ("15.03.2022", 30, "de", False),
+            ("2020-01-15", 30, "en", False),
+            ("15 January 2020", 30, "en", False),
+            ("January 15, 2020", 30, "en", False),
+            ("02/28/2019", 366, "en", True),
+            ("01/15/2020", -30, "en", True),
+        ]
+
+        with_dateutil = [
+            _shift_date(date_str, shift, keep_year=keep_year, lang=lang)
+            for date_str, shift, lang, keep_year in cases
+        ]
+
+        original_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "dateutil" or name.startswith("dateutil."):
+                raise ImportError("dateutil unavailable")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        without_dateutil = [
+            _shift_date(date_str, shift, keep_year=keep_year, lang=lang)
+            for date_str, shift, lang, keep_year in cases
+        ]
+
+        assert with_dateutil == without_dateutil
+
+    def test_shift_date_month_first_name_without_dateutil(self, monkeypatch):
+        """Month-first English dates must not require python-dateutil."""
+        original_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "dateutil" or name.startswith("dateutil."):
+                raise ImportError("dateutil unavailable")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        assert (
+            _shift_date("January 15, 2020", 30, keep_year=False, lang="en")
+            == "February 14, 2020"
+        )
+
 
 # ---------------------------------------------------------------------------
 # _format_date_like_original Tests
@@ -996,10 +1062,10 @@ class TestFormatDateLikeOriginal:
     """Tests for the _format_date_like_original helper function.
 
     Called directly rather than through _shift_date/deidentify: this function
-    is only reachable when python-dateutil is importable, which is not the
-    case in this project's own dev/CI install (``pip install -e ".[dev]"``
-    does not pull in python-dateutil). Testing it directly keeps coverage of
-    this code path independent of whether dateutil happens to be installed.
+    is only reachable when python-dateutil is importable. python-dateutil is
+    now in the ``dev`` extra (see test_shift_date_dateutil_and_basic_paths_agree
+    below), but testing this helper directly still keeps its coverage
+    independent of that installation detail.
     """
 
     def test_us_slash_two_digit_year_keeps_slash_shape(self):
