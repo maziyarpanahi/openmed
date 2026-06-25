@@ -6,6 +6,8 @@ import types
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from openmed.mlx.artifact import (
     load_artifact_config,
     resolve_weight_candidates,
@@ -27,6 +29,32 @@ def _write_fixture(path: Path) -> Path:
                                 "end": 16,
                                 "label": "PERSON",
                                 "text": "John Doe",
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _write_boundary_fixture(path: Path) -> Path:
+    text = "A" * 100
+    path.write_text(
+        json.dumps(
+            {
+                "fixtures": [
+                    {
+                        "id": "boundary-note",
+                        "text": text,
+                        "gold_spans": [
+                            {
+                                "start": 0,
+                                "end": len(text),
+                                "label": "PERSON",
+                                "text": text,
                             }
                         ],
                     }
@@ -65,14 +93,14 @@ def _write_stub_int4_artifact(path: Path) -> Path:
 
 def _perfect_runner(fixture: Any, model_name: str, device: str) -> list[dict[str, Any]]:
     del model_name, device
-    start = fixture.text.index("John Doe")
+    span = fixture.gold_spans[0]
     return [
         {
-            "entity_group": "PERSON",
+            "entity_group": span.label,
             "score": 0.99,
-            "start": start,
-            "end": start + len("John Doe"),
-            "word": "John Doe",
+            "start": span.start,
+            "end": span.end,
+            "word": fixture.text[span.start : span.end],
         }
     ]
 
@@ -80,6 +108,21 @@ def _perfect_runner(fixture: Any, model_name: str, device: str) -> list[dict[str
 def _miss_runner(fixture: Any, model_name: str, device: str) -> list[dict[str, Any]]:
     del fixture, model_name, device
     return []
+
+
+def _one_point_loss_runner(
+    fixture: Any, model_name: str, device: str
+) -> list[dict[str, Any]]:
+    del model_name, device
+    return [
+        {
+            "entity_group": "PERSON",
+            "score": 0.99,
+            "start": 0,
+            "end": len(fixture.text) - 1,
+            "word": fixture.text[:-1],
+        }
+    ]
 
 
 def test_int4_report_certifies_artifact_within_recall_budget(tmp_path: Path) -> None:
@@ -114,6 +157,28 @@ def test_int4_report_certifies_artifact_within_recall_budget(tmp_path: Path) -> 
     assert resolve_weight_candidates(artifact, config, manifest)[0].exists()
 
 
+def test_int4_report_marks_exact_threshold_delta_uncertified(
+    tmp_path: Path,
+) -> None:
+    from openmed.mlx.convert import write_quant_recall_delta_report
+
+    artifact = _write_stub_int4_artifact(tmp_path / "artifact")
+    fixture_path = _write_boundary_fixture(tmp_path / "fixtures.json")
+
+    report = write_quant_recall_delta_report(
+        source_model_id="OpenMed/stub-token-classifier",
+        artifact_dir=artifact,
+        eval_suite_path=fixture_path,
+        quantize_group_size=32,
+        parent_runner=_perfect_runner,
+        candidate_runner=_one_point_loss_runner,
+    )
+
+    assert report["certified"] is False
+    assert report["quant_recall_delta"] == pytest.approx(0.010)
+    assert report["delta"]["offending_labels"]["PERSON"]["limit"] == 0.010
+
+
 def test_int4_report_marks_over_threshold_delta_uncertified(
     tmp_path: Path,
 ) -> None:
@@ -140,6 +205,34 @@ def test_int4_report_marks_over_threshold_delta_uncertified(
     assert manifest["certified"] is False
     assert manifest["quantization"]["certified"] is False
     assert config["_mlx_quantization"]["certified"] is False
+
+
+def test_external_recall_delta_report_path_does_not_leak_absolute_paths(
+    tmp_path: Path,
+) -> None:
+    from openmed.mlx.convert import write_quant_recall_delta_report
+
+    artifact = _write_stub_int4_artifact(tmp_path / "artifact")
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    report_path = tmp_path / "reports" / "recall_delta.json"
+
+    report = write_quant_recall_delta_report(
+        source_model_id="OpenMed/stub-token-classifier",
+        artifact_dir=artifact,
+        eval_suite_path=fixture_path,
+        output_path=report_path,
+        quantize_group_size=32,
+        parent_runner=_perfect_runner,
+        candidate_runner=_perfect_runner,
+    )
+
+    manifest, config = load_artifact_config(artifact)
+    assert manifest is not None
+    assert report["report_path"] == "recall_delta.json"
+    assert manifest["recall_delta_path"] == "recall_delta.json"
+    assert config["_mlx_quantization"]["recall_delta_path"] == "recall_delta.json"
+    assert str(tmp_path) not in report["report_path"]
+    assert str(tmp_path) not in manifest["certification"]["report_path"]
 
 
 def test_save_mlx_model_records_int4_group_size_and_loadable_manifest(
@@ -220,3 +313,60 @@ def test_save_mlx_model_records_int4_group_size_and_loadable_manifest(
     assert manifest["quantization"]["group_size"] == 32
     assert config["_mlx_quantization"]["format"] == "mlx-4bit"
     assert resolve_weight_candidates(output, config, manifest)[0].exists()
+
+
+def test_convert_runs_quant_recall_certification_for_eval_suite(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from openmed.mlx import convert as convert_module
+
+    fake_mlx = types.ModuleType("mlx")
+    fake_core = types.ModuleType("mlx.core")
+    fake_mlx.core = fake_core
+    monkeypatch.setitem(sys.modules, "mlx", fake_mlx)
+    monkeypatch.setitem(sys.modules, "mlx.core", fake_core)
+    monkeypatch.setattr(
+        convert_module,
+        "convert_weights",
+        lambda model_id, cache_dir=None: (
+            {"classifier.weight": [[0.0, 1.0]]},
+            {"num_labels": 2, "_mlx_task": "token-classification"},
+        ),
+    )
+
+    def fake_save_mlx_model(**kwargs: Any) -> Path:
+        return _write_stub_int4_artifact(Path(kwargs["output_dir"]))
+
+    report_calls: list[dict[str, Any]] = []
+
+    def fake_write_quant_recall_delta_report(**kwargs: Any) -> dict[str, Any]:
+        report_calls.append(kwargs)
+        return {"certified": True, "quant_recall_delta": 0.0}
+
+    monkeypatch.setattr(convert_module, "save_mlx_model", fake_save_mlx_model)
+    monkeypatch.setattr(
+        convert_module,
+        "write_quant_recall_delta_report",
+        fake_write_quant_recall_delta_report,
+    )
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    report_path = tmp_path / "reports" / "recall_delta.json"
+
+    output = convert_module.convert(
+        model_id="OpenMed/stub-token-classifier",
+        output_dir=tmp_path / "artifact",
+        quantize_bits=4,
+        eval_suite_path=fixture_path,
+        recall_delta_report_path=report_path,
+        quantize_group_size=32,
+    )
+
+    assert output == tmp_path / "artifact"
+    assert len(report_calls) == 1
+    assert report_calls[0]["artifact_dir"] == output
+    assert report_calls[0]["eval_suite_path"] == fixture_path
+    assert report_calls[0]["output_path"] == report_path
+    assert report_calls[0]["format_name"] == "mlx-4bit"
+    assert report_calls[0]["quantize_bits"] == 4
+    assert report_calls[0]["quantize_group_size"] == 32
