@@ -371,6 +371,33 @@ See the full [REST service guide](docs/rest-service.md).
 
 ---
 
+## Agent Skills — teach your coding agent OpenMed
+
+Hand your coding agent a ready-made playbook. [`skills/`](skills/) ships **68
+portable [Agent Skills](https://agentskills.io)** — folders with a `SKILL.md`
+that work unchanged in **Claude Code**, **OpenAI Codex**, and any agent following
+the open standard. They cover building with OpenMed directly (NER,
+de-identification, FHIR export, on-device serving, leakage-gated evaluation) plus
+the healthcare workflows upstream and downstream of it (HL7v2/FHIR/C-CDA intake,
+RxNorm/LOINC/ICD-10/SNOMED coding, US Core validation, OMOP ETL, pharmacovigilance,
+HIPAA/Part 11 checks, and more).
+
+```bash
+# Symlink into both agents (auto-updates on `git pull`)
+./install-skills.sh all            # or: claude | codex
+
+# Or copy into one agent
+cp -r skills/*/ ~/.claude/skills/   # Claude Code
+cp -r skills/*/ ~/.codex/skills/    # OpenAI Codex
+```
+
+Claude Code users can install as a plugin: `/plugin marketplace add
+maziyarpanahi/openmed` then `/plugin install openmed-skills@openmed-skills`. See
+the [skills catalog](skills/README.md); start with
+[`building-with-openmed`](skills/building-with-openmed/SKILL.md).
+
+---
+
 ## Documentation
 
 Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
@@ -381,7 +408,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
-| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | |
+| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | [Agent Skills](skills/README.md) |
 
 ---
 
