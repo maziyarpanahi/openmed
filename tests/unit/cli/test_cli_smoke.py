@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import io
 import subprocess
 import sys
-import types
 from pathlib import Path
 
 import pytest
@@ -74,51 +72,20 @@ def test_argparse_cli_parses_benchmark_pii_modes() -> None:
     assert attack_args.model == "unit-model"
 
 
-def test_tui_entry_invokes_openmed_tui(monkeypatch: pytest.MonkeyPatch) -> None:
-    launched: dict[str, object] = {}
-
-    class FakeTUI:
-        def __init__(self, **kwargs: object) -> None:
-            launched["kwargs"] = kwargs
-
-        def run(self) -> None:
-            launched["ran"] = True
-
-    fake_tui = types.ModuleType("openmed.tui")
-    fake_tui.OpenMedTUI = FakeTUI
-    monkeypatch.setitem(sys.modules, "openmed.tui", fake_tui)
-
-    result = main_module.main(
-        [
-            "tui",
-            "--model",
-            "disease_detection_superclinical",
-            "--confidence-threshold",
-            "0.6",
-        ]
-    )
-
-    assert result == 0
-    assert launched == {
-        "kwargs": {
-            "model_name": "disease_detection_superclinical",
-            "confidence_threshold": 0.6,
-        },
-        "ran": True,
-    }
-
-
-def test_tui_entry_has_base_install_fallback(
-    monkeypatch: pytest.MonkeyPatch,
+def test_argparse_cli_without_command_prints_help(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.delitem(sys.modules, "openmed.tui", raising=False)
-    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
-
-    result = main_module.main(["tui"])
+    result = main_module.main([])
 
     assert result == 0
-    assert "OpenMed TUI entry is installed" in capsys.readouterr().out
+    assert "Command-line utilities for OpenMed" in capsys.readouterr().out
+
+
+def test_tui_command_is_not_registered() -> None:
+    result = _run_module("openmed.cli.main", "tui")
+
+    assert result.returncode == 2
+    assert "invalid choice: 'tui'" in result.stderr
 
 
 def test_typer_surface_is_importable() -> None:

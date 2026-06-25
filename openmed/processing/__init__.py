@@ -5,6 +5,7 @@ from .batch import (
     BatchItem,
     BatchItemResult,
     BatchProcessor,
+    BatchProgress,
     BatchResult,
     process_batch,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "BatchProcessor",
     "BatchItem",
     "BatchItemResult",
+    "BatchProgress",
     "BatchResult",
     "process_batch",
     "sentences",

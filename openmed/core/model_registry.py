@@ -29,7 +29,10 @@ class ModelInfo:
     architecture: Optional[str] = None
     base_model: Optional[str] = None
     formats: List[str] = field(default_factory=list)
-    benchmark: Dict[str, Any] = field(default_factory=dict)
+    benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
+    latency_ms: Dict[str, float] = field(default_factory=dict)
+    peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    recommended_tier: Optional[str] = None
     arxiv: Optional[str] = None
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
@@ -173,6 +176,25 @@ _CATEGORY_ENTITY_TYPES = {
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
+    # Forward metadata for future Cardiology models; no Cardiology model is
+    # registered today (see issue #317).
+    "Cardiology": [
+        "CARDIAC_FINDING",
+        "ECG_FINDING",
+        "EJECTION_FRACTION",
+        "CARDIAC_PROCEDURE",
+        "CARDIAC_DEVICE",
+        "ANATOMY",
+    ],
+    # Forward metadata for future Dermatology/Ophthalmology models; no such
+    # model is registered today (see issue #318).
+    "Dermatology": ["SKIN_LESION", "MORPHOLOGY", "DISTRIBUTION", "ANATOMY"],
+    "Ophthalmology": [
+        "EYE_FINDING",
+        "VISUAL_ACUITY",
+        "INTRAOCULAR_PRESSURE",
+        "ANATOMY",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -378,12 +400,37 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         architecture=row.get("architecture"),
         base_model=row.get("base_model"),
         formats=list(row.get("formats") or []),
-        benchmark=dict(row.get("benchmark") or {}),
+        benchmark=_benchmark_from_row(row),
+        latency_ms=_number_map_from_row(row, "latency_ms"),
+        peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        recommended_tier=row.get("recommended_tier")
+        if isinstance(row.get("recommended_tier"), str)
+        else None,
         arxiv=row.get("arxiv"),
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
         released=row.get("released"),
     )
+
+
+def _benchmark_from_row(row: Dict[str, Any]) -> Dict[str, Any] | List[Dict[str, Any]]:
+    benchmark = row.get("benchmark")
+    if isinstance(benchmark, list):
+        return [dict(entry) for entry in benchmark if isinstance(entry, dict)]
+    if isinstance(benchmark, dict):
+        return dict(benchmark)
+    return {}
+
+
+def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, float]:
+    value = row.get(field_name)
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(device): float(measurement)
+        for device, measurement in value.items()
+        if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
+    }
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -617,53 +664,82 @@ def get_all_models() -> Dict[str, ModelInfo]:
     return OPENMED_MODELS.copy()
 
 
+_CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
+    "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
+        "Privacy",
+        "Contains PII/de-identification terms",
+    ),
+    "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
+        "Oncology",
+        "Contains cancer/oncology terms",
+    ),
+    "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
+        "Pharmaceutical",
+        "Contains pharmaceutical terms",
+    ),
+    "gene|dna|protein|mutation|chromosome": (
+        "Genomics",
+        "Contains genomic/genetic terms",
+    ),
+    "ecg|ekg|ejection fraction|arrhythmia|stent|pacemaker|murmur|st elevation|echocardiogram|cardiac|cardiolog": (
+        "Cardiology",
+        "Contains cardiology terms",
+    ),
+    "rash|lesion|macule|papule|erythema|pruritus|biopsy of skin|dermatolog|skin": (
+        "Dermatology",
+        "Contains dermatology terms",
+    ),
+    "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
+        "Ophthalmology",
+        "Contains ophthalmology terms",
+    ),
+    "heart|lung|brain|liver|kidney|organ": (
+        "Anatomy",
+        "Contains anatomical terms",
+    ),
+    "bacteria|virus|organism|species": (
+        "Species",
+        "Contains organism/species terms",
+    ),
+    "disease|condition|disorder|syndrome": (
+        "Disease",
+        "Contains disease/condition terms",
+    ),
+    "pathology|histology|biopsy": (
+        "Pathology",
+        "Contains pathological terms",
+    ),
+    "blood|lymph|leukemia|lymphoma": (
+        "Hematology",
+        "Contains hematological terms",
+    ),
+}
+
+
+def _match_categories(text: str) -> List[Tuple[str, str]]:
+    """Return ``(category, reason)`` pairs whose keywords match ``text``.
+
+    This is the routing layer behind :func:`get_model_suggestions`. It reports
+    a category whenever the text matches its keywords, independently of whether
+    any model is registered for that category (e.g. ``Cardiology`` has keyword
+    routing but no registered model yet).
+    """
+
+    text_lower = text.lower()
+    return [
+        (category, reason)
+        for pattern, (category, reason) in _CATEGORY_KEYWORDS.items()
+        if re.search(pattern, text_lower)
+    ]
+
+
 def get_model_suggestions(text: str) -> List[Tuple[str, ModelInfo, str]]:
     """Suggest appropriate models based on text content."""
-    text_lower = text.lower()
     suggestions: List[Tuple[str, ModelInfo, str]] = []
-    keywords = {
-        "pii|deidentif|hipaa|phi|protected health|patient name|ssn|medical record|privacy|anonymiz": (
-            "Privacy",
-            "Contains PII/de-identification terms",
-        ),
-        "cancer|tumor|oncolog|malign|chemotherapy|radiation": (
-            "Oncology",
-            "Contains cancer/oncology terms",
-        ),
-        "drug|medication|pharma|dose|mg|pill|tablet|cisplatin": (
-            "Pharmaceutical",
-            "Contains pharmaceutical terms",
-        ),
-        "gene|dna|protein|mutation|chromosome": (
-            "Genomics",
-            "Contains genomic/genetic terms",
-        ),
-        "heart|lung|brain|liver|kidney|organ": (
-            "Anatomy",
-            "Contains anatomical terms",
-        ),
-        "bacteria|virus|organism|species": (
-            "Species",
-            "Contains organism/species terms",
-        ),
-        "disease|condition|disorder|syndrome": (
-            "Disease",
-            "Contains disease/condition terms",
-        ),
-        "pathology|histology|biopsy": (
-            "Pathology",
-            "Contains pathological terms",
-        ),
-        "blood|lymph|leukemia|lymphoma": (
-            "Hematology",
-            "Contains hematological terms",
-        ),
-    }
 
-    for pattern, (category, reason) in keywords.items():
-        if re.search(pattern, text_lower):
-            for key in CATEGORIES.get(category, [])[:3]:
-                suggestions.append((key, OPENMED_MODELS[key], reason))
+    for category, reason in _match_categories(text):
+        for key in CATEGORIES.get(category, [])[:3]:
+            suggestions.append((key, OPENMED_MODELS[key], reason))
 
     if not suggestions:
         for key in SIZE_RECOMMENDATIONS.get("balanced", [])[:3]:

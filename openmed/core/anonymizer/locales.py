@@ -10,6 +10,18 @@ Notes:
   callers as a ``UserWarning`` the first time it's used.
 - Portuguese defaults to ``pt_PT``; pass ``locale="pt_BR"`` explicitly to
   generate Brazilian-Portuguese surrogates (matters for CPF/CNPJ context).
+
+Regression contract (OM-135):
+- Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
+  :data:`LANG_TO_LOCALE` entry whose locale exists in Faker (or is a
+  documented approximation in :data:`_APPROXIMATE_LOCALES`).
+- Every language with a checksum-validated national ID must appear in
+  :data:`NATIONAL_ID_PROVIDERS`, and its generated surrogates must round-trip
+  that language's registered validator in :mod:`openmed.core.pii_i18n`.
+- Only the documented approximations may emit the locale ``UserWarning``.
+  ``tests/unit/core/test_locale_coherence.py`` gates all three so a new
+  language pack mis-wired to a wrong locale or provider fails loudly. Use
+  :func:`locale_coherence_report` for a per-language summary.
 """
 
 from __future__ import annotations
@@ -37,6 +49,30 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
 _APPROXIMATE_LOCALES: Final = frozenset({"te"})
+
+
+# Per-language national-ID surrogate providers — the single source of truth for
+# the OM-135 round-trip fidelity suite. Maps each language that has a
+# checksum-validated national ID to the ``(faker_locale, faker_method)`` whose
+# generated surrogates pass that language's registered validator(s) in
+# :mod:`openmed.core.pii_i18n`. The locale here can differ from the language's
+# default display locale when the registered validators target another country's
+# format: Portuguese national-ID validation is Brazilian CPF/CNPJ, so ``pt``
+# draws ID surrogates from ``pt_BR`` even though its default locale (names,
+# addresses, ...) stays ``pt_PT``. The method must match the registry's
+# locale-aware dispatch (``registry._LOCALE_ID_METHODS``); the regression suite
+# asserts that and the round-trip.
+NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
+    "en": ("en_US", "ssn"),
+    "fr": ("fr_FR", "ssn"),  # NIR / INSEE
+    "de": ("de_DE", "german_steuer_id"),  # Steuer-ID
+    "it": ("it_IT", "ssn"),  # Codice Fiscale
+    "es": ("es_ES", "nie"),  # NIE
+    "nl": ("nl_NL", "ssn"),  # BSN
+    "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
+    "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
+    "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+}
 
 _warned: set[str] = set()
 
@@ -71,4 +107,45 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
     return locale
 
 
-__all__ = ["LANG_TO_LOCALE", "resolve_locale"]
+def locale_coherence_report() -> list[dict[str, object]]:
+    """Return one locale-coherence row per supported language.
+
+    Each row is a plain JSON-friendly ``dict`` (so the status/leaderboard work
+    can reuse it) with:
+
+      - ``language``: the OpenMed ISO 639-1 code.
+      - ``locale``: the default Faker locale it resolves to (no warning side
+        effect — read straight from :data:`LANG_TO_LOCALE`).
+      - ``approximate``: ``True`` when that default locale is a documented
+        approximation rather than a native match.
+      - ``id_providers``: national-ID Faker method names whose surrogates
+        round-trip the language's registered checksum validator (empty when the
+        language has no checksummed national-ID surrogate provider).
+      - ``id_locale``: the Faker locale those providers are drawn from, or
+        ``None``. Usually equals ``locale``; differs when the registered
+        validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
+    """
+    from ..pii_i18n import SUPPORTED_LANGUAGES  # lazy: avoid import cycle
+
+    rows: list[dict[str, object]] = []
+    for lang in sorted(SUPPORTED_LANGUAGES):
+        provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
+        id_locale, id_method = provider if provider else (None, None)
+        rows.append(
+            {
+                "language": lang,
+                "locale": LANG_TO_LOCALE.get(lang, LANG_TO_LOCALE["en"]),
+                "approximate": lang in _APPROXIMATE_LOCALES,
+                "id_providers": [id_method] if id_method else [],
+                "id_locale": id_locale,
+            }
+        )
+    return rows
+
+
+__all__ = [
+    "LANG_TO_LOCALE",
+    "NATIONAL_ID_PROVIDERS",
+    "locale_coherence_report",
+    "resolve_locale",
+]
