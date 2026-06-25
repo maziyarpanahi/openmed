@@ -201,7 +201,7 @@ _NOTE_HEADER_KEYS = frozenset(
 )
 
 _HASH_LABELS = frozenset({ID_NUM, ACCOUNT_NUMBER, USERNAME})
-_DATE_LABELS = frozenset({DATE, DATE_OF_BIRTH})
+_DATE_SHIFT_LABELS = frozenset({DATE})
 
 _SSN_RE = re.compile(r"^\s*\d{3}-\d{2}-\d{4}\s*$")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -659,7 +659,7 @@ def _class_from_label(canonical_label: str) -> tuple[str, str | None]:
 
 
 def _default_action(canonical_label: str, assigned_class: str) -> str:
-    if canonical_label in _DATE_LABELS:
+    if canonical_label in _DATE_SHIFT_LABELS:
         return ACTION_DATE_SHIFT
     if canonical_label in _HASH_LABELS:
         return ACTION_HASH

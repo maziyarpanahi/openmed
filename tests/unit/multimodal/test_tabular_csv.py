@@ -73,6 +73,22 @@ def test_columns_are_detected_by_value_sampling_without_phi_headers():
     assert manifest["subject"]["detection_source"] == "value_sample"
 
 
+def test_date_of_birth_columns_default_to_mask_not_keep_year_shift():
+    source = "patient_name,dob,visit_date\nJohn Doe,1980-01-01,2026-04-01\n"
+
+    result = redact_table(source, date_shift_days=30, keep_year=True)
+    rows = _rows(result.text)
+    manifest = {entry["column_name"]: entry for entry in result.manifest}
+
+    assert rows[0]["dob"] == "[DATE_OF_BIRTH]"
+    assert rows[0]["visit_date"] == "2026-05-01"
+    assert manifest["dob"]["assigned_class"] == DIRECT_ID
+    assert manifest["dob"]["action"] == ACTION_MASK
+    assert manifest["visit_date"]["assigned_class"] == QUASI_ID
+    assert manifest["visit_date"]["action"] == ACTION_DATE_SHIFT
+    assert "1980" not in result.text
+
+
 def test_manifest_lists_each_column_class_and_action_without_raw_phi():
     result = redact_table(
         FIXTURES / "synthetic_phi.csv",
