@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import math
+from types import SimpleNamespace
 
 import pytest
 
 from openmed.training import load_preset
 from openmed.training.distill import (
+    ModeADistillationPipeline,
     build_distillation_report,
     compute_kd_loss,
     decode_repaired_spans,
@@ -46,6 +49,41 @@ def test_kd_loss_collapses_to_ce_when_alpha_zero_temperature_one():
     assert loss.span_transfer > 0
     assert loss.total == pytest.approx(expected_ce)
     assert loss.to_dict()["total"] == pytest.approx(expected_ce)
+
+
+def test_kd_loss_alpha_zero_does_not_require_teacher_outputs():
+    student_logits = [
+        [[2.0, 0.0, -1.0], [0.0, 3.0, -2.0]],
+    ]
+    hard_labels = [[0, 1]]
+
+    loss = compute_kd_loss(
+        student_logits=student_logits,
+        hard_labels=hard_labels,
+        temperature=1.0,
+        alpha=0.0,
+    )
+
+    expected_ce = (
+        sum(
+            -_log_softmax(row)[label]
+            for row, label in zip(student_logits[0], hard_labels[0])
+        )
+        / 2
+    )
+    assert loss.hard_ce == pytest.approx(expected_ce)
+    assert loss.soft_kl == pytest.approx(0.0)
+    assert loss.total == pytest.approx(expected_ce)
+
+
+def test_kd_loss_requires_teacher_outputs_when_teacher_weight_is_active():
+    with pytest.raises(ValueError, match="alpha > 0"):
+        compute_kd_loss(
+            student_logits=[[[2.0, 0.0], [0.0, 2.0]]],
+            hard_labels=[[0, 1]],
+            temperature=1.0,
+            alpha=0.5,
+        )
 
 
 def test_span_logit_transfer_term_is_computed_and_weighted():
@@ -103,6 +141,38 @@ def test_repaired_spans_reuse_core_decoding_and_refine_offsets():
     assert span_logits_from_repaired_spans(spans) == (((0.0, 8.0),),)
 
 
+def test_repaired_spans_filter_special_tokens_before_viterbi(monkeypatch):
+    captured_lengths = []
+
+    def fake_viterbi_decode(token_logprobs, *, label_info, biases):
+        captured_lengths.append(len(token_logprobs))
+        return [1, 2]
+
+    monkeypatch.setattr(
+        "openmed.training.distill.viterbi_decode",
+        fake_viterbi_decode,
+    )
+
+    spans = decode_repaired_spans(
+        [
+            [
+                [0.0, 99.0, 0.0],
+                [0.0, 8.0, 0.0],
+                [0.0, 0.0, 8.0],
+                [0.0, 99.0, 0.0],
+            ]
+        ],
+        {0: "O", 1: "B-NAME", 2: "E-NAME"},
+        texts=["Jane"],
+        offset_mapping=[[(0, 0), (0, 2), (2, 4), (0, 0)]],
+    )
+
+    assert captured_lengths == [2]
+    assert [(span.token_start, span.token_end) for span in spans[0]] == [(1, 3)]
+    assert spans[0][0].start == 0
+    assert spans[0][0].end == 4
+
+
 def test_distillation_report_records_recall_deltas_and_critical_drops():
     report = build_distillation_report(
         teacher_id="teacher-local",
@@ -122,6 +192,84 @@ def test_distillation_report_records_recall_deltas_and_critical_drops():
     assert payload["critical_label_drops"] == ["EMAIL"]
     assert payload["recall_gate_passed"] is False
     assert report.model_card_evidence()["distillation"] == payload
+
+
+def test_distillation_report_writes_deterministic_json(tmp_path):
+    report = build_distillation_report(
+        teacher_id="teacher-local",
+        student_backbone="openmed/backbones/tiny-direct-identifier-135m",
+        temperature=2.0,
+        alpha=0.6,
+        teacher_recall_by_label={"EMAIL": 0.99},
+        student_recall_by_label={"EMAIL": 0.98},
+        critical_labels=("EMAIL",),
+    )
+
+    report_path = report.write_json(tmp_path / "distillation_report.json")
+
+    assert report_path.read_text(encoding="utf-8") == report.to_json()
+    assert json.loads(report_path.read_text(encoding="utf-8")) == report.to_dict()
+
+
+def test_mode_a_pipeline_builds_teacher_targets_and_student_loss():
+    torch = pytest.importorskip("torch")
+
+    class FakeTokenizer:
+        def __call__(self, texts, **kwargs):
+            assert texts == ["alice@example.test ok"]
+            assert kwargs["return_offsets_mapping"] is True
+            return {
+                "attention_mask": torch.tensor([[1, 1]]),
+                "input_ids": torch.tensor([[101, 102]]),
+                "offset_mapping": [[(0, len("alice@example.test")), (19, 21)]],
+            }
+
+    class FakeTeacher:
+        config = SimpleNamespace(id2label={0: "O", 1: "S-EMAIL"})
+
+        def parameters(self):
+            yield torch.zeros(())
+
+        def __call__(self, **model_inputs):
+            assert set(model_inputs) == {"attention_mask", "input_ids"}
+            return SimpleNamespace(
+                logits=torch.tensor([[[0.0, 8.0], [8.0, 0.0]]]),
+                span_logits=torch.tensor([[[0.0, 8.0]]]),
+            )
+
+    class FakeStudent:
+        def __call__(self, **model_inputs):
+            assert set(model_inputs) == {"attention_mask", "input_ids"}
+            return SimpleNamespace(
+                logits=torch.tensor([[[0.5, 7.5], [7.0, 0.5]]]),
+                span_logits=torch.tensor([[[0.25, 7.75]]]),
+            )
+
+    pipeline = ModeADistillationPipeline(
+        teacher_id="teacher-local",
+        student_backbone="tiny-local",
+        teacher_model=FakeTeacher(),
+        student_model=FakeStudent(),
+        tokenizer=FakeTokenizer(),
+        temperature=2.0,
+        alpha=0.5,
+        span_loss_weight=0.25,
+    )
+
+    targets = pipeline.teacher_targets("alice@example.test ok")
+    loss = pipeline.student_loss(
+        model_inputs={
+            "attention_mask": torch.tensor([[1, 1]]),
+            "input_ids": torch.tensor([[101, 102]]),
+        },
+        hard_labels=torch.tensor([[1, 0]]),
+        teacher_targets=targets,
+    )
+
+    assert targets.teacher_id == "teacher-local"
+    assert targets.repaired_spans[0][0].label == "EMAIL"
+    assert loss.total.item() >= 0.0
+    assert loss.span_transfer.item() > 0.0
 
 
 def _log_softmax(values):

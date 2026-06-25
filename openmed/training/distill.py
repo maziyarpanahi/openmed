@@ -7,8 +7,10 @@ uses optional ``torch`` and ``transformers`` imports inside the runtime path.
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.decoding import (
@@ -137,6 +139,19 @@ class DistillationReport:
             "temperature": self.temperature,
         }
 
+    def to_json(self) -> str:
+        """Return deterministic JSON evidence for release artifacts."""
+
+        return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
+
+    def write_json(self, path: str | Path) -> Path:
+        """Write deterministic distillation report JSON to *path*."""
+
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(self.to_json(), encoding="utf-8")
+        return path
+
     def model_card_evidence(self) -> dict[str, Any]:
         """Return the report nested as a model-card evidence block."""
 
@@ -208,8 +223,10 @@ def compute_kd_loss(
     """
 
     _validate_kd_weights(alpha, temperature, span_loss_weight)
-    if teacher_logits is None and teacher_soft_labels is None:
-        raise ValueError("teacher_logits or teacher_soft_labels is required")
+    if alpha > 0.0 and teacher_logits is None and teacher_soft_labels is None:
+        raise ValueError(
+            "teacher_logits or teacher_soft_labels is required when alpha > 0"
+        )
 
     if _is_torch_tensor(student_logits):
         return _compute_torch_kd_loss(
@@ -268,12 +285,20 @@ def decode_repaired_spans(
     offsets = _as_optional_batch_offsets(offset_mapping)
     batches: list[tuple[RepairedSpan, ...]] = []
     for batch_index, sample_logits in enumerate(batch_logits):
-        token_logprobs = [_log_softmax(row) for row in sample_logits]
+        sample_offsets = offsets[batch_index] if offsets is not None else None
+        indexed_logits = _valid_indexed_logits(sample_logits, sample_offsets)
+        if not indexed_logits:
+            batches.append(())
+            continue
+
+        token_logprobs = [_log_softmax(row) for _, row in indexed_logits]
         path = viterbi_decode(token_logprobs, label_info=label_info, biases=biases)
-        labels_by_index = _labels_by_valid_offsets(path, offsets, batch_index)
+        labels_by_index = {
+            token_index: label
+            for (token_index, _), label in zip(indexed_logits, path, strict=True)
+        }
         token_spans = labels_to_token_spans(labels_by_index, label_info)
         text = texts[batch_index] if texts is not None else None
-        sample_offsets = offsets[batch_index] if offsets is not None else None
 
         repaired: list[RepairedSpan] = []
         for span_label, token_start, token_end in token_spans:
@@ -561,7 +586,11 @@ def _compute_torch_kd_loss(
         hard_ce = student_logits.sum() * 0.0
 
     if teacher_soft_labels is None:
-        teacher_probs = functional.softmax(teacher_logits / temperature, dim=-1)
+        teacher_probs = (
+            functional.softmax(teacher_logits / temperature, dim=-1)
+            if teacher_logits is not None
+            else None
+        )
     else:
         teacher_probs = _torch_tensor(
             teacher_soft_labels,
@@ -569,16 +598,19 @@ def _compute_torch_kd_loss(
             device=student_logits.device,
             dtype=student_logits.dtype,
         )
-    kl_rows = functional.kl_div(
-        functional.log_softmax(student_logits / temperature, dim=-1),
-        teacher_probs,
-        reduction="none",
-    ).sum(dim=-1)
-    soft_kl = (
-        kl_rows[valid].mean() * (temperature * temperature)
-        if bool(valid.any())
-        else hard_ce * 0.0
-    )
+    if teacher_probs is None:
+        soft_kl = hard_ce * 0.0
+    else:
+        kl_rows = functional.kl_div(
+            functional.log_softmax(student_logits / temperature, dim=-1),
+            teacher_probs,
+            reduction="none",
+        ).sum(dim=-1)
+        soft_kl = (
+            kl_rows[valid].mean() * (temperature * temperature)
+            if bool(valid.any())
+            else hard_ce * 0.0
+        )
     span_transfer = _torch_span_transfer(
         student_span_logits,
         teacher_span_logits,
@@ -621,6 +653,9 @@ def _compute_python_kd_loss(
     else:
         ce_values = []
         kl_values = []
+        has_teacher_terms = (
+            teacher_logits is not None or teacher_soft_labels is not None
+        )
         teacher_logits_batch = (
             _as_batched_logits(teacher_logits) if teacher_logits is not None else None
         )
@@ -631,6 +666,8 @@ def _compute_python_kd_loss(
         )
         for batch_index, token_index, student_row, label in valid_rows:
             ce_values.append(-_log_softmax(student_row)[label])
+            if not has_teacher_terms:
+                continue
             student_log_probs = _log_softmax(student_row, temperature=temperature)
             if teacher_probs_batch is not None:
                 teacher_probs = teacher_probs_batch[batch_index][token_index]
@@ -643,7 +680,11 @@ def _compute_python_kd_loss(
                 raise ValueError("teacher logits or soft labels are required")
             kl_values.append(_kl_divergence(teacher_probs, student_log_probs))
         hard_ce = sum(ce_values) / len(ce_values)
-        soft_kl = (sum(kl_values) / len(kl_values)) * (temperature * temperature)
+        soft_kl = (
+            (sum(kl_values) / len(kl_values)) * (temperature * temperature)
+            if kl_values
+            else 0.0
+        )
 
     span_transfer = _python_span_transfer(student_span_logits, teacher_span_logits)
     total = (1.0 - alpha) * hard_ce + alpha * (
@@ -740,23 +781,22 @@ def _python_span_transfer(
     return sum(squared) / len(squared)
 
 
-def _labels_by_valid_offsets(
-    path: Sequence[int],
-    offsets: tuple[tuple[tuple[int, int], ...], ...] | None,
-    batch_index: int,
-) -> dict[int, int]:
-    if offsets is None:
-        return {index: label for index, label in enumerate(path)}
-    sample_offsets = offsets[batch_index]
-    labels = {}
-    for index, label in enumerate(path):
+def _valid_indexed_logits(
+    sample_logits: Sequence[Sequence[float]],
+    sample_offsets: Sequence[tuple[int, int]] | None,
+) -> list[tuple[int, Sequence[float]]]:
+    if sample_offsets is None:
+        return list(enumerate(sample_logits))
+
+    indexed_logits = []
+    for index, row in enumerate(sample_logits):
         if index >= len(sample_offsets):
             break
         start, end = sample_offsets[index]
         if start == end == 0:
             continue
-        labels[index] = label
-    return labels
+        indexed_logits.append((index, row))
+    return indexed_logits
 
 
 def _char_offsets_for_token_span(
