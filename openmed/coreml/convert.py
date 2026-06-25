@@ -86,22 +86,31 @@ def convert(
     Returns:
         Path to the created ``.mlpackage``.
     """
-    try:
-        import coremltools as ct
-        import torch
-        from transformers import AutoModelForTokenClassification, AutoTokenizer
-    except ImportError as e:
-        raise ImportError(
-            f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
-        )
-
     output_path = Path(output_path)
+    _validate_compute_precision(compute_precision)
+    _validate_compute_units_choice(compute_units)
     quantize = _validate_quantize(quantize)
     quantized_output = _resolve_quantized_output_path(
         output_path,
         quantize,
         quantized_output_path,
     )
+
+    try:
+        import coremltools as ct
+        import torch
+        from transformers import (
+            AutoConfig,
+            AutoModelForTokenClassification,
+            AutoTokenizer,
+        )
+    except ImportError as e:
+        raise ImportError(
+            f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
+        )
+
+    source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
+    model_type = resolve_supported_model_type(source_config)
 
     # 1. Load model and tokenizer
     logger.info("Loading HuggingFace model %s ...", model_id)
@@ -111,7 +120,6 @@ def convert(
         cache_dir=cache_dir,
     )
     model.eval()
-    model_type = resolve_supported_model_type(model.config)
 
     num_labels = model.config.num_labels
     id2label = model.config.id2label
@@ -150,9 +158,6 @@ def convert(
 
     # 4. Convert to CoreML
     logger.info("Converting to CoreML (%s precision) ...", compute_precision)
-    if compute_precision not in {"float16", "float32"}:
-        raise ValueError("compute_precision must be either 'float16' or 'float32'.")
-
     ct_precision = (
         ct.precision.FLOAT16 if compute_precision == "float16" else ct.precision.FLOAT32
     )
@@ -301,9 +306,7 @@ def _infer_model_type_from_architectures(architectures) -> str | None:
 
 
 def _resolve_compute_units(ct, compute_units: str):
-    if compute_units not in _COMPUTE_UNIT_ATTRS:
-        choices = ", ".join(COMPUTE_UNIT_CHOICES)
-        raise ValueError(f"compute_units must be one of: {choices}.")
+    _validate_compute_units_choice(compute_units)
 
     attr = _COMPUTE_UNIT_ATTRS[compute_units]
     try:
@@ -313,6 +316,17 @@ def _resolve_compute_units(ct, compute_units: str):
             "Installed coremltools does not expose compute unit "
             f"{attr!r}; update coremltools or choose another compute_units value."
         ) from exc
+
+
+def _validate_compute_precision(compute_precision: str) -> None:
+    if compute_precision not in {"float16", "float32"}:
+        raise ValueError("compute_precision must be either 'float16' or 'float32'.")
+
+
+def _validate_compute_units_choice(compute_units: str) -> None:
+    if compute_units not in _COMPUTE_UNIT_ATTRS:
+        choices = ", ".join(COMPUTE_UNIT_CHOICES)
+        raise ValueError(f"compute_units must be one of: {choices}.")
 
 
 def _validate_quantize(quantize: str | None) -> str | None:
@@ -331,6 +345,8 @@ def _resolve_quantized_output_path(
     quantized_output_path: str | Path | None,
 ) -> Path | None:
     if quantize is None:
+        if quantized_output_path is not None:
+            raise ValueError("quantized_output_path requires quantize='int8'.")
         return None
     if quantized_output_path is not None:
         return Path(quantized_output_path)
