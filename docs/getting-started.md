@@ -36,6 +36,16 @@ PaddleOCR is available as a heavier opt-in OCR backend:
 uv pip install ".[ocr-paddle]"
 ```
 
+CDA/C-CDA XML de-identification is available in the core install. It redacts
+structured header PHI, sweeps CDA section narrative text, keeps XML parseable,
+and only routes `.xml` files that look like CDA documents:
+
+```python
+from openmed.interop.cda import redact_cda
+
+redacted_xml = redact_cda("synthetic_ccda.xml", date_shift_days=30)
+```
+
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
 ```bash

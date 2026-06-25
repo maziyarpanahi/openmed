@@ -43,7 +43,15 @@ BENCHMARK_SUITE_FIELDS = frozenset(
 )
 
 ALLOWED_TIERS = ("Tiny", "Small", "Base", "Medium", "Large", "XLarge")
-ALLOWED_FORMATS = ("pytorch", "mlx-fp", "mlx-8bit", "onnx", "gguf", "unknown")
+ALLOWED_FORMATS = (
+    "pytorch",
+    "mlx-fp",
+    "mlx-8bit",
+    "mlx-4bit",
+    "onnx",
+    "gguf",
+    "unknown",
+)
 ALLOWED_LICENSES = ("apache-2.0", "other")
 ALLOWED_RECOMMENDED_TIERS = ("phone", "laptop", "workstation", "server")
 

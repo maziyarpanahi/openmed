@@ -23,6 +23,12 @@ class AdapterSpec:
 
 
 _ADAPTERS: Final[dict[str, AdapterSpec]] = {
+    "cda": AdapterSpec(
+        name="cda",
+        module="openmed.interop.cda",
+        extra="core",
+        description="CDA/C-CDA XML de-identification adapter",
+    ),
     "hl7v2": AdapterSpec(
         name="hl7v2",
         module="openmed.interop.hl7v2",
