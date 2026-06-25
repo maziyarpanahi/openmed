@@ -135,6 +135,81 @@ class TestCardiologyRouting:
 
 
 # ---------------------------------------------------------------------------
+# Dermatology and ophthalmology domains (issue #318)
+# ---------------------------------------------------------------------------
+
+
+class TestSpecialtyDomains:
+    EXPECTED = {
+        "dermatology": ["SkinLesion", "Morphology", "Distribution", "Anatomy"],
+        "ophthalmology": [
+            "EyeFinding",
+            "VisualAcuity",
+            "IntraocularPressure",
+            "Anatomy",
+        ],
+    }
+
+    def test_domains_in_available_domains(self):
+        domains = available_domains()
+        assert "dermatology" in domains
+        assert "ophthalmology" in domains
+
+    def test_get_default_labels_returns_expected_sets(self):
+        for domain, expected in self.EXPECTED.items():
+            labels = get_default_labels(domain)
+            assert labels  # non-empty
+            assert labels == expected
+
+    def test_specialty_labels_have_no_duplicates(self):
+        for domain in self.EXPECTED:
+            labels = get_default_labels(domain)
+            lowered = [label.lower() for label in labels]
+            assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Dermatology and ophthalmology routing in model_registry (issue #318)
+# ---------------------------------------------------------------------------
+
+
+class TestSpecialtyRouting:
+    DERM_TEXT = "Erythematous macule with pruritus noted on the forearm"
+    OPHTH_TEXT = (
+        "Fundus exam shows elevated intraocular pressure consistent with glaucoma"
+    )
+
+    def test_match_categories_routes_dermatology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.DERM_TEXT)
+        ]
+        assert "Dermatology" in categories
+
+    def test_match_categories_routes_ophthalmology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.OPHTH_TEXT)
+        ]
+        assert "Ophthalmology" in categories
+
+    def test_specialties_are_registry_metadata_not_live_categories(self):
+        # Forward metadata for future models; no specialty model exists today.
+        from openmed.core.model_registry import CATEGORIES
+
+        for category in ("Dermatology", "Ophthalmology"):
+            assert category in _CATEGORY_ENTITY_TYPES
+            assert category not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_specialties(self):
+        for text in (self.DERM_TEXT, self.OPHTH_TEXT):
+            suggestions = get_model_suggestions(text)
+            assert suggestions  # still returns something useful
+            assert all(
+                info.category not in {"Dermatology", "Ophthalmology"}
+                for _key, info, _reason in suggestions
+            )
+
+
+# ---------------------------------------------------------------------------
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
 

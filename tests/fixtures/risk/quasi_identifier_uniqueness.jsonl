@@ -1,0 +1,5 @@
+{"kind":"meta","version":1,"suite":"quasi_identifier_uniqueness","description":"Synthetic redacted table rows whose quasi-identifier equivalence classes must remain non-singleton.","expected":{"min_k":2,"singleton_record_ids":[]}}
+{"kind":"record","record_id":"qi-pair-a-1","synthetic":true,"age":72,"city":"Riverton","visit_date":"2025-03-01","condition":"routine follow up"}
+{"kind":"record","record_id":"qi-pair-a-2","synthetic":true,"age":72,"city":"Riverton","visit_date":"2025-03-01","condition":"routine follow up"}
+{"kind":"record","record_id":"qi-pair-b-1","synthetic":true,"age":68,"city":"Lakeside","visit_date":"2025-03-08","condition":"hypertension review"}
+{"kind":"record","record_id":"qi-pair-b-2","synthetic":true,"age":68,"city":"Lakeside","visit_date":"2025-03-08","condition":"hypertension review"}

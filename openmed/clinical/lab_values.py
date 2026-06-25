@@ -1,165 +1,230 @@
-"""Utilities for parsing and interpreting clinical lab value ranges.
-
-Derived abnormal flags are heuristic convenience metadata for downstream
-structuring. They are not a substitute for the source laboratory's own flagging
-or for clinical review. Unit conversion and critical thresholds beyond explicit
-flags are intentionally out of scope.
-"""
+"""Deterministic laboratory reference-range helpers."""
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Literal, TypedDict
 
-ReferenceRange = dict[str, float | bool | None]
 AbnormalFlag = Literal["low", "normal", "high", "critical", "unknown"]
 
-_NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)"
-_NUMBER_RE = re.compile(_NUMBER)
-_RANGE_RE = re.compile(
-    rf"^\s*(?P<low>{_NUMBER})\s*(?:-|–|—|to)\s*(?P<high>{_NUMBER})\s*$",
-    re.IGNORECASE,
-)
-_BOUND_RE = re.compile(
-    rf"^\s*(?P<op><=|>=|<|>|≤|≥)\s*(?P<value>{_NUMBER})\s*$",
-    re.IGNORECASE,
+
+class ReferenceRange(TypedDict):
+    """Parsed numeric reference-range bounds."""
+
+    low: float | None
+    high: float | None
+    low_inclusive: bool
+    high_inclusive: bool
+
+
+LAB_FLAG_ADVISORY = (
+    "Derived lab abnormal flags are heuristic and are not a substitute for the "
+    "originating laboratory's own formal diagnostic flagging."
 )
 
-_EXPLICIT_FLAG_ALIASES: dict[str, AbnormalFlag] = {
-    "c": "critical",
-    "crit": "critical",
-    "critical": "critical",
-    "critical high": "critical",
-    "critical low": "critical",
-    "l": "low",
-    "low": "low",
-    "h": "high",
-    "high": "high",
-    "n": "normal",
-    "normal": "normal",
+_EN_DASH = "\u2013"
+_EM_DASH = "\u2014"
+_LESS_THAN_OR_EQUAL = "\u2264"
+_GREATER_THAN_OR_EQUAL = "\u2265"
+_NUMERIC = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+_RANGE_RE = re.compile(
+    rf"^(?P<low>{_NUMERIC})\s*(?:-|to|{_EN_DASH}|{_EM_DASH})\s*"
+    rf"(?P<high>{_NUMERIC})$",
+    re.IGNORECASE,
+)
+_ONE_SIDED_RE = re.compile(
+    rf"^(?P<operator><=|>=|<|>|{_LESS_THAN_OR_EQUAL}|"
+    rf"{_GREATER_THAN_OR_EQUAL})\s*(?P<bound>{_NUMERIC})$"
+)
+
+_EXPLICIT_FLAGS: Mapping[str, AbnormalFlag] = {
+    "H": "high",
+    "HIGH": "high",
+    "L": "low",
+    "LOW": "low",
+    "C": "critical",
+    "CRIT": "critical",
+    "CRITICAL": "critical",
+    "CRITICAL HIGH": "critical",
+    "CRITICAL LOW": "critical",
+    "HH": "critical",
+    "LL": "critical",
+    "N": "normal",
+    "NORMAL": "normal",
 }
 
 
-def parse_reference_range(text: str | None) -> ReferenceRange:
-    """Parse a lab reference range string into comparable numeric bounds.
-
-    Supported forms include closed ranges such as ``"135-145"`` and
-    one-sided bounds such as ``"<5"``, ``"<=5"``, ``">10"``, and ``">=10"``.
-    Unknown or unsupported input returns an unbounded range with ``None`` for
-    both bounds and inclusivity fields.
-    """
-    result: ReferenceRange = {
+def _empty_reference_range() -> ReferenceRange:
+    return {
         "low": None,
         "high": None,
-        "low_inclusive": None,
-        "high_inclusive": None,
+        "low_inclusive": True,
+        "high_inclusive": True,
     }
-    if text is None:
+
+
+def _finite_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def parse_reference_range(text: object) -> ReferenceRange:
+    """Parse a laboratory reference range into numeric bounds.
+
+    Supported forms are closed ranges such as ``"135-145"``, ``"0.5 - 1.2"``,
+    and ``"135 to 145"``, plus one-sided bounds such as ``"<5"``, ``"<=5"``,
+    ``">10"``, and ``">=10"``. Units are intentionally ignored rather than
+    parsed or converted.
+
+    Args:
+        text: Raw reference-range text.
+
+    Returns:
+        A mapping with ``low``, ``high``, ``low_inclusive``, and
+        ``high_inclusive`` keys. Unparseable or contradictory ranges return
+        empty bounds instead of guessing.
+    """
+
+    result = _empty_reference_range()
+    if not isinstance(text, str):
         return result
 
-    normalized = str(text).strip()
+    normalized = text.strip()
     if not normalized:
         return result
 
-    range_match = _RANGE_RE.match(normalized)
-    if range_match:
-        low = float(range_match.group("low"))
-        high = float(range_match.group("high"))
-        if low <= high:
-            result.update(
-                {
-                    "low": low,
-                    "high": high,
-                    "low_inclusive": True,
-                    "high_inclusive": True,
-                }
-            )
+    if range_match := _RANGE_RE.fullmatch(normalized):
+        low = _finite_float(range_match.group("low"))
+        high = _finite_float(range_match.group("high"))
+        if low is None or high is None or low > high:
+            return result
+        result["low"] = low
+        result["high"] = high
         return result
 
-    bound_match = _BOUND_RE.match(normalized)
-    if not bound_match:
+    if one_sided_match := _ONE_SIDED_RE.fullmatch(normalized):
+        bound = _finite_float(one_sided_match.group("bound"))
+        if bound is None:
+            return result
+
+        operator = one_sided_match.group("operator")
+        if operator in {"<", "<=", _LESS_THAN_OR_EQUAL}:
+            result["high"] = bound
+            result["high_inclusive"] = operator in {"<=", _LESS_THAN_OR_EQUAL}
+        else:
+            result["low"] = bound
+            result["low_inclusive"] = operator in {">=", _GREATER_THAN_OR_EQUAL}
         return result
 
-    operator = bound_match.group("op")
-    value = float(bound_match.group("value"))
-    if operator in {"<", "<=", "≤"}:
-        result["high"] = value
-        result["high_inclusive"] = operator in {"<=", "≤"}
-    elif operator in {">", ">=", "≥"}:
-        result["low"] = value
-        result["low_inclusive"] = operator in {">=", "≥"}
     return result
 
 
+def _bool_or_default(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    return default
+
+
+def _normalize_reference_range(
+    reference_range: Mapping[str, object] | str | None,
+) -> ReferenceRange:
+    if isinstance(reference_range, str):
+        return parse_reference_range(reference_range)
+    if not isinstance(reference_range, Mapping):
+        return _empty_reference_range()
+
+    raw_low = reference_range.get("low")
+    raw_high = reference_range.get("high")
+    low = _finite_float(raw_low)
+    high = _finite_float(raw_high)
+
+    if raw_low is not None and low is None:
+        return _empty_reference_range()
+    if raw_high is not None and high is None:
+        return _empty_reference_range()
+    if low is not None and high is not None and low > high:
+        return _empty_reference_range()
+
+    return {
+        "low": low,
+        "high": high,
+        "low_inclusive": _bool_or_default(
+            reference_range.get("low_inclusive"),
+            True,
+        ),
+        "high_inclusive": _bool_or_default(
+            reference_range.get("high_inclusive"),
+            True,
+        ),
+    }
+
+
 def derive_abnormal_flag(
-    value: float | int | str | None,
-    reference_range: Mapping[str, Any] | None,
+    value: object,
+    reference_range: Mapping[str, object] | str | None,
     explicit_flag: str | None = None,
 ) -> AbnormalFlag:
-    """Derive a heuristic abnormality flag from a value and reference range.
+    """Derive a laboratory abnormal flag from a value and reference range.
 
-    Explicit ``H``/``L``/``critical`` style flags take precedence. Otherwise
-    the numeric value is compared against the parsed bounds. Non-numeric
-    values, unparseable ranges, and unknown explicit flags return ``"unknown"``
-    rather than fabricating a bound or clinical interpretation.
+    Explicit laboratory flags for high, low, normal, or critical values are
+    honored before derived comparisons. Unknown explicit flags return
+    ``"unknown"`` instead of being ignored. Critical thresholds beyond the
+    reference range are out of scope unless the explicit flag marks the value
+    critical. This helper is unit-agnostic and does not perform conversion.
+
+    Args:
+        value: Numeric lab result value.
+        reference_range: Parsed range mapping or raw range text.
+        explicit_flag: Optional originating-lab flag such as ``"H"``, ``"L"``,
+            or ``"critical"``.
+
+    Returns:
+        ``"low"``, ``"normal"``, ``"high"``, ``"critical"``, or ``"unknown"``.
+        Non-numeric values and unparseable ranges return ``"unknown"``.
     """
-    normalized_flag = _normalize_explicit_flag(explicit_flag)
-    if normalized_flag is not None:
-        return normalized_flag
 
-    numeric_value = _coerce_float(value)
-    if numeric_value is None or not isinstance(reference_range, Mapping):
+    if explicit_flag is not None:
+        normalized_flag = explicit_flag.strip().upper()
+        if normalized_flag:
+            return _EXPLICIT_FLAGS.get(normalized_flag, "unknown")
+
+    numeric_value = _finite_float(value)
+    if numeric_value is None:
         return "unknown"
 
-    low = _coerce_float(reference_range.get("low"))
-    high = _coerce_float(reference_range.get("high"))
-    low_inclusive = reference_range.get("low_inclusive")
-    high_inclusive = reference_range.get("high_inclusive")
+    parsed_range = _normalize_reference_range(reference_range)
+    low = parsed_range["low"]
+    high = parsed_range["high"]
+    if low is None and high is None:
+        return "unknown"
 
-    if low is not None and _below_low(numeric_value, low, low_inclusive):
-        return "low"
-    if high is not None and _above_high(numeric_value, high, high_inclusive):
-        return "high"
-    if low is not None or high is not None:
-        return "normal"
-    return "unknown"
+    if low is not None:
+        if parsed_range["low_inclusive"] and numeric_value < low:
+            return "low"
+        if not parsed_range["low_inclusive"] and numeric_value <= low:
+            return "low"
 
+    if high is not None:
+        if parsed_range["high_inclusive"] and numeric_value > high:
+            return "high"
+        if not parsed_range["high_inclusive"] and numeric_value >= high:
+            return "high"
 
-def _normalize_explicit_flag(explicit_flag: str | None) -> AbnormalFlag | None:
-    if explicit_flag is None:
-        return None
-    normalized = str(explicit_flag).strip().lower()
-    if not normalized:
-        return None
-    return _EXPLICIT_FLAG_ALIASES.get(normalized, "unknown")
-
-
-def _coerce_float(value: Any) -> float | None:
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, int | float):
-        return float(value)
-    match = _NUMBER_RE.fullmatch(str(value).strip())
-    if match is None:
-        return None
-    return float(match.group(0))
-
-
-def _below_low(value: float, low: float, low_inclusive: Any) -> bool:
-    if low_inclusive is False:
-        return value <= low
-    return value < low
-
-
-def _above_high(value: float, high: float, high_inclusive: Any) -> bool:
-    if high_inclusive is False:
-        return value >= high
-    return value > high
+    return "normal"
 
 
 __all__ = [
     "AbnormalFlag",
+    "LAB_FLAG_ADVISORY",
     "ReferenceRange",
     "derive_abnormal_flag",
     "parse_reference_range",

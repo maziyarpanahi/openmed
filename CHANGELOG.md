@@ -9,7 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added lab reference range parsing and abnormal flag derivation helpers in `openmed.clinical.lab_values`.
+- Expanded lab reference-range parsing in `openmed.clinical.lab_values` with
+  tolerant separator/operator support and safer unknown explicit-flag handling.
+- Added a root `SECURITY.md` responsible-disclosure policy (private GitHub
+  vulnerability reporting, a severity matrix, supported versions, response targets
+  with a coordinated-disclosure CVE/advisory process, accidental-disclosure
+  containment, conduct/anti-abuse terms, and hardened safe-harbor protections), an
+  issue-template chooser that routes security reports to the private channel, and
+  security cross-links from the README and docs. Redaction-bypass / PHI leakage
+  (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
+  private-disclosure class.
+
+## [1.6.0] - 2026-06-22
+
+### Added
+
 - Added a policy-aware de-identification runtime with canonical `OpenMedSpan` schema contracts, a ten-stage `Pipeline`, detector arbitration/cascade routing, calibrated per-label/language/policy thresholds, deterministic safety sweep backstops, and six bundled policy profiles (`hipaa_safe_harbor`, `hipaa_expert_review_assist`, `gdpr_pseudonymization`, `research_limited_dataset`, `strict_no_leak`, `clinical_minimal_redaction`).
 - Added signed, reproducible de-identification audit reports with span provenance, residual-risk metadata, reproducibility hashes, and optional HMAC signatures.
 - Added re-identification risk reporting and adversarial re-identification benchmark support, including `openmed benchmark pii --attack reid`.
@@ -34,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `method="shift_dates"` to recognize canonical date labels before redaction, so lowercase `date` output from the default English PII model and `date_of_birth` labels are shifted instead of masked; `keep_mapping` no longer treats shifted dates as mask placeholders.
+- FHIR Bundle assembly now rejects duplicate `ResourceType/id` values instead of silently overwriting the earlier resource in the internal reference map. Duplicate resources raise a `ValueError` that names the colliding key, preventing downstream references from being rewritten to the wrong Bundle entry.
 - REST/MCP request schemas now accept `ar`, `ja`, and `tr` for the `lang` field. These languages have published PII models and are listed in `SUPPORTED_LANGUAGES`, but the `lang` `Literal` in `openmed/service/schemas.py` was never updated, so the service rejected them with a 422 even though the Python API and the models worked. The four `lang` annotations now share a single `PIILanguage` alias kept in sync with `SUPPORTED_LANGUAGES` (guarded by a regression test).
 - Fixed case-insensitive `trust_remote_code` allowlist matching for first-party and environment-configured privacy-filter repositories.
 - Fixed Feb 29 date shifting when `keep_year=True` targets a non-leap year.
@@ -47,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added a protected `hf-publish` environment and `HF_WRITE_TOKEN` policy for model publishing.
 - Added dependency license policy, `pip-audit` security gate with time-boxed ignores, and gitleaks CI/pre-commit secret scanning with a canary fixture.
+- Hardened de-identification audit report signing so `AuditReport.sign()` and `AuditReport.verify()` require a non-empty HMAC key. `None`, empty strings, and empty byte strings now raise `ValueError` instead of producing or accepting weak signatures.
+
+### Tests
+
+- Added FHIR Bundle regression coverage for empty resource lists across transaction, collection, and batch Bundles, and for dangling references that should remain unchanged when the referenced resource is absent from the Bundle.
 
 ### Notes
 
@@ -831,7 +852,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/OpenMed/openmed/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/maziyarpanahi/openmed/compare/v1.5.5...v1.6.0
 [0.6.1]: https://github.com/OpenMed/openmed/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/OpenMed/openmed/compare/v0.5.8...v0.6.0
 [0.5.8]: https://github.com/OpenMed/openmed/compare/v0.5.7...v0.5.8
