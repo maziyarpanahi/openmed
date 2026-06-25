@@ -41,6 +41,7 @@ nav:
       - FHIR Interop Helpers: fhir-interop.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
+      - MLX Quantized Export: export-mlx-quant.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
