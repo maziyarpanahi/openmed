@@ -47,6 +47,7 @@ _REQUIRED_ROOT_FIELDS = frozenset(
         "seed",
     }
 )
+_OPTIONAL_ROOT_FIELDS = frozenset({"head_contract"})
 
 
 class RecipeConfigError(ValueError):
@@ -143,6 +144,7 @@ class TrainingRecipeConfig:
     output_tier: str
     quantization: QuantizationConfig
     seed: int
+    head_contract: str | None = None
 
     @classmethod
     def from_mapping(cls, raw_config: Mapping[str, Any]) -> "TrainingRecipeConfig":
@@ -187,12 +189,13 @@ class TrainingRecipeConfig:
             output_tier=_require_str(data, "output_tier"),
             quantization=_parse_quantization(_require_mapping(data, "quantization")),
             seed=seed,
+            head_contract=_optional_str(data, "head_contract"),
         )
         _validate_output_tier(config.output_tier)
         return config
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "backbone": self.backbone.to_dict(),
             "dapt": self.dapt.to_dict(),
             "hard_negatives_required": self.hard_negatives_required,
@@ -206,6 +209,9 @@ class TrainingRecipeConfig:
             "schema_version": self.schema_version,
             "seed": self.seed,
         }
+        if self.head_contract is not None:
+            payload["head_contract"] = self.head_contract
+        return payload
 
 
 @dataclass(frozen=True)
@@ -339,7 +345,7 @@ def _reject_root_shape(data: Mapping[str, Any]) -> None:
     missing = sorted(_REQUIRED_ROOT_FIELDS - keys)
     if missing:
         raise RecipeConfigError(f"missing required field(s): {', '.join(missing)}")
-    unknown = sorted(keys - _REQUIRED_ROOT_FIELDS)
+    unknown = sorted(keys - _REQUIRED_ROOT_FIELDS - _OPTIONAL_ROOT_FIELDS)
     if unknown:
         raise RecipeConfigError(f"unknown field(s): {', '.join(unknown)}")
 
@@ -474,6 +480,17 @@ def _require_str(data: Mapping[str, Any], key: str) -> str:
     value = data[key]
     if not isinstance(value, str) or not value:
         raise RecipeConfigError(f"{key} must be a non-empty string")
+    return value
+
+
+def _optional_str(data: Mapping[str, Any], key: str) -> str | None:
+    if key not in data:
+        return None
+    value = data[key]
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise RecipeConfigError(f"{key} must be a non-empty string when present")
     return value
 
 

@@ -11,7 +11,9 @@ import pytest
 from openmed.core.pii import (
     DeidentificationResult,
     PIIEntity,
+    _format_date_like_original,
     _generate_fake_pii,
+    _random_nonzero_shift,
     _redact_entity,
     _shift_date,
     _strip_accents,
@@ -703,6 +705,69 @@ class TestDeidentify:
                 date_shift_days=30,
             )
 
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_auto_shift_dates_retries_zero_offset(
+        self, mock_extract, monkeypatch
+    ):
+        """Auto-selected shift_dates offsets must never be a no-op.
+
+        ``date_shift_days=None`` used to fall back to ``random.randint(-365,
+        365)``, which is inclusive of 0 and silently left every date in the
+        document unchanged. Force the first draw to 0 so the regression is
+        deterministic.
+        """
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+        draws = iter([0, 30])
+
+        def fake_randint(low, high):
+            assert (low, high) == (-365, 365)
+            return next(draws)
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        result = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=None,
+            keep_year=False,
+        )
+
+        assert result.deidentified_text == "DOB 02/14/2020"
+
+    @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_explicit_zero_shift_remains_allowed(self, mock_extract):
+        """An explicit caller-supplied zero shift is a deliberate no-op."""
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        result = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=0,
+            keep_year=False,
+        )
+
+        assert result.deidentified_text == f"DOB {original}"
+
 
 # ---------------------------------------------------------------------------
 # _redact_entity Tests
@@ -861,6 +926,26 @@ class TestShiftDate:
         result = _shift_date("01/15/2020", -30)
         assert result == "12/16/2020"  # With keep_year=True (default)
 
+    def test_shift_date_two_digit_year_preserves_separator_and_order(self):
+        """2-digit trailing years should keep slash/dash shape after shifting."""
+        assert _shift_date("03/15/22", 30, lang="en") == "04/14/2022"
+        assert _shift_date("15-03-22", 30, lang="fr") == "14-04-2022"
+
+    def test_shift_date_two_digit_year_without_dateutil(self, monkeypatch):
+        """The default fallback path should also handle 2-digit years."""
+
+        original_import = builtins.__import__
+
+        def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "dateutil" or name.startswith("dateutil."):
+                raise ImportError("dateutil unavailable")
+            return original_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
+
+        assert _shift_date("03/15/22", 30, lang="en") == "04/14/2022"
+        assert _shift_date("15-03-22", 30, lang="fr") == "14-04-2022"
+
     def test_shift_date_invalid_format(self):
         """Test shift_date with unparseable format returns placeholder."""
         result = _shift_date("not-a-date", 30)
@@ -876,6 +961,88 @@ class TestShiftDate:
         """
         result = _shift_date("02/28/2019", 366, keep_year=True)
         assert result == "02/28/2019"
+
+
+# ---------------------------------------------------------------------------
+# _format_date_like_original Tests
+# ---------------------------------------------------------------------------
+
+
+class TestFormatDateLikeOriginal:
+    """Tests for the _format_date_like_original helper function.
+
+    Called directly rather than through _shift_date/deidentify: this function
+    is only reachable when python-dateutil is importable, which is not the
+    case in this project's own dev/CI install (``pip install -e ".[dev]"``
+    does not pull in python-dateutil). Testing it directly keeps coverage of
+    this code path independent of whether dateutil happens to be installed.
+    """
+
+    def test_us_slash_two_digit_year_keeps_slash_shape(self):
+        """A 2-digit-year US date must not fall through to the ISO default."""
+        result = _format_date_like_original(
+            "03/15/22", datetime(2022, 4, 14), lang="en"
+        )
+        assert result == "04/14/2022"
+
+    def test_eu_dash_two_digit_year_keeps_dash_shape(self):
+        """A 2-digit-year EU dash date must not fall through to the ISO default."""
+        result = _format_date_like_original(
+            "15-03-22", datetime(2022, 4, 14), lang="fr"
+        )
+        assert result == "14-04-2022"
+
+    def test_four_digit_year_unaffected(self):
+        """Widening the year group must not change the existing 4-digit case."""
+        result = _format_date_like_original(
+            "03/15/2022", datetime(2022, 4, 14), lang="en"
+        )
+        assert result == "04/14/2022"
+
+
+# ---------------------------------------------------------------------------
+# _random_nonzero_shift Tests
+# ---------------------------------------------------------------------------
+
+
+class TestRandomNonzeroShift:
+    """Tests for the _random_nonzero_shift helper function."""
+
+    def test_random_nonzero_shift_retries_zero(self, monkeypatch):
+        """A zero draw must be retried until a non-zero offset is selected."""
+        calls = []
+        draws = iter([0, -7])
+
+        def fake_randint(low, high):
+            calls.append((low, high))
+            return next(draws)
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        assert _random_nonzero_shift(low=-10, high=10) == -7
+        assert calls == [(-10, 10), (-10, 10)]
+
+    def test_random_nonzero_shift_respects_one_sided_ranges(self, monkeypatch):
+        """Ranges that do not contain zero should be passed through unchanged."""
+        calls = []
+        draws = iter([-3, 4])
+
+        def fake_randint(low, high):
+            calls.append((low, high))
+            return next(draws)
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fake_randint)
+
+        assert _random_nonzero_shift(low=-10, high=-1) == -3
+        assert _random_nonzero_shift(low=1, high=10) == 4
+        assert calls == [(-10, -1), (1, 10)]
+
+    def test_random_nonzero_shift_rejects_invalid_ranges(self):
+        """The configured range must contain at least one non-zero value."""
+        with pytest.raises(ValueError, match="low must be less"):
+            _random_nonzero_shift(low=10, high=-10)
+        with pytest.raises(ValueError, match="non-zero shift"):
+            _random_nonzero_shift(low=0, high=0)
 
 
 # ---------------------------------------------------------------------------

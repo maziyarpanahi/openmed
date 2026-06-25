@@ -11,6 +11,14 @@ __all__ = [
     "AdjudicationItem",
     "AdjudicationQueue",
     "DryRunResult",
+    "DIRECTID_CONTRACT_REF",
+    "DIRECTID_FAMILY",
+    "DIRECTID_GATE_CODES",
+    "DIRECTID_REQUIRED_ID_SUBTYPES",
+    "DIRECTID_TINY_HEAD_CONTRACT",
+    "DirectIDContractError",
+    "DirectIDHeadContract",
+    "DirectIDPresetValidation",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
@@ -22,6 +30,7 @@ __all__ = [
     "config_hash",
     "count_hard_negatives",
     "dry_run_recipe",
+    "gate_requirements_by_code",
     "load_preset",
     "make_adjudication_item",
     "normalize_weak_span",
@@ -30,6 +39,8 @@ __all__ = [
     "runtime_dependencies",
     "sample_hard_negatives",
     "sampler_for_recipe",
+    "validate_directid_contract",
+    "validate_directid_preset",
     "weak_label_document",
 ]
 
@@ -50,6 +61,21 @@ def __getattr__(name: str) -> Any:
     }:
         recipe = import_module(".recipe", __name__)
         return getattr(recipe, name)
+    if name in {
+        "DIRECTID_CONTRACT_REF",
+        "DIRECTID_FAMILY",
+        "DIRECTID_GATE_CODES",
+        "DIRECTID_REQUIRED_ID_SUBTYPES",
+        "DIRECTID_TINY_HEAD_CONTRACT",
+        "DirectIDContractError",
+        "DirectIDHeadContract",
+        "DirectIDPresetValidation",
+        "gate_requirements_by_code",
+        "validate_directid_contract",
+        "validate_directid_preset",
+    }:
+        directid = import_module(".directid", __name__)
+        return getattr(directid, name)
     if name in {
         "HARD_NEGATIVE_CATEGORIES",
         "HardNegativeExample",

@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      OPENMED_PROFILE: ${OPENMED_PROFILE:-prod}
+      OPENMED_CACHE_DIR: ${OPENMED_CACHE_DIR:-/root/.cache/huggingface/openmed}
+      OPENMED_SERVICE_PRELOAD_MODELS: ${OPENMED_SERVICE_PRELOAD_MODELS:-}
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+
+volumes:
+  hf-cache:
