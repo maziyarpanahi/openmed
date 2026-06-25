@@ -21,6 +21,31 @@ uv pip install ".[hf,gliner]"      # add GLiNER + transformers
 uv pip install ".[dev]"            # pytest + coverage + linting
 ```
 
+For scanned images and document OCR, install the multimodal extra plus the
+system Tesseract binary:
+
+```bash
+uv pip install ".[multimodal]"
+brew install tesseract             # macOS
+sudo apt-get install tesseract-ocr # Debian/Ubuntu
+```
+
+PaddleOCR is available as a heavier opt-in OCR backend:
+
+```bash
+uv pip install ".[ocr-paddle]"
+```
+
+CDA/C-CDA XML de-identification is available in the core install. It redacts
+structured header PHI, sweeps CDA section narrative text, keeps XML parseable,
+and only routes `.xml` files that look like CDA documents:
+
+```python
+from openmed.interop.cda import redact_cda
+
+redacted_xml = redact_cda("synthetic_ccda.xml", date_shift_days=30)
+```
+
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
 ```bash

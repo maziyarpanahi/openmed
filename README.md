@@ -121,11 +121,11 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.6.0"),
 ]
 ```
 
-- **MLX runtime** for PII token classification, the Privacy Filter family, and experimental GLiNER-family zero-shot tasks — with a CoreML fallback path.
+- **MLX runtime** for PII token classification, the Privacy Filter family, experimental GLiNER-family zero-shot tasks, and Python MLX-LM text generation with Laneformer; includes a CoreML fallback path for supported token-classification artifacts.
 - **One model name, every platform** — MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
 - **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
 
@@ -309,7 +309,8 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ## Multilingual PII (12 languages)
 
-Extraction and de-identification across `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja`, and `tr` — **247 PII checkpoints** total.
+Extraction and de-identification support **12 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr` — **247 PII checkpoints** total.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -347,8 +348,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:1.6.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.6.0
 ```
 
 ```bash
@@ -378,6 +379,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
+| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | |
 
 ---
 
@@ -400,6 +402,16 @@ Contributions welcome — bug reports, feature requests, and PRs alike.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
 - **Translations welcome** — help complete the other-language READMEs linked in the switcher at the top.
+
+---
+
+## Security
+
+Found a vulnerability? OpenMed redacts PHI, so a **redaction bypass or PHI/PII
+leak is a security issue** — please report it **privately**, never as a public
+issue. See **[SECURITY.md](SECURITY.md)** for the responsible-disclosure policy
+and the [private reporting form](https://github.com/maziyarpanahi/openmed/security/advisories/new).
+Never include real patient data in a report.
 
 ---
 

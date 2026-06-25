@@ -177,9 +177,13 @@ def write_manifest(
         or "unknown"
     )
     task = config.get("_mlx_task", "token-classification")
+    quantization = config.get("_mlx_quantization")
+    quant_bits = quantization.get("bits") if isinstance(quantization, dict) else None
+    format_name = f"mlx-{quant_bits}bit" if quant_bits in {4, 8} else "mlx-fp"
 
     manifest = {
         "format": MANIFEST_FORMAT,
+        "formats": [format_name],
         "format_version": MANIFEST_VERSION,
         "task": task,
         "family": family,
@@ -192,13 +196,28 @@ def write_manifest(
         "fallback_weights": fallback_weights,
         "available_weights": available_weights,
         "weights_format": preferred_format,
-        "quantization": config.get("_mlx_quantization"),
+        "quantization": quantization,
         "max_sequence_length": config.get("max_position_embeddings", 512),
         "tokenizer": {
             "path": ".",
             "files": tokenizer_files,
         },
     }
+
+    if isinstance(quantization, dict):
+        if "quant_recall_delta" in quantization:
+            manifest["quant_recall_delta"] = quantization["quant_recall_delta"]
+        if "certified" in quantization:
+            manifest["certified"] = quantization["certified"]
+        if "recall_delta_path" in quantization:
+            manifest["recall_delta_path"] = quantization["recall_delta_path"]
+        if "certification_limit" in quantization:
+            manifest["certification"] = {
+                "gate": "G4",
+                "limit": quantization["certification_limit"],
+                "metric": "character_recall",
+                "report_path": quantization.get("recall_delta_path"),
+            }
 
     prompt_spec = config.get("_mlx_prompt_spec")
     if prompt_spec:
