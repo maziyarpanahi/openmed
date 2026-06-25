@@ -400,9 +400,10 @@ a local-first guardian for your most private data.
 
 ## Contributing
 
-Contributions welcome — bug reports, feature requests, and PRs alike.
+Contributions welcome — bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
+- [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
 - **Translations welcome** — help complete the other-language READMEs linked in the switcher at the top.
 
 ---
