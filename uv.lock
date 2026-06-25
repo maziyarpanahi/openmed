@@ -3029,6 +3029,7 @@ source = { editable = "." }
 dependencies = [
     { name = "faker" },
     { name = "pysbd" },
+    { name = "pyyaml" },
 ]
 
 [package.optional-dependencies]
@@ -3158,6 +3159,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "python-dateutil", marker = "extra == 'dev'", specifier = ">=2.8" },
     { name = "python-docx", marker = "extra == 'multimodal'", specifier = ">=1.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.18" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },

@@ -10,6 +10,7 @@ from .config import (
     load_config_with_profile,
     save_profile,
 )
+from .custom_recognizer import CustomRecognizer
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 
@@ -20,6 +21,7 @@ __all__ = [
     "ModelSearchResult",
     "search_models",
     "OpenMedConfig",
+    "CustomRecognizer",
     "AuditReport",
     "AuditSignature",
     "AuditSpan",

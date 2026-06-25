@@ -45,6 +45,7 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
+from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
@@ -472,6 +473,7 @@ def _extract_pii_batch(
     use_smart_merging: bool = True,
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
+    custom_recognizer: Any = None,
     *,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
@@ -560,6 +562,11 @@ def _extract_pii_batch(
         for result in results:
             _apply_pii_smart_merging(result, effective_model, lang)
 
+    recognizer = coerce_custom_recognizer(custom_recognizer)
+    if recognizer is not None:
+        for result in results:
+            recognizer.apply_to_prediction_result(result)
+
     from .quality_gates import validate_entity_spans
 
     for result in results:
@@ -578,6 +585,7 @@ def extract_pii(
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
+    custom_recognizer: Any = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -606,6 +614,10 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
+        custom_recognizer: Optional deny-list/allow-list recognizer config,
+            ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
+            matches are added with ``custom:deny`` provenance; allow-list
+            matches suppress overlapping spans from any detector.
 
     Returns:
         PredictionResult with detected PII entities
@@ -627,6 +639,7 @@ def extract_pii(
         lang=lang,
         normalize_accents=normalize_accents,
         loader=loader,
+        custom_recognizer=custom_recognizer,
     )[0]
 
 
@@ -714,6 +727,9 @@ def _sanitize_audit_evidence(value: Any) -> Any:
 def _entity_sources(entity: Any) -> list[str]:
     metadata = getattr(entity, "metadata", None) or {}
     source = str(metadata.get("source", "")).strip()
+    detector = str(metadata.get("detector", "")).strip()
+    if source == CUSTOM_DENY_DETECTOR or detector == CUSTOM_DENY_DETECTOR:
+        return [CUSTOM_DENY_DETECTOR]
     if source == "safety_sweep":
         return ["safety_sweep"]
     if source == "locale_rule":
@@ -781,7 +797,59 @@ def _detector_infos(
                 metadata={"patterns_version": SAFETY_SWEEP_PATTERNS_VERSION},
             )
         )
+    custom_metadata = metadata.get("custom_recognizer")
+    if isinstance(custom_metadata, Mapping):
+        detectors.append(
+            DetectorInfo(
+                source=CUSTOM_DENY_DETECTOR,
+                model_id="custom_recognizer",
+                model_format="rules",
+                commit=None,
+                metadata=dict(custom_metadata),
+            )
+        )
     return detectors
+
+
+def _add_custom_recognizer_metadata(
+    pii_result: Any,
+    *,
+    allow_spans: int,
+    suppressed: int,
+) -> None:
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    custom_metadata = dict(metadata.get("custom_recognizer") or {})
+    custom_metadata.setdefault("detector", CUSTOM_DENY_DETECTOR)
+    custom_metadata["allow_spans"] = allow_spans
+    custom_metadata["spans_suppressed_by_allow"] = (
+        int(custom_metadata.get("spans_suppressed_by_allow", 0)) + suppressed
+    )
+    metadata["custom_recognizer"] = custom_metadata
+    pii_result.metadata = metadata
+
+
+def _suppress_custom_allowed_entities(
+    text: str,
+    pii_result: Any,
+    custom_recognizer: Any,
+) -> int:
+    recognizer = coerce_custom_recognizer(custom_recognizer)
+    if recognizer is None:
+        return 0
+    retained, suppressed = recognizer.suppress_entities(
+        text,
+        list(getattr(pii_result, "entities", ()) or ()),
+    )
+    if suppressed:
+        pii_result.entities = retained
+        if hasattr(pii_result, "num_entities"):
+            pii_result.num_entities = len(retained)
+    _add_custom_recognizer_metadata(
+        pii_result,
+        allow_spans=len(recognizer.allow_matches(text)),
+        suppressed=suppressed,
+    )
+    return suppressed
 
 
 def _context_window(
@@ -1224,6 +1292,7 @@ def _deidentify_batch(
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
+    custom_recognizer: Any = None,
     *,
     consistent: bool = False,
     seed: Optional[int] = None,
@@ -1239,6 +1308,7 @@ def _deidentify_batch(
         date_shift_days,
     )
     stripped_texts = [text.strip() for text in texts]
+    recognizer = coerce_custom_recognizer(custom_recognizer)
     pii_results = _extract_pii_batch(
         stripped_texts,
         model_name=model_name,
@@ -1247,6 +1317,7 @@ def _deidentify_batch(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        custom_recognizer=recognizer,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
@@ -1255,6 +1326,7 @@ def _deidentify_batch(
     if use_safety_sweep:
         for stripped_text, pii_result in zip(stripped_texts, pii_results):
             _apply_safety_sweep_to_result(stripped_text, pii_result, lang=lang)
+            _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
 
     return [
         _build_deidentification_result(
@@ -1300,6 +1372,7 @@ def deidentify(
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
+    custom_recognizer: Any = None,
     audit: bool = False,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
@@ -1347,6 +1420,10 @@ def deidentify(
         calibration_thresholds_path: Optional thresholds.json artifact path
             or artifact directory. When provided, per-label calibrated
             thresholds filter model detections and appear in audit output.
+        custom_recognizer: Optional deny-list/allow-list recognizer config,
+            ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
+            matches are redacted with ``custom:deny`` provenance; allow-list
+            matches suppress overlapping spans from any detector.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
 
@@ -1384,6 +1461,7 @@ def deidentify(
             if calibration_thresholds_path is not None
             else None
         ),
+        custom_recognizer=custom_recognizer,
     )
     result = pipeline.run(
         text,

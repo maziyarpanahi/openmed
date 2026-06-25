@@ -119,6 +119,50 @@ placeholder (`[first_name]`, `[first_name_2]`, ...) so each one maps back to
 its own original value — this was a known limitation (#204) fixed by #222;
 `reidentify()` now round-trips correctly even when a type repeats.
 
+## Custom deny-list and allow-list recognizer
+
+Use `custom_recognizer` when your site has identifiers the model does not
+know, or benign values that must never be redacted. The argument accepts a
+plain mapping, a `CustomRecognizer` instance, or a `.json`/`.yaml` path.
+
+```python
+from openmed import deidentify, extract_pii
+
+custom_recognizer = {
+    "case_sensitive": False,
+    "deny": {
+        "terms": [
+            {"term": "Ward Phoenix", "label": "LOCATION"},
+        ],
+        "patterns": [
+            {"pattern": r"\bSTUDY-\d+\b", "label": "ID_NUM"},
+        ],
+    },
+    "allow": {
+        "terms": ["Mercy Trial"],
+        "patterns": [r"\bPUBLIC-\d+\b"],
+    },
+}
+
+entities = extract_pii(text, custom_recognizer=custom_recognizer)
+result = deidentify(text, method="mask", custom_recognizer=custom_recognizer)
+```
+
+Deny-list terms are literal strings. Deny-list patterns are regular
+expressions. Each deny entry needs a `label`; OpenMed keeps that label on the
+returned entity and normalizes it into the canonical label taxonomy for
+policy and audit handling. Matches are emitted with `custom:deny`
+provenance.
+
+Allow-list terms and patterns suppress any overlapping span from any detector,
+including model detections, deterministic rules, and custom deny-list matches.
+Allow-list precedence always wins over deny-list and model detections, so an
+allowed value is left untouched in `deidentify()` output.
+
+Recognizer metadata stores hashes and rule ids, not raw matched surfaces. In
+the staged pipeline, custom matching runs on normalized text and spans are
+remapped back to original offsets before redaction.
+
 ## The new `replace` engine
 
 `method="replace"` no longer picks from a small hardcoded list. It builds

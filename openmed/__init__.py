@@ -17,6 +17,7 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.custom_recognizer import CustomRecognizer
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -588,6 +589,7 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "CustomRecognizer",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
     "find_semantic_units",
