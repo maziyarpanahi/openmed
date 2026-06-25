@@ -34,6 +34,7 @@ def client(monkeypatch):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     app = create_app()
     with TestClient(app, raise_server_exceptions=False) as test_client:
