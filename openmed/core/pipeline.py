@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import inspect
+import logging
 import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -25,6 +27,26 @@ STAGE_NAMES: tuple[str, ...] = (
 )
 
 DEFAULT_HASH_SECRET = b"openmed-pipeline-v1"
+
+logger = logging.getLogger(__name__)
+
+_PIPELINE_TO_PLUGIN_STAGE = {
+    STAGE_NAMES[3]: "deterministic",
+    STAGE_NAMES[4]: "fast_pii",
+    STAGE_NAMES[5]: "clinical_phi",
+}
+_RAW_SURFACE_METADATA_KEYS = frozenset(
+    {
+        "matched_text",
+        "normalized_text",
+        "original_text",
+        "raw_text",
+        "span_text",
+        "surface",
+        "text",
+        "value",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -284,6 +306,30 @@ class Pipeline:
             deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
             model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
             clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+            deterministic_spans = (
+                *deterministic_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[3],
+                ),
+            )
+            model_spans = (
+                *model_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[4],
+                ),
+            )
+            clinical_spans = (
+                *clinical_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[5],
+                ),
+            )
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
@@ -335,6 +381,14 @@ class Pipeline:
                 ),
                 stage=STAGE_NAMES[4],
             )
+            model_spans = (
+                *model_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[4],
+                ),
+            )
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
@@ -376,6 +430,17 @@ class Pipeline:
                     "calibration_thresholds"
                 ]
                 pii_result.metadata = metadata
+        else:
+            pii_result = _append_span_predictions(
+                pii_result,
+                normalized.normalized_text,
+                [
+                    span
+                    for span in policy_spans
+                    if span.action != ACTION_KEEP
+                    and str(span.detector or "").startswith("plugin:")
+                ],
+            )
 
         sweep_spans, sweep_metadata = self.stage9_safety_sweep(
             normalized.normalized_text,
@@ -562,6 +627,10 @@ class Pipeline:
             context,
             default_detector="rules:regex",
             stage=STAGE_NAMES[3],
+        ) + self._registered_detector_spans(
+            text,
+            context,
+            pipeline_stage=STAGE_NAMES[3],
         )
 
     def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
@@ -605,6 +674,10 @@ class Pipeline:
             context,
             default_detector=f"model:{getattr(result, 'model_name', 'clinical_phi')}",
             stage=STAGE_NAMES[5],
+        ) + self._registered_detector_spans(
+            text,
+            context,
+            pipeline_stage=STAGE_NAMES[5],
         )
 
     def _apply_calibration_thresholds(
@@ -828,6 +901,76 @@ class Pipeline:
             )
         return tuple(spans)
 
+    def _registered_detector_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+        *,
+        pipeline_stage: str,
+    ) -> tuple[OpenMedSpan, ...]:
+        from .detector_plugins import detector_provenance, iter_detectors
+
+        plugin_stage = _PIPELINE_TO_PLUGIN_STAGE[pipeline_stage]
+        spans: list[OpenMedSpan] = []
+        for spec in iter_detectors(plugin_stage, context.route.lang):
+            try:
+                detected = _call_detector_plugin(spec, text, context)
+            except Exception as exc:
+                logger.warning(
+                    "OpenMed detector plugin %s failed in %s stage: %s",
+                    spec.name,
+                    plugin_stage,
+                    exc.__class__.__name__,
+                )
+                continue
+
+            for span in detected or ():
+                if not isinstance(span, OpenMedSpan):
+                    logger.warning(
+                        "OpenMed detector plugin %s returned a non-span record",
+                        spec.name,
+                    )
+                    continue
+                if span.start < 0 or span.end <= span.start or span.end > len(text):
+                    logger.warning(
+                        "OpenMed detector plugin %s returned invalid offsets",
+                        spec.name,
+                    )
+                    continue
+
+                surface = text[span.start : span.end]
+                canonical = normalize_label(span.canonical_label, context.route.lang)
+                metadata = _sanitize_plugin_mapping(span.metadata, surface)
+                metadata.setdefault("pipeline_stage", pipeline_stage)
+                metadata.setdefault("plugin_detector", spec.name)
+                evidence = _sanitize_plugin_mapping(span.evidence, surface)
+                spans.append(
+                    replace(
+                        span,
+                        doc_id=context.doc_id,
+                        text_hash=hmac_text_hash(surface, self.hmac_secret),
+                        entity_type=span.entity_type or canonical,
+                        canonical_label=canonical,
+                        policy_label=policy_label_for(
+                            canonical,
+                            lang=context.route.lang,
+                        ),
+                        regulatory_tags=(
+                            hipaa_class_for(canonical, lang=context.route.lang),
+                        ),
+                        detector=detector_provenance(spec),
+                        evidence=evidence,
+                        section=span.section
+                        or _section_for_span(
+                            span.start,
+                            span.end,
+                            context.section_metadata,
+                        ),
+                        metadata=metadata,
+                    )
+                )
+        return tuple(spans)
+
     def _audit_record(
         self,
         context: PipelineContext,
@@ -960,7 +1103,7 @@ def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
 def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
-    if detector and str(detector).startswith(("rules:", "model:")):
+    if detector and str(detector).startswith(("rules:", "model:", "plugin:")):
         return str(detector)
 
     sweep = metadata.get("safety_sweep") if isinstance(metadata, Mapping) else None
@@ -1075,6 +1218,32 @@ def _prediction_result_from_spans(
         model_name=model_name,
         timestamp=datetime.now().isoformat(),
     )
+
+
+def _append_span_predictions(
+    pii_result: Any,
+    text: str,
+    spans: Sequence[OpenMedSpan],
+) -> Any:
+    if not spans:
+        return pii_result
+
+    span_result = _prediction_result_from_spans(
+        text,
+        spans,
+        model_name=str(getattr(pii_result, "model_name", "plugins") or "plugins"),
+    )
+    combined = copy.copy(pii_result)
+    combined.entities = [
+        *list(getattr(pii_result, "entities", ()) or ()),
+        *span_result.entities,
+    ]
+    if hasattr(combined, "num_entities"):
+        combined.num_entities = len(combined.entities)
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    metadata["plugin_detector_spans"] = len(spans)
+    combined.metadata = metadata
+    return combined
 
 
 def _remap_pii_result_to_original(
@@ -1196,6 +1365,67 @@ def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:
         "reversible_id": policy.reversible_id,
     }
     pii_result.metadata = metadata
+
+
+def _call_detector_plugin(spec: Any, text: str, context: PipelineContext) -> Any:
+    kwargs = {
+        "context": context,
+        "lang": context.route.lang,
+        "language": context.route.lang,
+        "stage": spec.stage,
+    }
+    try:
+        signature = inspect.signature(spec.detect)
+    except (TypeError, ValueError):
+        return spec.detect(text, **kwargs)
+
+    parameters = signature.parameters
+    if any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    ):
+        return spec.detect(text, **kwargs)
+
+    accepted = {name: value for name, value in kwargs.items() if name in parameters}
+    return spec.detect(text, **accepted)
+
+
+def _sanitize_plugin_mapping(
+    mapping: Mapping[str, Any],
+    surface: str,
+) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in dict(mapping).items():
+        normalized_key = str(key).strip().lower()
+        if normalized_key in _RAW_SURFACE_METADATA_KEYS:
+            continue
+        sanitized_value = _sanitize_plugin_value(value, surface)
+        if sanitized_value is not _SKIP_PLUGIN_VALUE:
+            sanitized[str(key)] = sanitized_value
+    return sanitized
+
+
+_SKIP_PLUGIN_VALUE = object()
+
+
+def _sanitize_plugin_value(value: Any, surface: str) -> Any:
+    if isinstance(value, str):
+        return _SKIP_PLUGIN_VALUE if value == surface else value
+    if isinstance(value, Mapping):
+        return _sanitize_plugin_mapping(value, surface)
+    if isinstance(value, list):
+        return [
+            item
+            for item in (_sanitize_plugin_value(item, surface) for item in value)
+            if item is not _SKIP_PLUGIN_VALUE
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            item
+            for item in (_sanitize_plugin_value(item, surface) for item in value)
+            if item is not _SKIP_PLUGIN_VALUE
+        )
+    return value
 
 
 def _apply_policy_action(
