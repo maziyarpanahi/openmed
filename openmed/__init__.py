@@ -27,6 +27,7 @@ from .core.model_registry import (
     get_pii_models_by_language,
     list_model_categories,
 )
+from .core.model_search import ModelQuery, ModelSearchResult, search_models
 from .core.pii import (
     DeidentificationResult,
     PIIEntity,
