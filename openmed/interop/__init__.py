@@ -29,6 +29,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="core",
         description="CDA/C-CDA XML de-identification adapter",
     ),
+    "hl7v2": AdapterSpec(
+        name="hl7v2",
+        module="openmed.interop.hl7v2",
+        extra="",
+        description="HL7 v2 segment-aware de-identification",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
