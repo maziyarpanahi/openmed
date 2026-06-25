@@ -26,6 +26,22 @@ Start the API server:
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
+## Static OpenAPI Spec
+
+The committed OpenAPI document lives at `docs/api/openapi.json`. Regenerate it
+after changing REST routes, request schemas, response schemas, or service
+metadata:
+
+```bash
+.venv/bin/python scripts/export_openapi.py
+```
+
+The export command imports `openmed.service.app.create_app()`, calls
+`app.openapi()`, stamps `info.version` from `openmed.__version__`, and writes
+deterministic JSON with sorted keys. The unit test suite includes a drift guard
+that compares the committed artifact byte-for-byte against a fresh in-memory
+export.
+
 Optional profile selection (defaults to `prod`):
 
 ```bash
