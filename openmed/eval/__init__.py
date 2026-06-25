@@ -26,6 +26,12 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.fairness import (
+    UNSPECIFIED_GROUP,
+    FairnessGroupMetrics,
+    FairnessReport,
+    fairness_report,
+)
 from openmed.eval.harness import (
     BenchmarkFixture,
     FixtureResult,
@@ -89,6 +95,8 @@ __all__ = [
     "DEVICE_TIERS",
     "DEFAULT_PERTURBATIONS",
     "EvalSpan",
+    "FairnessGroupMetrics",
+    "FairnessReport",
     "FixtureResult",
     "GateCheck",
     "GateReport",
@@ -103,6 +111,7 @@ __all__ = [
     "ReleaseGate",
     "RobustnessReport",
     "RobustnessVariant",
+    "UNSPECIFIED_GROUP",
     "artifact_dir_for",
     "build_thresholds_payload",
     "case_flip_perturbation",
@@ -122,6 +131,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_suite_calibration_samples",
     "evaluate_quant_recall_delta",
+    "fairness_report",
     "fit_calibration_thresholds",
     "generate_reid_leaderboard",
     "identity_perturbation",
