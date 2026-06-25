@@ -786,6 +786,38 @@ class TestDeidentify:
         assert first.deidentified_text != f"DOB {original}"
 
     @patch("openmed.core.pii.extract_pii")
+    def test_deidentify_shift_dates_seed_does_not_touch_global_random(
+        self, mock_extract, monkeypatch
+    ):
+        """Seeded public API calls must not draw from module-level random."""
+        original = "01/15/2020"
+        mock_extract.return_value = PredictionResult(
+            text=f"DOB {original}",
+            entities=[
+                EntityPrediction(
+                    text=original, label="DATE", start=4, end=14, confidence=0.95
+                )
+            ],
+            model_name="test",
+            timestamp=datetime.now().isoformat(),
+        )
+
+        def fail_if_called(low, high):
+            raise AssertionError("global random.randint should not be called")
+
+        monkeypatch.setattr("openmed.core.pii.random.randint", fail_if_called)
+
+        result = deidentify(
+            f"DOB {original}",
+            method="shift_dates",
+            date_shift_days=None,
+            keep_year=False,
+            seed=42,
+        )
+
+        assert result.deidentified_text == "DOB 10/30/2020"
+
+    @patch("openmed.core.pii.extract_pii")
     def test_deidentify_shift_dates_without_seed_uses_global_random(
         self, mock_extract, monkeypatch
     ):
