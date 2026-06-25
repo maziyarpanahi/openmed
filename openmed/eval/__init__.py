@@ -43,6 +43,13 @@ from openmed.eval.harness import (
     run_benchmark,
     run_suite,
 )
+from openmed.eval.leakage_heatmap import (
+    LeakageHeatmap,
+    LeakageHeatmapCell,
+    LeakageHeatmapTotal,
+    compute_leakage_heatmap,
+    render_leakage_heatmap_markdown,
+)
 from openmed.eval.metrics import (
     DEVICE_TIERS,
     EvalSpan,
@@ -109,6 +116,9 @@ __all__ = [
     "GateReport",
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
+    "LeakageHeatmap",
+    "LeakageHeatmapCell",
+    "LeakageHeatmapTotal",
     "ModelStewardConfig",
     "QUARANTINED",
     "QuantRecallDeltaResult",
@@ -129,6 +139,7 @@ __all__ = [
     "compute_date_shift_consistency",
     "compute_exact_span_f1",
     "compute_latency_summary",
+    "compute_leakage_heatmap",
     "compute_leakage_rate",
     "compute_metrics_bundle",
     "compute_over_redaction_loss",
@@ -148,6 +159,7 @@ __all__ = [
     "ocr_noise_perturbation",
     "perturb_fixture",
     "render_reid_leaderboard",
+    "render_leakage_heatmap_markdown",
     "robustness_report",
     "run_benchmark",
     "run_reid_attack",
