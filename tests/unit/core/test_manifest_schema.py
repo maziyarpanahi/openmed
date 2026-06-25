@@ -87,6 +87,23 @@ def test_legacy_manifest_row_without_enrichment_fields_validates():
     assert info.recommended_tier is None
 
 
+def test_manifest_schema_accepts_mlx_4bit_format():
+    row = _manifest_row_fixture(
+        repo_id="OpenMed/laneformer-2b-it-q4-mlx",
+        family="General",
+        task="text-generation",
+        tier=None,
+        param_count=2_320_069_632,
+        architecture="laneformer",
+        base_model="kogai/laneformer-2b-it",
+        formats=["mlx-4bit"],
+        canonical_labels=[],
+        license="other",
+    )
+
+    assert validate_manifest_row(row, line_number=1) == []
+
+
 def test_registry_model_ids_are_derived_from_manifest():
     manifest_ids = {row["repo_id"] for row in _rows()}
     registry_ids = {info.model_id for info in model_registry.OPENMED_MODELS.values()}
