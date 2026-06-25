@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import zipfile
 from pathlib import Path
 
+import pytest
+
+import openmed.eval.datasets.drugprot as drugprot_module
 from openmed.cli import main_module
 from openmed.core.labels import OTHER
 from openmed.eval.datasets import (
@@ -13,6 +18,7 @@ from openmed.eval.datasets import (
     DRUGPROT_DOI,
     DRUGPROT_ENTITY_TO_CANONICAL,
     DrugProtRelationFixture,
+    corpus_from_rows,
     license_for,
     load_drugprot_corpus,
     load_drugprot_ner_fixtures,
@@ -75,6 +81,27 @@ def test_drugprot_loader_builds_relation_fixtures_with_entity_refs() -> None:
     assert first.arg2.entity_group == "GENE"
 
 
+def test_drugprot_loader_rejects_span_text_mismatches() -> None:
+    with pytest.raises(ValueError, match="span text mismatch"):
+        corpus_from_rows(
+            [("DPX", "Aspirin inhibits TP53", "")],
+            [("DPX", "T1", "CHEMICAL", "0", "7", "Ibuprofen")],
+            [],
+        )
+
+
+def test_drugprot_loader_rejects_unknown_relation_types() -> None:
+    with pytest.raises(ValueError, match="unknown DrugProt relation type"):
+        corpus_from_rows(
+            [("DPX", "Aspirin inhibits TP53", "")],
+            [
+                ("DPX", "T1", "CHEMICAL", "0", "7", "Aspirin"),
+                ("DPX", "T2", "GENE", "17", "21", "TP53"),
+            ],
+            [("DPX", "NOT-A-RELATION", "Arg1:T1", "Arg2:T2")],
+        )
+
+
 def test_drugprot_loader_accepts_official_abstracts_typo_in_zip(tmp_path) -> None:
     archive_path = tmp_path / "drugprot-gs.zip"
     with zipfile.ZipFile(archive_path, "w") as archive:
@@ -96,6 +123,45 @@ def test_drugprot_loader_accepts_official_abstracts_typo_in_zip(tmp_path) -> Non
     assert len(corpus.records) == 1
     assert corpus.records[0].pmid == "DP1"
     assert len(corpus.records[0].relations) == 2
+
+
+def test_drugprot_loader_uses_valid_cached_archive_without_downloading(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    archive_path = _write_drugprot_zip(tmp_path / "drugprot-gs.zip")
+    monkeypatch.setattr(drugprot_module, "DRUGPROT_ARCHIVE_MD5", _md5(archive_path))
+
+    def fail_downloader(url, target):
+        raise AssertionError(f"unexpected downloader call: {url} -> {target}")
+
+    corpus = load_drugprot_corpus(cache_dir=tmp_path, downloader=fail_downloader)
+
+    assert len(corpus.records) == 1
+    assert corpus.source_path == str(archive_path)
+
+
+def test_drugprot_loader_downloads_to_cache_when_archive_is_missing(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    source_archive = _write_drugprot_zip(tmp_path / "source-drugprot.zip")
+    cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(drugprot_module, "DRUGPROT_ARCHIVE_MD5", _md5(source_archive))
+    calls = []
+
+    def downloader(url, target):
+        calls.append((url, target))
+        shutil.copyfile(source_archive, target)
+        return target
+
+    corpus = load_drugprot_corpus(cache_dir=cache_dir, downloader=downloader)
+
+    assert len(corpus.records) == 1
+    assert calls == [
+        (drugprot_module.DRUGPROT_DOWNLOAD_URL, cache_dir / "drugprot-gs.zip")
+    ]
+    assert (cache_dir / "drugprot-gs.zip").exists()
 
 
 def test_drugprot_suite_registry_resolves_ner_and_relation_tasks() -> None:
@@ -136,3 +202,18 @@ def test_cli_benchmark_clinical_resolves_drugprot_relation_task(
     assert output["task"] == "relation"
     assert output["fixture_count"] == 1
     assert output["relation_count"] == 2
+
+
+def _write_drugprot_zip(path: Path) -> Path:
+    with zipfile.ZipFile(path, "w") as archive:
+        for name in (
+            "drugprot_training_abstracts.tsv",
+            "drugprot_training_entities.tsv",
+            "drugprot_training_relations.tsv",
+        ):
+            archive.write(FIXTURE_DIR / name, f"training/{name}")
+    return path
+
+
+def _md5(path: Path) -> str:
+    return hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
