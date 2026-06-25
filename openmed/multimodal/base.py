@@ -189,9 +189,10 @@ def redact_document(
 ) -> ExtractedDocument:
     """De-identify a document, dispatching by file extension to its ingester.
 
-    Raises :class:`MissingDependencyError` if the ``multimodal`` extra is not
-    installed, and :class:`UnsupportedDocumentError` if no handler is registered
-    for the file's extension.
+    Registered stdlib-only handlers may run without the full ``multimodal``
+    extra. Unknown extensions still check the optional dependency set first so
+    installs missing the extra keep surfacing the actionable install hint before
+    reporting unsupported formats.
     """
     extension = Path(str(path)).suffix.lower()
     specs = _HANDLERS.get(extension)
