@@ -18,7 +18,7 @@ Every row must include:
 | `param_count` | Parameter count as an integer, or `null`. |
 | `architecture` | Backbone architecture, or `null`. |
 | `base_model` | Source model id when known, or `null`. |
-| `formats` | Available artifact formats such as `pytorch`, `mlx-fp`, or `onnx`. |
+| `formats` | Available artifact formats such as `pytorch`, `mlx-fp`, `mlx-8bit`, `mlx-4bit`, or `onnx`. |
 | `canonical_labels` | Canonical OpenMed entity labels supported by the model. |
 | `benchmark` | Legacy benchmark object or enriched suite list. |
 | `arxiv` | Related arXiv id, or `null`. |
