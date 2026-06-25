@@ -34,6 +34,14 @@ from .ocr import (
     OcrWord,
     register_ocr_engine,
 )
+from .tabular_csv import (
+    ColumnDecision,
+    RedactedTable,
+    TableView,
+    classify_columns,
+    read_table,
+    redact_table,
+)
 
 __all__ = [
     "ExtractedDocument",
@@ -48,4 +56,10 @@ __all__ = [
     "OcrEngine",
     "FakeOcrEngine",
     "register_ocr_engine",
+    "ColumnDecision",
+    "TableView",
+    "RedactedTable",
+    "read_table",
+    "classify_columns",
+    "redact_table",
 ]
