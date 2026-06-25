@@ -3,37 +3,19 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 from openmed.core import model_registry
-from scripts.manifest import enrich_manifest, generate_manifest
+from openmed.core.manifest_schema import (
+    MANIFEST_FIELDS,
+    REQUIRED_FIELDS,
+    validate_manifest_row,
+)
+from scripts.manifest import generate_manifest
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST_PATH = ROOT / "models.jsonl"
 REFRESH_WORKFLOW = ROOT / ".github" / "workflows" / "manifest-refresh.yml"
-REQUIRED_FIELDS = {
-    "repo_id",
-    "family",
-    "task",
-    "languages",
-    "tier",
-    "param_count",
-    "architecture",
-    "base_model",
-    "formats",
-    "canonical_labels",
-    "benchmark",
-    "arxiv",
-    "license",
-    "reproducibility_hash",
-    "released",
-}
-OPTIONAL_FIELDS = {
-    "latency_ms",
-    "peak_ram_mb",
-    "recommended_tier",
-}
 
 
 def _rows():
@@ -50,8 +32,12 @@ def test_manifest_exists_and_has_unique_repo_ids():
 
 
 def test_every_manifest_row_matches_schema():
-    for row in _rows():
-        _assert_manifest_row_matches_schema(row)
+    violations = []
+    for line_number, row in enumerate(_rows(), start=1):
+        assert REQUIRED_FIELDS <= set(row)
+        assert set(row) <= MANIFEST_FIELDS
+        violations.extend(str(item) for item in validate_manifest_row(row, line_number))
+    assert violations == []
 
 
 def test_enriched_manifest_row_loads_and_validates(tmp_path):
@@ -81,7 +67,7 @@ def test_enriched_manifest_row_loads_and_validates(tmp_path):
 
     loaded = model_registry.load_manifest_rows(manifest)
     assert loaded == [row]
-    _assert_manifest_row_matches_schema(loaded[0])
+    assert validate_manifest_row(loaded[0], line_number=1) == []
 
     registry = model_registry._build_registry(loaded)
     info = registry["pii_fixture_tiny_65m"]
@@ -94,7 +80,7 @@ def test_enriched_manifest_row_loads_and_validates(tmp_path):
 def test_legacy_manifest_row_without_enrichment_fields_validates():
     row = _manifest_row_fixture()
 
-    _assert_manifest_row_matches_schema(row)
+    assert validate_manifest_row(row, line_number=1) == []
     info = model_registry._build_registry([row])["pii_fixture_tiny_65m"]
     assert info.latency_ms == {}
     assert info.peak_ram_mb == {}
@@ -191,41 +177,3 @@ def _manifest_row_fixture(**overrides):
     }
     row.update(overrides)
     return row
-
-
-def _assert_manifest_row_matches_schema(row):
-    assert REQUIRED_FIELDS <= set(row)
-    assert set(row) <= REQUIRED_FIELDS | OPTIONAL_FIELDS
-    enrich_manifest.validate_manifest_row(row)
-    assert isinstance(row["repo_id"], str) and row["repo_id"].startswith("OpenMed/")
-    assert isinstance(row["family"], str) and row["family"]
-    assert isinstance(row["task"], str) and row["task"]
-    assert isinstance(row["languages"], list)
-    assert all(isinstance(language, str) for language in row["languages"])
-    assert row["tier"] is None or isinstance(row["tier"], str)
-    assert row["param_count"] is None or (
-        isinstance(row["param_count"], int) and row["param_count"] > 0
-    )
-    assert row["architecture"] is None or isinstance(row["architecture"], str)
-    assert row["base_model"] is None or isinstance(row["base_model"], str)
-    assert isinstance(row["formats"], list) and row["formats"]
-    assert all(isinstance(format_name, str) for format_name in row["formats"])
-    assert isinstance(row["canonical_labels"], list)
-    assert all(isinstance(label, str) for label in row["canonical_labels"])
-    _assert_benchmark_matches_schema(row["benchmark"])
-    assert row["arxiv"] is None or isinstance(row["arxiv"], str)
-    assert row["license"] is None or isinstance(row["license"], str)
-    assert re.fullmatch(r"sha256:[0-9a-f]{64}", row["reproducibility_hash"])
-    assert row["released"] is None or re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}", row["released"]
-    )
-
-
-def _assert_benchmark_matches_schema(benchmark):
-    if isinstance(benchmark, dict):
-        assert {"dataset", "micro_f1", "recall"} <= set(benchmark)
-        return
-
-    assert isinstance(benchmark, list)
-    for suite in benchmark:
-        assert {"suite", "dataset", "micro_f1", "recall", "leakage"} <= set(suite)

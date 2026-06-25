@@ -454,6 +454,18 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     )
     models_freshness.set_defaults(handler=_handle_models_freshness)
 
+    models_validate = models_sub.add_parser(
+        "validate",
+        help="Validate the canonical model manifest schema.",
+    )
+    models_validate.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Path to a model manifest JSONL file.",
+    )
+    models_validate.set_defaults(handler=_handle_models_validate)
+
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     config_parser = subparsers.add_parser(
@@ -895,6 +907,26 @@ def _handle_models_freshness(args: argparse.Namespace) -> int:
     else:
         sys.stdout.write(metrics.to_markdown())
     return 0
+
+
+def _handle_models_validate(args: argparse.Namespace) -> int:
+    from openmed.core.manifest_schema import (
+        MANIFEST_PATH,
+        format_manifest_validation,
+        validate_manifest_file,
+    )
+
+    manifest_path = args.manifest or MANIFEST_PATH
+    try:
+        result = validate_manifest_file(manifest_path)
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read manifest: {exc}\n")
+        return 1
+
+    output = sys.stderr if result.violations else sys.stdout
+    for line in format_manifest_validation(result):
+        output.write(f"{line}\n")
+    return 0 if result.ok else 1
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
