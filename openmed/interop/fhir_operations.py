@@ -18,9 +18,9 @@ Three entry points are exposed:
 
 Design constraints:
 
-* Only free-text string content is transformed. Coded elements (``Coding``,
-  ``CodeableConcept.coding``), identifiers, references, systems, and temporal
-  values are never invented or altered.
+* Only free-text string content and direct identifier values are transformed.
+  Coded elements (``Coding``, ``CodeableConcept.coding``), references, systems,
+  and temporal values are never invented or altered.
 * The input is never mutated; every function returns a deep copy.
 * No HTTP server, no model loading at import time. The privacy pipeline is
   resolved lazily so importing this module stays cheap and side-effect free.
@@ -48,9 +48,11 @@ _DEFAULT_POLICY = "hipaa_safe_harbor"
 _DEFAULT_METHOD = "replace"
 
 # Keys whose entire subtree is structural/coded and must never be walked for
-# free text. ``coding`` holds coded values, ``identifier`` holds identifiers
-# (never invented or altered), and ``meta`` holds server/profile metadata.
-_SKIP_CONTAINERS = frozenset({"coding", "identifier", "meta"})
+# free text. ``coding`` holds coded values, and ``meta`` holds server/profile
+# metadata. Identifier subtrees are walked so direct ``Identifier.value`` PHI is
+# de-identified while ``system``/``type``/``use`` remain protected by
+# ``_SKIP_KEYS``.
+_SKIP_CONTAINERS = frozenset({"coding", "meta"})
 
 # Primitive keys whose string value is a code, system, reference, or temporal
 # value rather than human-readable free text. These are left untouched.
@@ -128,7 +130,8 @@ def de_identify_resource(
 
     Walks the resource's string-typed elements and its ``text`` narrative,
     de-identifying free-text content via the privacy pipeline. Coded elements,
-    identifiers, references, and temporal values are left unchanged.
+    identifier values are de-identified, while references, coded metadata, and
+    temporal values are left unchanged.
 
     Args:
         resource: A FHIR resource mapping carrying ``resourceType``.
@@ -332,7 +335,14 @@ def _bind_text_deidentifier(
         from ..core.pii import deidentify as deidentifier  # lazy, avoids cycles
 
     def deid(text: str) -> str:
-        result = deidentifier(text, method=method, policy=policy)
+        kwargs: dict[str, Any] = {"method": method, "policy": policy}
+        if method == "replace":
+            kwargs["consistent"] = True
+        try:
+            result = deidentifier(text, **kwargs)
+        except TypeError:
+            kwargs.pop("consistent", None)
+            result = deidentifier(text, **kwargs)
         return result.deidentified_text
 
     return deid
@@ -346,7 +356,6 @@ def _walk(node: Any, path: str, changes: list[str], deid: _TextDeidentifier) -> 
     """
 
     if isinstance(node, dict):
-        skip_text = isinstance(node.get("coding"), list)
         for key, value in list(node.items()):
             if key in _SKIP_CONTAINERS:
                 continue
@@ -358,7 +367,7 @@ def _walk(node: Any, path: str, changes: list[str], deid: _TextDeidentifier) -> 
                     changes.append(f"{child_path}.div")
                 continue
             if isinstance(value, str):
-                if key in _SKIP_KEYS or (key == "text" and skip_text):
+                if key in _SKIP_KEYS:
                     continue
                 new_value = _deidentify_string(value, deid)
                 if new_value is not None and new_value != value:
@@ -404,13 +413,14 @@ def _deidentify_narrative(div: Any, deid: _TextDeidentifier) -> tuple[Any, bool]
         new_div = deid(div)
         return new_div, new_div != div
 
+    result = redactor.result()
     if not redactor.changed:
         return div, False
-    return redactor.result(), True
+    return result, True
 
 
 class _NarrativeRedactor(HTMLParser):
-    """Rebuild XHTML, de-identifying only the text nodes between tags."""
+    """Rebuild XHTML while de-identifying full visible text content."""
 
     def __init__(self, deid: _TextDeidentifier) -> None:
         # ``convert_charrefs=False`` so entity/char refs are preserved verbatim
@@ -418,9 +428,11 @@ class _NarrativeRedactor(HTMLParser):
         super().__init__(convert_charrefs=False)
         self._deid = deid
         self._parts: list[str] = []
+        self._text_parts: list[tuple[int, str]] = []
         self.changed = False
 
     def result(self) -> str:
+        self._redact_visible_text()
         return "".join(self._parts)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
@@ -435,13 +447,10 @@ class _NarrativeRedactor(HTMLParser):
         self._parts.append(f"</{tag}>")
 
     def handle_data(self, data: str) -> None:
+        index = len(self._parts)
+        self._parts.append(data)
         if data.strip():
-            redacted = self._deid(data)
-            if redacted != data:
-                self.changed = True
-            self._parts.append(html.escape(redacted, quote=False))
-        else:
-            self._parts.append(data)
+            self._text_parts.append((index, data))
 
     def handle_entityref(self, name: str) -> None:
         self._parts.append(f"&{name};")
@@ -455,8 +464,23 @@ class _NarrativeRedactor(HTMLParser):
     def handle_decl(self, decl: str) -> None:
         self._parts.append(f"<!{decl}>")
 
-    @staticmethod
+    def _redact_visible_text(self) -> None:
+        if not self._text_parts:
+            return
+
+        visible_text = "".join(text for _, text in self._text_parts)
+        redacted = self._deid(visible_text)
+        if redacted == visible_text:
+            return
+
+        first_index = self._text_parts[0][0]
+        self._parts[first_index] = html.escape(redacted, quote=False)
+        for index, _ in self._text_parts[1:]:
+            self._parts[index] = ""
+        self.changed = True
+
     def _format_starttag(
+        self,
         tag: str,
         attrs: list[tuple[str, Optional[str]]],
         *,
@@ -467,9 +491,20 @@ class _NarrativeRedactor(HTMLParser):
             if value is None:
                 pieces.append(name)
             else:
-                pieces.append(f'{name}="{html.escape(value, quote=True)}"')
+                attr_value = self._deidentify_attribute(name, value)
+                pieces.append(f'{name}="{html.escape(attr_value, quote=True)}"')
         inner = " ".join(pieces)
         return f"<{inner}/>" if self_closing else f"<{inner}>"
+
+    def _deidentify_attribute(self, name: str, value: str) -> str:
+        if name in {"xmlns", "id", "class", "style", "href", "src"}:
+            return value
+        if not value.strip():
+            return value
+        redacted = self._deid(value)
+        if redacted != value:
+            self.changed = True
+        return redacted
 
 
 def _outcome_from_changes(changes: list[str]) -> dict[str, Any]:

@@ -20,6 +20,7 @@ _PHI_REPLACEMENTS = [
     ("John Doe", "[NAME]"),
     ("123 Main Street", "[ADDRESS]"),
     ("555-0100", "[PHONE]"),
+    ("MRN-123", "[MRN]"),
     ("Springfield", "[CITY]"),
     ("Doe", "[LAST]"),
     ("John", "[FIRST]"),
@@ -47,7 +48,7 @@ def _patient() -> dict:
         "text": {
             "status": "generated",
             "div": '<div xmlns="http://www.w3.org/1999/xhtml">'
-            "<p>Patient <b>John Doe</b> of Springfield</p></div>",
+            '<p title="John Doe">Patient <b>John</b> Doe of Springfield</p></div>',
         },
         "identifier": [{"system": "http://hospital.example/mrn", "value": "MRN-123"}],
         "name": [
@@ -99,6 +100,7 @@ def test_resource_deidentifies_free_text_and_narrative():
     # Narrative markup is preserved.
     assert result["text"]["div"].startswith("<div")
     assert "<b>" in result["text"]["div"]
+    assert 'title="[NAME]"' in result["text"]["div"]
 
 
 def test_resource_leaves_coded_and_structural_elements_untouched():
@@ -109,7 +111,7 @@ def test_resource_leaves_coded_and_structural_elements_untouched():
     assert result["name"][0]["use"] == "official"
     assert result["telecom"][0]["system"] == "phone"
     assert result["identifier"][0]["system"] == "http://hospital.example/mrn"
-    assert result["identifier"][0]["value"] == "MRN-123"
+    assert result["identifier"][0]["value"] == "[MRN]"
     assert result["text"]["status"] == "generated"
 
 
@@ -118,7 +120,7 @@ def test_observation_coded_values_preserved_but_free_text_redacted():
 
     assert result["code"]["coding"][0]["code"] == "29463-7"
     assert result["code"]["coding"][0]["display"] == "Body Weight"
-    assert result["code"]["text"] == "Body Weight for John Doe"
+    assert result["code"]["text"] == "Body Weight for [NAME]"
     assert result["valueQuantity"]["value"] == 72.5
     assert result["valueQuantity"]["unit"] == "kg"
     assert result["note"][0]["text"] == "Recorded by [NAME] at [ADDRESS]."
