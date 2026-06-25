@@ -26,6 +26,11 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.error_analysis import (
+    ErrorAnalysisReport,
+    ErrorSpanExample,
+    error_report,
+)
 from openmed.eval.fairness import (
     UNSPECIFIED_GROUP,
     FairnessGroupMetrics,
@@ -95,6 +100,8 @@ __all__ = [
     "DEVICE_TIERS",
     "DEFAULT_PERTURBATIONS",
     "EvalSpan",
+    "ErrorAnalysisReport",
+    "ErrorSpanExample",
     "FairnessGroupMetrics",
     "FairnessReport",
     "FixtureResult",
@@ -131,6 +138,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_suite_calibration_samples",
     "evaluate_quant_recall_delta",
+    "error_report",
     "fairness_report",
     "fit_calibration_thresholds",
     "generate_reid_leaderboard",
