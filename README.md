@@ -125,7 +125,7 @@ dependencies: [
 ]
 ```
 
-- **MLX runtime** for PII token classification, the Privacy Filter family, and experimental GLiNER-family zero-shot tasks — with a CoreML fallback path.
+- **MLX runtime** for PII token classification, the Privacy Filter family, experimental GLiNER-family zero-shot tasks, and Python MLX-LM text generation with Laneformer; includes a CoreML fallback path for supported token-classification artifacts.
 - **One model name, every platform** — MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
 - **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
 
