@@ -18,6 +18,7 @@ nav:
       - REST Service (MVP): rest-service.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
+      - Model Manifest: model-manifest.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
@@ -32,6 +33,7 @@ nav:
   - PII & De-identification:
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
+      - LangChain Redaction Wrapper: integrations-langchain.md
       - Compliance Posture: compliance.md
       - FHIR Interop Helpers: fhir-interop.md
   - Apple Silicon & Mobile:

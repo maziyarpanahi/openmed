@@ -1069,7 +1069,7 @@ def _build_deidentification_result(
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
     if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = random.randint(-365, 365)
+        date_shift_days = _random_nonzero_shift()
 
     anonymizer = None
     if effective_method == "replace" or any(
@@ -1322,7 +1322,7 @@ def deidentify(
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random if None)
+        date_shift_days: Specific number of days to shift (random non-zero if None)
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1700,6 +1700,30 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
         return date_value.replace(year=year, month=2, day=28)
 
 
+def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
+    """Return a random non-zero day offset in ``[low, high]`` excluding 0.
+
+    A zero-day shift would leave clinical dates unchanged, silently defeating
+    de-identification, so the auto-selected offset must never be 0.
+
+    Args:
+        low: Minimum (most-negative) shift in days, inclusive.
+        high: Maximum (most-positive) shift in days, inclusive.
+
+    Returns:
+        A non-zero integer day offset within the range.
+    """
+    if low > high:
+        raise ValueError("low must be less than or equal to high")
+    if low == high == 0:
+        raise ValueError("range must contain at least one non-zero shift")
+
+    while True:
+        shift_days = random.randint(low, high)
+        if shift_days != 0:
+            return shift_days
+
+
 def _shift_date(
     date_str: str,
     shift_days: int,
@@ -1789,14 +1813,14 @@ def _shift_date_basic(
     if lang in _DAY_FIRST_LANGS - {"de"}:
         # European: DD/MM/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "de":
         # German: DD.MM.YYYY
         patterns = [
             (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "ja":
@@ -1804,14 +1828,14 @@ def _shift_date_basic(
         # JAPANESE_PII_PATTERNS regex, not here).
         patterns = [
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
     else:
         # US/English: MM/DD/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "mdy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
 
     for pattern, order in patterns:
@@ -1896,7 +1920,7 @@ def _format_date_like_original(
         return new_date.strftime("%d.%m.%Y")
 
     # Slash-separated dates: interpretation depends on language
-    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
+    if re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
@@ -1905,7 +1929,7 @@ def _format_date_like_original(
             return new_date.strftime("%m/%d/%Y")
 
     # Dash-separated dates
-    if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
+    if re.match(r"\d{1,2}-\d{1,2}-\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             return new_date.strftime("%d-%m-%Y")
         else:

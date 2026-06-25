@@ -6,7 +6,7 @@ backbone:
   revision: policy-spine-v1
   family: encoder-token-classification
 dapt:
-  corpus_ref: openmed/dapt/clinical-policy-spine-v1
+  corpus_ref: openmed.eval.datasets:load_clinical_phi_manifest@openmed-clinicalprivacy-tier0
   sequence_length: 2048
 lora:
   target_trainable_ratio: 0.014
