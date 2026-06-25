@@ -66,6 +66,9 @@
     "VIN": "mask",
     "VEHICLE_REGISTRATION": "mask",
     "IMEI": "mask",
+    "MICROORGANISM": "mask",
+    "ANTIBIOTIC": "mask",
+    "SUSCEPTIBILITY": "mask",
     "OTHER": "mask"
   }
 }
