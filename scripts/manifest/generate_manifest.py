@@ -322,7 +322,7 @@ def _benchmark(tags: list[str]) -> dict[str, Any]:
         if tag.startswith("dataset:"):
             dataset = tag.split(":", 1)[1]
             break
-    return {"dataset": dataset, "micro_f1": None, "recall": None}
+    return {"dataset": dataset, "micro_f1": None, "recall": None, "leakage": None}
 
 
 def _arxiv(tags: list[str]) -> Optional[str]:
