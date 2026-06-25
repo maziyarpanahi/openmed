@@ -48,10 +48,12 @@ from .core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
 )
+from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
     BatchItem,
     BatchItemResult,
     BatchProcessor,
+    BatchProgress,
     BatchResult,
     OutputFormatter,
     TextProcessor,
@@ -545,6 +547,7 @@ __all__ = [
     "BatchProcessor",
     "BatchItem",
     "BatchItemResult",
+    "BatchProgress",
     "BatchResult",
     "process_batch",
     "AdvancedNERProcessor",
@@ -568,6 +571,8 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "generate_text",
+    "OpenMedMLXLanguageModel",
     # Profiling utilities
     "Profiler",
     "ProfileReport",

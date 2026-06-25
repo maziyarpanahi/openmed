@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a root `SECURITY.md` responsible-disclosure policy (private GitHub
+  vulnerability reporting, a severity matrix, supported versions, response targets
+  with a coordinated-disclosure CVE/advisory process, accidental-disclosure
+  containment, conduct/anti-abuse terms, and hardened safe-harbor protections), an
+  issue-template chooser that routes security reports to the private channel, and
+  security cross-links from the README and docs. Redaction-bypass / PHI leakage
+  (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
+  private-disclosure class.
+
 ## [1.6.0] - 2026-06-22
 
 ### Added
