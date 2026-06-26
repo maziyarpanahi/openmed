@@ -154,6 +154,65 @@ class DeidentificationResult:
             ),
         }
 
+    def to_dataframe(self) -> Any:
+        """Convert detected PII entities to a pandas DataFrame.
+
+        Returns:
+            A pandas DataFrame with one row per detected entity and columns
+            ``text``, ``label``, ``entity_type``, ``start``, ``end``,
+            ``confidence``, ``action``, and ``result_id``.
+
+        Raises:
+            ImportError: If pandas is not installed.
+        """
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise ImportError(
+                "pandas is required to use DeidentificationResult.to_dataframe(). "
+                "Install it with `pip install pandas`."
+            ) from exc
+
+        columns = [
+            "text",
+            "label",
+            "entity_type",
+            "start",
+            "end",
+            "confidence",
+            "action",
+            "result_id",
+        ]
+        payload = self.to_dict()
+        result_id_source = {
+            "deidentified_text": payload["deidentified_text"],
+            "method": payload["method"],
+            "num_entities_redacted": payload["num_entities_redacted"],
+            "timestamp": payload["timestamp"],
+        }
+        result_id = hashlib.sha256(
+            json.dumps(
+                result_id_source,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+        records = [
+            {
+                "text": entity.get("text"),
+                "label": entity.get("label"),
+                "entity_type": entity.get("entity_type"),
+                "start": entity.get("start"),
+                "end": entity.get("end"),
+                "confidence": entity.get("confidence"),
+                "action": entity.get("action"),
+                "result_id": result_id,
+            }
+            for entity in payload["pii_entities"]
+        ]
+        return pd.DataFrame.from_records(records, columns=columns)
+
 
 # Languages whose PII models were trained on accent-free text.
 # For these, input is automatically stripped of accents before model
