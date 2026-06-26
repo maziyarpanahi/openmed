@@ -178,6 +178,40 @@ jobs:
           pip-audit-report.json
       if: always()
 
+  sbom:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Sync runtime environment
+      run: |
+        uv sync --frozen --python 3.11
+
+    - name: Generate CycloneDX SBOM
+      run: |
+        uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: sbom
+        path: sbom.cdx.json
+      if: always()
+
   spacy-integration:
     needs: [repo-policy, lint]
     runs-on: ubuntu-latest
