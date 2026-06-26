@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.quality_gates import validate_entity_spans
+from openmed.eval.cache import build_report_key, hash_fixture_set, load_or_compute
 from openmed.eval.metrics import (
     EvalSpan,
     compute_confidence_intervals,
@@ -120,6 +121,8 @@ def run_benchmark(
     ci_resamples: int = 1000,
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
+    cache_dir: str | Path | None = None,
+    cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
     """Run *model_name* over fixtures and return a benchmark report.
 
@@ -127,9 +130,36 @@ def run_benchmark(
     cheap), a non-parametric bootstrap over documents attaches a
     ``confidence_interval`` payload to the leakage, character recall, and exact
     and relaxed span F1 metrics. The bootstrap is deterministic for a fixed
-    ``ci_seed``.
+    ``ci_seed``. Passing ``cache_dir`` opts into a local filesystem cache keyed
+    by model, suite, device, fixture-set hash, and eval code hash.
     """
     _validate_unique_fixture_ids(fixtures)
+    if cache_dir is not None:
+        report_key = build_report_key(
+            model_name=model_name,
+            suite=suite,
+            fixture_set_hash=hash_fixture_set(fixtures),
+            code_hash=cache_code_hash,
+            device=device,
+        )
+        return load_or_compute(
+            report_key,
+            lambda: run_benchmark(
+                fixtures,
+                suite=suite,
+                model_name=model_name,
+                device=device,
+                runner=runner,
+                generated_at=generated_at,
+                metadata=metadata,
+                confidence_intervals=confidence_intervals,
+                ci_resamples=ci_resamples,
+                ci_alpha=ci_alpha,
+                ci_seed=ci_seed,
+            ),
+            cache_dir=cache_dir,
+        )
+
     model_runner = runner or _shared_default_model_runner()
     results: list[FixtureResult] = []
     peak_rss_start = _peak_rss_bytes()
@@ -214,6 +244,8 @@ def run_suite(
     ci_resamples: int = 1000,
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
+    cache_dir: str | Path | None = None,
+    cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
     """Load fixtures, run the benchmark, and optionally write reports."""
     report = run_benchmark(
@@ -228,6 +260,8 @@ def run_suite(
         ci_resamples=ci_resamples,
         ci_alpha=ci_alpha,
         ci_seed=ci_seed,
+        cache_dir=cache_dir,
+        cache_code_hash=cache_code_hash,
     )
     if output_json is not None:
         report.write_json(output_json)
