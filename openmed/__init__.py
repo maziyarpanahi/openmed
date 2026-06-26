@@ -48,6 +48,7 @@ from .core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
 )
+from .core.redaction_preview import redaction_preview, render_redaction_preview
 from .core.result_cache import (
     get_result_cache,
     make_cache_key,
@@ -607,6 +608,8 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "redaction_preview",
+    "render_redaction_preview",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
     "find_semantic_units",
