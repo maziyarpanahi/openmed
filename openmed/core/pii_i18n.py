@@ -26,8 +26,6 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "ar",
     "ja",
     "tr",
-    "pl",
-    "ko",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -43,8 +41,6 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ar": "Arabic",
     "ja": "Japanese",
     "tr": "Turkish",
-    "pl": "Polish",
-    "ko": "Korean",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -60,8 +56,6 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ar": "Arabic-",
     "ja": "Japanese-",
     "tr": "Turkish-",
-    "pl": "Polish-",
-    "ko": "Korean-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -77,8 +71,6 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
-    "pl": "OpenMed/OpenMed-PII-Polish-SuperClinical-Small-44M-v1",
-    "ko": "OpenMed/OpenMed-PII-Korean-SuperClinical-Small-44M-v1",
 }
 
 
@@ -471,10 +463,13 @@ def validate_polish_pesel(text: str) -> bool:
     day = numbers[4] * 10 + numbers[5]
 
     # Century offset encoded in the month tens digit.
-    if month_raw > 80 or month_raw == 0:
+    if month_raw > 92 or month_raw == 0:
         return False
 
-    if month_raw > 60:
+    if month_raw > 80:
+        year += 1800
+        month = month_raw - 80
+    elif month_raw > 60:
         year += 2200
         month = month_raw - 60
     elif month_raw > 40:
@@ -1857,65 +1852,8 @@ _POLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.4,
         validator=validate_polish_pesel,
     ),
-    # Polish phone numbers (+48 or 0-prefix, 9 digits)
-    PIIPattern(
-        r"(?<!\w)(?:\+48\s?)?\d{3}[\s.-]?\d{3}[\s.-]?\d{3}\b",
-        "phone_number",
-        priority=8,
-        base_score=0.5,
-        context_words=[
-            "telefon",
-            "tel",
-            "komórkowy",
-            "komorkowy",
-            "numer telefonu",
-            "fax",
-            "kontakt",
-        ],
-        context_boost=0.35,
-    ),
-    # Polish dates (DD.MM.YYYY or DD-MM-YYYY)
-    PIIPattern(
-        r"\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b",
-        "date",
-        priority=9,
-        base_score=0.6,
-        context_words=[
-            "data urodzenia",
-            "urodzony",
-            "urodzona",
-            "ur.",
-            "przyjety",
-            "wypisany",
-            "data",
-        ],
-        context_boost=0.3,
-    ),
-    # Polish postcode (XX-XXX)
-    PIIPattern(
-        r"\b\d{2}-\d{3}\b",
-        "postcode",
-        priority=8,
-        base_score=0.6,
-        context_words=["kod pocztowy", "adres", "ul.", "ulica", "osiedle"],
-        context_boost=0.3,
-    ),
-    # Polish street address
-    PIIPattern(
-        r"\bul\.?\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż\s.]+\s+\d{1,5}[a-z]?\b",
-        "street_address",
-        priority=7,
-        base_score=0.65,
-        context_words=["adres", "zamieszkania", "zameldowany", "ulica"],
-        context_boost=0.2,
-        flags=re.IGNORECASE,
-    ),
 ]
 
-
-# ---------------------------------------------------------------------------
-# Korean PII patterns
-# ---------------------------------------------------------------------------
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # RRN (13-digit Resident Registration Number)
@@ -1934,59 +1872,6 @@ _KOREAN_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.4,
         validator=validate_korean_rrn,
-    ),
-    # Korean phone numbers (010-XXXX-XXXX, 02-XXXX-XXXX, etc.)
-    PIIPattern(
-        r"(?<!\w)(?:0(?:1[016789]|2|3[1-3]|4[1-4]|5[1-5]|6[1-4]))[-\s.]?\d{3,4}[-\s.]?\d{4}\b",
-        "phone_number",
-        priority=8,
-        base_score=0.6,
-        context_words=[
-            "전화",
-            "핸드폰",
-            "휴대폰",
-            "연락처",
-            "팩스",
-            "phone",
-            "tel",
-        ],
-        context_boost=0.3,
-    ),
-    # Korean dates (YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD)
-    PIIPattern(
-        r"\b\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\b",
-        "date",
-        priority=9,
-        base_score=0.6,
-        context_words=[
-            "생년월일",
-            "출생",
-            "입원일",
-            "퇴원일",
-            "날짜",
-            "date of birth",
-            "admitted",
-            "discharged",
-        ],
-        context_boost=0.3,
-    ),
-    # Korean postcode (5-digit since 2015)
-    PIIPattern(
-        r"\b\d{5}\b",
-        "postcode",
-        priority=6,
-        base_score=0.3,
-        context_words=["우편번호", "주소", "postcode", "postal"],
-        context_boost=0.5,
-    ),
-    # Korean address (road-name style)
-    PIIPattern(
-        r"[가-힣]+(?:도|시|군|구)\s+[가-힣]+(?:동|로|길|읍|면)\s+\d{1,5}\b",
-        "street_address",
-        priority=7,
-        base_score=0.65,
-        context_words=["주소", "거주지", "address", "residence"],
-        context_boost=0.2,
     ),
 ]
 
@@ -2289,46 +2174,6 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
         "ZIPCODE": ["34000", "06000", "35000"],
-    },
-    "pl": {
-        "NAME": [
-            "Jan Kowalski",
-            "Anna Nowak",
-            "Piotr Wiśniewski",
-            "Katarzyna Wójcik",
-        ],
-        "FIRST_NAME": ["Jan", "Anna", "Piotr", "Katarzyna"],
-        "LAST_NAME": ["Kowalski", "Nowak", "Wiśniewski", "Wójcik"],
-        "EMAIL": ["pacjent@przyklad.pl", "kontakt@przyklad.org"],
-        "PHONE": ["+48 123 456 789", "500 100 200"],
-        "ID_NUM": ["44051401359"],
-        "STREET_ADDRESS": ["ul. Marszałkowska 12", "ul. Krakowska 45"],
-        "URL_PERSONAL": ["https://przyklad.pl"],
-        "USERNAME": ["pacjent123", "uzytkownik456"],
-        "DATE": ["01.01.2000", "31.12.1999"],
-        "AGE": ["45", "62", "38"],
-        "LOCATION": ["Warszawa", "Kraków", "Gdańsk"],
-        "ZIPCODE": ["00-001", "31-001", "80-001"],
-    },
-    "ko": {
-        "NAME": [
-            "김민수",
-            "이영희",
-            "박철수",
-            "최수진",
-        ],
-        "FIRST_NAME": ["민수", "영희", "철수", "수진"],
-        "LAST_NAME": ["김", "이", "박", "최"],
-        "EMAIL": ["patient@example.kr", "contact@example.org"],
-        "PHONE": ["010-1234-5678", "02-123-4567"],
-        "ID_NUM": ["860815-1234567"],
-        "STREET_ADDRESS": ["서울특별시 강남구 역삼동 123"],
-        "URL_PERSONAL": ["https://example.kr"],
-        "USERNAME": ["patient123", "user456"],
-        "DATE": ["2000-01-01", "1999-12-31"],
-        "AGE": ["45", "62", "38"],
-        "LOCATION": ["서울", "부산", "대구"],
-        "ZIPCODE": ["06236", "04524", "100-011"],
     },
 }
 

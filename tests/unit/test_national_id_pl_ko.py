@@ -78,6 +78,24 @@ class TestValidatePolishPesel:
         pesel = "".join(str(d) for d in body) + str(check)
         assert validate_polish_pesel(pesel) is True
 
+    def test_valid_1800s_pesel(self):
+        # 1885-03-15 => month_raw = 83 (80+3) => year = 1885, month = 3
+        body = [8, 5, 8, 3, 1, 5, 0, 0, 0, 0]
+        weights = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+        total = sum(w * d for w, d in zip(weights, body))
+        check = (10 - total % 10) % 10
+        pesel = "".join(str(d) for d in body) + str(check)
+        assert validate_polish_pesel(pesel) is True
+
+    def test_rejects_month_raw_above_92(self):
+        # month_raw = 93 => invalid (above 92 threshold)
+        body = [8, 5, 9, 3, 1, 5, 0, 0, 0, 0]
+        weights = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+        total = sum(w * d for w, d in zip(weights, body))
+        check = (10 - total % 10) % 10
+        pesel = "".join(str(d) for d in body) + str(check)
+        assert validate_polish_pesel(pesel) is False
+
     def test_non_digit_input(self):
         assert validate_polish_pesel("abcdefghijk") is False
 
