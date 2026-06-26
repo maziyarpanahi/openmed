@@ -128,6 +128,9 @@ class ModelLoader:
             auth_kwargs = self._hub_auth_kwargs()
             local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
             pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
+            load_kwargs = dict(kwargs)
+            device_preference = load_kwargs.pop("device", None)
+            resolved_device = self._resolve_torch_device(device_preference)
 
             # Load config first to verify it's a token classification model
             config = AutoConfig.from_pretrained(
@@ -161,12 +164,14 @@ class ModelLoader:
             # not by modifying the model tokenizer/vocabulary.
 
             # Load model
-            model_kwargs = {**pretrained_kwargs, **kwargs}
+            model_kwargs = {**pretrained_kwargs, **load_kwargs}
             model = AutoModelForTokenClassification.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
                 **model_kwargs,
             )
+            if hasattr(model, "to"):
+                model.to(resolved_device)
 
             # Cache the loaded model and tokenizer
             self._models[full_model_name] = model
@@ -268,10 +273,11 @@ class ModelLoader:
 
         try:
             # Create pipeline directly with model name for better caching
+            pipeline_device = kwargs.get("device", self._get_device_id())
             pipeline_kwargs = {
                 "model": full_model_name,
                 "aggregation_strategy": aggregation_strategy,
-                "device": self._get_device_id(),
+                "device": pipeline_device,
                 "use_fast": use_fast_tokenizer,
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
@@ -290,6 +296,7 @@ class ModelLoader:
             model_data = self.load_model(model_name)
 
             fallback_kwargs = dict(kwargs)
+            fallback_kwargs.pop("device", None)
             if aggregation_strategy is not None:
                 fallback_kwargs["aggregation_strategy"] = aggregation_strategy
 
@@ -297,7 +304,7 @@ class ModelLoader:
                 task,
                 model=model_data["model"],
                 tokenizer=model_data["tokenizer"],
-                device=self._get_device_id(),
+                device=kwargs.get("device", self._get_device_id()),
                 **fallback_kwargs,
             )
             self._pipelines[cache_key] = ner_pipeline
@@ -437,14 +444,22 @@ class ModelLoader:
 
     def _get_device_id(self) -> Union[int, str]:
         """Get device ID for pipeline."""
-        if self.config.device is None:
-            return -1  # CPU
-        elif self.config.device.lower() == "cpu":
+        resolved_device = self._resolve_torch_device()
+        if resolved_device == "cpu":
             return -1
-        elif self.config.device.lower() in ["cuda", "gpu"]:
+        if resolved_device == "cuda":
             return 0
-        else:
-            return self.config.device
+        return resolved_device
+
+    def _resolve_torch_device(self, prefer: Optional[str] = None) -> str:
+        """Resolve and prepare the torch device for this loader."""
+        from openmed.torch.device import apply_mps_tuning, resolve_torch_device
+
+        device_preference = prefer if prefer is not None else self.config.device
+        resolved_device = resolve_torch_device(device_preference)
+        if resolved_device.startswith("mps"):
+            apply_mps_tuning()
+        return resolved_device
 
     def get_registry_info(self, model_key: str) -> Optional[RegistryModelInfo]:
         """Get information from model registry."""
