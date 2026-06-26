@@ -624,6 +624,14 @@ def _extract_pii_batch(
         for result in results:
             _apply_pii_smart_merging(result, effective_model, lang)
 
+    for result in results:
+        _apply_clinical_protection_to_result(
+            result.text,
+            result,
+            config=config,
+            lang=lang,
+        )
+
     from .quality_gates import validate_entity_spans
 
     for result in results:
@@ -860,6 +868,49 @@ def _detector_infos(
             )
         )
     return detectors
+
+
+def _apply_clinical_protection_to_result(
+    text: str,
+    pii_result: Any,
+    *,
+    config: Optional[OpenMedConfig] = None,
+    options: Optional[Mapping[str, Any]] = None,
+    lang: str = "en",
+) -> int:
+    """Suppress ambiguous PII entities that exactly match clinical terms."""
+    from .clinical_protect import (
+        filter_protected_spans,
+        protection_options_from_config,
+    )
+
+    protection_options = dict(options or protection_options_from_config(config))
+    result = filter_protected_spans(
+        list(getattr(pii_result, "entities", ()) or ()),
+        text,
+        lang=lang,
+        **protection_options,
+    )
+    pii_result.entities = result.spans
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(result.spans)
+
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    previous = metadata.get("clinical_protection")
+    previous_metadata = previous if isinstance(previous, Mapping) else {}
+    clinical_metadata = dict(result.metadata["clinical_protection"])
+    clinical_metadata["checked_spans"] += int(previous_metadata.get("checked_spans", 0))
+    clinical_metadata["suppressed_spans"] += int(
+        previous_metadata.get("suppressed_spans", 0)
+    )
+    clinical_metadata["protected_term_count"] = max(
+        int(clinical_metadata["protected_term_count"]),
+        int(previous_metadata.get("protected_term_count", 0)),
+    )
+    clinical_metadata["enabled"] = bool(protection_options.get("enabled", True))
+    metadata["clinical_protection"] = clinical_metadata
+    pii_result.metadata = metadata
+    return result.suppressed_count
 
 
 def _context_window(
