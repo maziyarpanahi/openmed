@@ -41,6 +41,13 @@ from openmed.eval.calibrate import (
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
+from openmed.eval.dataset_card import (
+    DATASET_CARD_SUITES,
+    DatasetCard,
+    build_all_dataset_cards,
+    build_dataset_card,
+    render_dataset_card_markdown,
+)
 from openmed.eval.error_analysis import (
     ErrorAnalysisReport,
     ErrorSpanExample,
@@ -102,6 +109,13 @@ from openmed.eval.robustness import (
     robustness_report,
     whitespace_noise_perturbation,
 )
+from openmed.eval.section_recall import (
+    UNSECTIONED_SECTION,
+    SectionRecallMetrics,
+    SectionRecallReport,
+    SectionSpan,
+    compute_section_recall,
+)
 from openmed.eval.tiers import TIERS
 
 __all__ = [
@@ -113,9 +127,11 @@ __all__ = [
     "CalibrationSample",
     "CalibrationThresholdSet",
     "CACHE_SCHEMA_VERSION",
+    "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
     "DEFAULT_PERTURBATIONS",
+    "DatasetCard",
     "EvalCacheKey",
     "EvalSpan",
     "ErrorAnalysisReport",
@@ -136,10 +152,16 @@ __all__ = [
     "ReleaseGate",
     "RobustnessReport",
     "RobustnessVariant",
+    "SectionRecallMetrics",
+    "SectionRecallReport",
+    "SectionSpan",
     "UNSPECIFIED_GROUP",
+    "UNSECTIONED_SECTION",
     "artifact_dir_for",
     "build_report_key",
     "build_thresholds_payload",
+    "build_all_dataset_cards",
+    "build_dataset_card",
     "cache_path",
     "case_flip_perturbation",
     "character_typo_perturbation",
@@ -156,6 +178,7 @@ __all__ = [
     "compute_recall_slices",
     "compute_relaxed_span_f1",
     "compute_resource_metrics",
+    "compute_section_recall",
     "compute_surrogate_consistency",
     "default_cache_dir",
     "default_suite_calibration_samples",
@@ -175,6 +198,7 @@ __all__ = [
     "ocr_noise_perturbation",
     "perturb_fixture",
     "render_reid_leaderboard",
+    "render_dataset_card_markdown",
     "robustness_report",
     "run_benchmark",
     "run_reid_attack",
