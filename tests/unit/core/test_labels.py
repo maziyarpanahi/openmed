@@ -4,26 +4,35 @@ import pytest
 
 from openmed.core.labels import (
     AGE,
+    ANTIBIOTIC,
+    BODY_SITE,
     CANONICAL_LABELS,
+    CLINICAL_CONCEPT,
+    CONDITION,
     CREDIT_CARD,
     DATE,
     DATE_OF_BIRTH,
     EMAIL,
     FIRST_NAME,
     GENDER,
+    HIPAA_SAFE_HARBOR_CLASSES,
     ID_NUM,
     ID_SUBTYPE_MRN,
     ID_SUBTYPE_NATIONAL_ID,
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
     IP_ADDRESS,
+    LAB_TEST,
     LAST_NAME,
     LOCATION,
+    MEDICATION,
+    MICROORGANISM,
     OCCUPATION,
     ORGANIZATION,
     OTHER,
     PERSON,
     PHONE,
+    PROCEDURE,
     SSN,
     STREET_ADDRESS,
     URL,
@@ -342,3 +351,107 @@ class TestRegistryCoverage:
             assert canonical in CANONICAL_LABELS, (
                 f"{label} -> {canonical} which is not in CANONICAL_LABELS"
             )
+
+
+class TestClinicalConceptLabels:
+    """Clinical-concept canonical labels added for grounding (issue #266)."""
+
+    NEW_LABELS = (CONDITION, MEDICATION, LAB_TEST, PROCEDURE, BODY_SITE)
+
+    def test_new_labels_in_canonical_set(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+
+    def test_new_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("disease", CONDITION),
+            ("diagnosis", CONDITION),
+            ("finding", CONDITION),
+            ("drug", MEDICATION),
+            ("medication", MEDICATION),
+            ("chemical", MEDICATION),
+            ("test", LAB_TEST),
+            ("measurement", LAB_TEST),
+            ("analyte", LAB_TEST),
+            ("surgery", PROCEDURE),
+            ("procedure", PROCEDURE),
+            ("operation", PROCEDURE),
+            ("anatomy", BODY_SITE),
+            ("organ", BODY_SITE),
+            ("body site", BODY_SITE),
+        ],
+    )
+    def test_clinical_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_new_labels_are_clinical_concepts(self):
+        for label in self.NEW_LABELS:
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)  # non-empty grounding hints
+
+    def test_new_labels_have_hipaa_class(self):
+        for label in self.NEW_LABELS:
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
+class TestClinicalLabelsAreAdditive:
+    """The clinical additions must not disturb the existing PII taxonomy."""
+
+    ORIGINAL_LABELS = frozenset(
+        {
+            PERSON,
+            FIRST_NAME,
+            LAST_NAME,
+            EMAIL,
+            PHONE,
+            URL,
+            LOCATION,
+            STREET_ADDRESS,
+            ZIPCODE,
+            DATE,
+            DATE_OF_BIRTH,
+            AGE,
+            ID_NUM,
+            SSN,
+            CREDIT_CARD,
+            IP_ADDRESS,
+            GENDER,
+            ORGANIZATION,
+            OCCUPATION,
+            USERNAME,
+            OTHER,
+        }
+    )
+
+    # Representative pre-existing alias resolutions that must stay byte-identical.
+    PRESERVED_ALIASES = {
+        "name": PERSON,
+        "patient": PERSON,
+        "givenname": FIRST_NAME,
+        "surname": LAST_NAME,
+        "email": EMAIL,
+        "telephone": PHONE,
+        "zipcode": ZIPCODE,
+        "dob": DATE_OF_BIRTH,
+        "age": AGE,
+        "ssn": SSN,
+        "organism": MICROORGANISM,
+        "antibiotic": ANTIBIOTIC,
+        "totally_made_up_label": OTHER,
+    }
+
+    def test_original_labels_still_present(self):
+        assert self.ORIGINAL_LABELS <= CANONICAL_LABELS
+
+    def test_existing_aliases_unchanged(self):
+        for alias, expected in self.PRESERVED_ALIASES.items():
+            assert normalize_label(alias) == expected
+
+    def test_id_num_mapping_unchanged(self):
+        assert normalize_label("ID_NUM") == ID_NUM
+        assert normalize_label("mrn") == ID_NUM
