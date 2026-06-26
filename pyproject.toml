@@ -133,6 +133,7 @@ docs = [
   "mkdocs-material>=9.5",
   "mkdocs-git-revision-date-localized-plugin>=1.2.6",
   "mkdocs-minify-plugin>=0.8.0",
+  "pygments<2.20",
   "pymdown-extensions>=10.8",
   "mkdocstrings[python]",
   "griffe",
