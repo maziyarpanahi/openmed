@@ -51,6 +51,11 @@ if TYPE_CHECKING:
     from .audit import AuditReport
     from .models import ModelLoader
 
+from .result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
+
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
 
@@ -634,6 +639,8 @@ def extract_pii(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
@@ -665,6 +672,8 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         PredictionResult with detected PII entities
@@ -677,7 +686,14 @@ def extract_pii(
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
-    return _extract_pii_batch(
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("extract_pii", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
+    final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -687,6 +703,9 @@ def extract_pii(
         normalize_accents=normalize_accents,
         loader=loader,
     )[0]
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _resolve_deidentification_method(
@@ -1360,6 +1379,8 @@ def deidentify(
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
     audit: bool = False,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -1408,6 +1429,8 @@ def deidentify(
             thresholds filter model detections and appear in audit output.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -1426,6 +1449,14 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("deidentify", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
     from .pipeline import Pipeline
 
     pipeline = Pipeline(
@@ -1456,9 +1487,14 @@ def deidentify(
         locale=locale,
         audit=audit,
     )
+
     if audit and result.deidentification_result.audit_report is not None:
-        return result.deidentification_result.audit_report
-    return result.deidentification_result
+        final_result = result.deidentification_result.audit_report
+    else:
+        final_result = result.deidentification_result
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
