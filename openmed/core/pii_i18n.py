@@ -26,6 +26,8 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "ar",
     "ja",
     "tr",
+    "pl",
+    "ko",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -41,6 +43,8 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ar": "Arabic",
     "ja": "Japanese",
     "tr": "Turkish",
+    "pl": "Polish",
+    "ko": "Korean",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -56,6 +60,8 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ar": "Arabic-",
     "ja": "Japanese-",
     "tr": "Turkish-",
+    "pl": "Polish-",
+    "ko": "Korean-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -71,6 +77,8 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "pl": "OpenMed/OpenMed-PII-Polish-SuperClinical-Small-44M-v1",
+    "ko": "OpenMed/OpenMed-PII-Korean-SuperClinical-Small-44M-v1",
 }
 
 
@@ -422,6 +430,154 @@ def validate_turkish_tckn(text: str) -> bool:
     eleventh = sum(numbers[:10]) % 10
 
     return numbers[9] == tenth and numbers[10] == eleventh
+
+
+def validate_polish_pesel(text: str) -> bool:
+    """Validate Polish PESEL number.
+
+    The PESEL is an 11-digit number with an embedded birth date and a
+    weighted checksum.  Structure: YYMMDDZZZSC.
+
+    - YYMMDD: date of birth.  Month has century offsets: +20 for 2000s,
+      +40 for 2100s, +60 for 2200s, +80 for 1800s.
+    - ZZZ: serial number.
+    - S: check digit.
+
+    Checksum weights over the first ten digits: 1, 3, 7, 9, 1, 3, 7, 9, 1, 3.
+    Check digit = (10 - sum mod 10) mod 10.
+
+    Args:
+        text: PESEL string (may contain spaces or hyphens)
+
+    Returns:
+        True if the PESEL passes format, date, and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+
+    numbers = [int(d) for d in digits]
+
+    # --- checksum ---
+    weights = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+    total = sum(w * n for w, n in zip(weights, numbers[:10]))
+    if numbers[10] != (10 - total % 10) % 10:
+        return False
+
+    # --- embedded birth date ---
+    year = numbers[0] * 10 + numbers[1]
+    month_raw = numbers[2] * 10 + numbers[3]
+    day = numbers[4] * 10 + numbers[5]
+
+    # Century offset encoded in the month tens digit.
+    if month_raw > 80 or month_raw == 0:
+        return False
+
+    if month_raw > 60:
+        year += 2200
+        month = month_raw - 60
+    elif month_raw > 40:
+        year += 2100
+        month = month_raw - 40
+    elif month_raw > 20:
+        year += 2000
+        month = month_raw - 20
+    else:
+        year += 1900
+        month = month_raw
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    return True
+
+
+def validate_korean_rrn(text: str) -> bool:
+    """Validate South Korean Resident Registration Number (RRN).
+
+    The RRN is a 13-digit number in the format YYMMDDGXXXXXX:
+
+    - YYMMDD: date of birth.
+    - G (position 6, zero-indexed): century and gender code.
+        1/2 = 1900s (1=male, 2=female),
+        3/4 = 2000s (3=male, 4=female),
+        5/6 = 1900s foreign residents,
+        7/8 = 2000s foreign residents,
+        9/0 = 1800s (9=male, 0=female).
+    - Positions 7-11: serial number.
+    - Position 12: check digit.
+
+    Checksum weights: 2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5.
+    Check digit = (11 - (sum mod 11)) mod 10.
+
+    Args:
+        text: RRN string (may contain hyphens or spaces)
+
+    Returns:
+        True if the RRN passes format, date, and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 13:
+        return False
+
+    numbers = [int(d) for d in digits]
+
+    # --- century/gender code ---
+    gender_code = numbers[6]
+    century_map = {
+        1: 1900,
+        2: 1900,
+        3: 2000,
+        4: 2000,
+        5: 1900,
+        6: 1900,
+        7: 2000,
+        8: 2000,
+        9: 1800,
+        0: 1800,
+    }
+    if gender_code not in century_map:
+        return False
+    century = century_map[gender_code]
+
+    # --- embedded birth date ---
+    year = century + numbers[0] * 10 + numbers[1]
+    month = numbers[2] * 10 + numbers[3]
+    day = numbers[4] * 10 + numbers[5]
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    # --- checksum ---
+    weights = (2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5)
+    total = sum(w * n for w, n in zip(weights, numbers[:12]))
+    check = (11 - total % 11) % 10
+
+    return numbers[12] == check
 
 
 # ---------------------------------------------------------------------------
@@ -1677,6 +1833,163 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+# ---------------------------------------------------------------------------
+# Polish PII patterns
+# ---------------------------------------------------------------------------
+
+_POLISH_PII_PATTERNS: List[PIIPattern] = [
+    # PESEL (11-digit national ID)
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "pesel",
+            "numer pesel",
+            "nr pesel",
+            "pesel:",
+            "tozsamo",
+            "dowód osobisty",
+            "dowod osobisty",
+        ],
+        context_boost=0.4,
+        validator=validate_polish_pesel,
+    ),
+    # Polish phone numbers (+48 or 0-prefix, 9 digits)
+    PIIPattern(
+        r"(?<!\w)(?:\+48\s?)?\d{3}[\s.-]?\d{3}[\s.-]?\d{3}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.5,
+        context_words=[
+            "telefon",
+            "tel",
+            "komórkowy",
+            "komorkowy",
+            "numer telefonu",
+            "fax",
+            "kontakt",
+        ],
+        context_boost=0.35,
+    ),
+    # Polish dates (DD.MM.YYYY or DD-MM-YYYY)
+    PIIPattern(
+        r"\b\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "data urodzenia",
+            "urodzony",
+            "urodzona",
+            "ur.",
+            "przyjety",
+            "wypisany",
+            "data",
+        ],
+        context_boost=0.3,
+    ),
+    # Polish postcode (XX-XXX)
+    PIIPattern(
+        r"\b\d{2}-\d{3}\b",
+        "postcode",
+        priority=8,
+        base_score=0.6,
+        context_words=["kod pocztowy", "adres", "ul.", "ulica", "osiedle"],
+        context_boost=0.3,
+    ),
+    # Polish street address
+    PIIPattern(
+        r"\bul\.?\s+[A-ZĄĆĘŁŃÓŚŹŻ][a-ząćęłńóśźż\s.]+\s+\d{1,5}[a-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adres", "zamieszkania", "zameldowany", "ulica"],
+        context_boost=0.2,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Korean PII patterns
+# ---------------------------------------------------------------------------
+
+_KOREAN_PII_PATTERNS: List[PIIPattern] = [
+    # RRN (13-digit Resident Registration Number)
+    PIIPattern(
+        r"\b\d{6}[-\s]?\d{7}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "주민등록번호",
+            "주민번호",
+            "등록번호",
+            "rrn",
+            "resident registration",
+            "jumin",
+        ],
+        context_boost=0.4,
+        validator=validate_korean_rrn,
+    ),
+    # Korean phone numbers (010-XXXX-XXXX, 02-XXXX-XXXX, etc.)
+    PIIPattern(
+        r"(?<!\w)(?:0(?:1[016789]|2|3[1-3]|4[1-4]|5[1-5]|6[1-4]))[-\s.]?\d{3,4}[-\s.]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "전화",
+            "핸드폰",
+            "휴대폰",
+            "연락처",
+            "팩스",
+            "phone",
+            "tel",
+        ],
+        context_boost=0.3,
+    ),
+    # Korean dates (YYYY.MM.DD, YYYY-MM-DD, YYYY/MM/DD)
+    PIIPattern(
+        r"\b\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "생년월일",
+            "출생",
+            "입원일",
+            "퇴원일",
+            "날짜",
+            "date of birth",
+            "admitted",
+            "discharged",
+        ],
+        context_boost=0.3,
+    ),
+    # Korean postcode (5-digit since 2015)
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["우편번호", "주소", "postcode", "postal"],
+        context_boost=0.5,
+    ),
+    # Korean address (road-name style)
+    PIIPattern(
+        r"[가-힣]+(?:도|시|군|구)\s+[가-힣]+(?:동|로|길|읍|면)\s+\d{1,5}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["주소", "거주지", "address", "residence"],
+        context_boost=0.2,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -1689,6 +2002,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
+    "pl": _POLISH_PII_PATTERNS,
+    "ko": _KOREAN_PII_PATTERNS,
 }
 
 
@@ -1974,6 +2289,46 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
         "ZIPCODE": ["34000", "06000", "35000"],
+    },
+    "pl": {
+        "NAME": [
+            "Jan Kowalski",
+            "Anna Nowak",
+            "Piotr Wiśniewski",
+            "Katarzyna Wójcik",
+        ],
+        "FIRST_NAME": ["Jan", "Anna", "Piotr", "Katarzyna"],
+        "LAST_NAME": ["Kowalski", "Nowak", "Wiśniewski", "Wójcik"],
+        "EMAIL": ["pacjent@przyklad.pl", "kontakt@przyklad.org"],
+        "PHONE": ["+48 123 456 789", "500 100 200"],
+        "ID_NUM": ["44051401359"],
+        "STREET_ADDRESS": ["ul. Marszałkowska 12", "ul. Krakowska 45"],
+        "URL_PERSONAL": ["https://przyklad.pl"],
+        "USERNAME": ["pacjent123", "uzytkownik456"],
+        "DATE": ["01.01.2000", "31.12.1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Warszawa", "Kraków", "Gdańsk"],
+        "ZIPCODE": ["00-001", "31-001", "80-001"],
+    },
+    "ko": {
+        "NAME": [
+            "김민수",
+            "이영희",
+            "박철수",
+            "최수진",
+        ],
+        "FIRST_NAME": ["민수", "영희", "철수", "수진"],
+        "LAST_NAME": ["김", "이", "박", "최"],
+        "EMAIL": ["patient@example.kr", "contact@example.org"],
+        "PHONE": ["010-1234-5678", "02-123-4567"],
+        "ID_NUM": ["860815-1234567"],
+        "STREET_ADDRESS": ["서울특별시 강남구 역삼동 123"],
+        "URL_PERSONAL": ["https://example.kr"],
+        "USERNAME": ["patient123", "user456"],
+        "DATE": ["2000-01-01", "1999-12-31"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["서울", "부산", "대구"],
+        "ZIPCODE": ["06236", "04524", "100-011"],
     },
 }
 
