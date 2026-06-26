@@ -99,3 +99,27 @@ jobs:
           HATCH_KEYRING: disabled
         run: |
           hatch publish
+
+      # SBOM generation runs after publish and is fail-open: a hiccup in any of
+      # these steps must never block an otherwise-successful release.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.2.0
+        continue-on-error: true
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Generate CycloneDX SBOM
+        continue-on-error: true
+        run: |
+          uv sync --frozen --python 3.11
+          uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          if-no-files-found: warn
