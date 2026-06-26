@@ -12,6 +12,7 @@ from .config import (
 )
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
+from .redaction_preview import redaction_preview, render_redaction_preview
 
 __all__ = [
     "ModelLoader",
@@ -24,6 +25,8 @@ __all__ = [
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "redaction_preview",
+    "render_redaction_preview",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",
