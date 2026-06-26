@@ -78,6 +78,7 @@ REVIEWED_LICENSES = {
     "pdfplumber": "MIT",
     "pillow": "HPND",
     "presidio-analyzer": "MIT",
+    "pygments": "BSD-2-Clause",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
     "pytesseract": "Apache-2.0",
