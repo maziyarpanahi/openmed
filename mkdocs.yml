@@ -32,6 +32,7 @@ nav:
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
   - PII & De-identification:
+      - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
       - LangChain Redaction Wrapper: integrations-langchain.md

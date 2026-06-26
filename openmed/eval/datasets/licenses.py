@@ -25,6 +25,13 @@ class DatasetLicense:
 
 
 PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
+    "golden": DatasetLicense(
+        dataset="golden",
+        license_id="Apache-2.0",
+        source_url="openmed/eval/golden/fixtures",
+        redistribution="committed synthetic fixtures only",
+        notes="Synthetic-only fixtures; no real PHI and no DUA content.",
+    ),
     "shield": DatasetLicense(
         dataset="shield",
         license_id="access-controlled-full; public-sample",
