@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   security cross-links from the README and docs. Redaction-bypass / PHI leakage
   (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
   private-disclosure class.
+- Added LRU Cache implementation for analyze_text(), extract_pii(), and deidentify().
 
 ## [1.6.0] - 2026-06-22
 

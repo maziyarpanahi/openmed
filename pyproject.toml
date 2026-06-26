@@ -43,7 +43,7 @@ dev = [
   "fastapi>=0.110",
   "httpx>=0.27",
   "python-dateutil>=2.8",
-  "ruff==0.15.18",
+  "ruff==0.15.20",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -83,7 +83,7 @@ awq = [
 ]
 
 langchain = [
-  "langchain-core>=0.2,<1",
+  "langchain-core>=0.2,<2",
 ]
 
 hf = [

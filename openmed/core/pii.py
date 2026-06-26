@@ -51,6 +51,11 @@ if TYPE_CHECKING:
     from .audit import AuditReport
     from .models import ModelLoader
 
+from .result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
+
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
 
@@ -153,6 +158,65 @@ class DeidentificationResult:
                 self.audit_report.to_dict() if self.audit_report is not None else None
             ),
         }
+
+    def to_dataframe(self) -> Any:
+        """Convert detected PII entities to a pandas DataFrame.
+
+        Returns:
+            A pandas DataFrame with one row per detected entity and columns
+            ``text``, ``label``, ``entity_type``, ``start``, ``end``,
+            ``confidence``, ``action``, and ``result_id``.
+
+        Raises:
+            ImportError: If pandas is not installed.
+        """
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise ImportError(
+                "pandas is required to use DeidentificationResult.to_dataframe(). "
+                "Install it with `pip install pandas`."
+            ) from exc
+
+        columns = [
+            "text",
+            "label",
+            "entity_type",
+            "start",
+            "end",
+            "confidence",
+            "action",
+            "result_id",
+        ]
+        payload = self.to_dict()
+        result_id_source = {
+            "deidentified_text": payload["deidentified_text"],
+            "method": payload["method"],
+            "num_entities_redacted": payload["num_entities_redacted"],
+            "timestamp": payload["timestamp"],
+        }
+        result_id = hashlib.sha256(
+            json.dumps(
+                result_id_source,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+        records = [
+            {
+                "text": entity.get("text"),
+                "label": entity.get("label"),
+                "entity_type": entity.get("entity_type"),
+                "start": entity.get("start"),
+                "end": entity.get("end"),
+                "confidence": entity.get("confidence"),
+                "action": entity.get("action"),
+                "result_id": result_id,
+            }
+            for entity in payload["pii_entities"]
+        ]
+        return pd.DataFrame.from_records(records, columns=columns)
 
 
 # Languages whose PII models were trained on accent-free text.
@@ -583,6 +647,8 @@ def extract_pii(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
@@ -614,6 +680,8 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         PredictionResult with detected PII entities
@@ -626,7 +694,14 @@ def extract_pii(
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
-    return _extract_pii_batch(
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("extract_pii", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
+    final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -636,6 +711,9 @@ def extract_pii(
         normalize_accents=normalize_accents,
         loader=loader,
     )[0]
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _resolve_deidentification_method(
@@ -1352,6 +1430,8 @@ def deidentify(
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
     audit: bool = False,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -1400,6 +1480,8 @@ def deidentify(
             thresholds filter model detections and appear in audit output.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -1418,6 +1500,14 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("deidentify", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
     from .pipeline import Pipeline
 
     pipeline = Pipeline(
@@ -1448,9 +1538,14 @@ def deidentify(
         locale=locale,
         audit=audit,
     )
+
     if audit and result.deidentification_result.audit_report is not None:
-        return result.deidentification_result.audit_report
-    return result.deidentification_result
+        final_result = result.deidentification_result.audit_report
+    else:
+        final_result = result.deidentification_result
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:

@@ -48,6 +48,11 @@ from .core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
 )
+from .core.redaction_preview import redaction_preview, render_redaction_preview
+from .core.result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
 from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
     BatchItem,
@@ -145,6 +150,8 @@ def analyze_text(
     sentence_language: str = "en",
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
 ) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
     """Run a token-classification model on ``text`` and format the predictions.
@@ -172,6 +179,8 @@ def analyze_text(
         sentence_language: Language hint for the sentence detector.
         sentence_clean: Whether to enable pySBD's cleaning heuristics.
         sentence_segmenter: Optional preconstructed pySBD segmenter to reuse.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
             :meth:`openmed.core.models.ModelLoader.create_pipeline`.
 
@@ -185,6 +194,14 @@ def analyze_text(
         raise ValueError("Pass only one of model_name or model_id")
 
     validated_model = validate_model_name(selected_model)
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("analyze_text", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
 
     loader = loader or ModelLoader(config)
 
@@ -524,13 +541,16 @@ def analyze_text(
 
     fmt_output = validate_output_format(output_format)
 
-    return format_predictions(
+    final_result = format_predictions(
         flattened_predictions,
         validated_text,
         model_name=validated_model,
         output_format=fmt_output,
         **fmt_kwargs,
     )
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 __all__ = [
@@ -588,6 +608,8 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "redaction_preview",
+    "render_redaction_preview",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
     "find_semantic_units",
