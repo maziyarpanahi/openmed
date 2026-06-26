@@ -58,7 +58,7 @@ jobs:
 
       - name: Upload gate report
         if: always() && steps.check-candidate.outputs.exists == 'true' && hashFiles('release-gate-report.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-gate-report
           path: release-gate-report.json
