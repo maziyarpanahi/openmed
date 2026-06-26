@@ -17,6 +17,11 @@ public struct EntityPrediction: Codable, Equatable, Sendable {
     /// End character offset in the original text (exclusive).
     public let end: Int
 
+    /// Python-compatible entity type used by de-identification exports.
+    public var entityType: String {
+        label
+    }
+
     public init(label: String, text: String, confidence: Float, start: Int, end: Int) {
         self.label = label
         self.text = text

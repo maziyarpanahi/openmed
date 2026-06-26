@@ -1,8 +1,10 @@
 <div align="center">
-
+  
 <img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
 
-<h3>Local-first healthcare AI that never leaves the device</h3>
+<h2>Local-first healthcare AI that never leaves the device</h2>
+
+<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
 Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
