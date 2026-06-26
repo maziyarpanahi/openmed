@@ -21,7 +21,7 @@ jobs:
       CANDIDATE_REPORT: ${{ github.event.inputs.candidate || 'artifacts/release-candidate.json' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v6
