@@ -1,11 +1,14 @@
+"""Offline-safe environment diagnostics for OpenMed."""
+
 from __future__ import annotations
 
 import importlib
-import json
 import os
 import platform
-from pathlib import Path
+import sys
 from typing import Any
+
+from .manifest_schema import MANIFEST_PATH
 
 # Optional extras mapping with their actual import names
 OPTIONAL_EXTRAS = {
@@ -17,177 +20,147 @@ OPTIONAL_EXTRAS = {
 }
 
 # Known architecture mappings for validation
-SUPPORTED_ARCHS = {
-    "x86_64",
-    "AMD64",  # Intel/AMD 64-bit
-    "arm64",
-    "aarch64",  # ARM 64-bit (Apple Silicon, ARM servers)
-    "armv7l",  # 32-bit ARM
-}
+SUPPORTED_ARCHS = frozenset(
+    {
+        "x86_64",
+        "AMD64",  # Intel/AMD 64-bit
+        "arm64",
+        "aarch64",  # ARM 64-bit (Apple Silicon, ARM servers)
+        "armv7l",  # 32-bit ARM
+    }
+)
+
+MIN_PYTHON_VERSION = (3, 10)
+
+
+def _check(
+    name: str,
+    status: str,
+    details: str,
+    hint: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "name": name,
+        "status": status,
+        "details": details,
+    }
+    if hint is not None:
+        payload["hint"] = hint
+    return payload
 
 
 def run_diagnostics() -> list[dict[str, Any]]:
-    """Run comprehensive system diagnostics for OpenMed."""
+    """Run local OpenMed diagnostics without network calls or secret exposure.
+
+    Returns:
+        A list of check dictionaries with ``name``, ``status``, ``details``,
+        and optional remediation ``hint`` fields.
+    """
     checks: list[dict[str, Any]] = []
 
-    # 1. Python version check
     python_version = platform.python_version()
-    version_parts = tuple(int(x) for x in python_version.split(".")[:2])
-
-    status = "FAIL" if version_parts < (3, 9) else "PASS"
-
+    python_supported = sys.version_info[:2] >= MIN_PYTHON_VERSION
     checks.append(
-        {
-            "name": "python_version",
-            "status": status,
-            "details": python_version,
-        }
+        _check(
+            "python_version",
+            "PASS" if python_supported else "FAIL",
+            python_version,
+            None if python_supported else "Use Python 3.10 or newer.",
+        )
     )
 
-    # 2. Python architecture
-    arch = platform.machine()
-    is_supported = arch in SUPPORTED_ARCHS
-    status = "FAIL" if not is_supported else "PASS"
+    arch = platform.machine() or "unknown"
+    arch_supported = arch in SUPPORTED_ARCHS
     checks.append(
-        {
-            "name": "python_arch",
-            "status": "PASS" if is_supported else "WARN",
-            "details": arch,
-        }
+        _check(
+            "python_arch",
+            "PASS" if arch_supported else "FAIL",
+            arch,
+            None if arch_supported else "Use a supported 64-bit Python architecture.",
+        )
     )
 
-    # 3. OpenMed version - search for __version__ in multiple locations
-    try:
-        from openmed.__about__ import __version__
-
-        checks.append(
-            {
-                "name": "openmed_version",
-                "status": "PASS",
-                "details": __version__,
-            }
-        )
-    except Exception:
-        checks.append(
-            {
-                "name": "openmed_version",
-                "status": "WARN",
-                "details": "version unavailable",
-            }
-        )
-
-    # 4. Optional dependencies with proper graceful degradation
-    for name, module_name in OPTIONAL_EXTRAS.items():
-        try:
-            # For multimodal, check PIL/Pillow specifically
-            if name == "multimodal":
-                try:
-                    importlib.import_module("PIL")
-                    checks.append(
-                        {
-                            "name": name,
-                            "status": "PASS",
-                            "details": "Pillow installed",
-                        }
-                    )
-                    continue
-                except ImportError:
-                    # Some systems might have PIL installed as Pillow but import as PIL
-                    pass
-
-            importlib.import_module(module_name)
-            checks.append(
-                {
-                    "name": name,
-                    "status": "PASS",
-                    "details": "installed",
-                }
-            )
-        except ImportError:
-            # Not installed - just WARN, not FAIL (optional)
-            hint_map = {
-                "mlx": "Install with: pip install mlx",
-                "coreml": "Install with: pip install coremltools",
-                "onnx": "Install with: pip install onnxruntime",
-                "hf": "Install with: pip install transformers",
-                "multimodal": "Install with: pip install pillow",
-            }
-
-            checks.append(
-                {
-                    "name": name,
-                    "status": "WARN",
-                    "details": f"{module_name} not installed",
-                    "hint": hint_map.get(name),
-                }
-            )
-
-    # 5. HF token - check safely without exposing value
-    token_present = bool(os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN"))
-
-    checks.append(
-        {
-            "name": "hf_token",
-            "status": "PASS" if token_present else "WARN",
-            "details": f"present={token_present}",
-            "hint": (
-                None
-                if token_present
-                else "Set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable"
-            ),
-        }
-    )
-
-    # 6. OPENMED_OFFLINE environment variable
-    offline = os.getenv("OPENMED_OFFLINE", "0")
-    checks.append(
-        {
-            "name": "openmed_offline",
-            "status": "PASS",
-            "details": offline,
-        }
-    )
-
-    # 7. Manifest existence and row count
-    manifest = Path("models.jsonl")
-
-    if manifest.exists():
-        checks.append(
-            {
-                "name": "manifest_exists",
-                "status": "PASS",
-                "details": str(manifest),
-            }
-        )
-
-        try:
-            with manifest.open("r", encoding="utf-8") as f:
-                rows = sum(1 for _ in f)
-
-            checks.append(
-                {
-                    "name": "manifest_rows",
-                    "status": "PASS",
-                    "details": f"{rows} rows",
-                }
-            )
-
-        except Exception as exc:
-            checks.append(
-                {
-                    "name": "manifest_rows",
-                    "status": "WARN",
-                    "details": f"error reading manifest: {exc}",
-                }
-            )
-
-    else:
-        checks.append(
-            {
-                "name": "manifest_exists",
-                "status": "WARN",
-                "details": "models.jsonl not found",
-            }
-        )
+    _check_openmed_version(checks)
+    _check_optional_dependencies(checks)
+    _check_hf_token(checks)
+    _check_offline_mode(checks)
+    _check_manifest(checks)
 
     return checks
+
+
+def _check_openmed_version(checks: list[dict[str, Any]]) -> None:
+    try:
+        from ..__about__ import __version__
+
+        checks.append(_check("openmed_version", "PASS", __version__))
+    except Exception:
+        checks.append(_check("openmed_version", "WARN", "version unavailable"))
+
+
+def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
+    hint_map = {
+        "mlx": "Install with: pip install mlx",
+        "coreml": "Install with: pip install coremltools",
+        "onnx": "Install with: pip install onnxruntime",
+        "hf": "Install with: pip install transformers",
+        "multimodal": "Install with: pip install pillow",
+    }
+
+    for name, module_name in OPTIONAL_EXTRAS.items():
+        try:
+            importlib.import_module(module_name)
+        except ImportError:
+            checks.append(
+                _check(
+                    name,
+                    "WARN",
+                    f"{module_name} not installed",
+                    hint_map.get(name),
+                )
+            )
+            continue
+
+        details = "Pillow installed" if name == "multimodal" else "installed"
+        checks.append(_check(name, "PASS", details))
+
+
+def _check_hf_token(checks: list[dict[str, Any]]) -> None:
+    token_present = bool(os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN"))
+    checks.append(
+        _check(
+            "hf_token",
+            "PASS" if token_present else "WARN",
+            f"present={token_present}",
+            None
+            if token_present
+            else "Set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable",
+        )
+    )
+
+
+def _check_offline_mode(checks: list[dict[str, Any]]) -> None:
+    checks.append(_check("openmed_offline", "PASS", os.getenv("OPENMED_OFFLINE", "0")))
+
+
+def _check_manifest(checks: list[dict[str, Any]]) -> None:
+    if not MANIFEST_PATH.exists():
+        checks.append(
+            _check(
+                "manifest_exists",
+                "WARN",
+                f"{MANIFEST_PATH.name} not found",
+            )
+        )
+        return
+
+    checks.append(_check("manifest_exists", "PASS", str(MANIFEST_PATH)))
+
+    try:
+        with MANIFEST_PATH.open("r", encoding="utf-8") as handle:
+            rows = sum(1 for line in handle if line.strip())
+    except OSError as exc:
+        checks.append(_check("manifest_rows", "WARN", f"error reading manifest: {exc}"))
+        return
+
+    checks.append(_check("manifest_rows", "PASS", f"{rows} rows"))
