@@ -461,6 +461,28 @@
         "summary": "Health"
       }
     },
+    "/livez": {
+      "get": {
+        "operationId": "livez_livez_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Livez Livez Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Livez"
+      }
+    },
     "/models/loaded": {
       "get": {
         "operationId": "loaded_models_models_loaded_get",
@@ -599,6 +621,22 @@
           }
         },
         "summary": "Pii Extract"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readyz"
       }
     }
   }
