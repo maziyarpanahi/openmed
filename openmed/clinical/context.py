@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal
 
 Negation = Literal["affirmed", "negated"]
@@ -88,6 +88,16 @@ HYPOTHETICAL_CUES = (
     "in case",
     "in the event of",
     "unless",
+)
+
+RECENT_TEMPORALITY_CUES = (
+    "active",
+    "acute",
+    "current",
+    "currently",
+    "new",
+    "new onset",
+    "ongoing",
 )
 
 # ConText hypothetical/uncertainty trigger lexicon. It intentionally overlaps
@@ -183,9 +193,65 @@ def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
 
 _HISTORICAL_RE = _cue_pattern(HISTORICAL_CUES)
 _HYPOTHETICAL_RE = _cue_pattern(HYPOTHETICAL_CUES)
+_RECENT_TEMPORALITY_RE = _cue_pattern(RECENT_TEMPORALITY_CUES)
 _UNCERTAINTY_RE = _cue_pattern(UNCERTAINTY_CUES)
 _NEGATION_RE = _cue_pattern(NEGATION_CUES)
 _PSEUDO_NEGATION_RE = _cue_pattern(PSEUDO_NEGATION_CUES)
+
+PATIENT_EXPERIENCER = "patient"
+FAMILY_EXPERIENCER = "family"
+
+# Canonical names are lower_snake_case keys expected to compose with the
+# user-facing labels OM-086's detect_sections will emit. Aliases are normalized
+# with _normalize_section_label before lookup.
+CANONICAL_SECTION_LABELS = {
+    "past_medical_history": (
+        "Past Medical History",
+        "PMH",
+        "Medical History",
+    ),
+    "history": ("History",),
+    "family_history": (
+        "Family History",
+        "Family Medical History",
+        "FH",
+    ),
+    "social_history": (
+        "Social History",
+        "Social Hx",
+        "SH",
+    ),
+    "history_of_present_illness": (
+        "History of Present Illness",
+        "HPI",
+    ),
+    "assessment": ("Assessment",),
+    "plan": ("Plan",),
+}
+
+SECTION_LABEL_ALIASES = {
+    "past medical history": "past_medical_history",
+    "pmh": "past_medical_history",
+    "medical history": "past_medical_history",
+    "history": "history",
+    "family history": "family_history",
+    "family medical history": "family_history",
+    "fh": "family_history",
+    "social history": "social_history",
+    "social hx": "social_history",
+    "sh": "social_history",
+    "history of present illness": "history_of_present_illness",
+    "hpi": "history_of_present_illness",
+    "assessment": "assessment",
+    "plan": "plan",
+}
+
+SECTION_CONTEXT_PRIORS = {
+    "past_medical_history": {"temporality": HISTORICAL},
+    "history": {"temporality": HISTORICAL},
+    "family_history": {"experiencer": FAMILY_EXPERIENCER},
+    "social_history": {"experiencer": PATIENT_EXPERIENCER},
+}
 
 
 @dataclass(frozen=True)
@@ -257,6 +323,39 @@ def _text_of(obj: Any) -> str:
     return ""
 
 
+def _normalize_section_label(section: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", " ", section.casefold()).strip()
+    return re.sub(r"\s+", " ", normalized)
+
+
+def _section_text_of(obj: Any) -> str:
+    """Best-effort extraction of a section label from heterogeneous inputs."""
+
+    if obj is None:
+        return ""
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, Mapping):
+        for key in ("section", "label", "name", "section_label", "section_name"):
+            value = obj.get(key)
+            if isinstance(value, str):
+                return value
+        return ""
+    for attr in ("section", "label", "name", "section_label", "section_name"):
+        value = getattr(obj, attr, None)
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def _canonical_section_name(section: Any) -> str | None:
+    section_text = _section_text_of(section)
+    if not section_text:
+        return None
+    normalized = _normalize_section_label(section_text)
+    return SECTION_LABEL_ALIASES.get(normalized)
+
+
 def _text_parts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
     parts = [_text_of(span)]
     if modifier_hits is not None and not isinstance(modifier_hits, (str, Mapping)):
@@ -267,6 +366,15 @@ def _text_parts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
     else:
         parts.append(_text_of(modifier_hits))
     return tuple(part for part in parts if part)
+
+
+def _has_explicit_temporality_cue(span: Any) -> bool:
+    return any(
+        _HYPOTHETICAL_RE.search(part)
+        or _HISTORICAL_RE.search(part)
+        or _RECENT_TEMPORALITY_RE.search(part)
+        for part in _text_parts(span, None)
+    )
 
 
 def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
@@ -357,13 +465,62 @@ def resolve_span_context(
 def assert_context_axes(
     span: Any,
     modifier_hits: Any = None,
+    section: Any = None,
 ) -> ClinicalAssertion:
     """Return the composed clinical assertion axes for ``span``."""
 
-    return ClinicalAssertion(
+    assertion = ClinicalAssertion(
         temporality=resolve_temporality(span, modifier_hits),
         certainty=resolve_uncertainty(span, modifier_hits),
     )
+    return apply_section_context(span, section, assertion)
+
+
+def apply_section_context(
+    span: Any,
+    section: Any = None,
+    assertion: ClinicalAssertion | None = None,
+) -> ClinicalAssertion:
+    """Apply conservative section priors to a span assertion.
+
+    ``section`` may be an explicit section label or mapping from OM-086's
+    future ``detect_sections`` output. When it is omitted, the helper falls
+    back to ``span.section`` or mapping-style ``span["section"]``. Section
+    priors only fill unset/default axes for the current span and never override
+    explicit in-sentence temporal cues such as ``"acute"``, ``"history of"``,
+    or ``"if"``.
+    """
+
+    resolved_assertion = assertion or ClinicalAssertion(
+        temporality=resolve_temporality(span),
+        certainty=resolve_uncertainty(span),
+    )
+    canonical_section = _canonical_section_name(section) or _canonical_section_name(
+        span
+    )
+    if canonical_section is None:
+        return resolved_assertion
+
+    prior = SECTION_CONTEXT_PRIORS.get(canonical_section)
+    if not prior:
+        return resolved_assertion
+
+    changes: dict[str, str] = {}
+    temporality_prior = prior.get("temporality")
+    if (
+        temporality_prior
+        and resolved_assertion.temporality == RECENT
+        and not _has_explicit_temporality_cue(span)
+    ):
+        changes["temporality"] = temporality_prior
+
+    experiencer_prior = prior.get("experiencer")
+    if experiencer_prior and resolved_assertion.experiencer is None:
+        changes["experiencer"] = experiencer_prior
+
+    if not changes:
+        return resolved_assertion
+    return replace(resolved_assertion, **changes)
 
 
 __all__ = [
@@ -381,6 +538,7 @@ __all__ = [
     "TEMPORALITY_VALUES",
     "HISTORICAL_CUES",
     "HYPOTHETICAL_CUES",
+    "RECENT_TEMPORALITY_CUES",
     "resolve_temporality",
     "Certainty",
     "CERTAIN",
@@ -389,6 +547,12 @@ __all__ = [
     "UNCERTAINTY_CUES",
     "resolve_uncertainty",
     "resolve_negation",
+    "PATIENT_EXPERIENCER",
+    "FAMILY_EXPERIENCER",
+    "CANONICAL_SECTION_LABELS",
+    "SECTION_LABEL_ALIASES",
+    "SECTION_CONTEXT_PRIORS",
+    "apply_section_context",
     "resolve_span_context",
     "assert_context_axes",
 ]
