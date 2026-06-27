@@ -24,6 +24,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "te",
     "pt",
     "ar",
+    "he",
     "ja",
     "tr",
 }
@@ -43,6 +44,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "te": "Telugu",
     "pt": "Portuguese",
     "ar": "Arabic",
+    "he": "Hebrew",
     "ja": "Japanese",
     "tr": "Turkish",
 }
@@ -58,6 +60,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "te": "Telugu-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
+    "he": "Hebrew-",
     "ja": "Japanese-",
     "tr": "Turkish-",
 }
@@ -73,6 +76,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "he": "OpenMed/privacy-filter-multilingual",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
 }
@@ -428,6 +432,36 @@ def validate_turkish_tckn(text: str) -> bool:
     return numbers[9] == tenth and numbers[10] == eleventh
 
 
+def validate_israeli_teudat_zehut(text: str) -> bool:
+    """Validate an Israeli Teudat Zehut identity number.
+
+    The Teudat Zehut is a numeric identifier validated with a Luhn-style
+    checksum. Values shorter than nine digits are left-padded with zeros before
+    applying alternating 1/2 weights from left to right.
+
+    Args:
+        text: Teudat Zehut string (may contain spaces or hyphens)
+
+    Returns:
+        True if the identifier passes format and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if not 1 <= len(digits) <= 9:
+        return False
+
+    digits = digits.zfill(9)
+    if digits == "000000000":
+        return False
+
+    total = 0
+    for index, digit in enumerate(digits):
+        product = int(digit) * (1 if index % 2 == 0 else 2)
+        total += product if product < 10 else (product // 10) + (product % 10)
+
+    return total % 10 == 0
+
+
 def validate_polish_pesel(text: str) -> bool:
     """Validate Polish PESEL number.
 
@@ -723,6 +757,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0623\u0643\u062a\u0648\u0628\u0631",
         "\u0646\u0648\u0641\u0645\u0628\u0631",
         "\u062f\u064a\u0633\u0645\u0628\u0631",
+    ],
+    "he": [
+        "\u05d9\u05e0\u05d5\u05d0\u05e8",
+        "\u05e4\u05d1\u05e8\u05d5\u05d0\u05e8",
+        "\u05de\u05e8\u05e5",
+        "\u05d0\u05e4\u05e8\u05d9\u05dc",
+        "\u05de\u05d0\u05d9",
+        "\u05d9\u05d5\u05e0\u05d9",
+        "\u05d9\u05d5\u05dc\u05d9",
+        "\u05d0\u05d5\u05d2\u05d5\u05e1\u05d8",
+        "\u05e1\u05e4\u05d8\u05de\u05d1\u05e8",
+        "\u05d0\u05d5\u05e7\u05d8\u05d5\u05d1\u05e8",
+        "\u05e0\u05d5\u05d1\u05de\u05d1\u05e8",
+        "\u05d3\u05e6\u05de\u05d1\u05e8",
     ],
     "ja": [
         "1\u6708",
@@ -1648,6 +1696,95 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+_HEBREW_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u05ea\u05d0\u05e8\u05d9\u05da",
+            "\u05ea\u05d0\u05e8\u05d9\u05da \u05dc\u05d9\u05d3\u05d4",
+            "\u05dc\u05d9\u05d3\u05d4",
+            "\u05e0\u05d5\u05dc\u05d3",
+            "\u05e0\u05d5\u05dc\u05d3\u05d4",
+            "\u05d0\u05e9\u05e4\u05d5\u05d6",
+            "\u05e9\u05d7\u05e8\u05d5\u05e8",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:\u05d9\u05e0\u05d5\u05d0\u05e8|\u05e4\u05d1\u05e8\u05d5\u05d0\u05e8|\u05de\u05e8\u05e5|\u05d0\u05e4\u05e8\u05d9\u05dc|\u05de\u05d0\u05d9|\u05d9\u05d5\u05e0\u05d9|\u05d9\u05d5\u05dc\u05d9|\u05d0\u05d5\u05d2\u05d5\u05e1\u05d8|\u05e1\u05e4\u05d8\u05de\u05d1\u05e8|\u05d0\u05d5\u05e7\u05d8\u05d5\u05d1\u05e8|\u05e0\u05d5\u05d1\u05de\u05d1\u05e8|\u05d3\u05e6\u05de\u05d1\u05e8)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "\u05ea\u05d0\u05e8\u05d9\u05da",
+            "\u05ea\u05d0\u05e8\u05d9\u05da \u05dc\u05d9\u05d3\u05d4",
+            "\u05dc\u05d9\u05d3\u05d4",
+            "\u05e0\u05d5\u05dc\u05d3",
+            "\u05e0\u05d5\u05dc\u05d3\u05d4",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+972[\s.-]?|0)5\d[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "\u05d8\u05dc\u05e4\u05d5\u05df",
+            "\u05e0\u05d9\u05d9\u05d3",
+            "\u05de\u05e1\u05e4\u05e8",
+            "\u05d9\u05e6\u05d9\u05e8\u05ea \u05e7\u05e9\u05e8",
+            "\u05e7\u05e9\u05e8",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}[\s-]?\d{3}[\s-]?\d{3}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.35,
+        context_words=[
+            "\u05ea\u05e2\u05d5\u05d3\u05ea \u05d6\u05d4\u05d5\u05ea",
+            "\u05ea.\u05d6",
+            "\u05de\u05e1\u05e4\u05e8 \u05d6\u05d4\u05d5\u05ea",
+            "\u05d6\u05d4\u05d5\u05ea",
+        ],
+        context_boost=0.55,
+        validator=validate_israeli_teudat_zehut,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?:\d{2})?(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "\u05de\u05d9\u05e7\u05d5\u05d3",
+            "\u05e7\u05d5\u05d3 \u05d3\u05d5\u05d0\u05e8",
+            "\u05d3\u05d5\u05d0\u05e8",
+            "\u05db\u05ea\u05d5\u05d1\u05ea",
+        ],
+        context_boost=0.5,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\u05e8\u05d7\u05d5\u05d1|\u05e8\u05d7'|\u05e9\u05d3\u05e8\u05d5\u05ea|\u05e9\u05d3'|\u05d3\u05e8\u05da|\u05db\u05d9\u05db\u05e8)\s+[\u0590-\u05FF\"'\s.-]{2,50}\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\u05db\u05ea\u05d5\u05d1\u05ea",
+            "\u05de\u05e2\u05df",
+            "\u05de\u05d2\u05d5\u05e8\u05d9\u05dd",
+            "\u05e8\u05d7\u05d5\u05d1",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+]
+
 _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{4}[/-]\d{1,2}[/-]\d{1,2}\b",
@@ -1889,6 +2026,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "hi": _HINDI_PII_PATTERNS,
     "te": _TELUGU_PII_PATTERNS,
     "ar": _ARABIC_PII_PATTERNS,
+    "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
@@ -2121,6 +2259,43 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
             "\u062f\u0628\u064a",
         ],
         "ZIPCODE": ["11511", "12345", "54321"],
+    },
+    "he": {
+        "NAME": [
+            "\u05d3\u05e0\u05d4 \u05db\u05d4\u05df",
+            "\u05d9\u05d5\u05e0\u05ea\u05df \u05dc\u05d5\u05d9",
+            "\u05de\u05d9\u05db\u05dc \u05d0\u05d1\u05e8\u05d4\u05dd",
+            "\u05e2\u05de\u05d9\u05ea \u05e4\u05e8\u05e5",
+        ],
+        "FIRST_NAME": [
+            "\u05d3\u05e0\u05d4",
+            "\u05d9\u05d5\u05e0\u05ea\u05df",
+            "\u05de\u05d9\u05db\u05dc",
+            "\u05e2\u05de\u05d9\u05ea",
+        ],
+        "LAST_NAME": [
+            "\u05db\u05d4\u05df",
+            "\u05dc\u05d5\u05d9",
+            "\u05d0\u05d1\u05e8\u05d4\u05dd",
+            "\u05e4\u05e8\u05e5",
+        ],
+        "EMAIL": ["patient@example.co.il", "contact@example.org"],
+        "PHONE": ["+972 54-123-4567", "054-987-6543"],
+        "ID_NUM": ["123456782", "000000018"],
+        "STREET_ADDRESS": [
+            "\u05e8\u05d7\u05d5\u05d1 \u05d4\u05e8\u05e6\u05dc 12",
+            "\u05e9\u05d3\u05e8\u05d5\u05ea \u05e8\u05d5\u05d8\u05e9\u05d9\u05dc\u05d3 45",
+        ],
+        "URL_PERSONAL": ["https://example.co.il"],
+        "USERNAME": ["metupal123", "patient456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": [
+            "\u05ea\u05dc \u05d0\u05d1\u05d9\u05d1",
+            "\u05d9\u05e8\u05d5\u05e9\u05dc\u05d9\u05dd",
+            "\u05d7\u05d9\u05e4\u05d4",
+        ],
+        "ZIPCODE": ["6423905", "9414101", "3100001"],
     },
     "ja": {
         "NAME": [

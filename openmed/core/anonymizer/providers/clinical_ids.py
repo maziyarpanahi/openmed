@@ -16,6 +16,7 @@ Custom providers below cover the gaps where Faker either has no built-in
 or emits a US-style format unrelated to the requested locale's actual ID:
 
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
+  - Israeli Teudat Zehut (Faker has no built-in)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
   - Generic medical record numbers (MRN-XXXXXXX style)
@@ -341,6 +342,40 @@ class GermanSteuerIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Israeli Teudat Zehut (9 digits, alternating 1/2 checksum)
+# ---------------------------------------------------------------------------
+
+
+def _teudat_zehut_check_digit(body_digits: Sequence[int]) -> int:
+    """Return the final check digit for the first eight Teudat Zehut digits."""
+    if len(body_digits) != 8:
+        raise ValueError("Teudat Zehut body must contain exactly eight digits")
+
+    total = 0
+    for index, digit in enumerate(body_digits):
+        product = digit * (1 if index % 2 == 0 else 2)
+        total += product if product < 10 else (product // 10) + (product % 10)
+    return (10 - total % 10) % 10
+
+
+def generate_teudat_zehut(*, rng: random.Random | None = None) -> str:
+    """Generate an Israeli Teudat Zehut that passes its checksum validator."""
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(8)]
+    if all(digit == 0 for digit in body):
+        body[-1] = 1
+    body.append(_teudat_zehut_check_digit(body))
+    return "".join(str(digit) for digit in body)
+
+
+class IsraeliTeudatZehutProvider(BaseProvider):
+    """Generates 9-digit Israeli Teudat Zehut numbers."""
+
+    def teudat_zehut(self) -> str:
+        return generate_teudat_zehut(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Medical Record Number (opaque, but recognizably MRN-shaped)
 # ---------------------------------------------------------------------------
 
@@ -510,6 +545,7 @@ def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     faker.add_provider(AadhaarProvider)
     faker.add_provider(GermanSteuerIdProvider)
+    faker.add_provider(IsraeliTeudatZehutProvider)
     faker.add_provider(KoreanRRNProvider)
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(NPIProvider)
@@ -519,6 +555,7 @@ def register_clinical_providers(faker) -> None:
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
@@ -528,6 +565,7 @@ __all__ = [
     "generate_npi",
     "generate_pesel",
     "generate_ssn",
+    "generate_teudat_zehut",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",

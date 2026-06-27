@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from openmed.core.pii_entity_merger import validate_luhn
 from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_israeli_teudat_zehut,
     validate_portuguese_cpf,
 )
 from openmed.eval import harness
@@ -73,6 +75,26 @@ def test_golden_json_files_are_harness_loadable():
     benchmark_fixtures = load_benchmark_fixtures()
     assert len(benchmark_fixtures) == len(load_golden_fixtures())
     assert all(item.metadata["category"] for item in benchmark_fixtures)
+
+
+def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/he.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "he"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "15/03/1985"
+    assert gold_by_label["PHONE"] == "+972 54-123-4567"
+    assert gold_by_label["ZIPCODE"] == "6423905"
+    assert gold_by_label["STREET_ADDRESS"] == "רחוב הרצל 12"
+    assert validate_israeli_teudat_zehut(gold_by_label["ID_NUM"])
 
 
 def test_nested_overlap_fixture_asserts_resolution_not_just_detection():

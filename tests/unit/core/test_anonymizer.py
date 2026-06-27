@@ -93,8 +93,8 @@ class TestDeterminism:
 
 class TestClinicalIDChecksums:
     """Faker built-ins (CPF, CNPJ, BSN, NIR, NIE, Codice Fiscale) and our
-    custom providers (Aadhaar, German Steuer-ID) must produce values that
-    pass the corresponding validators."""
+    custom providers (Aadhaar, German Steuer-ID, Teudat Zehut) must produce
+    values that pass the corresponding validators."""
 
     @pytest.mark.parametrize("seed", list(range(20)))
     def test_pt_br_cpf_validates(self, seed):
@@ -169,6 +169,24 @@ class TestClinicalIDChecksums:
         for _ in range(5):
             sid = fk.german_steuer_id()
             assert validate_german_steuer_id(sid), f"Invalid Steuer-ID: {sid!r}"
+
+    @pytest.mark.parametrize("seed", list(range(10)))
+    def test_teudat_zehut_provider_validates(self, seed):
+        from faker import Faker
+
+        from openmed.core.anonymizer.providers.clinical_ids import (
+            register_clinical_providers,
+        )
+        from openmed.core.pii_i18n import validate_israeli_teudat_zehut
+
+        fk = Faker("he_IL")
+        register_clinical_providers(fk)
+        fk.seed_instance(seed)
+        for _ in range(20):
+            identifier = fk.teudat_zehut()
+            assert validate_israeli_teudat_zehut(identifier), (
+                f"Invalid Teudat Zehut: {identifier!r}"
+            )
 
 
 class TestFormatPreservation:

@@ -95,6 +95,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "english": "en",
     "french": "fr",
     "german": "de",
+    "hebrew": "he",
     "hindi": "hi",
     "italian": "it",
     "japanese": "ja",
@@ -507,6 +508,16 @@ def _pii_compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     if _category_from_row(row) != "Privacy":
         return []
     repo_id = row["repo_id"]
+    if "privacy-filter-multilingual" in repo_id:
+        aliases = []
+        tokens = _clean_model_tokens(_split_repo_tokens(repo_id))
+        if tokens and tokens[0].lower() == "privacy":
+            tokens = ["privacy_filter"] + tokens[2:] if len(tokens) > 1 else tokens
+        suffix = _slug("_".join(tokens))
+        for lang in row.get("languages") or []:
+            if lang != "en":
+                aliases.append(f"pii_{lang}_{suffix}")
+        return aliases
     if "/OpenMed-PII-" not in repo_id:
         return []
 

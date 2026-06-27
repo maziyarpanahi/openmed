@@ -46,8 +46,8 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
+PII extraction and de-identification support **13 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
 The README keeps a short multilingual example set in
 [Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-12-languages).
 

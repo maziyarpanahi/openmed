@@ -36,7 +36,7 @@ KeepAliveValue = Union[int, float, str]
 # parity is guarded by
 # ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
 PIILanguage = Literal[
-    "en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"
+    "en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "he", "ja", "tr"
 ]
 
 

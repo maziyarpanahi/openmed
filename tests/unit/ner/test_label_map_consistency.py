@@ -293,6 +293,7 @@ class TestNormalizeLabelIdempotency:
             "aadhaar",
             "cpf",
             "cnpj",
+            "teudat_zehut",
             "postcode",
             "zipcode",
             "zip",
@@ -344,6 +345,7 @@ class TestSpecificityHierarchy:
             "codice_fiscale",
             "cpf",
             "cnpj",
+            "teudat_zehut",
         ],
     }
 
