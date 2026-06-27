@@ -14,6 +14,8 @@ jobs:
     environment:
       name: pypi
       url: https://pypi.org/p/openmed
+    permissions:
+      contents: write  # attach the SBOM asset to the tagged GitHub release
 
     steps:
       - uses: actions/checkout@v7
@@ -123,3 +125,13 @@ jobs:
           name: sbom
           path: sbom.cdx.json
           if-no-files-found: warn
+
+      - name: Attach SBOM to the tagged GitHub release
+        if: github.ref_type == 'tag' && hashFiles('sbom.cdx.json') != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" sbom.cdx.json --clobber \
+            || gh release create "$GITHUB_REF_NAME" sbom.cdx.json \
+                 --title "$GITHUB_REF_NAME" --generate-notes
