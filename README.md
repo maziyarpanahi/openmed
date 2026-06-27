@@ -1,5 +1,5 @@
 <div align="center">
-  
+
 <img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
 
 <h2>Local-first healthcare AI that never leaves the device</h2>
