@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,6 +18,7 @@ from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
 from .batcher import BatchResult, DynamicBatcher
+from .coalesce import RequestCoalescer, coalescing_key
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
@@ -29,6 +30,7 @@ from .schemas import (
 SERVICE_NAME = "openmed-rest"
 _MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
 _ServicePayload = Dict[str, Any]
+_ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
 
@@ -117,8 +119,12 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.profile = runtime.profile
     app.state.config = runtime.config
     app.state.batching = runtime.batching
+    app.state.coalescing = runtime.coalescing
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
+    app.state.request_coalescer = None
+    if runtime.coalescing.enabled:
+        app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
         app.state.analyze_batcher = DynamicBatcher(
             lambda jobs: _dispatch_analyze_batch(runtime, jobs),
@@ -186,6 +192,19 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     if batcher is None:
         raise RuntimeError("PII extract batcher is not initialized")
     return batcher
+
+
+async def _run_maybe_coalesced(
+    request: Request,
+    endpoint: str,
+    payload: Any,
+    operation: _ServiceOperation,
+) -> _ServicePayload:
+    coalescer = getattr(request.app.state, "request_coalescer", None)
+    if coalescer is None:
+        return await operation()
+
+    return await coalescer.run(coalescing_key(endpoint, payload), operation)
 
 
 def create_app() -> FastAPI:
@@ -340,40 +359,55 @@ def create_app() -> FastAPI:
     @app.post("/analyze")
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
-        if runtime.batching.enabled:
-            return await _await_with_timeout(
-                runtime,
-                _get_analyze_batcher(request).submit(_AnalyzeBatchJob(payload)),
-            )
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _analyze_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            if runtime.batching.enabled:
+                return await _await_with_timeout(
+                    runtime,
+                    _get_analyze_batcher(request).submit(_AnalyzeBatchJob(payload)),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _analyze_payload(payload, runtime),
+                )
+
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(request, "/analyze", payload, _operation)
 
     @app.post("/pii/extract")
     async def pii_extract(
         payload: PIIExtractRequest, request: Request
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
-        if runtime.batching.enabled:
-            return await _await_with_timeout(
-                runtime,
-                _get_pii_extract_batcher(request).submit(_PIIExtractBatchJob(payload)),
-            )
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _pii_extract_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            if runtime.batching.enabled:
+                return await _await_with_timeout(
+                    runtime,
+                    _get_pii_extract_batcher(request).submit(
+                        _PIIExtractBatchJob(payload)
+                    ),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _pii_extract_payload(payload, runtime),
+                )
+
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/pii/extract",
+            payload,
+            _operation,
+        )
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(
@@ -382,14 +416,22 @@ def create_app() -> FastAPI:
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _pii_deidentify_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _pii_deidentify_payload(payload, runtime),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/pii/deidentify",
+            payload,
+            _operation,
+        )
 
     return app
 
