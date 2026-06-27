@@ -53,6 +53,12 @@ from .core.result_cache import (
     get_result_cache,
     make_cache_key,
 )
+from .core.streaming import (
+    StreamingBufferError,
+    StreamingDeidentificationEvent,
+    StreamingDeidentifier,
+    deidentify_stream,
+)
 from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
     BatchItem,
