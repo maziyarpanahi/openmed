@@ -28,6 +28,10 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "tr",
 }
 
+# Languages with checksum-validated national-ID coverage but no bundled
+# default PII model or full language pack yet.
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko"}
+
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
     "fr": "French",
@@ -2191,8 +2195,9 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
-            ar, ja, tr)
+        lang: ISO 639-1 language code. Model-backed languages are listed in
+            :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
+            in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
 
     Returns:
         List of PIIPattern instances for the language
@@ -2200,9 +2205,11 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     Raises:
         ValueError: If the language is not supported
     """
-    if lang not in SUPPORTED_LANGUAGES:
+    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    if lang not in supported_pattern_languages:
         raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. "
+            f"Supported: {sorted(supported_pattern_languages)}"
         )
 
     from .pii_entity_merger import PII_PATTERNS
