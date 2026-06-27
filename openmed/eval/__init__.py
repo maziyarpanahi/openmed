@@ -79,6 +79,7 @@ from openmed.eval.leakage_heatmap import (
 from openmed.eval.metrics import (
     DEVICE_TIERS,
     EvalSpan,
+    PairedSignificance,
     compute_character_recall,
     compute_clinical_utility_loss,
     compute_date_shift_consistency,
@@ -91,6 +92,7 @@ from openmed.eval.metrics import (
     compute_relaxed_span_f1,
     compute_resource_metrics,
     compute_surrogate_consistency,
+    paired_significance,
 )
 from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
@@ -159,6 +161,7 @@ __all__ = [
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
     "ModelStewardConfig",
+    "PairedSignificance",
     "QUARANTINED",
     "QuantRecallDeltaResult",
     "ReidAttackResult",
@@ -214,6 +217,7 @@ __all__ = [
     "load_calibration_thresholds",
     "load_or_compute",
     "ocr_noise_perturbation",
+    "paired_significance",
     "perturb_fixture",
     "render_reid_leaderboard",
     "render_dataset_card_markdown",
