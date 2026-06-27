@@ -65,6 +65,11 @@ from openmed.eval.harness import (
     run_benchmark,
     run_suite,
 )
+from openmed.eval.leakage_heatmap import (
+    HeatmapCell,
+    LeakageHeatmap,
+    compute_leakage_heatmap,
+)
 from openmed.eval.metrics import (
     DEVICE_TIERS,
     EvalSpan,
@@ -139,6 +144,8 @@ __all__ = [
     "FairnessGroupMetrics",
     "FairnessReport",
     "FixtureResult",
+    "HeatmapCell",
+    "LeakageHeatmap",
     "GateCheck",
     "GateReport",
     "INT4_RECALL_DELTA_LIMIT",
@@ -172,6 +179,7 @@ __all__ = [
     "compute_date_shift_consistency",
     "compute_exact_span_f1",
     "compute_latency_summary",
+    "compute_leakage_heatmap",
     "compute_leakage_rate",
     "compute_metrics_bundle",
     "compute_over_redaction_loss",
