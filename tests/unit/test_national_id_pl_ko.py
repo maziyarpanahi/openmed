@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from openmed.core.pii_i18n import validate_korean_rrn, validate_polish_pesel
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.locales import locale_coherence_report
+from openmed.core.pii_entity_merger import PIIPattern
+from openmed.core.pii_i18n import (
+    get_patterns_for_language,
+    validate_korean_rrn,
+    validate_polish_pesel,
+)
 
 # ---------------------------------------------------------------------------
 # Polish PESEL
@@ -227,3 +234,56 @@ class TestFakerProviderRoundTrip:
             rrn = generate_korean_rrn()
             assert len(rrn) == 13
             assert validate_korean_rrn(rrn) is True
+
+    def test_pesel_registered_anonymizer_path_round_trips(self):
+        anon = Anonymizer(lang="pl", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("85031512344", "national_id")
+
+        assert validate_polish_pesel(surrogate) is True
+
+    def test_korean_rrn_registered_anonymizer_path_round_trips(self):
+        anon = Anonymizer(lang="ko", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("8608151234567", "national_id")
+
+        assert validate_korean_rrn(surrogate) is True
+
+
+class TestNationalIdPatternReachability:
+    """PESEL/RRN patterns are reachable without full language-pack support."""
+
+    def test_polish_patterns_are_national_id_only(self):
+        patterns = [
+            pattern
+            for pattern in get_patterns_for_language("pl")
+            if pattern.entity_type == "national_id"
+            and pattern.validator is validate_polish_pesel
+        ]
+
+        assert len(patterns) == 1
+        assert isinstance(patterns[0], PIIPattern)
+
+    def test_korean_patterns_are_national_id_only(self):
+        patterns = [
+            pattern
+            for pattern in get_patterns_for_language("ko")
+            if pattern.entity_type == "national_id"
+            and pattern.validator is validate_korean_rrn
+        ]
+
+        assert len(patterns) == 1
+        assert isinstance(patterns[0], PIIPattern)
+
+    @pytest.mark.parametrize(
+        ("lang", "locale", "method"),
+        [("pl", "pl_PL", "pesel"), ("ko", "ko_KR", "korean_rrn")],
+    )
+    def test_locale_coherence_report_includes_registered_provider(
+        self, lang, locale, method
+    ):
+        rows = {row["language"]: row for row in locale_coherence_report()}
+
+        assert rows[lang]["locale"] == locale
+        assert rows[lang]["id_locale"] == locale
+        assert rows[lang]["id_providers"] == [method]

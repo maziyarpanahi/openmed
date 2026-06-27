@@ -18,6 +18,8 @@ Regression contract (OM-135):
 - Every language with a checksum-validated national ID must appear in
   :data:`NATIONAL_ID_PROVIDERS`, and its generated surrogates must round-trip
   that language's registered validator in :mod:`openmed.core.pii_i18n`.
+  Some entries are national-ID-only and intentionally not full model-backed
+  ``SUPPORTED_LANGUAGES`` yet.
 - Only the documented approximations may emit the locale ``UserWarning``.
   ``tests/unit/core/test_locale_coherence.py`` gates all three so a new
   language pack mis-wired to a wrong locale or provider fails loudly. Use
@@ -112,7 +114,7 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
 
 
 def locale_coherence_report() -> list[dict[str, object]]:
-    """Return one locale-coherence row per supported language.
+    """Return one locale-coherence row per supported or ID-only language.
 
     Each row is a plain JSON-friendly ``dict`` (so the status/leaderboard work
     can reuse it) with:
@@ -129,10 +131,13 @@ def locale_coherence_report() -> list[dict[str, object]]:
         ``None``. Usually equals ``locale``; differs when the registered
         validators target another country's format (e.g. ``pt`` -> ``pt_BR``).
     """
-    from ..pii_i18n import SUPPORTED_LANGUAGES  # lazy: avoid import cycle
+    from ..pii_i18n import (  # lazy: avoid import cycle
+        NATIONAL_ID_ONLY_LANGUAGES,
+        SUPPORTED_LANGUAGES,
+    )
 
     rows: list[dict[str, object]] = []
-    for lang in sorted(SUPPORTED_LANGUAGES):
+    for lang in sorted(SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES):
         provider: tuple[str, str] | None = NATIONAL_ID_PROVIDERS.get(lang)
         id_locale, id_method = provider if provider else (None, None)
         rows.append(
