@@ -19,3 +19,9 @@ uv lock
 Commit the updated `uv.lock` with the dependency change. The CI failure message
 uses the same remediation: `Run 'uv lock' and commit the updated uv.lock.`
 Do not edit the lockfile by hand.
+
+## Software bill of materials
+
+CI and every tagged release also generate a CycloneDX SBOM (`sbom.cdx.json`)
+inventorying the dependency tree. See the
+[Software Bill of Materials](sbom.md) guide to regenerate or consume it.

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added CycloneDX 1.6 SBOM generation (`scripts/security/generate_sbom.py`,
+  `make sbom`) that inventories `openmed` and its runtime dependencies; a CI
+  `sbom` job uploads `sbom.cdx.json` on every push and pull request, and the
+  publish workflow attaches it as an asset on each tagged GitHub release
+  (fail-open).
 - Added an `openmed models recommend --task <task> --language <lang> --tier
   phone|laptop|workstation|server` command that reuses the manifest search core
   and ranks on-device models by device-tier fit (via `recommended_tier` and, when
