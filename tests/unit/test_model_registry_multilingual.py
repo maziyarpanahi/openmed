@@ -65,6 +65,11 @@ class TestModelNaming:
         language_name = LANGUAGE_NAMES[lang]
         models = get_pii_models_by_language(lang)
         assert models
+        if DEFAULT_PII_MODELS[lang] == "OpenMed/privacy-filter-multilingual":
+            assert any(
+                info.model_id == DEFAULT_PII_MODELS[lang] for info in models.values()
+            )
+            return
         assert any(f"{language_name}-" in info.model_id for info in models.values())
 
     def test_all_pii_model_ids_are_openmed_repos(self):

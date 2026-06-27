@@ -323,6 +323,57 @@
         "synthetic": true
       },
       "text": "Sentetik not: TCKN 13198785260 test hastası içindir."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 38,
+          "label": "DATE",
+          "start": 28,
+          "text": "15/03/1985"
+        },
+        {
+          "end": 62,
+          "label": "PHONE",
+          "start": 46,
+          "text": "+972 54-123-4567"
+        },
+        {
+          "end": 84,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "teudat_zehut"
+          },
+          "start": 75,
+          "text": "123456782"
+        },
+        {
+          "end": 99,
+          "label": "ZIPCODE",
+          "start": 92,
+          "text": "6423905"
+        },
+        {
+          "end": 119,
+          "label": "STREET_ADDRESS",
+          "start": 107,
+          "text": "רחוב הרצל 12"
+        }
+      ],
+      "id": "golden-multilingual-he-teudat-zehut",
+      "language": "he",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "מטופלת: דנה כהן. תאריך לידה [DATE], טלפון [PHONE], תעודת זהות [ID_NUM], מיקוד [ZIPCODE], כתובת [STREET_ADDRESS] תל אביב."
+        },
+        "identifier_type": "teudat_zehut",
+        "locale": "he_IL",
+        "synthetic": true
+      },
+      "text": "מטופלת: דנה כהן. תאריך לידה 15/03/1985, טלפון +972 54-123-4567, תעודת זהות 123456782, מיקוד 6423905, כתובת רחוב הרצל 12 תל אביב."
     }
   ],
   "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",

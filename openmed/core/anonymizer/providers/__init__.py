@@ -9,23 +9,27 @@ and produce values that pass the existing checksum validators in
 from .clinical_ids import (
     AadhaarProvider,
     GermanSteuerIdProvider,
+    IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     MedicalRecordNumberProvider,
     NPIProvider,
     PolishPeselProvider,
     generate_korean_rrn,
     generate_pesel,
+    generate_teudat_zehut,
     register_clinical_providers,
 )
 
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
     "generate_korean_rrn",
     "generate_pesel",
+    "generate_teudat_zehut",
     "register_clinical_providers",
 ]
