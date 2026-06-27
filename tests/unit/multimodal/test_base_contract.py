@@ -80,19 +80,23 @@ class TestRedactDocumentDispatcher:
     def test_dispatches_to_registered_handler(self, clean_registry, deps_present):
         received = {}
 
-        def handler(path, *, policy=None, models=None):
+        def handler(path, *, policy=None, models=None, lang=None):
             received["path"] = path
             received["policy"] = policy
             received["models"] = models
+            received["lang"] = lang
             return ExtractedDocument.from_blocks([{"text": "ok"}])
 
         register_handler(".txt", handler)
-        doc = redact_document("note.txt", policy="hipaa_safe_harbor", models="m1")
+        doc = redact_document(
+            "note.txt", policy="hipaa_safe_harbor", models="m1", lang="fr"
+        )
 
         assert isinstance(doc, ExtractedDocument)
         assert received["path"] == "note.txt"
         assert received["policy"] == "hipaa_safe_harbor"
         assert received["models"] == "m1"
+        assert received["lang"] == "fr"
 
     def test_extension_match_is_case_insensitive(self, clean_registry, deps_present):
         register_handler(
