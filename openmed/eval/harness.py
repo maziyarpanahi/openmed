@@ -68,12 +68,22 @@ class FixtureResult:
 
 
 def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
-    """Load benchmark fixtures from a JSON file.
+    """Load benchmark fixtures from a JSON or JSONL file.
 
     Accepted top-level shapes are either a list of fixture objects or a mapping
-    containing a ``fixtures`` list.
+    containing a ``fixtures`` list. JSONL files contain one fixture object per
+    non-empty line.
     """
     fixture_path = Path(path)
+    if fixture_path.suffix.lower() == ".jsonl":
+        fixtures = [
+            BenchmarkFixture.from_mapping(json.loads(line))
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        _validate_unique_fixture_ids(fixtures)
+        return fixtures
+
     raw = json.loads(fixture_path.read_text(encoding="utf-8"))
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):

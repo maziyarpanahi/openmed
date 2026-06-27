@@ -123,6 +123,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "en_IN",
         "pt_PT",
         "pt_BR",
+        "th_TH",
     }
 )
 
@@ -166,6 +167,7 @@ _LOCALE_ID_METHODS = {
     "en_GB": "ssn",
     "pl_PL": "pesel",
     "ko_KR": "korean_rrn",
+    "th_TH": "thai_national_id",
 }
 
 

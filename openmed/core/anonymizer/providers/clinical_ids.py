@@ -18,6 +18,7 @@ or emits a US-style format unrelated to the requested locale's actual ID:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -502,6 +503,30 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Thai national ID (13 digits, weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_thai_national_id(*, rng: random.Random | None = None) -> str:
+    """Generate a Thai national ID accepted by ``validate_thai_national_id``."""
+    source = rng or random.Random()
+    body_digits = [source.randint(1, 9)]
+    body_digits.extend(source.randint(0, 9) for _ in range(11))
+
+    total = sum(weight * value for weight, value in zip(range(13, 1, -1), body_digits))
+    check = (11 - total % 11) % 10
+
+    return "".join(str(digit) for digit in body_digits) + str(check)
+
+
+class ThaiNationalIdProvider(BaseProvider):
+    """Generates valid 13-digit Thai national IDs."""
+
+    def thai_national_id(self) -> str:
+        return generate_thai_national_id(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
@@ -514,6 +539,7 @@ def register_clinical_providers(faker) -> None:
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(NPIProvider)
     faker.add_provider(PolishPeselProvider)
+    faker.add_provider(ThaiNationalIdProvider)
 
 
 __all__ = [
@@ -523,11 +549,13 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "ThaiNationalIdProvider",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
     "generate_ssn",
+    "generate_thai_national_id",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",
