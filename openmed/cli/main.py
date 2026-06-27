@@ -23,7 +23,7 @@ from ..core.config import (
     set_config,
 )
 from ..core.model_registry import get_model_info
-from ..core.model_search import ModelSearchResult, search_models
+from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
 
 _ANALYZE_TEXT = None
@@ -462,6 +462,25 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Exclude manifest rows with unknown parameter counts.",
     )
     models_search.set_defaults(handler=_handle_models_search)
+
+    models_recommend = models_sub.add_parser(
+        "recommend",
+        help="Recommend the best on-device model for a task and device tier.",
+    )
+    models_recommend.add_argument("--task", help="Filter by model task.")
+    models_recommend.add_argument("--language", help="Filter by language code.")
+    models_recommend.add_argument(
+        "--tier",
+        required=True,
+        choices=["phone", "laptop", "workstation", "server"],
+        help="Target device tier the recommended model must fit.",
+    )
+    models_recommend.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the ranked shortlist as a single JSON document.",
+    )
+    models_recommend.set_defaults(handler=_handle_models_recommend)
 
     models_freshness = models_sub.add_parser(
         "freshness",
@@ -966,6 +985,57 @@ def _handle_models_search(args: argparse.Namespace) -> int:
 
     sys.stdout.write(_format_model_search_table(results))
     return 0
+
+
+def _handle_models_recommend(args: argparse.Namespace) -> int:
+    try:
+        results = recommend_models(
+            device_tier=args.tier,
+            task=args.task,
+            language=args.language,
+        )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to recommend models: {exc}\n")
+        return 1
+
+    if not results:
+        sys.stderr.write(
+            f"No model fits the '{args.tier}' device tier for the requested filters.\n"
+        )
+        return 1
+
+    if args.json:
+        payload = {
+            "tier": args.tier,
+            "task": args.task,
+            "language": args.language,
+            "recommended": results[0].repo_id,
+            "models": [_recommendation_to_dict(result) for result in results],
+        }
+        sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
+        return 0
+
+    sys.stdout.write(f"Recommended for {args.tier}: {results[0].repo_id}\n")
+    sys.stdout.write(_format_model_search_table(results))
+    return 0
+
+
+def _recommendation_to_dict(result: ModelSearchResult) -> dict[str, Any]:
+    row = result.manifest_row
+    return {
+        "repo_id": result.repo_id,
+        "family": result.family,
+        "task": result.task,
+        "languages": list(result.languages),
+        "tier": result.tier,
+        "param_count": result.param_count,
+        "formats": list(result.formats),
+        "license": result.license,
+        "recommended_tier": row.get("recommended_tier"),
+        "peak_ram_mb": row.get("peak_ram_mb"),
+        "latency_ms": row.get("latency_ms"),
+        "benchmark": result.benchmark,
+    }
 
 
 def _format_model_search_table(results: Sequence[ModelSearchResult]) -> str:
