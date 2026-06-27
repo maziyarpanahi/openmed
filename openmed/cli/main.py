@@ -136,6 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
     return parser
 
@@ -529,6 +530,25 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Path to a model manifest JSONL file.",
     )
     models_validate.set_defaults(handler=_handle_models_validate)
+
+
+def _add_doctor_command(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Inspect the OpenMed environment and dependencies.",
+    )
+
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit diagnostics as JSON.",
+    )
+
+    doctor_parser.set_defaults(
+        handler=_handle_doctor,
+    )
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1196,6 +1216,30 @@ def _handle_models_validate(args: argparse.Namespace) -> int:
     for line in format_manifest_validation(result):
         output.write(f"{line}\n")
     return 0 if result.ok else 1
+
+
+def _handle_doctor(args: argparse.Namespace) -> int:
+    from ..core.doctor import run_diagnostics
+
+    results = run_diagnostics()
+
+    if args.json:
+        sys.stdout.write(json.dumps(results, indent=2))
+        sys.stdout.write("\n")
+
+        has_fail = any(item["status"] == "FAIL" for item in results)
+
+        return 1 if has_fail else 0
+
+    for item in results:
+        sys.stdout.write(f"{item['status'][:5]} {item['name']}: {item['details']}\n")
+
+        if item.get("hint"):
+            sys.stdout.write(f"      Hint: {item['hint']}\n")
+
+    has_fail = any(item["status"] == "FAIL" for item in results)
+
+    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
