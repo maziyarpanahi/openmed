@@ -4,6 +4,8 @@ OpenMed `v0.6.2` hardens the FastAPI service introduced in `v0.6.1` with shared
 model reuse, explicit model unloading, and idle model cleanup:
 
 - `GET /health`
+- `GET /livez`
+- `GET /readyz`
 - `GET /models/loaded`
 - `POST /models/unload`
 - `POST /analyze`
@@ -103,6 +105,17 @@ non-batch-compatible settings are still coalesced but executed independently.
 `OPENMED_SERVICE_BATCH_MAX_WAIT_MS` is a non-negative wait window in
 milliseconds.
 
+Optional graceful-shutdown drain timeout:
+
+```bash
+OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+`OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
+During shutdown, readiness is flipped off, new model-backed work is rejected,
+and the service waits up to this timeout for in-flight `/analyze`,
+`/pii/extract`, and `/pii/deidentify` requests to finish. The default is `30`.
+
 ## Reliability Changes
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
@@ -112,6 +125,8 @@ milliseconds.
 - `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
 - Dynamic request batching can be enabled for compatible `/analyze` and `/pii/extract` traffic with `OPENMED_SERVICE_BATCHING_ENABLED=true`.
+- `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
+- Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
@@ -129,6 +144,33 @@ Health response:
   "profile": "prod"
 }
 ```
+
+`GET /health` remains the backward-compatible health alias.
+
+### `GET /livez`
+
+Liveness response:
+
+```json
+{
+  "status": "ok",
+  "service": "openmed-rest"
+}
+```
+
+### `GET /readyz`
+
+Readiness response after startup preload completes:
+
+```json
+{
+  "status": "ready",
+  "service": "openmed-rest"
+}
+```
+
+Before startup readiness, `/readyz` returns `503` with `error.code` set to
+`not_ready`.
 
 ### `GET /models/loaded`
 
@@ -240,7 +282,7 @@ All non-2xx responses use this shape:
 ```json
 {
   "error": {
-    "code": "validation_error|bad_request|timeout|internal_error",
+    "code": "validation_error|bad_request|timeout|not_ready|internal_error",
     "message": "human-readable summary",
     "details": null
   }
