@@ -28,6 +28,10 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "tr",
 }
 
+# Languages with checksum-validated national-ID coverage but no bundled
+# default PII model or full language pack yet.
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko"}
+
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
     "fr": "French",
@@ -422,6 +426,157 @@ def validate_turkish_tckn(text: str) -> bool:
     eleventh = sum(numbers[:10]) % 10
 
     return numbers[9] == tenth and numbers[10] == eleventh
+
+
+def validate_polish_pesel(text: str) -> bool:
+    """Validate Polish PESEL number.
+
+    The PESEL is an 11-digit number with an embedded birth date and a
+    weighted checksum.  Structure: YYMMDDZZZSC.
+
+    - YYMMDD: date of birth.  Month has century offsets: +20 for 2000s,
+      +40 for 2100s, +60 for 2200s, +80 for 1800s.
+    - ZZZ: serial number.
+    - S: check digit.
+
+    Checksum weights over the first ten digits: 1, 3, 7, 9, 1, 3, 7, 9, 1, 3.
+    Check digit = (10 - sum mod 10) mod 10.
+
+    Args:
+        text: PESEL string (may contain spaces or hyphens)
+
+    Returns:
+        True if the PESEL passes format, date, and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+
+    numbers = [int(d) for d in digits]
+
+    # --- checksum ---
+    weights = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+    total = sum(w * n for w, n in zip(weights, numbers[:10]))
+    if numbers[10] != (10 - total % 10) % 10:
+        return False
+
+    # --- embedded birth date ---
+    year = numbers[0] * 10 + numbers[1]
+    month_raw = numbers[2] * 10 + numbers[3]
+    day = numbers[4] * 10 + numbers[5]
+
+    # Century offset encoded in the month tens digit.
+    if month_raw > 92 or month_raw == 0:
+        return False
+
+    if month_raw > 80:
+        year += 1800
+        month = month_raw - 80
+    elif month_raw > 60:
+        year += 2200
+        month = month_raw - 60
+    elif month_raw > 40:
+        year += 2100
+        month = month_raw - 40
+    elif month_raw > 20:
+        year += 2000
+        month = month_raw - 20
+    else:
+        year += 1900
+        month = month_raw
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    return True
+
+
+def validate_korean_rrn(text: str) -> bool:
+    """Validate South Korean Resident Registration Number (RRN).
+
+    The RRN is a 13-digit number in the format YYMMDDGXXXXXX:
+
+    - YYMMDD: date of birth.
+    - G (position 6, zero-indexed): century and gender code.
+        1/2 = 1900s (1=male, 2=female),
+        3/4 = 2000s (3=male, 4=female),
+        5/6 = 1900s foreign residents,
+        7/8 = 2000s foreign residents,
+        9/0 = 1800s (9=male, 0=female).
+    - Positions 7-11: serial number.
+    - Position 12: check digit.
+
+    Checksum weights: 2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5.
+    Check digit = (11 - (sum mod 11)) mod 10.
+
+    Args:
+        text: RRN string (may contain hyphens or spaces)
+
+    Returns:
+        True if the RRN passes format, date, and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 13:
+        return False
+
+    numbers = [int(d) for d in digits]
+
+    # --- century/gender code ---
+    gender_code = numbers[6]
+    century_map = {
+        1: 1900,
+        2: 1900,
+        3: 2000,
+        4: 2000,
+        5: 1900,
+        6: 1900,
+        7: 2000,
+        8: 2000,
+        9: 1800,
+        0: 1800,
+    }
+    if gender_code not in century_map:
+        return False
+    century = century_map[gender_code]
+
+    # --- embedded birth date ---
+    year = century + numbers[0] * 10 + numbers[1]
+    month = numbers[2] * 10 + numbers[3]
+    day = numbers[4] * 10 + numbers[5]
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    # --- checksum ---
+    weights = (2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5)
+    total = sum(w * n for w, n in zip(weights, numbers[:12]))
+    check = (11 - total % 11) % 10
+
+    return numbers[12] == check
 
 
 # ---------------------------------------------------------------------------
@@ -1677,6 +1832,53 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+# ---------------------------------------------------------------------------
+# Polish PII patterns
+# ---------------------------------------------------------------------------
+
+_POLISH_PII_PATTERNS: List[PIIPattern] = [
+    # PESEL (11-digit national ID)
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "pesel",
+            "numer pesel",
+            "nr pesel",
+            "pesel:",
+            "tozsamo",
+            "dowód osobisty",
+            "dowod osobisty",
+        ],
+        context_boost=0.4,
+        validator=validate_polish_pesel,
+    ),
+]
+
+
+_KOREAN_PII_PATTERNS: List[PIIPattern] = [
+    # RRN (13-digit Resident Registration Number)
+    PIIPattern(
+        r"\b\d{6}[-\s]?\d{7}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "주민등록번호",
+            "주민번호",
+            "등록번호",
+            "rrn",
+            "resident registration",
+            "jumin",
+        ],
+        context_boost=0.4,
+        validator=validate_korean_rrn,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -1689,6 +1891,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
+    "pl": _POLISH_PII_PATTERNS,
+    "ko": _KOREAN_PII_PATTERNS,
 }
 
 
@@ -1991,8 +2195,9 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
-            ar, ja, tr)
+        lang: ISO 639-1 language code. Model-backed languages are listed in
+            :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
+            in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
 
     Returns:
         List of PIIPattern instances for the language
@@ -2000,9 +2205,11 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     Raises:
         ValueError: If the language is not supported
     """
-    if lang not in SUPPORTED_LANGUAGES:
+    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    if lang not in supported_pattern_languages:
         raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. "
+            f"Supported: {sorted(supported_pattern_languages)}"
         )
 
     from .pii_entity_merger import PII_PATTERNS
