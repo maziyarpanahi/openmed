@@ -529,7 +529,7 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         default=None,
         help="Path to a model manifest JSONL file.",
     )
-    models_validate.set_defaults(handler=_handle_models_validate)
+    # models_validate.set_defaults(handler=_handle_models_validate)
 
 
 def _add_doctor_command(
