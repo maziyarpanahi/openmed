@@ -17,6 +17,7 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.explain import ExplainReport, explain
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -591,6 +592,8 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "explain",
+    "ExplainReport",
     "generate_text",
     "OpenMedMLXLanguageModel",
     # Profiling utilities
