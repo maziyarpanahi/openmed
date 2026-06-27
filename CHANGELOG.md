@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `sbom` job uploads `sbom.cdx.json` on every push and pull request, and the
   publish workflow attaches it as an asset on each tagged GitHub release
   (fail-open).
+- Added an `openmed models recommend --task <task> --language <lang> --tier
+  phone|laptop|workstation|server` command that reuses the manifest search core
+  and ranks on-device models by device-tier fit (via `recommended_tier` and, when
+  present, `peak_ram_mb` budgets), then smallest parameter count and highest
+  benchmark recall/F1, with `--json` output and a non-zero exit when nothing fits.
 - Expanded lab reference-range parsing in `openmed.clinical.lab_values` with
   tolerant separator/operator support and safer unknown explicit-flag handling.
 - Added a root `SECURITY.md` responsible-disclosure policy (private GitHub

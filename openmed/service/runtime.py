@@ -20,8 +20,10 @@ SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
 SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
+SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
+DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 
 _BATCHING_ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BATCHING_DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -86,6 +88,24 @@ def parse_service_batch_max_wait_ms(raw_value: Optional[str]) -> float:
     return parsed
 
 
+def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
+    """Parse the configured graceful-shutdown drain window in seconds."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_SHUTDOWN_DRAIN_ENV_VAR} must be a non-negative number"
+        ) from exc
+    if parsed < 0:
+        raise ValueError(
+            f"{SERVICE_SHUTDOWN_DRAIN_ENV_VAR} must be greater than or equal to 0"
+        )
+    return parsed
+
+
 def parse_service_batching_config() -> ServiceBatchingConfig:
     """Read dynamic-batching settings from the current process environment."""
     return ServiceBatchingConfig(
@@ -132,6 +152,7 @@ class ServiceRuntime:
     preload_models: Tuple[str, ...] = ()
     max_resident_models: Optional[int] = None
     default_keep_alive_seconds: Optional[float] = None
+    shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     _loader_factory: Optional[Callable[[OpenMedConfig], ModelLoader]] = None
     _loader: Optional[ModelLoader] = None
@@ -155,6 +176,9 @@ class ServiceRuntime:
             preload_models=preload_models,
             max_resident_models=max_resident_models,
             default_keep_alive_seconds=keep_alive,
+            shutdown_drain_seconds=parse_shutdown_drain_seconds(
+                os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
+            ),
             batching=batching,
             _loader_factory=ModelLoader,
         )
