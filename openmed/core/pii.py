@@ -51,6 +51,11 @@ if TYPE_CHECKING:
     from .audit import AuditReport
     from .models import ModelLoader
 
+from .result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
+
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
 
@@ -153,6 +158,65 @@ class DeidentificationResult:
                 self.audit_report.to_dict() if self.audit_report is not None else None
             ),
         }
+
+    def to_dataframe(self) -> Any:
+        """Convert detected PII entities to a pandas DataFrame.
+
+        Returns:
+            A pandas DataFrame with one row per detected entity and columns
+            ``text``, ``label``, ``entity_type``, ``start``, ``end``,
+            ``confidence``, ``action``, and ``result_id``.
+
+        Raises:
+            ImportError: If pandas is not installed.
+        """
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise ImportError(
+                "pandas is required to use DeidentificationResult.to_dataframe(). "
+                "Install it with `pip install pandas`."
+            ) from exc
+
+        columns = [
+            "text",
+            "label",
+            "entity_type",
+            "start",
+            "end",
+            "confidence",
+            "action",
+            "result_id",
+        ]
+        payload = self.to_dict()
+        result_id_source = {
+            "deidentified_text": payload["deidentified_text"],
+            "method": payload["method"],
+            "num_entities_redacted": payload["num_entities_redacted"],
+            "timestamp": payload["timestamp"],
+        }
+        result_id = hashlib.sha256(
+            json.dumps(
+                result_id_source,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+        records = [
+            {
+                "text": entity.get("text"),
+                "label": entity.get("label"),
+                "entity_type": entity.get("entity_type"),
+                "start": entity.get("start"),
+                "end": entity.get("end"),
+                "confidence": entity.get("confidence"),
+                "action": entity.get("action"),
+                "result_id": result_id,
+            }
+            for entity in payload["pii_entities"]
+        ]
+        return pd.DataFrame.from_records(records, columns=columns)
 
 
 # Languages whose PII models were trained on accent-free text.
@@ -560,6 +624,14 @@ def _extract_pii_batch(
         for result in results:
             _apply_pii_smart_merging(result, effective_model, lang)
 
+    for result in results:
+        _apply_clinical_protection_to_result(
+            result.text,
+            result,
+            config=config,
+            lang=lang,
+        )
+
     from .quality_gates import validate_entity_spans
 
     for result in results:
@@ -575,6 +647,8 @@ def extract_pii(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
@@ -606,6 +680,8 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         PredictionResult with detected PII entities
@@ -618,7 +694,14 @@ def extract_pii(
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
-    return _extract_pii_batch(
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("extract_pii", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
+    final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -628,6 +711,9 @@ def extract_pii(
         normalize_accents=normalize_accents,
         loader=loader,
     )[0]
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _resolve_deidentification_method(
@@ -782,6 +868,49 @@ def _detector_infos(
             )
         )
     return detectors
+
+
+def _apply_clinical_protection_to_result(
+    text: str,
+    pii_result: Any,
+    *,
+    config: Optional[OpenMedConfig] = None,
+    options: Optional[Mapping[str, Any]] = None,
+    lang: str = "en",
+) -> int:
+    """Suppress ambiguous PII entities that exactly match clinical terms."""
+    from .clinical_protect import (
+        filter_protected_spans,
+        protection_options_from_config,
+    )
+
+    protection_options = dict(options or protection_options_from_config(config))
+    result = filter_protected_spans(
+        list(getattr(pii_result, "entities", ()) or ()),
+        text,
+        lang=lang,
+        **protection_options,
+    )
+    pii_result.entities = result.spans
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(result.spans)
+
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    previous = metadata.get("clinical_protection")
+    previous_metadata = previous if isinstance(previous, Mapping) else {}
+    clinical_metadata = dict(result.metadata["clinical_protection"])
+    clinical_metadata["checked_spans"] += int(previous_metadata.get("checked_spans", 0))
+    clinical_metadata["suppressed_spans"] += int(
+        previous_metadata.get("suppressed_spans", 0)
+    )
+    clinical_metadata["protected_term_count"] = max(
+        int(clinical_metadata["protected_term_count"]),
+        int(previous_metadata.get("protected_term_count", 0)),
+    )
+    clinical_metadata["enabled"] = bool(protection_options.get("enabled", True))
+    metadata["clinical_protection"] = clinical_metadata
+    pii_result.metadata = metadata
+    return result.suppressed_count
 
 
 def _context_window(
@@ -1069,7 +1198,7 @@ def _build_deidentification_result(
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
     if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = random.randint(-365, 365)
+        date_shift_days = _random_nonzero_shift()
 
     anonymizer = None
     if effective_method == "replace" or any(
@@ -1215,7 +1344,7 @@ def _deidentify_batch(
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -1284,7 +1413,7 @@ def deidentify(
     method: DeidentificationMethod = "mask",
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,  # Higher threshold for safety
-    keep_year: bool = True,
+    keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
     keep_mapping: bool = False,
@@ -1301,6 +1430,8 @@ def deidentify(
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
     audit: bool = False,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -1322,7 +1453,7 @@ def deidentify(
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random if None)
+        date_shift_days: Specific number of days to shift (random non-zero if None)
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1349,6 +1480,8 @@ def deidentify(
             thresholds filter model detections and appear in audit output.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -1367,6 +1500,14 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("deidentify", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
     from .pipeline import Pipeline
 
     pipeline = Pipeline(
@@ -1397,9 +1538,14 @@ def deidentify(
         locale=locale,
         audit=audit,
     )
+
     if audit and result.deidentification_result.audit_report is not None:
-        return result.deidentification_result.audit_report
-    return result.deidentification_result
+        final_result = result.deidentification_result.audit_report
+    else:
+        final_result = result.deidentification_result
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
@@ -1420,7 +1566,7 @@ def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
 def _redact_entity(
     entity: PIIEntity,
     method: DeidentificationMethod,
-    keep_year: bool = True,
+    keep_year: bool = False,
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
@@ -1631,17 +1777,39 @@ def _parse_localized_month_date(
     text = date_str.strip()
 
     if lang in {"es", "pt"}:
-        pattern = rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$"
-        style = "day_month_year_de"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})\s+de\s+(?P<month>{month_alts})\s+de\s+(?P<year>\d{{4}})$",
+                "day_month_year_de",
+            )
+        ]
     elif lang == "de":
-        pattern = rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
-        style = "day_month_year_dot"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})(?P<dot>\.)?\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$",
+                "day_month_year_dot",
+            )
+        ]
     else:
-        pattern = rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$"
-        style = "day_month_year"
+        patterns = [
+            (
+                rf"^(?P<day>\d{{1,2}})\s+(?P<month>{month_alts})\s+(?P<year>\d{{4}})$",
+                "day_month_year",
+            ),
+            (
+                rf"^(?P<month>{month_alts})\s+(?P<day>\d{{1,2}}),?\s+(?P<year>\d{{4}})$",
+                "month_day_year",
+            ),
+        ]
 
-    match = re.match(pattern, text, re.IGNORECASE)
-    if not match:
+    match = None
+    style = ""
+    for pattern, candidate_style in patterns:
+        match = re.match(pattern, text, re.IGNORECASE)
+        if match:
+            style = candidate_style
+            break
+    if match is None:
         return None
 
     month_lookup = {
@@ -1682,6 +1850,8 @@ def _format_localized_month_date(
         return f"{new_date.day} de {month_name} de {new_date.year}"
     if style == "day_month_year_dot":
         return f"{new_date.day}. {month_name} {new_date.year}"
+    if style == "month_day_year":
+        return f"{month_name} {new_date.day}, {new_date.year}"
     return f"{new_date.day} {month_name} {new_date.year}"
 
 
@@ -1700,10 +1870,34 @@ def _replace_year_safe(date_value: datetime, year: int) -> datetime:
         return date_value.replace(year=year, month=2, day=28)
 
 
+def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
+    """Return a random non-zero day offset in ``[low, high]`` excluding 0.
+
+    A zero-day shift would leave clinical dates unchanged, silently defeating
+    de-identification, so the auto-selected offset must never be 0.
+
+    Args:
+        low: Minimum (most-negative) shift in days, inclusive.
+        high: Maximum (most-positive) shift in days, inclusive.
+
+    Returns:
+        A non-zero integer day offset within the range.
+    """
+    if low > high:
+        raise ValueError("low must be less than or equal to high")
+    if low == high == 0:
+        raise ValueError("range must contain at least one non-zero shift")
+
+    while True:
+        shift_days = random.randint(low, high)
+        if shift_days != 0:
+            return shift_days
+
+
 def _shift_date(
     date_str: str,
     shift_days: int,
-    keep_year: bool = True,
+    keep_year: bool = False,
     lang: str = "en",
 ) -> str:
     """Shift a date string by specified number of days.
@@ -1769,7 +1963,7 @@ def _shift_date(
 def _shift_date_basic(
     date_str: str,
     shift_days: int,
-    keep_year: bool = True,
+    keep_year: bool = False,
     lang: str = "en",
 ) -> str:
     """Basic date shifting without dateutil dependency.
@@ -1789,14 +1983,14 @@ def _shift_date_basic(
     if lang in _DAY_FIRST_LANGS - {"de"}:
         # European: DD/MM/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "de":
         # German: DD.MM.YYYY
         patterns = [
             (r"(\d{1,2})\.(\d{1,2})\.(\d{2,4})", "dmy"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
         ]
     elif lang == "ja":
@@ -1804,14 +1998,14 @@ def _shift_date_basic(
         # JAPANESE_PII_PATTERNS regex, not here).
         patterns = [
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
     else:
         # US/English: MM/DD/YYYY first
         patterns = [
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "mdy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "mdy"),
             (r"(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})", "ymd"),
-            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})", "dmy"),
+            (r"(\d{1,2})[/\-](\d{1,2})[/\-](\d{2,4})", "dmy"),
         ]
 
     for pattern, order in patterns:
@@ -1896,7 +2090,7 @@ def _format_date_like_original(
         return new_date.strftime("%d.%m.%Y")
 
     # Slash-separated dates: interpretation depends on language
-    if re.match(r"\d{1,2}/\d{1,2}/\d{4}", original_stripped):
+    if re.match(r"\d{1,2}/\d{1,2}/\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             # European: DD/MM/YYYY
             return new_date.strftime("%d/%m/%Y")
@@ -1905,7 +2099,7 @@ def _format_date_like_original(
             return new_date.strftime("%m/%d/%Y")
 
     # Dash-separated dates
-    if re.match(r"\d{1,2}-\d{1,2}-\d{4}", original_stripped):
+    if re.match(r"\d{1,2}-\d{1,2}-\d{2,4}", original_stripped):
         if lang in _DAY_FIRST_LANGS:
             return new_date.strftime("%d-%m-%Y")
         else:

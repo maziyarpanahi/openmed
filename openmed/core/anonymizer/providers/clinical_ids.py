@@ -24,6 +24,7 @@ or emits a US-style format unrelated to the requested locale's actual ID:
 
 from __future__ import annotations
 
+import random
 import re
 from typing import Sequence
 
@@ -108,6 +109,50 @@ def validate_npi(npi_text: str) -> bool:
     body = [int(digit) for digit in digits[:-1]]
     prefixed = [8, 0, 8, 4, 0, *body]
     return _luhn_check_digit(prefixed) == int(digits[-1])
+
+
+def generate_luhn_identifier(
+    *,
+    length: int = 16,
+    prefix: str = "",
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a numeric identifier that passes :func:`validate_luhn`."""
+
+    if length < 13:
+        raise ValueError("length must be at least 13 for Luhn validation")
+    if not prefix.isdigit() and prefix:
+        raise ValueError("prefix must contain only digits")
+    if len(prefix) >= length:
+        raise ValueError("prefix must leave room for body and check digit")
+
+    source = rng or random.Random()
+    body = [int(digit) for digit in prefix]
+    body.extend(source.randint(0, 9) for _ in range(length - len(prefix) - 1))
+    check_digit = _luhn_check_digit(body)
+    return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+def generate_npi(*, rng: random.Random | None = None) -> str:
+    """Generate a 10-digit US NPI that passes :func:`validate_npi`."""
+
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(9)]
+    prefixed = [8, 0, 8, 4, 0, *body]
+    check_digit = _luhn_check_digit(prefixed)
+    return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+def generate_ssn(*, rng: random.Random | None = None) -> str:
+    """Generate a US SSN-shaped value accepted by :func:`validate_ssn`."""
+
+    source = rng or random.Random()
+    area = source.randint(1, 899)
+    while area == 666:
+        area = source.randint(1, 899)
+    group = source.randint(1, 99)
+    serial = source.randint(1, 9999)
+    return f"{area:03d}-{group:02d}-{serial:04d}"
 
 
 _IBAN_LENGTHS = {
@@ -332,11 +377,128 @@ class NPIProvider(BaseProvider):
     """
 
     def npi(self) -> str:
-        rng = self.generator.random
-        body = [rng.randint(0, 9) for _ in range(9)]
-        prefixed = [8, 0, 8, 4, 0, *body]
-        check = _luhn_check_digit(prefixed)
-        return "".join(str(d) for d in body) + str(check)
+        return generate_npi(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Polish PESEL (11 digits, weighted checksum with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_pesel(*, rng: random.Random | None = None) -> str:
+    """Generate a Polish PESEL that passes :func:`validate_polish_pesel`.
+
+    Constructs a PESEL for a random birth date between 1920 and 2029.
+    """
+    from datetime import date
+
+    source = rng or random.Random()
+
+    # Random date between 1920-01-01 and 2029-12-31.
+    year = source.randint(1920, 2029)
+    month = source.randint(1, 12)
+    max_day = 28  # safe default
+    if month in (1, 3, 5, 7, 8, 10, 12):
+        max_day = 31
+    elif month in (4, 6, 9, 11):
+        max_day = 30
+    else:
+        import calendar
+
+        max_day = calendar.monthrange(year, month)[1]
+    day = source.randint(1, max_day)
+
+    # Encode century offset in the month.
+    if year >= 2200:
+        encoded_month = month + 60
+    elif year >= 2100:
+        encoded_month = month + 40
+    elif year >= 2000:
+        encoded_month = month + 20
+    else:
+        encoded_month = month
+
+    yy = year % 100
+    body_digits = [
+        yy // 10,
+        yy % 10,
+        encoded_month // 10,
+        encoded_month % 10,
+        day // 10,
+        day % 10,
+    ]
+    # 3-digit serial + 1 sex digit.
+    body_digits.extend(source.randint(0, 9) for _ in range(4))
+
+    weights = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+    total = sum(w * d for w, d in zip(weights, body_digits))
+    check = (10 - total % 10) % 10
+
+    return "".join(str(d) for d in body_digits) + str(check)
+
+
+class PolishPeselProvider(BaseProvider):
+    """Generates valid Polish PESEL numbers."""
+
+    def pesel(self) -> str:
+        return generate_pesel(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_korean_rrn(*, rng: random.Random | None = None) -> str:
+    """Generate a Korean RRN that passes :func:`validate_korean_rrn`.
+
+    Constructs an RRN for a random birth date between 1920 and 2029.
+    Gender code 1/2 for 1900s, 3/4 for 2000s.
+    """
+    source = rng or random.Random()
+
+    year = source.randint(1920, 2029)
+    month = source.randint(1, 12)
+    if month in (1, 3, 5, 7, 8, 10, 12):
+        max_day = 31
+    elif month in (4, 6, 9, 11):
+        max_day = 30
+    else:
+        import calendar
+
+        max_day = calendar.monthrange(year, month)[1]
+    day = source.randint(1, max_day)
+
+    if year >= 2000:
+        gender_code = source.choice((3, 4))
+    else:
+        gender_code = source.choice((1, 2))
+
+    yy = year % 100
+    body_digits = [
+        yy // 10,
+        yy % 10,
+        month // 10,
+        month % 10,
+        day // 10,
+        day % 10,
+        gender_code,
+    ]
+    # 5 more serial digits.
+    body_digits.extend(source.randint(0, 9) for _ in range(5))
+
+    weights = (2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5)
+    total = sum(w * d for w, d in zip(weights, body_digits[:12]))
+    check = (11 - total % 11) % 10
+
+    return "".join(str(d) for d in body_digits[:12]) + str(check)
+
+
+class KoreanRRNProvider(BaseProvider):
+    """Generates valid South Korean Resident Registration Numbers."""
+
+    def korean_rrn(self) -> str:
+        return generate_korean_rrn(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -348,15 +510,24 @@ def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     faker.add_provider(AadhaarProvider)
     faker.add_provider(GermanSteuerIdProvider)
+    faker.add_provider(KoreanRRNProvider)
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(NPIProvider)
+    faker.add_provider(PolishPeselProvider)
 
 
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "PolishPeselProvider",
+    "generate_korean_rrn",
+    "generate_luhn_identifier",
+    "generate_npi",
+    "generate_pesel",
+    "generate_ssn",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import inspect
+import logging
 import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -24,6 +27,26 @@ STAGE_NAMES: tuple[str, ...] = (
 )
 
 DEFAULT_HASH_SECRET = b"openmed-pipeline-v1"
+
+logger = logging.getLogger(__name__)
+
+_PIPELINE_TO_PLUGIN_STAGE = {
+    STAGE_NAMES[3]: "deterministic",
+    STAGE_NAMES[4]: "fast_pii",
+    STAGE_NAMES[5]: "clinical_phi",
+}
+_RAW_SURFACE_METADATA_KEYS = frozenset(
+    {
+        "matched_text",
+        "normalized_text",
+        "original_text",
+        "raw_text",
+        "span_text",
+        "surface",
+        "text",
+        "value",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -208,13 +231,16 @@ class Pipeline:
         self.policy_actions = policy_actions
         self.section_detector = section_detector
         self.hmac_secret = hmac_secret
+        from .clinical_protect import protection_options_from_config
+
+        self.clinical_protect_options = protection_options_from_config(config)
 
     def run(
         self,
         text: str,
         *,
         method: str = "mask",
-        keep_year: bool = True,
+        keep_year: bool = False,
         shift_dates: Optional[bool] = None,
         date_shift_days: Optional[int] = None,
         keep_mapping: bool = False,
@@ -283,6 +309,30 @@ class Pipeline:
             deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
             model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
             clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+            deterministic_spans = (
+                *deterministic_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[3],
+                ),
+            )
+            model_spans = (
+                *model_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[4],
+                ),
+            )
+            clinical_spans = (
+                *clinical_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[5],
+                ),
+            )
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
@@ -329,8 +379,18 @@ class Pipeline:
                 getattr(pii_result, "entities", ()),
                 normalized.normalized_text,
                 context,
-                default_detector=f"model:{getattr(pii_result, 'model_name', route.model_name)}",
+                default_detector=(
+                    f"model:{getattr(pii_result, 'model_name', route.model_name)}"
+                ),
                 stage=STAGE_NAMES[4],
+            )
+            model_spans = (
+                *model_spans,
+                *self._registered_detector_spans(
+                    normalized.normalized_text,
+                    context,
+                    pipeline_stage=STAGE_NAMES[4],
+                ),
             )
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
@@ -348,13 +408,32 @@ class Pipeline:
             (*deterministic_spans, *model_spans, *clinical_spans),
             context,
         )
+        merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
+            normalized.normalized_text,
+            merged_spans,
+            context,
+        )
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 merged_spans,
                 model_name="cascade",
             )
-        stage_results.append(PipelineStageResult(7, STAGE_NAMES[6], spans=merged_spans))
+        else:
+            pii._apply_clinical_protection_to_result(
+                normalized.normalized_text,
+                pii_result,
+                options=self.clinical_protect_options,
+                lang=route.lang,
+            )
+        stage_results.append(
+            PipelineStageResult(
+                7,
+                STAGE_NAMES[6],
+                spans=merged_spans,
+                metadata=clinical_protection_metadata,
+            )
+        )
 
         policy_spans = self.stage8_policy_actions(merged_spans, context)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
@@ -373,6 +452,17 @@ class Pipeline:
                     "calibration_thresholds"
                 ]
                 pii_result.metadata = metadata
+        else:
+            pii_result = _append_span_predictions(
+                pii_result,
+                normalized.normalized_text,
+                [
+                    span
+                    for span in policy_spans
+                    if span.action != ACTION_KEEP
+                    and str(span.detector or "").startswith("plugin:")
+                ],
+            )
 
         sweep_spans, sweep_metadata = self.stage9_safety_sweep(
             normalized.normalized_text,
@@ -391,9 +481,14 @@ class Pipeline:
         effective_keep_mapping = keep_mapping or bool(
             self.policy is not None and self.policy.keep_mapping
         )
-        deidentified = self.stage10_emit(
-            normalized.normalized_text,
+        emission_pii_result = _remap_pii_result_to_original(
             pii_result,
+            normalized,
+            self.hmac_secret,
+        )
+        deidentified = self.stage10_emit(
+            normalized.original_text,
+            emission_pii_result,
             effective_method=effective_method,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
@@ -415,11 +510,16 @@ class Pipeline:
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
+        emission_spans = _remap_spans_to_original(
+            final_spans,
+            normalized,
+            self.hmac_secret,
+        )
         stage_results.append(
             PipelineStageResult(
                 10,
                 STAGE_NAMES[9],
-                spans=final_spans,
+                spans=emission_spans,
                 metadata={
                     "redacted_text_hash": hmac_text_hash(
                         deidentified.deidentified_text,
@@ -432,7 +532,7 @@ class Pipeline:
         audit_record = self._audit_record(
             context,
             stage_results,
-            final_spans,
+            emission_spans,
             redacted_text=deidentified.deidentified_text,
         )
 
@@ -441,7 +541,7 @@ class Pipeline:
             normalized_text=normalized.normalized_text,
             offset_map=normalized.offset_map,
             route=route,
-            spans=final_spans,
+            spans=emission_spans,
             stage_results=tuple(stage_results),
             redacted_text=deidentified.deidentified_text,
             audit_record=audit_record,
@@ -549,6 +649,10 @@ class Pipeline:
             context,
             default_detector="rules:regex",
             stage=STAGE_NAMES[3],
+        ) + self._registered_detector_spans(
+            text,
+            context,
+            pipeline_stage=STAGE_NAMES[3],
         )
 
     def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
@@ -592,6 +696,10 @@ class Pipeline:
             context,
             default_detector=f"model:{getattr(result, 'model_name', 'clinical_phi')}",
             stage=STAGE_NAMES[5],
+        ) + self._registered_detector_spans(
+            text,
+            context,
+            pipeline_stage=STAGE_NAMES[5],
         )
 
     def _apply_calibration_thresholds(
@@ -714,7 +822,9 @@ class Pipeline:
             getattr(pii_result, "entities", ()),
             text,
             context,
-            default_detector=f"model:{getattr(pii_result, 'model_name', context.route.model_name)}",
+            default_detector=(
+                f"model:{getattr(pii_result, 'model_name', context.route.model_name)}"
+            ),
             stage=STAGE_NAMES[8],
         )
         return spans, {
@@ -723,6 +833,24 @@ class Pipeline:
             "redacted_chars_before": before,
             "redacted_chars_after": after,
         }
+
+    def _protect_clinical_spans(
+        self,
+        text: str,
+        spans: Sequence[OpenMedSpan],
+        context: PipelineContext,
+    ) -> tuple[tuple[OpenMedSpan, ...], Mapping[str, Any]]:
+        from .clinical_protect import filter_protected_spans
+
+        result = filter_protected_spans(
+            spans,
+            text,
+            lang=context.route.lang,
+            **self.clinical_protect_options,
+        )
+        metadata = dict(result.metadata["clinical_protection"])
+        metadata["enabled"] = bool(self.clinical_protect_options.get("enabled", True))
+        return tuple(result.spans), {"clinical_protection": metadata}
 
     def stage10_emit(
         self,
@@ -811,6 +939,76 @@ class Pipeline:
                     metadata=metadata,
                 )
             )
+        return tuple(spans)
+
+    def _registered_detector_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+        *,
+        pipeline_stage: str,
+    ) -> tuple[OpenMedSpan, ...]:
+        from .detector_plugins import detector_provenance, iter_detectors
+
+        plugin_stage = _PIPELINE_TO_PLUGIN_STAGE[pipeline_stage]
+        spans: list[OpenMedSpan] = []
+        for spec in iter_detectors(plugin_stage, context.route.lang):
+            try:
+                detected = _call_detector_plugin(spec, text, context)
+            except Exception as exc:
+                logger.warning(
+                    "OpenMed detector plugin %s failed in %s stage: %s",
+                    spec.name,
+                    plugin_stage,
+                    exc.__class__.__name__,
+                )
+                continue
+
+            for span in detected or ():
+                if not isinstance(span, OpenMedSpan):
+                    logger.warning(
+                        "OpenMed detector plugin %s returned a non-span record",
+                        spec.name,
+                    )
+                    continue
+                if span.start < 0 or span.end <= span.start or span.end > len(text):
+                    logger.warning(
+                        "OpenMed detector plugin %s returned invalid offsets",
+                        spec.name,
+                    )
+                    continue
+
+                surface = text[span.start : span.end]
+                canonical = normalize_label(span.canonical_label, context.route.lang)
+                metadata = _sanitize_plugin_mapping(span.metadata, surface)
+                metadata.setdefault("pipeline_stage", pipeline_stage)
+                metadata.setdefault("plugin_detector", spec.name)
+                evidence = _sanitize_plugin_mapping(span.evidence, surface)
+                spans.append(
+                    replace(
+                        span,
+                        doc_id=context.doc_id,
+                        text_hash=hmac_text_hash(surface, self.hmac_secret),
+                        entity_type=span.entity_type or canonical,
+                        canonical_label=canonical,
+                        policy_label=policy_label_for(
+                            canonical,
+                            lang=context.route.lang,
+                        ),
+                        regulatory_tags=(
+                            hipaa_class_for(canonical, lang=context.route.lang),
+                        ),
+                        detector=detector_provenance(spec),
+                        evidence=evidence,
+                        section=span.section
+                        or _section_for_span(
+                            span.start,
+                            span.end,
+                            context.section_metadata,
+                        ),
+                        metadata=metadata,
+                    )
+                )
         return tuple(spans)
 
     def _audit_record(
@@ -945,7 +1143,7 @@ def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
 def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
-    if detector and str(detector).startswith(("rules:", "model:")):
+    if detector and str(detector).startswith(("rules:", "model:", "plugin:")):
         return str(detector)
 
     sweep = metadata.get("safety_sweep") if isinstance(metadata, Mapping) else None
@@ -1062,6 +1260,123 @@ def _prediction_result_from_spans(
     )
 
 
+def _append_span_predictions(
+    pii_result: Any,
+    text: str,
+    spans: Sequence[OpenMedSpan],
+) -> Any:
+    if not spans:
+        return pii_result
+
+    span_result = _prediction_result_from_spans(
+        text,
+        spans,
+        model_name=str(getattr(pii_result, "model_name", "plugins") or "plugins"),
+    )
+    combined = copy.copy(pii_result)
+    combined.entities = [
+        *list(getattr(pii_result, "entities", ()) or ()),
+        *span_result.entities,
+    ]
+    if hasattr(combined, "num_entities"):
+        combined.num_entities = len(combined.entities)
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    metadata["plugin_detector_spans"] = len(spans)
+    combined.metadata = metadata
+    return combined
+
+
+def _remap_pii_result_to_original(
+    pii_result: Any,
+    document: NormalizedDocument,
+    hmac_secret: str | bytes,
+) -> Any:
+    """Clone a normalized-text PII result with entities mapped to original text."""
+    remapped_result = copy.copy(pii_result)
+    remapped_entities = []
+    for entity in getattr(pii_result, "entities", ()):
+        remapped = _remap_entity_to_original(entity, document, hmac_secret)
+        if remapped is not None:
+            remapped_entities.append(remapped)
+    remapped_result.entities = remapped_entities
+    if hasattr(remapped_result, "text"):
+        remapped_result.text = document.original_text
+    if hasattr(remapped_result, "num_entities"):
+        remapped_result.num_entities = len(remapped_entities)
+    return remapped_result
+
+
+def _remap_entity_to_original(
+    entity: Any,
+    document: NormalizedDocument,
+    hmac_secret: str | bytes,
+) -> Any | None:
+    bounds = _entity_bounds(entity, document.normalized_text)
+    if bounds is None:
+        return None
+
+    normalized_start, normalized_end = bounds
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    original_surface = document.original_text[original_start:original_end]
+
+    remapped = copy.copy(entity)
+    remapped.start = original_start
+    remapped.end = original_end
+    remapped.text = original_surface
+
+    metadata = dict(getattr(entity, "metadata", None) or {})
+    normalized_surface = document.normalized_text[normalized_start:normalized_end]
+    metadata.pop("normalized_text", None)
+    metadata.setdefault(
+        "normalized_text_hash",
+        hmac_text_hash(normalized_surface, hmac_secret),
+    )
+    metadata.setdefault("normalized_start", normalized_start)
+    metadata.setdefault("normalized_end", normalized_end)
+    remapped.metadata = metadata
+    return remapped
+
+
+def _remap_spans_to_original(
+    spans: Sequence[OpenMedSpan],
+    document: NormalizedDocument,
+    hmac_secret: str | bytes,
+) -> tuple[OpenMedSpan, ...]:
+    remapped_spans = []
+    for span in spans:
+        original_start, original_end = (
+            document.offset_map.normalized_span_to_original_offsets(
+                span.start,
+                span.end,
+            )
+        )
+        original_surface = document.original_text[original_start:original_end]
+        normalized_surface = document.normalized_text[span.start : span.end]
+        metadata = dict(span.metadata)
+        metadata.pop("normalized_text", None)
+        metadata.setdefault("normalized_start", span.start)
+        metadata.setdefault("normalized_end", span.end)
+        metadata.setdefault(
+            "normalized_text_hash",
+            hmac_text_hash(normalized_surface, hmac_secret),
+        )
+        remapped_spans.append(
+            replace(
+                span,
+                start=original_start,
+                end=original_end,
+                text_hash=hmac_text_hash(original_surface, hmac_secret),
+                metadata=metadata,
+            )
+        )
+    return tuple(remapped_spans)
+
+
 def _load_calibration_thresholds(
     *,
     calibration_thresholds: Mapping[str, Any] | Any | None,
@@ -1090,6 +1405,67 @@ def _attach_policy_metadata(pii_result: Any, policy: Any) -> None:
         "reversible_id": policy.reversible_id,
     }
     pii_result.metadata = metadata
+
+
+def _call_detector_plugin(spec: Any, text: str, context: PipelineContext) -> Any:
+    kwargs = {
+        "context": context,
+        "lang": context.route.lang,
+        "language": context.route.lang,
+        "stage": spec.stage,
+    }
+    try:
+        signature = inspect.signature(spec.detect)
+    except (TypeError, ValueError):
+        return spec.detect(text, **kwargs)
+
+    parameters = signature.parameters
+    if any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    ):
+        return spec.detect(text, **kwargs)
+
+    accepted = {name: value for name, value in kwargs.items() if name in parameters}
+    return spec.detect(text, **accepted)
+
+
+def _sanitize_plugin_mapping(
+    mapping: Mapping[str, Any],
+    surface: str,
+) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for key, value in dict(mapping).items():
+        normalized_key = str(key).strip().lower()
+        if normalized_key in _RAW_SURFACE_METADATA_KEYS:
+            continue
+        sanitized_value = _sanitize_plugin_value(value, surface)
+        if sanitized_value is not _SKIP_PLUGIN_VALUE:
+            sanitized[str(key)] = sanitized_value
+    return sanitized
+
+
+_SKIP_PLUGIN_VALUE = object()
+
+
+def _sanitize_plugin_value(value: Any, surface: str) -> Any:
+    if isinstance(value, str):
+        return _SKIP_PLUGIN_VALUE if value == surface else value
+    if isinstance(value, Mapping):
+        return _sanitize_plugin_mapping(value, surface)
+    if isinstance(value, list):
+        return [
+            item
+            for item in (_sanitize_plugin_value(item, surface) for item in value)
+            if item is not _SKIP_PLUGIN_VALUE
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            item
+            for item in (_sanitize_plugin_value(item, surface) for item in value)
+            if item is not _SKIP_PLUGIN_VALUE
+        )
+    return value
 
 
 def _apply_policy_action(
