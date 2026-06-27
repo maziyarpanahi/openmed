@@ -28,7 +28,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>12 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,000+ models</b> &nbsp;·&nbsp; <b>13 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -100,7 +100,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          1,000+          |        Limited         |
-| Languages                             |           12+            |         Varies         |
+| Languages                             |           13+            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
@@ -309,10 +309,10 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (12 languages)
+## Multilingual PII (13 languages)
 
-Extraction and de-identification support **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr` — **247 PII checkpoints** total.
+Extraction and de-identification support **13 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr` — **247 PII checkpoints** total.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"

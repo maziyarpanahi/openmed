@@ -1,9 +1,13 @@
 """Tests for multilingual PII detection support (pii_i18n module)."""
 
+import json
 import re
+from pathlib import Path
 
 import pytest
 
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.locales import LANG_TO_LOCALE
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -23,6 +27,7 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cpf,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_thai_national_id,
     validate_turkish_tckn,
 )
 
@@ -48,6 +53,7 @@ class TestConstants:
             "ar",
             "ja",
             "tr",
+            "th",
         }
 
     def test_national_id_only_languages(self):
@@ -69,6 +75,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
         assert LANGUAGE_MODEL_PREFIX["ja"] == "Japanese-"
         assert LANGUAGE_MODEL_PREFIX["tr"] == "Turkish-"
+        assert LANGUAGE_MODEL_PREFIX["th"] == "Thai-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
@@ -85,6 +92,7 @@ class TestConstants:
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
         assert "Japanese" in DEFAULT_PII_MODELS["ja"]
         assert "Turkish" in DEFAULT_PII_MODELS["tr"]
+        assert DEFAULT_PII_MODELS["th"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -330,6 +338,33 @@ class TestValidateTurkishTCKN:
         assert validate_turkish_tckn("1000000014") is False
 
 
+class TestValidateThaiNationalId:
+    """Tests for validate_thai_national_id()."""
+
+    def test_valid_thai_national_id(self):
+        assert validate_thai_national_id("1101700203450") is True
+
+    def test_valid_thai_national_id_with_hyphens(self):
+        assert validate_thai_national_id("1-1017-00203-45-0") is True
+
+    def test_invalid_thai_national_id_wrong_checksum(self):
+        assert validate_thai_national_id("1101700203451") is False
+
+    def test_invalid_thai_national_id_wrong_length(self):
+        assert validate_thai_national_id("110170020345") is False
+
+    def test_invalid_thai_national_id_first_digit_zero(self):
+        assert validate_thai_national_id("0101700203458") is False
+
+    def test_generated_thai_surrogate_passes_validator(self):
+        assert LANG_TO_LOCALE["th"] == "th_TH"
+
+        anonymizer = Anonymizer(lang="th", consistent=True, seed=7)
+        surrogate = anonymizer.surrogate("1101700203450", "national_id")
+
+        assert validate_thai_national_id(surrogate) is True
+
+
 # ---------------------------------------------------------------------------
 # Language-specific PII Patterns Tests
 # ---------------------------------------------------------------------------
@@ -381,6 +416,10 @@ class TestLanguagePIIPatterns:
     def test_turkish_patterns_exist(self):
         assert "tr" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["tr"]) > 0
+
+    def test_thai_patterns_exist(self):
+        assert "th" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["th"]) > 0
 
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
@@ -734,6 +773,79 @@ class TestLanguagePIIPatterns:
             matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
             assert matched, f"Turkish address pattern should match '{text}'"
 
+    def test_thai_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "date"]
+        text = "15 มกราคม 2567"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Thai date pattern should match '{text}'"
+
+    def test_thai_phone(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "phone_number"
+        ]
+        texts = ["+66 81 234 5678", "081-234-5678"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Thai phone pattern should match '{text}'"
+
+    def test_thai_national_id_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "national_id"
+        ]
+        text = "1101700203450"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Thai national ID pattern should match"
+
+    def test_thai_address_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "street_address"
+        ]
+        text = "123 ถนนสุขุมวิท แขวงคลองตัน เขตคลองเตย กรุงเทพฯ"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Thai address pattern should match"
+
+    def test_thai_postcode_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["th"] if p.entity_type == "postcode"
+        ]
+        text = "10110"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Thai postcode pattern should match"
+
+    def test_thai_jsonl_fixture_matches_expected_offsets(self):
+        fixture_path = (
+            Path(__file__).resolve().parents[2]
+            / "openmed/eval/golden/fixtures/i18n/th.jsonl"
+        )
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8").strip())
+        text = fixture["text"]
+
+        expected = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in fixture["gold_spans"]
+        }
+        observed = set()
+        for pattern in LANGUAGE_PII_PATTERNS["th"]:
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                if pattern.validator and not pattern.validator(match.group(0)):
+                    continue
+                observed.add(
+                    (
+                        {
+                            "date": "DATE",
+                            "phone_number": "PHONE",
+                            "national_id": "ID_NUM",
+                            "street_address": "STREET_ADDRESS",
+                            "postcode": "ZIPCODE",
+                        }[pattern.entity_type],
+                        match.start(),
+                        match.end(),
+                        match.group(0),
+                    )
+                )
+
+        assert expected <= observed
+
     def test_arabic_phone_rejects_bare_digit_strings(self):
         # The old pattern would match the 14-digit national-ID and any other
         # 5–13-digit number. The tightened pattern requires +CC or a leading 0.
@@ -837,6 +949,12 @@ class TestGetPatternsForLanguage:
         lang_count = len(LANGUAGE_PII_PATTERNS["tr"])
         assert len(tr_patterns) == base_count + lang_count
 
+    def test_thai_includes_base_and_language(self):
+        th_patterns = get_patterns_for_language("th")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["th"])
+        assert len(th_patterns) == base_count + lang_count
+
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
             get_patterns_for_language("xx")
@@ -921,6 +1039,10 @@ class TestLanguageFakeData:
         names = LANGUAGE_FAKE_DATA["tr"]["NAME"]
         assert any("Y\u0131lmaz" in n or "Kaya" in n for n in names)
 
+    def test_thai_names_are_thai(self):
+        names = LANGUAGE_FAKE_DATA["th"]["NAME"]
+        assert any("ใจดี" in n or "แก้วใส" in n for n in names)
+
     def test_french_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["fr"]["PHONE"]
         assert any("+33" in p or p.startswith("0") for p in phones)
@@ -964,6 +1086,10 @@ class TestLanguageFakeData:
     def test_turkish_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["tr"]["PHONE"]
         assert any("+90" in p or p.startswith("0") for p in phones)
+
+    def test_thai_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["th"]["PHONE"]
+        assert any("+66" in p or p.startswith("0") for p in phones)
 
 
 if __name__ == "__main__":

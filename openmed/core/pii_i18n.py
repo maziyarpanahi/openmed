@@ -26,6 +26,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "ar",
     "ja",
     "tr",
+    "th",
 }
 
 # Languages with checksum-validated national-ID coverage but no bundled
@@ -45,6 +46,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ar": "Arabic",
     "ja": "Japanese",
     "tr": "Turkish",
+    "th": "Thai",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -60,6 +62,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ar": "Arabic-",
     "ja": "Japanese-",
     "tr": "Turkish-",
+    "th": "Thai-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -75,6 +78,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "th": "OpenMed/privacy-filter-multilingual",
 }
 
 
@@ -428,6 +432,32 @@ def validate_turkish_tckn(text: str) -> bool:
     return numbers[9] == tenth and numbers[10] == eleventh
 
 
+def validate_thai_national_id(text: str) -> bool:
+    """Validate Thai 13-digit national ID with its mod-11 checksum.
+
+    The check digit is calculated from the first 12 digits weighted 13..2:
+    ``check = (11 - sum % 11) % 10``.
+
+    Args:
+        text: Thai national ID string (may contain spaces or hyphens)
+
+    Returns:
+        True if the ID has valid shape and checksum.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 13:
+        return False
+    if digits[0] == "0":
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(range(13, 1, -1), numbers[:12]))
+    check = (11 - total % 11) % 10
+
+    return numbers[12] == check
+
+
 def validate_polish_pesel(text: str) -> bool:
     """Validate Polish PESEL number.
 
@@ -751,6 +781,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Ekim",
         "Kas\u0131m",
         "Aral\u0131k",
+    ],
+    "th": [
+        "มกราคม",
+        "กุมภาพันธ์",
+        "มีนาคม",
+        "เมษายน",
+        "พฤษภาคม",
+        "มิถุนายน",
+        "กรกฎาคม",
+        "สิงหาคม",
+        "กันยายน",
+        "ตุลาคม",
+        "พฤศจิกายน",
+        "ธันวาคม",
     ],
 }
 
@@ -1833,6 +1877,109 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_THAI_MONTH_PATTERN = (
+    r"มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|"
+    r"กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|"
+    r"พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\."
+)
+
+_THAI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-](?:25\d{2}|\d{2,4})(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "วันที่",
+            "วันเกิด",
+            "เกิด",
+            "รับไว้",
+            "จำหน่าย",
+            "นัด",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"(?<!\d)\d{{1,2}}\s+(?:{_THAI_MONTH_PATTERN})\s+(?:พ\.ศ\.\s*)?(?:25\d{{2}}|\d{{4}})(?!\d)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "วันที่",
+            "วันเกิด",
+            "เกิด",
+            "รับไว้",
+            "จำหน่าย",
+            "นัด",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:\+66[\s.-]?|0)[689]\d[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "โทรศัพท์",
+            "โทร",
+            "มือถือ",
+            "เบอร์",
+            "ติดต่อ",
+            "หมายเลข",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)[1-9](?:[\s-]?\d){12}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "เลขบัตรประชาชน",
+            "บัตรประชาชน",
+            "เลขประจำตัวประชาชน",
+            "ประจำตัวประชาชน",
+            "ประชาชน",
+        ],
+        context_boost=0.4,
+        validator=validate_thai_national_id,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "รหัสไปรษณีย์",
+            "ไปรษณีย์",
+            "ที่อยู่",
+            "แขวง",
+            "เขต",
+            "จังหวัด",
+        ],
+        context_boost=0.5,
+    ),
+    PIIPattern(
+        r"(?<!\w)\d{1,5}\s+(?:ถนน|ถ\.|ซอย|ซ\.|หมู่|ม\.|แขวง|เขต|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.)[\u0E00-\u0E7F0-9\s./-]{3,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "ที่อยู่",
+            "อยู่ที่",
+            "บ้านเลขที่",
+            "ถนน",
+            "ซอย",
+            "แขวง",
+            "เขต",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 # ---------------------------------------------------------------------------
 # Polish PII patterns
 # ---------------------------------------------------------------------------
@@ -1891,6 +2038,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
+    "th": _THAI_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
 }
@@ -2178,6 +2326,29 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
         "ZIPCODE": ["34000", "06000", "35000"],
+    },
+    "th": {
+        "NAME": [
+            "สมชาย ใจดี",
+            "สุดา แก้วใส",
+            "อนันต์ วิชัย",
+            "มาลี พรหมมา",
+        ],
+        "FIRST_NAME": ["สมชาย", "สุดา", "อนันต์", "มาลี"],
+        "LAST_NAME": ["ใจดี", "แก้วใส", "วิชัย", "พรหมมา"],
+        "EMAIL": ["patient@example.th", "contact@example.org"],
+        "PHONE": ["+66 81 234 5678", "081-234-5678"],
+        "ID_NUM": ["1101700203450"],
+        "STREET_ADDRESS": [
+            "123 ถนนสุขุมวิท",
+            "45 ซอยสีลม",
+        ],
+        "URL_PERSONAL": ["https://example.th"],
+        "USERNAME": ["rogi123", "phuphuai456"],
+        "DATE": ["15 มกราคม 2567", "01/01/2567"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["กรุงเทพมหานคร", "เชียงใหม่", "ภูเก็ต"],
+        "ZIPCODE": ["10110", "50000", "83000"],
     },
 }
 
