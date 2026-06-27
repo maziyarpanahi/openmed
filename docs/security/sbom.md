@@ -47,9 +47,10 @@ uv run --no-project --with 'cyclonedx-bom>=4.6,<7' \
 - **CI** — the `sbom` job in `.github/workflows/ci.yml` regenerates the SBOM on
   every push and pull request and uploads `sbom.cdx.json` as the `sbom`
   artifact.
-- **Releases** — `.github/workflows/publish.yml` regenerates and uploads the
-  SBOM alongside each tagged PyPI publish. SBOM generation there is fail-open and
-  never blocks a release.
+- **Releases** — on each tagged publish, `.github/workflows/publish.yml`
+  regenerates the SBOM and attaches `sbom.cdx.json` as an asset on the GitHub
+  release for that tag (it is also kept as a workflow artifact). SBOM handling
+  there is fail-open and never blocks a release.
 
 ## Consume and verify
 
