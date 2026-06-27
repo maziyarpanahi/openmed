@@ -151,6 +151,13 @@ class PipelineResult:
                 return result
         raise KeyError(name)
 
+    def explain(self) -> Any:
+        """Return a reviewer-facing trace report for this pipeline result."""
+
+        from .explain import explain
+
+        return explain(self)
+
 
 SpanHook = Callable[[Sequence[OpenMedSpan], PipelineContext], Sequence[OpenMedSpan]]
 ModelDetector = Callable[..., Any]
@@ -249,6 +256,7 @@ class Pipeline:
         locale: Optional[str] = None,
         doc_id: str | None = None,
         audit: bool = False,
+        explain: bool = False,
     ) -> PipelineResult:
         from . import pii
 
@@ -404,15 +412,34 @@ class Pipeline:
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
 
+        arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
         merged_spans = self.stage7_arbitration(
-            (*deterministic_spans, *model_spans, *clinical_spans),
+            arbitration_candidates,
             context,
+        )
+        arbitration_trace_metadata = (
+            _arbitration_trace_metadata(
+                arbitration_candidates,
+                merged_spans,
+                mode=self.arbitration_mode,
+                strict_no_leak=self.strict_no_leak,
+                language=route.lang,
+                policy_profile=self.policy_profile,
+                label_floors=self.arbitration_label_floors,
+                high_recall_label_floors=self.high_recall_label_floors,
+                threshold_matrix=self.threshold_matrix,
+            )
+            if explain and self.arbitration is None
+            else None
         )
         merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
             normalized.normalized_text,
             merged_spans,
             context,
         )
+        arbitration_metadata = dict(clinical_protection_metadata)
+        if arbitration_trace_metadata is not None:
+            arbitration_metadata["arbitration_trace"] = arbitration_trace_metadata
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
@@ -431,11 +458,15 @@ class Pipeline:
                 7,
                 STAGE_NAMES[6],
                 spans=merged_spans,
-                metadata=clinical_protection_metadata,
+                metadata=arbitration_metadata,
             )
         )
 
-        policy_spans = self.stage8_policy_actions(merged_spans, context)
+        policy_spans = self.stage8_policy_actions(
+            merged_spans,
+            context,
+            explain=explain,
+        )
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
@@ -779,6 +810,8 @@ class Pipeline:
         self,
         spans: Sequence[OpenMedSpan],
         context: PipelineContext,
+        *,
+        explain: bool = False,
     ) -> tuple[OpenMedSpan, ...]:
         if self.policy_actions is not None:
             return tuple(self.policy_actions(spans, context))
@@ -794,6 +827,7 @@ class Pipeline:
                 policy_profile=self.policy_profile,
                 strict_no_leak=self.strict_no_leak,
                 matrix=self.threshold_matrix,
+                explain=explain,
             )
             for span in spans
         )
@@ -1218,6 +1252,242 @@ def _redacted_char_count(entities: Sequence[Any]) -> int:
     return total
 
 
+def _arbitration_trace_metadata(
+    candidates: Sequence[OpenMedSpan],
+    winners: Sequence[OpenMedSpan],
+    *,
+    mode: str | None,
+    strict_no_leak: bool,
+    language: str,
+    policy_profile: str | None,
+    label_floors: Mapping[str, float] | None,
+    high_recall_label_floors: Mapping[str, float] | None,
+    threshold_matrix: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+    from .arbitration import (
+        DEFAULT_BALANCED_FLOOR,
+        DEFAULT_HIGH_RECALL_FLOOR,
+        MODE_HIGH_RECALL_UNION,
+        arbitration_mode,
+    )
+
+    selected_mode = arbitration_mode(strict_no_leak=strict_no_leak, mode=mode)
+    resolved_profile = _arbitration_profile(
+        selected_mode,
+        strict_no_leak=strict_no_leak,
+        policy_profile=policy_profile,
+    )
+    if selected_mode == MODE_HIGH_RECALL_UNION:
+        default_floor = DEFAULT_HIGH_RECALL_FLOOR
+        floors = high_recall_label_floors
+        floor_source = "custom_high_recall_label_floors"
+    else:
+        default_floor = DEFAULT_BALANCED_FLOOR
+        floors = label_floors
+        floor_source = "custom_label_floors"
+
+    winner_identities = {_span_identity(span) for span in winners}
+    losers_by_winner: dict[tuple[int, int, str], list[Mapping[str, Any]]] = {}
+    pending_decisions: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        span_ref = _span_trace_ref(candidate)
+        threshold = _arbitration_threshold_trace(
+            candidate,
+            language=language,
+            policy_profile=resolved_profile,
+            floors=floors,
+            floor_source=floor_source,
+            default_floor=default_floor,
+            matrix=threshold_matrix,
+        )
+        if _span_identity(candidate) in winner_identities:
+            decision = {
+                "span": span_ref,
+                "outcome": "winner",
+                "rule": "selected",
+                "reason": "retained",
+                "threshold": threshold,
+            }
+            pending_decisions.append(decision)
+            continue
+
+        winning_span = _overlapping_winner(candidate, winners)
+        if winning_span is None:
+            decision = {
+                "span": span_ref,
+                "outcome": "loser",
+                "rule": "score_below_keep_floor",
+                "reason": "below_keep_floor",
+                "winning_span": None,
+                "threshold": threshold,
+            }
+        else:
+            winner_ref = _span_trace_ref(winning_span)
+            decision = {
+                "span": span_ref,
+                "outcome": "loser",
+                "rule": _arbitration_tie_break_rule(winning_span, candidate),
+                "reason": "overlap",
+                "winning_span": winner_ref,
+                "threshold": threshold,
+            }
+            losers_by_winner.setdefault(
+                _span_trace_key(winning_span),
+                [],
+            ).append(span_ref)
+        pending_decisions.append(decision)
+
+    decisions: list[Mapping[str, Any]] = []
+    for decision in pending_decisions:
+        if decision["outcome"] == "winner":
+            span_ref = decision["span"]
+            decision["losing_spans"] = tuple(
+                losers_by_winner.get(
+                    (span_ref["start"], span_ref["end"], span_ref["text_hash"]),
+                    (),
+                )
+            )
+        decisions.append(decision)
+
+    return {
+        "mode": selected_mode,
+        "policy_profile": resolved_profile,
+        "language": language,
+        "candidate_count": len(candidates),
+        "winner_count": len(winners),
+        "decisions": tuple(decisions),
+    }
+
+
+def _arbitration_profile(
+    mode: str,
+    *,
+    strict_no_leak: bool,
+    policy_profile: str | None,
+) -> str:
+    from .arbitration import MODE_HIGH_RECALL_UNION
+
+    if policy_profile is not None:
+        return policy_profile
+    if strict_no_leak or mode == MODE_HIGH_RECALL_UNION:
+        return "strict_no_leak"
+    return "balanced"
+
+
+def _arbitration_threshold_trace(
+    span: OpenMedSpan,
+    *,
+    language: str,
+    policy_profile: str,
+    floors: Mapping[str, float] | None,
+    floor_source: str,
+    default_floor: float,
+    matrix: Mapping[str, Any] | None,
+) -> Mapping[str, Any]:
+    if floors is not None:
+        keep_floor = float(
+            floors.get(
+                span.canonical_label,
+                floors.get(span.entity_type, default_floor),
+            )
+        )
+        return {
+            "keep_floor": keep_floor,
+            "policy_profile": policy_profile,
+            "source": floor_source,
+            "canonical_label": span.canonical_label,
+            "language": language,
+        }
+
+    try:
+        from .thresholds import lookup_threshold
+
+        return lookup_threshold(
+            span.canonical_label,
+            language,
+            policy_profile,
+            matrix=matrix,
+        )
+    except Exception:
+        return {
+            "keep_floor": default_floor,
+            "policy_profile": policy_profile,
+            "source": "default_floor",
+            "canonical_label": span.canonical_label,
+            "language": language,
+        }
+
+
+def _overlapping_winner(
+    candidate: OpenMedSpan,
+    winners: Sequence[OpenMedSpan],
+) -> OpenMedSpan | None:
+    overlaps = [winner for winner in winners if _spans_overlap(candidate, winner)]
+    if not overlaps:
+        return None
+    return max(overlaps, key=lambda winner: _overlap_width(candidate, winner))
+
+
+def _spans_overlap(left: OpenMedSpan, right: OpenMedSpan) -> bool:
+    return left.start < right.end and right.start < left.end
+
+
+def _overlap_width(left: OpenMedSpan, right: OpenMedSpan) -> int:
+    return max(0, min(left.end, right.end) - max(left.start, right.start))
+
+
+def _arbitration_tie_break_rule(
+    winner: OpenMedSpan,
+    loser: OpenMedSpan,
+) -> str:
+    from .arbitration import specificity_rank
+
+    winner_is_rules = bool(winner.detector and winner.detector.startswith("rules:"))
+    loser_is_rules = bool(loser.detector and loser.detector.startswith("rules:"))
+    if winner_is_rules != loser_is_rules:
+        return "rules_detector_precedence"
+    if specificity_rank(winner.canonical_label) != specificity_rank(
+        loser.canonical_label
+    ):
+        return "label_specificity"
+    if (winner.end - winner.start) != (loser.end - loser.start):
+        return "span_length"
+    if float(winner.score or 0.0) != float(loser.score or 0.0):
+        return "score"
+    if winner.start != loser.start:
+        return "earlier_start"
+    return "detector_name"
+
+
+def _span_identity(span: OpenMedSpan) -> tuple[int, int, str, str, str | None, float]:
+    return (
+        span.start,
+        span.end,
+        span.text_hash,
+        span.canonical_label,
+        span.detector,
+        float(span.score or 0.0),
+    )
+
+
+def _span_trace_key(span: OpenMedSpan) -> tuple[int, int, str]:
+    return (span.start, span.end, span.text_hash)
+
+
+def _span_trace_ref(span: OpenMedSpan) -> Mapping[str, Any]:
+    return {
+        "start": span.start,
+        "end": span.end,
+        "text_hash": span.text_hash,
+        "entity_type": span.entity_type,
+        "canonical_label": span.canonical_label,
+        "policy_label": span.policy_label,
+        "detector": span.detector,
+        "score": span.score,
+    }
+
+
 def _cascade_stage_spans(
     cascade_result: Any, routes: set[str]
 ) -> tuple[OpenMedSpan, ...]:
@@ -1494,6 +1764,7 @@ def _apply_threshold_action(
     policy_profile: str | None,
     strict_no_leak: bool,
     matrix: Mapping[str, Any] | None,
+    explain: bool = False,
 ) -> OpenMedSpan:
     from .thresholds import lookup_threshold
 
@@ -1505,15 +1776,26 @@ def _apply_threshold_action(
         matrix=matrix,
     )
     action = str(threshold["action"])
-    if span.action == action:
+    if span.action == action and not explain:
         return span
 
     metadata = dict(span.metadata)
-    metadata["threshold_action"] = {
+    threshold_action = {
         "policy_profile": threshold["policy_profile"],
         "source": threshold["source"],
         "schema_version": threshold["schema_version"],
     }
+    if explain:
+        threshold_action.update(
+            {
+                "keep_floor": threshold["keep_floor"],
+                "escalate_below": threshold["escalate_below"],
+                "action": action,
+                "canonical_label": threshold["canonical_label"],
+                "language": threshold["language"],
+            }
+        )
+    metadata["threshold_action"] = threshold_action
     return replace(span, action=action, metadata=metadata)
 
 
