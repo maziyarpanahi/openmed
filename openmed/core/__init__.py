@@ -10,16 +10,23 @@ from .config import (
     load_config_with_profile,
     save_profile,
 )
+from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
+from .redaction_preview import redaction_preview, render_redaction_preview
 
 __all__ = [
     "ModelLoader",
     "load_model",
+    "ModelQuery",
+    "ModelSearchResult",
+    "search_models",
     "OpenMedConfig",
     "AuditReport",
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "redaction_preview",
+    "render_redaction_preview",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",

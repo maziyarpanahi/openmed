@@ -8,10 +8,12 @@ from .operation_outcome import (
     from_validation_result,
     to_operation_outcome,
 )
+from .references import deterministic_fullurl
 
 __all__ = [
-    "to_bundle",
+    "deterministic_fullurl",
     "OperationOutcomeIssue",
-    "to_operation_outcome",
     "from_validation_result",
+    "to_bundle",
+    "to_operation_outcome",
 ]

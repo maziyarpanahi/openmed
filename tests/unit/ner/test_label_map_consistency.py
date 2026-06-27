@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.labels import normalize_label as normalize_canonical_label
 from openmed.core.model_registry import (
     _CATEGORY_ENTITY_TYPES,
     OPENMED_MODELS,
@@ -132,6 +133,63 @@ class TestCardiologyRouting:
         suggestions = get_model_suggestions(self.CARDIO_TEXT)
         assert suggestions  # still returns something useful
         assert all(info.category != "Cardiology" for _key, info, _reason in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Microbiology domain (issue #314)
+# ---------------------------------------------------------------------------
+
+
+class TestMicrobiologyDomain:
+    EXPECTED_LABELS = [
+        "Microorganism",
+        "Antibiotic",
+        "Susceptibility",
+        "SpecimenSource",
+        "CultureResult",
+    ]
+
+    MICROBIOLOGY_TEXT = "Blood culture grew MRSA, resistant to oxacillin"
+
+    def test_microbiology_in_available_domains(self):
+        assert "microbiology" in available_domains()
+
+    def test_get_default_labels_returns_microbiology_set(self):
+        labels = get_default_labels("microbiology")
+        assert labels == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            ("susceptibility", "SUSCEPTIBILITY"),
+            ("antibiotic", "ANTIBIOTIC"),
+            ("microorganism", "MICROORGANISM"),
+            ("organism", "MICROORGANISM"),
+        ],
+    )
+    def test_microbiology_labels_normalize(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+
+    def test_match_categories_routes_microbiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.MICROBIOLOGY_TEXT)
+        ]
+        assert categories[0] == "Microbiology"
+
+    def test_microbiology_is_registry_metadata_not_a_live_category(self):
+        # Domain metadata is ready before a dedicated Microbiology model is
+        # registered, matching the Cardiology forward-metadata pattern.
+        assert "Microbiology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Microbiology" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.MICROBIOLOGY_TEXT)
+        assert suggestions
+        assert all(
+            info.category != "Microbiology" for _key, info, _reason in suggestions
+        )
 
 
 # ---------------------------------------------------------------------------

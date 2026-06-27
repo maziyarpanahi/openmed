@@ -12,6 +12,7 @@ from openmed.core.pii_i18n import (
     LANGUAGE_MONTH_NAMES,
     LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
+    NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
     validate_dutch_bsn,
@@ -48,6 +49,9 @@ class TestConstants:
             "ja",
             "tr",
         }
+
+    def test_national_id_only_languages(self):
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -835,7 +839,7 @@ class TestGetPatternsForLanguage:
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
-            get_patterns_for_language("ko")
+            get_patterns_for_language("xx")
 
     def test_all_returned_patterns_are_pii_pattern(self):
         for lang in SUPPORTED_LANGUAGES:
