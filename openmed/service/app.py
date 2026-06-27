@@ -27,6 +27,7 @@ from .schemas import (
 )
 
 SERVICE_NAME = "openmed-rest"
+_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
 _ServicePayload = Dict[str, Any]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
@@ -194,11 +195,28 @@ def create_app() -> FastAPI:
     async def lifespan(fastapi_app: FastAPI):
         runtime = ServiceRuntime.from_env()
         _attach_runtime(fastapi_app, runtime)
+        fastapi_app.state.ready = False
+        fastapi_app.state.shutting_down = False
+        fastapi_app.state.inflight = 0
 
         if runtime.preload_models:
             await run_in_threadpool(runtime.preload)
 
-        yield
+        fastapi_app.state.ready = True
+
+        try:
+            yield
+        finally:
+            fastapi_app.state.ready = False
+            fastapi_app.state.shutting_down = True
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + float(
+                getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
+            )
+            while getattr(fastapi_app.state, "inflight", 0) > 0 and (
+                loop.time() < deadline
+            ):
+                await asyncio.sleep(0.05)
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -206,6 +224,25 @@ def create_app() -> FastAPI:
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def _readiness_middleware(request: Request, call_next):
+        path = request.url.path
+        if path in _MODEL_BACKED_PATHS:
+            state = request.app.state
+            if getattr(state, "shutting_down", False):
+                return _error_response(
+                    503,
+                    "not_ready",
+                    "Service is shutting down and not accepting new requests",
+                    details=None,
+                )
+            state.inflight = getattr(state, "inflight", 0) + 1
+            try:
+                return await call_next(request)
+            finally:
+                state.inflight = getattr(state, "inflight", 0) - 1
+        return await call_next(request)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
@@ -268,6 +305,21 @@ def create_app() -> FastAPI:
             "version": openmed.__version__,
             "profile": runtime.profile,
         }
+
+    @app.get("/livez")
+    async def livez() -> Dict[str, str]:
+        return {"status": "ok", "service": SERVICE_NAME}
+
+    @app.get("/readyz")
+    async def readyz(request: Request):
+        if getattr(request.app.state, "ready", False):
+            return {"status": "ready", "service": SERVICE_NAME}
+        return _error_response(
+            503,
+            "not_ready",
+            "Service preload has not completed",
+            details=None,
+        )
 
     @app.get("/models/loaded")
     async def loaded_models(request: Request) -> Dict[str, Any]:
