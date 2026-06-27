@@ -162,8 +162,7 @@ def _recommendation_sort_key(
 
 def _has_tier_enrichment(result: ModelSearchResult, tier: str) -> bool:
     return (
-        _recommended_tier(result) is not None
-        or _peak_ram_mb(result, tier) is not None
+        _recommended_tier(result) is not None or _peak_ram_mb(result, tier) is not None
     )
 
 
