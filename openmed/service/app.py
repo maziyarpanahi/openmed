@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import Any, Dict, Mapping, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,7 +14,10 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import openmed
+from openmed.processing import format_predictions
+from openmed.utils.validation import validate_model_name
 
+from .batcher import BatchResult, DynamicBatcher
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
@@ -23,6 +27,20 @@ from .schemas import (
 )
 
 SERVICE_NAME = "openmed-rest"
+_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
+_ServicePayload = Dict[str, Any]
+_AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
+_PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
+
+
+@dataclass(frozen=True)
+class _AnalyzeBatchJob:
+    payload: AnalyzeRequest
+
+
+@dataclass(frozen=True)
+class _PIIExtractBatchJob:
+    payload: PIIExtractRequest
 
 
 class ServiceTimeoutError(RuntimeError):
@@ -98,6 +116,20 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.runtime = runtime
     app.state.profile = runtime.profile
     app.state.config = runtime.config
+    app.state.batching = runtime.batching
+    app.state.analyze_batcher = None
+    app.state.pii_extract_batcher = None
+    if runtime.batching.enabled:
+        app.state.analyze_batcher = DynamicBatcher(
+            lambda jobs: _dispatch_analyze_batch(runtime, jobs),
+            max_batch_size=runtime.batching.max_batch_size,
+            max_wait_ms=runtime.batching.max_wait_ms,
+        )
+        app.state.pii_extract_batcher = DynamicBatcher(
+            lambda jobs: _dispatch_pii_extract_batch(runtime, jobs),
+            max_batch_size=runtime.batching.max_batch_size,
+            max_wait_ms=runtime.batching.max_wait_ms,
+        )
 
 
 def _get_service_runtime(request: Request) -> ServiceRuntime:
@@ -127,6 +159,35 @@ async def _run_with_timeout(
         raise ServiceTimeoutError(timeout_seconds) from exc
 
 
+async def _await_with_timeout(
+    runtime: ServiceRuntime,
+    awaitable: Any,
+) -> Any:
+    """Await async service work under the profile timeout."""
+    timeout_seconds = float(getattr(runtime.config, "timeout", 0) or 0)
+    if timeout_seconds <= 0:
+        return await awaitable
+
+    try:
+        return await asyncio.wait_for(awaitable, timeout=float(timeout_seconds))
+    except asyncio.TimeoutError as exc:
+        raise ServiceTimeoutError(timeout_seconds) from exc
+
+
+def _get_analyze_batcher(request: Request) -> _AnalyzeBatcher:
+    batcher = getattr(request.app.state, "analyze_batcher", None)
+    if batcher is None:
+        raise RuntimeError("Analyze batcher is not initialized")
+    return batcher
+
+
+def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
+    batcher = getattr(request.app.state, "pii_extract_batcher", None)
+    if batcher is None:
+        raise RuntimeError("PII extract batcher is not initialized")
+    return batcher
+
+
 def create_app() -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
@@ -134,11 +195,28 @@ def create_app() -> FastAPI:
     async def lifespan(fastapi_app: FastAPI):
         runtime = ServiceRuntime.from_env()
         _attach_runtime(fastapi_app, runtime)
+        fastapi_app.state.ready = False
+        fastapi_app.state.shutting_down = False
+        fastapi_app.state.inflight = 0
 
         if runtime.preload_models:
             await run_in_threadpool(runtime.preload)
 
-        yield
+        fastapi_app.state.ready = True
+
+        try:
+            yield
+        finally:
+            fastapi_app.state.ready = False
+            fastapi_app.state.shutting_down = True
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + float(
+                getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
+            )
+            while getattr(fastapi_app.state, "inflight", 0) > 0 and (
+                loop.time() < deadline
+            ):
+                await asyncio.sleep(0.05)
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -146,6 +224,25 @@ def create_app() -> FastAPI:
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
     )
+
+    @app.middleware("http")
+    async def _readiness_middleware(request: Request, call_next):
+        path = request.url.path
+        if path in _MODEL_BACKED_PATHS:
+            state = request.app.state
+            if getattr(state, "shutting_down", False):
+                return _error_response(
+                    503,
+                    "not_ready",
+                    "Service is shutting down and not accepting new requests",
+                    details=None,
+                )
+            state.inflight = getattr(state, "inflight", 0) + 1
+            try:
+                return await call_next(request)
+            finally:
+                state.inflight = getattr(state, "inflight", 0) - 1
+        return await call_next(request)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
@@ -209,6 +306,21 @@ def create_app() -> FastAPI:
             "profile": runtime.profile,
         }
 
+    @app.get("/livez")
+    async def livez() -> Dict[str, str]:
+        return {"status": "ok", "service": SERVICE_NAME}
+
+    @app.get("/readyz")
+    async def readyz(request: Request):
+        if getattr(request.app.state, "ready", False):
+            return {"status": "ready", "service": SERVICE_NAME}
+        return _error_response(
+            503,
+            "not_ready",
+            "Service preload has not completed",
+            details=None,
+        )
+
     @app.get("/models/loaded")
     async def loaded_models(request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
@@ -228,6 +340,11 @@ def create_app() -> FastAPI:
     @app.post("/analyze")
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        if runtime.batching.enabled:
+            return await _await_with_timeout(
+                runtime,
+                _get_analyze_batcher(request).submit(_AnalyzeBatchJob(payload)),
+            )
 
         def _operation() -> Dict[str, Any]:
             return runtime.run_model_request(
@@ -243,6 +360,11 @@ def create_app() -> FastAPI:
         payload: PIIExtractRequest, request: Request
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        if runtime.batching.enabled:
+            return await _await_with_timeout(
+                runtime,
+                _get_pii_extract_batcher(request).submit(_PIIExtractBatchJob(payload)),
+            )
 
         def _operation() -> Dict[str, Any]:
             return runtime.run_model_request(
@@ -270,6 +392,317 @@ def create_app() -> FastAPI:
         return await _run_with_timeout(runtime, _operation)
 
     return app
+
+
+async def _dispatch_analyze_batch(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    return await run_in_threadpool(_dispatch_analyze_batch_sync, runtime, list(jobs))
+
+
+def _dispatch_analyze_batch_sync(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    results: list[Optional[BatchResult[_ServicePayload]]] = [None] * len(jobs)
+    groups: dict[Tuple[Any, ...], list[int]] = {}
+    for index, job in enumerate(jobs):
+        groups.setdefault(_analyze_batch_key(job.payload), []).append(index)
+
+    for indexes in groups.values():
+        _dispatch_analyze_group(runtime, jobs, indexes, results)
+
+    return _completed_batch_results(results)
+
+
+def _dispatch_analyze_group(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_AnalyzeBatchJob],
+    indexes: Sequence[int],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
+    active_jobs: list[Tuple[int, str, Any]] = []
+
+    for index in indexes:
+        try:
+            model_key = runtime.begin_model_request(jobs[index].payload.model_name)
+        except Exception as exc:
+            results[index] = exc
+        else:
+            active_jobs.append((index, model_key, jobs[index].payload.keep_alive))
+
+    try:
+        active_indexes = [index for index, _, _ in active_jobs]
+        if not active_indexes:
+            return
+
+        payloads = [jobs[index].payload for index in active_indexes]
+        if _can_backend_batch_analyze(payloads, runtime):
+            try:
+                batch_results = _analyze_payload_batch(payloads, runtime)
+                if len(batch_results) != len(active_indexes):
+                    raise ValueError(
+                        "Analyze batch returned "
+                        f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                    )
+            except Exception:
+                for index in active_indexes:
+                    try:
+                        results[index] = _analyze_payload(jobs[index].payload, runtime)
+                    except Exception as exc:
+                        results[index] = exc
+            else:
+                for index, result in zip(active_indexes, batch_results):
+                    results[index] = result
+        else:
+            for index in active_indexes:
+                try:
+                    results[index] = _analyze_payload(jobs[index].payload, runtime)
+                except Exception as exc:
+                    results[index] = exc
+    finally:
+        _finish_active_batch_requests(runtime, active_jobs, results)
+
+
+async def _dispatch_pii_extract_batch(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_PIIExtractBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    return await run_in_threadpool(
+        _dispatch_pii_extract_batch_sync,
+        runtime,
+        list(jobs),
+    )
+
+
+def _dispatch_pii_extract_batch_sync(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_PIIExtractBatchJob],
+) -> Sequence[BatchResult[_ServicePayload]]:
+    results: list[Optional[BatchResult[_ServicePayload]]] = [None] * len(jobs)
+    groups: dict[Tuple[Any, ...], list[int]] = {}
+    for index, job in enumerate(jobs):
+        groups.setdefault(_pii_extract_batch_key(job.payload), []).append(index)
+
+    for indexes in groups.values():
+        _dispatch_pii_extract_group(runtime, jobs, indexes, results)
+
+    return _completed_batch_results(results)
+
+
+def _dispatch_pii_extract_group(
+    runtime: ServiceRuntime,
+    jobs: Sequence[_PIIExtractBatchJob],
+    indexes: Sequence[int],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
+    active_jobs: list[Tuple[int, str, Any]] = []
+    for index in indexes:
+        try:
+            model_key = runtime.begin_model_request(jobs[index].payload.model_name)
+        except Exception as exc:
+            results[index] = exc
+        else:
+            active_jobs.append((index, model_key, jobs[index].payload.keep_alive))
+
+    try:
+        active_indexes = [index for index, _, _ in active_jobs]
+        if not active_indexes:
+            return
+        payloads = [jobs[index].payload for index in active_indexes]
+        try:
+            batch_results = _pii_extract_payload_batch(payloads, runtime)
+            if len(batch_results) != len(active_indexes):
+                raise ValueError(
+                    "PII extract batch returned "
+                    f"{len(batch_results)} results for {len(active_indexes)} jobs"
+                )
+        except Exception:
+            for index in active_indexes:
+                try:
+                    results[index] = _pii_extract_payload(jobs[index].payload, runtime)
+                except Exception as exc:
+                    results[index] = exc
+        else:
+            for index, result in zip(active_indexes, batch_results):
+                results[index] = result
+    except Exception as exc:
+        for index, _, _ in active_jobs:
+            if results[index] is None:
+                results[index] = exc
+    finally:
+        _finish_active_batch_requests(runtime, active_jobs, results)
+
+
+def _finish_active_batch_requests(
+    runtime: ServiceRuntime,
+    active_jobs: Sequence[Tuple[int, str, Any]],
+    results: list[Optional[BatchResult[_ServicePayload]]],
+) -> None:
+    for index, model_key, keep_alive in active_jobs:
+        try:
+            runtime.finish_model_request(model_key, keep_alive)
+        except Exception as exc:
+            if not isinstance(results[index], BaseException):
+                results[index] = exc
+
+
+def _completed_batch_results(
+    results: Sequence[Optional[BatchResult[_ServicePayload]]],
+) -> list[BatchResult[_ServicePayload]]:
+    completed: list[BatchResult[_ServicePayload]] = []
+    for result in results:
+        if result is None:
+            completed.append(RuntimeError("Batch job did not produce a result"))
+        else:
+            completed.append(result)
+    return completed
+
+
+def _analyze_batch_key(payload: AnalyzeRequest) -> Tuple[Any, ...]:
+    return (
+        payload.model_name,
+        payload.confidence_threshold,
+        payload.group_entities,
+        payload.aggregation_strategy,
+        payload.sentence_detection,
+        payload.sentence_language,
+        payload.sentence_clean,
+        payload.use_fast_tokenizer,
+    )
+
+
+def _can_backend_batch_analyze(
+    payloads: Sequence[AnalyzeRequest],
+    runtime: ServiceRuntime,
+) -> bool:
+    if not payloads:
+        return False
+    first = payloads[0]
+    return not first.sentence_detection and not bool(
+        getattr(runtime.config, "use_medical_tokenizer", False)
+    )
+
+
+def _normalize_batch_predictions(
+    raw_predictions: Any, expected_count: int
+) -> list[Any]:
+    if expected_count == 1:
+        if isinstance(raw_predictions, list) and (
+            not raw_predictions or isinstance(raw_predictions[0], dict)
+        ):
+            return [raw_predictions]
+        if isinstance(raw_predictions, list) and len(raw_predictions) == 1:
+            return [raw_predictions[0]]
+        return [raw_predictions]
+
+    if not isinstance(raw_predictions, list):
+        raise ValueError("Analyze backend returned a non-list batch result")
+    if len(raw_predictions) != expected_count:
+        raise ValueError(
+            "Analyze backend returned "
+            f"{len(raw_predictions)} results for {expected_count} inputs"
+        )
+    return list(raw_predictions)
+
+
+def _analyze_payload_batch(
+    payloads: Sequence[AnalyzeRequest],
+    runtime: ServiceRuntime,
+) -> list[_ServicePayload]:
+    if not payloads:
+        return []
+
+    first = payloads[0]
+    model_name = validate_model_name(first.model_name)
+    loader = runtime.get_loader()
+    pipeline = loader.create_pipeline(
+        model_name,
+        task="token-classification",
+        aggregation_strategy=first.aggregation_strategy,
+        use_fast_tokenizer=first.use_fast_tokenizer,
+    )
+
+    effective_max_length = loader.get_max_sequence_length(
+        model_name,
+        tokenizer=getattr(pipeline, "tokenizer", None),
+    )
+    tokenizer = getattr(pipeline, "tokenizer", None)
+    if tokenizer is not None and effective_max_length is not None:
+        try:
+            tokenizer.model_max_length = int(effective_max_length)
+        except Exception:
+            pass
+
+    import time
+
+    texts = [payload.text for payload in payloads]
+    start_time = time.time()
+    raw_predictions = pipeline(texts, batch_size=len(texts))
+    processing_time = time.time() - start_time
+    per_item_time = processing_time / len(texts) if texts else 0.0
+    normalized = _normalize_batch_predictions(raw_predictions, len(texts))
+
+    responses: list[_ServicePayload] = []
+    for payload, predictions in zip(payloads, normalized):
+        if predictions is None:
+            predictions = []
+        elif isinstance(predictions, dict):
+            predictions = [predictions]
+        else:
+            predictions = list(predictions)
+
+        metadata = {"sentence_detection": False}
+        if effective_max_length is not None:
+            metadata["max_length"] = effective_max_length
+        result = format_predictions(
+            predictions,
+            payload.text,
+            model_name=model_name,
+            output_format="dict",
+            include_confidence=True,
+            confidence_threshold=payload.confidence_threshold,
+            group_entities=payload.group_entities,
+            metadata=metadata,
+            processing_time=per_item_time,
+        )
+        responses.append(_result_to_dict(result))
+    return responses
+
+
+def _pii_extract_batch_key(payload: PIIExtractRequest) -> Tuple[Any, ...]:
+    return (
+        payload.model_name,
+        payload.confidence_threshold,
+        payload.use_smart_merging,
+        payload.lang,
+        payload.normalize_accents,
+    )
+
+
+def _pii_extract_payload_batch(
+    payloads: Sequence[PIIExtractRequest],
+    runtime: ServiceRuntime,
+) -> list[_ServicePayload]:
+    from openmed.core.pii import _extract_pii_batch
+
+    if not payloads:
+        return []
+
+    first = payloads[0]
+    results = _extract_pii_batch(
+        [payload.text for payload in payloads],
+        model_name=first.model_name,
+        confidence_threshold=first.confidence_threshold,
+        config=runtime.config,
+        use_smart_merging=first.use_smart_merging,
+        lang=first.lang,
+        normalize_accents=first.normalize_accents,
+        loader=runtime.get_loader(),
+        batch_size=len(payloads),
+    )
+    return [_result_to_dict(result) for result in results]
 
 
 def _analyze_payload(

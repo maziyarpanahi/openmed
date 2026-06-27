@@ -1,145 +1,543 @@
-"""OCR engine adapters for multimodal document intake.
+"""OCR contract and swappable engine adapters for the multimodal subsystem.
 
-The OCR contract is intentionally small: each engine returns one
-:class:`OcrResult` per recognized word with normalized text, an absolute pixel
-bounding box, a confidence score, and a 0-based page index. Engine dependencies
-are imported lazily so importing :mod:`openmed.multimodal.ocr` never downloads
-models or requires optional OCR packages to be installed.
+Provides one OCR result shape (per-word text + bbox + confidence + page) with
+interchangeable backends (docTR, Tesseract, PaddleOCR) plus a deterministic
+in-memory fake engine for tests. OCR output bridges into
+:class:`ExtractedDocument` so scanned/image text flows through
+``redact_document`` and detected PHI projects back to source pixel bounding
+boxes.
+
+Like the rest of the package, this module imports no heavy dependency at module
+load time: each engine imports its backend lazily and raises a clear,
+actionable error when the dependency (or the system Tesseract binary) is
+missing.
+
+Language packs: ``ocr(..., languages=[...])`` selects OCR languages by OpenMed
+PII language code (en, fr, de, it, es, nl, hi, te, pt, ar, ja, tr) and maps them
+to each backend's identifiers. The language data itself is not bundled and must
+be installed separately: Tesseract needs the matching ``traineddata`` files
+(e.g. ``apt-get install tesseract-ocr-fra`` or the language pack for your OS),
+and PaddleOCR downloads the recognition model for the requested language on
+first use.
 """
 
 from __future__ import annotations
 
 import importlib.util
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Mapping,
+    Protocol,
+    Sequence,
+    runtime_checkable,
+)
 
-__all__ = [
-    "OcrResult",
-    "available_ocr_engines",
-    "ocr",
-    "run_doctr_ocr",
-]
+from .base import ExtractedDocument, register_handler
+from .exceptions import MissingDependencyError
 
-_DOCTR_ENGINE = "doctr"
-_AUTO_ENGINE = "auto"
-_ENGINE_ORDER = (_DOCTR_ENGINE,)
-_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
 
-ImageInput = str | Path | Sequence[str | Path]
-PredictorFactory = Callable[..., Callable[[list[str]], Any]]
+@dataclass(frozen=True)
+class OcrWord:
+    """A single recognized word with its pixel location and confidence."""
+
+    text: str
+    bbox: tuple[float, float, float, float]
+    confidence: float
+    page: int = 0
 
 
 @dataclass(frozen=True)
 class OcrResult:
-    """One OCR word result using absolute pixel coordinates."""
+    """The common OCR contract shared by every engine adapter."""
 
-    text: str
-    bbox: tuple[int, int, int, int]
-    confidence: float
-    page: int
+    words: tuple[OcrWord, ...]
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def text(self) -> str:
+        """The recognized words joined into a single normalized string."""
+        return " ".join(word.text for word in self.words)
+
+    def to_document(self, *, separator: str = " ") -> ExtractedDocument:
+        """Bridge OCR words into an :class:`ExtractedDocument`.
+
+        Each word becomes a block so its ``SourceSpan`` carries the source pixel
+        bbox and page, letting downstream redaction project a detected PHI
+        offset back to its location in the image.
+        """
+        blocks = [
+            {
+                "text": word.text,
+                "page": word.page,
+                "bbox": word.bbox,
+                "metadata": {"confidence": word.confidence},
+            }
+            for word in self.words
+        ]
+        return ExtractedDocument.from_blocks(
+            blocks, separator=separator, metadata=dict(self.metadata)
+        )
 
 
-def available_ocr_engines() -> tuple[str, ...]:
-    """Return installed OCR engines in the default auto-detection order."""
+@runtime_checkable
+class OcrEngine(Protocol):
+    """Structural contract every OCR backend implements."""
 
-    return tuple(engine for engine in _ENGINE_ORDER if _engine_available(engine))
+    name: str
+
+    def recognize(
+        self, image: Any, *, languages: Sequence[str] | None = None
+    ) -> OcrResult: ...
 
 
-def ocr(image: ImageInput, *, engine: str = _AUTO_ENGINE) -> list[OcrResult]:
-    """Run OCR over ``image`` with a selected engine.
+class FakeOcrEngine:
+    """Deterministic in-memory engine for tests; returns fixed words.
 
-    ``engine="auto"`` chooses the first installed engine from the default
-    detection order. ``engine="doctr"`` explicitly selects the docTR adapter.
+    Records the ``languages`` of the most recent call as ``last_languages`` so
+    tests can assert that a language selection reaches the adapter.
     """
 
-    resolved_engine = _resolve_engine(engine)
-    if resolved_engine == _DOCTR_ENGINE:
-        return run_doctr_ocr(image)
-    raise ValueError(f"Unsupported OCR engine: {engine!r}")
+    name = "fake"
+
+    def __init__(self, words: Iterable[OcrWord], **metadata: Any) -> None:
+        self._words = tuple(words)
+        self._metadata = {"engine": "fake", **metadata}
+        self.last_languages: list[str] | None = None
+
+    def recognize(
+        self, image: Any, *, languages: Sequence[str] | None = None
+    ) -> OcrResult:
+        self.last_languages = list(languages) if languages is not None else None
+        metadata = {**self._metadata, "languages": self.last_languages}
+        return OcrResult(words=self._words, metadata=metadata)
+
+
+def _import_backend(module: str, instruction: str) -> Any:
+    try:
+        return importlib.import_module(module)
+    except ImportError as exc:  # pragma: no cover - exercised when extra absent
+        raise MissingDependencyError(
+            dependency=module, instruction=instruction
+        ) from exc
+
+
+_TESSERACT_HINT = (
+    'Install with: pip install "openmed[multimodal]" and install the system '
+    "Tesseract binary (e.g. `brew install tesseract` or `apt-get install "
+    "tesseract-ocr`)."
+)
+_DOCTR_HINT = 'Install with: pip install "openmed[multimodal]".'
+_PADDLE_HINT = 'Install with: pip install "openmed[ocr-paddle]".'
+
+
+# --- language mapping -------------------------------------------------------
+
+DEFAULT_OCR_LANGUAGE = "en"
+
+# OpenMed PII language code -> Tesseract traineddata code (ISO 639-2/T).
+_TESSERACT_LANGUAGES: dict[str, str] = {
+    "en": "eng",
+    "fr": "fra",
+    "de": "deu",
+    "it": "ita",
+    "es": "spa",
+    "nl": "nld",
+    "hi": "hin",
+    "te": "tel",
+    "pt": "por",
+    "ar": "ara",
+    "ja": "jpn",
+    "tr": "tur",
+}
+
+# OpenMed PII language code -> PaddleOCR ``lang`` identifier.
+_PADDLE_LANGUAGES: dict[str, str] = {
+    "en": "en",
+    "fr": "fr",
+    "de": "german",
+    "it": "it",
+    "es": "es",
+    "nl": "nl",
+    "hi": "hi",
+    "te": "te",
+    "pt": "pt",
+    "ar": "ar",
+    "ja": "japan",
+    "tr": "tr",
+}
+
+# The OpenMed PII languages with OCR-engine coverage.
+SUPPORTED_OCR_LANGUAGES: tuple[str, ...] = tuple(_TESSERACT_LANGUAGES)
+
+
+def _normalize_languages(languages: str | Sequence[str] | None) -> list[str]:
+    """Normalize a language selection to a list of OpenMed codes (English default)."""
+    if languages is None:
+        return [DEFAULT_OCR_LANGUAGE]
+    if isinstance(languages, str):
+        languages = [languages]
+    normalized = [str(code).strip().lower() for code in languages if str(code).strip()]
+    return normalized or [DEFAULT_OCR_LANGUAGE]
+
+
+def _lookup_language(mapping: Mapping[str, str], code: str) -> str:
+    try:
+        return mapping[code]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported OCR language {code!r}. "
+            f"Supported OpenMed language codes: {', '.join(SUPPORTED_OCR_LANGUAGES)}."
+        ) from None
+
+
+def tesseract_language(languages: str | Sequence[str] | None = None) -> str:
+    """Map OpenMed language code(s) to a Tesseract ``lang`` string (``eng+fra``)."""
+    codes = _normalize_languages(languages)
+    return "+".join(_lookup_language(_TESSERACT_LANGUAGES, code) for code in codes)
+
+
+def paddle_language(languages: str | Sequence[str] | None = None) -> str:
+    """Map OpenMed language code(s) to a PaddleOCR ``lang`` identifier.
+
+    PaddleOCR loads a single recognition language per instance, so the first
+    requested language is used.
+    """
+    codes = _normalize_languages(languages)
+    return _lookup_language(_PADDLE_LANGUAGES, codes[0])
+
+
+DocTrPredictorFactory = Callable[..., Callable[[Any], Any]]
+DocTrDocumentLoader = Callable[[Any], Any]
+
+
+class DocTrEngine:
+    """OCR backend backed by python-doctr."""
+
+    name = "doctr"
+
+    def __init__(
+        self,
+        *,
+        predictor_factory: DocTrPredictorFactory | None = None,
+        document_loader: DocTrDocumentLoader | None = None,
+    ) -> None:
+        self._predictor_factory = predictor_factory
+        self._document_loader = document_loader
+
+    def recognize(
+        self, image: Any, *, languages: Sequence[str] | None = None
+    ) -> OcrResult:
+        return run_doctr_ocr(
+            image,
+            predictor_factory=self._predictor_factory,
+            document_loader=self._document_loader,
+        )
+
+
+class TesseractEngine:
+    """OCR backend backed by pytesseract / the Tesseract binary."""
+
+    name = "tesseract"
+
+    def recognize(
+        self, image: Any, *, languages: Sequence[str] | None = None
+    ) -> OcrResult:
+        pytesseract = _import_backend("pytesseract", _TESSERACT_HINT)
+        loaded = _load_tesseract_image(image)
+        try:
+            data = pytesseract.image_to_data(
+                loaded,
+                lang=tesseract_language(languages),
+                output_type=pytesseract.Output.DICT,
+            )
+        except Exception as exc:
+            tesseract_error = getattr(
+                getattr(pytesseract, "pytesseract", None),
+                "TesseractNotFoundError",
+                None,
+            )
+            if tesseract_error is not None and isinstance(exc, tesseract_error):
+                raise MissingDependencyError(
+                    dependency="tesseract", instruction=_TESSERACT_HINT
+                ) from exc
+            raise
+
+        words: list[OcrWord] = []
+        for i, text in enumerate(data["text"]):
+            text = text.strip()
+            if not text:
+                continue
+            left, top = float(data["left"][i]), float(data["top"][i])
+            width, height = float(data["width"][i]), float(data["height"][i])
+            conf = float(data["conf"][i])
+            page_nums = data.get("page_num")
+            words.append(
+                OcrWord(
+                    text=text,
+                    bbox=(left, top, left + width, top + height),
+                    confidence=max(conf, 0.0) / 100.0,
+                    page=_zero_based_page(page_nums[i]) if page_nums else 0,
+                )
+            )
+        return OcrResult(words=tuple(words), metadata={"engine": self.name})
+
+
+class PaddleOcrEngine:
+    """OCR backend backed by PaddleOCR."""
+
+    name = "paddleocr"
+
+    def recognize(
+        self, image: Any, *, languages: Sequence[str] | None = None
+    ) -> OcrResult:
+        paddleocr = _import_backend("paddleocr", _PADDLE_HINT)
+        engine = paddleocr.PaddleOCR(show_log=False, lang=paddle_language(languages))
+        loaded = _load_paddle_image(image)
+        predictions = engine.ocr(loaded)
+        words: list[OcrWord] = []
+        for page_index, page in _iter_paddle_pages(predictions):
+            for box, (text, confidence) in page or []:
+                xs = [point[0] for point in box]
+                ys = [point[1] for point in box]
+                words.append(
+                    OcrWord(
+                        text=str(text),
+                        bbox=(min(xs), min(ys), max(xs), max(ys)),
+                        confidence=float(confidence),
+                        page=page_index,
+                    )
+                )
+        return OcrResult(words=tuple(words), metadata={"engine": self.name})
 
 
 def run_doctr_ocr(
-    image: ImageInput,
+    image: Any,
     *,
-    predictor_factory: PredictorFactory | None = None,
-) -> list[OcrResult]:
-    """Run the docTR OCR adapter and return normalized word results."""
-
+    predictor_factory: DocTrPredictorFactory | None = None,
+    document_loader: DocTrDocumentLoader | None = None,
+) -> OcrResult:
+    """Run the docTR OCR adapter and return the shared OCR result contract."""
     factory = predictor_factory or _load_doctr_predictor()
+    loader = document_loader or _load_doctr_document
     predictor = factory(pretrained=True)
-    document = predictor(_normalize_image_input(image))
-    return _results_from_doctr_document(document)
+    document = loader(image)
+    return _result_from_doctr_document(predictor(document))
 
 
-def _resolve_engine(engine: str) -> str:
-    normalized = engine.lower()
-    if normalized == _AUTO_ENGINE:
-        available = available_ocr_engines()
-        if not available:
-            raise _missing_doctr_error()
-        return available[0]
-    if normalized == _DOCTR_ENGINE:
-        if not _engine_available(normalized):
-            raise _missing_doctr_error()
-        return normalized
-    raise ValueError(f"Unsupported OCR engine: {engine!r}")
-
-
-def _engine_available(engine: str) -> bool:
-    if engine == _DOCTR_ENGINE:
-        return importlib.util.find_spec("doctr") is not None
-    return False
-
-
-def _load_doctr_predictor() -> PredictorFactory:
+def _load_doctr_predictor() -> DocTrPredictorFactory:
     try:
-        from doctr.models import ocr_predictor
-    except ImportError as exc:  # pragma: no cover - covered by explicit guard tests
-        raise _missing_doctr_error() from exc
-    return ocr_predictor
+        models = importlib.import_module("doctr.models")
+    except ImportError as exc:  # pragma: no cover - exercised when extra absent
+        raise _missing_doctr_dependency() from exc
+    return models.ocr_predictor
 
 
-def _missing_doctr_error() -> ImportError:
-    return ImportError(
-        "The docTR OCR engine requires the optional 'python-doctr' package. "
-        f"{_INSTALL_HINT}"
-    )
+def _load_doctr_document(image: Any) -> Any:
+    try:
+        document_file = importlib.import_module("doctr.io").DocumentFile
+    except ImportError as exc:  # pragma: no cover - exercised when extra absent
+        raise _missing_doctr_dependency() from exc
+    normalized = _normalize_doctr_image_input(image)
+    if isinstance(normalized, list):
+        return document_file.from_images(normalized)
+    return normalized
 
 
-def _normalize_image_input(image: ImageInput) -> list[str]:
+def _missing_doctr_dependency() -> MissingDependencyError:
+    return MissingDependencyError(dependency="python-doctr", instruction=_DOCTR_HINT)
+
+
+def _normalize_doctr_image_input(image: Any) -> Any:
     if isinstance(image, (str, Path)):
         return [str(image)]
-    return [str(path) for path in image]
+    if isinstance(image, (list, tuple)):
+        return [str(item) if isinstance(item, Path) else item for item in image]
+    return image
 
 
-def _results_from_doctr_document(document: Any) -> list[OcrResult]:
-    results: list[OcrResult] = []
+def _result_from_doctr_document(document: Any) -> OcrResult:
+    words: list[OcrWord] = []
     for page_index, page in enumerate(document.pages):
         for block in page.blocks:
             for line in block.lines:
                 for word in line.words:
-                    results.append(
-                        OcrResult(
+                    words.append(
+                        OcrWord(
                             text=str(word.value),
-                            bbox=_absolute_bbox(word.geometry, page.dimensions),
+                            bbox=_absolute_doctr_bbox(word.geometry, page.dimensions),
                             confidence=float(word.confidence),
                             page=page_index,
                         )
                     )
-    return results
+    return OcrResult(words=tuple(words), metadata={"engine": DocTrEngine.name})
 
 
-def _absolute_bbox(
+def _absolute_doctr_bbox(
     geometry: tuple[tuple[float, float], tuple[float, float]],
-    dimensions: tuple[int, int],
-) -> tuple[int, int, int, int]:
+    dimensions: tuple[int | float, int | float],
+) -> tuple[float, float, float, float]:
     (rel_xmin, rel_ymin), (rel_xmax, rel_ymax) = geometry
     page_height, page_width = dimensions
     return (
-        int(round(rel_xmin * page_width)),
-        int(round(rel_ymin * page_height)),
-        int(round(rel_xmax * page_width)),
-        int(round(rel_ymax * page_height)),
+        float(rel_xmin) * float(page_width),
+        float(rel_ymin) * float(page_height),
+        float(rel_xmax) * float(page_width),
+        float(rel_ymax) * float(page_height),
     )
+
+
+def _load_tesseract_image(image: Any) -> Any:
+    """Load a path/bytes into a PIL image for pytesseract; pass through others."""
+    if isinstance(image, (str, Path)):
+        PIL_Image = _import_backend("PIL.Image", _TESSERACT_HINT)
+        return PIL_Image.open(image)
+    return image
+
+
+def _load_paddle_image(image: Any) -> Any:
+    """Normalize pathlib paths for PaddleOCR without forcing Pillow."""
+    if isinstance(image, Path):
+        return str(image)
+    return image
+
+
+def _zero_based_page(page_num: Any) -> int:
+    """Convert OCR backend page numbers to the SourceSpan zero-based contract."""
+    return max(int(page_num) - 1, 0)
+
+
+def _looks_like_paddle_detection(item: Any) -> bool:
+    if not isinstance(item, (list, tuple)) or len(item) != 2:
+        return False
+    box, text_confidence = item
+    if not isinstance(box, (list, tuple)) or not box:
+        return False
+    first_point = box[0]
+    return (
+        isinstance(first_point, (list, tuple))
+        and len(first_point) >= 2
+        and isinstance(text_confidence, (list, tuple))
+        and len(text_confidence) >= 2
+    )
+
+
+def _iter_paddle_pages(predictions: Any) -> Iterable[tuple[int, Any]]:
+    """Yield page-indexed PaddleOCR detections for common v2 output shapes."""
+    if not predictions:
+        return ()
+    if isinstance(predictions, (list, tuple)) and _looks_like_paddle_detection(
+        predictions[0]
+    ):
+        return ((0, predictions),)
+    return enumerate(predictions)
+
+
+EngineFactory = Callable[[], OcrEngine]
+
+_ENGINES: dict[str, EngineFactory] = {
+    "doctr": DocTrEngine,
+    "tesseract": TesseractEngine,
+    "paddleocr": PaddleOcrEngine,
+}
+
+# Backend import module per engine, used for availability-based auto-selection.
+_ENGINE_MODULES = {
+    "doctr": "doctr",
+    "tesseract": "pytesseract",
+    "paddleocr": "paddleocr",
+}
+
+# Auto-selection priority when no engine is requested.
+_AUTO_ORDER = ("doctr", "tesseract", "paddleocr")
+
+
+def register_ocr_engine(name: str, factory: EngineFactory) -> None:
+    """Register an OCR engine factory under ``name``."""
+    _ENGINES[name] = factory
+
+
+def available_ocr_engines() -> tuple[str, ...]:
+    """Return installed OCR engines in the default auto-detection order."""
+    return tuple(name for name in _AUTO_ORDER if _engine_available(name))
+
+
+def _engine_available(name: str) -> bool:
+    module = _ENGINE_MODULES.get(name)
+    return module is not None and importlib.util.find_spec(module) is not None
+
+
+def resolve_engine(engine: str | OcrEngine | None = None) -> OcrEngine:
+    """Resolve ``engine`` (name, instance, or ``None`` for auto-select)."""
+    if isinstance(engine, OcrEngine) and not isinstance(engine, str):
+        return engine
+    if isinstance(engine, str):
+        factory = _ENGINES.get(engine)
+        if factory is None:
+            raise ValueError(
+                f"Unknown OCR engine {engine!r}. "
+                f"Available: {', '.join(sorted(_ENGINES))}."
+            )
+        return factory()
+    # Auto-select the first installed engine.
+    for name in _AUTO_ORDER:
+        if _engine_available(name):
+            return _ENGINES[name]()
+    raise MissingDependencyError(
+        dependency="python-doctr, pytesseract, or paddleocr",
+        instruction=(
+            "No OCR engine is installed. Install docTR or Tesseract via "
+            'pip install "openmed[multimodal]" (Tesseract also needs its '
+            'system binary), or PaddleOCR via pip install "openmed[ocr-paddle]".'
+        ),
+    )
+
+
+def ocr(
+    image: Any,
+    *,
+    engine: str | OcrEngine | None = None,
+    languages: str | Sequence[str] | None = None,
+) -> OcrResult:
+    """Run OCR on ``image`` and return an :class:`OcrResult`.
+
+    ``engine`` may be an engine name, an :class:`OcrEngine` instance, or
+    ``None`` to auto-select the first installed backend. ``languages`` selects
+    the OCR languages by OpenMed PII language code (e.g. ``["fr"]``); each
+    adapter maps them to its own identifiers. Defaults to English.
+    """
+    return resolve_engine(engine).recognize(
+        image, languages=_normalize_languages(languages)
+    )
+
+
+# --- redact_document bridge -------------------------------------------------
+
+_IMAGE_EXTENSIONS = (
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
+    ".bmp",
+    ".gif",
+    ".webp",
+)
+
+
+def _ocr_image_handler(
+    path: Any, *, policy: Any = None, models: Any = None, lang: str | None = None
+) -> ExtractedDocument:
+    """redact_document handler for image files: OCR then bridge to a document.
+
+    ``lang`` (an OpenMed language code from ``redact_document(lang=...)``) is
+    forwarded to OCR so scans are read in the requested language.
+    """
+    languages = [lang] if lang else None
+    return ocr(path, languages=languages).to_document()
+
+
+register_handler(_IMAGE_EXTENSIONS, _ocr_image_handler)

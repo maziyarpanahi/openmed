@@ -56,6 +56,7 @@ You can find these directly in the docs:
 
 - [Analyze Text Helper](./analyze-text.md) — dict/JSON/HTML/CSV outputs with metadata.
 - [REST Service (MVP)](./rest-service.md) — FastAPI endpoints and Docker runbook.
+- [LangChain Redaction Wrapper](./integrations-langchain.md) — RAG context redaction before model calls.
 - [MLX Backend](./mlx-backend.md) — Apple Silicon Python runtime and artifact packaging.
 - [OpenMedKit (Swift)](./swift-openmedkit.md) — native app runtime for macOS, iOS, and iPadOS.
 - [ModelLoader & Pipelines](./model-loader.md) — caching, token helpers, multi-model setups.
