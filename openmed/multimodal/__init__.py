@@ -13,6 +13,9 @@ from __future__ import annotations
 # stdlib-only, so the public multimodal import path remains free of heavy deps.
 from openmed.interop import cda as _cda
 
+# Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
+# handlers. Third-party parser availability is checked only when a handler runs.
+from . import documents_markdown as _documents_markdown
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -20,6 +23,7 @@ from .base import (
     redact_document,
     register_handler,
 )
+from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 
 # Importing the OCR module registers image-format handlers with the dispatcher
@@ -62,4 +66,7 @@ __all__ = [
     "read_table",
     "classify_columns",
     "redact_table",
+    "extract_markdown",
+    "extract_asciidoc",
+    "redact_source_text",
 ]

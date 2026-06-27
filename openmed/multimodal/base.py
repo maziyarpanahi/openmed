@@ -21,6 +21,7 @@ _MULTIMODAL_DEPENDENCIES: tuple[tuple[str, str], ...] = (
     ("pdfplumber", "pdfplumber"),
     ("docx", "python-docx"),
     ("PIL", "Pillow"),
+    ("markdown_it", "markdown-it-py"),
 )
 
 _MULTIMODAL_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'

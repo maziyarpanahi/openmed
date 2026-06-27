@@ -70,6 +70,7 @@ multimodal = [
   "python-docx>=1.1",
   "Pillow>=10.0",
   "pytesseract>=0.3.10",
+  "markdown-it-py>=3.0,<5",
 ]
 
 # PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
