@@ -96,6 +96,13 @@ MICROORGANISM: Final = "MICROORGANISM"
 ANTIBIOTIC: Final = "ANTIBIOTIC"
 SUSCEPTIBILITY: Final = "SUSCEPTIBILITY"
 
+#: Clinical concepts (grounding targets for RxNorm/ICD-10-CM/LOINC/SNOMED/HPO)
+CONDITION: Final = "CONDITION"
+MEDICATION: Final = "MEDICATION"
+LAB_TEST: Final = "LAB_TEST"
+PROCEDURE: Final = "PROCEDURE"
+BODY_SITE: Final = "BODY_SITE"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -169,6 +176,11 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         MICROORGANISM,
         ANTIBIOTIC,
         SUSCEPTIBILITY,
+        CONDITION,
+        MEDICATION,
+        LAB_TEST,
+        PROCEDURE,
+        BODY_SITE,
         OTHER,
     }
 )
@@ -327,6 +339,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     MICROORGANISM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, LOINC)),
     ANTIBIOTIC: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
     SUSCEPTIBILITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    # Clinical concepts
+    CONDITION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED)),
+    MEDICATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -394,6 +412,12 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     MICROORGANISM: HIPAA_UNIQUE_IDENTIFIER,
     ANTIBIOTIC: HIPAA_UNIQUE_IDENTIFIER,
     SUSCEPTIBILITY: HIPAA_UNIQUE_IDENTIFIER,
+    # Clinical concepts
+    CONDITION: HIPAA_UNIQUE_IDENTIFIER,
+    MEDICATION: HIPAA_UNIQUE_IDENTIFIER,
+    LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
+    PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
+    BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -571,6 +595,32 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "antimicrobial": ANTIBIOTIC,
     "susceptibility": SUSCEPTIBILITY,
     "susceptibilityresult": SUSCEPTIBILITY,
+    # Clinical concepts
+    "condition": CONDITION,
+    "disease": CONDITION,
+    "diagnosis": CONDITION,
+    "finding": CONDITION,
+    "problem": CONDITION,
+    "disorder": CONDITION,
+    "syndrome": CONDITION,
+    "medication": MEDICATION,
+    "drug": MEDICATION,
+    "chemical": MEDICATION,
+    "substance": MEDICATION,
+    "labtest": LAB_TEST,
+    "test": LAB_TEST,
+    "lab": LAB_TEST,
+    "measurement": LAB_TEST,
+    "analyte": LAB_TEST,
+    "procedure": PROCEDURE,
+    "surgery": PROCEDURE,
+    "operation": PROCEDURE,
+    "intervention": PROCEDURE,
+    "bodysite": BODY_SITE,
+    "bodypart": BODY_SITE,
+    "anatomy": BODY_SITE,
+    "anatomical": BODY_SITE,
+    "organ": BODY_SITE,
 }
 
 
@@ -768,5 +818,10 @@ __all__ = [
     "MICROORGANISM",
     "ANTIBIOTIC",
     "SUSCEPTIBILITY",
+    "CONDITION",
+    "MEDICATION",
+    "LAB_TEST",
+    "PROCEDURE",
+    "BODY_SITE",
     "OTHER",
 ]
