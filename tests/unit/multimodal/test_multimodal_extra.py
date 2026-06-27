@@ -17,7 +17,14 @@ from openmed.multimodal import redact_document
 from openmed.multimodal.exceptions import MissingDependencyError
 
 # Distribution package -> import module name for optional multimodal/OCR deps.
-HEAVY_MODULES = ("pdfplumber", "docx", "PIL", "pytesseract", "paddleocr")
+HEAVY_MODULES = (
+    "pdfplumber",
+    "docx",
+    "PIL",
+    "pytesseract",
+    "paddleocr",
+    "markdown_it",
+)
 
 
 def _import_then_check(import_line: str) -> set[str]:
