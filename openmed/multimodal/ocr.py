@@ -413,10 +413,15 @@ _IMAGE_EXTENSIONS = (
 
 
 def _ocr_image_handler(
-    path: Any, *, policy: Any = None, models: Any = None
+    path: Any, *, policy: Any = None, models: Any = None, lang: str | None = None
 ) -> ExtractedDocument:
-    """redact_document handler for image files: OCR then bridge to a document."""
-    return ocr(path).to_document()
+    """redact_document handler for image files: OCR then bridge to a document.
+
+    ``lang`` (an OpenMed language code from ``redact_document(lang=...)``) is
+    forwarded to OCR so scans are read in the requested language.
+    """
+    languages = [lang] if lang else None
+    return ocr(path, languages=languages).to_document()
 
 
 register_handler(_IMAGE_EXTENSIONS, _ocr_image_handler)

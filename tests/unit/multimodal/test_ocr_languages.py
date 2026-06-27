@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import pytest
 
+import openmed.multimodal.base as base
+import openmed.multimodal.ocr as ocr_mod
+from openmed.multimodal import ExtractedDocument, redact_document
 from openmed.multimodal.ocr import (
     SUPPORTED_OCR_LANGUAGES,
     FakeOcrEngine,
@@ -72,3 +75,26 @@ def test_unsupported_language_raises_value_error():
         tesseract_language(["zz"])
     with pytest.raises(ValueError):
         paddle_language(["zz"])
+
+
+class TestRedactDocumentLanguageWiring:
+    """redact_document(lang=...) must configure image OCR (issue #315)."""
+
+    def test_redact_document_passes_lang_to_ocr(self, monkeypatch):
+        engine = FakeOcrEngine(WORDS)
+        monkeypatch.setattr(base, "_missing_multimodal_dependencies", lambda: [])
+        monkeypatch.setattr(ocr_mod, "resolve_engine", lambda e=None: engine)
+
+        doc = redact_document("scan.png", lang="fr")
+
+        assert isinstance(doc, ExtractedDocument)
+        assert engine.last_languages == ["fr"]
+
+    def test_redact_document_defaults_to_english(self, monkeypatch):
+        engine = FakeOcrEngine(WORDS)
+        monkeypatch.setattr(base, "_missing_multimodal_dependencies", lambda: [])
+        monkeypatch.setattr(ocr_mod, "resolve_engine", lambda e=None: engine)
+
+        redact_document("scan.png")
+
+        assert engine.last_languages == ["en"]
