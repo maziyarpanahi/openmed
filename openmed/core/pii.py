@@ -52,6 +52,11 @@ if TYPE_CHECKING:
     from .audit import AuditReport
     from .models import ModelLoader
 
+from .result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
+
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
 
@@ -154,6 +159,65 @@ class DeidentificationResult:
                 self.audit_report.to_dict() if self.audit_report is not None else None
             ),
         }
+
+    def to_dataframe(self) -> Any:
+        """Convert detected PII entities to a pandas DataFrame.
+
+        Returns:
+            A pandas DataFrame with one row per detected entity and columns
+            ``text``, ``label``, ``entity_type``, ``start``, ``end``,
+            ``confidence``, ``action``, and ``result_id``.
+
+        Raises:
+            ImportError: If pandas is not installed.
+        """
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise ImportError(
+                "pandas is required to use DeidentificationResult.to_dataframe(). "
+                "Install it with `pip install pandas`."
+            ) from exc
+
+        columns = [
+            "text",
+            "label",
+            "entity_type",
+            "start",
+            "end",
+            "confidence",
+            "action",
+            "result_id",
+        ]
+        payload = self.to_dict()
+        result_id_source = {
+            "deidentified_text": payload["deidentified_text"],
+            "method": payload["method"],
+            "num_entities_redacted": payload["num_entities_redacted"],
+            "timestamp": payload["timestamp"],
+        }
+        result_id = hashlib.sha256(
+            json.dumps(
+                result_id_source,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+        records = [
+            {
+                "text": entity.get("text"),
+                "label": entity.get("label"),
+                "entity_type": entity.get("entity_type"),
+                "start": entity.get("start"),
+                "end": entity.get("end"),
+                "confidence": entity.get("confidence"),
+                "action": entity.get("action"),
+                "result_id": result_id,
+            }
+            for entity in payload["pii_entities"]
+        ]
+        return pd.DataFrame.from_records(records, columns=columns)
 
 
 # Languages whose PII models were trained on accent-free text.
@@ -567,6 +631,14 @@ def _extract_pii_batch(
         for result in results:
             recognizer.apply_to_prediction_result(result)
 
+    for result in results:
+        _apply_clinical_protection_to_result(
+            result.text,
+            result,
+            config=config,
+            lang=lang,
+        )
+
     from .quality_gates import validate_entity_spans
 
     for result in results:
@@ -582,6 +654,8 @@ def extract_pii(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
@@ -618,6 +692,9 @@ def extract_pii(
             ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
             matches are added with ``custom:deny`` provenance; allow-list
             matches suppress overlapping spans from any detector.
+        cache_results: Whether to cache this result in the in-process LRU
+            cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         PredictionResult with detected PII entities
@@ -630,7 +707,14 @@ def extract_pii(
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
-    return _extract_pii_batch(
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("extract_pii", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
+    final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -641,6 +725,9 @@ def extract_pii(
         loader=loader,
         custom_recognizer=custom_recognizer,
     )[0]
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _resolve_deidentification_method(
@@ -850,6 +937,49 @@ def _suppress_custom_allowed_entities(
         suppressed=suppressed,
     )
     return suppressed
+
+
+def _apply_clinical_protection_to_result(
+    text: str,
+    pii_result: Any,
+    *,
+    config: Optional[OpenMedConfig] = None,
+    options: Optional[Mapping[str, Any]] = None,
+    lang: str = "en",
+) -> int:
+    """Suppress ambiguous PII entities that exactly match clinical terms."""
+    from .clinical_protect import (
+        filter_protected_spans,
+        protection_options_from_config,
+    )
+
+    protection_options = dict(options or protection_options_from_config(config))
+    result = filter_protected_spans(
+        list(getattr(pii_result, "entities", ()) or ()),
+        text,
+        lang=lang,
+        **protection_options,
+    )
+    pii_result.entities = result.spans
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(result.spans)
+
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    previous = metadata.get("clinical_protection")
+    previous_metadata = previous if isinstance(previous, Mapping) else {}
+    clinical_metadata = dict(result.metadata["clinical_protection"])
+    clinical_metadata["checked_spans"] += int(previous_metadata.get("checked_spans", 0))
+    clinical_metadata["suppressed_spans"] += int(
+        previous_metadata.get("suppressed_spans", 0)
+    )
+    clinical_metadata["protected_term_count"] = max(
+        int(clinical_metadata["protected_term_count"]),
+        int(previous_metadata.get("protected_term_count", 0)),
+    )
+    clinical_metadata["enabled"] = bool(protection_options.get("enabled", True))
+    metadata["clinical_protection"] = clinical_metadata
+    pii_result.metadata = metadata
+    return result.suppressed_count
 
 
 def _context_window(
@@ -1374,6 +1504,8 @@ def deidentify(
     calibration_thresholds_path: Optional[str | Path] = None,
     custom_recognizer: Any = None,
     audit: bool = False,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -1426,6 +1558,8 @@ def deidentify(
             matches suppress overlapping spans from any detector.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -1444,6 +1578,14 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("deidentify", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
     from .pipeline import Pipeline
 
     pipeline = Pipeline(
@@ -1475,9 +1617,14 @@ def deidentify(
         locale=locale,
         audit=audit,
     )
+
     if audit and result.deidentification_result.audit_report is not None:
-        return result.deidentification_result.audit_report
-    return result.deidentification_result
+        final_result = result.deidentification_result.audit_report
+    else:
+        final_result = result.deidentification_result
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:

@@ -32,6 +32,7 @@ nav:
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
   - PII & De-identification:
+      - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
@@ -41,6 +42,7 @@ nav:
       - FHIR Interop Helpers: fhir-interop.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
+      - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
@@ -50,6 +52,7 @@ nav:
       - Contributing & Releases: contributing.md
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
+      - Supply Chain Controls: security/supply-chain.md
       - Release Streams & Channels: release/semver-and-channels.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md

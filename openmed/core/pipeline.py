@@ -234,6 +234,9 @@ class Pipeline:
         self.section_detector = section_detector
         self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
         self.hmac_secret = hmac_secret
+        from .clinical_protect import protection_options_from_config
+
+        self.clinical_protect_options = protection_options_from_config(config)
 
     def run(
         self,
@@ -412,18 +415,33 @@ class Pipeline:
             normalized.normalized_text,
             merged_spans,
         )
+        merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
+            normalized.normalized_text,
+            merged_spans,
+            context,
+        )
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 merged_spans,
                 model_name="cascade",
             )
+        else:
+            pii._apply_clinical_protection_to_result(
+                normalized.normalized_text,
+                pii_result,
+                options=self.clinical_protect_options,
+                lang=route.lang,
+            )
         stage_results.append(
             PipelineStageResult(
                 7,
                 STAGE_NAMES[6],
                 spans=merged_spans,
-                metadata=allow_metadata,
+                metadata={
+                    **dict(allow_metadata),
+                    **dict(clinical_protection_metadata),
+                },
             )
         )
 
@@ -847,6 +865,24 @@ class Pipeline:
                 else 0
             ),
         }
+
+    def _protect_clinical_spans(
+        self,
+        text: str,
+        spans: Sequence[OpenMedSpan],
+        context: PipelineContext,
+    ) -> tuple[tuple[OpenMedSpan, ...], Mapping[str, Any]]:
+        from .clinical_protect import filter_protected_spans
+
+        result = filter_protected_spans(
+            spans,
+            text,
+            lang=context.route.lang,
+            **self.clinical_protect_options,
+        )
+        metadata = dict(result.metadata["clinical_protection"])
+        metadata["enabled"] = bool(self.clinical_protect_options.get("enabled", True))
+        return tuple(result.spans), {"clinical_protection": metadata}
 
     def stage10_emit(
         self,
