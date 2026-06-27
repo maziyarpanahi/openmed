@@ -10,6 +10,11 @@ from openmed.eval.datasets.drugprot import (
     load_drugprot_fixtures,
 )
 from openmed.eval.harness import BenchmarkFixture
+from openmed.eval.suites.policy_compliance import (
+    POLICY_COMPLIANCE,
+    load_policy_compliance_fixtures,
+    policy_compliance_metadata,
+)
 from openmed.eval.suites.shield import (
     SHIELD,
     load_shield_fixtures,
@@ -20,7 +25,14 @@ GOLDEN = "golden"
 I2B2 = "i2b2"
 N2C2 = "n2c2"
 
-DEFAULT_SUITES: tuple[str, ...] = (GOLDEN, I2B2, N2C2, SHIELD, DRUGPROT)
+DEFAULT_SUITES: tuple[str, ...] = (
+    GOLDEN,
+    I2B2,
+    N2C2,
+    SHIELD,
+    DRUGPROT,
+    POLICY_COMPLIANCE,
+)
 
 
 def validate_suite_name(name: str) -> str:
@@ -40,6 +52,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_shield_fixtures(**kwargs)
     if suite == DRUGPROT:
         return load_drugprot_fixtures(**kwargs)
+    if suite == POLICY_COMPLIANCE:
+        return load_policy_compliance_fixtures(**kwargs)
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -50,6 +64,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return shield_suite_metadata(**kwargs)
     if suite == DRUGPROT:
         return drugprot_suite_metadata(**kwargs)
+    if suite == POLICY_COMPLIANCE:
+        return policy_compliance_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -59,6 +75,7 @@ __all__ = [
     "N2C2",
     "SHIELD",
     "DRUGPROT",
+    "POLICY_COMPLIANCE",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_suite_fixtures",
@@ -67,4 +84,6 @@ __all__ = [
     "drugprot_suite_metadata",
     "load_shield_fixtures",
     "shield_suite_metadata",
+    "load_policy_compliance_fixtures",
+    "policy_compliance_metadata",
 ]
