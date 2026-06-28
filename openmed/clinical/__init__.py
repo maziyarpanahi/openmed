@@ -42,6 +42,13 @@ from .lab_values import (
     derive_abnormal_flag,
     parse_reference_range,
 )
+from .medication_sig import (
+    MEDICATION_SIG_ADVISORY,
+    DurationNormalization,
+    FrequencyNormalization,
+    normalize_duration,
+    normalize_frequency,
+)
 from .status_vocab import (
     CURRENT,
     FORMER,
@@ -100,6 +107,11 @@ __all__ = [
     "LAB_FLAG_ADVISORY",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "FrequencyNormalization",
+    "DurationNormalization",
+    "MEDICATION_SIG_ADVISORY",
+    "normalize_frequency",
+    "normalize_duration",
     "CURRENT",
     "FORMER",
     "NEVER",
