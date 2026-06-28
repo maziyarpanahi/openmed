@@ -140,6 +140,12 @@ from openmed.eval.robustness import (
     robustness_report,
     whitespace_noise_perturbation,
 )
+from openmed.eval.scorecard import (
+    ModelScorecard,
+    render_model_scorecard,
+    write_model_scorecard,
+    write_model_scorecard_json,
+)
 from openmed.eval.section_recall import (
     UNSECTIONED_SECTION,
     SectionRecallMetrics,
@@ -200,6 +206,7 @@ __all__ = [
     "LeakageHeatmap",
     "LeakageHeatmapCell",
     "LeakageHeatmapTotal",
+    "ModelScorecard",
     "ModelStewardConfig",
     "PairedSignificance",
     "QUARANTINED",
@@ -271,6 +278,7 @@ __all__ = [
     "render_reid_leaderboard",
     "render_dataset_card_markdown",
     "render_leakage_heatmap_markdown",
+    "render_model_scorecard",
     "reliability_bins",
     "robustness_report",
     "run_benchmark",
@@ -283,4 +291,6 @@ __all__ = [
     "utility_loss_report",
     "whitespace_noise_perturbation",
     "write_calibration_artifacts",
+    "write_model_scorecard",
+    "write_model_scorecard_json",
 ]
