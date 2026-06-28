@@ -160,6 +160,20 @@ def fixtures_by_category(
     return dict(grouped)
 
 
+def fixtures_by_language(
+    fixtures: list[GoldenFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> dict[str, list[GoldenFixture]]:
+    """Group fixtures by language, optionally restricted to one category."""
+    source = fixtures if fixtures is not None else load_golden_fixtures()
+    grouped: defaultdict[str, list[GoldenFixture]] = defaultdict(list)
+    for fixture in source:
+        if category is None or fixture.category == category:
+            grouped[fixture.language].append(fixture)
+    return dict(grouped)
+
+
 def fixture_languages(
     fixtures: list[GoldenFixture] | None = None,
     *,
@@ -205,8 +219,12 @@ def _span_to_mapping(span: EvalSpan) -> dict[str, Any]:
         "label": span.label,
         "text": span.text,
     }
-    if span.metadata:
-        row["metadata"] = _plain_mapping(span.metadata)
+    metadata = dict(span.metadata)
+    group = metadata.pop("group", None)
+    if group is not None and str(group).strip():
+        row["group"] = str(group).strip()
+    if metadata:
+        row["metadata"] = _plain_mapping(metadata)
     return row
 
 
@@ -227,6 +245,7 @@ __all__ = [
     "GoldenFixture",
     "fixture_languages",
     "fixtures_by_category",
+    "fixtures_by_language",
     "list_fixture_paths",
     "load_benchmark_fixtures",
     "load_golden_fixtures",

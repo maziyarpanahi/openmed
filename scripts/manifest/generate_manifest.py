@@ -297,6 +297,13 @@ def _formats(repo_id: str, tags: list[str], siblings: list[str]) -> list[str]:
         formats.discard("mlx-fp")
     if any(name.endswith(".onnx") for name in lowered_names):
         formats.add("onnx")
+    if (
+        "transformers.js" in lowered_tags
+        or "transformersjs" in lowered_tags
+        or any(name == "onnx/model_quantized.onnx" for name in lowered_names)
+        or ("tokenizer.json" in lowered_names and "onnx/model.onnx" in lowered_names)
+    ):
+        formats.add("transformersjs")
     if any(name.endswith(".gguf") for name in lowered_names):
         formats.add("gguf")
     return sorted(formats) or ["unknown"]
@@ -322,7 +329,7 @@ def _benchmark(tags: list[str]) -> dict[str, Any]:
         if tag.startswith("dataset:"):
             dataset = tag.split(":", 1)[1]
             break
-    return {"dataset": dataset, "micro_f1": None, "recall": None}
+    return {"dataset": dataset, "micro_f1": None, "recall": None, "leakage": None}
 
 
 def _arxiv(tags: list[str]) -> Optional[str]:

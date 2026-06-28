@@ -26,7 +26,12 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "ar",
     "ja",
     "tr",
+    "id",
 }
+
+# Languages with checksum-validated national-ID coverage but no bundled
+# default PII model or full language pack yet.
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -41,6 +46,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ar": "Arabic",
     "ja": "Japanese",
     "tr": "Turkish",
+    "id": "Indonesian",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -56,6 +62,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ar": "Arabic-",
     "ja": "Japanese-",
     "tr": "Turkish-",
+    "id": "Indonesian-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -71,6 +78,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "id": "OpenMed/privacy-filter-multilingual",
 }
 
 
@@ -424,6 +432,209 @@ def validate_turkish_tckn(text: str) -> bool:
     return numbers[9] == tenth and numbers[10] == eleventh
 
 
+def validate_indonesian_nik(text: str) -> bool:
+    """Validate Indonesian NIK (Nomor Induk Kependudukan) structure.
+
+    NIK is a 16-digit civil-registration identifier. This validator checks the
+    stable structural parts OpenMed can verify without bundling a restricted
+    registry:
+
+    - PP: province code, using Indonesia's numeric 11-94 province-code range.
+    - RR: regency/city code, non-zero two-digit shape.
+    - DD: district code, non-zero two-digit shape.
+    - DDMMYY: embedded birth date. Female identifiers add 40 to the day.
+    - SSSS: non-zero sequence number.
+
+    Args:
+        text: NIK string (may contain spaces or separators).
+
+    Returns:
+        True if the NIK has a valid structure and decodable birth date.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 16:
+        return False
+
+    province = int(digits[0:2])
+    regency = int(digits[2:4])
+    district = int(digits[4:6])
+    if not (11 <= province <= 94 and 1 <= regency <= 99 and 1 <= district <= 99):
+        return False
+
+    raw_day = int(digits[6:8])
+    month = int(digits[8:10])
+    year = int(digits[10:12])
+    serial = int(digits[12:16])
+
+    day = raw_day - 40 if raw_day > 40 else raw_day
+    if not (1 <= day <= 31 and 1 <= month <= 12 and serial > 0):
+        return False
+
+    import calendar
+
+    # NIK stores a two-digit year without a century. Accept the date if it is
+    # possible in either common civil-registration century.
+    try:
+        return any(
+            day <= calendar.monthrange(century + year, month)[1]
+            for century in (1900, 2000)
+        )
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def validate_polish_pesel(text: str) -> bool:
+    """Validate Polish PESEL number.
+
+    The PESEL is an 11-digit number with an embedded birth date and a
+    weighted checksum.  Structure: YYMMDDZZZSC.
+
+    - YYMMDD: date of birth.  Month has century offsets: +20 for 2000s,
+      +40 for 2100s, +60 for 2200s, +80 for 1800s.
+    - ZZZ: serial number.
+    - S: check digit.
+
+    Checksum weights over the first ten digits: 1, 3, 7, 9, 1, 3, 7, 9, 1, 3.
+    Check digit = (10 - sum mod 10) mod 10.
+
+    Args:
+        text: PESEL string (may contain spaces or hyphens)
+
+    Returns:
+        True if the PESEL passes format, date, and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+
+    numbers = [int(d) for d in digits]
+
+    # --- checksum ---
+    weights = (1, 3, 7, 9, 1, 3, 7, 9, 1, 3)
+    total = sum(w * n for w, n in zip(weights, numbers[:10]))
+    if numbers[10] != (10 - total % 10) % 10:
+        return False
+
+    # --- embedded birth date ---
+    year = numbers[0] * 10 + numbers[1]
+    month_raw = numbers[2] * 10 + numbers[3]
+    day = numbers[4] * 10 + numbers[5]
+
+    # Century offset encoded in the month tens digit.
+    if month_raw > 92 or month_raw == 0:
+        return False
+
+    if month_raw > 80:
+        year += 1800
+        month = month_raw - 80
+    elif month_raw > 60:
+        year += 2200
+        month = month_raw - 60
+    elif month_raw > 40:
+        year += 2100
+        month = month_raw - 40
+    elif month_raw > 20:
+        year += 2000
+        month = month_raw - 20
+    else:
+        year += 1900
+        month = month_raw
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    return True
+
+
+def validate_korean_rrn(text: str) -> bool:
+    """Validate South Korean Resident Registration Number (RRN).
+
+    The RRN is a 13-digit number in the format YYMMDDGXXXXXX:
+
+    - YYMMDD: date of birth.
+    - G (position 6, zero-indexed): century and gender code.
+        1/2 = 1900s (1=male, 2=female),
+        3/4 = 2000s (3=male, 4=female),
+        5/6 = 1900s foreign residents,
+        7/8 = 2000s foreign residents,
+        9/0 = 1800s (9=male, 0=female).
+    - Positions 7-11: serial number.
+    - Position 12: check digit.
+
+    Checksum weights: 2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5.
+    Check digit = (11 - (sum mod 11)) mod 10.
+
+    Args:
+        text: RRN string (may contain hyphens or spaces)
+
+    Returns:
+        True if the RRN passes format, date, and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 13:
+        return False
+
+    numbers = [int(d) for d in digits]
+
+    # --- century/gender code ---
+    gender_code = numbers[6]
+    century_map = {
+        1: 1900,
+        2: 1900,
+        3: 2000,
+        4: 2000,
+        5: 1900,
+        6: 1900,
+        7: 2000,
+        8: 2000,
+        9: 1800,
+        0: 1800,
+    }
+    if gender_code not in century_map:
+        return False
+    century = century_map[gender_code]
+
+    # --- embedded birth date ---
+    year = century + numbers[0] * 10 + numbers[1]
+    month = numbers[2] * 10 + numbers[3]
+    day = numbers[4] * 10 + numbers[5]
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    # --- checksum ---
+    weights = (2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5)
+    total = sum(w * n for w, n in zip(weights, numbers[:12]))
+    check = (11 - total % 11) % 10
+
+    return numbers[12] == check
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -597,6 +808,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Kas\u0131m",
         "Aral\u0131k",
     ],
+    "id": [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+    ],
 }
 
 
@@ -705,6 +930,7 @@ _FRENCH_PII_PATTERNS: List[PIIPattern] = [
             "cedex",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -804,6 +1030,7 @@ _GERMAN_PII_PATTERNS: List[PIIPattern] = [
             "Postleitzahl",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -903,6 +1130,7 @@ _ITALIAN_PII_PATTERNS: List[PIIPattern] = [
             "codice postale",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1018,6 +1246,7 @@ _SPANISH_PII_PATTERNS: List[PIIPattern] = [
             "cp",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1145,6 +1374,7 @@ _PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
             "morada",
         ],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1230,6 +1460,7 @@ _DUTCH_PII_PATTERNS: List[PIIPattern] = [
             "adres",
         ],
         context_boost=0.4,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -1299,6 +1530,7 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
             "\u092a\u0924\u093e",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
     # Aadhaar (12 digits, possibly spaced as 4-4-4)
     PIIPattern(
@@ -1382,6 +1614,7 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
             "\u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
     # Aadhaar (12 digits, possibly spaced as 4-4-4)
     PIIPattern(
@@ -1490,6 +1723,7 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
             "\u0639\u0646\u0648\u0627\u0646",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1559,6 +1793,7 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
             "\u4f4f\u6240",
         ],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
     PIIPattern(
         r"\b[\u4e00-\u9fff]{2,12}(?:\u90fd|\u9053|\u5e9c|\u770c)[\u4e00-\u9fff0-9\u4e01\u76ee\u756a\u5730\u53f7\s-]{3,60}\b",
@@ -1673,7 +1908,155 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
             "adres",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Indonesian PII patterns
+# ---------------------------------------------------------------------------
+
+_INDONESIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "tanggal",
+            "tanggal lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawat",
+            "kontrol",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "tanggal",
+            "tanggal lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawat",
+            "kontrol",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+62\s?|0)8\d{1,3}(?:[\s.-]?\d{3,4}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "telepon",
+            "telp",
+            "hp",
+            "ponsel",
+            "nomor",
+            "kontak",
+            "whatsapp",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{16}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "nik",
+            "nomor induk kependudukan",
+            "ktp",
+            "identitas",
+            "kependudukan",
+        ],
+        context_boost=0.45,
+        validator=validate_indonesian_nik,
+    ),
+    PIIPattern(
+        r"\b(?:Jl\.|Jalan)\s+[A-Z][A-Za-z0-9 .'-]{2,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "alamat",
+            "domisili",
+            "tinggal",
+            "jalan",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "kode pos",
+            "pos",
+            "alamat",
+            "domisili",
+        ],
+        context_boost=0.5,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Polish PII patterns
+# ---------------------------------------------------------------------------
+
+_POLISH_PII_PATTERNS: List[PIIPattern] = [
+    # PESEL (11-digit national ID)
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "pesel",
+            "numer pesel",
+            "nr pesel",
+            "pesel:",
+            "tozsamo",
+            "dowód osobisty",
+            "dowod osobisty",
+        ],
+        context_boost=0.4,
+        validator=validate_polish_pesel,
+    ),
+]
+
+
+_KOREAN_PII_PATTERNS: List[PIIPattern] = [
+    # RRN (13-digit Resident Registration Number)
+    PIIPattern(
+        r"\b\d{6}[-\s]?\d{7}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "주민등록번호",
+            "주민번호",
+            "등록번호",
+            "rrn",
+            "resident registration",
+            "jumin",
+        ],
+        context_boost=0.4,
+        validator=validate_korean_rrn,
     ),
 ]
 
@@ -1689,6 +2072,9 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
+    "id": _INDONESIAN_PII_PATTERNS,
+    "pl": _POLISH_PII_PATTERNS,
+    "ko": _KOREAN_PII_PATTERNS,
 }
 
 
@@ -1975,6 +2361,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
         "ZIPCODE": ["34000", "06000", "35000"],
     },
+    "id": {
+        "NAME": ["Siti Aminah", "Budi Santoso", "Dewi Lestari", "Agus Pratama"],
+        "FIRST_NAME": ["Siti", "Budi", "Dewi", "Agus"],
+        "LAST_NAME": ["Aminah", "Santoso", "Lestari", "Pratama"],
+        "EMAIL": ["pasien@contoh.id", "kontak@contoh.org"],
+        "PHONE": ["+62 812 3456 7890", "0812-9876-5432"],
+        "ID_NUM": ["3174055708850001"],
+        "STREET_ADDRESS": ["Jl. Merdeka No. 10", "Jl. Sudirman 25"],
+        "URL_PERSONAL": ["https://contoh.id"],
+        "USERNAME": ["pasien123", "pengguna456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Jakarta", "Bandung", "Surabaya"],
+        "ZIPCODE": ["10110", "40123", "60234"],
+    },
 }
 
 
@@ -1991,8 +2392,9 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     addresses) are added on top.
 
     Args:
-        lang: ISO 639-1 language code (en, fr, de, it, es, nl, hi, te, pt,
-            ar, ja, tr)
+        lang: ISO 639-1 language code. Model-backed languages are listed in
+            :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
+            in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
 
     Returns:
         List of PIIPattern instances for the language
@@ -2000,9 +2402,11 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     Raises:
         ValueError: If the language is not supported
     """
-    if lang not in SUPPORTED_LANGUAGES:
+    supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+    if lang not in supported_pattern_languages:
         raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            f"Unsupported language '{lang}'. "
+            f"Supported: {sorted(supported_pattern_languages)}"
         )
 
     from .pii_entity_merger import PII_PATTERNS

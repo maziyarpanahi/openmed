@@ -136,12 +136,34 @@ processor = BatchProcessor(
 
 ## Progress Tracking
 
-Track progress with a callback:
+Track progress with `on_progress`. The callback receives a frozen
+`BatchProgress` record with counts, the current zero-based item index, and
+elapsed time only. It does not receive source text, file content, model output,
+or item metadata, so it is safe to use for progress bars and logs.
+
+```python
+from openmed import BatchProgress
+
+
+def on_progress(progress: BatchProgress) -> None:
+    print(
+        f"[{progress.completed}/{progress.total}] "
+        f"index={progress.current_index} elapsed={progress.elapsed:.1f}s"
+    )
+
+
+result = processor.process_texts(texts, on_progress=on_progress)
+```
+
+Existing callers can still use `progress_callback(current, total, item_result)`
+when they need per-result status, but avoid logging the `item_result` payload in
+PHI workflows because model outputs may contain source-derived text.
 
 ```python
 def progress_callback(current, total, item_result):
     status = "OK" if item_result.success else "FAILED"
-    print(f"[{current}/{total}] {item_result.id}: {status}")
+    print(f"[{current}/{total}] {status}")
+
 
 result = processor.process_texts(texts, progress_callback=progress_callback)
 ```

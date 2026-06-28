@@ -32,6 +32,8 @@ class PIIPattern:
     - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
     - context_words: Keywords that boost confidence when found nearby
     - validator: Optional checksum/validation function to confirm matches
+    - safety_sweep_requires_context: Require nearby context before the
+      deterministic safety sweep accepts this pattern
 
     Example:
         PIIPattern(
@@ -55,6 +57,7 @@ class PIIPattern:
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
+    safety_sweep_requires_context: bool = False
 
 
 # ============================================================================
@@ -356,6 +359,7 @@ PII_PATTERNS = [
         base_score=0.4,  # Could be other 5-digit numbers
         context_words=["zip", "zipcode", "zip code", "postal", "postal code"],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
     # Credit card with Luhn validation
     PIIPattern(
