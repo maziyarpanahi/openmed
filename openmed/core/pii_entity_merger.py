@@ -877,6 +877,9 @@ def normalize_label(label: str) -> str:
         "aadhaar",
         "cpf",
         "cnpj",
+        "teudat_zehut",
+        "teudatzehut",
+        "tz",
     ):
         return "national_id"
 
@@ -937,6 +940,7 @@ def is_more_specific(label1: str, label2: str) -> bool:
             "codice_fiscale",
             "cpf",
             "cnpj",
+            "teudat_zehut",
         ],
     }
 

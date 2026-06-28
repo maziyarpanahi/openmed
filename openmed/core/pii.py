@@ -2015,6 +2015,8 @@ _LABEL_TO_FAKE_KEY: Dict[str, str] = {
     "CPF": "ID_NUM",
     "cnpj": "ID_NUM",
     "CNPJ": "ID_NUM",
+    "teudat_zehut": "ID_NUM",
+    "TEUDAT_ZEHUT": "ID_NUM",
     "medical_record_number": "ID_NUM",
     "MEDICAL_RECORD_NUMBER": "ID_NUM",
     # Other

@@ -312,8 +312,8 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **14 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr`.
+as its source of truth and supports **15 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr`.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 

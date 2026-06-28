@@ -12,6 +12,7 @@ from openmed.core.pii_i18n import (
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
+    validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_portuguese_cpf,
     validate_spanish_nie,
@@ -36,12 +37,14 @@ _ID_VALIDATORS = {
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
+    "he": validate_israeli_teudat_zehut,
     "id": validate_indonesian_nik,
     "th": validate_thai_national_id,
 }
 
 _SCRIPT_RANGES = {
     "ar": ("\u0600", "\u06ff"),
+    "he": ("\u0590", "\u05ff"),
     "hi": ("\u0900", "\u097f"),
     "ja": ("\u3040", "\u9fff"),
     "te": ("\u0c00", "\u0c7f"),
@@ -95,7 +98,7 @@ def test_locale_phi_generation_is_deterministic_per_seed():
     assert first == second
 
 
-@pytest.mark.parametrize("language", ("ar", "hi", "ja", "te", "th"))
+@pytest.mark.parametrize("language", ("ar", "he", "hi", "ja", "te", "th"))
 def test_non_latin_locale_templates_render_target_script(language):
     example = LocalePhiGenerator(seed=29).generate(language)
     low, high = _SCRIPT_RANGES[language]

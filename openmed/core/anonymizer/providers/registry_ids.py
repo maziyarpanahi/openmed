@@ -33,6 +33,7 @@ from openmed.core.pii_i18n import (
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
+    validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_korean_rrn,
     validate_polish_pesel,
@@ -48,6 +49,7 @@ from .clinical_ids import (
     AadhaarProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
+    IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     NPIProvider,
     PolishPeselProvider,
@@ -252,6 +254,13 @@ def _register_builtin_specs() -> None:
         validate=validate_thai_national_id,
         faker_method="thai_national_id",
         faker_provider=ThaiNationalIdProvider,
+    )
+    _register_aliases(
+        ("he", "he_IL"),
+        id_type="teudat_zehut",
+        validate=validate_israeli_teudat_zehut,
+        faker_method="teudat_zehut",
+        faker_provider=IsraeliTeudatZehutProvider,
     )
     _register_aliases(
         ("pl", "pl_PL"),
