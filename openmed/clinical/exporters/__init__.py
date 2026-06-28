@@ -1,5 +1,11 @@
 """Exporters that turn clinical resources into interchange formats."""
 
+from __future__ import annotations
+
+from .code_provenance import (
+    CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL,
+    stamp_coding_provenance,
+)
 from .flat_table import (
     FLAT_TABLE_COLUMNS,
     flatten_clinical_entities,
@@ -9,9 +15,11 @@ from .flat_table import (
 )
 
 __all__ = [
+    "CODE_SYSTEM_VERSION_SOURCE_EXTENSION_URL",
     "FLAT_TABLE_COLUMNS",
-    "flatten_entities",
     "flatten_clinical_entities",
+    "flatten_entities",
+    "stamp_coding_provenance",
     "to_csv",
     "to_dataframe",
 ]
