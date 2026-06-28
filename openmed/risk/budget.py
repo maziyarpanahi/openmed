@@ -137,6 +137,12 @@ DEFAULT_POLICY_BUDGETS: Mapping[str, RiskBudget] = {
         max_surviving_direct_ids=0,
         max_singleton_records=0,
     ),
+    "gdpr_art9_health": RiskBudget(
+        name="gdpr_art9_health",
+        max_residual_qi_weight=2.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
     "research_limited_dataset": RiskBudget(
         name="research_limited_dataset",
         max_residual_qi_weight=8.0,
@@ -155,6 +161,12 @@ DEFAULT_POLICY_BUDGETS: Mapping[str, RiskBudget] = {
     ),
     "canada_pipeda": RiskBudget(
         name="canada_pipeda",
+        max_residual_qi_weight=3.0,
+        max_surviving_direct_ids=0,
+        max_singleton_records=0,
+    ),
+    "australia_privacy_act": RiskBudget(
+        name="australia_privacy_act",
         max_residual_qi_weight=3.0,
         max_surviving_direct_ids=0,
         max_singleton_records=0,

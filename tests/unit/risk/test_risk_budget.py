@@ -112,6 +112,8 @@ def test_default_budgets_cover_every_bundled_policy_and_strict_is_stricter():
     assert clinical.max_residual_qi_weight is not None
     assert strict.max_residual_qi_weight < clinical.max_residual_qi_weight
     assert budget_for_policy("gdpr").name == "gdpr_pseudonymization"
+    assert budget_for_policy("gdpr_health").name == "gdpr_art9_health"
+    assert budget_for_policy("au_privacy").name == "australia_privacy_act"
 
 
 def test_exported_budget_api_is_available_from_package():
