@@ -27,6 +27,7 @@ def test_required_checks_present():
     assert "hf_token" in names
     assert "openmed_offline" in names
     assert "manifest_exists" in names
+    assert "manifest_rows" in names
 
 
 def test_hf_token_not_exposed(monkeypatch):
@@ -76,6 +77,25 @@ def test_manifest_check_uses_canonical_path(monkeypatch, tmp_path):
 
     assert manifest_check["status"] == "PASS"
     assert manifest_check["details"].endswith("models.jsonl")
+
+
+def test_missing_manifest_reports_row_check(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        doctor_module,
+        "MANIFEST_PATH",
+        tmp_path / "missing-models.jsonl",
+    )
+
+    results = run_diagnostics()
+
+    manifest_exists = next(
+        item for item in results if item["name"] == "manifest_exists"
+    )
+    manifest_rows = next(item for item in results if item["name"] == "manifest_rows")
+
+    assert manifest_exists["status"] == "WARN"
+    assert manifest_rows["status"] == "WARN"
+    assert "missing" in manifest_rows["details"]
 
 
 def test_optional_dependencies_are_warn_or_pass():
