@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Mapping as MappingABC
 from pathlib import Path
 from typing import Any, Callable, Optional, Sequence
 
@@ -25,6 +26,7 @@ from ..core.config import (
 from ..core.model_registry import get_model_info
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
+from .gates import add_gates_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -99,6 +101,7 @@ COMPLIANCE_CAVEAT = (
     "No de-identification tool can guarantee compliance or zero residual risk. "
     "Validate locally before any production or clinical use."
 )
+_FHIR_BUNDLE_TYPES = frozenset({"transaction", "batch"})
 
 
 def _non_negative_int(value: str) -> int:
@@ -133,11 +136,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
+    _add_policy_command(subparsers)
+    _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
+    add_gates_command(subparsers)
     return parser
 
 
@@ -403,6 +409,66 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
         help="Minimum confidence for redaction.",
     )
     batch_parser.set_defaults(handler=_handle_pii_batch)
+
+
+def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add FHIR export commands."""
+    fhir_parser = subparsers.add_parser("fhir", help="FHIR export utilities.")
+    fhir_sub = fhir_parser.add_subparsers(dest="fhir_command")
+
+    bundle_parser = fhir_sub.add_parser(
+        "bundle",
+        help="Assemble standalone FHIR resources into a deterministic Bundle.",
+    )
+    bundle_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="JSON result file containing standalone FHIR resources.",
+    )
+    bundle_parser.add_argument(
+        "--type",
+        dest="bundle_type",
+        choices=sorted(_FHIR_BUNDLE_TYPES),
+        required=True,
+        help="FHIR Bundle type to emit.",
+    )
+    bundle_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path to write the FHIR Bundle JSON.",
+    )
+    bundle_parser.set_defaults(handler=_handle_fhir_bundle)
+
+
+def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
+    policy_parser = subparsers.add_parser(
+        "policy",
+        help="Inspect de-identification policy profiles.",
+    )
+    policy_sub = policy_parser.add_subparsers(dest="policy_command")
+
+    diff_parser = policy_sub.add_parser(
+        "diff",
+        help="Compare two policy profile configurations.",
+    )
+    diff_parser.add_argument(
+        "base",
+        help="Baseline bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "candidate",
+        help="Candidate bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format",
+        help="Output format.",
+    )
+    diff_parser.set_defaults(handler=_handle_policy_diff)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -690,13 +756,32 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         "--input",
         type=Path,
         default=None,
-        help="Optional local DrugProt directory or zip archive.",
+        help="Optional local corpus directory, fixture file, or DrugProt archive.",
     )
     clinical_parser.add_argument(
         "--cache-dir",
         type=Path,
         default=None,
         help="Optional cache directory for download-on-demand public corpora.",
+    )
+    clinical_parser.add_argument(
+        "--split",
+        default=None,
+        help="Optional public-corpus split to load.",
+    )
+    clinical_parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help=(
+            "One or more model identifiers for NER benchmark reports. "
+            "Comma-separated values are accepted."
+        ),
+    )
+    clinical_parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device tier label recorded in NER benchmark reports.",
     )
     clinical_parser.add_argument(
         "--output",
@@ -869,6 +954,133 @@ def _handle_batch(args: argparse.Namespace) -> int:
     return 0 if result.failed_items == 0 else 1
 
 
+def _handle_fhir_bundle(args: argparse.Namespace) -> int:
+    if args.bundle_type not in _FHIR_BUNDLE_TYPES:
+        allowed = ", ".join(sorted(_FHIR_BUNDLE_TYPES))
+        sys.stderr.write(f"--type must be one of: {allowed}\n")
+        return 2
+
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        resources = _extract_fhir_resources(payload)
+        doc_id = _extract_fhir_doc_id(payload)
+
+        from ..clinical.exporters.fhir import to_bundle
+
+        bundle = to_bundle(
+            resources,
+            doc_id=doc_id,
+            bundle_type=args.bundle_type,
+        )
+        args.output.write_text(
+            json.dumps(bundle, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        sys.stderr.write(f"Input file not found: {args.input}\n")
+        return 1
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}\n"
+        )
+        return 1
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read or write FHIR Bundle: {exc}\n")
+        return 1
+    except (TypeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to assemble FHIR Bundle: {exc}\n")
+        return 1
+
+    sys.stdout.write(f"FHIR Bundle written to: {args.output}\n")
+    return 0
+
+
+def _extract_fhir_doc_id(payload: Any) -> str:
+    """Return the stable document id carried by a serialized result payload."""
+    if isinstance(payload, MappingABC):
+        for key in ("doc_id", "document_id", "id"):
+            value = payload.get(key)
+            if isinstance(value, (str, int)) and str(value):
+                return str(value)
+    return "openmed-document"
+
+
+def _extract_fhir_resources(payload: Any) -> list[dict[str, Any]]:
+    """Extract standalone FHIR resources from supported result JSON shapes."""
+    resources = _find_fhir_resource_payload(payload)
+    if not isinstance(resources, list):
+        raise ValueError("FHIR resources must be a JSON array")
+
+    normalized: list[dict[str, Any]] = []
+    for index, resource in enumerate(resources):
+        if not isinstance(resource, MappingABC):
+            raise ValueError(f"FHIR resource at index {index} must be a JSON object")
+        if resource.get("resourceType") == "Bundle":
+            raise ValueError(
+                "input resources must be standalone FHIR resources, not Bundles"
+            )
+        normalized.append(dict(resource))
+    return normalized
+
+
+def _find_fhir_resource_payload(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return payload
+
+    if not isinstance(payload, MappingABC):
+        raise ValueError(
+            "FHIR input must be a JSON array of resources or a result object"
+        )
+
+    for key in ("fhir_resources", "fhirResources", "resources"):
+        if key in payload:
+            return payload[key]
+
+    fhir_payload = payload.get("fhir")
+    if isinstance(fhir_payload, list):
+        return fhir_payload
+    if isinstance(fhir_payload, MappingABC):
+        for key in ("resources", "fhir_resources", "fhirResources"):
+            if key in fhir_payload:
+                return fhir_payload[key]
+
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("fhir_resources", "fhirResources", "resources"):
+            if key in result_payload:
+                return result_payload[key]
+
+    if "resourceType" in payload:
+        if payload.get("resourceType") == "Bundle":
+            raise ValueError(
+                "input is already a FHIR Bundle; provide standalone resources"
+            )
+        return [payload]
+
+    raise ValueError(
+        "FHIR input must contain standalone FHIR resources under "
+        "'resources', 'fhir_resources', or 'fhir.resources'"
+    )
+
+
+def _handle_policy_diff(args: argparse.Namespace) -> int:
+    from ..core.policy_diff import diff_policies, render
+
+    try:
+        diff = diff_policies(args.base, args.candidate)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"Policy diff failed: {exc}\n")
+        return 1
+
+    if args.output_format == "json":
+        payload = render(diff, fmt="dict")
+        sys.stdout.write(f"{json.dumps(payload, indent=2, sort_keys=True)}\n")
+    else:
+        sys.stdout.write(f"{render(diff, fmt='text')}\n")
+    return 0
+
+
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
@@ -926,27 +1138,66 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
 
 
 def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
-    from openmed.eval.suites import load_suite_fixtures, suite_metadata
+    from openmed.eval.suites import (
+        BIOMEDICAL_NER,
+        load_suite_fixtures,
+        run_biomedical_ner_benchmark,
+        suite_metadata,
+    )
 
     try:
-        fixtures = load_suite_fixtures(
-            str(args.suite),
-            task=str(args.task),
-            path=args.input,
-            cache_dir=args.cache_dir,
-        )
-        metadata = suite_metadata(str(args.suite), task=str(args.task))
+        suite = str(args.suite)
+        task = str(args.task)
+        load_kwargs: dict[str, Any] = {
+            "task": task,
+            "path": args.input,
+            "cache_dir": args.cache_dir,
+        }
+        if args.split is not None:
+            load_kwargs["split"] = str(args.split)
+        fixtures = load_suite_fixtures(suite, **load_kwargs)
+        metadata_kwargs: dict[str, Any] = {}
+        if suite == "drugprot":
+            metadata_kwargs["task"] = task
+        if suite == BIOMEDICAL_NER and args.split is not None:
+            metadata_kwargs["split"] = str(args.split)
+        metadata = suite_metadata(suite, **metadata_kwargs)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to load clinical benchmark suite: {exc}\n")
         return 1
 
+    if suite == BIOMEDICAL_NER and task == "ner":
+        split = str(args.split) if args.split is not None else "test"
+        models = _parse_model_args(args.models or [])
+        if not models:
+            models = ["disease_detection_superclinical"]
+        reports = [
+            run_biomedical_ner_benchmark(
+                fixtures,
+                model_name=model,
+                device=str(args.device),
+                metadata=metadata,
+                split=split,
+            )
+            for model in models
+        ]
+        if len(reports) == 1:
+            payload: Any = reports[0].to_dict()
+        else:
+            payload = {
+                "metadata": metadata,
+                "reports": [report.to_dict() for report in reports],
+                "suite": suite,
+            }
+        return _write_json_payload(payload, args.output)
+
     payload: dict[str, Any] = {
         "fixture_count": len(fixtures),
         "metadata": metadata,
-        "suite": str(args.suite),
-        "task": str(args.task),
+        "suite": suite,
+        "task": task,
     }
-    if str(args.task) == "relation":
+    if task == "relation":
         payload["relation_count"] = sum(
             len(getattr(fixture, "relations", ())) for fixture in fixtures
         )
@@ -955,10 +1206,14 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
             len(getattr(fixture, "gold_spans", ())) for fixture in fixtures
         )
 
+    return _write_json_payload(payload, args.output)
+
+
+def _write_json_payload(payload: Any, output_path: Path | None) -> int:
     output = json.dumps(payload, indent=2, sort_keys=True)
-    if args.output:
+    if output_path:
         try:
-            args.output.write_text(output + "\n", encoding="utf-8")
+            output_path.write_text(output + "\n", encoding="utf-8")
         except OSError as exc:
             sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
             return 1
