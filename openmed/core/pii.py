@@ -12,21 +12,12 @@ Key Features:
     - Integration with OpenMed's existing NER infrastructure
 
 Example:
-    >>> from openmed import extract_pii, deidentify
-    >>>
-    >>> # Extract PII entities
-    >>> result = extract_pii("Dr. Smith called John Doe at 555-1234")
-    >>> len(result.entities) > 0
-    True
-
-    >>> # De-identify with masking
-    >>> deid = deidentify(
-    ...     "Patient John Doe (DOB: 01/15/1970) at 555-123-4567",
-    ...     method="mask",
-    ...     keep_year=True
+    >>> from openmed import reidentify
+    >>> reidentify(
+    ...     "Patient [NAME] called [PHONE]",
+    ...     {"[NAME]": "Casey Example", "[PHONE]": "555-0100"},
     ... )
-    >>> print(deid.deidentified_text)
-    Patient [NAME] (DOB: [DATE]/1970) at [PHONE]
+    'Patient Casey Example called 555-0100'
 """
 
 from __future__ import annotations
@@ -41,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
@@ -50,6 +41,7 @@ if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
     from .models import ModelLoader
+    from .surrogate_vault import SurrogateVault
 
 from .result_cache import (
     get_result_cache,
@@ -57,7 +49,90 @@ from .result_cache import (
 )
 
 # Type alias for de-identification methods
-DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
+DEIDENTIFICATION_METHODS = (
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+)
+DeidentificationMethod = Literal[
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
+
+
+class MissingOptionalDependencyError(ImportError):
+    """Raised when a requested optional capability needs an unavailable package."""
+
+    def __init__(
+        self,
+        *,
+        package: str,
+        feature: str,
+        extra: str | None = None,
+    ) -> None:
+        instruction = _optional_dependency_install_instruction(package, extra)
+        super().__init__(
+            f"{feature} requires optional dependency '{package}'. {instruction}"
+        )
+        self.package = package
+        self.feature = feature
+        self.extra = extra
+
+
+def _optional_dependency_install_instruction(
+    package: str,
+    extra: str | None = None,
+) -> str:
+    if extra:
+        return (
+            f"Install it with `pip install openmed[{extra}]` "
+            f"or `pip install {package}`."
+        )
+    return f"Install it with `pip install {package}`."
+
+
+def _optional_dependency_status(
+    *,
+    package: str,
+    feature: str,
+    available: bool,
+    skipped: bool,
+    extra: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    status: dict[str, Any] = {
+        "feature": feature,
+        "dependency": package,
+        "available": available,
+        "skipped": skipped,
+        "install": _optional_dependency_install_instruction(package, extra),
+    }
+    if extra is not None:
+        status["extra"] = extra
+    if reason is not None:
+        status["reason"] = reason
+    return status
+
+
+def _raise_missing_optional_dependency(
+    *,
+    package: str,
+    feature: str,
+    extra: str | None = None,
+    cause: ImportError | None = None,
+) -> NoReturn:
+    raise MissingOptionalDependencyError(
+        package=package,
+        feature=feature,
+        extra=extra,
+    ) from cause
 
 
 @dataclass
@@ -687,12 +762,31 @@ def extract_pii(
         PredictionResult with detected PII entities
 
     Example:
-        >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
-        >>> len(result.entities) > 0
-        True
-
-        >>> # French PII detection
-        >>> result = extract_pii("Né le 15/01/1970", lang="fr")
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import extract_pii
+        >>> from openmed.processing.outputs import EntityPrediction, PredictionResult
+        >>> fake_result = PredictionResult(
+        ...     text="Patient Casey Example called.",
+        ...     entities=[
+        ...         EntityPrediction(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             confidence=0.98,
+        ...             start=8,
+        ...             end=21,
+        ...         )
+        ...     ],
+        ...     model_name="fixture-pii-model",
+        ...     timestamp="2026-01-01T00:00:00",
+        ... )
+        >>> with patch("openmed.analyze_text", return_value=fake_result):
+        ...     result = extract_pii(
+        ...         "Patient Casey Example called.",
+        ...         model_name="fixture-pii-model",
+        ...         use_smart_merging=False,
+        ...     )
+        >>> [(entity.text, entity.label) for entity in result.entities]
+        [('Casey Example', 'NAME')]
     """
     if cache_results:
         params = dict(locals())
@@ -730,6 +824,8 @@ def _resolve_deidentification_method(
 
     if date_shift_days is not None and effective_method != "shift_dates":
         raise ValueError("date_shift_days requires method='shift_dates'")
+    if effective_method not in DEIDENTIFICATION_METHODS:
+        raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
 
     return effective_method
 
@@ -1145,6 +1241,7 @@ def _build_deidentification_result(
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    surrogate_vault: Optional["SurrogateVault"] = None,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
     normalize_accents: Optional[bool] = None,
@@ -1201,8 +1298,9 @@ def _build_deidentification_result(
         date_shift_days = _random_nonzero_shift()
 
     anonymizer = None
-    if effective_method == "replace" or any(
-        _entity_policy_action(entity) == "replace" for entity in pii_entities
+    if effective_method in {"replace", "format_preserve"} or any(
+        _entity_policy_action(entity) in {"replace", "format_preserve"}
+        for entity in pii_entities
     ):
         from .anonymizer import Anonymizer
 
@@ -1221,8 +1319,15 @@ def _build_deidentification_result(
         entity_type_counts: dict[str, int] = {}
         for entity in sorted(pii_entities, key=lambda e: e.start):
             entity_method = _entity_redaction_method(entity, effective_method)
-            if entity_method in {"mask", "remove"} or (
-                entity_method == "shift_dates" and not _is_date_entity(entity, lang)
+            if (
+                entity_method in {"mask", "remove"}
+                or (
+                    entity_method == "shift_dates" and not _is_date_entity(entity, lang)
+                )
+                or (
+                    entity_method == "format_preserve"
+                    and _format_preserve_uses_mask_fallback(entity, anonymizer, lang)
+                )
             ):
                 entity_type_counts[entity.entity_type] = (
                     entity_type_counts.get(entity.entity_type, 0) + 1
@@ -1233,18 +1338,29 @@ def _build_deidentification_result(
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
+        actual_entity_method = entity_method
+        if entity_method == "format_preserve" and _format_preserve_uses_mask_fallback(
+            entity,
+            anonymizer,
+            lang,
+        ):
+            actual_entity_method = "mask"
         redacted = _redact_entity(
             entity,
-            entity_method,
+            actual_entity_method,
             keep_year=keep_year,
             date_shift_days=(
-                date_shift_days if entity_method == "shift_dates" else None
+                date_shift_days if actual_entity_method == "shift_dates" else None
             ),
             lang=lang,
             anonymizer=anonymizer,
+            require_dateutil=effective_method == "shift_dates",
+            surrogate_vault=surrogate_vault,
         )
+        if entity_method == "format_preserve" and redacted == _mask_placeholder(entity):
+            actual_entity_method = "mask"
 
-        if keep_mapping and entity_method == "remove":
+        if keep_mapping and actual_entity_method == "remove":
             redacted = f"[{entity.entity_type}_REMOVED]"
 
         # Only make repeated placeholders unique for reversible mappings. Plain
@@ -1262,7 +1378,7 @@ def _build_deidentification_result(
                 entity,
                 policy_name=policy_name,
             )
-        entity.action = entity_method
+        entity.action = actual_entity_method
         entity.surrogate = redacted if redacted else None
 
         deidentified = (
@@ -1321,9 +1437,25 @@ def _entity_redaction_method(
         return "replace"
     if action == "hash":
         return "hash"
+    if action == "format_preserve":
+        return "format_preserve"
     if action in {"mask", "redact"}:
         return "mask"
     return fallback
+
+
+def _format_preserve_uses_mask_fallback(
+    entity: PIIEntity,
+    anonymizer: Optional["Anonymizer"],
+    lang: str,
+) -> bool:
+    if anonymizer is None:
+        return True
+    return not anonymizer.can_format_preserve(
+        entity.original_text or entity.text,
+        entity.entity_type,
+        lang=lang,
+    )
 
 
 def _build_reversible_id(
@@ -1357,6 +1489,7 @@ def _deidentify_batch(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -1402,6 +1535,7 @@ def _deidentify_batch(
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             policy="hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
@@ -1426,6 +1560,7 @@ def deidentify(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
@@ -1441,6 +1576,8 @@ def deidentify(
     - **remove**: Remove PII text entirely (empty string)
     - **replace**: Replace with fake but realistic data
     - **hash**: Replace with consistent hashed values for entity linking
+    - **format_preserve**: Replace structured identifiers with synthetic
+      values that keep shape and separators, masking unsupported labels
     - **shift_dates**: Shift dates by random offset while preserving intervals
 
     Smart merging uses regex patterns to merge fragmented entities (e.g., dates
@@ -1448,7 +1585,8 @@ def deidentify(
 
     Args:
         text: Input text to de-identify
-        method: De-identification method (mask, remove, replace, hash, shift_dates)
+        method: De-identification method (mask, remove, replace, hash,
+            shift_dates, format_preserve)
         model_name: PII detection model
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
@@ -1465,14 +1603,20 @@ def deidentify(
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
         loader: Optional shared model loader to reuse warmed pipelines.
-        consistent: When ``method="replace"``, generate stable surrogates
+        consistent: When ``method="replace"`` or
+            ``method="format_preserve"``, generate stable surrogates
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
         seed: Optional integer seed for cross-run reproducibility of
             ``consistent=True`` replacements. Implies ``consistent=True``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
-            ``method="replace"``. When ``None``, derived from ``lang``.
+            ``method="replace"`` and ``method="format_preserve"``. When
+            ``None``, derived from ``lang``.
+        surrogate_vault: Optional cross-document surrogate vault. When provided
+            with ``method="replace"``, OpenMed stores only HMAC source hashes
+            and reuses the same surrogate for the same label/language/source
+            identifier across calls.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path
@@ -1488,17 +1632,44 @@ def deidentify(
         AuditReport when ``audit=True``.
 
     Example:
-        >>> result = deidentify(
-        ...     "Patient John Doe (DOB: 01/15/1970) called from 555-1234",
-        ...     method="mask",
-        ...     keep_year=True
+        >>> from datetime import datetime
+        >>> from types import SimpleNamespace
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import (
+        ...     DeidentificationResult,
+        ...     PIIEntity,
+        ...     deidentify,
         ... )
-        >>> print(result.deidentified_text)
-        Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
-
-        >>> result = deidentify(text, method="replace", lang="de")
-        >>> result = deidentify(text, method="replace", lang="pt",
-        ...                    locale="pt_BR", consistent=True, seed=42)
+        >>> fixture = DeidentificationResult(
+        ...     original_text="Patient Casey Example",
+        ...     deidentified_text="Patient [NAME]",
+        ...     pii_entities=[
+        ...         PIIEntity(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             start=8,
+        ...             end=21,
+        ...             confidence=0.98,
+        ...             redacted_text="[NAME]",
+        ...         )
+        ...     ],
+        ...     method="mask",
+        ...     timestamp=datetime(2026, 1, 1, 0, 0, 0),
+        ...     mapping={"[NAME]": "Casey Example"},
+        ... )
+        >>> with patch("openmed.core.pipeline.Pipeline") as pipeline_cls:
+        ...     pipeline_cls.return_value.run.return_value = SimpleNamespace(
+        ...         deidentification_result=fixture
+        ...     )
+        ...     result = deidentify(
+        ...         "Patient Casey Example",
+        ...         method="mask",
+        ...         keep_mapping=True,
+        ...     )
+        >>> result.deidentified_text
+        'Patient [NAME]'
+        >>> result.mapping
+        {'[NAME]': 'Casey Example'}
     """
 
     if cache_results:
@@ -1536,6 +1707,7 @@ def deidentify(
         consistent=consistent,
         seed=seed,
         locale=locale,
+        surrogate_vault=surrogate_vault,
         audit=audit,
     )
 
@@ -1570,6 +1742,8 @@ def _redact_entity(
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
+    require_dateutil: bool = False,
+    surrogate_vault: Optional["SurrogateVault"] = None,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -1579,16 +1753,20 @@ def _redact_entity(
         keep_year: Keep year in dates
         date_shift_days: Days to shift dates
         lang: Language code for fake data and date formatting
-        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
+        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``
+            or ``method="format_preserve"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
+        require_dateutil: Require python-dateutil instead of silently falling
+            back to the basic regex shifter.
+        surrogate_vault: Optional vault for stable cross-document replacements.
 
     Returns:
         Redacted text replacement
     """
     if method == "mask":
         # Replace with placeholder
-        return f"[{entity.entity_type}]"
+        return _mask_placeholder(entity)
 
     elif method == "remove":
         # Remove entirely (replace with empty string)
@@ -1596,12 +1774,41 @@ def _redact_entity(
 
     elif method == "replace":
         if anonymizer is not None:
+            original = entity.original_text or entity.text
+            if surrogate_vault is not None:
+                label = entity.canonical_label or entity.entity_type
+
+                def _create_surrogate(attempt: int) -> str:
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(
+                        source,
+                        entity.entity_type,
+                        lang=lang,
+                    )
+
+                return surrogate_vault.get_or_create(
+                    original,
+                    label=label,
+                    lang=lang,
+                    create_surrogate=_create_surrogate,
+                )
             return anonymizer.surrogate(
-                entity.original_text or entity.text,
+                original,
                 entity.entity_type,
                 lang=lang,
             )
         return _generate_fake_pii(entity.entity_type, lang=lang)
+
+    elif method == "format_preserve":
+        if anonymizer is not None:
+            surrogate = anonymizer.format_preserving_surrogate(
+                entity.original_text or entity.text,
+                entity.entity_type,
+                lang=lang,
+            )
+            if surrogate is not None:
+                return surrogate
+        return _mask_placeholder(entity)
 
     elif method == "hash":
         # Generate consistent hash
@@ -1612,12 +1819,22 @@ def _redact_entity(
     elif method == "shift_dates":
         # Shift dates by offset
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
+            return _shift_date(
+                entity.text,
+                date_shift_days,
+                keep_year,
+                lang=lang,
+                require_dateutil=require_dateutil,
+            )
         else:
             # Non-date entities get masked
-            return f"[{entity.entity_type}]"
+            return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _mask_placeholder(entity: PIIEntity) -> str:
+    return f"[{entity.entity_type}]"
 
 
 _LABEL_TO_FAKE_KEY: Dict[str, str] = {
@@ -1899,6 +2116,8 @@ def _shift_date(
     shift_days: int,
     keep_year: bool = False,
     lang: str = "en",
+    *,
+    require_dateutil: bool = False,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -1914,6 +2133,9 @@ def _shift_date(
         shift_days: Number of days to shift (positive = future, negative = past)
         keep_year: Keep the year unchanged (only shift month/day)
         lang: Language code for date format conventions
+        require_dateutil: Raise a clear optional-dependency error when
+            python-dateutil is unavailable. When false, fall back to the basic
+            regex shifter.
 
     Returns:
         Shifted date string in the same format as input
@@ -1935,7 +2157,14 @@ def _shift_date(
     # Try to parse and shift using dateutil if available
     try:
         from dateutil import parser as date_parser
-    except ImportError:
+    except ImportError as exc:
+        if require_dateutil:
+            _raise_missing_optional_dependency(
+                package="python-dateutil",
+                extra="dev",
+                feature="method='shift_dates' date parsing",
+                cause=exc,
+            )
         # Fallback without dateutil - basic pattern matching
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
@@ -2149,9 +2378,12 @@ def reidentify(
         Re-identified text with original PII restored
 
     Example:
-        >>> result = deidentify(text, method="mask", keep_mapping=True)
-        >>> original = reidentify(result.deidentified_text, result.mapping)
-        >>> assert original == text
+        >>> from openmed.core.pii import reidentify
+        >>> reidentify(
+        ...     "Patient [NAME] has record [ID]",
+        ...     {"[NAME]": "Casey Example", "[ID]": "MRN-0001"},
+        ... )
+        'Patient Casey Example has record MRN-0001'
 
     Note:
         Only works if keep_mapping=True was used during de-identification.

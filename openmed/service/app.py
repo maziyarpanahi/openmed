@@ -31,6 +31,7 @@ from .schemas import (
     PIIDeidentifyRequest,
     PIIExtractRequest,
 )
+from .throttle import ServiceThrottle
 
 SERVICE_NAME = "openmed-rest"
 _MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
@@ -123,6 +124,11 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.profile = runtime.profile
     app.state.config = runtime.config
     app.state.batching = runtime.batching
+    app.state.throttle = ServiceThrottle(
+        runtime.throttle,
+        error_response=_error_response,
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
     if runtime.batching.enabled:
@@ -291,6 +297,16 @@ def create_app() -> FastAPI:
                 content=registry.render(),
                 media_type=PROMETHEUS_CONTENT_TYPE,
             )
+
+    @app.middleware("http")
+    async def _throttle_middleware(request: Request, call_next):
+        throttle = getattr(request.app.state, "throttle", None)
+        if throttle is None:
+            _get_service_runtime(request)
+            throttle = getattr(request.app.state, "throttle", None)
+        if throttle is None:
+            return await call_next(request)
+        return await throttle.dispatch(request, call_next)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
