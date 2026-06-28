@@ -166,7 +166,7 @@ class StreamingDeidentifier:
             return ()
 
         window = self._run_window(self._pending)
-        cutoff = self._safe_cutoff(window.spans)
+        cutoff = self._safe_cutoff(window.spans, window.entities)
         if cutoff <= 0:
             if len(self._pending) > self.max_buffer:
                 raise StreamingBufferError(
@@ -174,6 +174,11 @@ class StreamingDeidentifier:
                     "could be finalized; increase max_buffer for this stream"
                 )
             return ()
+        if len(self._pending) - cutoff > self.max_buffer:
+            raise StreamingBufferError(
+                "carry-over buffer exceeded max_buffer because the unsafe tail "
+                "could not be finalized; increase max_buffer for this stream"
+            )
 
         return (self._emit_prefix(cutoff, window),)
 
@@ -258,13 +263,26 @@ class StreamingDeidentifier:
             audit_record=result.audit_record,
         )
 
-    def _safe_cutoff(self, spans: Sequence[OpenMedSpan]) -> int:
+    def _safe_cutoff(
+        self,
+        spans: Sequence[OpenMedSpan],
+        entities: Sequence[Any],
+    ) -> int:
         cutoff = len(self._pending) - self.max_buffer
+        cutoff = _advance_cutoff_past_redactions(self._pending, cutoff, entities)
         cutoff = _adjust_text_boundary(self._pending, cutoff)
 
         changed = True
         while changed:
             changed = False
+            advanced = _advance_cutoff_past_redactions(
+                self._pending,
+                cutoff,
+                entities,
+            )
+            if advanced != cutoff:
+                cutoff = advanced
+                changed = True
             for span in spans:
                 if span.start < cutoff < span.end:
                     cutoff = span.start
@@ -411,6 +429,17 @@ def _adjust_text_boundary(text: str, cutoff: int) -> int:
     if cutoff > 0 and cutoff < len(text):
         left = text[cutoff - 1]
         right = text[cutoff]
+        if _is_identifier_token_char(left) and _is_identifier_token_char(right):
+            token_start = cutoff - 1
+            while token_start > 0 and _is_identifier_token_char(text[token_start - 1]):
+                token_start -= 1
+            token_end = cutoff
+            while token_end < len(text) and _is_identifier_token_char(text[token_end]):
+                token_end += 1
+            if _is_identifier_like_token(text[token_start:token_end]):
+                cutoff = token_start
+                left = text[cutoff - 1] if cutoff > 0 else ""
+                right = text[cutoff] if cutoff < len(text) else ""
         if left.isspace() and right.isspace():
             run_start = cutoff - 1
             while run_start > 0 and text[run_start - 1].isspace():
@@ -428,6 +457,35 @@ def _adjust_text_boundary(text: str, cutoff: int) -> int:
         cutoff = last_non_whitespace + 1
 
     return cutoff
+
+
+def _advance_cutoff_past_redactions(
+    text: str,
+    cutoff: int,
+    entities: Sequence[Any],
+) -> int:
+    changed = True
+    while changed:
+        changed = False
+        for entity in entities:
+            start = int(entity.start)
+            end = int(entity.end)
+            if start <= cutoff < end and _has_safe_redaction_boundary(text, end):
+                cutoff = end
+                changed = True
+    return cutoff
+
+
+def _has_safe_redaction_boundary(text: str, end: int) -> bool:
+    return end < len(text) and not _is_identifier_token_char(text[end])
+
+
+def _is_identifier_token_char(char: str) -> bool:
+    return char.isalnum() or char in "._%+-@:/#?&=~"
+
+
+def _is_identifier_like_token(token: str) -> bool:
+    return any(char.isdigit() or char in "._%+-@:/#?&=~" for char in token)
 
 
 def _new_hmac(secret: str | bytes) -> hmac.HMAC:
