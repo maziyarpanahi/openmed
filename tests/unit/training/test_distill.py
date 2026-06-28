@@ -8,9 +8,12 @@ import pytest
 
 from openmed.training import load_preset
 from openmed.training.distill import (
+    EntityTypeWeights,
+    LabeledSpan,
     ModeADistillationPipeline,
     build_distillation_report,
     compute_kd_loss,
+    compute_span_agreement_loss,
     decode_repaired_spans,
     soft_label_distributions,
     span_logits_from_repaired_spans,
@@ -102,6 +105,105 @@ def test_span_logit_transfer_term_is_computed_and_weighted():
     assert loss.soft_kl == pytest.approx(0.0)
     assert loss.span_transfer == pytest.approx(expected_span_mse)
     assert loss.total == pytest.approx(0.25 * expected_span_mse)
+
+
+def test_entity_type_weights_upweight_rare_label_kl_rows():
+    student_logits = [
+        [
+            [5.0, 0.0, 0.0],
+            [0.0, 0.0, 5.0],
+        ],
+    ]
+    teacher_logits = [
+        [
+            [0.0, 5.0, 0.0],
+            [0.0, 0.0, 5.0],
+        ],
+    ]
+    hard_labels = [[1, 2]]
+    id2label = {0: "O", 1: "B-EMAIL", 2: "B-NAME"}
+
+    unweighted = compute_kd_loss(
+        student_logits=student_logits,
+        teacher_logits=teacher_logits,
+        hard_labels=hard_labels,
+        temperature=1.0,
+        alpha=1.0,
+        id2label=id2label,
+    )
+    weighted = compute_kd_loss(
+        student_logits=student_logits,
+        teacher_logits=teacher_logits,
+        hard_labels=hard_labels,
+        temperature=1.0,
+        alpha=1.0,
+        id2label=id2label,
+        entity_type_weights={"EMAIL": 8.0},
+    )
+
+    assert weighted.soft_kl > unweighted.soft_kl
+    assert (
+        weighted.to_dict()
+        == compute_kd_loss(
+            student_logits=student_logits,
+            teacher_logits=teacher_logits,
+            hard_labels=hard_labels,
+            temperature=1.0,
+            alpha=1.0,
+            id2label=id2label,
+            entity_type_weights=EntityTypeWeights({"EMAIL": 8.0}),
+        ).to_dict()
+    )
+
+
+def test_span_agreement_penalizes_shifted_and_missing_spans():
+    teacher_spans = [
+        [
+            LabeledSpan("EMAIL", 0, 2, start=0, end=18),
+            LabeledSpan("PHONE", 3, 4, start=24, end=36),
+        ]
+    ]
+    shifted_student_spans = [[LabeledSpan("EMAIL", 0, 2, start=1, end=18)]]
+
+    exact = compute_span_agreement_loss(
+        teacher_spans=teacher_spans,
+        student_spans=teacher_spans,
+        entity_type_weights={"PHONE": 3.0},
+    )
+    shifted = compute_span_agreement_loss(
+        teacher_spans=teacher_spans,
+        student_spans=shifted_student_spans,
+        entity_type_weights={"PHONE": 3.0},
+    )
+
+    assert exact.total == pytest.approx(0.0)
+    assert shifted.matched == 1
+    assert shifted.boundary > 0.0
+    assert shifted.missed == pytest.approx(3.0)
+    assert shifted.total > 0.0
+    assert shifted.to_dict()["teacher_count"] == 2
+
+
+def test_kd_loss_includes_weighted_span_agreement_when_requested():
+    teacher_spans = [[LabeledSpan("EMAIL", 0, 2)]]
+    student_spans = [[LabeledSpan("EMAIL", 0, 1)]]
+
+    loss = compute_kd_loss(
+        student_logits=[[[4.0, 0.0]]],
+        teacher_logits=[[[4.0, 0.0]]],
+        hard_labels=[[0]],
+        teacher_spans=teacher_spans,
+        student_spans=student_spans,
+        temperature=1.0,
+        alpha=1.0,
+        span_loss_weight=0.0,
+        span_agreement_weight=2.0,
+    )
+
+    assert loss.soft_kl == pytest.approx(0.0)
+    assert loss.span_transfer == pytest.approx(0.0)
+    assert loss.span_agreement > 0.0
+    assert loss.total == pytest.approx(2.0 * loss.span_agreement)
 
 
 def test_soft_labels_use_temperature_scaled_teacher_distribution():
