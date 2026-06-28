@@ -18,6 +18,7 @@ or emits a US-style format unrelated to the requested locale's actual ID:
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Indonesian NIK with a decodable embedded birth date
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -445,6 +446,48 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Indonesian NIK (16 digits with province/regency/district + birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_indonesian_nik(*, rng: random.Random | None = None) -> str:
+    """Generate an Indonesian NIK accepted by ``validate_indonesian_nik``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    province = source.randint(11, 94)
+    regency = source.randint(1, 99)
+    district = source.randint(1, 99)
+
+    year = source.randint(1940, 2009)
+    month = source.randint(1, 12)
+    max_day = calendar.monthrange(year, month)[1]
+    day = source.randint(1, max_day)
+    if source.choice((False, True)):
+        day += 40
+
+    serial = source.randint(1, 9999)
+    candidate = (
+        f"{province:02d}{regency:02d}{district:02d}"
+        f"{day:02d}{month:02d}{year % 100:02d}{serial:04d}"
+    )
+
+    from openmed.core.pii_i18n import validate_indonesian_nik
+
+    if validate_indonesian_nik(candidate):
+        return candidate
+    return "3174051708850001"
+
+
+class IndonesianNIKProvider(BaseProvider):
+    """Generates valid Indonesian NIK numbers."""
+
+    def indonesian_nik(self) -> str:
+        return generate_indonesian_nik(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -510,6 +553,7 @@ def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     faker.add_provider(AadhaarProvider)
     faker.add_provider(GermanSteuerIdProvider)
+    faker.add_provider(IndonesianNIKProvider)
     faker.add_provider(KoreanRRNProvider)
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(NPIProvider)
@@ -519,10 +563,12 @@ def register_clinical_providers(faker) -> None:
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "IndonesianNIKProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "generate_indonesian_nik",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",

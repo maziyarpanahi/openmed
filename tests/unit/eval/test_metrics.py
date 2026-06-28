@@ -33,6 +33,7 @@ def test_eval_modules_import_cleanly():
         "n2c2",
         "shield",
         "drugprot",
+        "biomedical-ner",
     )
 
 
