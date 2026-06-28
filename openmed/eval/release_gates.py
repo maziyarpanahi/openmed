@@ -32,6 +32,7 @@ from openmed.core.thresholds import (
     validate_threshold_matrix,
 )
 from openmed.eval.metrics import normalize_eval_spans
+from openmed.eval.nano_cert import certify_measurements
 from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
@@ -534,7 +535,15 @@ class ReleaseGate:
         checks.append(self._g2_check(per_label_recall, recall_denominators))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g4_check(quant_delta_result))
-        checks.append(_g5_check(identity["tier"], p50_ms, p95_ms, ram_mb))
+        checks.append(
+            _g5_check(
+                identity["tier"],
+                p50_ms,
+                p95_ms,
+                ram_mb,
+                param_count=identity["param_count"],
+            )
+        )
         checks.append(_g6_check(p50_ms, p95_ms))
         checks.append(
             _g7_check(
@@ -1216,7 +1225,23 @@ def _g5_check(
     p50_ms: float | None,
     p95_ms: float | None,
     ram_mb: float | None,
+    *,
+    param_count: int | None = None,
 ) -> GateCheck:
+    if _normalise_dimension(tier) == "nano":
+        result = certify_measurements(
+            param_count=param_count,
+            ram_mb=ram_mb,
+            p50_ms=p50_ms,
+            p95_ms=p95_ms,
+        )
+        return GateCheck(
+            "G5",
+            result.passed,
+            reason="ok" if result.passed else "Nano sub-tier budget not certified",
+            details=result.to_dict(),
+        )
+
     normalized_tier = _normalise_tier(tier)
     budget = _TIER_BUDGETS.get(normalized_tier)
     if budget is None:
