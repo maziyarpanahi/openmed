@@ -19,6 +19,14 @@ final class PolicyTests: XCTestCase {
         let gdpr = try Policy(named: "gdpr")
         XCTAssertEqual(gdpr.name, "gdpr_pseudonymization")
         XCTAssertEqual(gdpr.action(for: "email"), .replace)
+
+        let gdprHealth = try Policy(named: "gdpr_health")
+        XCTAssertEqual(gdprHealth.name, "gdpr_art9_health")
+        XCTAssertEqual(gdprHealth.action(for: "condition"), .mask)
+
+        let australia = try Policy(named: "au_privacy")
+        XCTAssertEqual(australia.name, "australia_privacy_act")
+        XCTAssertEqual(australia.action(for: "medical_record_number"), .mask)
     }
 
     func testUnknownProfileThrowsClearError() {
@@ -29,6 +37,8 @@ final class PolicyTests: XCTestCase {
             XCTAssertEqual(name, "unknown_policy")
             XCTAssertTrue(allowed.contains("hipaa_safe_harbor"))
             XCTAssertTrue(allowed.contains("gdpr"))
+            XCTAssertTrue(allowed.contains("gdpr_health"))
+            XCTAssertTrue(allowed.contains("au_privacy"))
         }
     }
 
@@ -38,10 +48,12 @@ final class PolicyTests: XCTestCase {
         XCTAssertTrue(strict.strictNoLeak)
         XCTAssertEqual(strict.action(for: "antibiotic"), .mask)
         XCTAssertEqual(strict.action(for: "microorganism"), .mask)
+        XCTAssertEqual(strict.action(for: "condition"), .mask)
         XCTAssertEqual(strict.action(for: "not_a_known_label"), .mask)
 
         let clinical = try Policy(named: "clinical_minimal_redaction")
         XCTAssertEqual(clinical.action(for: "antibiotic"), .keep)
+        XCTAssertEqual(clinical.action(for: "condition"), .keep)
     }
 
     func testPolicyProfileTransformPreservesOriginalOffsets() throws {
@@ -52,7 +64,11 @@ final class PolicyTests: XCTestCase {
             entity(label: "date_of_birth", value: "04/01/2026", in: text),
         ]
 
-        let result = OpenMed.deidentify(text, entities: entities, policy: policy)
+        let result: PolicyDeidentificationResult = OpenMed.deidentify(
+            text,
+            entities: entities,
+            policy: policy
+        )
 
         XCTAssertEqual(
             result.redactedText,

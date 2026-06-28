@@ -52,14 +52,18 @@ public struct Policy: Equatable, Sendable {
         "hipaa_safe_harbor",
         "hipaa_expert_review_assist",
         "gdpr_pseudonymization",
+        "gdpr_art9_health",
         "research_limited_dataset",
         "strict_no_leak",
         "clinical_minimal_redaction",
         "canada_pipeda",
+        "australia_privacy_act",
     ]
 
     public static let aliases = [
+        "au_privacy": "australia_privacy_act",
         "gdpr": "gdpr_pseudonymization",
+        "gdpr_health": "gdpr_art9_health",
         "pipeda": "canada_pipeda",
     ]
 
@@ -256,6 +260,11 @@ public struct Policy: Equatable, Sendable {
         "MICROORGANISM",
         "ANTIBIOTIC",
         "SUSCEPTIBILITY",
+        "CONDITION",
+        "MEDICATION",
+        "LAB_TEST",
+        "PROCEDURE",
+        "BODY_SITE",
         "OTHER",
     ]
 
@@ -331,6 +340,11 @@ public struct Policy: Equatable, Sendable {
         "MICROORGANISM",
         "ANTIBIOTIC",
         "SUSCEPTIBILITY",
+        "CONDITION",
+        "MEDICATION",
+        "LAB_TEST",
+        "PROCEDURE",
+        "BODY_SITE",
         "OTHER",
     ]
 
@@ -470,6 +484,31 @@ public struct Policy: Equatable, Sendable {
         "antimicrobial": "ANTIBIOTIC",
         "susceptibility": "SUSCEPTIBILITY",
         "susceptibilityresult": "SUSCEPTIBILITY",
+        "condition": "CONDITION",
+        "disease": "CONDITION",
+        "diagnosis": "CONDITION",
+        "finding": "CONDITION",
+        "problem": "CONDITION",
+        "disorder": "CONDITION",
+        "syndrome": "CONDITION",
+        "medication": "MEDICATION",
+        "drug": "MEDICATION",
+        "chemical": "MEDICATION",
+        "substance": "MEDICATION",
+        "labtest": "LAB_TEST",
+        "test": "LAB_TEST",
+        "lab": "LAB_TEST",
+        "measurement": "LAB_TEST",
+        "analyte": "LAB_TEST",
+        "procedure": "PROCEDURE",
+        "surgery": "PROCEDURE",
+        "operation": "PROCEDURE",
+        "intervention": "PROCEDURE",
+        "bodysite": "BODY_SITE",
+        "bodypart": "BODY_SITE",
+        "anatomy": "BODY_SITE",
+        "anatomical": "BODY_SITE",
+        "organ": "BODY_SITE",
     ]
 }
 
@@ -484,8 +523,8 @@ public struct DeidentifiedSpanAction: Equatable, Sendable {
     public let replacement: String?
 }
 
-/// Result of an on-device de-identification run.
-public struct DeidentificationResult: Equatable, Sendable {
+/// Result of an on-device policy-driven de-identification run.
+public struct PolicyDeidentificationResult: Equatable, Sendable {
     public let redactedText: String
     public let policyName: String
     public let actions: [DeidentifiedSpanAction]

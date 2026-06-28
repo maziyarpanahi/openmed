@@ -187,16 +187,17 @@ public final class OpenMed {
 
     /// De-identify text under a bundled policy profile.
     ///
-    /// The default profile is `hipaa_safe_harbor`, matching the safest
-    /// on-device redaction posture for callers who do not explicitly choose a
-    /// policy. This path does not write the input text or detected span text to
-    /// stdout, stderr, or logs.
+    /// Pass `Policy.defaultName` to use the default `hipaa_safe_harbor`
+    /// posture. The policy argument is explicit so existing method-based
+    /// `deidentify(_:)` call sites keep resolving to mask redaction. This path
+    /// does not write the input text or detected span text to stdout, stderr,
+    /// or logs.
     public func deidentify(
         _ text: String,
-        policy: String = Policy.defaultName,
+        policy: String,
         confidenceThreshold: Float = 0.5,
         useSmartMerging: Bool = true
-    ) throws -> DeidentificationResult {
+    ) throws -> PolicyDeidentificationResult {
         let resolvedPolicy = try Policy(named: policy)
         return try deidentify(
             text,
@@ -215,13 +216,38 @@ public final class OpenMed {
         policy: Policy,
         confidenceThreshold: Float = 0.5,
         useSmartMerging: Bool = true
-    ) throws -> DeidentificationResult {
+    ) throws -> PolicyDeidentificationResult {
         let entities = try extractPII(
             text,
             confidenceThreshold: confidenceThreshold,
             useSmartMerging: useSmartMerging
         )
         return Self.deidentify(text, entities: entities, policy: policy)
+    }
+
+    /// Detect and de-identify PII, returning a Python-schema-compatible result.
+    public func deidentify(
+        _ text: String,
+        method: DeidentificationMethod = .mask,
+        confidenceThreshold: Float = 0.5,
+        useSmartMerging: Bool = true
+    ) throws -> DeidentificationResult {
+        let entities = try extractPII(
+            text,
+            confidenceThreshold: confidenceThreshold,
+            useSmartMerging: useSmartMerging
+        )
+        let deidentifiedText = Self.deidentifiedText(
+            text,
+            entities: entities,
+            method: method
+        )
+        return DeidentificationResult(
+            originalText: text,
+            deidentifiedText: deidentifiedText,
+            entities: entities,
+            method: method.rawValue
+        )
     }
 
     /// Run PII detection over long text using overlapping token windows.
@@ -397,7 +423,7 @@ public final class OpenMed {
         _ text: String,
         entities: [EntityPrediction],
         policy: Policy
-    ) -> DeidentificationResult {
+    ) -> PolicyDeidentificationResult {
         let candidates = deidentificationCandidates(entities, in: text)
         var redactedText = text
         var actionRecords: [DeidentifiedSpanAction] = []
@@ -440,7 +466,7 @@ public final class OpenMed {
             redactedText.replaceSubrange(lowerBound..<upperBound, with: replacement)
         }
 
-        return DeidentificationResult(
+        return PolicyDeidentificationResult(
             redactedText: redactedText,
             policyName: policy.name,
             actions: actionRecords
@@ -634,6 +660,49 @@ public final class OpenMed {
         let lowerBound = text.index(text.startIndex, offsetBy: start)
         let upperBound = text.index(lowerBound, offsetBy: end - start)
         return String(text[lowerBound..<upperBound])
+    }
+
+    private static func deidentifiedText(
+        _ text: String,
+        entities: [EntityPrediction],
+        method: DeidentificationMethod
+    ) -> String {
+        var redacted = text
+        for entity in entities.sorted(by: { $0.start > $1.start }) {
+            guard let range = characterRange(in: redacted, start: entity.start, end: entity.end) else {
+                continue
+            }
+            redacted.replaceSubrange(
+                range,
+                with: replacementText(for: entity, method: method)
+            )
+        }
+        return redacted
+    }
+
+    private static func replacementText(
+        for entity: EntityPrediction,
+        method: DeidentificationMethod
+    ) -> String {
+        switch method {
+        case .mask:
+            return "[\(entity.entityType.uppercased())]"
+        case .remove:
+            return ""
+        }
+    }
+
+    private static func characterRange(
+        in text: String,
+        start: Int,
+        end: Int
+    ) -> Range<String.Index>? {
+        guard start >= 0, end >= start, end <= text.count else {
+            return nil
+        }
+        let lowerBound = text.index(text.startIndex, offsetBy: start)
+        let upperBound = text.index(lowerBound, offsetBy: end - start)
+        return lowerBound..<upperBound
     }
 
     static func loadTokenizer(

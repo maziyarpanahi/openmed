@@ -167,7 +167,7 @@ def test_publish_artifact_errors_when_token_is_missing(tmp_path, monkeypatch):
         )
 
 
-def test_manifest_append_replaces_existing_repo_row(tmp_path):
+def test_manifest_append_replaces_existing_repo_row_and_merges_formats(tmp_path):
     manifest = tmp_path / "models.jsonl"
     first = {"repo_id": "OpenMed/model", "formats": ["mlx-fp"]}
     second = {"repo_id": "OpenMed/model", "formats": ["coreml"]}
@@ -178,7 +178,7 @@ def test_manifest_append_replaces_existing_repo_row(tmp_path):
     rows = [
         json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
     ]
-    assert rows == [second]
+    assert rows == [{"repo_id": "OpenMed/model", "formats": ["mlx-fp", "coreml"]}]
 
 
 def test_conversion_modules_expose_publish_options():
