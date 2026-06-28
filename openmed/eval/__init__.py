@@ -157,6 +157,13 @@ from openmed.eval.suites.policy_compliance import (
     PolicyProfileComplianceResult,
     run_policy_compliance,
 )
+from openmed.eval.threshold_sweep import (
+    ThresholdSweepPoint,
+    ThresholdSweepReport,
+    build_threshold_sweep_report,
+    sweep_confidence_thresholds,
+    threshold_sweep_report,
+)
 from openmed.eval.tiers import TIERS
 from openmed.eval.utility import (
     CLINICAL_CATEGORIES,
@@ -219,6 +226,8 @@ __all__ = [
     "ReleaseGate",
     "RobustnessReport",
     "RobustnessVariant",
+    "ThresholdSweepPoint",
+    "ThresholdSweepReport",
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
@@ -231,6 +240,7 @@ __all__ = [
     "build_report_key",
     "bundle_gate_evidence",
     "build_thresholds_payload",
+    "build_threshold_sweep_report",
     "build_all_dataset_cards",
     "build_dataset_card",
     "cache_path",
@@ -286,6 +296,8 @@ __all__ = [
     "run_reid_attack",
     "run_reid_benchmark",
     "run_suite",
+    "sweep_confidence_thresholds",
+    "threshold_sweep_report",
     "store",
     "TIERS",
     "utility_loss_report",
