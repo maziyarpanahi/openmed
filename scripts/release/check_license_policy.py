@@ -56,6 +56,7 @@ REVIEWED_LICENSES = {
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
     "coremltools": "BSD-3-Clause",
+    "easyocr": "Apache-2.0",
     "faker": "MIT",
     "fastapi": "MIT",
     "gliner": "Apache-2.0",
