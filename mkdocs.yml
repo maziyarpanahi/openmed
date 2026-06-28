@@ -20,6 +20,7 @@ nav:
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
       - Advanced NER & Output Formatting: output-formatting.md
+      - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
