@@ -63,6 +63,9 @@ def render_model_card(row: dict[str, Any]) -> str:
         "",
         _labels_block(labels),
     ]
+    artifact_lines = _artifact_format_block(formats)
+    if artifact_lines:
+        lines.extend(["", "## Artifact Format", "", *artifact_lines])
     distillation_lines = _distillation_block(row)
     if distillation_lines:
         lines.extend(["", "## Distillation Evidence", "", *distillation_lines])
@@ -125,6 +128,43 @@ def _labels_block(labels: list[str]) -> str:
     if not labels:
         return "Not specified."
     return ", ".join(f"`{label}`" for label in labels)
+
+
+def _artifact_format_block(formats: list[str]) -> list[str]:
+    runtime_formats = []
+    quantization_formats = []
+    for value in formats:
+        if _normalize_format(value) in {"onnx", "webgpu"}:
+            runtime_formats.append(value)
+        quantization = _quantization_label(value)
+        if quantization is not None:
+            quantization_formats.append(quantization)
+    if not runtime_formats and not quantization_formats:
+        return []
+
+    return [
+        "| Field | Value |",
+        "|---|---|",
+        f"| Runtime artifacts | {_comma_or_unspecified(runtime_formats)} |",
+        f"| Quantization | {_comma_or_unspecified(quantization_formats)} |",
+    ]
+
+
+def _normalize_format(value: str) -> str:
+    return value.lower().replace("_", "-")
+
+
+def _quantization_label(value: str) -> str | None:
+    normalized = _normalize_format(value)
+    if normalized in {"int8", "8bit", "8-bit", "onnx-int8"}:
+        return "int8"
+    if normalized in {"int4", "4bit", "4-bit", "onnx-int4"}:
+        return "int4"
+    if normalized in {"awq", "openmed-awq"}:
+        return "awq"
+    if normalized in {"gptq", "openmed-gptq"}:
+        return "gptq"
+    return None
 
 
 def _distillation_block(row: dict[str, Any]) -> list[str]:

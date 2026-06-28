@@ -28,6 +28,12 @@ def service_env(monkeypatch):
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
 
 
 def test_security_config_defaults_to_no_cors_and_loopback_hosts() -> None:

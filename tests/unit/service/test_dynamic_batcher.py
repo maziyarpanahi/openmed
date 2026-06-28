@@ -76,6 +76,12 @@ def _clear_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
 
 
 def _enable_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -85,6 +91,12 @@ def _enable_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
     monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "10")
     monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "25")

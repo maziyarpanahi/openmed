@@ -154,6 +154,12 @@ def client(monkeypatch, fake_loader_cls):
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
     app = create_app()
     with TestClient(
         app,

@@ -1,0 +1,90 @@
+# OpenMed clinical protection terms v1
+#
+# Source/license note:
+# This is a small OpenMed-maintained list of generic clinical vocabulary,
+# common generic medication names, department words, and high-frequency medical
+# eponyms. It was curated manually for redistribution with OpenMed under the
+# project license. It is not extracted from UMLS, SNOMED CT, RxNorm, CPT,
+# MIMIC, i2b2, n2c2, or any DUA-gated/proprietary terminology source.
+#
+# Matching is case-insensitive and only applies when a detected PERSON,
+# LOCATION, or ORGANIZATION-class span is exactly the whole term.
+
+# Common generic medications
+acetaminophen
+albuterol
+amlodipine
+amoxicillin
+aspirin
+atorvastatin
+azithromycin
+ceftriaxone
+furosemide
+gabapentin
+heparin
+hydrochlorothiazide
+ibuprofen
+insulin
+levothyroxine
+lisinopril
+metformin
+metoprolol
+morphine
+omeprazole
+prednisone
+sertraline
+vancomycin
+warfarin
+
+# Eponymous conditions and clinical terms
+Addison
+Alzheimer
+Crohn
+Graves
+Hashimoto
+Hodgkin
+Huntington
+Kaposi
+Parkinson
+Tourette
+Down syndrome
+Parkinson disease
+Parkinson's disease
+
+# Ward, service, and department words
+cardiology
+dermatology
+emergency department
+endocrinology
+gastroenterology
+hematology
+ICU
+laboratory
+nephrology
+neurology
+NICU
+oncology
+operating room
+orthopedics
+pathology
+pediatrics
+pharmacy
+PICU
+psychiatry
+radiology
+rehabilitation
+surgery
+triage
+
+# Anatomical and examination eponyms
+Achilles
+Apgar
+Bartholin
+Broca
+Eustachian
+Fallopian
+Glisson
+Langerhans
+Meckel
+Purkinje
+Wernicke
