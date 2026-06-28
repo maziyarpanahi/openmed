@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
+
 from .calibration import (
     QUANTIZATION_CALIBRATION_SOURCE,
     calibration_texts_sha256,
@@ -86,7 +88,11 @@ def quantize_awq(
         hf_kwargs["revision"] = revision
 
     config = AutoConfig.from_pretrained(model_name, **hf_kwargs)
-    tokenizer = AutoTokenizer.from_pretrained(model_name, **hf_kwargs)
+    tokenizer = get_tokenizer_with_loader(
+        model_name,
+        AutoTokenizer.from_pretrained,
+        **hf_kwargs,
+    )
 
     download_kwargs: dict[str, Any] = {"local_files_only": local_files_only}
     if revision is not None:
