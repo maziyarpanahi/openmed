@@ -31,7 +31,7 @@ jobs:
     if: contains(github.event.inputs.formats, 'mlx')
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -69,7 +69,7 @@ jobs:
     if: contains(github.event.inputs.formats, 'coreml')
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -104,7 +104,7 @@ jobs:
     if: contains(github.event.inputs.formats, 'onnx')
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -157,7 +157,7 @@ jobs:
       url: https://huggingface.co/OpenMed
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6

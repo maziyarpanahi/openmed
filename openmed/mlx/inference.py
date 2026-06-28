@@ -31,6 +31,7 @@ from openmed.mlx.artifact import (
     read_manifest,
     resolve_tokenizer_reference,
 )
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +68,18 @@ def _load_auto_tokenizer(reference: str | Path) -> Any:
 
     def _from_pretrained(**kwargs: Any) -> Any:
         try:
-            return AutoTokenizer.from_pretrained(
+            return get_tokenizer_with_loader(
                 reference,
+                AutoTokenizer.from_pretrained,
                 fix_mistral_regex=True,
                 **kwargs,
             )
         except TypeError as exc:
             if "fix_mistral_regex" not in str(exc):
                 raise
-            return AutoTokenizer.from_pretrained(reference, **kwargs)
+            return get_tokenizer_with_loader(
+                reference, AutoTokenizer.from_pretrained, **kwargs
+            )
 
     try:
         return _from_pretrained()
