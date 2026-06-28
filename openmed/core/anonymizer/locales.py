@@ -45,6 +45,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "ar": "ar_EG",  # Egypt is the most-populous Arabic-speaking country; override for Gulf/Levant locales.
     "ja": "ja_JP",
     "tr": "tr_TR",
+    "id": "id_ID",
     "pl": "pl_PL",
     "ko": "ko_KR",
 }
@@ -76,6 +77,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
     "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    "id": ("id_ID", "indonesian_nik"),  # NIK
     "pl": ("pl_PL", "pesel"),  # PESEL
     "ko": ("ko_KR", "korean_rrn"),  # RRN
 }
