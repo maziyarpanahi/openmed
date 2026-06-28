@@ -176,6 +176,26 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     assert restored.to_json() == result.to_json()
 
 
+def test_gate_report_from_json_rejects_malformed_payload() -> None:
+    with pytest.raises(ValueError, match="Invalid JSON for GateReport"):
+        GateReport.from_json("{")
+
+
+def test_find_open_issue_returns_none_for_malformed_gh_json(monkeypatch) -> None:
+    class Result:
+        stdout = "{"
+
+    monkeypatch.setattr(
+        release_gates.subprocess,
+        "run",
+        lambda *args, **kwargs: Result(),
+    )
+
+    assert (
+        release_gates._find_open_issue(repo="owner/repo", title="Gate failure") is None
+    )
+
+
 @pytest.mark.parametrize(
     ("gate_name", "metric_updates", "metadata_updates"),
     [

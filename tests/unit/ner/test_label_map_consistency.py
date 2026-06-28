@@ -20,7 +20,11 @@ from openmed.core.model_registry import (
     get_model_suggestions,
 )
 from openmed.core.pii_entity_merger import is_more_specific, normalize_label
-from openmed.ner.labels import available_domains, get_default_labels
+from openmed.ner.labels import (
+    available_domains,
+    get_default_labels,
+    load_default_label_map,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -75,6 +79,16 @@ class TestDefaultsJsonInvariants:
                     f"Domain {domain!r} label {label!r} drifts from the "
                     "letters-only display-label style"
                 )
+
+
+def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> None:
+    path = tmp_path / "labels.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in label file") as exc_info:
+        load_default_label_map(path)
+
+    assert str(path) in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------

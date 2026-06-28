@@ -201,7 +201,10 @@ class JsonFileSurrogateStore(InMemorySurrogateStore):
                 raise FileNotFoundError(vault_path)
             return cls(vault_path, autosave=autosave)
 
-        payload = json.loads(vault_path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(vault_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Corrupt surrogate vault {vault_path}: {exc}") from exc
         loaded = InMemorySurrogateStore.from_payload(payload)
         return cls(vault_path, loaded.entries(), autosave=autosave)
 
