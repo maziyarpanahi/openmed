@@ -19,7 +19,7 @@ The one-line promise the mascot must embody:
 > **"Healthcare AI that never leaves your device."**
 
 Current traction (worth feeling confident/proud, not scrappy): ~1,360★ on GitHub,
-1,000+ open-source models, 12 languages, an arXiv paper, Apache-2.0.
+1,000+ open-source models, 13 languages, an arXiv paper, Apache-2.0.
 
 ---
 

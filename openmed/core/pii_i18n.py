@@ -24,8 +24,11 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "te",
     "pt",
     "ar",
+    "he",
     "ja",
     "tr",
+    "id",
+    "th",
 }
 
 # Languages with checksum-validated national-ID coverage but no bundled
@@ -43,8 +46,11 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "te": "Telugu",
     "pt": "Portuguese",
     "ar": "Arabic",
+    "he": "Hebrew",
     "ja": "Japanese",
     "tr": "Turkish",
+    "id": "Indonesian",
+    "th": "Thai",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -58,8 +64,11 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "te": "Telugu-",
     "pt": "Portuguese-",
     "ar": "Arabic-",
+    "he": "Hebrew-",
     "ja": "Japanese-",
     "tr": "Turkish-",
+    "id": "Indonesian-",
+    "th": "Thai-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -73,8 +82,11 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "te": "OpenMed/OpenMed-PII-Telugu-SuperClinical-Large-434M-v1",
     "pt": "OpenMed/OpenMed-PII-Portuguese-SnowflakeMed-Large-568M-v1",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
+    "he": "OpenMed/privacy-filter-multilingual",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "id": "OpenMed/privacy-filter-multilingual",
+    "th": "OpenMed/privacy-filter-multilingual",
 }
 
 
@@ -428,6 +440,114 @@ def validate_turkish_tckn(text: str) -> bool:
     return numbers[9] == tenth and numbers[10] == eleventh
 
 
+def validate_israeli_teudat_zehut(text: str) -> bool:
+    """Validate an Israeli Teudat Zehut identity number.
+
+    The Teudat Zehut is a numeric identifier validated with a Luhn-style
+    checksum. Values shorter than nine digits are left-padded with zeros before
+    applying alternating 1/2 weights from left to right.
+
+    Args:
+        text: Teudat Zehut string (may contain spaces or hyphens)
+
+    Returns:
+        True if the identifier passes format and checksum validation.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if not 1 <= len(digits) <= 9:
+        return False
+
+    digits = digits.zfill(9)
+    if digits == "000000000":
+        return False
+
+    total = 0
+    for index, digit in enumerate(digits):
+        product = int(digit) * (1 if index % 2 == 0 else 2)
+        total += product if product < 10 else (product // 10) + (product % 10)
+
+    return total % 10 == 0
+
+
+def validate_indonesian_nik(text: str) -> bool:
+    """Validate Indonesian NIK (Nomor Induk Kependudukan) structure.
+
+    NIK is a 16-digit civil-registration identifier. This validator checks the
+    stable structural parts OpenMed can verify without bundling a restricted
+    registry:
+
+    - PP: province code, using Indonesia's numeric 11-94 province-code range.
+    - RR: regency/city code, non-zero two-digit shape.
+    - DD: district code, non-zero two-digit shape.
+    - DDMMYY: embedded birth date. Female identifiers add 40 to the day.
+    - SSSS: non-zero sequence number.
+
+    Args:
+        text: NIK string (may contain spaces or separators).
+
+    Returns:
+        True if the NIK has a valid structure and decodable birth date.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 16:
+        return False
+
+    province = int(digits[0:2])
+    regency = int(digits[2:4])
+    district = int(digits[4:6])
+    if not (11 <= province <= 94 and 1 <= regency <= 99 and 1 <= district <= 99):
+        return False
+
+    raw_day = int(digits[6:8])
+    month = int(digits[8:10])
+    year = int(digits[10:12])
+    serial = int(digits[12:16])
+
+    day = raw_day - 40 if raw_day > 40 else raw_day
+    if not (1 <= day <= 31 and 1 <= month <= 12 and serial > 0):
+        return False
+
+    import calendar
+
+    # NIK stores a two-digit year without a century. Accept the date if it is
+    # possible in either common civil-registration century.
+    try:
+        return any(
+            day <= calendar.monthrange(century + year, month)[1]
+            for century in (1900, 2000)
+        )
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def validate_thai_national_id(text: str) -> bool:
+    """Validate Thai 13-digit national ID with its mod-11 checksum.
+
+    The check digit is calculated from the first 12 digits weighted 13..2:
+    ``check = (11 - sum % 11) % 10``.
+
+    Args:
+        text: Thai national ID string (may contain spaces or hyphens)
+
+    Returns:
+        True if the ID has valid shape and checksum.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 13:
+        return False
+    if digits[0] == "0":
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(range(13, 1, -1), numbers[:12]))
+    check = (11 - total % 11) % 10
+
+    return numbers[12] == check
+
+
 def validate_polish_pesel(text: str) -> bool:
     """Validate Polish PESEL number.
 
@@ -724,6 +844,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "\u0646\u0648\u0641\u0645\u0628\u0631",
         "\u062f\u064a\u0633\u0645\u0628\u0631",
     ],
+    "he": [
+        "\u05d9\u05e0\u05d5\u05d0\u05e8",
+        "\u05e4\u05d1\u05e8\u05d5\u05d0\u05e8",
+        "\u05de\u05e8\u05e5",
+        "\u05d0\u05e4\u05e8\u05d9\u05dc",
+        "\u05de\u05d0\u05d9",
+        "\u05d9\u05d5\u05e0\u05d9",
+        "\u05d9\u05d5\u05dc\u05d9",
+        "\u05d0\u05d5\u05d2\u05d5\u05e1\u05d8",
+        "\u05e1\u05e4\u05d8\u05de\u05d1\u05e8",
+        "\u05d0\u05d5\u05e7\u05d8\u05d5\u05d1\u05e8",
+        "\u05e0\u05d5\u05d1\u05de\u05d1\u05e8",
+        "\u05d3\u05e6\u05de\u05d1\u05e8",
+    ],
     "ja": [
         "1\u6708",
         "2\u6708",
@@ -751,6 +885,34 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Ekim",
         "Kas\u0131m",
         "Aral\u0131k",
+    ],
+    "id": [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
+    ],
+    "th": [
+        "มกราคม",
+        "กุมภาพันธ์",
+        "มีนาคม",
+        "เมษายน",
+        "พฤษภาคม",
+        "มิถุนายน",
+        "กรกฎาคม",
+        "สิงหาคม",
+        "กันยายน",
+        "ตุลาคม",
+        "พฤศจิกายน",
+        "ธันวาคม",
     ],
 }
 
@@ -860,6 +1022,7 @@ _FRENCH_PII_PATTERNS: List[PIIPattern] = [
             "cedex",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -959,6 +1122,7 @@ _GERMAN_PII_PATTERNS: List[PIIPattern] = [
             "Postleitzahl",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1058,6 +1222,7 @@ _ITALIAN_PII_PATTERNS: List[PIIPattern] = [
             "codice postale",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1173,6 +1338,7 @@ _SPANISH_PII_PATTERNS: List[PIIPattern] = [
             "cp",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1300,6 +1466,7 @@ _PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
             "morada",
         ],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1385,6 +1552,7 @@ _DUTCH_PII_PATTERNS: List[PIIPattern] = [
             "adres",
         ],
         context_boost=0.4,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -1454,6 +1622,7 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
             "\u092a\u0924\u093e",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
     # Aadhaar (12 digits, possibly spaced as 4-4-4)
     PIIPattern(
@@ -1537,6 +1706,7 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
             "\u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
     # Aadhaar (12 digits, possibly spaced as 4-4-4)
     PIIPattern(
@@ -1645,6 +1815,96 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
             "\u0639\u0646\u0648\u0627\u0646",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+_HEBREW_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "\u05ea\u05d0\u05e8\u05d9\u05da",
+            "\u05ea\u05d0\u05e8\u05d9\u05da \u05dc\u05d9\u05d3\u05d4",
+            "\u05dc\u05d9\u05d3\u05d4",
+            "\u05e0\u05d5\u05dc\u05d3",
+            "\u05e0\u05d5\u05dc\u05d3\u05d4",
+            "\u05d0\u05e9\u05e4\u05d5\u05d6",
+            "\u05e9\u05d7\u05e8\u05d5\u05e8",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:\u05d9\u05e0\u05d5\u05d0\u05e8|\u05e4\u05d1\u05e8\u05d5\u05d0\u05e8|\u05de\u05e8\u05e5|\u05d0\u05e4\u05e8\u05d9\u05dc|\u05de\u05d0\u05d9|\u05d9\u05d5\u05e0\u05d9|\u05d9\u05d5\u05dc\u05d9|\u05d0\u05d5\u05d2\u05d5\u05e1\u05d8|\u05e1\u05e4\u05d8\u05de\u05d1\u05e8|\u05d0\u05d5\u05e7\u05d8\u05d5\u05d1\u05e8|\u05e0\u05d5\u05d1\u05de\u05d1\u05e8|\u05d3\u05e6\u05de\u05d1\u05e8)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "\u05ea\u05d0\u05e8\u05d9\u05da",
+            "\u05ea\u05d0\u05e8\u05d9\u05da \u05dc\u05d9\u05d3\u05d4",
+            "\u05dc\u05d9\u05d3\u05d4",
+            "\u05e0\u05d5\u05dc\u05d3",
+            "\u05e0\u05d5\u05dc\u05d3\u05d4",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+972[\s.-]?|0)5\d[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "\u05d8\u05dc\u05e4\u05d5\u05df",
+            "\u05e0\u05d9\u05d9\u05d3",
+            "\u05de\u05e1\u05e4\u05e8",
+            "\u05d9\u05e6\u05d9\u05e8\u05ea \u05e7\u05e9\u05e8",
+            "\u05e7\u05e9\u05e8",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}[\s-]?\d{3}[\s-]?\d{3}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.35,
+        context_words=[
+            "\u05ea\u05e2\u05d5\u05d3\u05ea \u05d6\u05d4\u05d5\u05ea",
+            "\u05ea.\u05d6",
+            "\u05de\u05e1\u05e4\u05e8 \u05d6\u05d4\u05d5\u05ea",
+            "\u05d6\u05d4\u05d5\u05ea",
+        ],
+        context_boost=0.55,
+        validator=validate_israeli_teudat_zehut,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?:\d{2})?(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "\u05de\u05d9\u05e7\u05d5\u05d3",
+            "\u05e7\u05d5\u05d3 \u05d3\u05d5\u05d0\u05e8",
+            "\u05d3\u05d5\u05d0\u05e8",
+            "\u05db\u05ea\u05d5\u05d1\u05ea",
+        ],
+        context_boost=0.5,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\u05e8\u05d7\u05d5\u05d1|\u05e8\u05d7'|\u05e9\u05d3\u05e8\u05d5\u05ea|\u05e9\u05d3'|\u05d3\u05e8\u05da|\u05db\u05d9\u05db\u05e8)\s+[\u0590-\u05FF\"'\s.-]{2,50}\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\u05db\u05ea\u05d5\u05d1\u05ea",
+            "\u05de\u05e2\u05df",
+            "\u05de\u05d2\u05d5\u05e8\u05d9\u05dd",
+            "\u05e8\u05d7\u05d5\u05d1",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
     ),
 ]
 
@@ -1714,6 +1974,7 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
             "\u4f4f\u6240",
         ],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
     PIIPattern(
         r"\b[\u4e00-\u9fff]{2,12}(?:\u90fd|\u9053|\u5e9c|\u770c)[\u4e00-\u9fff0-9\u4e01\u76ee\u756a\u5730\u53f7\s-]{3,60}\b",
@@ -1828,6 +2089,210 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
             "adres",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Indonesian PII patterns
+# ---------------------------------------------------------------------------
+
+_INDONESIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "tanggal",
+            "tanggal lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawat",
+            "kontrol",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "tanggal",
+            "tanggal lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawat",
+            "kontrol",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+62\s?|0)8\d{1,3}(?:[\s.-]?\d{3,4}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "telepon",
+            "telp",
+            "hp",
+            "ponsel",
+            "nomor",
+            "kontak",
+            "whatsapp",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{16}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "nik",
+            "nomor induk kependudukan",
+            "ktp",
+            "identitas",
+            "kependudukan",
+        ],
+        context_boost=0.45,
+        validator=validate_indonesian_nik,
+    ),
+    PIIPattern(
+        r"\b(?:Jl\.|Jalan)\s+[A-Z][A-Za-z0-9 .'-]{2,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "alamat",
+            "domisili",
+            "tinggal",
+            "jalan",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "kode pos",
+            "pos",
+            "alamat",
+            "domisili",
+        ],
+        context_boost=0.5,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+_THAI_MONTH_PATTERN = (
+    r"มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|"
+    r"กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|"
+    r"พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\."
+)
+
+_THAI_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)\d{1,2}[/-]\d{1,2}[/-](?:25\d{2}|\d{2,4})(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "วันที่",
+            "วันเกิด",
+            "เกิด",
+            "รับไว้",
+            "จำหน่าย",
+            "นัด",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"(?<!\d)\d{{1,2}}\s+(?:{_THAI_MONTH_PATTERN})\s+(?:พ\.ศ\.\s*)?(?:25\d{{2}}|\d{{4}})(?!\d)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "วันที่",
+            "วันเกิด",
+            "เกิด",
+            "รับไว้",
+            "จำหน่าย",
+            "นัด",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:\+66[\s.-]?|0)[689]\d[\s.-]?\d{3}[\s.-]?\d{4}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "โทรศัพท์",
+            "โทร",
+            "มือถือ",
+            "เบอร์",
+            "ติดต่อ",
+            "หมายเลข",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)[1-9](?:[\s-]?\d){12}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "เลขบัตรประชาชน",
+            "บัตรประชาชน",
+            "เลขประจำตัวประชาชน",
+            "ประจำตัวประชาชน",
+            "ประชาชน",
+        ],
+        context_boost=0.4,
+        validator=validate_thai_national_id,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "รหัสไปรษณีย์",
+            "ไปรษณีย์",
+            "ที่อยู่",
+            "แขวง",
+            "เขต",
+            "จังหวัด",
+        ],
+        context_boost=0.5,
+    ),
+    PIIPattern(
+        r"(?<!\w)\d{1,5}\s+(?:ถนน|ถ\.|ซอย|ซ\.|หมู่|ม\.|แขวง|เขต|ตำบล|ต\.|อำเภอ|อ\.|จังหวัด|จ\.)[\u0E00-\u0E7F0-9\s./-]{3,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "ที่อยู่",
+            "อยู่ที่",
+            "บ้านเลขที่",
+            "ถนน",
+            "ซอย",
+            "แขวง",
+            "เขต",
+        ],
+        context_boost=0.25,
         flags=re.IGNORECASE,
     ),
 ]
@@ -1889,8 +2354,11 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "hi": _HINDI_PII_PATTERNS,
     "te": _TELUGU_PII_PATTERNS,
     "ar": _ARABIC_PII_PATTERNS,
+    "he": _HEBREW_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
+    "id": _INDONESIAN_PII_PATTERNS,
+    "th": _THAI_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
 }
@@ -2122,6 +2590,43 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         ],
         "ZIPCODE": ["11511", "12345", "54321"],
     },
+    "he": {
+        "NAME": [
+            "\u05d3\u05e0\u05d4 \u05db\u05d4\u05df",
+            "\u05d9\u05d5\u05e0\u05ea\u05df \u05dc\u05d5\u05d9",
+            "\u05de\u05d9\u05db\u05dc \u05d0\u05d1\u05e8\u05d4\u05dd",
+            "\u05e2\u05de\u05d9\u05ea \u05e4\u05e8\u05e5",
+        ],
+        "FIRST_NAME": [
+            "\u05d3\u05e0\u05d4",
+            "\u05d9\u05d5\u05e0\u05ea\u05df",
+            "\u05de\u05d9\u05db\u05dc",
+            "\u05e2\u05de\u05d9\u05ea",
+        ],
+        "LAST_NAME": [
+            "\u05db\u05d4\u05df",
+            "\u05dc\u05d5\u05d9",
+            "\u05d0\u05d1\u05e8\u05d4\u05dd",
+            "\u05e4\u05e8\u05e5",
+        ],
+        "EMAIL": ["patient@example.co.il", "contact@example.org"],
+        "PHONE": ["+972 54-123-4567", "054-987-6543"],
+        "ID_NUM": ["123456782", "000000018"],
+        "STREET_ADDRESS": [
+            "\u05e8\u05d7\u05d5\u05d1 \u05d4\u05e8\u05e6\u05dc 12",
+            "\u05e9\u05d3\u05e8\u05d5\u05ea \u05e8\u05d5\u05d8\u05e9\u05d9\u05dc\u05d3 45",
+        ],
+        "URL_PERSONAL": ["https://example.co.il"],
+        "USERNAME": ["metupal123", "patient456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": [
+            "\u05ea\u05dc \u05d0\u05d1\u05d9\u05d1",
+            "\u05d9\u05e8\u05d5\u05e9\u05dc\u05d9\u05dd",
+            "\u05d7\u05d9\u05e4\u05d4",
+        ],
+        "ZIPCODE": ["6423905", "9414101", "3100001"],
+    },
     "ja": {
         "NAME": [
             "\u4f50\u85e4 \u82b1\u5b50",
@@ -2178,6 +2683,44 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
         "ZIPCODE": ["34000", "06000", "35000"],
+    },
+    "id": {
+        "NAME": ["Siti Aminah", "Budi Santoso", "Dewi Lestari", "Agus Pratama"],
+        "FIRST_NAME": ["Siti", "Budi", "Dewi", "Agus"],
+        "LAST_NAME": ["Aminah", "Santoso", "Lestari", "Pratama"],
+        "EMAIL": ["pasien@contoh.id", "kontak@contoh.org"],
+        "PHONE": ["+62 812 3456 7890", "0812-9876-5432"],
+        "ID_NUM": ["3174055708850001"],
+        "STREET_ADDRESS": ["Jl. Merdeka No. 10", "Jl. Sudirman 25"],
+        "URL_PERSONAL": ["https://contoh.id"],
+        "USERNAME": ["pasien123", "pengguna456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Jakarta", "Bandung", "Surabaya"],
+        "ZIPCODE": ["10110", "40123", "60234"],
+    },
+    "th": {
+        "NAME": [
+            "สมชาย ใจดี",
+            "สุดา แก้วใส",
+            "อนันต์ วิชัย",
+            "มาลี พรหมมา",
+        ],
+        "FIRST_NAME": ["สมชาย", "สุดา", "อนันต์", "มาลี"],
+        "LAST_NAME": ["ใจดี", "แก้วใส", "วิชัย", "พรหมมา"],
+        "EMAIL": ["patient@example.th", "contact@example.org"],
+        "PHONE": ["+66 81 234 5678", "081-234-5678"],
+        "ID_NUM": ["1101700203450"],
+        "STREET_ADDRESS": [
+            "123 ถนนสุขุมวิท",
+            "45 ซอยสีลม",
+        ],
+        "URL_PERSONAL": ["https://example.th"],
+        "USERNAME": ["rogi123", "phuphuai456"],
+        "DATE": ["15 มกราคม 2567", "01/01/2567"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["กรุงเทพมหานคร", "เชียงใหม่", "ภูเก็ต"],
+        "ZIPCODE": ["10110", "50000", "83000"],
     },
 }
 
