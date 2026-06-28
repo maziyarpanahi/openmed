@@ -4,12 +4,17 @@ import builtins
 import importlib
 import sys
 from datetime import datetime
+from types import ModuleType
 from typing import Any
 
 import pytest
 
 from openmed.__about__ import __version__
-from openmed.processing.kafka_connector import deidentify_stream
+from openmed.processing.kafka_connector import (
+    KafkaConnectorError,
+    create_confluent_kafka_clients,
+    deidentify_stream,
+)
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
@@ -191,3 +196,100 @@ def test_importing_openmed_processing_does_not_import_kafka_client(
 
     assert hasattr(package, "__version__")
     assert hasattr(processing, "deidentify_stream")
+
+
+def test_confluent_factory_serializes_json_and_waits_for_delivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    instances: dict[str, Any] = {}
+
+    class FakeConfluentConsumer:
+        def __init__(self, config: dict[str, Any]) -> None:
+            self.config = config
+            self.subscriptions: list[list[str]] = []
+            instances["consumer"] = self
+
+        def subscribe(self, topics: list[str]) -> None:
+            self.subscriptions.append(topics)
+
+    class FakeConfluentProducer:
+        def __init__(self, config: dict[str, Any]) -> None:
+            self.config = config
+            self.produced: list[tuple[str, bytes]] = []
+            self.flush_timeouts: list[float | None] = []
+            instances["producer"] = self
+
+        def produce(
+            self,
+            topic: str,
+            *,
+            value: bytes,
+            on_delivery: Any,
+        ) -> None:
+            self.produced.append((topic, value))
+            on_delivery(None, object())
+
+        def flush(self, timeout: float | None = None) -> int:
+            self.flush_timeouts.append(timeout)
+            return 0
+
+    module = ModuleType("confluent_kafka")
+    module.Consumer = FakeConfluentConsumer
+    module.Producer = FakeConfluentProducer
+    monkeypatch.setitem(sys.modules, "confluent_kafka", module)
+
+    pair = create_confluent_kafka_clients(
+        consumer_config={"group.id": "openmed"},
+        producer_config={"bootstrap.servers": "localhost:9092"},
+        in_topic="raw-notes",
+        delivery_timeout=2.5,
+    )
+
+    pair.producer.produce("redacted-notes", {"text": "safe", "event_id": "1"})
+
+    assert instances["consumer"].subscriptions == [["raw-notes"]]
+    assert instances["producer"].produced == [
+        ("redacted-notes", b'{"event_id":"1","text":"safe"}')
+    ]
+    assert instances["producer"].flush_timeouts == [2.5]
+
+
+def test_confluent_factory_raises_on_delivery_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeConfluentConsumer:
+        def __init__(self, config: dict[str, Any]) -> None:
+            self.config = config
+
+        def subscribe(self, topics: list[str]) -> None:
+            self.topics = topics
+
+    class FakeConfluentProducer:
+        def __init__(self, config: dict[str, Any]) -> None:
+            self.config = config
+
+        def produce(
+            self,
+            topic: str,
+            *,
+            value: bytes,
+            on_delivery: Any,
+        ) -> None:
+            on_delivery(RuntimeError("broker rejected message"), object())
+
+        def flush(self, timeout: float | None = None) -> int:
+            return 0
+
+    module = ModuleType("confluent_kafka")
+    module.Consumer = FakeConfluentConsumer
+    module.Producer = FakeConfluentProducer
+    monkeypatch.setitem(sys.modules, "confluent_kafka", module)
+
+    pair = create_confluent_kafka_clients(
+        consumer_config={"group.id": "openmed"},
+        producer_config={"bootstrap.servers": "localhost:9092"},
+        in_topic="raw-notes",
+    )
+
+    with pytest.raises(KafkaConnectorError, match="broker rejected message"):
+        pair.producer.produce("redacted-notes", {"text": "safe"})
