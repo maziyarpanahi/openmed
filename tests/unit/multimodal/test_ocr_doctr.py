@@ -113,6 +113,22 @@ def test_run_doctr_ocr_maps_relative_boxes_to_absolute_pixels():
     )
 
 
+def test_doctr_result_projects_absolute_boxes_to_document_spans():
+    result = run_doctr_ocr(
+        Path("sample_invoice.jpg"),
+        predictor_factory=_predictor_factory({}),
+        document_loader=_document_loader({}),
+    )
+
+    doc = result.to_document()
+
+    span = doc.location_at(doc.text.index("Clinical"))
+    assert span is not None
+    assert span.bbox == (50.0, 200.0, 150.0, 400.0)
+    assert span.page == 0
+    assert span.metadata["confidence"] == 0.991234
+
+
 def test_doctr_engine_satisfies_ocr_contract():
     engine = DocTrEngine(
         predictor_factory=_predictor_factory({}),
