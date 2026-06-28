@@ -27,7 +27,14 @@ def test_eval_modules_import_cleanly():
     assert openmed.eval.harness.run_benchmark
     assert openmed.eval.metrics.compute_leakage_rate
     assert openmed.eval.report.BenchmarkReport
-    assert openmed.eval.suites.DEFAULT_SUITES == ("golden", "i2b2", "n2c2", "shield")
+    assert openmed.eval.suites.DEFAULT_SUITES == (
+        "golden",
+        "i2b2",
+        "n2c2",
+        "shield",
+        "drugprot",
+        "biomedical-ner",
+    )
 
 
 def test_leakage_rate_is_char_weighted_and_sliced():
