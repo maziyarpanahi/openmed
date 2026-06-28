@@ -10,7 +10,10 @@ from .config import (
     load_config_with_profile,
     save_profile,
 )
+from .custom_recognizer import CustomRecognizer
+from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
+from .redaction_preview import redaction_preview, render_redaction_preview
 from .script_detect import (
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
@@ -19,15 +22,33 @@ from .script_detect import (
     detect_script,
     segment_by_script,
 )
+from .surrogate_vault import (
+    InMemorySurrogateStore,
+    JsonFileSurrogateStore,
+    SurrogateEntry,
+    SurrogateKey,
+    SurrogateVault,
+)
 
 __all__ = [
     "ModelLoader",
     "load_model",
+    "ModelQuery",
+    "ModelSearchResult",
+    "search_models",
     "OpenMedConfig",
+    "CustomRecognizer",
     "AuditReport",
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "redaction_preview",
+    "render_redaction_preview",
+    "SurrogateVault",
+    "SurrogateKey",
+    "SurrogateEntry",
+    "InMemorySurrogateStore",
+    "JsonFileSurrogateStore",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",

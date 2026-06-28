@@ -1,9 +1,13 @@
 """Tests for multilingual PII detection support (pii_i18n module)."""
 
+import json
 import re
+from pathlib import Path
 
 import pytest
 
+from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer.locales import LANG_TO_LOCALE
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -12,11 +16,13 @@ from openmed.core.pii_i18n import (
     LANGUAGE_MONTH_NAMES,
     LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
+    NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_indonesian_nik,
     validate_italian_codice_fiscale,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
@@ -47,7 +53,11 @@ class TestConstants:
             "ar",
             "ja",
             "tr",
+            "id",
         }
+
+    def test_national_id_only_languages(self):
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -65,6 +75,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["ar"] == "Arabic-"
         assert LANGUAGE_MODEL_PREFIX["ja"] == "Japanese-"
         assert LANGUAGE_MODEL_PREFIX["tr"] == "Turkish-"
+        assert LANGUAGE_MODEL_PREFIX["id"] == "Indonesian-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
@@ -81,6 +92,7 @@ class TestConstants:
         assert "Arabic" in DEFAULT_PII_MODELS["ar"]
         assert "Japanese" in DEFAULT_PII_MODELS["ja"]
         assert "Turkish" in DEFAULT_PII_MODELS["tr"]
+        assert DEFAULT_PII_MODELS["id"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -326,6 +338,31 @@ class TestValidateTurkishTCKN:
         assert validate_turkish_tckn("1000000014") is False
 
 
+class TestValidateIndonesianNIK:
+    """Tests for validate_indonesian_nik()."""
+
+    def test_valid_male_nik(self):
+        assert validate_indonesian_nik("3174051708850001") is True
+
+    def test_valid_female_nik(self):
+        assert validate_indonesian_nik("3174055708850001") is True
+
+    def test_valid_nik_with_spaces(self):
+        assert validate_indonesian_nik("317405 570885 0001") is True
+
+    def test_invalid_nik_impossible_birth_date(self):
+        assert validate_indonesian_nik("3174057102850001") is False
+
+    def test_invalid_nik_bad_prefix_shape(self):
+        assert validate_indonesian_nik("0074051708850001") is False
+
+    def test_invalid_nik_zero_serial(self):
+        assert validate_indonesian_nik("3174051708850000") is False
+
+    def test_invalid_nik_wrong_length(self):
+        assert validate_indonesian_nik("317405170885000") is False
+
+
 # ---------------------------------------------------------------------------
 # Language-specific PII Patterns Tests
 # ---------------------------------------------------------------------------
@@ -377,6 +414,10 @@ class TestLanguagePIIPatterns:
     def test_turkish_patterns_exist(self):
         assert "tr" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["tr"]) > 0
+
+    def test_indonesian_patterns_exist(self):
+        assert "id" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["id"]) > 0
 
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
@@ -665,6 +706,18 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, f"Turkish date pattern should match '{text}'"
 
+    def test_indonesian_date_slash(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["id"] if p.entity_type == "date"]
+        text = "17/08/1985"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Indonesian date pattern should match '{text}'"
+
+    def test_indonesian_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["id"] if p.entity_type == "date"]
+        text = "17 Agustus 1985"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Indonesian date pattern should match '{text}'"
+
     def test_arabic_phone(self):
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["ar"] if p.entity_type == "phone_number"
@@ -689,6 +742,15 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, f"Turkish phone pattern should match '{text}'"
 
+    def test_indonesian_phone(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["id"] if p.entity_type == "phone_number"
+        ]
+        texts = ["+62 812 3456 7890", "0812-3456-7890"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Indonesian phone pattern should match '{text}'"
+
     def test_arabic_national_id_pattern(self):
         patterns = [
             p for p in LANGUAGE_PII_PATTERNS["ar"] if p.entity_type == "national_id"
@@ -712,6 +774,53 @@ class TestLanguagePIIPatterns:
         text = "10000000146"
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, "Turkish TCKN pattern should match"
+
+    def test_indonesian_nik_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["id"] if p.entity_type == "national_id"
+        ]
+        text = "3174055708850001"
+        matched = any(
+            re.search(p.pattern, text, p.flags) and p.validator(text) for p in patterns
+        )
+        assert matched, "Indonesian NIK pattern should match and validate"
+
+    def test_indonesian_address_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["id"] if p.entity_type == "street_address"
+        ]
+        text = "Jl. Merdeka No. 10"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Indonesian address pattern should match"
+
+    def test_indonesian_postcode_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["id"] if p.entity_type == "postcode"
+        ]
+        text = "40123"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, "Indonesian postcode pattern should match"
+
+    def test_indonesian_clinical_sample_expected_spans(self):
+        text = (
+            "Pasien Siti Aminah lahir 17/08/1985. Telepon +62 812 3456 7890. "
+            "NIK 3174055708850001. Alamat Jl. Merdeka No. 10, kode pos 40123."
+        )
+        matches = set()
+        for pattern in get_patterns_for_language("id"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                matches.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert {
+            ("date", 25, 35, "17/08/1985"),
+            ("phone_number", 45, 62, "+62 812 3456 7890"),
+            ("national_id", 68, 84, "3174055708850001"),
+            ("street_address", 93, 111, "Jl. Merdeka No. 10"),
+            ("postcode", 122, 127, "40123"),
+        } <= matches
 
     def test_turkish_address_with_turkish_letters(self):
         # Ş, ı, İ, ğ live in Latin Extended-A; the regex must accept them
@@ -833,9 +942,15 @@ class TestGetPatternsForLanguage:
         lang_count = len(LANGUAGE_PII_PATTERNS["tr"])
         assert len(tr_patterns) == base_count + lang_count
 
+    def test_indonesian_includes_base_and_language(self):
+        id_patterns = get_patterns_for_language("id")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["id"])
+        assert len(id_patterns) == base_count + lang_count
+
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
-            get_patterns_for_language("ko")
+            get_patterns_for_language("xx")
 
     def test_all_returned_patterns_are_pii_pattern(self):
         for lang in SUPPORTED_LANGUAGES:
@@ -917,6 +1032,10 @@ class TestLanguageFakeData:
         names = LANGUAGE_FAKE_DATA["tr"]["NAME"]
         assert any("Y\u0131lmaz" in n or "Kaya" in n for n in names)
 
+    def test_indonesian_names_are_indonesian(self):
+        names = LANGUAGE_FAKE_DATA["id"]["NAME"]
+        assert any("Siti" in n or "Santoso" in n for n in names)
+
     def test_french_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["fr"]["PHONE"]
         assert any("+33" in p or p.startswith("0") for p in phones)
@@ -960,6 +1079,52 @@ class TestLanguageFakeData:
     def test_turkish_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["tr"]["PHONE"]
         assert any("+90" in p or p.startswith("0") for p in phones)
+
+    def test_indonesian_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["id"]["PHONE"]
+        assert any("+62" in p or p.startswith("0") for p in phones)
+
+
+class TestIndonesianLocaleAndFixture:
+    """Tests for Indonesian locale and golden fixture wiring."""
+
+    def test_locale_and_surrogate_nik_round_trip(self):
+        assert LANG_TO_LOCALE["id"] == "id_ID"
+        anon = Anonymizer(lang="id", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("3174055708850001", "national_id")
+
+        assert validate_indonesian_nik(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/id.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "id"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            ("DATE", 25, 35, "17/08/1985"),
+            ("PHONE", 45, 62, "+62 812 3456 7890"),
+            ("ID_NUM", 68, 84, "3174055708850001"),
+            ("STREET_ADDRESS", 93, 111, "Jl. Merdeka No. 10"),
+            ("ZIPCODE", 122, 127, "40123"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
 
 
 if __name__ == "__main__":

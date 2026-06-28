@@ -29,7 +29,10 @@ class ModelInfo:
     architecture: Optional[str] = None
     base_model: Optional[str] = None
     formats: List[str] = field(default_factory=list)
-    benchmark: Dict[str, Any] = field(default_factory=dict)
+    benchmark: Dict[str, Any] | List[Dict[str, Any]] = field(default_factory=dict)
+    latency_ms: Dict[str, float] = field(default_factory=dict)
+    peak_ram_mb: Dict[str, float] = field(default_factory=dict)
+    recommended_tier: Optional[str] = None
     arxiv: Optional[str] = None
     license: Optional[str] = None
     reproducibility_hash: Optional[str] = None
@@ -93,6 +96,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "french": "fr",
     "german": "de",
     "hindi": "hi",
+    "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
     "portuguese": "pt",
@@ -170,6 +174,7 @@ _CATEGORY_ENTITY_TYPES = {
     "Genomics": ["GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA"],
     "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
     "Species": ["ORGANISM", "SPECIES"],
+    "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
     "Pathology": ["DISEASE", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
@@ -397,12 +402,37 @@ def _model_info_from_row(row: Dict[str, Any]) -> ModelInfo:
         architecture=row.get("architecture"),
         base_model=row.get("base_model"),
         formats=list(row.get("formats") or []),
-        benchmark=dict(row.get("benchmark") or {}),
+        benchmark=_benchmark_from_row(row),
+        latency_ms=_number_map_from_row(row, "latency_ms"),
+        peak_ram_mb=_number_map_from_row(row, "peak_ram_mb"),
+        recommended_tier=row.get("recommended_tier")
+        if isinstance(row.get("recommended_tier"), str)
+        else None,
         arxiv=row.get("arxiv"),
         license=row.get("license"),
         reproducibility_hash=row.get("reproducibility_hash"),
         released=row.get("released"),
     )
+
+
+def _benchmark_from_row(row: Dict[str, Any]) -> Dict[str, Any] | List[Dict[str, Any]]:
+    benchmark = row.get("benchmark")
+    if isinstance(benchmark, list):
+        return [dict(entry) for entry in benchmark if isinstance(entry, dict)]
+    if isinstance(benchmark, dict):
+        return dict(benchmark)
+    return {}
+
+
+def _number_map_from_row(row: Dict[str, Any], field_name: str) -> Dict[str, float]:
+    value = row.get(field_name)
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(device): float(measurement)
+        for device, measurement in value.items()
+        if isinstance(measurement, (int, float)) and not isinstance(measurement, bool)
+    }
 
 
 def _language_prefix(row: Dict[str, Any]) -> str:
@@ -669,6 +699,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
         "Anatomy",
         "Contains anatomical terms",
     ),
+    "culture|gram\\s*stain|susceptib|\\bmic\\b|resistant|sensitive|e\\.\\s*coli|mrsa|oxacillin": (
+        "Microbiology",
+        "Contains microbiology terms",
+    ),
     "bacteria|virus|organism|species": (
         "Species",
         "Contains organism/species terms",
@@ -748,11 +782,27 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         }
 
     prefix = f"pii_{lang}_"
-    return {
+    language_models = {
         key: info
         for key, info in OPENMED_MODELS.items()
         if key.startswith(prefix)
         and info.category == "Privacy"
+        and lang in (info.languages or [])
+    }
+    if language_models:
+        return language_models
+
+    from .pii_i18n import DEFAULT_PII_MODELS
+
+    default_model_id = DEFAULT_PII_MODELS.get(lang)
+    if not default_model_id:
+        return {}
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if key.startswith("pii_")
+        and info.category == "Privacy"
+        and info.model_id == default_model_id
         and lang in (info.languages or [])
     }
 
