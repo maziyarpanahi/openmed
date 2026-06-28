@@ -131,11 +131,14 @@ def create_confluent_kafka_clients(
     consumer_config: Mapping[str, Any],
     producer_config: Mapping[str, Any],
     in_topic: str,
+    delivery_timeout: float | None = 30.0,
 ) -> KafkaClientPair:
     """Create JSON record adapters backed by ``confluent-kafka``.
 
     ``confluent-kafka`` is imported only inside this helper so importing
-    ``openmed`` or ``openmed.processing`` does not require a Kafka client.
+    ``openmed`` or ``openmed.processing`` does not require a Kafka client. The
+    producer adapter waits for delivery before returning so callers can commit
+    offsets after ``produce`` succeeds.
     """
 
     _validate_topic(in_topic, "in_topic")
@@ -148,7 +151,10 @@ def create_confluent_kafka_clients(
         ) from exc
 
     consumer = _ConfluentJsonConsumer(Consumer(dict(consumer_config)))
-    producer = _ConfluentJsonProducer(Producer(dict(producer_config)))
+    producer = _ConfluentJsonProducer(
+        Producer(dict(producer_config)),
+        delivery_timeout=delivery_timeout,
+    )
     consumer.subscribe([in_topic])
     return KafkaClientPair(consumer=consumer, producer=producer)
 
@@ -168,8 +174,14 @@ class _ConfluentJsonConsumer:
 
 
 class _ConfluentJsonProducer:
-    def __init__(self, producer: Any) -> None:
+    def __init__(
+        self,
+        producer: Any,
+        *,
+        delivery_timeout: float | None = 30.0,
+    ) -> None:
         self._producer = producer
+        self._delivery_timeout = delivery_timeout
 
     def produce(self, topic: str, value: Mapping[str, Any]) -> Any:
         payload = json.dumps(
@@ -177,7 +189,29 @@ class _ConfluentJsonProducer:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
-        return self._producer.produce(topic, value=payload)
+        delivery_errors: list[Any] = []
+
+        def on_delivery(error: Any, _message: Any) -> None:
+            if error is not None:
+                delivery_errors.append(error)
+
+        result = self._producer.produce(
+            topic,
+            value=payload,
+            on_delivery=on_delivery,
+        )
+        remaining = (
+            self._producer.flush()
+            if self._delivery_timeout is None
+            else self._producer.flush(self._delivery_timeout)
+        )
+        if remaining:
+            raise KafkaConnectorError("Timed out waiting for Kafka producer delivery")
+        if delivery_errors:
+            raise KafkaConnectorError(
+                f"Kafka producer delivery failed: {delivery_errors[0]}"
+            )
+        return result
 
 
 def _validate_stream_args(
