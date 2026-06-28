@@ -11,6 +11,7 @@ from openmed.core.pii import deidentify
 from openmed.core.pipeline import Pipeline
 from openmed.core.policy import (
     CANONICAL_POLICY_NAMES,
+    canonical_policy_name,
     lint_policy,
     list_policies,
     load_policy,
@@ -173,6 +174,50 @@ def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):
         "[ID_NUM_2]": "ABCD123456",
     }
     assert [entity.action for entity in result.pii_entities] == ["mask", "mask"]
+    assert all(entity.reversible_id for entity in result.pii_entities)
+
+
+def test_uk_ico_profile_and_alias_load():
+    profile = load_policy("uk_ico_anonymisation")
+
+    assert profile.name == "uk_ico_anonymisation"
+    assert load_policy("uk_ico").name == "uk_ico_anonymisation"
+    assert canonical_policy_name("uk-ico") == "uk_ico_anonymisation"
+    assert "uk_ico_anonymisation" in list_policies()
+    assert profile.action_for("NHS_NUMBER") == "mask"
+    assert profile.action_for("ID_NUM") == "mask"
+    assert profile.action_for("PERSON") == "mask"
+    assert profile.action_for("LOCATION") == "replace"
+    assert profile.action_for("CONDITION") == "keep"
+    assert profile.keep_mapping is True
+    assert profile.reversible_id is True
+
+
+def test_uk_ico_masks_nhs_number_and_pseudonymizes_quasi_identifier(monkeypatch):
+    text = "NHS number NHS-A4857773456 for patient in Cardiff"
+    _patch_extract_many(
+        monkeypatch,
+        [
+            _entity(text, "NHS-A4857773456", "NHS_NUMBER", 0.99),
+            _entity(text, "Cardiff", "LOCATION", 0.99),
+        ],
+    )
+
+    result = deidentify(
+        text,
+        policy="uk_ico_anonymisation",
+        use_smart_merging=False,
+        use_safety_sweep=False,
+        seed=42,
+    )
+
+    assert result.deidentified_text != text
+    assert result.deidentified_text.startswith("NHS number [NHS_NUMBER]")
+    assert "Cardiff" not in result.deidentified_text
+    assert result.mapping is not None
+    assert result.mapping["[NHS_NUMBER]"] == "NHS-A4857773456"
+    assert result.pii_entities[0].canonical_label == "ID_NUM"
+    assert [entity.action for entity in result.pii_entities] == ["mask", "replace"]
     assert all(entity.reversible_id for entity in result.pii_entities)
 
 
