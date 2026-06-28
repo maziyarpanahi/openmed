@@ -13,6 +13,9 @@ from __future__ import annotations
 # stdlib-only, so the public multimodal import path remains free of heavy deps.
 from openmed.interop import cda as _cda
 
+# Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
+# handlers. Third-party parser availability is checked only when a handler runs.
+from . import documents_markdown as _documents_markdown
 from .base import (
     ExtractedDocument,
     SourceSpan,
@@ -29,7 +32,18 @@ from .chatlog_jsonl import (
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
 )
+from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
+from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .metadata_scrub import (
+    MetadataFinding,
+    MetadataScrubError,
+    MetadataScrubResult,
+    ResidualMetadataReport,
+    assert_metadata_clean,
+    scrub_metadata,
+    verify_metadata,
+)
 
 # Importing the OCR module registers image-format handlers with the dispatcher
 # so ``redact_document`` can route scans/images. It stays import-light: OCR
@@ -67,6 +81,16 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "ProjectedRectangle",
+    "extract_pdf",
+    "project_text_spans",
+    "MetadataFinding",
+    "ResidualMetadataReport",
+    "MetadataScrubResult",
+    "MetadataScrubError",
+    "scrub_metadata",
+    "verify_metadata",
+    "assert_metadata_clean",
     "OcrResult",
     "OcrWord",
     "OcrEngine",
@@ -78,4 +102,7 @@ __all__ = [
     "read_table",
     "classify_columns",
     "redact_table",
+    "extract_markdown",
+    "extract_asciidoc",
+    "redact_source_text",
 ]
