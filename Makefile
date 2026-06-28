@@ -1,6 +1,6 @@
 # Makefile for openmed package management
 
-.PHONY: help build publish release clean install lint format format-check lint-swift format-swift quality test docs-serve docs-build docs-stage docs-deploy
+.PHONY: help build publish release clean install lint format format-check lint-swift format-swift quality test sbom docs-serve docs-build docs-stage docs-deploy
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -50,6 +50,11 @@ quality: lint format-check test ## Run the local quality gate
 test: ## Run the test suite
 	@echo "🧪 Running tests..."
 	pytest
+
+sbom: ## Generate a CycloneDX 1.6 SBOM (sbom.cdx.json) for the runtime dependencies
+	@echo "📦 Generating CycloneDX SBOM..."
+	uv sync --frozen
+	uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
 
 docs-serve: ## Run the MkDocs dev server with live reload
 	@echo "📚 Serving docs at http://127.0.0.1:8008 ..."
