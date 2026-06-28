@@ -49,7 +49,22 @@ from .result_cache import (
 )
 
 # Type alias for de-identification methods
-DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
+DEIDENTIFICATION_METHODS = (
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+)
+DeidentificationMethod = Literal[
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
 
 
 @dataclass
@@ -741,6 +756,8 @@ def _resolve_deidentification_method(
 
     if date_shift_days is not None and effective_method != "shift_dates":
         raise ValueError("date_shift_days requires method='shift_dates'")
+    if effective_method not in DEIDENTIFICATION_METHODS:
+        raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
 
     return effective_method
 
@@ -1213,8 +1230,9 @@ def _build_deidentification_result(
         date_shift_days = _random_nonzero_shift()
 
     anonymizer = None
-    if effective_method == "replace" or any(
-        _entity_policy_action(entity) == "replace" for entity in pii_entities
+    if effective_method in {"replace", "format_preserve"} or any(
+        _entity_policy_action(entity) in {"replace", "format_preserve"}
+        for entity in pii_entities
     ):
         from .anonymizer import Anonymizer
 
@@ -1233,8 +1251,15 @@ def _build_deidentification_result(
         entity_type_counts: dict[str, int] = {}
         for entity in sorted(pii_entities, key=lambda e: e.start):
             entity_method = _entity_redaction_method(entity, effective_method)
-            if entity_method in {"mask", "remove"} or (
-                entity_method == "shift_dates" and not _is_date_entity(entity, lang)
+            if (
+                entity_method in {"mask", "remove"}
+                or (
+                    entity_method == "shift_dates" and not _is_date_entity(entity, lang)
+                )
+                or (
+                    entity_method == "format_preserve"
+                    and _format_preserve_uses_mask_fallback(entity, anonymizer, lang)
+                )
             ):
                 entity_type_counts[entity.entity_type] = (
                     entity_type_counts.get(entity.entity_type, 0) + 1
@@ -1245,19 +1270,28 @@ def _build_deidentification_result(
 
     for entity in redaction_entities:
         entity_method = _entity_redaction_method(entity, effective_method)
+        actual_entity_method = entity_method
+        if entity_method == "format_preserve" and _format_preserve_uses_mask_fallback(
+            entity,
+            anonymizer,
+            lang,
+        ):
+            actual_entity_method = "mask"
         redacted = _redact_entity(
             entity,
-            entity_method,
+            actual_entity_method,
             keep_year=keep_year,
             date_shift_days=(
-                date_shift_days if entity_method == "shift_dates" else None
+                date_shift_days if actual_entity_method == "shift_dates" else None
             ),
             lang=lang,
             anonymizer=anonymizer,
             surrogate_vault=surrogate_vault,
         )
+        if entity_method == "format_preserve" and redacted == _mask_placeholder(entity):
+            actual_entity_method = "mask"
 
-        if keep_mapping and entity_method == "remove":
+        if keep_mapping and actual_entity_method == "remove":
             redacted = f"[{entity.entity_type}_REMOVED]"
 
         # Only make repeated placeholders unique for reversible mappings. Plain
@@ -1275,7 +1309,7 @@ def _build_deidentification_result(
                 entity,
                 policy_name=policy_name,
             )
-        entity.action = entity_method
+        entity.action = actual_entity_method
         entity.surrogate = redacted if redacted else None
 
         deidentified = (
@@ -1334,9 +1368,25 @@ def _entity_redaction_method(
         return "replace"
     if action == "hash":
         return "hash"
+    if action == "format_preserve":
+        return "format_preserve"
     if action in {"mask", "redact"}:
         return "mask"
     return fallback
+
+
+def _format_preserve_uses_mask_fallback(
+    entity: PIIEntity,
+    anonymizer: Optional["Anonymizer"],
+    lang: str,
+) -> bool:
+    if anonymizer is None:
+        return True
+    return not anonymizer.can_format_preserve(
+        entity.original_text or entity.text,
+        entity.entity_type,
+        lang=lang,
+    )
 
 
 def _build_reversible_id(
@@ -1457,6 +1507,8 @@ def deidentify(
     - **remove**: Remove PII text entirely (empty string)
     - **replace**: Replace with fake but realistic data
     - **hash**: Replace with consistent hashed values for entity linking
+    - **format_preserve**: Replace structured identifiers with synthetic
+      values that keep shape and separators, masking unsupported labels
     - **shift_dates**: Shift dates by random offset while preserving intervals
 
     Smart merging uses regex patterns to merge fragmented entities (e.g., dates
@@ -1464,7 +1516,8 @@ def deidentify(
 
     Args:
         text: Input text to de-identify
-        method: De-identification method (mask, remove, replace, hash, shift_dates)
+        method: De-identification method (mask, remove, replace, hash,
+            shift_dates, format_preserve)
         model_name: PII detection model
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
@@ -1481,14 +1534,16 @@ def deidentify(
         normalize_accents: Strip diacritical marks before model inference.
             ``None`` (default) auto-enables for Spanish.
         loader: Optional shared model loader to reuse warmed pipelines.
-        consistent: When ``method="replace"``, generate stable surrogates
+        consistent: When ``method="replace"`` or
+            ``method="format_preserve"``, generate stable surrogates
             (same input -> same surrogate within the call). Lets repeated
             mentions of the same name resolve to one fake identity instead
             of a different one each time.
         seed: Optional integer seed for cross-run reproducibility of
             ``consistent=True`` replacements. Implies ``consistent=True``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
-            ``method="replace"``. When ``None``, derived from ``lang``.
+            ``method="replace"`` and ``method="format_preserve"``. When
+            ``None``, derived from ``lang``.
         surrogate_vault: Optional cross-document surrogate vault. When provided
             with ``method="replace"``, OpenMed stores only HMAC source hashes
             and reuses the same surrogate for the same label/language/source
@@ -1628,7 +1683,8 @@ def _redact_entity(
         keep_year: Keep year in dates
         date_shift_days: Days to shift dates
         lang: Language code for fake data and date formatting
-        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
+        anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``
+            or ``method="format_preserve"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
         surrogate_vault: Optional vault for stable cross-document replacements.
@@ -1638,7 +1694,7 @@ def _redact_entity(
     """
     if method == "mask":
         # Replace with placeholder
-        return f"[{entity.entity_type}]"
+        return _mask_placeholder(entity)
 
     elif method == "remove":
         # Remove entirely (replace with empty string)
@@ -1671,6 +1727,17 @@ def _redact_entity(
             )
         return _generate_fake_pii(entity.entity_type, lang=lang)
 
+    elif method == "format_preserve":
+        if anonymizer is not None:
+            surrogate = anonymizer.format_preserving_surrogate(
+                entity.original_text or entity.text,
+                entity.entity_type,
+                lang=lang,
+            )
+            if surrogate is not None:
+                return surrogate
+        return _mask_placeholder(entity)
+
     elif method == "hash":
         # Generate consistent hash
         hash_val = hashlib.sha256(entity.text.encode()).hexdigest()[:8]
@@ -1683,9 +1750,13 @@ def _redact_entity(
             return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
         else:
             # Non-date entities get masked
-            return f"[{entity.entity_type}]"
+            return _mask_placeholder(entity)
 
     return entity.text
+
+
+def _mask_placeholder(entity: PIIEntity) -> str:
+    return f"[{entity.entity_type}]"
 
 
 _LABEL_TO_FAKE_KEY: Dict[str, str] = {
