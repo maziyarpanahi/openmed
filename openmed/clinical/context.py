@@ -186,6 +186,22 @@ _HYPOTHETICAL_RE = _cue_pattern(HYPOTHETICAL_CUES)
 _UNCERTAINTY_RE = _cue_pattern(UNCERTAINTY_CUES)
 _NEGATION_RE = _cue_pattern(NEGATION_CUES)
 _PSEUDO_NEGATION_RE = _cue_pattern(PSEUDO_NEGATION_CUES)
+_SCOPE_TERMINATOR_RE = re.compile(
+    r"(?:[.!?;]|\b(?:and|but|however|or)\b)",
+    re.IGNORECASE,
+)
+_CONTEXT_TEXT_KEYS = (
+    "document_text",
+    "context_text",
+    "source_text",
+    "full_text",
+    "note_text",
+    "context",
+    "document",
+)
+_START_KEYS = ("start", "start_char", "start_offset", "begin", "offset")
+_END_KEYS = ("end", "end_char", "end_offset", "stop")
+_OCCURRENCE_KEYS = ("occurrence", "text_occurrence", "occurrence_index")
 
 
 @dataclass(frozen=True)
@@ -257,15 +273,184 @@ def _text_of(obj: Any) -> str:
     return ""
 
 
-def _text_parts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
-    parts = [_text_of(span)]
-    if modifier_hits is not None and not isinstance(modifier_hits, (str, Mapping)):
-        if isinstance(modifier_hits, Iterable):
-            parts.extend(_text_of(hit) for hit in modifier_hits)
-        else:
-            parts.append(_text_of(modifier_hits))
+def _field_value(obj: Any, keys: Iterable[str]) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, Mapping):
+        for key in keys:
+            value = obj.get(key)
+            if value is not None:
+                return value
+        return None
+    for key in keys:
+        value = getattr(obj, key, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _int_field(obj: Any, keys: Iterable[str]) -> int | None:
+    value = _field_value(obj, keys)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    return None
+
+
+def _offsets_of(obj: Any) -> tuple[int, int] | None:
+    start = _int_field(obj, _START_KEYS)
+    end = _int_field(obj, _END_KEYS)
+    if start is None or end is None or start < 0 or end < start:
+        return None
+    return start, end
+
+
+def _context_text_of(span: Any) -> str:
+    context = _field_value(span, _CONTEXT_TEXT_KEYS)
+    if isinstance(context, str):
+        return context
+
+    text = _text_of(span)
+    offsets = _offsets_of(span)
+    if offsets is not None and offsets[1] <= len(text):
+        return text
+    return ""
+
+
+def _occurrence_of(obj: Any) -> int | None:
+    occurrence = _int_field(obj, _OCCURRENCE_KEYS)
+    if occurrence is None or occurrence < 0:
+        return None
+    return occurrence
+
+
+def _text_offsets_in_context(
+    context: str, text: str, occurrence: int | None
+) -> tuple[int, int] | None:
+    if not context or not text:
+        return None
+
+    haystack = context.casefold()
+    needle = text.casefold()
+    matches: list[tuple[int, int]] = []
+    start = haystack.find(needle)
+    while start != -1:
+        matches.append((start, start + len(text)))
+        start = haystack.find(needle, start + 1)
+
+    if occurrence is not None:
+        if occurrence < len(matches):
+            return matches[occurrence]
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def _text_appears_in_context(context: str, text: str) -> bool:
+    return bool(context and text and text.casefold() in context.casefold())
+
+
+def _target_offsets_in_context(span: Any, context: str) -> tuple[int, int] | None:
+    offsets = _offsets_of(span)
+    if offsets is not None and offsets[1] <= len(context):
+        return offsets
+    return _text_offsets_in_context(context, _text_of(span), _occurrence_of(span))
+
+
+def _scope_bounds(
+    context: str,
+    target_start: int,
+    target_end: int,
+) -> tuple[int, int]:
+    scope_start = 0
+    for match in _SCOPE_TERMINATOR_RE.finditer(context, 0, target_start):
+        scope_start = match.end()
+
+    scope_end = len(context)
+    for match in _SCOPE_TERMINATOR_RE.finditer(context, target_end):
+        scope_end = match.start()
+        break
+
+    return scope_start, scope_end
+
+
+def _cue_reaches_target(
+    context: str,
+    cue_start: int,
+    cue_end: int,
+    target_start: int,
+    target_end: int,
+) -> bool:
+    if cue_end <= target_start:
+        between = context[cue_end:target_start]
+    elif target_end <= cue_start:
+        between = context[target_end:cue_start]
     else:
-        parts.append(_text_of(modifier_hits))
+        between = ""
+    return _SCOPE_TERMINATOR_RE.search(between) is None
+
+
+def _scoped_span_text(span: Any) -> str:
+    context = _context_text_of(span)
+    target_offsets = _target_offsets_in_context(span, context)
+    if target_offsets is None:
+        return _text_of(span)
+
+    scope_start, scope_end = _scope_bounds(context, *target_offsets)
+    return context[scope_start:scope_end]
+
+
+def _modifier_hit_offsets(hit: Any, context: str) -> tuple[int, int] | None:
+    offsets = _offsets_of(hit)
+    if offsets is not None and offsets[1] <= len(context):
+        return offsets
+    return _text_offsets_in_context(context, _text_of(hit), _occurrence_of(hit))
+
+
+def _iter_modifier_hits(modifier_hits: Any) -> Iterable[Any]:
+    if modifier_hits is None:
+        return ()
+    if isinstance(modifier_hits, (str, Mapping)):
+        return (modifier_hits,)
+    if isinstance(modifier_hits, Iterable):
+        return modifier_hits
+    return (modifier_hits,)
+
+
+def _scoped_modifier_texts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
+    context = _context_text_of(span)
+    target_offsets = _target_offsets_in_context(span, context)
+    parts: list[str] = []
+
+    for hit in _iter_modifier_hits(modifier_hits):
+        text = _text_of(hit)
+        if not text:
+            continue
+        if target_offsets is not None:
+            hit_offsets = _modifier_hit_offsets(hit, context)
+            if hit_offsets is None and _text_appears_in_context(context, text):
+                continue
+            if hit_offsets is not None and not _cue_reaches_target(
+                context,
+                *hit_offsets,
+                *target_offsets,
+            ):
+                continue
+        parts.append(text)
+
+    return tuple(parts)
+
+
+def _text_parts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
+    span_text = _scoped_span_text(span)
+    parts = [span_text]
+    span_text_casefold = span_text.casefold()
+    for modifier_text in _scoped_modifier_texts(span, modifier_hits):
+        if span_text_casefold and modifier_text.casefold() in span_text_casefold:
+            continue
+        parts.append(modifier_text)
     return tuple(part for part in parts if part)
 
 
@@ -274,6 +459,9 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
 
     ``span`` is the target clinical span -- a string, a span mapping with a
     ``text``-like key, or any object exposing a ``text`` attribute.
+    Span mappings/objects may also expose note text via ``context`` or
+    ``document_text`` plus ``start``/``end`` offsets; when present, cue matching
+    is bounded to the target's sentence or clause.
     ``modifier_hits`` is the optional collection of ConText modifier cues the
     shared engine matched in the span's window (cue strings, or mappings/objects
     exposing a ``text``-like field).  The span surface itself is also scanned so
@@ -300,6 +488,9 @@ def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
 
     ``span`` is the target clinical span -- a string, a span mapping with a
     ``text``-like key, or any object exposing a ``text`` attribute.
+    Span mappings/objects may also expose note text via ``context`` or
+    ``document_text`` plus ``start``/``end`` offsets; when present, cue matching
+    is bounded to the target's sentence or clause.
     ``modifier_hits`` is the optional collection of ConText uncertainty cues
     matched in the span's window. Each part is scanned independently so cues
     are never created by concatenating unrelated fragments.
@@ -324,6 +515,9 @@ def resolve_negation(span: Any, modifier_hits: Any = None) -> Negation:
 
     ``span`` is the target clinical span -- a string, a span mapping with a
     ``text``-like key, or any object exposing a ``text`` attribute.
+    Span mappings/objects may also expose note text via ``context`` or
+    ``document_text`` plus ``start``/``end`` offsets; when present, cue matching
+    is bounded to the target's sentence or clause.
     ``modifier_hits`` is the optional collection of ConText negation cues
     matched in the span's window. Each part is scanned independently so cues
     are never created by concatenating unrelated fragments.

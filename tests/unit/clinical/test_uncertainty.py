@@ -109,6 +109,20 @@ def test_single_modifier_hit_string_is_supported():
     assert resolve_uncertainty("sepsis", "rule out") == UNCERTAIN
 
 
+def test_uncertainty_cues_do_not_cross_sentence_boundary():
+    context = "Rule out sepsis. Sepsis confirmed on culture."
+    span = _span_in_context(context, "Sepsis")
+
+    assert resolve_uncertainty(span, ["rule out"]) == CERTAIN
+
+
+def test_same_sentence_uncertainty_cue_still_applies_with_offsets():
+    context = "Rule out sepsis today."
+    span = _span_in_context(context, "sepsis")
+
+    assert resolve_uncertainty(span, ["rule out"]) == UNCERTAIN
+
+
 def test_modifier_hits_do_not_create_cues_across_fragments():
     assert resolve_uncertainty("rule", ["out sepsis"]) == CERTAIN
 
@@ -152,3 +166,13 @@ def test_required_uncertainty_cues_are_public():
         "vs",
     ):
         assert cue in UNCERTAINTY_CUES
+
+
+def _span_in_context(context: str, target: str) -> dict[str, object]:
+    start = context.index(target)
+    return {
+        "text": target,
+        "context": context,
+        "start": start,
+        "end": start + len(target),
+    }
