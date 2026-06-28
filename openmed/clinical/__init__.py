@@ -32,6 +32,18 @@ from .lab_values import (
     derive_abnormal_flag,
     parse_reference_range,
 )
+from .status_vocab import (
+    CURRENT,
+    FORMER,
+    NEVER,
+    STATUS_NORMALIZATION_ADVISORY,
+    STATUS_VALUES,
+    UNKNOWN,
+    load_status_vocab,
+    normalize_employment_status,
+    normalize_living_status,
+    normalize_substance_status,
+)
 
 __all__ = [
     "AFFIRMED",
@@ -58,4 +70,14 @@ __all__ = [
     "LAB_FLAG_ADVISORY",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "CURRENT",
+    "FORMER",
+    "NEVER",
+    "UNKNOWN",
+    "STATUS_VALUES",
+    "STATUS_NORMALIZATION_ADVISORY",
+    "load_status_vocab",
+    "normalize_substance_status",
+    "normalize_employment_status",
+    "normalize_living_status",
 ]
