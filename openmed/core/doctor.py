@@ -152,6 +152,13 @@ def _check_manifest(checks: list[dict[str, Any]]) -> None:
                 f"{MANIFEST_PATH.name} not found",
             )
         )
+        checks.append(
+            _check(
+                "manifest_rows",
+                "WARN",
+                "not checked because manifest is missing",
+            )
+        )
         return
 
     checks.append(_check("manifest_exists", "PASS", str(MANIFEST_PATH)))
