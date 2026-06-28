@@ -274,6 +274,29 @@ def test_g4_blocks_only_the_offending_quantized_format(tmp_path: Path) -> None:
     assert _check(fp, "G4").passed is True
 
 
+def test_g5_uses_nano_certificate_for_nano_declared_artifacts(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"tier": "Nano", "param_count": 44_000_000},
+            metric_updates={
+                "latency": {"p50_ms": 20.0, "p95_ms": 50.0},
+                "resources": {"peak_rss_mib": 128.0},
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G5")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "Nano sub-tier budget not certified"
+    assert check.details["failing_dimension"] == "param_count"
+    assert check.details["parent_tier"] == "Tiny"
+
+
 def test_missing_calibration_artifacts_fail_closed(tmp_path: Path) -> None:
     result = _gate().evaluate(
         _report(
