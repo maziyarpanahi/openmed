@@ -435,6 +435,27 @@ class ReleaseGate:
     ) -> GateReport:
         """Evaluate *report* and return a signed gate report."""
 
+        gate_report = self._score(report, baseline)
+        return gate_report.sign(
+            signing_key or self.signing_key, key_id=key_id or self.key_id
+        )
+
+    def preview(
+        self,
+        report: BenchmarkReport | Mapping[str, Any],
+        baseline: Mapping[str, Any] | None = None,
+    ) -> GateReport:
+        """Evaluate *report* in read-only preview mode without signing."""
+
+        return self._score(report, baseline)
+
+    def _score(
+        self,
+        report: BenchmarkReport | Mapping[str, Any],
+        baseline: Mapping[str, Any] | None,
+    ) -> GateReport:
+        """Score release gates without deciding whether to sign the report."""
+
         payload = _report_payload(report)
         metrics = _mapping(payload.get("metrics"))
         metadata = _mapping(payload.get("metadata"))
@@ -560,9 +581,7 @@ class ReleaseGate:
             target_leakage_rate=target_leakage,
             blocked_formats=blocked_formats,
         )
-        return gate_report.sign(
-            signing_key or self.signing_key, key_id=key_id or self.key_id
-        )
+        return gate_report
 
     def _load_threshold_matrix(self) -> Mapping[str, Any]:
         if self.thresholds_matrix is not None:
@@ -1747,6 +1766,52 @@ def _key_bytes(key: bytes | str) -> bytes:
     raise TypeError("signing key must be bytes or str")
 
 
+def preview(
+    report: BenchmarkReport | Mapping[str, Any],
+    baseline: Mapping[str, Any] | None = None,
+    *,
+    milestone: str = "v1.6",
+    policy: str = "hipaa_safe_harbor",
+    baseline_path: str | Path = baseline_store.BASELINE_PATH,
+    thresholds_matrix: Mapping[str, Any] | None = None,
+    thresholds_matrix_path: str | Path | None = None,
+    model_steward_config: Mapping[str, Any] | ModelStewardConfig | None = None,
+) -> GateReport:
+    """Return an unsigned release-gate preview for *report*."""
+
+    gate = ReleaseGate(
+        milestone=milestone,
+        policy=policy,
+        baseline_path=baseline_path,
+        thresholds_matrix=thresholds_matrix,
+        thresholds_matrix_path=thresholds_matrix_path,
+        model_steward_config=model_steward_config,
+    )
+    return gate.preview(report, baseline)
+
+
+def format_preview(report: GateReport) -> str:
+    """Render a read-only release-gate preview table."""
+
+    verdict = "would-pass" if report.decision == RELEASABLE else "would-fail"
+    gate_width = max(4, *(len(check.gate) for check in report.gate_results))
+    status_width = len("status")
+    lines = [
+        "Release gate preview (read-only)",
+        "No signed report emitted; no GateReport file written.",
+        f"Candidate: {report.repo_id}",
+        f"Overall verdict: {verdict}",
+        "",
+        f"{'gate':<{gate_width}}  {'status':<{status_width}}  reason",
+    ]
+    for check in report.gate_results:
+        status = "pass" if check.passed else "fail"
+        lines.append(
+            f"{check.gate:<{gate_width}}  {status:<{status_width}}  {check.reason}"
+        )
+    return "\n".join(lines)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -2024,7 +2089,9 @@ __all__ = [
     "ModelStewardConfig",
     "ReleaseGate",
     "build_arg_parser",
+    "format_preview",
     "main",
+    "preview",
 ]
 
 
