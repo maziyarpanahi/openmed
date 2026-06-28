@@ -16,6 +16,8 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
 )
 
+MULTILINGUAL_DEFAULT_LANGUAGES = {"id"}
+
 
 class TestRegistryCompleteness:
     """Verify PII model registry entries are derived from the manifest."""
@@ -62,6 +64,8 @@ class TestModelNaming:
 
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_specific_models_contain_language_name(self, lang):
+        if lang in MULTILINGUAL_DEFAULT_LANGUAGES:
+            pytest.skip("language intentionally defaults to multilingual family")
         language_name = LANGUAGE_NAMES[lang]
         models = get_pii_models_by_language(lang)
         assert models
@@ -77,6 +81,11 @@ class TestModelNaming:
     @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES - {"en"}))
     def test_language_bucket_keys_use_language_prefix_when_specific(self, lang):
         models = get_pii_models_by_language(lang)
+        if lang in MULTILINGUAL_DEFAULT_LANGUAGES:
+            assert any(
+                info.model_id == DEFAULT_PII_MODELS[lang] for info in models.values()
+            )
+            return
         prefixed_keys = [key for key in models if key.startswith(f"pii_{lang}_")]
         assert prefixed_keys, f"No pii_{lang}_ keys found"
 

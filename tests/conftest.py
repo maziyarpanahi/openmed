@@ -7,6 +7,7 @@ import pytest
 
 import openmed
 from openmed.core.config import OpenMedConfig
+from openmed.processing.tokenizer_cache import clear_tokenizer_cache
 
 
 @pytest.fixture
@@ -151,6 +152,14 @@ def reset_config():
     yield
     # Reset to default configuration
     openmed.core.config.set_config(OpenMedConfig())
+
+
+@pytest.fixture(autouse=True)
+def reset_tokenizer_cache():
+    """Reset process-level tokenizer cache around each test."""
+    clear_tokenizer_cache()
+    yield
+    clear_tokenizer_cache()
 
 
 class TestHelpers:
