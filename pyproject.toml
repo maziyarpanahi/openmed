@@ -167,7 +167,8 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 [tool.pytest.ini_options]
 markers = [
   "integration: marks end-to-end or external integration tests",
-  "slow: marks tests that are expected to run slowly"
+  "slow: marks tests that are expected to run slowly",
+  "doctest_examples: runs doctest examples for targeted public modules"
 ]
 python_files = [
   "test_*.py",

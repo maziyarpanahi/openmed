@@ -12,21 +12,12 @@ Key Features:
     - Integration with OpenMed's existing NER infrastructure
 
 Example:
-    >>> from openmed import extract_pii, deidentify
-    >>>
-    >>> # Extract PII entities
-    >>> result = extract_pii("Dr. Smith called John Doe at 555-1234")
-    >>> len(result.entities) > 0
-    True
-
-    >>> # De-identify with masking
-    >>> deid = deidentify(
-    ...     "Patient John Doe (DOB: 01/15/1970) at 555-123-4567",
-    ...     method="mask",
-    ...     keep_year=True
+    >>> from openmed import reidentify
+    >>> reidentify(
+    ...     "Patient [NAME] called [PHONE]",
+    ...     {"[NAME]": "Casey Example", "[PHONE]": "555-0100"},
     ... )
-    >>> print(deid.deidentified_text)
-    Patient [NAME] (DOB: [DATE]/1970) at [PHONE]
+    'Patient Casey Example called 555-0100'
 """
 
 from __future__ import annotations
@@ -687,12 +678,31 @@ def extract_pii(
         PredictionResult with detected PII entities
 
     Example:
-        >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
-        >>> len(result.entities) > 0
-        True
-
-        >>> # French PII detection
-        >>> result = extract_pii("Né le 15/01/1970", lang="fr")
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import extract_pii
+        >>> from openmed.processing.outputs import EntityPrediction, PredictionResult
+        >>> fake_result = PredictionResult(
+        ...     text="Patient Casey Example called.",
+        ...     entities=[
+        ...         EntityPrediction(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             confidence=0.98,
+        ...             start=8,
+        ...             end=21,
+        ...         )
+        ...     ],
+        ...     model_name="fixture-pii-model",
+        ...     timestamp="2026-01-01T00:00:00",
+        ... )
+        >>> with patch("openmed.analyze_text", return_value=fake_result):
+        ...     result = extract_pii(
+        ...         "Patient Casey Example called.",
+        ...         model_name="fixture-pii-model",
+        ...         use_smart_merging=False,
+        ...     )
+        >>> [(entity.text, entity.label) for entity in result.entities]
+        [('Casey Example', 'NAME')]
     """
     if cache_results:
         params = dict(locals())
@@ -1488,17 +1498,44 @@ def deidentify(
         AuditReport when ``audit=True``.
 
     Example:
-        >>> result = deidentify(
-        ...     "Patient John Doe (DOB: 01/15/1970) called from 555-1234",
-        ...     method="mask",
-        ...     keep_year=True
+        >>> from datetime import datetime
+        >>> from types import SimpleNamespace
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import (
+        ...     DeidentificationResult,
+        ...     PIIEntity,
+        ...     deidentify,
         ... )
-        >>> print(result.deidentified_text)
-        Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
-
-        >>> result = deidentify(text, method="replace", lang="de")
-        >>> result = deidentify(text, method="replace", lang="pt",
-        ...                    locale="pt_BR", consistent=True, seed=42)
+        >>> fixture = DeidentificationResult(
+        ...     original_text="Patient Casey Example",
+        ...     deidentified_text="Patient [NAME]",
+        ...     pii_entities=[
+        ...         PIIEntity(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             start=8,
+        ...             end=21,
+        ...             confidence=0.98,
+        ...             redacted_text="[NAME]",
+        ...         )
+        ...     ],
+        ...     method="mask",
+        ...     timestamp=datetime(2026, 1, 1, 0, 0, 0),
+        ...     mapping={"[NAME]": "Casey Example"},
+        ... )
+        >>> with patch("openmed.core.pipeline.Pipeline") as pipeline_cls:
+        ...     pipeline_cls.return_value.run.return_value = SimpleNamespace(
+        ...         deidentification_result=fixture
+        ...     )
+        ...     result = deidentify(
+        ...         "Patient Casey Example",
+        ...         method="mask",
+        ...         keep_mapping=True,
+        ...     )
+        >>> result.deidentified_text
+        'Patient [NAME]'
+        >>> result.mapping
+        {'[NAME]': 'Casey Example'}
     """
 
     if cache_results:
@@ -2149,9 +2186,12 @@ def reidentify(
         Re-identified text with original PII restored
 
     Example:
-        >>> result = deidentify(text, method="mask", keep_mapping=True)
-        >>> original = reidentify(result.deidentified_text, result.mapping)
-        >>> assert original == text
+        >>> from openmed.core.pii import reidentify
+        >>> reidentify(
+        ...     "Patient [NAME] has record [ID]",
+        ...     {"[NAME]": "Casey Example", "[ID]": "MRN-0001"},
+        ... )
+        'Patient Casey Example has record MRN-0001'
 
     Note:
         Only works if keep_mapping=True was used during de-identification.
