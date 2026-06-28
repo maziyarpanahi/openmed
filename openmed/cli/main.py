@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 from ..__about__ import __version__
 from ..core.config import (
@@ -22,7 +23,8 @@ from ..core.config import (
     save_profile,
     set_config,
 )
-from ..core.model_registry import get_model_info
+from ..core.model_card import render_model_card
+from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
 
@@ -482,6 +484,29 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Emit the ranked shortlist as a single JSON document.",
     )
     models_recommend.set_defaults(handler=_handle_models_recommend)
+
+    models_card = models_sub.add_parser(
+        "card",
+        help="Render a README model card from the canonical manifest.",
+    )
+    models_card.add_argument(
+        "repo_id",
+        help="Hugging Face repository id to resolve from models.jsonl.",
+    )
+    card_output = models_card.add_mutually_exclusive_group()
+    card_output.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Optional path to write the rendered README Markdown.",
+    )
+    card_output.add_argument(
+        "--check",
+        type=Path,
+        metavar="README",
+        help="Compare an existing README against the rendered card.",
+    )
+    models_card.set_defaults(handler=_handle_models_card)
 
     models_freshness = models_sub.add_parser(
         "freshness",
@@ -1038,6 +1063,54 @@ def _handle_models_recommend(args: argparse.Namespace) -> int:
     sys.stdout.write(f"Recommended for {args.tier}: {results[0].repo_id}\n")
     sys.stdout.write(_format_model_search_table(results))
     return 0
+
+
+def _handle_models_card(args: argparse.Namespace) -> int:
+    try:
+        row = _find_manifest_row(args.repo_id)
+        rendered = render_model_card(dict(row))
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to render model card: {exc}\n")
+        return 1
+
+    if args.check is not None:
+        try:
+            existing = args.check.read_text(encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to read README for comparison: {exc}\n")
+            return 1
+
+        if existing == rendered:
+            return 0
+
+        diff = difflib.unified_diff(
+            existing.splitlines(keepends=True),
+            rendered.splitlines(keepends=True),
+            fromfile=str(args.check),
+            tofile=f"rendered:{args.repo_id}",
+        )
+        sys.stdout.writelines(diff)
+        return 1
+
+    if args.output is not None:
+        try:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write model card: {exc}\n")
+            return 1
+        return 0
+
+    sys.stdout.write(rendered)
+    return 0
+
+
+def _find_manifest_row(repo_id: str) -> Mapping[str, Any]:
+    rows = load_manifest_rows(MANIFEST_PATH)
+    for row in rows:
+        if row.get("repo_id") == repo_id:
+            return row
+    raise ValueError(f"repo_id not found in model manifest: {repo_id}")
 
 
 def _recommendation_to_dict(result: ModelSearchResult) -> dict[str, Any]:
