@@ -20,6 +20,7 @@ from .base import (
     redact_document,
     register_handler,
 )
+from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 from .metadata_scrub import (
     MetadataFinding,
@@ -60,6 +61,9 @@ __all__ = [
     "ensure_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "ProjectedRectangle",
+    "extract_pdf",
+    "project_text_spans",
     "MetadataFinding",
     "ResidualMetadataReport",
     "MetadataScrubResult",
