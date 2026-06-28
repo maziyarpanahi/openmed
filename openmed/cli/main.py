@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import difflib
 import json
+import os
 import sys
 import tempfile
+from collections import Counter
 from collections.abc import Mapping as MappingABC
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -37,6 +40,8 @@ _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
 _LIST_MODELS = None
 _BATCH_PROCESSOR = None
+
+_AUDIT_KEY_ENV = "OPENMED_AUDIT_KEY"
 
 # Exposed for unit tests to patch without importing heavy modules eagerly.
 analyze_text = None
@@ -152,6 +157,8 @@ def build_parser() -> argparse.ArgumentParser:
     _add_batch_command(subparsers)
     _add_deid_command(subparsers)
     _add_pii_command(subparsers)
+    _add_audit_command(subparsers)
+    _add_risk_command(subparsers)
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
@@ -485,6 +492,70 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
         help="Minimum confidence for redaction.",
     )
     batch_parser.set_defaults(handler=_handle_pii_batch)
+
+
+def _add_audit_command(subparsers: argparse._SubParsersAction) -> None:
+    audit_parser = subparsers.add_parser(
+        "audit",
+        help="Inspect and verify PHI-safe de-identification audit reports.",
+    )
+    audit_sub = audit_parser.add_subparsers(dest="audit_command")
+
+    verify_parser = audit_sub.add_parser(
+        "verify",
+        help="Verify an audit report's reproducibility hash and signature.",
+    )
+    verify_parser.add_argument(
+        "report",
+        type=Path,
+        help="Path to a signed audit report JSON file.",
+    )
+    verify_parser.add_argument(
+        "--key",
+        default=None,
+        help=f"HMAC key for signed reports. Defaults to {_AUDIT_KEY_ENV}.",
+    )
+    verify_parser.set_defaults(handler=_handle_audit_verify)
+
+    show_parser = audit_sub.add_parser(
+        "show",
+        help="Print a PHI-safe summary of an audit report.",
+    )
+    show_parser.add_argument(
+        "report",
+        type=Path,
+        help="Path to an audit report JSON file.",
+    )
+    show_parser.set_defaults(handler=_handle_audit_show)
+
+
+def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
+    risk_parser = subparsers.add_parser(
+        "risk",
+        help="Score residual re-identification risk for text or tables.",
+    )
+    risk_sub = risk_parser.add_subparsers(dest="risk_command")
+
+    text_parser = risk_sub.add_parser(
+        "text",
+        help="Score residual re-identification risk for text.",
+    )
+    text_parser.add_argument(
+        "input",
+        help="Text to score, or a path to a UTF-8 text file.",
+    )
+    text_parser.set_defaults(handler=_handle_risk_text)
+
+    table_parser = risk_sub.add_parser(
+        "table",
+        help="Score residual re-identification risk for CSV records.",
+    )
+    table_parser.add_argument(
+        "csv",
+        type=Path,
+        help="Path to a CSV file with a header row.",
+    )
+    table_parser.set_defaults(handler=_handle_risk_table)
 
 
 def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1065,6 +1136,194 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_audit_verify(args: argparse.Namespace) -> int:
+    try:
+        report = _load_audit_report(args.report)
+    except (OSError, TypeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load audit report: {exc}\n")
+        return 1
+
+    repro_ok = report.repro_hash_matches()
+    signature_status = "SKIPPED (report is unsigned)"
+    signature_ok = True
+
+    if report.signature is not None:
+        key = args.key or os.environ.get(_AUDIT_KEY_ENV)
+        if not key:
+            signature_status = f"FAIL (set --key or {_AUDIT_KEY_ENV})"
+            signature_ok = False
+        else:
+            try:
+                signature_ok = report.verify(key)
+            except (TypeError, ValueError) as exc:
+                signature_status = f"FAIL ({exc})"
+                signature_ok = False
+            else:
+                signature_status = _pass_fail(signature_ok)
+
+    verified = repro_ok and signature_ok
+    sys.stdout.write(f"Audit report verification: {_pass_fail(verified)}\n")
+    sys.stdout.write(f"Reproducibility hash: {_pass_fail(repro_ok)}\n")
+    sys.stdout.write(f"HMAC signature: {signature_status}\n")
+    return 0 if verified else 1
+
+
+def _handle_audit_show(args: argparse.Namespace) -> int:
+    try:
+        report = _load_audit_report(args.report)
+    except (OSError, TypeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load audit report: {exc}\n")
+        return 1
+
+    sys.stdout.write(_format_audit_summary(report))
+    return 0
+
+
+def _load_audit_report(path: Path):
+    from ..core.audit import AuditReport
+
+    return AuditReport.from_json(path.read_text(encoding="utf-8"))
+
+
+def _format_audit_summary(report: Any) -> str:
+    span_counts = Counter(
+        span.canonical_label or span.label or "UNKNOWN" for span in report.spans
+    )
+    action_counts = Counter(span.action or "unspecified" for span in report.spans)
+    signature = "present" if report.signature is not None else "absent"
+
+    lines = [
+        "Audit report summary",
+        f"Policy: {report.policy or '-'}",
+        f"OpenMed version: {report.openmed_version or '-'}",
+        f"Document length: {report.document_length}",
+        f"Reproducibility hash: {_pass_fail(report.repro_hash_matches())}",
+        f"Signature: {signature}",
+        "Span counts by type:",
+        *_format_count_lines(span_counts),
+        "Policy actions:",
+        *_format_count_lines(action_counts),
+        "Residual risk:",
+        *_format_residual_risk_lines(report.residual_risk),
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _format_residual_risk_lines(residual_risk: Mapping[str, Any]) -> list[str]:
+    if not residual_risk:
+        return ["  none"]
+
+    lines: list[str] = []
+    projected = residual_risk.get("projected_leakage")
+    if _is_number(projected):
+        lines.append(f"  Projected leakage: {_format_number(projected)}")
+
+    record_score = residual_risk.get("risk_report_record_score")
+    if _is_number(record_score):
+        lines.append(f"  Risk report record score: {_format_number(record_score)}")
+
+    risk = residual_risk.get("risk_report")
+    if isinstance(risk, MappingABC):
+        lines.extend(f"  {line}" for line in _format_risk_summary_lines(risk))
+
+    return lines or ["  summary unavailable"]
+
+
+def _handle_risk_text(args: argparse.Namespace) -> int:
+    from ..risk import risk_report
+
+    try:
+        text = _read_text_input(args.input)
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read text input: {exc}\n")
+        return 1
+
+    report = risk_report(text)
+    sys.stdout.write(_format_risk_summary("Text risk summary", report))
+    return 0
+
+
+def _handle_risk_table(args: argparse.Namespace) -> int:
+    from ..risk import risk_report
+
+    try:
+        records = _read_csv_records(args.csv)
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to read table input: {exc}\n")
+        return 1
+
+    report = risk_report(records)
+    sys.stdout.write(_format_risk_summary("Table risk summary", report))
+    return 0
+
+
+def _read_text_input(value: str) -> str:
+    path = Path(value)
+    if path.exists():
+        if not path.is_file():
+            raise OSError(f"not a file: {path}")
+        return path.read_text(encoding="utf-8")
+    return value
+
+
+def _read_csv_records(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if reader.fieldnames is None:
+            raise ValueError("CSV input must include a header row")
+        return [dict(row) for row in reader]
+
+
+def _format_risk_summary(title: str, report: Mapping[str, Any]) -> str:
+    return "\n".join([title, *_format_risk_summary_lines(report)]) + "\n"
+
+
+def _format_risk_summary_lines(report: Mapping[str, Any]) -> list[str]:
+    quasi_identifiers = _mapping_items(report.get("quasi_identifiers"))
+    singleton_records = _mapping_items(report.get("singleton_records"))
+    category_counts = Counter(
+        str(item.get("category") or "unknown") for item in quasi_identifiers
+    )
+
+    lines = [
+        f"Leakage rate: {_format_number(report.get('leakage_rate'))}",
+        f"Re-identification rate: {_format_number(report.get('reid_rate'))}",
+        f"Minimum k: {report.get('k_min', 0)}",
+        f"Singleton records: {len(singleton_records)}",
+        f"Quasi-identifiers: {len(quasi_identifiers)}",
+    ]
+    if category_counts:
+        lines.append("Quasi-identifier categories:")
+        lines.extend(_format_count_lines(category_counts))
+    return lines
+
+
+def _mapping_items(value: Any) -> list[Mapping[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, MappingABC)]
+
+
+def _format_count_lines(counts: Counter[str]) -> list[str]:
+    if not counts:
+        return ["  none"]
+    return [f"  {name}: {count}" for name, count in sorted(counts.items())]
+
+
+def _format_number(value: Any) -> str:
+    if _is_number(value):
+        return f"{float(value):.3f}"
+    return "n/a"
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _pass_fail(ok: bool) -> str:
+    return "PASS" if ok else "FAIL"
 
 
 def _handle_fhir_bundle(args: argparse.Namespace) -> int:
