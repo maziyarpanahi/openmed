@@ -66,6 +66,14 @@
     "VIN": "redact",
     "VEHICLE_REGISTRATION": "redact",
     "IMEI": "redact",
+    "MICROORGANISM": "keep",
+    "ANTIBIOTIC": "keep",
+    "SUSCEPTIBILITY": "keep",
+    "CONDITION": "keep",
+    "MEDICATION": "keep",
+    "LAB_TEST": "keep",
+    "PROCEDURE": "keep",
+    "BODY_SITE": "keep",
     "OTHER": "keep"
   }
 }

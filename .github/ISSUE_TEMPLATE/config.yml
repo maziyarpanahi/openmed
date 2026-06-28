@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability (private)
+    url: https://github.com/maziyarpanahi/openmed/security/advisories/new
+    about: Redaction bypass, PHI/PII leakage, or any security issue — report it privately here. NEVER open a public issue for a security problem.
+  - name: 📄 Security policy (SECURITY.md)
+    url: https://github.com/maziyarpanahi/openmed/blob/master/SECURITY.md
+    about: Read the responsible-disclosure policy before reporting a vulnerability.
