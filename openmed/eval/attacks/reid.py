@@ -15,6 +15,8 @@ from openmed.eval.golden import GoldenFixture, load_golden_fixtures
 from openmed.eval.report import BenchmarkReport
 from openmed.risk import risk_report
 
+from .linkage import linkage_attack
+
 
 @dataclass(frozen=True)
 class ReidAttackResult:
@@ -56,8 +58,11 @@ def run_reid_benchmark(
     *,
     suite: str = "golden",
     model_name: str = "privacy-filter",
+    attack_mode: str = "reid",
     deidentified_records: Sequence[Mapping[str, Any]] | None = None,
     auxiliary_records: Sequence[Mapping[str, Any]] | None = None,
+    quasi_id_table: Sequence[Mapping[str, Any]] | None = None,
+    quasi_identifiers: Sequence[str] | None = None,
     candidate_members: Sequence[Mapping[str, Any]] | None = None,
     output_json: str | Path | None = None,
     output_markdown: str | Path | None = None,
@@ -65,12 +70,54 @@ def run_reid_benchmark(
 ) -> BenchmarkReport:
     """Run the re-identification attack and return a BenchmarkReport.
 
-    When ``candidate_members`` is provided, the membership-inference probe runs
-    against the de-identified records and its result is added to the report
-    metrics under ``"membership_inference"``.
+    ``attack_mode="linkage"`` runs a first-class external quasi-identifier
+    linkage attack against ``quasi_id_table``. When ``candidate_members`` is
+    provided in the default ``"reid"`` mode, the membership-inference probe
+    runs against the de-identified records and its result is added to the
+    report metrics under ``"membership_inference"``.
     """
 
     fixtures = _load_suite_fixtures(suite)
+    if attack_mode not in {"reid", "linkage"}:
+        raise ValueError("attack_mode must be 'reid' or 'linkage'")
+
+    if attack_mode == "linkage":
+        if quasi_id_table is None:
+            raise ValueError("quasi_id_table is required for linkage mode")
+        deidentified = (
+            list(deidentified_records)
+            if deidentified_records is not None
+            else [_deidentified_record(fixture) for fixture in fixtures]
+        )
+        linkage_result = linkage_attack(
+            deidentified,
+            quasi_id_table,
+            quasi_identifiers=quasi_identifiers,
+        )
+        report = BenchmarkReport(
+            suite=suite,
+            model_name=model_name,
+            device="attack",
+            fixture_count=linkage_result.record_count,
+            generated_at=generated_at or _utc_now(),
+            metrics={
+                "linkage_unique_match_rate": linkage_result.unique_match_rate,
+                "linkage_attack": linkage_result.to_metric(),
+            },
+            metadata={
+                "attack": "linkage",
+                "leaderboard_metric": "linkage_unique_match_rate",
+            },
+        )
+        if output_json is not None:
+            report.write_json(output_json)
+        if output_markdown is not None:
+            Path(output_markdown).write_text(
+                render_reid_leaderboard([report]),
+                encoding="utf-8",
+            )
+        return report
+
     result = run_reid_attack(
         fixtures,
         deidentified_records=deidentified_records,

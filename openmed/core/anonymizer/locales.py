@@ -43,8 +43,11 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "te": "en_IN",  # Faker has no Telugu locale; en_IN is the closest match
     "pt": "pt_PT",
     "ar": "ar_EG",  # Egypt is the most-populous Arabic-speaking country; override for Gulf/Levant locales.
+    "he": "he_IL",
     "ja": "ja_JP",
     "tr": "tr_TR",
+    "id": "id_ID",
+    "th": "th_TH",
     "pl": "pl_PL",
     "ko": "ko_KR",
 }
@@ -76,6 +79,10 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
     "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    "tr": ("tr_TR", "ssn"),  # TCKN
+    "he": ("he_IL", "teudat_zehut"),  # Israeli Teudat Zehut
+    "id": ("id_ID", "indonesian_nik"),  # NIK
+    "th": ("th_TH", "thai_national_id"),  # Thai 13-digit national ID
     "pl": ("pl_PL", "pesel"),  # PESEL
     "ko": ("ko_KR", "korean_rrn"),  # RRN
 }
