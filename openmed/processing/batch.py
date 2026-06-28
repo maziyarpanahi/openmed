@@ -67,6 +67,16 @@ class BatchItemResult:
         }
 
 
+@dataclass(frozen=True)
+class BatchProgress:
+    """PHI-safe progress snapshot for a batch processing job."""
+
+    completed: int
+    total: int
+    current_index: int
+    elapsed: float
+
+
 @dataclass
 class BatchResult:
     """Aggregate result for a batch processing job."""
@@ -147,6 +157,7 @@ class BatchResult:
 
 # Type alias for progress callback
 ProgressCallback = Callable[[int, int, Optional[BatchItemResult]], None]
+BatchProgressCallback = Callable[[BatchProgress], None]
 
 
 class BatchProcessor:
@@ -319,6 +330,8 @@ class BatchProcessor:
         texts: Sequence[str],
         ids: Optional[Sequence[str]] = None,
         progress_callback: Optional[ProgressCallback] = None,
+        *,
+        on_progress: Optional[BatchProgressCallback] = None,
     ) -> BatchResult:
         """Process multiple texts.
 
@@ -326,19 +339,27 @@ class BatchProcessor:
             texts: Sequence of texts to analyze.
             ids: Optional identifiers for each text.
             progress_callback: Optional callback for progress updates.
-                Signature: callback(current_index, total_count, result)
+                Signature: callback(completed_count, total_count, result)
+            on_progress: Optional PHI-safe callback that receives a
+                BatchProgress record after each completed item.
 
         Returns:
             BatchResult with all processing results.
         """
         items = self._create_batch_items(texts, ids)
-        return self._process_items(items, progress_callback)
+        return self._process_items(
+            items,
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+        )
 
     def process_files(
         self,
         file_paths: Sequence[Union[str, Path]],
         encoding: str = "utf-8",
         progress_callback: Optional[ProgressCallback] = None,
+        *,
+        on_progress: Optional[BatchProgressCallback] = None,
     ) -> BatchResult:
         """Process multiple files.
 
@@ -346,6 +367,8 @@ class BatchProcessor:
             file_paths: Paths to text files.
             encoding: File encoding.
             progress_callback: Optional callback for progress updates.
+            on_progress: Optional PHI-safe callback that receives a
+                BatchProgress record after each completed item.
 
         Returns:
             BatchResult with all processing results.
@@ -374,7 +397,11 @@ class BatchProcessor:
                         metadata={"read_error": str(e)},
                     )
                 )
-        return self._process_items(items, progress_callback)
+        return self._process_items(
+            items,
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+        )
 
     def process_directory(
         self,
@@ -383,6 +410,8 @@ class BatchProcessor:
         recursive: bool = False,
         encoding: str = "utf-8",
         progress_callback: Optional[ProgressCallback] = None,
+        *,
+        on_progress: Optional[BatchProgressCallback] = None,
     ) -> BatchResult:
         """Process all matching files in a directory.
 
@@ -392,6 +421,8 @@ class BatchProcessor:
             recursive: Whether to search recursively.
             encoding: File encoding.
             progress_callback: Optional callback for progress updates.
+            on_progress: Optional PHI-safe callback that receives a
+                BatchProgress record after each completed item.
 
         Returns:
             BatchResult with all processing results.
@@ -403,28 +434,43 @@ class BatchProcessor:
             files = list(directory.glob(pattern))
 
         files.sort()
-        return self.process_files(files, encoding, progress_callback)
+        return self.process_files(
+            files,
+            encoding=encoding,
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+        )
 
     def process_items(
         self,
         items: Sequence[BatchItem],
         progress_callback: Optional[ProgressCallback] = None,
+        *,
+        on_progress: Optional[BatchProgressCallback] = None,
     ) -> BatchResult:
         """Process a sequence of BatchItem objects.
 
         Args:
             items: Sequence of BatchItem objects.
             progress_callback: Optional callback for progress updates.
+            on_progress: Optional PHI-safe callback that receives a
+                BatchProgress record after each completed item.
 
         Returns:
             BatchResult with all processing results.
         """
-        return self._process_items(list(items), progress_callback)
+        return self._process_items(
+            list(items),
+            progress_callback=progress_callback,
+            on_progress=on_progress,
+        )
 
     def _process_items(
         self,
         items: List[BatchItem],
         progress_callback: Optional[ProgressCallback] = None,
+        *,
+        on_progress: Optional[BatchProgressCallback] = None,
     ) -> BatchResult:
         """Internal method to process batch items."""
         from datetime import datetime
@@ -441,17 +487,48 @@ class BatchProcessor:
             chunk_results = self._process_batch_chunk(chunk)
             for item_result in chunk_results:
                 batch_result.items.append(item_result)
-
-                if progress_callback:
-                    try:
-                        progress_callback(len(batch_result.items), total, item_result)
-                    except Exception as e:
-                        logger.warning(f"Progress callback error: {e}")
+                self._emit_progress(
+                    completed=len(batch_result.items),
+                    total=total,
+                    started_at=batch_start,
+                    item_result=item_result,
+                    progress_callback=progress_callback,
+                    on_progress=on_progress,
+                )
 
         batch_result.total_processing_time = time.time() - batch_start
         batch_result.completed_at = datetime.now().isoformat()
 
         return batch_result
+
+    def _emit_progress(
+        self,
+        *,
+        completed: int,
+        total: int,
+        started_at: float,
+        item_result: BatchItemResult,
+        progress_callback: Optional[ProgressCallback] = None,
+        on_progress: Optional[BatchProgressCallback] = None,
+    ) -> None:
+        """Notify optional progress callbacks after one item completes."""
+        if on_progress:
+            progress = BatchProgress(
+                completed=completed,
+                total=total,
+                current_index=completed - 1,
+                elapsed=time.time() - started_at,
+            )
+            try:
+                on_progress(progress)
+            except Exception:
+                logger.warning("on_progress callback raised; continuing batch")
+
+        if progress_callback:
+            try:
+                progress_callback(completed, total, item_result)
+            except Exception:
+                logger.warning("progress_callback raised; continuing batch")
 
     def _process_batch_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
         """Process a contiguous item chunk for the selected operation."""
@@ -625,6 +702,8 @@ class BatchProcessor:
         self,
         texts: Sequence[str],
         ids: Optional[Sequence[str]] = None,
+        *,
+        on_progress: Optional[BatchProgressCallback] = None,
     ) -> Iterator[BatchItemResult]:
         """Process texts as an iterator, yielding results one at a time.
 
@@ -634,14 +713,27 @@ class BatchProcessor:
         Args:
             texts: Sequence of texts to analyze.
             ids: Optional identifiers for each text.
+            on_progress: Optional PHI-safe callback that receives a
+                BatchProgress record after each completed item.
 
         Yields:
             BatchItemResult for each processed text.
         """
         items = self._create_batch_items(texts, ids)
+        total = len(items)
+        completed = 0
+        batch_start = time.time()
 
         for chunk in self._iter_chunks(items):
             for result in self._process_batch_chunk(chunk):
+                completed += 1
+                self._emit_progress(
+                    completed=completed,
+                    total=total,
+                    started_at=batch_start,
+                    item_result=result,
+                    on_progress=on_progress,
+                )
                 yield result
 
 
@@ -651,6 +743,7 @@ def process_batch(
     ids: Optional[Sequence[str]] = None,
     config: Optional[Any] = None,
     progress_callback: Optional[ProgressCallback] = None,
+    on_progress: Optional[BatchProgressCallback] = None,
     **kwargs: Any,
 ) -> BatchResult:
     """Convenience function for batch processing texts.
@@ -661,6 +754,8 @@ def process_batch(
         ids: Optional identifiers for each text.
         config: Optional OpenMedConfig instance.
         progress_callback: Optional callback for progress updates.
+        on_progress: Optional PHI-safe callback that receives a
+            BatchProgress record after each completed item.
         **kwargs: Additional arguments passed to BatchProcessor.
 
     Returns:
@@ -673,4 +768,9 @@ def process_batch(
         >>> print(f"Processed {result.successful_items}/{result.total_items} texts")
     """
     processor = BatchProcessor(model_name=model_name, config=config, **kwargs)
-    return processor.process_texts(texts, ids, progress_callback)
+    return processor.process_texts(
+        texts,
+        ids,
+        progress_callback,
+        on_progress=on_progress,
+    )

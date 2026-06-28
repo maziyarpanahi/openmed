@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
+from collections.abc import Mapping as MappingABC
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 from ..__about__ import __version__
 from ..core.config import (
@@ -22,8 +24,11 @@ from ..core.config import (
     save_profile,
     set_config,
 )
-from ..core.model_registry import get_model_info
+from ..core.model_card import render_model_card
+from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
+from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
+from .gates import add_gates_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -98,6 +103,14 @@ COMPLIANCE_CAVEAT = (
     "No de-identification tool can guarantee compliance or zero residual risk. "
     "Validate locally before any production or clinical use."
 )
+_FHIR_BUNDLE_TYPES = frozenset({"transaction", "batch"})
+
+
+def _non_negative_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("value must be greater than or equal to 0")
+    return parsed
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -125,10 +138,14 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
+    _add_policy_command(subparsers)
+    _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
+    add_gates_command(subparsers)
     return parser
 
 
@@ -396,6 +413,37 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.set_defaults(handler=_handle_pii_batch)
 
 
+def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add FHIR export commands."""
+    fhir_parser = subparsers.add_parser("fhir", help="FHIR export utilities.")
+    fhir_sub = fhir_parser.add_subparsers(dest="fhir_command")
+
+    bundle_parser = fhir_sub.add_parser(
+        "bundle",
+        help="Assemble standalone FHIR resources into a deterministic Bundle.",
+    )
+    bundle_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="JSON result file containing standalone FHIR resources.",
+    )
+    bundle_parser.add_argument(
+        "--type",
+        dest="bundle_type",
+        choices=sorted(_FHIR_BUNDLE_TYPES),
+        required=True,
+        help="FHIR Bundle type to emit.",
+    )
+    bundle_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path to write the FHIR Bundle JSON.",
+    )
+    bundle_parser.set_defaults(handler=_handle_fhir_bundle)
+
+
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
@@ -417,6 +465,85 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Registry key defined in openmed.core.model_registry.",
     )
     models_info.set_defaults(handler=_handle_models_info)
+
+    models_search = models_sub.add_parser(
+        "search",
+        help="Search the canonical model manifest.",
+    )
+    models_search.add_argument(
+        "query",
+        nargs="?",
+        default=None,
+        help="Case-insensitive substring matched against repo_id or family.",
+    )
+    models_search.add_argument("--task", help="Filter by model task.")
+    models_search.add_argument("--language", help="Filter by language code.")
+    models_search.add_argument("--tier", help="Filter by model tier.")
+    models_search.add_argument(
+        "--max-params",
+        type=_non_negative_int,
+        default=None,
+        help="Maximum parameter count. Unknown counts are retained by default.",
+    )
+    models_search.add_argument(
+        "--min-params",
+        type=_non_negative_int,
+        default=None,
+        help="Minimum parameter count.",
+    )
+    models_search.add_argument(
+        "--format",
+        help="Filter by runtime format or device, such as mlx, coreml, onnx, or pytorch.",
+    )
+    models_search.add_argument("--license", help="Filter by SPDX license string.")
+    models_search.add_argument(
+        "--require-params",
+        action="store_true",
+        help="Exclude manifest rows with unknown parameter counts.",
+    )
+    models_search.set_defaults(handler=_handle_models_search)
+
+    models_recommend = models_sub.add_parser(
+        "recommend",
+        help="Recommend the best on-device model for a task and device tier.",
+    )
+    models_recommend.add_argument("--task", help="Filter by model task.")
+    models_recommend.add_argument("--language", help="Filter by language code.")
+    models_recommend.add_argument(
+        "--tier",
+        required=True,
+        choices=["phone", "laptop", "workstation", "server"],
+        help="Target device tier the recommended model must fit.",
+    )
+    models_recommend.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the ranked shortlist as a single JSON document.",
+    )
+    models_recommend.set_defaults(handler=_handle_models_recommend)
+
+    models_card = models_sub.add_parser(
+        "card",
+        help="Render a README model card from the canonical manifest.",
+    )
+    models_card.add_argument(
+        "repo_id",
+        help="Hugging Face repository id to resolve from models.jsonl.",
+    )
+    card_output = models_card.add_mutually_exclusive_group()
+    card_output.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Optional path to write the rendered README Markdown.",
+    )
+    card_output.add_argument(
+        "--check",
+        type=Path,
+        metavar="README",
+        help="Compare an existing README against the rendered card.",
+    )
+    models_card.set_defaults(handler=_handle_models_card)
 
     models_freshness = models_sub.add_parser(
         "freshness",
@@ -453,6 +580,37 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Reference median-age target in days.",
     )
     models_freshness.set_defaults(handler=_handle_models_freshness)
+
+    models_validate = models_sub.add_parser(
+        "validate",
+        help="Validate the canonical model manifest schema.",
+    )
+    models_validate.add_argument(
+        "--manifest",
+        type=Path,
+        default=None,
+        help="Path to a model manifest JSONL file.",
+    )
+    models_validate.set_defaults(handler=_handle_models_validate)
+
+
+def _add_doctor_command(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Inspect the OpenMed environment and dependencies.",
+    )
+
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit diagnostics as JSON.",
+    )
+
+    doctor_parser.set_defaults(
+        handler=_handle_doctor,
+    )
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
@@ -511,6 +669,49 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     )
     profile_delete.add_argument("profile_name", help="Name of the profile to delete.")
     profile_delete.set_defaults(handler=_handle_profile_delete)
+
+
+def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
+    policy_parser = subparsers.add_parser(
+        "policy", help="Inspect and validate OpenMed policy profiles."
+    )
+    policy_sub = policy_parser.add_subparsers(dest="policy_command")
+
+    diff_parser = policy_sub.add_parser(
+        "diff",
+        help="Compare two policy profile configurations.",
+    )
+    diff_parser.add_argument(
+        "base",
+        help="Baseline bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "candidate",
+        help="Candidate bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format",
+        help="Output format.",
+    )
+    diff_parser.set_defaults(handler=_handle_policy_diff)
+
+    policy_lint = policy_sub.add_parser(
+        "lint",
+        help="Lint a bundled policy name or policy profile JSON file.",
+    )
+    policy_lint.add_argument(
+        "target",
+        help="Policy profile name or path to a policy profile JSON file.",
+    )
+    policy_lint.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return a non-zero exit code when warnings are present.",
+    )
+    policy_lint.set_defaults(handler=_handle_policy_lint)
 
 
 def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
@@ -574,6 +775,60 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Use the approved-access full SHIELD corpus instead of the public sample.",
     )
     pii_parser.set_defaults(handler=_handle_benchmark_pii)
+
+    clinical_parser = benchmark_sub.add_parser(
+        "clinical",
+        help="Resolve clinical benchmark suites such as DrugProt.",
+    )
+    clinical_parser.add_argument(
+        "--suite",
+        default="drugprot",
+        help="Clinical benchmark suite to load.",
+    )
+    clinical_parser.add_argument(
+        "--task",
+        choices=["ner", "relation"],
+        default="ner",
+        help="Clinical benchmark task view to load.",
+    )
+    clinical_parser.add_argument(
+        "--input",
+        type=Path,
+        default=None,
+        help="Optional local corpus directory, fixture file, or DrugProt archive.",
+    )
+    clinical_parser.add_argument(
+        "--cache-dir",
+        type=Path,
+        default=None,
+        help="Optional cache directory for download-on-demand public corpora.",
+    )
+    clinical_parser.add_argument(
+        "--split",
+        default=None,
+        help="Optional public-corpus split to load.",
+    )
+    clinical_parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help=(
+            "One or more model identifiers for NER benchmark reports. "
+            "Comma-separated values are accepted."
+        ),
+    )
+    clinical_parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device tier label recorded in NER benchmark reports.",
+    )
+    clinical_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Optional path for a JSON suite-resolution summary.",
+    )
+    clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -738,6 +993,133 @@ def _handle_batch(args: argparse.Namespace) -> int:
     return 0 if result.failed_items == 0 else 1
 
 
+def _handle_fhir_bundle(args: argparse.Namespace) -> int:
+    if args.bundle_type not in _FHIR_BUNDLE_TYPES:
+        allowed = ", ".join(sorted(_FHIR_BUNDLE_TYPES))
+        sys.stderr.write(f"--type must be one of: {allowed}\n")
+        return 2
+
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        resources = _extract_fhir_resources(payload)
+        doc_id = _extract_fhir_doc_id(payload)
+
+        from ..clinical.exporters.fhir import to_bundle
+
+        bundle = to_bundle(
+            resources,
+            doc_id=doc_id,
+            bundle_type=args.bundle_type,
+        )
+        args.output.write_text(
+            json.dumps(bundle, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        sys.stderr.write(f"Input file not found: {args.input}\n")
+        return 1
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}\n"
+        )
+        return 1
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read or write FHIR Bundle: {exc}\n")
+        return 1
+    except (TypeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to assemble FHIR Bundle: {exc}\n")
+        return 1
+
+    sys.stdout.write(f"FHIR Bundle written to: {args.output}\n")
+    return 0
+
+
+def _extract_fhir_doc_id(payload: Any) -> str:
+    """Return the stable document id carried by a serialized result payload."""
+    if isinstance(payload, MappingABC):
+        for key in ("doc_id", "document_id", "id"):
+            value = payload.get(key)
+            if isinstance(value, (str, int)) and str(value):
+                return str(value)
+    return "openmed-document"
+
+
+def _extract_fhir_resources(payload: Any) -> list[dict[str, Any]]:
+    """Extract standalone FHIR resources from supported result JSON shapes."""
+    resources = _find_fhir_resource_payload(payload)
+    if not isinstance(resources, list):
+        raise ValueError("FHIR resources must be a JSON array")
+
+    normalized: list[dict[str, Any]] = []
+    for index, resource in enumerate(resources):
+        if not isinstance(resource, MappingABC):
+            raise ValueError(f"FHIR resource at index {index} must be a JSON object")
+        if resource.get("resourceType") == "Bundle":
+            raise ValueError(
+                "input resources must be standalone FHIR resources, not Bundles"
+            )
+        normalized.append(dict(resource))
+    return normalized
+
+
+def _find_fhir_resource_payload(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return payload
+
+    if not isinstance(payload, MappingABC):
+        raise ValueError(
+            "FHIR input must be a JSON array of resources or a result object"
+        )
+
+    for key in ("fhir_resources", "fhirResources", "resources"):
+        if key in payload:
+            return payload[key]
+
+    fhir_payload = payload.get("fhir")
+    if isinstance(fhir_payload, list):
+        return fhir_payload
+    if isinstance(fhir_payload, MappingABC):
+        for key in ("resources", "fhir_resources", "fhirResources"):
+            if key in fhir_payload:
+                return fhir_payload[key]
+
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("fhir_resources", "fhirResources", "resources"):
+            if key in result_payload:
+                return result_payload[key]
+
+    if "resourceType" in payload:
+        if payload.get("resourceType") == "Bundle":
+            raise ValueError(
+                "input is already a FHIR Bundle; provide standalone resources"
+            )
+        return [payload]
+
+    raise ValueError(
+        "FHIR input must contain standalone FHIR resources under "
+        "'resources', 'fhir_resources', or 'fhir.resources'"
+    )
+
+
+def _handle_policy_diff(args: argparse.Namespace) -> int:
+    from ..core.policy_diff import diff_policies, render
+
+    try:
+        diff = diff_policies(args.base, args.candidate)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"Policy diff failed: {exc}\n")
+        return 1
+
+    if args.output_format == "json":
+        payload = render(diff, fmt="dict")
+        sys.stdout.write(f"{json.dumps(payload, indent=2, sort_keys=True)}\n")
+    else:
+        sys.stdout.write(f"{render(diff, fmt='text')}\n")
+    return 0
+
+
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
@@ -794,11 +1176,272 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
+    from openmed.eval.suites import (
+        BIOMEDICAL_NER,
+        load_suite_fixtures,
+        run_biomedical_ner_benchmark,
+        suite_metadata,
+    )
+
+    try:
+        suite = str(args.suite)
+        task = str(args.task)
+        load_kwargs: dict[str, Any] = {
+            "task": task,
+            "path": args.input,
+            "cache_dir": args.cache_dir,
+        }
+        if args.split is not None:
+            load_kwargs["split"] = str(args.split)
+        fixtures = load_suite_fixtures(suite, **load_kwargs)
+        metadata_kwargs: dict[str, Any] = {}
+        if suite == "drugprot":
+            metadata_kwargs["task"] = task
+        if suite == BIOMEDICAL_NER and args.split is not None:
+            metadata_kwargs["split"] = str(args.split)
+        metadata = suite_metadata(suite, **metadata_kwargs)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to load clinical benchmark suite: {exc}\n")
+        return 1
+
+    if suite == BIOMEDICAL_NER and task == "ner":
+        split = str(args.split) if args.split is not None else "test"
+        models = _parse_model_args(args.models or [])
+        if not models:
+            models = ["disease_detection_superclinical"]
+        reports = [
+            run_biomedical_ner_benchmark(
+                fixtures,
+                model_name=model,
+                device=str(args.device),
+                metadata=metadata,
+                split=split,
+            )
+            for model in models
+        ]
+        if len(reports) == 1:
+            payload: Any = reports[0].to_dict()
+        else:
+            payload = {
+                "metadata": metadata,
+                "reports": [report.to_dict() for report in reports],
+                "suite": suite,
+            }
+        return _write_json_payload(payload, args.output)
+
+    payload: dict[str, Any] = {
+        "fixture_count": len(fixtures),
+        "metadata": metadata,
+        "suite": suite,
+        "task": task,
+    }
+    if task == "relation":
+        payload["relation_count"] = sum(
+            len(getattr(fixture, "relations", ())) for fixture in fixtures
+        )
+    else:
+        payload["span_count"] = sum(
+            len(getattr(fixture, "gold_spans", ())) for fixture in fixtures
+        )
+
+    return _write_json_payload(payload, args.output)
+
+
+def _write_json_payload(payload: Any, output_path: Path | None) -> int:
+    output = json.dumps(payload, indent=2, sort_keys=True)
+    if output_path:
+        try:
+            output_path.write_text(output + "\n", encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+    else:
+        sys.stdout.write(output + "\n")
+    return 0
+
+
 def _parse_model_args(values: Sequence[str]) -> list[str]:
     models: list[str] = []
     for value in values:
         models.extend(item.strip() for item in value.split(",") if item.strip())
     return models
+
+
+def _handle_models_search(args: argparse.Namespace) -> int:
+    if (
+        args.min_params is not None
+        and args.max_params is not None
+        and args.min_params > args.max_params
+    ):
+        sys.stderr.write("--min-params must be less than or equal to --max-params\n")
+        return 2
+
+    try:
+        results = search_models(
+            task=args.task,
+            language=args.language,
+            tier=args.tier,
+            max_params=args.max_params,
+            min_params=args.min_params,
+            format=args.format,
+            license=args.license,
+            query=args.query,
+            require_params=args.require_params,
+        )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to search models: {exc}\n")
+        return 1
+
+    if not results:
+        sys.stderr.write("No models matched the search filters.\n")
+        return 1
+
+    sys.stdout.write(_format_model_search_table(results))
+    return 0
+
+
+def _handle_models_recommend(args: argparse.Namespace) -> int:
+    try:
+        results = recommend_models(
+            device_tier=args.tier,
+            task=args.task,
+            language=args.language,
+        )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to recommend models: {exc}\n")
+        return 1
+
+    if not results:
+        sys.stderr.write(
+            f"No model fits the '{args.tier}' device tier for the requested filters.\n"
+        )
+        return 1
+
+    if args.json:
+        payload = {
+            "tier": args.tier,
+            "task": args.task,
+            "language": args.language,
+            "recommended": results[0].repo_id,
+            "models": [_recommendation_to_dict(result) for result in results],
+        }
+        sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
+        return 0
+
+    sys.stdout.write(f"Recommended for {args.tier}: {results[0].repo_id}\n")
+    sys.stdout.write(_format_model_search_table(results))
+    return 0
+
+
+def _handle_models_card(args: argparse.Namespace) -> int:
+    try:
+        row = _find_manifest_row(args.repo_id)
+        rendered = render_model_card(dict(row))
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to render model card: {exc}\n")
+        return 1
+
+    if args.check is not None:
+        try:
+            existing = args.check.read_text(encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to read README for comparison: {exc}\n")
+            return 1
+
+        if existing == rendered:
+            return 0
+
+        diff = difflib.unified_diff(
+            existing.splitlines(keepends=True),
+            rendered.splitlines(keepends=True),
+            fromfile=str(args.check),
+            tofile=f"rendered:{args.repo_id}",
+        )
+        sys.stdout.writelines(diff)
+        return 1
+
+    if args.output is not None:
+        try:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write model card: {exc}\n")
+            return 1
+        return 0
+
+    sys.stdout.write(rendered)
+    return 0
+
+
+def _find_manifest_row(repo_id: str) -> Mapping[str, Any]:
+    rows = load_manifest_rows(MANIFEST_PATH)
+    for row in rows:
+        if row.get("repo_id") == repo_id:
+            return row
+    raise ValueError(f"repo_id not found in model manifest: {repo_id}")
+
+
+def _recommendation_to_dict(result: ModelSearchResult) -> dict[str, Any]:
+    row = result.manifest_row
+    return {
+        "repo_id": result.repo_id,
+        "family": result.family,
+        "task": result.task,
+        "languages": list(result.languages),
+        "tier": result.tier,
+        "param_count": result.param_count,
+        "formats": list(result.formats),
+        "license": result.license,
+        "recommended_tier": row.get("recommended_tier"),
+        "peak_ram_mb": row.get("peak_ram_mb"),
+        "latency_ms": row.get("latency_ms"),
+        "benchmark": result.benchmark,
+    }
+
+
+def _format_model_search_table(results: Sequence[ModelSearchResult]) -> str:
+    columns = (
+        ("repo_id", "repo_id"),
+        ("family", "family"),
+        ("task", "task"),
+        ("languages", "languages"),
+        ("tier", "tier"),
+        ("params", "params"),
+        ("formats", "formats"),
+        ("license", "license"),
+    )
+    rows = [
+        {
+            "repo_id": result.repo_id,
+            "family": result.family or "-",
+            "task": result.task or "-",
+            "languages": ",".join(result.languages) or "-",
+            "tier": result.tier or "-",
+            "params": _format_param_count(result.param_count),
+            "formats": ",".join(result.formats) or "-",
+            "license": result.license or "-",
+        }
+        for result in results
+    ]
+    widths = {
+        key: max(len(header), *(len(row[key]) for row in rows))
+        for key, header in columns
+    }
+
+    header = "  ".join(header.ljust(widths[key]) for key, header in columns)
+    separator = "  ".join("-" * widths[key] for key, _header in columns)
+    body = [
+        "  ".join(row[key].ljust(widths[key]) for key, _header in columns)
+        for row in rows
+    ]
+    return "\n".join([header, separator, *body]) + "\n"
+
+
+def _format_param_count(param_count: int | None) -> str:
+    if param_count is None:
+        return "unknown"
+    return f"{param_count:,}"
 
 
 def _handle_models_list(args: argparse.Namespace) -> int:
@@ -895,6 +1538,50 @@ def _handle_models_freshness(args: argparse.Namespace) -> int:
     else:
         sys.stdout.write(metrics.to_markdown())
     return 0
+
+
+def _handle_models_validate(args: argparse.Namespace) -> int:
+    from openmed.core.manifest_schema import (
+        MANIFEST_PATH,
+        format_manifest_validation,
+        validate_manifest_file,
+    )
+
+    manifest_path = args.manifest or MANIFEST_PATH
+    try:
+        result = validate_manifest_file(manifest_path)
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read manifest: {exc}\n")
+        return 1
+
+    output = sys.stderr if result.violations else sys.stdout
+    for line in format_manifest_validation(result):
+        output.write(f"{line}\n")
+    return 0 if result.ok else 1
+
+
+def _handle_doctor(args: argparse.Namespace) -> int:
+    from ..core.doctor import run_diagnostics
+
+    results = run_diagnostics()
+
+    if args.json:
+        sys.stdout.write(json.dumps(results, indent=2))
+        sys.stdout.write("\n")
+
+        has_fail = any(item["status"] == "FAIL" for item in results)
+
+        return 1 if has_fail else 0
+
+    for item in results:
+        sys.stdout.write(f"{item['status'][:5]} {item['name']}: {item['details']}\n")
+
+        if item.get("hint"):
+            sys.stdout.write(f"      Hint: {item['hint']}\n")
+
+    has_fail = any(item["status"] == "FAIL" for item in results)
+
+    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:
@@ -1000,6 +1687,23 @@ def _coerce_value(key: str, value: str) -> Any:
         except ValueError:
             raise ValueError("timeout must be an integer") from None
     return value
+
+
+# ---------------------------------------------------------------------------
+# Policy Handlers
+# ---------------------------------------------------------------------------
+
+
+def _handle_policy_lint(args: argparse.Namespace) -> int:
+    from ..core.policy_lint import lint_policy
+
+    report = lint_policy(args.target)
+    sys.stdout.write(f"{json.dumps(report, indent=2, sort_keys=True)}\n")
+    if report["errors"]:
+        return 1
+    if args.strict and report["warnings"]:
+        return 1
+    return 0
 
 
 # ---------------------------------------------------------------------------
