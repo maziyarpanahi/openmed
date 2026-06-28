@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from openmed.core.hf_publish import publish_artifact
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,11 @@ def convert(
 
     # 1. Load model and tokenizer
     logger.info("Loading HuggingFace model %s ...", model_id)
-    tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
+    tokenizer = get_tokenizer_with_loader(
+        model_id,
+        AutoTokenizer.from_pretrained,
+        cache_dir=cache_dir,
+    )
     model = AutoModelForTokenClassification.from_pretrained(
         model_id,
         cache_dir=cache_dir,
