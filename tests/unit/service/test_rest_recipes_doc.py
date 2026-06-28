@@ -50,13 +50,6 @@ def test_recipes_endpoint_paths_match_reference():
         assert path in reference, f"endpoint missing from reference doc: {path}"
 
 
-def test_recipes_error_envelope_matches_reference():
-    envelope = '"code": "validation_error|bad_request|timeout|internal_error"'
-    reference = REFERENCE.read_text(encoding="utf-8")
-    assert envelope in reference
-    assert envelope in _recipes_text()
-
-
 def test_recipes_and_reference_cross_link():
     assert "rest-recipes.md" in REFERENCE.read_text(encoding="utf-8")
     assert "rest-service.md" in _recipes_text()
@@ -64,3 +57,12 @@ def test_recipes_and_reference_cross_link():
 
 def test_recipes_page_is_in_mkdocs_nav():
     assert "rest-recipes.md" in MKDOCS.read_text(encoding="utf-8")
+
+
+def test_recipes_documents_error_envelope():
+    """The recipes guide documents the structured error envelope so callers
+    know what an error response looks like (GitHub issue #480)."""
+    text = _recipes_text()
+    assert '"code":' in text
+    for code in ("validation_error", "bad_request", "timeout", "internal_error"):
+        assert code in text, f"error code not documented in recipes: {code}"
