@@ -92,9 +92,14 @@ def _normalize_attn_preference(prefer: str | None) -> str:
 
 def _flash_attention_2_is_available() -> bool:
     try:
-        return importlib.util.find_spec("flash_attn") is not None
+        if importlib.util.find_spec("flash_attn") is None:
+            return False
     except (ImportError, ValueError):
         return False
+    torch = _import_torch()
+    cuda = getattr(torch, "cuda", None)
+    is_available = getattr(cuda, "is_available", None)
+    return callable(is_available) and bool(is_available())
 
 
 def _sdpa_is_available() -> bool:
