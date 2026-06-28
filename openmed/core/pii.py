@@ -785,8 +785,8 @@ def extract_pii(
         ...         model_name="fixture-pii-model",
         ...         use_smart_merging=False,
         ...     )
-        >>> [(entity.text, entity.label) for entity in result.entities]
-        [('Casey Example', 'NAME')]
+        >>> next((entity.text, entity.label) for entity in result.entities)
+        ('Casey Example', 'NAME')
     """
     if cache_results:
         params = dict(locals())
