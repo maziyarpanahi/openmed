@@ -350,7 +350,10 @@ def load_index(path: Optional[Path] = None) -> ModelIndex:
     if not index_path.exists():
         raise FileNotFoundError(f"Index file not found: {index_path}")
 
-    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in index file {index_path}: {exc}") from exc
 
     models_payload = payload.get("models", [])
     meta = payload.get("meta", {})

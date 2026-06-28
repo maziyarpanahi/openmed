@@ -45,7 +45,10 @@ def _load_from_resource() -> Mapping[str, Iterable[str]]:
 
 def _load_from_path(path: Path) -> Mapping[str, Iterable[str]]:
     text = Path(path).read_text(encoding="utf-8")
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON in label file: {exc}") from exc
 
 
 def _normalise_label_map(raw: Mapping[str, Iterable[str]]) -> Dict[str, List[str]]:
