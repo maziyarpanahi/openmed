@@ -359,6 +359,33 @@
         "synthetic": true
       },
       "text": "Sentetik not: Ayşe Yılmaz 14.03.2026 tarihinde geldi; TCKN 13198785260 test hastası içindir."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 38,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "nik"
+          },
+          "start": 22,
+          "text": "3174055708850001"
+        }
+      ],
+      "id": "golden-multilingual-id-nik",
+      "language": "id",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Catatan sintetis: NIK [ID_NUM] untuk pasien uji."
+        },
+        "identifier_type": "nik",
+        "locale": "id_ID",
+        "synthetic": true
+      },
+      "text": "Catatan sintetis: NIK 3174055708850001 untuk pasien uji."
     }
   ],
   "notice": "Synthetic-only golden fixtures for evals; no DUA data and no real PHI.",
