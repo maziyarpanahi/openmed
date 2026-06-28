@@ -71,6 +71,13 @@ from openmed.eval.harness import (
     run_benchmark,
     run_suite,
 )
+from openmed.eval.history import (
+    BenchmarkHistoryDiff,
+    MetricDelta,
+    MetricHistoryPoint,
+    diff_against_baseline,
+    metric_history,
+)
 from openmed.eval.leakage_heatmap import (
     HeatmapCell,
     LeakageHeatmap,
@@ -131,6 +138,7 @@ from openmed.eval.tiers import TIERS
 
 __all__ = [
     "BenchmarkFixture",
+    "BenchmarkHistoryDiff",
     "BenchmarkReport",
     "CalibrationArtifactPaths",
     "CalibrationGroupReport",
@@ -159,6 +167,8 @@ __all__ = [
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
     "ModelStewardConfig",
+    "MetricDelta",
+    "MetricHistoryPoint",
     "QUARANTINED",
     "QuantRecallDeltaResult",
     "ReidAttackResult",
@@ -198,6 +208,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_cache_dir",
     "default_suite_calibration_samples",
+    "diff_against_baseline",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
     "error_report",
@@ -213,6 +224,7 @@ __all__ = [
     "load_calibration_samples",
     "load_calibration_thresholds",
     "load_or_compute",
+    "metric_history",
     "ocr_noise_perturbation",
     "perturb_fixture",
     "render_reid_leaderboard",
