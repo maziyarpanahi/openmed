@@ -193,6 +193,35 @@ def analyze_text(
 
     Returns:
         Prediction result in the requested ``output_format``.
+
+    Example:
+        >>> class FixtureLoader:
+        ...     config = None
+        ...
+        ...     def create_pipeline(self, model_name, **kwargs):
+        ...         def pipeline(text, **call_kwargs):
+        ...             return [
+        ...                 {
+        ...                     "entity_group": "CONDITION",
+        ...                     "score": 0.99,
+        ...                     "start": 11,
+        ...                     "end": 17,
+        ...                     "word": "asthma",
+        ...                 }
+        ...             ]
+        ...
+        ...         return pipeline
+        ...
+        ...     def get_max_sequence_length(self, model_name, tokenizer=None):
+        ...         return 128
+        >>> result = analyze_text(
+        ...     "History of asthma.",
+        ...     model_name="fixture-ner-model",
+        ...     loader=FixtureLoader(),
+        ...     sentence_detection=False,
+        ... )
+        >>> [(entity.text, entity.label) for entity in result.entities]
+        [('asthma', 'CONDITION')]
     """
 
     validated_text = validate_input(text)
