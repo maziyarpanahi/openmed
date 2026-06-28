@@ -12,6 +12,11 @@ from typing import Any, Mapping, Sequence
 
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files
+from openmed.onnx.transformersjs import (
+    DEFAULT_BUNDLE_DIRNAME,
+    TRANSFORMERSJS_FORMAT,
+    export_transformersjs_bundle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +184,7 @@ def convert(
     output_dir: str | Path,
     *,
     include_webgpu: bool = True,
+    include_transformersjs: bool = False,
     max_seq_length: int = 512,
     opset: int = 18,
     cache_dir: str | None = None,
@@ -222,6 +228,22 @@ def convert(
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
     )
+    if include_transformersjs:
+        transformersjs_result = export_transformersjs_bundle(
+            output_dir,
+            output_dir / DEFAULT_BUNDLE_DIRNAME,
+            tokenizer_source=output_dir,
+            config_source=output_dir / "config.json",
+            update_manifest=False,
+        )
+        artifacts.append(
+            ExportArtifact(
+                format=TRANSFORMERSJS_FORMAT,
+                path=transformersjs_result.output_dir,
+                precision="int8",
+            )
+        )
+
     manifest_path = write_export_manifest(
         output_dir,
         source_model_id=model_id,
@@ -418,6 +440,11 @@ def main() -> None:
         help="Only emit the fp32 ONNX artifact",
     )
     parser.add_argument(
+        "--include-transformersjs",
+        action="store_true",
+        help="Also emit a Transformers.js bundle with model_quantized.onnx",
+    )
+    parser.add_argument(
         "--max-seq-length",
         type=int,
         default=512,
@@ -469,6 +496,7 @@ def main() -> None:
         args.model,
         args.output,
         include_webgpu=not args.no_webgpu,
+        include_transformersjs=args.include_transformersjs,
         max_seq_length=args.max_seq_length,
         opset=args.opset,
         cache_dir=args.cache_dir,
