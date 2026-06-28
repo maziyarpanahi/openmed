@@ -66,14 +66,21 @@ def _validated(pattern: PIIPattern, text: str) -> bool:
         return False
 
 
+def _has_context(text: str, start: int, end: int, pattern: PIIPattern) -> bool:
+    return bool(
+        pattern.context_words
+        and find_context_words(
+            text,
+            start,
+            end,
+            pattern.context_words,
+        )
+    )
+
+
 def _confidence(text: str, start: int, end: int, pattern: PIIPattern) -> float:
     score = pattern.base_score
-    if pattern.context_words and find_context_words(
-        text,
-        start,
-        end,
-        pattern.context_words,
-    ):
+    if _has_context(text, start, end, pattern):
         score = min(1.0, score + pattern.context_boost)
     return score
 
@@ -105,6 +112,13 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
 
             matched_text = text[start:end]
             if not _validated(pattern, matched_text):
+                continue
+            if pattern.safety_sweep_requires_context and not _has_context(
+                text,
+                start,
+                end,
+                pattern,
+            ):
                 continue
 
             candidates.append(
