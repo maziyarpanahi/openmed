@@ -4,13 +4,15 @@ OpenMed `v0.6.2` hardens the FastAPI service introduced in `v0.6.1` with shared
 model reuse, explicit model unloading, and idle model cleanup:
 
 - `GET /health`
+- `GET /livez`
+- `GET /readyz`
 - `GET /models/loaded`
 - `POST /models/unload`
 - `POST /analyze`
 - `POST /pii/extract`
 - `POST /pii/deidentify`
 
-This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, model keep-alive controls, and a unified non-2xx error envelope.
+This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, and a unified non-2xx error envelope.
 
 ## Run Locally
 
@@ -26,6 +28,22 @@ Start the API server:
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
+## Static OpenAPI Spec
+
+The committed OpenAPI document lives at `docs/api/openapi.json`. Regenerate it
+after changing REST routes, request schemas, response schemas, or service
+metadata:
+
+```bash
+.venv/bin/python scripts/export_openapi.py
+```
+
+The export command imports `openmed.service.app.create_app()`, calls
+`app.openapi()`, stamps `info.version` from `openmed.__version__`, and writes
+deterministic JSON with sorted keys. The unit test suite includes a drift guard
+that compares the committed artifact byte-for-byte against a fresh in-memory
+export.
+
 Optional profile selection (defaults to `prod`):
 
 ```bash
@@ -40,6 +58,16 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
 `OPENMED_SERVICE_PRELOAD_MODELS` is a comma-separated list of registry aliases or full Hugging Face ids. Empty entries are ignored and duplicates are removed.
+
+Optional warm-pool resident model limit:
+
+```bash
+OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
+OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+`OPENMED_SERVICE_MAX_RESIDENT_MODELS` bounds how many models remain resident in the shared warm-pool. When the limit is exceeded, the least-recently-used idle model is unloaded. Omit it for unbounded resident model caching.
 
 Optional default model keep-alive:
 
@@ -57,13 +85,48 @@ OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 0.
 
 `OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`, `/pii/extract`, and `/pii/deidentify`. The default is `1,000,000` characters. Oversized requests return the standard `422` validation envelope; split larger documents client-side or route them through batch processing.
 
+Optional dynamic request batching:
+
+```bash
+OPENMED_SERVICE_BATCHING_ENABLED=true \
+OPENMED_SERVICE_BATCH_MAX_SIZE=8 \
+OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+Dynamic batching is off by default. When enabled, `/pii/extract` groups
+compatible requests and dispatches them through the PII batch helper; models
+with true batch backends get one backend batch, while model families whose
+batch helper falls back to per-text analysis still preserve per-request results.
+`/analyze` uses one backend pipeline call for compatible requests with
+`sentence_detection=false`; requests that need sentence segmentation or other
+non-batch-compatible settings are still coalesced but executed independently.
+`OPENMED_SERVICE_BATCH_MAX_SIZE` must be a positive integer.
+`OPENMED_SERVICE_BATCH_MAX_WAIT_MS` is a non-negative wait window in
+milliseconds.
+
+Optional graceful-shutdown drain timeout:
+
+```bash
+OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+`OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
+During shutdown, readiness is flipped off, new model-backed work is rejected,
+and the service waits up to this timeout for in-flight `/analyze`,
+`/pii/extract`, and `/pii/deidentify` requests to finish. The default is `30`.
+
 ## Reliability Changes
 
-- Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and shared `ModelLoader`.
+- Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
+- `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
+- Dynamic request batching can be enabled for compatible `/analyze` and `/pii/extract` traffic with `OPENMED_SERVICE_BATCHING_ENABLED=true`.
+- `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
+- Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
@@ -82,6 +145,33 @@ Health response:
 }
 ```
 
+`GET /health` remains the backward-compatible health alias.
+
+### `GET /livez`
+
+Liveness response:
+
+```json
+{
+  "status": "ok",
+  "service": "openmed-rest"
+}
+```
+
+### `GET /readyz`
+
+Readiness response after startup preload completes:
+
+```json
+{
+  "status": "ready",
+  "service": "openmed-rest"
+}
+```
+
+Before startup readiness, `/readyz` returns `503` with `error.code` set to
+`not_ready`.
+
 ### `GET /models/loaded`
 
 Returns currently cached model resources and idle-unload status:
@@ -89,13 +179,16 @@ Returns currently cached model resources and idle-unload status:
 ```json
 {
   "default_keep_alive_seconds": 600.0,
+  "max_resident_models": 2,
+  "warm_models": ["disease_detection_superclinical"],
   "models": {
     "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": {
       "models": 0,
       "tokenizers": 0,
       "pipelines": 1,
       "active_requests": 0,
-      "keep_alive_seconds_remaining": 287.4
+      "keep_alive_seconds_remaining": 287.4,
+      "resident": true
     }
   }
 }
@@ -189,7 +282,7 @@ All non-2xx responses use this shape:
 ```json
 {
   "error": {
-    "code": "validation_error|bad_request|timeout|internal_error",
+    "code": "validation_error|bad_request|timeout|not_ready|internal_error",
     "message": "human-readable summary",
     "details": null
   }
@@ -243,6 +336,7 @@ docker run --rm -p 8080:8080 \
   -e OPENMED_PROFILE=prod \
   -e OPENMED_SERVICE_KEEP_ALIVE=10m \
   -e OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
+  -e OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
   openmed:0.6.2
 ```
 
@@ -284,6 +378,6 @@ curl http://127.0.0.1:8080/health
 ```
 
 Optional values such as `HF_TOKEN`, `OPENMED_PROFILE`,
-`OPENMED_CACHE_DIR`, and `OPENMED_SERVICE_PRELOAD_MODELS` can be supplied from a
-local `.env` file. Keep `.env` ignored and never commit secrets to version
-control.
+`OPENMED_CACHE_DIR`, `OPENMED_SERVICE_PRELOAD_MODELS`, and
+`OPENMED_SERVICE_MAX_RESIDENT_MODELS` can be supplied from a local `.env` file.
+Keep `.env` ignored and never commit secrets to version control.

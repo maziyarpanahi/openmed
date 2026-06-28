@@ -36,6 +36,8 @@ PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
     "drugprot": {
         "chemical": "OTHER",
         "gene": "OTHER",
+        "gene-n": "OTHER",
+        "gene-y": "OTHER",
         "protein": "OTHER",
         "relation": "OTHER",
     },

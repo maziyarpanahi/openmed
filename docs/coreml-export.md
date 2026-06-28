@@ -1,47 +1,81 @@
-# CoreML Packaging Status (iOS & macOS)
+# CoreML Export
 
-Use CoreML when you need a bundled Apple model package for **Swift/iOS/macOS app integration**. If you want the shared OpenMed MLX artifact path, see the [MLX backend](mlx-backend.md) and [OpenMedKit Swift guide](swift-openmedkit.md).
+Use CoreML when you need a bundled Apple model package for Swift, iOS, or
+macOS app integration. If you want the shared OpenMed MLX artifact path, see
+the [MLX backend](mlx-backend.md) and
+[OpenMedKit Swift guide](swift-openmedkit.md).
 
-OpenMedKit is the public Swift runtime and supports both MLX and CoreML backends. The universal OpenMed-to-CoreML packaging workflow is still being generalized across the model collection, so conversion should be treated as **active platform work**, not a stable public release surface yet.
+The CoreML converter is a local packaging path for Hugging Face
+token-classification checkpoints. After model download, conversion runs
+locally and writes `.mlpackage` artifacts plus label sidecars for app bundles.
 
-## Current Status
+## Converter Contract
 
-As of April 4, 2026:
+```bash
+python -m openmed.coreml.convert \
+  --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
+  --output ./OpenMedPIISmall.mlpackage \
+  --precision float16 \
+  --compute-units cpuAndNeuralEngine \
+  --quantize int8
+```
 
-- the `OpenMedKit` Swift package builds and tests successfully
-- the `OpenMedDemo` Xcode project builds and launches on macOS
-- Swift MLX is the forward Apple Silicon path for supported BERT-family artifacts
-- MLX artifacts such as `weights.safetensors` or `weights.npz` are still separate from CoreML app bundles
-- a fresh DeBERTa-v2 pilot export is **not** yet release-ready in the current arm64 CoreML environment
+The command writes:
 
-## What To Ship Today
+- `OpenMedPIISmall.mlpackage`: the float16 CoreML package
+- `OpenMedPIISmall_id2label.json`: label sidecar for the float package
+- `OpenMedPIISmall_int8.mlpackage`: the INT8-palettized package when
+  `--quantize int8` is set
+- `OpenMedPIISmall_int8_id2label.json`: label sidecar for the INT8 package
 
-When you already have a compatible CoreML bundle, the app-facing packaging contract is:
+Use `--quantized-output <path>` when the default `_int8.mlpackage` sibling name
+does not fit your release layout.
 
-- `YourModel.mlmodelc` or `.mlpackage`
-- `id2label.json`
-- tokenizer assets if the app must run offline
+## Supported Families
 
-That is the stable surface consumed by [OpenMedKit](swift-openmedkit.md).
+The converter accepts these Hugging Face token-classification source families:
 
-## Architecture Rollout
+- `bert`
+- `distilbert`
+- `electra`
+- `roberta`
+- `xlm-roberta`
+- `deberta-v2`
 
-OpenMed is actively working toward a universal Apple packaging path for:
+Unsupported architectures fail before tracing with an error that lists the
+supported families.
 
-- BERT
-- DistilBERT
-- RoBERTa
-- XLM-RoBERTa
-- Longformer
-- ModernBERT
-- EuroBERT
-- Qwen3
+## Compute Units
 
-The goal is one repeatable packaging story across the collection rather than a one-off converter for a single checkpoint.
+Use `--compute-units` to declare the Core ML runtime target:
+
+- `all`: Core ML may use all available compute units
+- `cpuAndNeuralEngine`: prefer CPU plus Apple Neural Engine
+- `cpuOnly`: CPU-only package execution
+
+The selected value is passed to Core ML conversion and stored in package
+metadata.
+
+## Metadata
+
+Each `.mlpackage` carries the following `user_defined_metadata` fields:
+
+- `id2label`
+- `num_labels`
+- `max_seq_length`
+- `source_model`
+- `source_model_type`
+- `compute_precision`
+- `compute_units`
+- `quantization`
+
+The float package records `quantization=none`; the INT8 package records
+`quantization=int8`.
 
 ## Manual CoreML Integration
 
-If you already have a compatible CoreML model and prefer not to use OpenMedKit, you can integrate it directly:
+If you already have a compatible CoreML model and prefer not to use
+OpenMedKit, you can integrate it directly:
 
 ```swift
 import CoreML
@@ -60,4 +94,4 @@ let output = try model.prediction(from: input)
 let logits = output.featureValue(for: "logits")!.multiArrayValue!
 ```
 
-For most apps, though, `OpenMedKit` is the simpler route.
+For most apps, `OpenMedKit` is the simpler route.

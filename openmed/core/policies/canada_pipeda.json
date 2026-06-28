@@ -70,6 +70,14 @@
     "VIN": "replace",
     "VEHICLE_REGISTRATION": "replace",
     "IMEI": "replace",
+    "MICROORGANISM": "keep",
+    "ANTIBIOTIC": "keep",
+    "SUSCEPTIBILITY": "keep",
+    "CONDITION": "keep",
+    "MEDICATION": "keep",
+    "LAB_TEST": "keep",
+    "PROCEDURE": "keep",
+    "BODY_SITE": "keep",
     "OTHER": "keep"
   }
 }

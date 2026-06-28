@@ -204,6 +204,21 @@ def write_manifest(
         },
     }
 
+    if isinstance(quantization, dict):
+        if "quant_recall_delta" in quantization:
+            manifest["quant_recall_delta"] = quantization["quant_recall_delta"]
+        if "certified" in quantization:
+            manifest["certified"] = quantization["certified"]
+        if "recall_delta_path" in quantization:
+            manifest["recall_delta_path"] = quantization["recall_delta_path"]
+        if "certification_limit" in quantization:
+            manifest["certification"] = {
+                "gate": "G4",
+                "limit": quantization["certification_limit"],
+                "metric": "character_recall",
+                "report_path": quantization.get("recall_delta_path"),
+            }
+
     prompt_spec = config.get("_mlx_prompt_spec")
     if prompt_spec:
         manifest["prompt_spec"] = prompt_spec

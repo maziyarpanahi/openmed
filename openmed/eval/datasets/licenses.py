@@ -25,6 +25,13 @@ class DatasetLicense:
 
 
 PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
+    "golden": DatasetLicense(
+        dataset="golden",
+        license_id="Apache-2.0",
+        source_url="openmed/eval/golden/fixtures",
+        redistribution="committed synthetic fixtures only",
+        notes="Synthetic-only fixtures; no real PHI and no DUA content.",
+    ),
     "shield": DatasetLicense(
         dataset="shield",
         license_id="access-controlled-full; public-sample",
@@ -36,8 +43,11 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
         dataset="drugprot",
         license_id="CC-BY-4.0",
         source_url="https://zenodo.org/records/4955411",
-        redistribution="reference-only",
-        notes="Adapter stores no corpus rows and expects a local user-provided path.",
+        redistribution="download-on-demand",
+        notes=(
+            "Zenodo DOI 10.5281/zenodo.4955411; adapter caches the public "
+            "archive locally and stores no corpus rows in the repository."
+        ),
     ),
     "medmentions": DatasetLicense(
         dataset="medmentions",
