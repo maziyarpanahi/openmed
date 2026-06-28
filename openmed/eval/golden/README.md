@@ -35,7 +35,8 @@ Required fields:
 - `text`: source fixture text.
 - `gold_spans`: canonical-label spans with character offsets into `text`.
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
-  `multilingual`, `checksum_ids`, or `date_arithmetic`.
+  `multilingual`, `checksum_ids`, `date_arithmetic`, or
+  `policy_profile_actions`.
 - `metadata.expected_output`: expected post-action output, including `method`
   and resulting `text`.
 - `metadata.synthetic`: must be `true`.

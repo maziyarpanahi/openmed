@@ -96,6 +96,7 @@ _LANGUAGE_NAME_TO_CODE = {
     "french": "fr",
     "german": "de",
     "hindi": "hi",
+    "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
     "portuguese": "pt",
@@ -798,21 +799,29 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         }
 
     prefix = f"pii_{lang}_"
-    localized = {
+    language_models = {
         key: info
         for key, info in OPENMED_MODELS.items()
         if key.startswith(prefix)
         and info.category == "Privacy"
         and lang in (info.languages or [])
     }
-    if localized:
-        return localized
+    if language_models:
+        return language_models
 
+    from .pii_i18n import DEFAULT_PII_MODELS
+
+    default_model_id = DEFAULT_PII_MODELS.get(lang)
+    if not default_model_id:
+        return {}
+    # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
+    # so language-pack callers can reuse multilingual privacy filters safely.
     return {
         key: info
         for key, info in OPENMED_MODELS.items()
-        if key.startswith("pii_privacy_filter_multilingual")
+        if key.startswith("pii_")
         and info.category == "Privacy"
+        and info.model_id == default_model_id
         and lang in (info.languages or [])
     }
 
