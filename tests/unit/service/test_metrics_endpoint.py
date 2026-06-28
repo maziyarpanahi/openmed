@@ -17,6 +17,8 @@ from openmed.service.metrics import (
 )
 from openmed.service.warm_pool import WarmPool
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 
 class FakeLoader:
     """Loader double that keeps REST tests away from model downloads."""
@@ -69,6 +71,8 @@ def _configure_service_env(monkeypatch, *, metrics_enabled: bool) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     if metrics_enabled:
         monkeypatch.setenv(METRICS_ENABLED_ENV_VAR, "true")
     else:
@@ -84,7 +88,11 @@ def _metric_label_names(line: str) -> set[str]:
 def test_metrics_endpoint_is_disabled_by_default(monkeypatch) -> None:
     _configure_service_env(monkeypatch, metrics_enabled=False)
 
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         response = client.get("/metrics")
 
     assert response.status_code == 404
@@ -93,7 +101,11 @@ def test_metrics_endpoint_is_disabled_by_default(monkeypatch) -> None:
 def test_metrics_endpoint_renders_prometheus_text_when_enabled(monkeypatch) -> None:
     _configure_service_env(monkeypatch, metrics_enabled=True)
 
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         health = client.get("/health")
         response = client.get("/metrics")
 
@@ -134,7 +146,11 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
 
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
 
-    with TestClient(create_app(), raise_server_exceptions=False) as client:
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         served = client.post(
             "/analyze",
             json={

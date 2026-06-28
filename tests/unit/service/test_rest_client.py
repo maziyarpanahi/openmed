@@ -18,6 +18,8 @@ from openmed.service.client import (
     OpenMedClient,
 )
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 
 class SyncASGITransport(httpx.BaseTransport):
     """Sync adapter that drives ``httpx.ASGITransport`` for client tests."""
@@ -100,10 +102,18 @@ def rest_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
 
     app = create_app()
     transport = SyncASGITransport(app)
-    with OpenMedClient(base_url="http://testserver", transport=transport) as client:
+    with OpenMedClient(base_url=LOOPBACK_BASE_URL, transport=transport) as client:
         yield client
 
 
