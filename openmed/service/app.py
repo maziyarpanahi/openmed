@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -19,6 +20,12 @@ from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
 from .batcher import BatchResult, DynamicBatcher
+from .coalesce import RequestCoalescer, coalescing_key
+from .metrics import (
+    PROMETHEUS_CONTENT_TYPE,
+    PrometheusMetricsRegistry,
+    metrics_enabled_from_env,
+)
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
@@ -32,9 +39,12 @@ from .security_headers import (
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
 )
+from .throttle import ServiceThrottle
 
 SERVICE_NAME = "openmed-rest"
+_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
 _ServicePayload = Dict[str, Any]
+_ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
 _PIIExtractBatcher = DynamicBatcher["_PIIExtractBatchJob", _ServicePayload]
 
@@ -123,8 +133,17 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.profile = runtime.profile
     app.state.config = runtime.config
     app.state.batching = runtime.batching
+    app.state.coalescing = runtime.coalescing
+    app.state.throttle = ServiceThrottle(
+        runtime.throttle,
+        error_response=_error_response,
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
+    app.state.request_coalescer = None
+    if runtime.coalescing.enabled:
+        app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
         app.state.analyze_batcher = DynamicBatcher(
             lambda jobs: _dispatch_analyze_batch(runtime, jobs),
@@ -142,7 +161,9 @@ def _get_service_runtime(request: Request) -> ServiceRuntime:
     """Return the initialized service runtime."""
     runtime = getattr(request.app.state, "runtime", None)
     if runtime is None:
-        runtime = ServiceRuntime.from_env()
+        runtime = ServiceRuntime.from_env(
+            metrics=getattr(request.app.state, "metrics", None)
+        )
         _attach_runtime(request.app, runtime)
     return runtime
 
@@ -194,18 +215,58 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     return batcher
 
 
+async def _run_maybe_coalesced(
+    request: Request,
+    endpoint: str,
+    payload: Any,
+    operation: _ServiceOperation,
+) -> _ServicePayload:
+    coalescer = getattr(request.app.state, "request_coalescer", None)
+    if coalescer is None:
+        return await operation()
+
+    return await coalescer.run(coalescing_key(endpoint, payload), operation)
+
+
+def _metrics_route_label(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if isinstance(route_path, str) and route_path:
+        return route_path
+    return "unknown"
+
+
 def create_app() -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
-        runtime = ServiceRuntime.from_env()
+        runtime = ServiceRuntime.from_env(
+            metrics=getattr(fastapi_app.state, "metrics", None)
+        )
         _attach_runtime(fastapi_app, runtime)
+        fastapi_app.state.ready = False
+        fastapi_app.state.shutting_down = False
+        fastapi_app.state.inflight = 0
 
         if runtime.preload_models:
             await run_in_threadpool(runtime.preload)
 
-        yield
+        fastapi_app.state.ready = True
+
+        try:
+            yield
+        finally:
+            fastapi_app.state.ready = False
+            fastapi_app.state.shutting_down = True
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + float(
+                getattr(runtime, "shutdown_drain_seconds", 0.0) or 0.0
+            )
+            while getattr(fastapi_app.state, "inflight", 0) > 0 and (
+                loop.time() < deadline
+            ):
+                await asyncio.sleep(0.05)
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -227,6 +288,65 @@ def create_app() -> FastAPI:
         allowed_hosts=security_config.trusted_hosts,
         www_redirect=False,
     )
+    app.state.metrics = (
+        PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
+    )
+
+    @app.middleware("http")
+    async def _readiness_middleware(request: Request, call_next):
+        path = request.url.path
+        if path in _MODEL_BACKED_PATHS:
+            state = request.app.state
+            if getattr(state, "shutting_down", False):
+                return _error_response(
+                    503,
+                    "not_ready",
+                    "Service is shutting down and not accepting new requests",
+                    details=None,
+                )
+            state.inflight = getattr(state, "inflight", 0) + 1
+            try:
+                return await call_next(request)
+            finally:
+                state.inflight = getattr(state, "inflight", 0) - 1
+        return await call_next(request)
+
+    if app.state.metrics is not None:
+
+        @app.middleware("http")
+        async def _metrics_middleware(request: Request, call_next):
+            metrics = request.app.state.metrics
+            metrics.request_started()
+            start_time = time.perf_counter()
+            status_code = 500
+            try:
+                response = await call_next(request)
+                status_code = response.status_code
+                return response
+            finally:
+                metrics.request_finished(
+                    route=_metrics_route_label(request),
+                    status_code=status_code,
+                    duration_seconds=time.perf_counter() - start_time,
+                )
+
+        @app.get("/metrics", include_in_schema=False)
+        async def metrics(request: Request) -> Response:
+            registry = request.app.state.metrics
+            return Response(
+                content=registry.render(),
+                media_type=PROMETHEUS_CONTENT_TYPE,
+            )
+
+    @app.middleware("http")
+    async def _throttle_middleware(request: Request, call_next):
+        throttle = getattr(request.app.state, "throttle", None)
+        if throttle is None:
+            _get_service_runtime(request)
+            throttle = getattr(request.app.state, "throttle", None)
+        if throttle is None:
+            return await call_next(request)
+        return await throttle.dispatch(request, call_next)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
@@ -290,6 +410,21 @@ def create_app() -> FastAPI:
             "profile": runtime.profile,
         }
 
+    @app.get("/livez")
+    async def livez() -> Dict[str, str]:
+        return {"status": "ok", "service": SERVICE_NAME}
+
+    @app.get("/readyz")
+    async def readyz(request: Request):
+        if getattr(request.app.state, "ready", False):
+            return {"status": "ready", "service": SERVICE_NAME}
+        return _error_response(
+            503,
+            "not_ready",
+            "Service preload has not completed",
+            details=None,
+        )
+
     @app.get("/models/loaded")
     async def loaded_models(request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
@@ -309,40 +444,55 @@ def create_app() -> FastAPI:
     @app.post("/analyze")
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
-        if runtime.batching.enabled:
-            return await _await_with_timeout(
-                runtime,
-                _get_analyze_batcher(request).submit(_AnalyzeBatchJob(payload)),
-            )
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _analyze_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            if runtime.batching.enabled:
+                return await _await_with_timeout(
+                    runtime,
+                    _get_analyze_batcher(request).submit(_AnalyzeBatchJob(payload)),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _analyze_payload(payload, runtime),
+                )
+
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(request, "/analyze", payload, _operation)
 
     @app.post("/pii/extract")
     async def pii_extract(
         payload: PIIExtractRequest, request: Request
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
-        if runtime.batching.enabled:
-            return await _await_with_timeout(
-                runtime,
-                _get_pii_extract_batcher(request).submit(_PIIExtractBatchJob(payload)),
-            )
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _pii_extract_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            if runtime.batching.enabled:
+                return await _await_with_timeout(
+                    runtime,
+                    _get_pii_extract_batcher(request).submit(
+                        _PIIExtractBatchJob(payload)
+                    ),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _pii_extract_payload(payload, runtime),
+                )
+
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/pii/extract",
+            payload,
+            _operation,
+        )
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(
@@ -351,14 +501,22 @@ def create_app() -> FastAPI:
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
 
-        def _operation() -> Dict[str, Any]:
-            return runtime.run_model_request(
-                payload.model_name,
-                payload.keep_alive,
-                lambda: _pii_deidentify_payload(payload, runtime),
-            )
+        async def _operation() -> Dict[str, Any]:
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _pii_deidentify_payload(payload, runtime),
+                )
 
-        return await _run_with_timeout(runtime, _operation)
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _run_maybe_coalesced(
+            request,
+            "/pii/deidentify",
+            payload,
+            _operation,
+        )
 
     return app
 
