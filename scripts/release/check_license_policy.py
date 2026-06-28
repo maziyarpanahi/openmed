@@ -55,6 +55,7 @@ REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
+    "confluent-kafka": "Apache-2.0",
     "coremltools": "BSD-3-Clause",
     "faker": "MIT",
     "fastapi": "MIT",
