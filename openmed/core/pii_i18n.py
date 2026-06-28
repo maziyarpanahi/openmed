@@ -930,6 +930,7 @@ _FRENCH_PII_PATTERNS: List[PIIPattern] = [
             "cedex",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1029,6 +1030,7 @@ _GERMAN_PII_PATTERNS: List[PIIPattern] = [
             "Postleitzahl",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1128,6 +1130,7 @@ _ITALIAN_PII_PATTERNS: List[PIIPattern] = [
             "codice postale",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1243,6 +1246,7 @@ _SPANISH_PII_PATTERNS: List[PIIPattern] = [
             "cp",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1370,6 +1374,7 @@ _PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
             "morada",
         ],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1455,6 +1460,7 @@ _DUTCH_PII_PATTERNS: List[PIIPattern] = [
             "adres",
         ],
         context_boost=0.4,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
 ]
@@ -1524,6 +1530,7 @@ _HINDI_PII_PATTERNS: List[PIIPattern] = [
             "\u092a\u0924\u093e",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
     # Aadhaar (12 digits, possibly spaced as 4-4-4)
     PIIPattern(
@@ -1607,6 +1614,7 @@ _TELUGU_PII_PATTERNS: List[PIIPattern] = [
             "\u0c1a\u0c3f\u0c30\u0c41\u0c28\u0c3e\u0c2e\u0c3e",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
     # Aadhaar (12 digits, possibly spaced as 4-4-4)
     PIIPattern(
@@ -1715,6 +1723,7 @@ _ARABIC_PII_PATTERNS: List[PIIPattern] = [
             "\u0639\u0646\u0648\u0627\u0646",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
     ),
 ]
 
@@ -1784,6 +1793,7 @@ _JAPANESE_PII_PATTERNS: List[PIIPattern] = [
             "\u4f4f\u6240",
         ],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
     PIIPattern(
         r"\b[\u4e00-\u9fff]{2,12}(?:\u90fd|\u9053|\u5e9c|\u770c)[\u4e00-\u9fff0-9\u4e01\u76ee\u756a\u5730\u53f7\s-]{3,60}\b",
@@ -1898,6 +1908,7 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
             "adres",
         ],
         context_boost=0.5,
+        safety_sweep_requires_context=True,
         flags=re.IGNORECASE,
     ),
 ]
