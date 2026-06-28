@@ -307,8 +307,10 @@ class ServiceRuntime:
     _warm_pool: Optional[WarmPool] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
+    metrics: Optional[Any] = None
+
     @classmethod
-    def from_env(cls) -> "ServiceRuntime":
+    def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
         """Create a runtime using the current process environment."""
         profile = os.getenv(PROFILE_ENV_VAR, "prod")
         config = OpenMedConfig.from_profile(profile)
@@ -331,6 +333,7 @@ class ServiceRuntime:
             batching=batching,
             throttle=throttle,
             _loader_factory=ModelLoader,
+            metrics=metrics,
         )
 
     def get_model_loader(self) -> ModelLoader:
@@ -352,6 +355,7 @@ class ServiceRuntime:
                         warm_models=self.preload_models,
                         max_resident_models=self.max_resident_models,
                         default_keep_alive_seconds=self.default_keep_alive_seconds,
+                        metrics=self.metrics,
                     )
         return self._warm_pool
 

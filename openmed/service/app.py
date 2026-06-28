@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -18,6 +19,11 @@ from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
 from .batcher import BatchResult, DynamicBatcher
+from .metrics import (
+    PROMETHEUS_CONTENT_TYPE,
+    PrometheusMetricsRegistry,
+    metrics_enabled_from_env,
+)
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
@@ -142,7 +148,9 @@ def _get_service_runtime(request: Request) -> ServiceRuntime:
     """Return the initialized service runtime."""
     runtime = getattr(request.app.state, "runtime", None)
     if runtime is None:
-        runtime = ServiceRuntime.from_env()
+        runtime = ServiceRuntime.from_env(
+            metrics=getattr(request.app.state, "metrics", None)
+        )
         _attach_runtime(request.app, runtime)
     return runtime
 
@@ -194,12 +202,22 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     return batcher
 
 
+def _metrics_route_label(request: Request) -> str:
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if isinstance(route_path, str) and route_path:
+        return route_path
+    return "unknown"
+
+
 def create_app() -> FastAPI:
     """Create and configure the OpenMed REST FastAPI app."""
 
     @asynccontextmanager
     async def lifespan(fastapi_app: FastAPI):
-        runtime = ServiceRuntime.from_env()
+        runtime = ServiceRuntime.from_env(
+            metrics=getattr(fastapi_app.state, "metrics", None)
+        )
         _attach_runtime(fastapi_app, runtime)
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
@@ -230,6 +248,9 @@ def create_app() -> FastAPI:
         description="Hardened REST API for OpenMed text analysis and PII workflows.",
         lifespan=lifespan,
     )
+    app.state.metrics = (
+        PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
+    )
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -249,6 +270,33 @@ def create_app() -> FastAPI:
             finally:
                 state.inflight = getattr(state, "inflight", 0) - 1
         return await call_next(request)
+
+    if app.state.metrics is not None:
+
+        @app.middleware("http")
+        async def _metrics_middleware(request: Request, call_next):
+            metrics = request.app.state.metrics
+            metrics.request_started()
+            start_time = time.perf_counter()
+            status_code = 500
+            try:
+                response = await call_next(request)
+                status_code = response.status_code
+                return response
+            finally:
+                metrics.request_finished(
+                    route=_metrics_route_label(request),
+                    status_code=status_code,
+                    duration_seconds=time.perf_counter() - start_time,
+                )
+
+        @app.get("/metrics", include_in_schema=False)
+        async def metrics(request: Request) -> Response:
+            registry = request.app.state.metrics
+            return Response(
+                content=registry.render(),
+                media_type=PROMETHEUS_CONTENT_TYPE,
+            )
 
     @app.middleware("http")
     async def _throttle_middleware(request: Request, call_next):
