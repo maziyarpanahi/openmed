@@ -54,6 +54,7 @@ from .core.result_cache import (
     get_result_cache,
     make_cache_key,
 )
+from .core.results import AnalyzeResult
 from .core.surrogate_vault import (
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
@@ -161,7 +162,7 @@ def analyze_text(
     cache_results: bool = False,
     max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
-) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
+) -> Union[AnalyzeResult, str, List[Dict[str, Any]]]:
     """Run a token-classification model on ``text`` and format the predictions.
 
     Args:
@@ -193,7 +194,8 @@ def analyze_text(
             :meth:`openmed.core.models.ModelLoader.create_pipeline`.
 
     Returns:
-        Prediction result in the requested ``output_format``.
+        Analyze result for ``"dict"`` output, otherwise the requested rendered
+        format.
 
     Example:
         >>> class FixtureLoader:
@@ -578,13 +580,18 @@ def analyze_text(
 
     fmt_output = validate_output_format(output_format)
 
-    final_result = format_predictions(
+    result = format_predictions(
         flattened_predictions,
         validated_text,
         model_name=validated_model,
         output_format=fmt_output,
         **fmt_kwargs,
     )
+    final_result: Union[AnalyzeResult, str, List[Dict[str, Any]]]
+    if fmt_output == "dict" and isinstance(result, PredictionResult):
+        final_result = AnalyzeResult.from_prediction_result(result)
+    else:
+        final_result = result
     if cache_results:
         cache.set(cache_key, final_result)
     return final_result
@@ -609,6 +616,7 @@ __all__ = [
     "process_batch",
     "AdvancedNERProcessor",
     "create_advanced_processor",
+    "AnalyzeResult",
     "PredictionResult",
     "setup_logging",
     "get_logger",
