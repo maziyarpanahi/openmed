@@ -59,11 +59,22 @@ from openmed.eval.error_analysis import (
     ErrorSpanExample,
     error_report,
 )
+from openmed.eval.evidence_bundle import (
+    EvidenceArtifactSpec,
+    EvidenceBundleResult,
+    bundle_gate_evidence,
+)
 from openmed.eval.fairness import (
     UNSPECIFIED_GROUP,
     FairnessGroupMetrics,
     FairnessReport,
     fairness_report,
+)
+from openmed.eval.flaky import (
+    DEFAULT_FLAKY_TOLERANCE,
+    FlakyMetricReport,
+    FlakyReport,
+    detect_flaky_eval,
 )
 from openmed.eval.harness import (
     BenchmarkFixture,
@@ -143,14 +154,19 @@ __all__ = [
     "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
+    "DEFAULT_FLAKY_TOLERANCE",
     "DEFAULT_PERTURBATIONS",
     "DatasetCard",
     "EvalCacheKey",
     "EvalSpan",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
+    "EvidenceArtifactSpec",
+    "EvidenceBundleResult",
     "FairnessGroupMetrics",
     "FairnessReport",
+    "FlakyMetricReport",
+    "FlakyReport",
     "FixtureResult",
     "FixtureCoverageReport",
     "GOLDEN_EDGE_CASE_CATEGORIES",
@@ -177,6 +193,7 @@ __all__ = [
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
     "build_report_key",
+    "bundle_gate_evidence",
     "build_thresholds_payload",
     "build_all_dataset_cards",
     "build_dataset_card",
@@ -201,6 +218,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_cache_dir",
     "default_suite_calibration_samples",
+    "detect_flaky_eval",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
     "error_report",
