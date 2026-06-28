@@ -6,6 +6,7 @@ import argparse
 import difflib
 import json
 import sys
+import tempfile
 from collections.abc import Mapping as MappingABC
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
@@ -27,6 +28,7 @@ from ..core.config import (
 from ..core.model_card import render_model_card
 from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
+from ..core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
 from .active_learning import add_active_learning_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
@@ -106,12 +108,22 @@ COMPLIANCE_CAVEAT = (
 )
 _FHIR_BUNDLE_TYPES = frozenset({"transaction", "batch"})
 
+_DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+_DEID_METHODS = ("mask", "remove", "replace", "hash", "shift_dates")
+
 
 def _non_negative_int(value: str) -> int:
     parsed = int(value)
     if parsed < 0:
         raise argparse.ArgumentTypeError("value must be greater than or equal to 0")
     return parsed
+
+
+def _policy_name_arg(value: str) -> str:
+    try:
+        return canonical_policy_name(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,6 +150,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
+    _add_deid_command(subparsers)
     _add_pii_command(subparsers)
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
@@ -293,6 +306,65 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.set_defaults(handler=_handle_batch)
 
 
+def _add_deid_command(subparsers: argparse._SubParsersAction) -> None:
+    deid_parser = subparsers.add_parser(
+        "deid",
+        help="De-identify text with policy profiles.",
+    )
+    deid_parser.add_argument(
+        "--policy",
+        type=_policy_name_arg,
+        choices=CANONICAL_POLICY_NAMES,
+        default="hipaa_safe_harbor",
+        help="Policy profile to apply.",
+    )
+    deid_parser.add_argument(
+        "--method",
+        choices=_DEID_METHODS,
+        default="mask",
+        help="De-identification method.",
+    )
+    deid_parser.add_argument(
+        "--keep-mapping",
+        action="store_true",
+        help="Keep reversible mapping metadata in the de-identification result.",
+    )
+    deid_parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Write an audit report and print its path instead of redacted text.",
+    )
+    deid_parser.add_argument(
+        "--input",
+        default="-",
+        metavar="FILE",
+        help="Input text file, or '-' for stdin (default).",
+    )
+    deid_parser.add_argument(
+        "--output",
+        default="-",
+        metavar="FILE",
+        help="Output file, or '-' for stdout (default).",
+    )
+    deid_parser.add_argument(
+        "--model",
+        default=_DEFAULT_PII_MODEL,
+        help="PII detection model.",
+    )
+    deid_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.7,
+        help="Minimum confidence for redaction.",
+    )
+    deid_parser.add_argument(
+        "--keep-year",
+        action="store_true",
+        help="Keep year in dates.",
+    )
+    deid_parser.set_defaults(handler=_handle_deid)
+
+
 def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     """Add PII extraction and de-identification commands."""
     pii_parser = subparsers.add_parser(
@@ -331,7 +403,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     deid_parser.add_argument(
         "--model",
-        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        default=_DEFAULT_PII_MODEL,
         help="PII detection model.",
     )
     deid_text_group = deid_parser.add_mutually_exclusive_group(required=True)
@@ -344,7 +416,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     deid_parser.add_argument(
         "--method",
-        choices=["mask", "remove", "replace", "hash", "shift_dates"],
+        choices=_DEID_METHODS,
         default="mask",
         help="De-identification method.",
     )
@@ -375,7 +447,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser = pii_sub.add_parser("batch", help="Batch de-identification of files.")
     batch_parser.add_argument(
         "--model",
-        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        default=_DEFAULT_PII_MODEL,
         help="PII detection model.",
     )
     batch_parser.add_argument(
@@ -1806,6 +1878,79 @@ def _handle_profile_delete(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # PII Handlers
 # ---------------------------------------------------------------------------
+
+
+def _read_text_input(input_path: str) -> str:
+    if input_path == "-":
+        return sys.stdin.read()
+    return Path(input_path).read_text(encoding="utf-8")
+
+
+def _write_text_output(text: str, output_path: str) -> None:
+    if output_path == "-":
+        sys.stdout.write(text)
+        if not text.endswith("\n"):
+            sys.stdout.write("\n")
+        return
+
+    path = Path(output_path)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_audit_report(report: Any, output_path: str) -> Path:
+    payload = report.to_json()
+    if output_path == "-":
+        with tempfile.NamedTemporaryFile(
+            "w",
+            delete=False,
+            encoding="utf-8",
+            prefix="openmed-deid-audit-",
+            suffix=".json",
+        ) as handle:
+            handle.write(payload)
+            handle.write("\n")
+            return Path(handle.name)
+
+    path = Path(output_path)
+    path.write_text(f"{payload}\n", encoding="utf-8")
+    return path
+
+
+def _handle_deid(args: argparse.Namespace) -> int:
+    """Handle the top-level de-identification command."""
+    from ..core.pii import deidentify
+
+    config = _load_and_apply_config(args)
+
+    try:
+        text = _read_text_input(args.input)
+    except FileNotFoundError:
+        sys.stderr.write(f"Input file not found: {args.input}\n")
+        return 1
+
+    try:
+        result = deidentify(
+            text,
+            method=args.method,
+            model_name=args.model,
+            confidence_threshold=args.confidence_threshold,
+            keep_year=args.keep_year,
+            keep_mapping=args.keep_mapping,
+            config=config,
+            policy=args.policy,
+            audit=args.audit,
+        )
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
+
+    if args.audit:
+        audit_path = _write_audit_report(result, args.output)
+        sys.stdout.write(f"{audit_path}\n")
+        return 0
+
+    _write_text_output(result.deidentified_text, args.output)
+    return 0
 
 
 def _handle_pii_extract(args: argparse.Namespace) -> int:
