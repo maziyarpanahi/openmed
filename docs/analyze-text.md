@@ -13,13 +13,15 @@ result = analyze_text(
     text="Patient started on imatinib for chronic myeloid leukemia.",
     model_name="disease_detection_superclinical",
     aggregation_strategy="simple",
-    output_format="json",
+    output_format="dict",
     include_confidence=True,
     confidence_threshold=0.55,
     group_entities=True,
     metadata={"source": "clinic-note-42"},
 )
-print(result[:200])  # JSON string in this configuration
+print(result.model)
+print(result.entities[:3])
+payload = result.to_dict()
 ```
 
 ### Key arguments
@@ -28,7 +30,7 @@ print(result[:200])  # JSON string in this configuration
   auto-discovery.
 - `model_id`: alias for `model_name`, supported for API-style callers that use model-id terminology.
 - `aggregation_strategy`: forwarded to the HF pipeline. `simple` (default) yields grouped tokens; `None` keeps raw tokens.
-- `output_format`: `"dict"` (default, returns `PredictionResult`), `"json"`, `"html"`, or `"csv"`.
+- `output_format`: `"dict"` (default, returns `AnalyzeResult`), `"json"`, `"html"`, or `"csv"`.
 - `include_confidence` & `confidence_threshold`: control the final payload; defaults keep all scores.
 - `group_entities`: merge adjacent spans of the same label after formatting.
 - `formatter_kwargs`: forwarded to `openmed.processing.format_predictions`.
@@ -76,6 +78,9 @@ result = analyze_text(
 
 for entity in result.entities:
     print(entity.text, entity.label)
+
+legacy_payload = result.to_dict()
+print(legacy_payload["model_name"])
 ```
 
 When the identifier points to an existing local path, OpenMed asks Transformers to load with `local_files_only=True` by
