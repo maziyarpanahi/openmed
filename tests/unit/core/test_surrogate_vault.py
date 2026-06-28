@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 
+import pytest
+
 from openmed.core.pii import deidentify, reidentify
 from openmed.core.surrogate_vault import (
     HMAC_SCHEME,
@@ -111,6 +113,16 @@ def test_json_vault_persists_only_hmac_hashes_and_surrogates(monkeypatch, tmp_pa
     assert all(
         entry["text_hash"].startswith(f"{HMAC_SCHEME}:") for entry in payload["entries"]
     )
+
+
+def test_json_vault_load_rejects_malformed_json(tmp_path):
+    path = tmp_path / "surrogate-vault.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Corrupt surrogate vault") as exc_info:
+        SurrogateVault.from_file(path, hmac_secret="unit-test-hmac-secret")
+
+    assert str(path) in str(exc_info.value)
 
 
 def test_json_vault_reload_continues_stable_surrogates(monkeypatch, tmp_path):

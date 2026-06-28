@@ -48,7 +48,7 @@ def _load_from_path(path: Path) -> Mapping[str, Iterable[str]]:
     try:
         return json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"Invalid JSON in label file: {exc}") from exc
+        raise ValueError(f"Invalid JSON in label file {path}: {exc}") from exc
 
 
 def _normalise_label_map(raw: Mapping[str, Iterable[str]]) -> Dict[str, List[str]]:
