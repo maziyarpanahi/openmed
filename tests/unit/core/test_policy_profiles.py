@@ -87,6 +87,42 @@ def test_all_policy_literals_load_and_gdpr_alias_resolves():
     assert load_policy("gdpr").name == "gdpr_pseudonymization"
 
 
+def test_gdpr_art9_health_profile_and_alias_load():
+    profile = load_policy("gdpr_art9_health")
+    gdpr = load_policy("gdpr_pseudonymization")
+
+    assert profile.name == "gdpr_art9_health"
+    assert load_policy("gdpr_health").name == "gdpr_art9_health"
+    assert "gdpr_art9_health" in list_policies()
+    assert profile.safety_sweep_mandatory is True
+    assert "R3" in profile.forced_cascade_tiers
+    assert profile.action_for("LOCATION") == "mask"
+    assert profile.action_for("CONDITION") == "mask"
+    assert gdpr.action_for("CONDITION") == "keep"
+    assert lint_policy("gdpr_art9_health") == ()
+
+
+def test_gdpr_art9_health_masks_clinical_fixture_that_gdpr_keeps(monkeypatch):
+    text = "Patient has diabetes"
+    _patch_extract(monkeypatch, _entity(text, "diabetes", "CONDITION", 0.99))
+
+    gdpr = deidentify(
+        text,
+        policy="gdpr_pseudonymization",
+        use_safety_sweep=False,
+    )
+    article9 = deidentify(
+        text,
+        policy="gdpr_art9_health",
+        use_safety_sweep=False,
+    )
+
+    assert gdpr.deidentified_text == text
+    assert article9.deidentified_text == "Patient has [CONDITION]"
+    assert article9.pii_entities[0].action == "mask"
+    assert article9.pii_entities[0].metadata["policy_action"]["action"] == "mask"
+
+
 def test_canada_pipeda_profile_and_alias_load():
     profile = load_policy("canada_pipeda")
 
