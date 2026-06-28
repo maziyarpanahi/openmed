@@ -28,6 +28,44 @@ Start the API server:
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
+## Python Client
+
+The service extra includes the typed sync client and its `httpx` dependency:
+
+```bash
+uv pip install -e ".[hf,service]"
+```
+
+Use `OpenMedClient` against a running service:
+
+```python
+from openmed.service.client import OpenMedAPIError, OpenMedClient
+
+with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
+    result = client.analyze(
+        "Patient started imatinib for CML.",
+        model_name="disease_detection_superclinical",
+    )
+    pii = client.extract_pii("Paciente: Maria Garcia", lang="es")
+    redacted = client.deidentify(
+        "Paciente: Maria Garcia",
+        method="mask",
+        keep_mapping=True,
+    )
+    loaded = client.loaded_models()
+```
+
+Non-2xx responses raise `OpenMedAPIError` with the service error `code`,
+`message`, optional `details`, HTTP status, and any `X-Request-ID` returned by
+the service or proxy:
+
+```python
+try:
+    client.unload_model("disease_detection_superclinical")
+except OpenMedAPIError as exc:
+    print(exc.status_code, exc.code, exc.message, exc.request_id)
+```
+
 ## Static OpenAPI Spec
 
 The committed OpenAPI document lives at `docs/api/openapi.json`. Regenerate it
