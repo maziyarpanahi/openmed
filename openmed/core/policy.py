@@ -28,6 +28,7 @@ class PolicyName(str, Enum):
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
     CANADA_PIPEDA = "canada_pipeda"
+    UK_ICO_ANONYMISATION = "uk_ico_anonymisation"
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
 
 
@@ -37,6 +38,7 @@ POLICY_ALIASES: Mapping[str, str] = {
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
     "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
+    "uk_ico": PolicyName.UK_ICO_ANONYMISATION.value,
 }
 
 _ARBITRATION_MODES = frozenset({MODE_BALANCED, MODE_HIGH_RECALL_UNION})
