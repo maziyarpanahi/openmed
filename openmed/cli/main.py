@@ -25,6 +25,7 @@ from ..core.config import (
 from ..core.model_registry import get_model_info
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
+from .gates import add_gates_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -139,6 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
+    add_gates_command(subparsers)
     return parser
 
 
@@ -720,13 +722,32 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         "--input",
         type=Path,
         default=None,
-        help="Optional local DrugProt directory or zip archive.",
+        help="Optional local corpus directory, fixture file, or DrugProt archive.",
     )
     clinical_parser.add_argument(
         "--cache-dir",
         type=Path,
         default=None,
         help="Optional cache directory for download-on-demand public corpora.",
+    )
+    clinical_parser.add_argument(
+        "--split",
+        default=None,
+        help="Optional public-corpus split to load.",
+    )
+    clinical_parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help=(
+            "One or more model identifiers for NER benchmark reports. "
+            "Comma-separated values are accepted."
+        ),
+    )
+    clinical_parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device tier label recorded in NER benchmark reports.",
     )
     clinical_parser.add_argument(
         "--output",
@@ -973,27 +994,66 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
 
 
 def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
-    from openmed.eval.suites import load_suite_fixtures, suite_metadata
+    from openmed.eval.suites import (
+        BIOMEDICAL_NER,
+        load_suite_fixtures,
+        run_biomedical_ner_benchmark,
+        suite_metadata,
+    )
 
     try:
-        fixtures = load_suite_fixtures(
-            str(args.suite),
-            task=str(args.task),
-            path=args.input,
-            cache_dir=args.cache_dir,
-        )
-        metadata = suite_metadata(str(args.suite), task=str(args.task))
+        suite = str(args.suite)
+        task = str(args.task)
+        load_kwargs: dict[str, Any] = {
+            "task": task,
+            "path": args.input,
+            "cache_dir": args.cache_dir,
+        }
+        if args.split is not None:
+            load_kwargs["split"] = str(args.split)
+        fixtures = load_suite_fixtures(suite, **load_kwargs)
+        metadata_kwargs: dict[str, Any] = {}
+        if suite == "drugprot":
+            metadata_kwargs["task"] = task
+        if suite == BIOMEDICAL_NER and args.split is not None:
+            metadata_kwargs["split"] = str(args.split)
+        metadata = suite_metadata(suite, **metadata_kwargs)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to load clinical benchmark suite: {exc}\n")
         return 1
 
+    if suite == BIOMEDICAL_NER and task == "ner":
+        split = str(args.split) if args.split is not None else "test"
+        models = _parse_model_args(args.models or [])
+        if not models:
+            models = ["disease_detection_superclinical"]
+        reports = [
+            run_biomedical_ner_benchmark(
+                fixtures,
+                model_name=model,
+                device=str(args.device),
+                metadata=metadata,
+                split=split,
+            )
+            for model in models
+        ]
+        if len(reports) == 1:
+            payload: Any = reports[0].to_dict()
+        else:
+            payload = {
+                "metadata": metadata,
+                "reports": [report.to_dict() for report in reports],
+                "suite": suite,
+            }
+        return _write_json_payload(payload, args.output)
+
     payload: dict[str, Any] = {
         "fixture_count": len(fixtures),
         "metadata": metadata,
-        "suite": str(args.suite),
-        "task": str(args.task),
+        "suite": suite,
+        "task": task,
     }
-    if str(args.task) == "relation":
+    if task == "relation":
         payload["relation_count"] = sum(
             len(getattr(fixture, "relations", ())) for fixture in fixtures
         )
@@ -1002,10 +1062,14 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
             len(getattr(fixture, "gold_spans", ())) for fixture in fixtures
         )
 
+    return _write_json_payload(payload, args.output)
+
+
+def _write_json_payload(payload: Any, output_path: Path | None) -> int:
     output = json.dumps(payload, indent=2, sort_keys=True)
-    if args.output:
+    if output_path:
         try:
-            args.output.write_text(output + "\n", encoding="utf-8")
+            output_path.write_text(output + "\n", encoding="utf-8")
         except OSError as exc:
             sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
             return 1
