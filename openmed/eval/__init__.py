@@ -59,6 +59,11 @@ from openmed.eval.error_analysis import (
     ErrorSpanExample,
     error_report,
 )
+from openmed.eval.evidence_bundle import (
+    EvidenceArtifactSpec,
+    EvidenceBundleResult,
+    bundle_gate_evidence,
+)
 from openmed.eval.fairness import (
     UNSPECIFIED_GROUP,
     FairnessGroupMetrics,
@@ -154,6 +159,8 @@ __all__ = [
     "EvalSpan",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
+    "EvidenceArtifactSpec",
+    "EvidenceBundleResult",
     "FairnessGroupMetrics",
     "FairnessReport",
     "FlakyMetricReport",
@@ -183,6 +190,7 @@ __all__ = [
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
     "build_report_key",
+    "bundle_gate_evidence",
     "build_thresholds_payload",
     "build_all_dataset_cards",
     "build_dataset_card",
