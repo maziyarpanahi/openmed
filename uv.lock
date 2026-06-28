@@ -3124,6 +3124,7 @@ presidio = [
 ]
 service = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 spacy = [
@@ -3143,6 +3144,7 @@ requires-dist = [
     { name = "gliner", extras = ["tokenizers"], marker = "extra == 'gliner'", specifier = ">=0.2.0" },
     { name = "griffe", marker = "extra == 'docs'" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "httpx", marker = "extra == 'service'", specifier = ">=0.27" },
     { name = "huggingface-hub", marker = "extra == 'coreml'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.30" },
