@@ -46,7 +46,7 @@ DOCUMENTED_APPROXIMATE = {"te"}
 
 # Languages that register a national-ID checksum validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
-KNOWN_PROVIDERLESS_VALIDATORS = {"tr"}  # TCKN validator exists; no Faker TCKN provider
+KNOWN_PROVIDERLESS_VALIDATORS = set()
 
 # Number of surrogates sampled per language for the round-trip check.
 SAMPLE_SIZE = 40
