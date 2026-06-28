@@ -39,6 +39,7 @@ def client(monkeypatch):
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
