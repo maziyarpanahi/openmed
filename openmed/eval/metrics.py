@@ -6,7 +6,7 @@ import random
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from math import ceil
+from math import ceil, isfinite
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
@@ -249,6 +249,53 @@ class BootstrapCI:
         return self.to_dict()[key]
 
 
+@dataclass(frozen=True)
+class ReliabilityBin:
+    """One serializable bin for a reliability diagram."""
+
+    bin_index: int
+    lower_bound: float
+    upper_bound: float
+    mean_confidence: float
+    empirical_accuracy: float
+    count: int
+
+    def to_dict(self) -> dict[str, int | float]:
+        return {
+            "bin_index": self.bin_index,
+            "lower_bound": self.lower_bound,
+            "upper_bound": self.upper_bound,
+            "mean_confidence": self.mean_confidence,
+            "accuracy": self.empirical_accuracy,
+            "empirical_accuracy": self.empirical_accuracy,
+            "count": self.count,
+        }
+
+    def __getitem__(self, key: str) -> int | float:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class PairedSignificance:
+    """Observed paired delta and permutation-test p-value."""
+
+    observed_delta: float
+    p_value: float
+    n_resamples: int
+    method: str = "paired_permutation"
+
+    def to_dict(self) -> dict[str, float | int | str]:
+        return {
+            "observed_delta": self.observed_delta,
+            "p_value": self.p_value,
+            "n_resamples": self.n_resamples,
+            "method": self.method,
+        }
+
+    def __getitem__(self, key: str) -> float | int | str:
+        return self.to_dict()[key]
+
+
 def normalize_eval_span(
     span: Any,
     *,
@@ -265,6 +312,11 @@ def normalize_eval_span(
     if not isinstance(metadata, Mapping):
         metadata = {"value": metadata}
     metadata = dict(metadata)
+    for confidence_key in ("confidence", "score", "probability"):
+        confidence = _read_value(data, confidence_key)
+        if confidence is not None:
+            metadata.setdefault("confidence", confidence)
+            break
     raw_group = _read_value(data, "group")
     if raw_group is not None and str(raw_group).strip():
         metadata["group"] = str(raw_group).strip()
@@ -713,6 +765,74 @@ def compute_resource_metrics(
     )
 
 
+def reliability_bins(
+    predictions_with_confidence: Iterable[Any],
+    n_bins: int = 10,
+) -> list[dict[str, int | float]]:
+    """Return binned confidence-vs-accuracy records for predictions.
+
+    Each input record must provide a confidence score in ``[0, 1]`` and a
+    boolean correctness indicator. Mappings and objects may use ``confidence``,
+    ``score``, or ``probability`` for the score, and ``correct``,
+    ``is_correct``, ``matched``, or ``accurate`` for correctness. Two-item
+    sequences are treated as ``(confidence, correct)``.
+    """
+    if n_bins < 1:
+        raise ValueError("n_bins must be at least 1")
+
+    confidence_sums = [0.0 for _ in range(n_bins)]
+    correct_sums = [0 for _ in range(n_bins)]
+    counts = [0 for _ in range(n_bins)]
+
+    for record in predictions_with_confidence:
+        confidence, correct = _confidence_correctness(record)
+        index = min(int(confidence * n_bins), n_bins - 1)
+        confidence_sums[index] += confidence
+        correct_sums[index] += int(correct)
+        counts[index] += 1
+
+    bins: list[dict[str, int | float]] = []
+    for index, count in enumerate(counts):
+        bins.append(
+            ReliabilityBin(
+                bin_index=index,
+                lower_bound=index / n_bins,
+                upper_bound=(index + 1) / n_bins,
+                mean_confidence=confidence_sums[index] / count if count else 0.0,
+                empirical_accuracy=_safe_rate(
+                    correct_sums[index], count, zero_denominator=0.0
+                ),
+                count=count,
+            ).to_dict()
+        )
+    return bins
+
+
+def expected_calibration_error(
+    bins: Iterable[Mapping[str, Any]],
+) -> float:
+    """Compute expected calibration error over reliability bins."""
+    rows = list(bins)
+    total = sum(int(row.get("count", 0)) for row in rows)
+    if total == 0:
+        return 0.0
+
+    error = 0.0
+    for row in rows:
+        count = int(row.get("count", 0))
+        if count <= 0:
+            continue
+        mean_confidence = float(row["mean_confidence"])
+        accuracy_value = (
+            row["empirical_accuracy"]
+            if "empirical_accuracy" in row
+            else row["accuracy"]
+        )
+        empirical_accuracy = float(accuracy_value)
+        error += (count / total) * abs(empirical_accuracy - mean_confidence)
+    return error
+
+
 def compute_metrics_bundle(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -842,6 +962,68 @@ def bootstrap_ci(
     )
 
 
+def paired_significance(
+    per_document_a: Sequence[Any],
+    per_document_b: Sequence[Any],
+    statistic: str | Callable[[Sequence[Any]], float],
+    n_resamples: int = 1000,
+    seed: int = 0,
+) -> PairedSignificance:
+    """Run a paired permutation test between two benchmark runs.
+
+    ``per_document_a`` and ``per_document_b`` must be aligned one-to-one by
+    benchmark document. The null hypothesis is that the two systems are
+    exchangeable within each aligned document pair, so each resample randomly
+    swaps the A/B labels per document before recomputing the scalar statistic.
+
+    The observed delta is ``statistic(A) - statistic(B)``. Built-in statistic
+    names are ``"leakage"``/``"leakage_rate"`` for leaked-character rates,
+    ``"character_recall"``/``"recall"`` for character recall, and
+    ``"f1"``/``"exact_span_f1"``/``"relaxed_span_f1"`` for span F1. Rate
+    inputs use per-document ``(numerator, denominator)`` pairs; F1 inputs use
+    ``(true_positives, false_positives, false_negatives)`` triples.
+    """
+    values_a = list(per_document_a)
+    values_b = list(per_document_b)
+    if len(values_a) != len(values_b):
+        raise ValueError("per_document_a and per_document_b must have the same length")
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be at least 1")
+
+    scorer = _paired_statistic(statistic)
+    observed_delta = float(scorer(values_a)) - float(scorer(values_b))
+    if not values_a:
+        return PairedSignificance(
+            observed_delta=observed_delta,
+            p_value=1.0,
+            n_resamples=n_resamples,
+        )
+
+    rng = random.Random(seed)
+    extreme = 0
+    observed_abs = abs(observed_delta)
+    tolerance = 1e-12
+    for _ in range(n_resamples):
+        sample_a: list[Any] = []
+        sample_b: list[Any] = []
+        for value_a, value_b in zip(values_a, values_b):
+            if rng.random() < 0.5:
+                sample_a.append(value_b)
+                sample_b.append(value_a)
+            else:
+                sample_a.append(value_a)
+                sample_b.append(value_b)
+        sample_delta = float(scorer(sample_a)) - float(scorer(sample_b))
+        if abs(sample_delta) + tolerance >= observed_abs:
+            extreme += 1
+
+    return PairedSignificance(
+        observed_delta=observed_delta,
+        p_value=(extreme + 1) / (n_resamples + 1),
+        n_resamples=n_resamples,
+    )
+
+
 def compute_confidence_intervals(
     per_document_spans: Sequence[tuple[Iterable[Any], Iterable[Any]]],
     *,
@@ -951,6 +1133,26 @@ def _f1_over_docs(docs: Sequence[tuple[int, int, int]]) -> float:
     ).f1
 
 
+def _paired_statistic(
+    statistic: str | Callable[[Sequence[Any]], float],
+) -> Callable[[Sequence[Any]], float]:
+    if callable(statistic):
+        return statistic
+    if not isinstance(statistic, str):
+        raise TypeError("statistic must be a supported name or callable")
+
+    normalized = statistic.lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"leakage", "leakage_rate"}:
+        return lambda docs: _ratio_over_docs(docs, zero_denominator=0.0)
+    if normalized in {"character_recall", "char_recall", "recall"}:
+        return lambda docs: _ratio_over_docs(docs, zero_denominator=1.0)
+    if normalized in {"f1", "exact_span_f1", "relaxed_span_f1", "exact_f1"}:
+        return _f1_over_docs
+    raise ValueError(
+        "statistic must be one of leakage, character_recall, f1, or a callable"
+    )
+
+
 def _read_value(data: Mapping[str, Any], key: str) -> Any:
     if key in data:
         return data[key]
@@ -970,6 +1172,63 @@ def _read_int(data: Mapping[str, Any], key: str) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _confidence_correctness(record: Any) -> tuple[float, bool]:
+    if isinstance(record, tuple | list) and len(record) == 2:
+        confidence = _coerce_confidence(record[0])
+        return confidence, _coerce_bool(record[1])
+
+    data = record if isinstance(record, Mapping) else vars(record)
+    metadata = _read_mapping(data, "metadata") or {}
+
+    confidence_value = None
+    for key in ("confidence", "score", "probability"):
+        value = _read_value(data, key)
+        if value is None:
+            value = metadata.get(key)
+        if value is not None:
+            confidence_value = value
+            break
+    if confidence_value is None:
+        raise ValueError("prediction record must include a confidence score")
+
+    correctness_value = None
+    for key in ("correct", "is_correct", "matched", "accurate"):
+        value = _read_value(data, key)
+        if value is None:
+            value = metadata.get(key)
+        if value is not None:
+            correctness_value = value
+            break
+    if correctness_value is None:
+        raise ValueError("prediction record must include a correctness indicator")
+
+    return _coerce_confidence(confidence_value), _coerce_bool(correctness_value)
+
+
+def _coerce_confidence(value: Any) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"confidence must be numeric: {value!r}") from exc
+    if not isfinite(confidence) or confidence < 0.0 or confidence > 1.0:
+        raise ValueError(f"confidence must be between 0 and 1: {value!r}")
+    return confidence
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "y"}:
+            return True
+        if normalized in {"0", "false", "no", "n"}:
+            return False
+    raise ValueError(f"correctness indicator must be boolean-like: {value!r}")
 
 
 def _safe_rate(
@@ -1112,6 +1371,8 @@ __all__ = [
     "LatencyMetrics",
     "ResourceMetrics",
     "BootstrapCI",
+    "ReliabilityBin",
+    "PairedSignificance",
     "normalize_eval_span",
     "normalize_eval_spans",
     "compute_leakage_rate",
@@ -1125,7 +1386,10 @@ __all__ = [
     "compute_surrogate_consistency",
     "compute_latency_summary",
     "compute_resource_metrics",
+    "reliability_bins",
+    "expected_calibration_error",
     "compute_metrics_bundle",
     "bootstrap_ci",
+    "paired_significance",
     "compute_confidence_intervals",
 ]

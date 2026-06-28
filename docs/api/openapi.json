@@ -195,7 +195,8 @@
               "pt",
               "ar",
               "ja",
-              "tr"
+              "tr",
+              "id"
             ],
             "title": "Lang",
             "type": "string"
@@ -313,7 +314,8 @@
               "pt",
               "ar",
               "ja",
-              "tr"
+              "tr",
+              "id"
             ],
             "title": "Lang",
             "type": "string"
