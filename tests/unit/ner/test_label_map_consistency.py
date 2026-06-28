@@ -407,7 +407,7 @@ class TestModelRegistryEntityTypes:
 
     def test_at_least_one_pii_model_per_supported_language(self):
         """Every supported language should have at least one PII model in the registry."""
-        from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+        from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
 
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
         for lang in SUPPORTED_LANGUAGES:
@@ -422,6 +422,13 @@ class TestModelRegistryEntityTypes:
                 ), "No English PII model found"
             else:
                 # Non-English keys use pii_{lang}_ prefix, e.g. pii_de_superclinical_small
-                assert any(k.startswith(f"pii_{lang}_") for k in pii_keys), (
+                has_language_key = any(k.startswith(f"pii_{lang}_") for k in pii_keys)
+                default_model_id = DEFAULT_PII_MODELS.get(lang)
+                has_default_model = any(
+                    info.model_id == default_model_id and lang in info.languages
+                    for info in OPENMED_MODELS.values()
+                    if info.category == "Privacy"
+                )
+                assert has_language_key or has_default_model, (
                     f"No PII model found for language {lang!r}"
                 )

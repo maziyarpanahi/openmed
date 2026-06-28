@@ -176,6 +176,36 @@ Three modes:
 Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
 
+### Cross-document surrogate vaults
+
+Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
+calls need stable pseudonyms for the same identifier:
+
+```python
+from openmed import SurrogateVault, deidentify
+
+vault = SurrogateVault.from_file(
+    "surrogate-vault.json",
+    hmac_secret="rotate-and-store-this-secret-outside-the-vault",
+)
+
+first = deidentify(
+    "Patient John Doe was admitted.",
+    method="replace",
+    surrogate_vault=vault,
+)
+second = deidentify(
+    "John Doe returned for follow-up.",
+    method="replace",
+    surrogate_vault=vault,
+)
+```
+
+The vault file stores `(canonical_label, lang, HMAC text_hash) -> surrogate`
+entries plus `schema_version` and `hmac_scheme`; it does not store raw source
+surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
+data anyway: it can connect records across documents even without plaintext.
+
 ### Format preservation
 
 Phone numbers, dates, and emails preserve the structure of the original:
@@ -238,8 +268,8 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
+as its source of truth and supports **13 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 
@@ -247,7 +277,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 12-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 13-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:
