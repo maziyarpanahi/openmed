@@ -21,6 +21,9 @@ This release adds stricter request validation, shared model/pipeline reuse, opti
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
 
+For ready-to-run `curl` one-liners and a minimal Python `requests` client for the
+common calls, see the task-oriented [REST API Recipes](./rest-recipes.md).
+
 ## Run Locally
 
 Install the service dependencies:
