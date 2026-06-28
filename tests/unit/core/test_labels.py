@@ -3,31 +3,70 @@
 import pytest
 
 from openmed.core.labels import (
+    ACCOUNT_NUMBER,
     AGE,
+    AMOUNT,
+    ANTIBIOTIC,
+    API_KEY,
+    BIC,
+    BITCOIN_ADDRESS,
+    BODY_SITE,
+    BUILDING_NUMBER,
     CANONICAL_LABELS,
+    CLINICAL_CONCEPT,
+    CONDITION,
     CREDIT_CARD,
+    CREDIT_CARD_ISSUER,
+    CURRENCY,
+    CVV,
     DATE,
     DATE_OF_BIRTH,
     EMAIL,
+    ETHEREUM_ADDRESS,
+    EYE_COLOR,
     FIRST_NAME,
     GENDER,
+    GPS_COORDINATES,
+    HEIGHT,
+    HIPAA_SAFE_HARBOR_CLASSES,
+    IBAN,
     ID_NUM,
     ID_SUBTYPE_MRN,
     ID_SUBTYPE_NATIONAL_ID,
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
+    IMEI,
     IP_ADDRESS,
+    JOB_DEPARTMENT,
+    JOB_TITLE,
+    LAB_TEST,
     LAST_NAME,
+    LITECOIN_ADDRESS,
     LOCATION,
+    MAC_ADDRESS,
+    MASKED_NUMBER,
+    MEDICATION,
+    MICROORGANISM,
+    MIDDLE_NAME,
     OCCUPATION,
+    ORDINAL_DIRECTION,
     ORGANIZATION,
     OTHER,
+    PASSWORD,
     PERSON,
     PHONE,
+    PIN,
+    PREFIX,
+    PROCEDURE,
     SSN,
     STREET_ADDRESS,
+    SUSCEPTIBILITY,
+    TIME,
     URL,
+    USER_AGENT,
     USERNAME,
+    VEHICLE_REGISTRATION,
+    VIN,
     ZIPCODE,
     hipaa_class_for,
     id_subtype_for,
@@ -61,8 +100,10 @@ class TestEnglishLabels:
             ("dob", DATE_OF_BIRTH),
             ("ssn", SSN),
             ("medical_record_number", ID_NUM),
+            ("nhs_number", ID_NUM),
             ("id_num", ID_NUM),
             ("national_id", ID_NUM),
+            ("teudat_zehut", ID_NUM),
             ("age", AGE),
             ("username", USERNAME),
             ("url_personal", URL),
@@ -221,6 +262,7 @@ class TestIdentifierSubtypes:
             ("medical_record_number", ID_SUBTYPE_MRN),
             ("mrn", ID_SUBTYPE_MRN),
             ("npi", ID_SUBTYPE_NPI),
+            ("nhs_number", ID_SUBTYPE_NATIONAL_ID),
             ("national_id", ID_SUBTYPE_NATIONAL_ID),
             ("nationalid", ID_SUBTYPE_NATIONAL_ID),
             ("cpf", ID_SUBTYPE_NATIONAL_ID),
@@ -232,6 +274,8 @@ class TestIdentifierSubtypes:
             ("nie", ID_SUBTYPE_NATIONAL_ID),
             ("bsn", ID_SUBTYPE_NATIONAL_ID),
             ("aadhaar", ID_SUBTYPE_NATIONAL_ID),
+            ("teudat_zehut", ID_SUBTYPE_NATIONAL_ID),
+            ("tz", ID_SUBTYPE_NATIONAL_ID),
             ("B-CPF", ID_SUBTYPE_NATIONAL_ID),
         ],
     )
@@ -342,3 +386,251 @@ class TestRegistryCoverage:
             assert canonical in CANONICAL_LABELS, (
                 f"{label} -> {canonical} which is not in CANONICAL_LABELS"
             )
+
+
+class TestClinicalConceptLabels:
+    """Clinical-concept canonical labels added for grounding (issue #266)."""
+
+    NEW_LABELS = (CONDITION, MEDICATION, LAB_TEST, PROCEDURE, BODY_SITE)
+
+    def test_new_labels_in_canonical_set(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+
+    def test_new_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("disease", CONDITION),
+            ("diagnosis", CONDITION),
+            ("finding", CONDITION),
+            ("drug", MEDICATION),
+            ("medication", MEDICATION),
+            ("chemical", MEDICATION),
+            ("test", LAB_TEST),
+            ("measurement", LAB_TEST),
+            ("analyte", LAB_TEST),
+            ("surgery", PROCEDURE),
+            ("procedure", PROCEDURE),
+            ("operation", PROCEDURE),
+            ("anatomy", BODY_SITE),
+            ("organ", BODY_SITE),
+            ("body site", BODY_SITE),
+        ],
+    )
+    def test_clinical_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_new_labels_are_clinical_concepts(self):
+        for label in self.NEW_LABELS:
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)  # non-empty grounding hints
+
+    def test_new_labels_have_hipaa_class(self):
+        for label in self.NEW_LABELS:
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
+class TestClinicalLabelsAreAdditive:
+    """The clinical additions must not disturb the existing PII taxonomy."""
+
+    ORIGINAL_LABELS = frozenset(
+        {
+            PERSON,
+            FIRST_NAME,
+            LAST_NAME,
+            MIDDLE_NAME,
+            PREFIX,
+            USERNAME,
+            EMAIL,
+            PHONE,
+            URL,
+            LOCATION,
+            STREET_ADDRESS,
+            BUILDING_NUMBER,
+            ZIPCODE,
+            GPS_COORDINATES,
+            ORDINAL_DIRECTION,
+            DATE,
+            DATE_OF_BIRTH,
+            TIME,
+            AGE,
+            ID_NUM,
+            SSN,
+            ACCOUNT_NUMBER,
+            PASSWORD,
+            PIN,
+            API_KEY,
+            CREDIT_CARD,
+            CREDIT_CARD_ISSUER,
+            CVV,
+            IBAN,
+            BIC,
+            AMOUNT,
+            CURRENCY,
+            BITCOIN_ADDRESS,
+            ETHEREUM_ADDRESS,
+            LITECOIN_ADDRESS,
+            MASKED_NUMBER,
+            GENDER,
+            EYE_COLOR,
+            HEIGHT,
+            ORGANIZATION,
+            JOB_TITLE,
+            JOB_DEPARTMENT,
+            OCCUPATION,
+            IP_ADDRESS,
+            MAC_ADDRESS,
+            USER_AGENT,
+            VIN,
+            VEHICLE_REGISTRATION,
+            IMEI,
+            MICROORGANISM,
+            ANTIBIOTIC,
+            SUSCEPTIBILITY,
+            OTHER,
+        }
+    )
+
+    NEW_LABELS = frozenset({CONDITION, MEDICATION, LAB_TEST, PROCEDURE, BODY_SITE})
+
+    # Full pre-#266 alias map from master. These resolutions must stay
+    # byte-identical while clinical aliases are added.
+    PRESERVED_ALIASES = {
+        "name": PERSON,
+        "person": PERSON,
+        "patient": PERSON,
+        "doctor": PERSON,
+        "fullname": PERSON,
+        "firstname": FIRST_NAME,
+        "givenname": FIRST_NAME,
+        "lastname": LAST_NAME,
+        "surname": LAST_NAME,
+        "familyname": LAST_NAME,
+        "middlename": MIDDLE_NAME,
+        "prefix": PREFIX,
+        "title": PREFIX,
+        "username": USERNAME,
+        "userhandle": USERNAME,
+        "email": EMAIL,
+        "emailaddress": EMAIL,
+        "phone": PHONE,
+        "phonenumber": PHONE,
+        "telephone": PHONE,
+        "fax": PHONE,
+        "url": URL,
+        "urlpersonal": URL,
+        "website": URL,
+        "personalurl": URL,
+        "location": LOCATION,
+        "city": LOCATION,
+        "state": LOCATION,
+        "country": LOCATION,
+        "county": LOCATION,
+        "region": LOCATION,
+        "place": LOCATION,
+        "address": STREET_ADDRESS,
+        "street": STREET_ADDRESS,
+        "streetaddress": STREET_ADDRESS,
+        "secondaryaddress": STREET_ADDRESS,
+        "buildingnumber": BUILDING_NUMBER,
+        "zipcode": ZIPCODE,
+        "zip": ZIPCODE,
+        "postcode": ZIPCODE,
+        "postalcode": ZIPCODE,
+        "gpscoordinates": GPS_COORDINATES,
+        "gps": GPS_COORDINATES,
+        "ordinaldirection": ORDINAL_DIRECTION,
+        "date": DATE,
+        "dateofbirth": DATE_OF_BIRTH,
+        "dob": DATE_OF_BIRTH,
+        "birthdate": DATE_OF_BIRTH,
+        "time": TIME,
+        "age": AGE,
+        "idnum": ID_NUM,
+        "id": ID_NUM,
+        "identifier": ID_NUM,
+        "medicalrecordnumber": ID_NUM,
+        "mrn": ID_NUM,
+        "nationalid": ID_NUM,
+        "cpf": ID_NUM,
+        "cnpj": ID_NUM,
+        "nir": ID_NUM,
+        "steuerid": ID_NUM,
+        "codicefiscale": ID_NUM,
+        "dni": ID_NUM,
+        "nie": ID_NUM,
+        "bsn": ID_NUM,
+        "aadhaar": ID_NUM,
+        "npi": ID_NUM,
+        "ssn": SSN,
+        "socialsecuritynumber": SSN,
+        "accountnumber": ACCOUNT_NUMBER,
+        "accountname": ACCOUNT_NUMBER,
+        "bankaccount": ACCOUNT_NUMBER,
+        "password": PASSWORD,
+        "pin": PIN,
+        "apikey": API_KEY,
+        "creditcard": CREDIT_CARD,
+        "creditdebitcard": CREDIT_CARD,
+        "creditcardnumber": CREDIT_CARD,
+        "creditcardissuer": CREDIT_CARD_ISSUER,
+        "cvv": CVV,
+        "iban": IBAN,
+        "bic": BIC,
+        "swift": BIC,
+        "amount": AMOUNT,
+        "currency": CURRENCY,
+        "currencycode": CURRENCY,
+        "currencyname": CURRENCY,
+        "currencysymbol": CURRENCY,
+        "bitcoinaddress": BITCOIN_ADDRESS,
+        "ethereumaddress": ETHEREUM_ADDRESS,
+        "litecoinaddress": LITECOIN_ADDRESS,
+        "maskednumber": MASKED_NUMBER,
+        "gender": GENDER,
+        "sex": GENDER,
+        "eyecolor": EYE_COLOR,
+        "height": HEIGHT,
+        "organization": ORGANIZATION,
+        "company": ORGANIZATION,
+        "employer": ORGANIZATION,
+        "jobtitle": JOB_TITLE,
+        "jobdepartment": JOB_DEPARTMENT,
+        "department": JOB_DEPARTMENT,
+        "occupation": OCCUPATION,
+        "profession": OCCUPATION,
+        "ipaddress": IP_ADDRESS,
+        "ip": IP_ADDRESS,
+        "macaddress": MAC_ADDRESS,
+        "useragent": USER_AGENT,
+        "vin": VIN,
+        "vrm": VEHICLE_REGISTRATION,
+        "licenseplate": VEHICLE_REGISTRATION,
+        "imei": IMEI,
+        "microorganism": MICROORGANISM,
+        "microbe": MICROORGANISM,
+        "organism": MICROORGANISM,
+        "pathogen": MICROORGANISM,
+        "antibiotic": ANTIBIOTIC,
+        "antimicrobial": ANTIBIOTIC,
+        "susceptibility": SUSCEPTIBILITY,
+        "susceptibilityresult": SUSCEPTIBILITY,
+    }
+
+    def test_original_labels_still_present(self):
+        assert CANONICAL_LABELS - self.NEW_LABELS == self.ORIGINAL_LABELS
+
+    def test_existing_aliases_unchanged(self):
+        for alias, expected in self.PRESERVED_ALIASES.items():
+            assert normalize_label(alias) == expected
+
+    def test_id_num_mapping_unchanged(self):
+        assert normalize_label("ID_NUM") == ID_NUM
+        assert normalize_label("mrn") == ID_NUM
+
+    def test_unknown_labels_still_fall_back_to_other(self):
+        assert normalize_label("totally_made_up_label") == OTHER

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+import re
+from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -13,6 +14,8 @@ from typing import Any
 from openmed.eval.golden import GoldenFixture, load_golden_fixtures
 from openmed.eval.report import BenchmarkReport
 from openmed.risk import risk_report
+
+from .linkage import linkage_attack
 
 
 @dataclass(frozen=True)
@@ -55,34 +58,95 @@ def run_reid_benchmark(
     *,
     suite: str = "golden",
     model_name: str = "privacy-filter",
+    attack_mode: str = "reid",
     deidentified_records: Sequence[Mapping[str, Any]] | None = None,
     auxiliary_records: Sequence[Mapping[str, Any]] | None = None,
+    quasi_id_table: Sequence[Mapping[str, Any]] | None = None,
+    quasi_identifiers: Sequence[str] | None = None,
+    candidate_members: Sequence[Mapping[str, Any]] | None = None,
     output_json: str | Path | None = None,
     output_markdown: str | Path | None = None,
     generated_at: str | None = None,
 ) -> BenchmarkReport:
-    """Run the re-identification attack and return a BenchmarkReport."""
+    """Run the re-identification attack and return a BenchmarkReport.
+
+    ``attack_mode="linkage"`` runs a first-class external quasi-identifier
+    linkage attack against ``quasi_id_table``. When ``candidate_members`` is
+    provided in the default ``"reid"`` mode, the membership-inference probe
+    runs against the de-identified records and its result is added to the
+    report metrics under ``"membership_inference"``.
+    """
 
     fixtures = _load_suite_fixtures(suite)
+    if attack_mode not in {"reid", "linkage"}:
+        raise ValueError("attack_mode must be 'reid' or 'linkage'")
+
+    if attack_mode == "linkage":
+        if quasi_id_table is None:
+            raise ValueError("quasi_id_table is required for linkage mode")
+        deidentified = (
+            list(deidentified_records)
+            if deidentified_records is not None
+            else [_deidentified_record(fixture) for fixture in fixtures]
+        )
+        linkage_result = linkage_attack(
+            deidentified,
+            quasi_id_table,
+            quasi_identifiers=quasi_identifiers,
+        )
+        report = BenchmarkReport(
+            suite=suite,
+            model_name=model_name,
+            device="attack",
+            fixture_count=linkage_result.record_count,
+            generated_at=generated_at or _utc_now(),
+            metrics={
+                "linkage_unique_match_rate": linkage_result.unique_match_rate,
+                "linkage_attack": linkage_result.to_metric(),
+            },
+            metadata={
+                "attack": "linkage",
+                "leaderboard_metric": "linkage_unique_match_rate",
+            },
+        )
+        if output_json is not None:
+            report.write_json(output_json)
+        if output_markdown is not None:
+            Path(output_markdown).write_text(
+                render_reid_leaderboard([report]),
+                encoding="utf-8",
+            )
+        return report
+
     result = run_reid_attack(
         fixtures,
         deidentified_records=deidentified_records,
         auxiliary_records=auxiliary_records,
     )
+    metrics: dict[str, Any] = {
+        "reid_leakage": {
+            "rate": result.rate,
+            "numerator": result.numerator,
+            "denominator": result.denominator,
+        },
+        "reidentification": result.to_metric(),
+    }
+    if candidate_members is not None:
+        deidentified = (
+            list(deidentified_records)
+            if deidentified_records is not None
+            else [_deidentified_record(fixture) for fixture in fixtures]
+        )
+        metrics["membership_inference"] = membership_inference_attack(
+            deidentified, candidate_members
+        ).to_metric()
     report = BenchmarkReport(
         suite=suite,
         model_name=model_name,
         device="attack",
         fixture_count=result.denominator,
         generated_at=generated_at or _utc_now(),
-        metrics={
-            "reid_leakage": {
-                "rate": result.rate,
-                "numerator": result.numerator,
-                "denominator": result.denominator,
-            },
-            "reidentification": result.to_metric(),
-        },
+        metrics=metrics,
         metadata={
             "attack": "reid",
             "leaderboard_metric": "reid_leakage_rate",
@@ -142,6 +206,148 @@ def run_reid_attack(
             "fixture_ids": [fixture.fixture_id for fixture in normalized_fixtures]
         },
     )
+
+
+_ID_FIELDS = ("record_id", "doc_id", "id")
+_TOKEN_RE = re.compile(r"[a-z0-9]{4,}")
+
+
+@dataclass(frozen=True)
+class MembershipInferenceResult:
+    """Membership-inference probe score over de-identified records.
+
+    ``advantage`` is the attacker accuracy above the 0.5 chance baseline:
+    confident-correct decisions count 1.0, confident-wrong 0.0, and records
+    with no distinguishing residual signal count as chance (0.5).
+    """
+
+    advantage: float
+    accuracy: float
+    record_count: int
+    confident_count: int
+    per_record: tuple[dict[str, Any], ...]
+    baseline: float = 0.5
+
+    def to_metric(self) -> dict[str, Any]:
+        return {
+            "advantage": float(self.advantage),
+            "accuracy": float(self.accuracy),
+            "baseline": float(self.baseline),
+            "record_count": int(self.record_count),
+            "confident_count": int(self.confident_count),
+            "per_record": [dict(row) for row in self.per_record],
+        }
+
+
+def membership_inference_attack(
+    deidentified_records: Sequence[Mapping[str, Any]],
+    candidate_members: Sequence[Mapping[str, Any]],
+    *,
+    threshold: int = 1,
+) -> MembershipInferenceResult:
+    """Score whether each de-identified record's source is in the candidates.
+
+    Each record is matched to candidates by residual quasi-identifier overlap
+    and surviving rare tokens. A token held by exactly one candidate is
+    *distinguishing*; when a record's distinguishing tokens point to a single
+    candidate (with at least ``threshold`` hits), the attacker confidently
+    predicts that candidate. The ground-truth source id is used only to score
+    correctness, never as an attack feature.
+    """
+    deidentified = list(deidentified_records)
+    candidates = list(candidate_members)
+
+    candidate_ids = [_record_id(record) for record in candidates]
+    candidate_features = _feature_sets(candidates)
+    token_to_candidates: defaultdict[str, set[str]] = defaultdict(set)
+    for cid, features in zip(candidate_ids, candidate_features):
+        for token in features:
+            token_to_candidates[token].add(cid)
+
+    deid_features = _feature_sets(deidentified)
+    known_ids = set(candidate_ids)
+
+    per_record: list[dict[str, Any]] = []
+    outcomes: list[float] = []
+    confident_count = 0
+    for record, features in zip(deidentified, deid_features):
+        record_id = _record_id(record)
+        hits: Counter[str] = Counter()
+        for token in features:
+            owners = token_to_candidates.get(token, set())
+            if len(owners) == 1:
+                hits[next(iter(owners))] += 1
+
+        best = _best_candidate(hits)
+        confident = best is not None and hits[best] >= threshold
+        true_source = record_id if record_id in known_ids else None
+
+        if confident:
+            confident_count += 1
+            outcome = 1.0 if best == true_source else 0.0
+        else:
+            outcome = 0.5  # no distinguishing signal -> chance
+        outcomes.append(outcome)
+
+        per_record.append(
+            {
+                "record_id": record_id,
+                "matched_candidate": best if confident else None,
+                "confidence": (hits[best] / len(features))
+                if confident and features
+                else 0.0,
+                "distinguishing_hits": int(hits[best]) if confident else 0,
+                "outcome": outcome,
+            }
+        )
+
+    accuracy = sum(outcomes) / len(outcomes) if outcomes else 0.5
+    return MembershipInferenceResult(
+        advantage=accuracy - 0.5,
+        accuracy=accuracy,
+        record_count=len(deidentified),
+        confident_count=confident_count,
+        per_record=tuple(per_record),
+    )
+
+
+def _best_candidate(hits: Counter[str]) -> str | None:
+    if not hits:
+        return None
+    # Deterministic: most hits, ties broken by sorted candidate id.
+    return min(sorted(hits), key=lambda cid: (-hits[cid], cid))
+
+
+def _feature_sets(records: Sequence[Mapping[str, Any]]) -> list[set[str]]:
+    """Residual features per record: reused QI values plus surviving tokens.
+
+    Identifier fields are excluded so the ground-truth id never leaks into the
+    attack features.
+    """
+    sanitized = [_without_id_fields(record) for record in records]
+    risk = risk_report(sanitized)
+    qi_by_index: defaultdict[int, set[str]] = defaultdict(set)
+    for qi in risk.get("quasi_identifiers") or ():
+        value = str(qi.get("normalized_value") or "").strip()
+        if value:
+            qi_by_index[int(qi.get("record_index", -1))].add(value)
+
+    feature_sets: list[set[str]] = []
+    for index, record in enumerate(records):
+        tokens = _residual_tokens(record)
+        feature_sets.append(tokens | qi_by_index.get(index, set()))
+    return feature_sets
+
+
+def _without_id_fields(record: Mapping[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in record.items() if key not in _ID_FIELDS}
+
+
+def _residual_tokens(record: Mapping[str, Any]) -> set[str]:
+    text = " ".join(
+        str(value) for key, value in record.items() if key not in _ID_FIELDS
+    )
+    return set(_TOKEN_RE.findall(text.lower()))
 
 
 def generate_reid_leaderboard(
@@ -368,7 +574,9 @@ def _utc_now() -> str:
 
 __all__ = [
     "ReidAttackResult",
+    "MembershipInferenceResult",
     "generate_reid_leaderboard",
+    "membership_inference_attack",
     "render_reid_leaderboard",
     "run_reid_attack",
     "run_reid_benchmark",
