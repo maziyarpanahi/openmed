@@ -8,7 +8,7 @@ from dataclasses import replace
 import pytest
 
 from openmed.core.labels import HIPAA_SAFE_HARBOR_CLASSES, PERSON
-from openmed.core.policy import load_policy
+from openmed.core.policy import list_policies, load_policy
 from openmed.core.schemas.span import ACTION_KEEP
 from openmed.eval.report import BenchmarkReport
 from openmed.eval.suites import (
@@ -62,7 +62,7 @@ def test_run_policy_compliance_reports_every_bundled_profile() -> None:
     assert payload["suite"] == POLICY_COMPLIANCE
     assert payload["generated_at"] == "2026-06-27T00:00:00Z"
     assert payload["metrics"]["overall_passed"] is True
-    assert payload["metrics"]["profile_count"] == 6
+    assert payload["metrics"]["profile_count"] == len(list_policies())
     assert set(profiles) == set(BUNDLED_DEIDENTIFICATION_POLICIES)
 
     for profile_name in BUNDLED_DEIDENTIFICATION_POLICIES:

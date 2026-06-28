@@ -34,6 +34,7 @@ def test_eval_modules_import_cleanly():
         "shield",
         "drugprot",
         "policy_compliance",
+        "biomedical-ner",
     )
 
 
