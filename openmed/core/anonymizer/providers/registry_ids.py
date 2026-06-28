@@ -51,6 +51,7 @@ from .clinical_ids import (
     NPIProvider,
     PolishPeselProvider,
     SpanishDNIProvider,
+    SpanishNIEProvider,
     validate_npi,
 )
 
@@ -221,6 +222,7 @@ def _register_builtin_specs() -> None:
         id_type="nie",
         validate=validate_spanish_nie,
         faker_method="nie",
+        faker_provider=SpanishNIEProvider,
     )
     _register_aliases(
         ("nl", "nl_NL"),
