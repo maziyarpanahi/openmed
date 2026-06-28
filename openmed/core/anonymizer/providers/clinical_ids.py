@@ -10,14 +10,19 @@ validators):
   - ``nl_NL.ssn()``  (BSN)        valid
   - ``fr_FR.ssn()``  (NIR)        valid
   - ``it_IT.ssn()``  (Codice Fiscale) valid
-  - ``es_ES.nie()``               valid
 
 Custom providers below cover the gaps where Faker either has no built-in
-or emits a US-style format unrelated to the requested locale's actual ID:
+or emits a US-style format unrelated to the requested locale's actual ID.
+They also replace generators whose checksums are valid but not instance-seed
+deterministic:
 
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Spanish NIE (Faker's built-in uses non-instance randomness)
+  - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Indonesian NIK with a decodable embedded birth date
+  - Polish PESEL and South Korean RRN
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -141,6 +146,21 @@ def generate_npi(*, rng: random.Random | None = None) -> str:
     prefixed = [8, 0, 8, 4, 0, *body]
     check_digit = _luhn_check_digit(prefixed)
     return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+_SPANISH_NIE_PREFIX_VALUES = {"X": "0", "Y": "1", "Z": "2"}
+
+
+def generate_spanish_nie(*, rng: random.Random | None = None) -> str:
+    """Generate a Spanish NIE with a valid modulo-23 check letter."""
+
+    source = rng or random.Random()
+    prefix = source.choice(tuple(_SPANISH_NIE_PREFIX_VALUES))
+    digits = f"{source.randint(0, 9999999):07d}"
+    number = int(_SPANISH_NIE_PREFIX_VALUES[prefix] + digits)
+    check = _SPANISH_DNI_LETTERS[number % len(_SPANISH_DNI_LETTERS)]
+    return f"{prefix}{digits}{check}"
 
 
 def generate_ssn(*, rng: random.Random | None = None) -> str:
@@ -309,6 +329,18 @@ class AadhaarProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Spanish NIE (prefix + 7 digits + modulo-23 check letter)
+# ---------------------------------------------------------------------------
+
+
+class SpanishNIEProvider(BaseProvider):
+    """Generates Spanish NIE values using Faker's instance RNG."""
+
+    def nie(self) -> str:
+        return generate_spanish_nie(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -338,6 +370,21 @@ class GermanSteuerIdProvider(BaseProvider):
                 return candidate
         # Fallback: return any 11 digits; validator may reject downstream.
         return self.numerify("###########")
+
+
+# ---------------------------------------------------------------------------
+# Spanish DNI (8 digits + modulo-23 letter)
+# ---------------------------------------------------------------------------
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+
+
+class SpanishDNIProvider(BaseProvider):
+    """Generates Spanish DNI values that pass the existing validator."""
+
+    def dni(self) -> str:
+        number = self.generator.random.randint(0, 99_999_999)
+        return f"{number:08d}{_SPANISH_DNI_LETTERS[number % 23]}"
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +492,48 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Indonesian NIK (16 digits with province/regency/district + birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_indonesian_nik(*, rng: random.Random | None = None) -> str:
+    """Generate an Indonesian NIK accepted by ``validate_indonesian_nik``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    province = source.randint(11, 94)
+    regency = source.randint(1, 99)
+    district = source.randint(1, 99)
+
+    year = source.randint(1940, 2009)
+    month = source.randint(1, 12)
+    max_day = calendar.monthrange(year, month)[1]
+    day = source.randint(1, max_day)
+    if source.choice((False, True)):
+        day += 40
+
+    serial = source.randint(1, 9999)
+    candidate = (
+        f"{province:02d}{regency:02d}{district:02d}"
+        f"{day:02d}{month:02d}{year % 100:02d}{serial:04d}"
+    )
+
+    from openmed.core.pii_i18n import validate_indonesian_nik
+
+    if validate_indonesian_nik(candidate):
+        return candidate
+    return "3174051708850001"
+
+
+class IndonesianNIKProvider(BaseProvider):
+    """Generates valid Indonesian NIK numbers."""
+
+    def indonesian_nik(self) -> str:
+        return generate_indonesian_nik(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -508,25 +597,29 @@ class KoreanRRNProvider(BaseProvider):
 
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
-    faker.add_provider(AadhaarProvider)
-    faker.add_provider(GermanSteuerIdProvider)
-    faker.add_provider(KoreanRRNProvider)
+    from .registry_ids import national_id_faker_provider_classes
+
+    for provider in national_id_faker_provider_classes():
+        faker.add_provider(provider)
     faker.add_provider(MedicalRecordNumberProvider)
-    faker.add_provider(NPIProvider)
-    faker.add_provider(PolishPeselProvider)
 
 
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "IndonesianNIKProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "SpanishDNIProvider",
+    "SpanishNIEProvider",
+    "generate_indonesian_nik",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
+    "generate_spanish_nie",
     "generate_ssn",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
