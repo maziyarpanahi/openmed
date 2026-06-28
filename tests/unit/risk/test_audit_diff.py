@@ -6,6 +6,8 @@ import copy
 import json
 from pathlib import Path
 
+import pytest
+
 from openmed.core.audit import hash_text
 from openmed.risk import diff_audit_reports
 
@@ -161,3 +163,13 @@ def test_to_dict_is_json_serializable_and_deterministic_for_paths(
     assert json.loads(json.dumps(first, sort_keys=True)) == first
     assert first["summary"]["added_spans"] == 1
     assert first["added_spans"][0]["label"] == "PHONE"
+
+
+def test_diff_audit_reports_rejects_malformed_json_path(tmp_path: Path) -> None:
+    path = tmp_path / "audit-report.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in audit report") as exc_info:
+        diff_audit_reports(path, _report())
+
+    assert str(path) in str(exc_info.value)
