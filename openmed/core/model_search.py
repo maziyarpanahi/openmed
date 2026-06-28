@@ -88,6 +88,129 @@ def search_models(
     return sorted(results, key=_result_sort_key)
 
 
+# Device tiers ordered from the most constrained to the least constrained.
+DEVICE_TIERS: tuple[str, ...] = ("phone", "laptop", "workstation", "server")
+_DEVICE_TIER_RANK = {name: index for index, name in enumerate(DEVICE_TIERS)}
+
+# Approximate usable RAM budgets (in MB) per device tier. These are only
+# consulted when a manifest row carries ``peak_ram_mb`` enrichment; rows without
+# it are retained and ranked by parameter count so the command degrades
+# gracefully before the enrichment task lands.
+_DEVICE_RAM_BUDGET_MB = {
+    "phone": 6_000,
+    "laptop": 16_000,
+    "workstation": 64_000,
+    "server": 512_000,
+}
+
+
+def recommend_models(
+    *,
+    device_tier: str,
+    task: str | None = None,
+    language: str | None = None,
+    manifest_path: str | Path | None = None,
+) -> list[ModelSearchResult]:
+    """Rank on-device models that fit ``device_tier`` for a task and language.
+
+    Task/language filtering reuses :func:`search_models`; this adds device-tier
+    fit and ranking on top. A row fits when its ``recommended_tier`` is no larger
+    than the requested tier and, when present, its ``peak_ram_mb`` is within the
+    tier budget. Rows lacking that enrichment are retained and ranked by
+    parameter count, so the command still returns a shortlist today.
+    """
+
+    tier = device_tier.casefold()
+    if tier not in _DEVICE_TIER_RANK:
+        raise ValueError(
+            f"Unknown device tier: {device_tier!r}. "
+            f"Expected one of: {', '.join(DEVICE_TIERS)}."
+        )
+
+    candidates = search_models(
+        task=task,
+        language=language,
+        manifest_path=manifest_path,
+    )
+    fitted = [result for result in candidates if _fits_device_tier(result, tier)]
+    return sorted(fitted, key=lambda result: _recommendation_sort_key(result, tier))
+
+
+def _fits_device_tier(result: ModelSearchResult, tier: str) -> bool:
+    recommended = _recommended_tier(result)
+    if recommended is not None and recommended in _DEVICE_TIER_RANK:
+        if _DEVICE_TIER_RANK[recommended] > _DEVICE_TIER_RANK[tier]:
+            return False
+
+    peak_ram = _peak_ram_mb(result, tier)
+    if peak_ram is not None and peak_ram > _DEVICE_RAM_BUDGET_MB[tier]:
+        return False
+
+    return True
+
+
+def _recommendation_sort_key(
+    result: ModelSearchResult, tier: str
+) -> tuple[int, float, float, str]:
+    return (
+        0 if _has_tier_enrichment(result, tier) else 1,
+        _size_metric(result, tier),
+        -_benchmark_score(result),
+        result.repo_id.casefold(),
+    )
+
+
+def _has_tier_enrichment(result: ModelSearchResult, tier: str) -> bool:
+    return (
+        _recommended_tier(result) is not None or _peak_ram_mb(result, tier) is not None
+    )
+
+
+def _size_metric(result: ModelSearchResult, tier: str) -> float:
+    peak_ram = _peak_ram_mb(result, tier)
+    if peak_ram is not None:
+        return peak_ram
+    if result.param_count is not None:
+        return float(result.param_count)
+    return float("inf")
+
+
+def _benchmark_score(result: ModelSearchResult) -> float:
+    benchmark = result.benchmark
+    entries = benchmark if isinstance(benchmark, list) else [benchmark]
+    scores: list[float] = []
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            continue
+        for key, value in entry.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            lowered = str(key).casefold()
+            if "recall" in lowered or "f1" in lowered:
+                scores.append(float(value))
+    return max(scores) if scores else 0.0
+
+
+def _recommended_tier(result: ModelSearchResult) -> str | None:
+    value = result.manifest_row.get("recommended_tier")
+    if isinstance(value, str) and value.strip():
+        return value.strip().casefold()
+    return None
+
+
+def _peak_ram_mb(result: ModelSearchResult, tier: str) -> float | None:
+    value = result.manifest_row.get("peak_ram_mb")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, Mapping):
+        candidate = value.get(tier)
+        if isinstance(candidate, (int, float)) and not isinstance(candidate, bool):
+            return float(candidate)
+    return None
+
+
 def _matches_query(row: Mapping[str, Any], query: ModelQuery) -> bool:
     if query.task and not _matches_text(row.get("task"), query.task):
         return False
