@@ -20,6 +20,15 @@ from .base import (
     redact_document,
     register_handler,
 )
+from .chatlog_jsonl import (
+    ChatLogRedactionSummary,
+    MessagesListAdapter,
+    RedactedChatLog,
+    TurnRecordAdapter,
+    iter_redacted_chatlog_jsonl,
+    redact_chatlog_jsonl,
+    write_redacted_chatlog_jsonl,
+)
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
 
 # Importing the OCR module registers image-format handlers with the dispatcher
@@ -51,6 +60,13 @@ __all__ = [
     "ensure_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "ChatLogRedactionSummary",
+    "RedactedChatLog",
+    "TurnRecordAdapter",
+    "MessagesListAdapter",
+    "iter_redacted_chatlog_jsonl",
+    "redact_chatlog_jsonl",
+    "write_redacted_chatlog_jsonl",
     "OcrResult",
     "OcrWord",
     "OcrEngine",
