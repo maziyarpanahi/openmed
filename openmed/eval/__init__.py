@@ -144,6 +144,10 @@ from openmed.eval.section_recall import (
     SectionSpan,
     compute_section_recall,
 )
+from openmed.eval.suites.policy_compliance import (
+    PolicyProfileComplianceResult,
+    run_policy_compliance,
+)
 from openmed.eval.tiers import TIERS
 from openmed.eval.utility import (
     CLINICAL_CATEGORIES,
@@ -199,6 +203,7 @@ __all__ = [
     "ReliabilityBin",
     "RELEASABLE",
     "Perturbation",
+    "PolicyProfileComplianceResult",
     "ReleaseGate",
     "RobustnessReport",
     "RobustnessVariant",
@@ -263,6 +268,7 @@ __all__ = [
     "reliability_bins",
     "robustness_report",
     "run_benchmark",
+    "run_policy_compliance",
     "run_reid_attack",
     "run_reid_benchmark",
     "run_suite",
