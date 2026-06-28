@@ -17,6 +17,7 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.custom_recognizer import CustomRecognizer
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -27,6 +28,7 @@ from .core.model_registry import (
     get_pii_models_by_language,
     list_model_categories,
 )
+from .core.model_search import ModelQuery, ModelSearchResult, search_models
 from .core.pii import (
     DeidentificationResult,
     PIIEntity,
@@ -47,10 +49,24 @@ from .core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
 )
+from .core.redaction_preview import redaction_preview, render_redaction_preview
+from .core.result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
+from .core.surrogate_vault import (
+    InMemorySurrogateStore,
+    JsonFileSurrogateStore,
+    SurrogateEntry,
+    SurrogateKey,
+    SurrogateVault,
+)
+from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
     BatchItem,
     BatchItemResult,
     BatchProcessor,
+    BatchProgress,
     BatchResult,
     OutputFormatter,
     TextProcessor,
@@ -142,6 +158,8 @@ def analyze_text(
     sentence_language: str = "en",
     sentence_clean: bool = False,
     sentence_segmenter: Optional[Any] = None,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     **pipeline_kwargs: Any,
 ) -> Union[PredictionResult, str, List[Dict[str, Any]]]:
     """Run a token-classification model on ``text`` and format the predictions.
@@ -169,11 +187,42 @@ def analyze_text(
         sentence_language: Language hint for the sentence detector.
         sentence_clean: Whether to enable pySBD's cleaning heuristics.
         sentence_segmenter: Optional preconstructed pySBD segmenter to reuse.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
         **pipeline_kwargs: Additional arguments passed to
             :meth:`openmed.core.models.ModelLoader.create_pipeline`.
 
     Returns:
         Prediction result in the requested ``output_format``.
+
+    Example:
+        >>> class FixtureLoader:
+        ...     config = None
+        ...
+        ...     def create_pipeline(self, model_name, **kwargs):
+        ...         def pipeline(text, **call_kwargs):
+        ...             return [
+        ...                 {
+        ...                     "entity_group": "CONDITION",
+        ...                     "score": 0.99,
+        ...                     "start": 11,
+        ...                     "end": 17,
+        ...                     "word": "asthma",
+        ...                 }
+        ...             ]
+        ...
+        ...         return pipeline
+        ...
+        ...     def get_max_sequence_length(self, model_name, tokenizer=None):
+        ...         return 128
+        >>> result = analyze_text(
+        ...     "History of asthma.",
+        ...     model_name="fixture-ner-model",
+        ...     loader=FixtureLoader(),
+        ...     sentence_detection=False,
+        ... )
+        >>> next((entity.text, entity.label) for entity in result.entities)
+        ('asthma', 'CONDITION')
     """
 
     validated_text = validate_input(text)
@@ -182,6 +231,14 @@ def analyze_text(
         raise ValueError("Pass only one of model_name or model_id")
 
     validated_model = validate_model_name(selected_model)
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("analyze_text", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
 
     loader = loader or ModelLoader(config)
 
@@ -521,13 +578,16 @@ def analyze_text(
 
     fmt_output = validate_output_format(output_format)
 
-    return format_predictions(
+    final_result = format_predictions(
         flattened_predictions,
         validated_text,
         model_name=validated_model,
         output_format=fmt_output,
         **fmt_kwargs,
     )
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 __all__ = [
@@ -544,6 +604,7 @@ __all__ = [
     "BatchProcessor",
     "BatchItem",
     "BatchItemResult",
+    "BatchProgress",
     "BatchResult",
     "process_batch",
     "AdvancedNERProcessor",
@@ -567,6 +628,8 @@ __all__ = [
     "list_models",
     "get_model_max_length",
     "analyze_text",
+    "generate_text",
+    "OpenMedMLXLanguageModel",
     # Profiling utilities
     "Profiler",
     "ProfileReport",
@@ -582,6 +645,9 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "CustomRecognizer",
+    "redaction_preview",
+    "render_redaction_preview",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
     "find_semantic_units",
@@ -602,4 +668,9 @@ __all__ = [
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",
+    "SurrogateVault",
+    "SurrogateKey",
+    "SurrogateEntry",
+    "InMemorySurrogateStore",
+    "JsonFileSurrogateStore",
 ]

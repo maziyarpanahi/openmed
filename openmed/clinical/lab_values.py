@@ -24,9 +24,20 @@ LAB_FLAG_ADVISORY = (
     "originating laboratory's own formal diagnostic flagging."
 )
 
+_EN_DASH = "\u2013"
+_EM_DASH = "\u2014"
+_LESS_THAN_OR_EQUAL = "\u2264"
+_GREATER_THAN_OR_EQUAL = "\u2265"
 _NUMERIC = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
-_RANGE_RE = re.compile(rf"^(?P<low>{_NUMERIC})\s*-\s*(?P<high>{_NUMERIC})$")
-_ONE_SIDED_RE = re.compile(rf"^(?P<operator><=|>=|<|>)\s*(?P<bound>{_NUMERIC})$")
+_RANGE_RE = re.compile(
+    rf"^(?P<low>{_NUMERIC})\s*(?:-|to|{_EN_DASH}|{_EM_DASH})\s*"
+    rf"(?P<high>{_NUMERIC})$",
+    re.IGNORECASE,
+)
+_ONE_SIDED_RE = re.compile(
+    rf"^(?P<operator><=|>=|<|>|{_LESS_THAN_OR_EQUAL}|"
+    rf"{_GREATER_THAN_OR_EQUAL})\s*(?P<bound>{_NUMERIC})$"
+)
 
 _EXPLICIT_FLAGS: Mapping[str, AbnormalFlag] = {
     "H": "high",
@@ -36,6 +47,8 @@ _EXPLICIT_FLAGS: Mapping[str, AbnormalFlag] = {
     "C": "critical",
     "CRIT": "critical",
     "CRITICAL": "critical",
+    "CRITICAL HIGH": "critical",
+    "CRITICAL LOW": "critical",
     "HH": "critical",
     "LL": "critical",
     "N": "normal",
@@ -67,8 +80,8 @@ def _finite_float(value: object) -> float | None:
 def parse_reference_range(text: object) -> ReferenceRange:
     """Parse a laboratory reference range into numeric bounds.
 
-    Supported forms are closed ranges such as ``"135-145"`` and
-    ``"0.5 - 1.2"``, plus one-sided bounds such as ``"<5"``, ``"<=5"``,
+    Supported forms are closed ranges such as ``"135-145"``, ``"0.5 - 1.2"``,
+    and ``"135 to 145"``, plus one-sided bounds such as ``"<5"``, ``"<=5"``,
     ``">10"``, and ``">=10"``. Units are intentionally ignored rather than
     parsed or converted.
 
@@ -104,12 +117,12 @@ def parse_reference_range(text: object) -> ReferenceRange:
             return result
 
         operator = one_sided_match.group("operator")
-        if operator.startswith("<"):
+        if operator in {"<", "<=", _LESS_THAN_OR_EQUAL}:
             result["high"] = bound
-            result["high_inclusive"] = operator == "<="
+            result["high_inclusive"] = operator in {"<=", _LESS_THAN_OR_EQUAL}
         else:
             result["low"] = bound
-            result["low_inclusive"] = operator == ">="
+            result["low_inclusive"] = operator in {">=", _GREATER_THAN_OR_EQUAL}
         return result
 
     return result
@@ -163,7 +176,8 @@ def derive_abnormal_flag(
     """Derive a laboratory abnormal flag from a value and reference range.
 
     Explicit laboratory flags for high, low, normal, or critical values are
-    honored before derived comparisons. Critical thresholds beyond the
+    honored before derived comparisons. Unknown explicit flags return
+    ``"unknown"`` instead of being ignored. Critical thresholds beyond the
     reference range are out of scope unless the explicit flag marks the value
     critical. This helper is unit-agnostic and does not perform conversion.
 
@@ -178,10 +192,10 @@ def derive_abnormal_flag(
         Non-numeric values and unparseable ranges return ``"unknown"``.
     """
 
-    if explicit_flag:
+    if explicit_flag is not None:
         normalized_flag = explicit_flag.strip().upper()
-        if normalized_flag in _EXPLICIT_FLAGS:
-            return _EXPLICIT_FLAGS[normalized_flag]
+        if normalized_flag:
+            return _EXPLICIT_FLAGS.get(normalized_flag, "unknown")
 
     numeric_value = _finite_float(value)
     if numeric_value is None:
