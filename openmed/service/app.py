@@ -696,7 +696,7 @@ def _analyze_payload_batch(
     if tokenizer is not None and effective_max_length is not None:
         try:
             tokenizer.model_max_length = int(effective_max_length)
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             pass
 
     import time
