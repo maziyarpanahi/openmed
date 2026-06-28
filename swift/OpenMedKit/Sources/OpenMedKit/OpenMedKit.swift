@@ -184,6 +184,31 @@ public final class OpenMed {
         }
     }
 
+    /// Detect and de-identify PII, returning a Python-schema-compatible result.
+    public func deidentify(
+        _ text: String,
+        method: DeidentificationMethod = .mask,
+        confidenceThreshold: Float = 0.5,
+        useSmartMerging: Bool = true
+    ) throws -> DeidentificationResult {
+        let entities = try extractPII(
+            text,
+            confidenceThreshold: confidenceThreshold,
+            useSmartMerging: useSmartMerging
+        )
+        let deidentifiedText = Self.deidentifiedText(
+            text,
+            entities: entities,
+            method: method
+        )
+        return DeidentificationResult(
+            originalText: text,
+            deidentifiedText: deidentifiedText,
+            entities: entities,
+            method: method.rawValue
+        )
+    }
+
     /// Run PII detection over long text using overlapping token windows.
     ///
     /// The returned entity offsets always reference the original full text.
@@ -476,6 +501,49 @@ public final class OpenMed {
         let lowerBound = text.index(text.startIndex, offsetBy: start)
         let upperBound = text.index(lowerBound, offsetBy: end - start)
         return String(text[lowerBound..<upperBound])
+    }
+
+    private static func deidentifiedText(
+        _ text: String,
+        entities: [EntityPrediction],
+        method: DeidentificationMethod
+    ) -> String {
+        var redacted = text
+        for entity in entities.sorted(by: { $0.start > $1.start }) {
+            guard let range = characterRange(in: redacted, start: entity.start, end: entity.end) else {
+                continue
+            }
+            redacted.replaceSubrange(
+                range,
+                with: replacementText(for: entity, method: method)
+            )
+        }
+        return redacted
+    }
+
+    private static func replacementText(
+        for entity: EntityPrediction,
+        method: DeidentificationMethod
+    ) -> String {
+        switch method {
+        case .mask:
+            return "[\(entity.entityType.uppercased())]"
+        case .remove:
+            return ""
+        }
+    }
+
+    private static func characterRange(
+        in text: String,
+        start: Int,
+        end: Int
+    ) -> Range<String.Index>? {
+        guard start >= 0, end >= start, end <= text.count else {
+            return nil
+        }
+        let lowerBound = text.index(text.startIndex, offsetBy: start)
+        let upperBound = text.index(lowerBound, offsetBy: end - start)
+        return lowerBound..<upperBound
     }
 
     static func loadTokenizer(

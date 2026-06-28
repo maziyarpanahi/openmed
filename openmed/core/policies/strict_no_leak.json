@@ -69,6 +69,11 @@
     "MICROORGANISM": "mask",
     "ANTIBIOTIC": "mask",
     "SUSCEPTIBILITY": "mask",
+    "CONDITION": "mask",
+    "MEDICATION": "mask",
+    "LAB_TEST": "mask",
+    "PROCEDURE": "mask",
+    "BODY_SITE": "mask",
     "OTHER": "mask"
   }
 }

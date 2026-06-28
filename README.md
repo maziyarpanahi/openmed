@@ -2,7 +2,9 @@
 
 <img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
 
-<h3>Local-first healthcare AI that never leaves the device</h3>
+<h2>Local-first healthcare AI that never leaves the device</h2>
+
+<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
 Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
@@ -398,9 +400,10 @@ a local-first guardian for your most private data.
 
 ## Contributing
 
-Contributions welcome — bug reports, feature requests, and PRs alike.
+Contributions welcome — bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
+- [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
 - **Translations welcome** — help complete the other-language READMEs linked in the switcher at the top.
 
 ---

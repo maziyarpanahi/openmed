@@ -23,8 +23,9 @@ from ..core.config import (
     set_config,
 )
 from ..core.model_registry import get_model_info
-from ..core.model_search import ModelSearchResult, search_models
+from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
+from .gates import add_gates_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -136,7 +137,9 @@ def build_parser() -> argparse.ArgumentParser:
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
+    add_gates_command(subparsers)
     return parser
 
 
@@ -463,6 +466,25 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     )
     models_search.set_defaults(handler=_handle_models_search)
 
+    models_recommend = models_sub.add_parser(
+        "recommend",
+        help="Recommend the best on-device model for a task and device tier.",
+    )
+    models_recommend.add_argument("--task", help="Filter by model task.")
+    models_recommend.add_argument("--language", help="Filter by language code.")
+    models_recommend.add_argument(
+        "--tier",
+        required=True,
+        choices=["phone", "laptop", "workstation", "server"],
+        help="Target device tier the recommended model must fit.",
+    )
+    models_recommend.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the ranked shortlist as a single JSON document.",
+    )
+    models_recommend.set_defaults(handler=_handle_models_recommend)
+
     models_freshness = models_sub.add_parser(
         "freshness",
         help="Compute freshness metrics from the canonical model manifest.",
@@ -510,6 +532,25 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Path to a model manifest JSONL file.",
     )
     models_validate.set_defaults(handler=_handle_models_validate)
+
+
+def _add_doctor_command(
+    subparsers: argparse._SubParsersAction,
+) -> None:
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Inspect the OpenMed environment and dependencies.",
+    )
+
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit diagnostics as JSON.",
+    )
+
+    doctor_parser.set_defaults(
+        handler=_handle_doctor,
+    )
 
 
 def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
@@ -968,6 +1009,57 @@ def _handle_models_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_models_recommend(args: argparse.Namespace) -> int:
+    try:
+        results = recommend_models(
+            device_tier=args.tier,
+            task=args.task,
+            language=args.language,
+        )
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to recommend models: {exc}\n")
+        return 1
+
+    if not results:
+        sys.stderr.write(
+            f"No model fits the '{args.tier}' device tier for the requested filters.\n"
+        )
+        return 1
+
+    if args.json:
+        payload = {
+            "tier": args.tier,
+            "task": args.task,
+            "language": args.language,
+            "recommended": results[0].repo_id,
+            "models": [_recommendation_to_dict(result) for result in results],
+        }
+        sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
+        return 0
+
+    sys.stdout.write(f"Recommended for {args.tier}: {results[0].repo_id}\n")
+    sys.stdout.write(_format_model_search_table(results))
+    return 0
+
+
+def _recommendation_to_dict(result: ModelSearchResult) -> dict[str, Any]:
+    row = result.manifest_row
+    return {
+        "repo_id": result.repo_id,
+        "family": result.family,
+        "task": result.task,
+        "languages": list(result.languages),
+        "tier": result.tier,
+        "param_count": result.param_count,
+        "formats": list(result.formats),
+        "license": result.license,
+        "recommended_tier": row.get("recommended_tier"),
+        "peak_ram_mb": row.get("peak_ram_mb"),
+        "latency_ms": row.get("latency_ms"),
+        "benchmark": result.benchmark,
+    }
+
+
 def _format_model_search_table(results: Sequence[ModelSearchResult]) -> str:
     columns = (
         ("repo_id", "repo_id"),
@@ -1126,6 +1218,30 @@ def _handle_models_validate(args: argparse.Namespace) -> int:
     for line in format_manifest_validation(result):
         output.write(f"{line}\n")
     return 0 if result.ok else 1
+
+
+def _handle_doctor(args: argparse.Namespace) -> int:
+    from ..core.doctor import run_diagnostics
+
+    results = run_diagnostics()
+
+    if args.json:
+        sys.stdout.write(json.dumps(results, indent=2))
+        sys.stdout.write("\n")
+
+        has_fail = any(item["status"] == "FAIL" for item in results)
+
+        return 1 if has_fail else 0
+
+    for item in results:
+        sys.stdout.write(f"{item['status'][:5]} {item['name']}: {item['details']}\n")
+
+        if item.get("hint"):
+            sys.stdout.write(f"      Hint: {item['hint']}\n")
+
+    has_fail = any(item["status"] == "FAIL" for item in results)
+
+    return 1 if has_fail else 0
 
 
 def _handle_benchmark_pii_reid(args: argparse.Namespace) -> int:

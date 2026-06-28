@@ -231,6 +231,9 @@ class Pipeline:
         self.policy_actions = policy_actions
         self.section_detector = section_detector
         self.hmac_secret = hmac_secret
+        from .clinical_protect import protection_options_from_config
+
+        self.clinical_protect_options = protection_options_from_config(config)
 
     def run(
         self,
@@ -244,6 +247,7 @@ class Pipeline:
         consistent: bool = False,
         seed: Optional[int] = None,
         locale: Optional[str] = None,
+        surrogate_vault: Any = None,
         doc_id: str | None = None,
         audit: bool = False,
     ) -> PipelineResult:
@@ -405,13 +409,32 @@ class Pipeline:
             (*deterministic_spans, *model_spans, *clinical_spans),
             context,
         )
+        merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
+            normalized.normalized_text,
+            merged_spans,
+            context,
+        )
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 merged_spans,
                 model_name="cascade",
             )
-        stage_results.append(PipelineStageResult(7, STAGE_NAMES[6], spans=merged_spans))
+        else:
+            pii._apply_clinical_protection_to_result(
+                normalized.normalized_text,
+                pii_result,
+                options=self.clinical_protect_options,
+                lang=route.lang,
+            )
+        stage_results.append(
+            PipelineStageResult(
+                7,
+                STAGE_NAMES[6],
+                spans=merged_spans,
+                metadata=clinical_protection_metadata,
+            )
+        )
 
         policy_spans = self.stage8_policy_actions(merged_spans, context)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
@@ -475,6 +498,7 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=route.model_name,
             confidence_threshold=self.confidence_threshold,
             normalize_accents=self.normalize_accents,
@@ -812,6 +836,24 @@ class Pipeline:
             "redacted_chars_after": after,
         }
 
+    def _protect_clinical_spans(
+        self,
+        text: str,
+        spans: Sequence[OpenMedSpan],
+        context: PipelineContext,
+    ) -> tuple[tuple[OpenMedSpan, ...], Mapping[str, Any]]:
+        from .clinical_protect import filter_protected_spans
+
+        result = filter_protected_spans(
+            spans,
+            text,
+            lang=context.route.lang,
+            **self.clinical_protect_options,
+        )
+        metadata = dict(result.metadata["clinical_protection"])
+        metadata["enabled"] = bool(self.clinical_protect_options.get("enabled", True))
+        return tuple(result.spans), {"clinical_protection": metadata}
+
     def stage10_emit(
         self,
         text: str,
@@ -825,6 +867,7 @@ class Pipeline:
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        surrogate_vault: Any = None,
         model_name: str,
         confidence_threshold: float,
         normalize_accents: Optional[bool],
@@ -848,6 +891,7 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=model_name,
             confidence_threshold=confidence_threshold,
             normalize_accents=normalize_accents,
