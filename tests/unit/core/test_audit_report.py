@@ -90,6 +90,11 @@ def test_report_json_round_trip_is_byte_stable_and_hash_recomputes():
     assert verify_repro_hash(json.loads(payload))
 
 
+def test_report_from_json_rejects_malformed_payload():
+    with pytest.raises(ValueError, match="Invalid JSON for AuditReport"):
+        AuditReport.from_json("{")
+
+
 def test_report_sign_verify_and_tamper_detection():
     report = _report().sign("release-key", key_id="test-key")
 

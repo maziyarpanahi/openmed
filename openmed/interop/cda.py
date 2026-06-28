@@ -227,7 +227,10 @@ def _redact_document_handler(
     *,
     policy: Any | None = None,
     models: Any | None = None,
+    lang: str | None = None,
 ) -> ExtractedDocument:
+    # ``lang`` is accepted for the shared handler contract; CDA is parsed XML
+    # with no OCR step, so language selection does not apply here.
     text_redactor = models if callable(models) else None
     redacted = redact_cda(path, text_redactor=text_redactor)
     return ExtractedDocument(
