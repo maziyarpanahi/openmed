@@ -26,6 +26,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "ar",
     "ja",
     "tr",
+    "id",
 }
 
 # Languages with checksum-validated national-ID coverage but no bundled
@@ -45,6 +46,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "ar": "Arabic",
     "ja": "Japanese",
     "tr": "Turkish",
+    "id": "Indonesian",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -60,6 +62,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "ar": "Arabic-",
     "ja": "Japanese-",
     "tr": "Turkish-",
+    "id": "Indonesian-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -75,6 +78,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
     "ja": "OpenMed/OpenMed-PII-Japanese-BigMed-Large-560M-v1",
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
+    "id": "OpenMed/privacy-filter-multilingual",
 }
 
 
@@ -428,6 +432,58 @@ def validate_turkish_tckn(text: str) -> bool:
     return numbers[9] == tenth and numbers[10] == eleventh
 
 
+def validate_indonesian_nik(text: str) -> bool:
+    """Validate Indonesian NIK (Nomor Induk Kependudukan) structure.
+
+    NIK is a 16-digit civil-registration identifier. This validator checks the
+    stable structural parts OpenMed can verify without bundling a restricted
+    registry:
+
+    - PP: province code, using Indonesia's numeric 11-94 province-code range.
+    - RR: regency/city code, non-zero two-digit shape.
+    - DD: district code, non-zero two-digit shape.
+    - DDMMYY: embedded birth date. Female identifiers add 40 to the day.
+    - SSSS: non-zero sequence number.
+
+    Args:
+        text: NIK string (may contain spaces or separators).
+
+    Returns:
+        True if the NIK has a valid structure and decodable birth date.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 16:
+        return False
+
+    province = int(digits[0:2])
+    regency = int(digits[2:4])
+    district = int(digits[4:6])
+    if not (11 <= province <= 94 and 1 <= regency <= 99 and 1 <= district <= 99):
+        return False
+
+    raw_day = int(digits[6:8])
+    month = int(digits[8:10])
+    year = int(digits[10:12])
+    serial = int(digits[12:16])
+
+    day = raw_day - 40 if raw_day > 40 else raw_day
+    if not (1 <= day <= 31 and 1 <= month <= 12 and serial > 0):
+        return False
+
+    import calendar
+
+    # NIK stores a two-digit year without a century. Accept the date if it is
+    # possible in either common civil-registration century.
+    try:
+        return any(
+            day <= calendar.monthrange(century + year, month)[1]
+            for century in (1900, 2000)
+        )
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
 def validate_polish_pesel(text: str) -> bool:
     """Validate Polish PESEL number.
 
@@ -751,6 +807,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Ekim",
         "Kas\u0131m",
         "Aral\u0131k",
+    ],
+    "id": [
+        "Januari",
+        "Februari",
+        "Maret",
+        "April",
+        "Mei",
+        "Juni",
+        "Juli",
+        "Agustus",
+        "September",
+        "Oktober",
+        "November",
+        "Desember",
     ],
 }
 
@@ -1845,6 +1915,106 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
 
 
 # ---------------------------------------------------------------------------
+# Indonesian PII patterns
+# ---------------------------------------------------------------------------
+
+_INDONESIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}/\d{1,2}/\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "tanggal",
+            "tanggal lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawat",
+            "kontrol",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{1,2}\s+(?:Januari|Februari|Maret|April|Mei|Juni|Juli|Agustus|September|Oktober|November|Desember)\s+\d{4}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "tanggal",
+            "tanggal lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawat",
+            "kontrol",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+62\s?|0)8\d{1,3}(?:[\s.-]?\d{3,4}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "telepon",
+            "telp",
+            "hp",
+            "ponsel",
+            "nomor",
+            "kontak",
+            "whatsapp",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"\b\d{16}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "nik",
+            "nomor induk kependudukan",
+            "ktp",
+            "identitas",
+            "kependudukan",
+        ],
+        context_boost=0.45,
+        validator=validate_indonesian_nik,
+    ),
+    PIIPattern(
+        r"\b(?:Jl\.|Jalan)\s+[A-Z][A-Za-z0-9 .'-]{2,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "alamat",
+            "domisili",
+            "tinggal",
+            "jalan",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "kode pos",
+            "pos",
+            "alamat",
+            "domisili",
+        ],
+        context_boost=0.5,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # Polish PII patterns
 # ---------------------------------------------------------------------------
 
@@ -1902,6 +2072,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ar": _ARABIC_PII_PATTERNS,
     "ja": _JAPANESE_PII_PATTERNS,
     "tr": _TURKISH_PII_PATTERNS,
+    "id": _INDONESIAN_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
 }
@@ -2189,6 +2360,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["\u0130stanbul", "Ankara", "\u0130zmir"],
         "ZIPCODE": ["34000", "06000", "35000"],
+    },
+    "id": {
+        "NAME": ["Siti Aminah", "Budi Santoso", "Dewi Lestari", "Agus Pratama"],
+        "FIRST_NAME": ["Siti", "Budi", "Dewi", "Agus"],
+        "LAST_NAME": ["Aminah", "Santoso", "Lestari", "Pratama"],
+        "EMAIL": ["pasien@contoh.id", "kontak@contoh.org"],
+        "PHONE": ["+62 812 3456 7890", "0812-9876-5432"],
+        "ID_NUM": ["3174055708850001"],
+        "STREET_ADDRESS": ["Jl. Merdeka No. 10", "Jl. Sudirman 25"],
+        "URL_PERSONAL": ["https://contoh.id"],
+        "USERNAME": ["pasien123", "pengguna456"],
+        "DATE": ["01/01/2000", "31/12/1999"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Jakarta", "Bandung", "Surabaya"],
+        "ZIPCODE": ["10110", "40123", "60234"],
     },
 }
 
