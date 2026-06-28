@@ -23,6 +23,15 @@ from .base import (
     redact_document,
     register_handler,
 )
+from .chatlog_jsonl import (
+    ChatLogRedactionSummary,
+    MessagesListAdapter,
+    RedactedChatLog,
+    TurnRecordAdapter,
+    iter_redacted_chatlog_jsonl,
+    redact_chatlog_jsonl,
+    write_redacted_chatlog_jsonl,
+)
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
@@ -65,6 +74,13 @@ __all__ = [
     "ensure_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
+    "ChatLogRedactionSummary",
+    "RedactedChatLog",
+    "TurnRecordAdapter",
+    "MessagesListAdapter",
+    "iter_redacted_chatlog_jsonl",
+    "redact_chatlog_jsonl",
+    "write_redacted_chatlog_jsonl",
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
