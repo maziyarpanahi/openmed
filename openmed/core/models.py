@@ -33,6 +33,7 @@ except (ImportError, OSError) as e:
 if TYPE_CHECKING:
     from .config import OpenMedConfig
 
+from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
 from .model_registry import (
     OPENMED_MODELS,
@@ -128,6 +129,13 @@ class ModelLoader:
             auth_kwargs = self._hub_auth_kwargs()
             local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
             pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
+            load_kwargs = dict(kwargs)
+            device_preference = load_kwargs.pop("device", None)
+            attention_preference = load_kwargs.pop("attn_implementation", None)
+            resolved_device = self._resolve_torch_device(device_preference)
+            attn_implementation = self._resolve_attn_implementation(
+                attention_preference
+            )
 
             # Load config first to verify it's a token classification model
             config = AutoConfig.from_pretrained(
@@ -151,8 +159,10 @@ class ModelLoader:
                     )
 
             # Load tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer = get_tokenizer_with_loader(
                 full_model_name,
+                AutoTokenizer.from_pretrained,
+                refresh_cache=force_reload,
                 cache_dir=self.config.cache_dir,
                 **pretrained_kwargs,
             )
@@ -161,12 +171,15 @@ class ModelLoader:
             # not by modifying the model tokenizer/vocabulary.
 
             # Load model
-            model_kwargs = {**pretrained_kwargs, **kwargs}
+            model_kwargs = {**pretrained_kwargs, **load_kwargs}
+            model_kwargs["attn_implementation"] = attn_implementation
             model = AutoModelForTokenClassification.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
                 **model_kwargs,
             )
+            if hasattr(model, "to"):
+                model.to(resolved_device)
 
             # Cache the loaded model and tokenizer
             self._models[full_model_name] = model
@@ -268,15 +281,17 @@ class ModelLoader:
 
         try:
             # Create pipeline directly with model name for better caching
+            pipeline_device = kwargs.get("device", self._get_device_id())
             pipeline_kwargs = {
                 "model": full_model_name,
                 "aggregation_strategy": aggregation_strategy,
-                "device": self._get_device_id(),
+                "device": pipeline_device,
                 "use_fast": use_fast_tokenizer,
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
             pipeline_kwargs.update(self._local_loading_kwargs(full_model_name, kwargs))
             pipeline_kwargs.update(kwargs)
+            self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
             ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
@@ -290,6 +305,7 @@ class ModelLoader:
             model_data = self.load_model(model_name)
 
             fallback_kwargs = dict(kwargs)
+            fallback_kwargs.pop("device", None)
             if aggregation_strategy is not None:
                 fallback_kwargs["aggregation_strategy"] = aggregation_strategy
 
@@ -297,7 +313,7 @@ class ModelLoader:
                 task,
                 model=model_data["model"],
                 tokenizer=model_data["tokenizer"],
-                device=self._get_device_id(),
+                device=kwargs.get("device", self._get_device_id()),
                 **fallback_kwargs,
             )
             self._pipelines[cache_key] = ner_pipeline
@@ -380,8 +396,9 @@ class ModelLoader:
 
         if tokenizer is None:
             try:
-                tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer = get_tokenizer_with_loader(
                     full_model_name,
+                    AutoTokenizer.from_pretrained,
                     cache_dir=self.config.cache_dir,
                     use_fast=True,
                     **pretrained_kwargs,
@@ -437,14 +454,46 @@ class ModelLoader:
 
     def _get_device_id(self) -> Union[int, str]:
         """Get device ID for pipeline."""
-        if self.config.device is None:
-            return -1  # CPU
-        elif self.config.device.lower() == "cpu":
+        resolved_device = self._resolve_torch_device()
+        if resolved_device == "cpu":
             return -1
-        elif self.config.device.lower() in ["cuda", "gpu"]:
+        if resolved_device == "cuda":
             return 0
-        else:
-            return self.config.device
+        return resolved_device
+
+    def _resolve_torch_device(self, prefer: Optional[str] = None) -> str:
+        """Resolve and prepare the torch device for this loader."""
+        from openmed.torch.device import apply_mps_tuning, resolve_torch_device
+
+        device_preference = prefer if prefer is not None else self.config.device
+        resolved_device = resolve_torch_device(device_preference)
+        if resolved_device.startswith("mps"):
+            apply_mps_tuning()
+        return resolved_device
+
+    def _resolve_attn_implementation(self, prefer: Optional[str] = None) -> str:
+        """Resolve a safe Transformers attention backend for PyTorch loading."""
+        from openmed.torch.attention import select_attn_implementation
+
+        attention_preference = (
+            prefer
+            if prefer is not None
+            else getattr(self.config, "torch_attention_backend", "auto")
+        )
+        return select_attn_implementation(attention_preference, log=logger)
+
+    def _apply_attention_pipeline_kwargs(self, pipeline_kwargs: Dict[str, Any]) -> None:
+        """Thread attention backend selection into direct pipeline model loading."""
+        attention_preference = pipeline_kwargs.pop("attn_implementation", None)
+        model_kwargs = dict(pipeline_kwargs.pop("model_kwargs", {}) or {})
+        attention_preference = model_kwargs.pop(
+            "attn_implementation",
+            attention_preference,
+        )
+        model_kwargs["attn_implementation"] = self._resolve_attn_implementation(
+            attention_preference
+        )
+        pipeline_kwargs["model_kwargs"] = model_kwargs
 
     def get_registry_info(self, model_key: str) -> Optional[RegistryModelInfo]:
         """Get information from model registry."""
