@@ -15,6 +15,8 @@ from openmed.service.app import create_app
 from openmed.service.coalesce import RequestCoalescer, coalescing_key
 from openmed.service.schemas import AnalyzeRequest
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 
 class FakeLoader:
     """Minimal loader double for service runtime tests."""
@@ -38,6 +40,8 @@ def _enable_coalescing_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
@@ -130,7 +134,7 @@ def test_identical_concurrent_requests_trigger_one_model_call(monkeypatch) -> No
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 first = asyncio.create_task(
                     client.post("/analyze", json={"text": "alpha"})
@@ -183,7 +187,7 @@ def test_non_identical_requests_do_not_coalesce(
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return list(
                     await asyncio.gather(
@@ -223,7 +227,7 @@ def test_leader_error_propagates_to_all_joined_waiters(monkeypatch) -> None:
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 first = asyncio.create_task(
                     client.post("/analyze", json={"text": "alpha"})

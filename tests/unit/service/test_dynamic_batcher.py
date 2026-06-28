@@ -15,6 +15,8 @@ from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.batcher import DynamicBatcher
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 
 class FakeLoader:
     """Minimal loader double for service runtime tests."""
@@ -72,6 +74,8 @@ def _clear_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
@@ -85,6 +89,8 @@ def _enable_batching_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
@@ -207,7 +213,7 @@ def test_pii_extract_endpoint_batches_concurrent_requests(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return await asyncio.gather(
                     client.post("/pii/extract", json={"text": "alpha"}),
@@ -237,7 +243,7 @@ def test_analyze_endpoint_batches_compatible_concurrent_requests(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 payload = {"sentence_detection": False}
                 return await asyncio.gather(
@@ -274,7 +280,7 @@ def test_pii_extract_batches_only_compatible_request_shapes(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return await asyncio.gather(
                     client.post("/pii/extract", json={"text": "alpha", "lang": "en"}),
@@ -309,7 +315,7 @@ def test_pii_extract_endpoint_isolates_one_failed_batched_input(monkeypatch):
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 return await asyncio.gather(
                     client.post("/pii/extract", json={"text": "good"}),

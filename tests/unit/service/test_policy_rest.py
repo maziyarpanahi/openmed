@@ -11,6 +11,8 @@ from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 
 class FakeLoader:
     instances: list["FakeLoader"] = []
@@ -25,6 +27,12 @@ class FakeLoader:
 
     def loaded_models(self) -> dict[str, dict[str, int]]:
         return {}
+
+
+@pytest.fixture(autouse=True)
+def clear_security_env(monkeypatch):
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
 
 
 @pytest.fixture
@@ -46,7 +54,11 @@ def client(monkeypatch):
     monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
     app = create_app()
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
         yield test_client
 
 

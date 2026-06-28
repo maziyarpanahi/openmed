@@ -16,11 +16,15 @@ from openmed.processing.outputs import PredictionResult
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_PRELOAD_MODELS",
     "OPENMED_SERVICE_KEEP_ALIVE",
     "OPENMED_SERVICE_MAX_RESIDENT_MODELS",
     "OPENMED_SERVICE_MAX_TEXT_LENGTH",
+    "OPENMED_SERVICE_CORS_ORIGINS",
+    "OPENMED_SERVICE_TRUSTED_HOSTS",
     "OPENMED_SERVICE_BATCHING_ENABLED",
     "OPENMED_SERVICE_BATCH_MAX_SIZE",
     "OPENMED_SERVICE_BATCH_MAX_WAIT_MS",
@@ -121,7 +125,11 @@ def test_rate_limit_returns_429_with_retry_after(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         first = client.post("/analyze", json={"text": "first"})
         second = client.post("/analyze", json={"text": "second"})
 
@@ -158,7 +166,7 @@ def test_concurrency_limit_returns_503_after_bounded_wait(
             transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="http://test",
+                base_url=LOOPBACK_BASE_URL,
             ) as client:
                 first_task = asyncio.create_task(
                     client.post("/analyze", json={"text": "held"})
@@ -186,7 +194,11 @@ def test_probe_paths_do_not_consume_rate_limit(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         for _ in range(3):
             assert client.get("/health").status_code == 200
             assert client.get("/livez").status_code == 200
@@ -210,7 +222,11 @@ def test_throttle_middleware_is_noop_when_limits_unset(
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         responses = [
             client.post("/analyze", json={"text": text})
             for text in ("one", "two", "three")
