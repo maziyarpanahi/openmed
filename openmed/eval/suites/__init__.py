@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from openmed.eval.datasets.biomedical_ner import (
+    BIOMEDICAL_NER,
+    biomedical_ner_suite_metadata,
+    load_biomedical_ner_fixtures,
+    run_biomedical_ner_benchmark,
+)
 from openmed.eval.datasets.drugprot import (
     DRUGPROT,
     drugprot_suite_metadata,
@@ -20,7 +26,14 @@ GOLDEN = "golden"
 I2B2 = "i2b2"
 N2C2 = "n2c2"
 
-DEFAULT_SUITES: tuple[str, ...] = (GOLDEN, I2B2, N2C2, SHIELD, DRUGPROT)
+DEFAULT_SUITES: tuple[str, ...] = (
+    GOLDEN,
+    I2B2,
+    N2C2,
+    SHIELD,
+    DRUGPROT,
+    BIOMEDICAL_NER,
+)
 
 
 def validate_suite_name(name: str) -> str:
@@ -40,6 +53,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_shield_fixtures(**kwargs)
     if suite == DRUGPROT:
         return load_drugprot_fixtures(**kwargs)
+    if suite == BIOMEDICAL_NER:
+        return load_biomedical_ner_fixtures(**kwargs)
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -50,6 +65,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return shield_suite_metadata(**kwargs)
     if suite == DRUGPROT:
         return drugprot_suite_metadata(**kwargs)
+    if suite == BIOMEDICAL_NER:
+        return biomedical_ner_suite_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -59,12 +76,16 @@ __all__ = [
     "N2C2",
     "SHIELD",
     "DRUGPROT",
+    "BIOMEDICAL_NER",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_suite_fixtures",
     "suite_metadata",
+    "biomedical_ner_suite_metadata",
     "load_drugprot_fixtures",
+    "load_biomedical_ner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
     "shield_suite_metadata",
+    "run_biomedical_ner_benchmark",
 ]
