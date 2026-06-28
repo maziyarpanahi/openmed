@@ -28,7 +28,7 @@ import random
 import re
 import unicodedata
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -558,8 +558,38 @@ def _prepare_pii_text(
     return original_text, inference_text, do_normalize
 
 
-def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> None:
-    """Apply semantic-unit PII merging in place."""
+def _replace_analysis_result(result: Any, **updates: Any) -> Any:
+    """Return ``result`` with analysis-result updates applied compatibly."""
+    from .results import AnalyzeResult
+
+    if isinstance(result, AnalyzeResult):
+        return replace(result, **updates)
+
+    for key, value in updates.items():
+        setattr(result, key, value)
+    if "entities" in updates:
+        result.num_entities = len(updates["entities"])
+    return result
+
+
+def _mutable_prediction_result(result: Any) -> Any:
+    """Return a mutable prediction result for internal PII post-processing."""
+    from .results import AnalyzeResult
+
+    if not isinstance(result, AnalyzeResult):
+        return result
+    return PredictionResult(
+        text=result.text,
+        entities=list(result.entities),
+        model_name=result.model_name,
+        timestamp=result.timestamp,
+        processing_time=result.processing_time,
+        metadata=dict(result.metadata) if result.metadata is not None else None,
+    )
+
+
+def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> Any:
+    """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
     from .pii_i18n import get_patterns_for_language
@@ -591,7 +621,7 @@ def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> No
         allow_label_expansion=not model_led_merging,
     )
 
-    result.entities = [
+    merged_entities = [
         EntityPrediction(
             text=e["word"],
             label=e["entity_type"],
@@ -601,7 +631,7 @@ def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> No
         )
         for e in merged_dicts
     ]
-    result.num_entities = len(result.entities)
+    return _replace_analysis_result(result, entities=merged_entities)
 
 
 def _extract_pii_batch(
@@ -681,10 +711,10 @@ def _extract_pii_batch(
                 group_entities=True,
                 **pipeline_kwargs,
             )
+            result = _mutable_prediction_result(result)
 
             if do_normalize and original_text != inference_text:
-                result.text = original_text
-                result.entities = [
+                normalized_entities = [
                     EntityPrediction(
                         text=original_text[e.start : e.end],
                         label=e.label,
@@ -694,12 +724,19 @@ def _extract_pii_batch(
                     )
                     for e in result.entities
                 ]
+                result = _replace_analysis_result(
+                    result,
+                    text=original_text,
+                    entities=normalized_entities,
+                )
 
             results.append(result)
 
     if use_smart_merging and not uses_privacy_filter:
-        for result in results:
+        results = [
             _apply_pii_smart_merging(result, effective_model, lang)
+            for result in results
+        ]
 
     recognizer = coerce_custom_recognizer(custom_recognizer)
     if recognizer is not None:
@@ -855,7 +892,7 @@ def _apply_safety_sweep_to_result(
     pii_result: Any,
     *,
     lang: str,
-) -> int:
+) -> tuple[Any, int]:
     """Run the deterministic sweep and record its net span contribution."""
     from .quality_gates import validate_entity_spans
     from .safety_sweep import (
@@ -865,8 +902,8 @@ def _apply_safety_sweep_to_result(
     )
 
     before_count = len(pii_result.entities)
-    pii_result.entities = safety_sweep(text, pii_result.entities, lang=lang)
-    added_count = len(pii_result.entities) - before_count
+    entities = safety_sweep(text, pii_result.entities, lang=lang)
+    added_count = len(entities) - before_count
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
     metadata["safety_sweep"] = {
@@ -874,10 +911,13 @@ def _apply_safety_sweep_to_result(
         "patterns_version": SAFETY_SWEEP_PATTERNS_VERSION,
         "spans_added": added_count,
     }
-    pii_result.metadata = metadata
-    pii_result.num_entities = len(pii_result.entities)
+    pii_result = _replace_analysis_result(
+        pii_result,
+        entities=entities,
+        metadata=metadata,
+    )
     validate_entity_spans(pii_result.entities, text)
-    return added_count
+    return pii_result, added_count
 
 
 _AUDIT_TEXT_KEYS = {
@@ -1326,9 +1366,7 @@ def _build_deidentification_result(
     from .quality_gates import resolve_overlapping_entities
 
     resolved_entities = resolve_overlapping_entities(list(pii_result.entities))
-    pii_result.entities = resolved_entities
-    if hasattr(pii_result, "num_entities"):
-        pii_result.num_entities = len(resolved_entities)
+    pii_result = _replace_analysis_result(pii_result, entities=resolved_entities)
 
     active_thresholds = _active_calibration_thresholds(pii_result, lang=lang)
     pii_entities = []
@@ -1587,9 +1625,16 @@ def _deidentify_batch(
     )
 
     if use_safety_sweep:
+        swept_results = []
         for stripped_text, pii_result in zip(stripped_texts, pii_results):
-            _apply_safety_sweep_to_result(stripped_text, pii_result, lang=lang)
+            pii_result, _ = _apply_safety_sweep_to_result(
+                stripped_text,
+                pii_result,
+                lang=lang,
+            )
             _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
+            swept_results.append(pii_result)
+        pii_results = swept_results
 
     return [
         _build_deidentification_result(
