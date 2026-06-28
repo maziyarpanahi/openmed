@@ -8,7 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .calibration import calibration_texts_sha256, load_awq_calibration_texts
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
+
+from .calibration import (
+    QUANTIZATION_CALIBRATION_SOURCE,
+    calibration_texts_sha256,
+    load_quantization_calibration_texts,
+)
 
 QUANT_CONFIG_FILENAME = "quant_config.json"
 AWQ_FORMAT = "openmed-awq"
@@ -82,7 +88,11 @@ def quantize_awq(
         hf_kwargs["revision"] = revision
 
     config = AutoConfig.from_pretrained(model_name, **hf_kwargs)
-    tokenizer = AutoTokenizer.from_pretrained(model_name, **hf_kwargs)
+    tokenizer = get_tokenizer_with_loader(
+        model_name,
+        AutoTokenizer.from_pretrained,
+        **hf_kwargs,
+    )
 
     download_kwargs: dict[str, Any] = {"local_files_only": local_files_only}
     if revision is not None:
@@ -170,7 +180,7 @@ def write_quant_config(
         "zero_point": bool(autoawq_quant_config.get("zero_point", True)),
         "version": str(autoawq_quant_config.get("version", DEFAULT_AWQ_VERSION)),
         "calibration_sample_count": len(calibration_samples),
-        "calibration_source": "openmed.torch.calibration.synthetic_clinical_awq",
+        "calibration_source": QUANTIZATION_CALIBRATION_SOURCE,
         "calibration_sha256": calibration_texts_sha256(calibration_samples),
         "max_calib_seq_len": max_calib_seq_len,
         "autoawq_quant_config": dict(autoawq_quant_config),
@@ -210,7 +220,11 @@ def _require_transformers() -> tuple[Any, Any]:
 
 
 def _normalize_calibration_texts(calib_texts: Iterable[str] | None) -> list[str]:
-    texts = load_awq_calibration_texts() if calib_texts is None else list(calib_texts)
+    texts = (
+        load_quantization_calibration_texts()
+        if calib_texts is None
+        else list(calib_texts)
+    )
     normalized = [text.strip() for text in texts if text and text.strip()]
     if not normalized:
         raise ValueError("calib_texts must contain at least one non-empty sample")

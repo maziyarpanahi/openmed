@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import sys
+import tempfile
+from collections.abc import Mapping as MappingABC
 from pathlib import Path
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 from ..__about__ import __version__
 from ..core.config import (
@@ -22,9 +25,13 @@ from ..core.config import (
     save_profile,
     set_config,
 )
-from ..core.model_registry import get_model_info
+from ..core.model_card import render_model_card
+from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
+from ..core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
+from .active_learning import add_active_learning_command
 from .calibrate import add_calibrate_command
+from .gates import add_gates_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -99,6 +106,10 @@ COMPLIANCE_CAVEAT = (
     "No de-identification tool can guarantee compliance or zero residual risk. "
     "Validate locally before any production or clinical use."
 )
+_FHIR_BUNDLE_TYPES = frozenset({"transaction", "batch"})
+
+_DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+_DEID_METHODS = ("mask", "remove", "replace", "hash", "shift_dates")
 
 
 def _non_negative_int(value: str) -> int:
@@ -106,6 +117,13 @@ def _non_negative_int(value: str) -> int:
     if parsed < 0:
         raise argparse.ArgumentTypeError("value must be greater than or equal to 0")
     return parsed
+
+
+def _policy_name_arg(value: str) -> str:
+    try:
+        return canonical_policy_name(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -132,12 +150,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
+    _add_deid_command(subparsers)
     _add_pii_command(subparsers)
+    _add_policy_command(subparsers)
+    _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    add_active_learning_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
+    add_gates_command(subparsers)
     return parser
 
 
@@ -283,6 +306,65 @@ def _add_batch_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser.set_defaults(handler=_handle_batch)
 
 
+def _add_deid_command(subparsers: argparse._SubParsersAction) -> None:
+    deid_parser = subparsers.add_parser(
+        "deid",
+        help="De-identify text with policy profiles.",
+    )
+    deid_parser.add_argument(
+        "--policy",
+        type=_policy_name_arg,
+        choices=CANONICAL_POLICY_NAMES,
+        default="hipaa_safe_harbor",
+        help="Policy profile to apply.",
+    )
+    deid_parser.add_argument(
+        "--method",
+        choices=_DEID_METHODS,
+        default="mask",
+        help="De-identification method.",
+    )
+    deid_parser.add_argument(
+        "--keep-mapping",
+        action="store_true",
+        help="Keep reversible mapping metadata in the de-identification result.",
+    )
+    deid_parser.add_argument(
+        "--audit",
+        action="store_true",
+        help="Write an audit report and print its path instead of redacted text.",
+    )
+    deid_parser.add_argument(
+        "--input",
+        default="-",
+        metavar="FILE",
+        help="Input text file, or '-' for stdin (default).",
+    )
+    deid_parser.add_argument(
+        "--output",
+        default="-",
+        metavar="FILE",
+        help="Output file, or '-' for stdout (default).",
+    )
+    deid_parser.add_argument(
+        "--model",
+        default=_DEFAULT_PII_MODEL,
+        help="PII detection model.",
+    )
+    deid_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.7,
+        help="Minimum confidence for redaction.",
+    )
+    deid_parser.add_argument(
+        "--keep-year",
+        action="store_true",
+        help="Keep year in dates.",
+    )
+    deid_parser.set_defaults(handler=_handle_deid)
+
+
 def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     """Add PII extraction and de-identification commands."""
     pii_parser = subparsers.add_parser(
@@ -321,7 +403,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     deid_parser.add_argument(
         "--model",
-        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        default=_DEFAULT_PII_MODEL,
         help="PII detection model.",
     )
     deid_text_group = deid_parser.add_mutually_exclusive_group(required=True)
@@ -334,7 +416,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     )
     deid_parser.add_argument(
         "--method",
-        choices=["mask", "remove", "replace", "hash", "shift_dates"],
+        choices=_DEID_METHODS,
         default="mask",
         help="De-identification method.",
     )
@@ -365,7 +447,7 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     batch_parser = pii_sub.add_parser("batch", help="Batch de-identification of files.")
     batch_parser.add_argument(
         "--model",
-        default="OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+        default=_DEFAULT_PII_MODEL,
         help="PII detection model.",
     )
     batch_parser.add_argument(
@@ -403,6 +485,37 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
         help="Minimum confidence for redaction.",
     )
     batch_parser.set_defaults(handler=_handle_pii_batch)
+
+
+def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
+    """Add FHIR export commands."""
+    fhir_parser = subparsers.add_parser("fhir", help="FHIR export utilities.")
+    fhir_sub = fhir_parser.add_subparsers(dest="fhir_command")
+
+    bundle_parser = fhir_sub.add_parser(
+        "bundle",
+        help="Assemble standalone FHIR resources into a deterministic Bundle.",
+    )
+    bundle_parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="JSON result file containing standalone FHIR resources.",
+    )
+    bundle_parser.add_argument(
+        "--type",
+        dest="bundle_type",
+        choices=sorted(_FHIR_BUNDLE_TYPES),
+        required=True,
+        help="FHIR Bundle type to emit.",
+    )
+    bundle_parser.add_argument(
+        "--output",
+        type=Path,
+        required=True,
+        help="Path to write the FHIR Bundle JSON.",
+    )
+    bundle_parser.set_defaults(handler=_handle_fhir_bundle)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -482,6 +595,29 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Emit the ranked shortlist as a single JSON document.",
     )
     models_recommend.set_defaults(handler=_handle_models_recommend)
+
+    models_card = models_sub.add_parser(
+        "card",
+        help="Render a README model card from the canonical manifest.",
+    )
+    models_card.add_argument(
+        "repo_id",
+        help="Hugging Face repository id to resolve from models.jsonl.",
+    )
+    card_output = models_card.add_mutually_exclusive_group()
+    card_output.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Optional path to write the rendered README Markdown.",
+    )
+    card_output.add_argument(
+        "--check",
+        type=Path,
+        metavar="README",
+        help="Compare an existing README against the rendered card.",
+    )
+    models_card.set_defaults(handler=_handle_models_card)
 
     models_freshness = models_sub.add_parser(
         "freshness",
@@ -609,6 +745,49 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     profile_delete.set_defaults(handler=_handle_profile_delete)
 
 
+def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
+    policy_parser = subparsers.add_parser(
+        "policy", help="Inspect and validate OpenMed policy profiles."
+    )
+    policy_sub = policy_parser.add_subparsers(dest="policy_command")
+
+    diff_parser = policy_sub.add_parser(
+        "diff",
+        help="Compare two policy profile configurations.",
+    )
+    diff_parser.add_argument(
+        "base",
+        help="Baseline bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "candidate",
+        help="Candidate bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format",
+        help="Output format.",
+    )
+    diff_parser.set_defaults(handler=_handle_policy_diff)
+
+    policy_lint = policy_sub.add_parser(
+        "lint",
+        help="Lint a bundled policy name or policy profile JSON file.",
+    )
+    policy_lint.add_argument(
+        "target",
+        help="Policy profile name or path to a policy profile JSON file.",
+    )
+    policy_lint.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return a non-zero exit code when warnings are present.",
+    )
+    policy_lint.set_defaults(handler=_handle_policy_lint)
+
+
 def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     benchmark_parser = subparsers.add_parser(
         "benchmark", help="Run benchmark and adversarial evaluation suites."
@@ -690,13 +869,32 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         "--input",
         type=Path,
         default=None,
-        help="Optional local DrugProt directory or zip archive.",
+        help="Optional local corpus directory, fixture file, or DrugProt archive.",
     )
     clinical_parser.add_argument(
         "--cache-dir",
         type=Path,
         default=None,
         help="Optional cache directory for download-on-demand public corpora.",
+    )
+    clinical_parser.add_argument(
+        "--split",
+        default=None,
+        help="Optional public-corpus split to load.",
+    )
+    clinical_parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help=(
+            "One or more model identifiers for NER benchmark reports. "
+            "Comma-separated values are accepted."
+        ),
+    )
+    clinical_parser.add_argument(
+        "--device",
+        default="cpu",
+        help="Device tier label recorded in NER benchmark reports.",
     )
     clinical_parser.add_argument(
         "--output",
@@ -869,6 +1067,133 @@ def _handle_batch(args: argparse.Namespace) -> int:
     return 0 if result.failed_items == 0 else 1
 
 
+def _handle_fhir_bundle(args: argparse.Namespace) -> int:
+    if args.bundle_type not in _FHIR_BUNDLE_TYPES:
+        allowed = ", ".join(sorted(_FHIR_BUNDLE_TYPES))
+        sys.stderr.write(f"--type must be one of: {allowed}\n")
+        return 2
+
+    try:
+        payload = json.loads(args.input.read_text(encoding="utf-8"))
+        resources = _extract_fhir_resources(payload)
+        doc_id = _extract_fhir_doc_id(payload)
+
+        from ..clinical.exporters.fhir import to_bundle
+
+        bundle = to_bundle(
+            resources,
+            doc_id=doc_id,
+            bundle_type=args.bundle_type,
+        )
+        args.output.write_text(
+            json.dumps(bundle, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    except FileNotFoundError:
+        sys.stderr.write(f"Input file not found: {args.input}\n")
+        return 1
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(
+            f"Invalid JSON in {args.input}: {exc.msg} "
+            f"at line {exc.lineno} column {exc.colno}\n"
+        )
+        return 1
+    except OSError as exc:
+        sys.stderr.write(f"Failed to read or write FHIR Bundle: {exc}\n")
+        return 1
+    except (TypeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to assemble FHIR Bundle: {exc}\n")
+        return 1
+
+    sys.stdout.write(f"FHIR Bundle written to: {args.output}\n")
+    return 0
+
+
+def _extract_fhir_doc_id(payload: Any) -> str:
+    """Return the stable document id carried by a serialized result payload."""
+    if isinstance(payload, MappingABC):
+        for key in ("doc_id", "document_id", "id"):
+            value = payload.get(key)
+            if isinstance(value, (str, int)) and str(value):
+                return str(value)
+    return "openmed-document"
+
+
+def _extract_fhir_resources(payload: Any) -> list[dict[str, Any]]:
+    """Extract standalone FHIR resources from supported result JSON shapes."""
+    resources = _find_fhir_resource_payload(payload)
+    if not isinstance(resources, list):
+        raise ValueError("FHIR resources must be a JSON array")
+
+    normalized: list[dict[str, Any]] = []
+    for index, resource in enumerate(resources):
+        if not isinstance(resource, MappingABC):
+            raise ValueError(f"FHIR resource at index {index} must be a JSON object")
+        if resource.get("resourceType") == "Bundle":
+            raise ValueError(
+                "input resources must be standalone FHIR resources, not Bundles"
+            )
+        normalized.append(dict(resource))
+    return normalized
+
+
+def _find_fhir_resource_payload(payload: Any) -> Any:
+    if isinstance(payload, list):
+        return payload
+
+    if not isinstance(payload, MappingABC):
+        raise ValueError(
+            "FHIR input must be a JSON array of resources or a result object"
+        )
+
+    for key in ("fhir_resources", "fhirResources", "resources"):
+        if key in payload:
+            return payload[key]
+
+    fhir_payload = payload.get("fhir")
+    if isinstance(fhir_payload, list):
+        return fhir_payload
+    if isinstance(fhir_payload, MappingABC):
+        for key in ("resources", "fhir_resources", "fhirResources"):
+            if key in fhir_payload:
+                return fhir_payload[key]
+
+    result_payload = payload.get("result")
+    if isinstance(result_payload, MappingABC):
+        for key in ("fhir_resources", "fhirResources", "resources"):
+            if key in result_payload:
+                return result_payload[key]
+
+    if "resourceType" in payload:
+        if payload.get("resourceType") == "Bundle":
+            raise ValueError(
+                "input is already a FHIR Bundle; provide standalone resources"
+            )
+        return [payload]
+
+    raise ValueError(
+        "FHIR input must contain standalone FHIR resources under "
+        "'resources', 'fhir_resources', or 'fhir.resources'"
+    )
+
+
+def _handle_policy_diff(args: argparse.Namespace) -> int:
+    from ..core.policy_diff import diff_policies, render
+
+    try:
+        diff = diff_policies(args.base, args.candidate)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"Policy diff failed: {exc}\n")
+        return 1
+
+    if args.output_format == "json":
+        payload = render(diff, fmt="dict")
+        sys.stdout.write(f"{json.dumps(payload, indent=2, sort_keys=True)}\n")
+    else:
+        sys.stdout.write(f"{render(diff, fmt='text')}\n")
+    return 0
+
+
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     if args.attack == "reid":
         return _handle_benchmark_pii_reid(args)
@@ -890,7 +1215,7 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
         else:
             fixtures = load_suite_fixtures(suite)
             metadata = suite_metadata(suite)
-    except (RuntimeError, ValueError) as exc:
+    except (PermissionError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to load benchmark suite: {exc}\n")
         return 1
 
@@ -926,27 +1251,66 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
 
 
 def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
-    from openmed.eval.suites import load_suite_fixtures, suite_metadata
+    from openmed.eval.suites import (
+        BIOMEDICAL_NER,
+        load_suite_fixtures,
+        run_biomedical_ner_benchmark,
+        suite_metadata,
+    )
 
     try:
-        fixtures = load_suite_fixtures(
-            str(args.suite),
-            task=str(args.task),
-            path=args.input,
-            cache_dir=args.cache_dir,
-        )
-        metadata = suite_metadata(str(args.suite), task=str(args.task))
+        suite = str(args.suite)
+        task = str(args.task)
+        load_kwargs: dict[str, Any] = {
+            "task": task,
+            "path": args.input,
+            "cache_dir": args.cache_dir,
+        }
+        if args.split is not None:
+            load_kwargs["split"] = str(args.split)
+        fixtures = load_suite_fixtures(suite, **load_kwargs)
+        metadata_kwargs: dict[str, Any] = {}
+        if suite == "drugprot":
+            metadata_kwargs["task"] = task
+        if suite == BIOMEDICAL_NER and args.split is not None:
+            metadata_kwargs["split"] = str(args.split)
+        metadata = suite_metadata(suite, **metadata_kwargs)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to load clinical benchmark suite: {exc}\n")
         return 1
 
+    if suite == BIOMEDICAL_NER and task == "ner":
+        split = str(args.split) if args.split is not None else "test"
+        models = _parse_model_args(args.models or [])
+        if not models:
+            models = ["disease_detection_superclinical"]
+        reports = [
+            run_biomedical_ner_benchmark(
+                fixtures,
+                model_name=model,
+                device=str(args.device),
+                metadata=metadata,
+                split=split,
+            )
+            for model in models
+        ]
+        if len(reports) == 1:
+            payload: Any = reports[0].to_dict()
+        else:
+            payload = {
+                "metadata": metadata,
+                "reports": [report.to_dict() for report in reports],
+                "suite": suite,
+            }
+        return _write_json_payload(payload, args.output)
+
     payload: dict[str, Any] = {
         "fixture_count": len(fixtures),
         "metadata": metadata,
-        "suite": str(args.suite),
-        "task": str(args.task),
+        "suite": suite,
+        "task": task,
     }
-    if str(args.task) == "relation":
+    if task == "relation":
         payload["relation_count"] = sum(
             len(getattr(fixture, "relations", ())) for fixture in fixtures
         )
@@ -955,10 +1319,14 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
             len(getattr(fixture, "gold_spans", ())) for fixture in fixtures
         )
 
+    return _write_json_payload(payload, args.output)
+
+
+def _write_json_payload(payload: Any, output_path: Path | None) -> int:
     output = json.dumps(payload, indent=2, sort_keys=True)
-    if args.output:
+    if output_path:
         try:
-            args.output.write_text(output + "\n", encoding="utf-8")
+            output_path.write_text(output + "\n", encoding="utf-8")
         except OSError as exc:
             sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
             return 1
@@ -1038,6 +1406,54 @@ def _handle_models_recommend(args: argparse.Namespace) -> int:
     sys.stdout.write(f"Recommended for {args.tier}: {results[0].repo_id}\n")
     sys.stdout.write(_format_model_search_table(results))
     return 0
+
+
+def _handle_models_card(args: argparse.Namespace) -> int:
+    try:
+        row = _find_manifest_row(args.repo_id)
+        rendered = render_model_card(dict(row))
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to render model card: {exc}\n")
+        return 1
+
+    if args.check is not None:
+        try:
+            existing = args.check.read_text(encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to read README for comparison: {exc}\n")
+            return 1
+
+        if existing == rendered:
+            return 0
+
+        diff = difflib.unified_diff(
+            existing.splitlines(keepends=True),
+            rendered.splitlines(keepends=True),
+            fromfile=str(args.check),
+            tofile=f"rendered:{args.repo_id}",
+        )
+        sys.stdout.writelines(diff)
+        return 1
+
+    if args.output is not None:
+        try:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(rendered, encoding="utf-8")
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write model card: {exc}\n")
+            return 1
+        return 0
+
+    sys.stdout.write(rendered)
+    return 0
+
+
+def _find_manifest_row(repo_id: str) -> Mapping[str, Any]:
+    rows = load_manifest_rows(MANIFEST_PATH)
+    for row in rows:
+        if row.get("repo_id") == repo_id:
+            return row
+    raise ValueError(f"repo_id not found in model manifest: {repo_id}")
 
 
 def _recommendation_to_dict(result: ModelSearchResult) -> dict[str, Any]:
@@ -1348,6 +1764,23 @@ def _coerce_value(key: str, value: str) -> Any:
 
 
 # ---------------------------------------------------------------------------
+# Policy Handlers
+# ---------------------------------------------------------------------------
+
+
+def _handle_policy_lint(args: argparse.Namespace) -> int:
+    from ..core.policy_lint import lint_policy
+
+    report = lint_policy(args.target)
+    sys.stdout.write(f"{json.dumps(report, indent=2, sort_keys=True)}\n")
+    if report["errors"]:
+        return 1
+    if args.strict and report["warnings"]:
+        return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Profile Handlers
 # ---------------------------------------------------------------------------
 
@@ -1445,6 +1878,79 @@ def _handle_profile_delete(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # PII Handlers
 # ---------------------------------------------------------------------------
+
+
+def _read_text_input(input_path: str) -> str:
+    if input_path == "-":
+        return sys.stdin.read()
+    return Path(input_path).read_text(encoding="utf-8")
+
+
+def _write_text_output(text: str, output_path: str) -> None:
+    if output_path == "-":
+        sys.stdout.write(text)
+        if not text.endswith("\n"):
+            sys.stdout.write("\n")
+        return
+
+    path = Path(output_path)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_audit_report(report: Any, output_path: str) -> Path:
+    payload = report.to_json()
+    if output_path == "-":
+        with tempfile.NamedTemporaryFile(
+            "w",
+            delete=False,
+            encoding="utf-8",
+            prefix="openmed-deid-audit-",
+            suffix=".json",
+        ) as handle:
+            handle.write(payload)
+            handle.write("\n")
+            return Path(handle.name)
+
+    path = Path(output_path)
+    path.write_text(f"{payload}\n", encoding="utf-8")
+    return path
+
+
+def _handle_deid(args: argparse.Namespace) -> int:
+    """Handle the top-level de-identification command."""
+    from ..core.pii import deidentify
+
+    config = _load_and_apply_config(args)
+
+    try:
+        text = _read_text_input(args.input)
+    except FileNotFoundError:
+        sys.stderr.write(f"Input file not found: {args.input}\n")
+        return 1
+
+    try:
+        result = deidentify(
+            text,
+            method=args.method,
+            model_name=args.model,
+            confidence_threshold=args.confidence_threshold,
+            keep_year=args.keep_year,
+            keep_mapping=args.keep_mapping,
+            config=config,
+            policy=args.policy,
+            audit=args.audit,
+        )
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
+
+    if args.audit:
+        audit_path = _write_audit_report(result, args.output)
+        sys.stdout.write(f"{audit_path}\n")
+        return 0
+
+    _write_text_output(result.deidentified_text, args.output)
+    return 0
 
 
 def _handle_pii_extract(args: argparse.Namespace) -> int:
