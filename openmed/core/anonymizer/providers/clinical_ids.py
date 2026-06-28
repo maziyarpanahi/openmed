@@ -10,14 +10,21 @@ validators):
   - ``nl_NL.ssn()``  (BSN)        valid
   - ``fr_FR.ssn()``  (NIR)        valid
   - ``it_IT.ssn()``  (Codice Fiscale) valid
-  - ``es_ES.nie()``               valid
 
 Custom providers below cover the gaps where Faker either has no built-in
-or emits a US-style format unrelated to the requested locale's actual ID:
+or emits a US-style format unrelated to the requested locale's actual ID.
+They also replace generators whose checksums are valid but not instance-seed
+deterministic:
 
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Spanish NIE (Faker's built-in uses non-instance randomness)
+  - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Israeli Teudat Zehut (Faker has no built-in)
+  - Indonesian NIK with a decodable embedded birth date
+  - Thai national ID (13 digits with a weighted mod-11 checksum)
+  - Polish PESEL and South Korean RRN
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -141,6 +148,21 @@ def generate_npi(*, rng: random.Random | None = None) -> str:
     prefixed = [8, 0, 8, 4, 0, *body]
     check_digit = _luhn_check_digit(prefixed)
     return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+_SPANISH_NIE_PREFIX_VALUES = {"X": "0", "Y": "1", "Z": "2"}
+
+
+def generate_spanish_nie(*, rng: random.Random | None = None) -> str:
+    """Generate a Spanish NIE with a valid modulo-23 check letter."""
+
+    source = rng or random.Random()
+    prefix = source.choice(tuple(_SPANISH_NIE_PREFIX_VALUES))
+    digits = f"{source.randint(0, 9999999):07d}"
+    number = int(_SPANISH_NIE_PREFIX_VALUES[prefix] + digits)
+    check = _SPANISH_DNI_LETTERS[number % len(_SPANISH_DNI_LETTERS)]
+    return f"{prefix}{digits}{check}"
 
 
 def generate_ssn(*, rng: random.Random | None = None) -> str:
@@ -309,6 +331,18 @@ class AadhaarProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Spanish NIE (prefix + 7 digits + modulo-23 check letter)
+# ---------------------------------------------------------------------------
+
+
+class SpanishNIEProvider(BaseProvider):
+    """Generates Spanish NIE values using Faker's instance RNG."""
+
+    def nie(self) -> str:
+        return generate_spanish_nie(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -338,6 +372,55 @@ class GermanSteuerIdProvider(BaseProvider):
                 return candidate
         # Fallback: return any 11 digits; validator may reject downstream.
         return self.numerify("###########")
+
+
+# ---------------------------------------------------------------------------
+# Israeli Teudat Zehut (9 digits, alternating 1/2 checksum)
+# ---------------------------------------------------------------------------
+
+
+def _teudat_zehut_check_digit(body_digits: Sequence[int]) -> int:
+    """Return the final check digit for the first eight Teudat Zehut digits."""
+    if len(body_digits) != 8:
+        raise ValueError("Teudat Zehut body must contain exactly eight digits")
+
+    total = 0
+    for index, digit in enumerate(body_digits):
+        product = digit * (1 if index % 2 == 0 else 2)
+        total += product if product < 10 else (product // 10) + (product % 10)
+    return (10 - total % 10) % 10
+
+
+def generate_teudat_zehut(*, rng: random.Random | None = None) -> str:
+    """Generate an Israeli Teudat Zehut that passes its checksum validator."""
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(8)]
+    if all(digit == 0 for digit in body):
+        body[-1] = 1
+    body.append(_teudat_zehut_check_digit(body))
+    return "".join(str(digit) for digit in body)
+
+
+class IsraeliTeudatZehutProvider(BaseProvider):
+    """Generates 9-digit Israeli Teudat Zehut numbers."""
+
+    def teudat_zehut(self) -> str:
+        return generate_teudat_zehut(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Spanish DNI (8 digits + modulo-23 letter)
+# ---------------------------------------------------------------------------
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+
+
+class SpanishDNIProvider(BaseProvider):
+    """Generates Spanish DNI values that pass the existing validator."""
+
+    def dni(self) -> str:
+        number = self.generator.random.randint(0, 99_999_999)
+        return f"{number:08d}{_SPANISH_DNI_LETTERS[number % 23]}"
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +528,48 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Indonesian NIK (16 digits with province/regency/district + birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_indonesian_nik(*, rng: random.Random | None = None) -> str:
+    """Generate an Indonesian NIK accepted by ``validate_indonesian_nik``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    province = source.randint(11, 94)
+    regency = source.randint(1, 99)
+    district = source.randint(1, 99)
+
+    year = source.randint(1940, 2009)
+    month = source.randint(1, 12)
+    max_day = calendar.monthrange(year, month)[1]
+    day = source.randint(1, max_day)
+    if source.choice((False, True)):
+        day += 40
+
+    serial = source.randint(1, 9999)
+    candidate = (
+        f"{province:02d}{regency:02d}{district:02d}"
+        f"{day:02d}{month:02d}{year % 100:02d}{serial:04d}"
+    )
+
+    from openmed.core.pii_i18n import validate_indonesian_nik
+
+    if validate_indonesian_nik(candidate):
+        return candidate
+    return "3174051708850001"
+
+
+class IndonesianNIKProvider(BaseProvider):
+    """Generates valid Indonesian NIK numbers."""
+
+    def indonesian_nik(self) -> str:
+        return generate_indonesian_nik(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -502,32 +627,64 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Thai national ID (13 digits, weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_thai_national_id(*, rng: random.Random | None = None) -> str:
+    """Generate a Thai national ID accepted by ``validate_thai_national_id``."""
+    source = rng or random.Random()
+    body_digits = [source.randint(1, 9)]
+    body_digits.extend(source.randint(0, 9) for _ in range(11))
+
+    total = sum(weight * value for weight, value in zip(range(13, 1, -1), body_digits))
+    check = (11 - total % 11) % 10
+
+    return "".join(str(digit) for digit in body_digits) + str(check)
+
+
+class ThaiNationalIdProvider(BaseProvider):
+    """Generates valid 13-digit Thai national IDs."""
+
+    def thai_national_id(self) -> str:
+        return generate_thai_national_id(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
 
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
-    faker.add_provider(AadhaarProvider)
-    faker.add_provider(GermanSteuerIdProvider)
-    faker.add_provider(KoreanRRNProvider)
+    from .registry_ids import national_id_faker_provider_classes
+
+    for provider in national_id_faker_provider_classes():
+        faker.add_provider(provider)
     faker.add_provider(MedicalRecordNumberProvider)
-    faker.add_provider(NPIProvider)
-    faker.add_provider(PolishPeselProvider)
 
 
 __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
+    "IndonesianNIKProvider",
+    "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "ThaiNationalIdProvider",
+    "SpanishDNIProvider",
+    "SpanishNIEProvider",
+    "generate_indonesian_nik",
+    "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
+    "generate_spanish_nie",
     "generate_ssn",
+    "generate_thai_national_id",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",

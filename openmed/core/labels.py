@@ -526,6 +526,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "identifier": ID_NUM,
     "medicalrecordnumber": ID_NUM,
     "mrn": ID_NUM,
+    "nhsnumber": ID_NUM,
+    "nhs": ID_NUM,
     "nationalid": ID_NUM,
     "cpf": ID_NUM,
     "cnpj": ID_NUM,
@@ -536,6 +538,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nie": ID_NUM,
     "bsn": ID_NUM,
     "aadhaar": ID_NUM,
+    "teudatzehut": ID_NUM,
+    "tz": ID_NUM,
     "npi": ID_NUM,
     "ssn": SSN,
     "socialsecuritynumber": SSN,
@@ -628,6 +632,8 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
     "npi": ID_SUBTYPE_NPI,
+    "nhsnumber": ID_SUBTYPE_NATIONAL_ID,
+    "nhs": ID_SUBTYPE_NATIONAL_ID,
     "nationalid": ID_SUBTYPE_NATIONAL_ID,
     "cpf": ID_SUBTYPE_NATIONAL_ID,
     "cnpj": ID_SUBTYPE_NATIONAL_ID,
@@ -638,6 +644,8 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "nie": ID_SUBTYPE_NATIONAL_ID,
     "bsn": ID_SUBTYPE_NATIONAL_ID,
     "aadhaar": ID_SUBTYPE_NATIONAL_ID,
+    "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
+    "tz": ID_SUBTYPE_NATIONAL_ID,
 }
 
 
