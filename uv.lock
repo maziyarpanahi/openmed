@@ -275,6 +275,31 @@ wheels = [
 ]
 
 [[package]]
+name = "auto-gptq"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "datasets" },
+    { name = "gekko" },
+    { name = "numpy" },
+    { name = "peft" },
+    { name = "rouge" },
+    { name = "safetensors" },
+    { name = "sentencepiece" },
+    { name = "torch" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/90/e5/b22697903982284fe284568fb2663a2196694a8eee637f5cf4ccfe435a38/auto_gptq-0.7.1.tar.gz", hash = "sha256:5c61ad380e9b4c603757c254765e9083a90a820cd0aff1b5d2c6f7fd96c85e80", size = 126148, upload-time = "2024-03-01T13:09:30.998Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/a6/0d099a45b2f09dfc7dbd97c97b478d4db488f9168a019aa841b714b82fd7/auto_gptq-0.7.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:84efeb9527b2d49f3555b2ba9451018c5ff41722c0b0e2fde74f5183ba0c008d", size = 23481371, upload-time = "2024-03-01T13:09:00.364Z" },
+    { url = "https://files.pythonhosted.org/packages/e6/4f/010daf242f5da59dce5dabf32aaf2a00411f8334e3a83759d0ed798127b3/auto_gptq-0.7.1-cp310-cp310-win_amd64.whl", hash = "sha256:5d0f3c1b4905e1f14f5b88a33d3dfaf313ebfa138f73c43315f80b40a2d8bb1f", size = 4639074, upload-time = "2024-03-01T13:09:06.904Z" },
+    { url = "https://files.pythonhosted.org/packages/97/32/7cc2f3bd401021fe9af085e78c2b8c24d6521bec324918c8c5660c650074/auto_gptq-0.7.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:a372d81d523b8d2f98639bbca63c0c427cab0ed55b8a57bb96706b0942aa01c9", size = 23520497, upload-time = "2024-03-01T13:09:10.479Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/8e/6c90faf9c4058215341523c1fd0e70ac49c504023af2fcd0bd89a825dd72/auto_gptq-0.7.1-cp311-cp311-win_amd64.whl", hash = "sha256:8d9d3fbfff94e129bcde0432fd5f6ba09f26aeceea0890a68c898210ba448135", size = 4643924, upload-time = "2024-03-01T13:09:13.392Z" },
+]
+
+[[package]]
 name = "autoawq"
 version = "0.2.9"
 source = { registry = "https://pypi.org/simple" }
@@ -1430,6 +1455,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a7/b2/4140c69c6a66432916b26158687e821ba631a4c9273c474343badf84d3ba/future-1.0.0.tar.gz", hash = "sha256:bd2968309307861edae1458a4f8a4f3598c03be43b97521076aebf5d94c07b05", size = 1228490, upload-time = "2024-02-21T11:52:38.461Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/71/ae30dadffc90b9006d77af76b393cb9dfbfc9629f339fc1574a1c52e6806/future-1.0.0-py3-none-any.whl", hash = "sha256:929292d34f5872e70396626ef385ec22355a1fae8ad29e1a734c3e43f9fbc216", size = 491326, upload-time = "2024-02-21T11:52:35.956Z" },
+]
+
+[[package]]
+name = "gekko"
+version = "1.3.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/0e/fe8a9e823c059141560106cdf5e0e4338c71a60d4802e32dca0e2b2129d5/gekko-1.3.2.tar.gz", hash = "sha256:a399cd9f896c864adbdfbb9dd052f957d106f454e0a711bd53db696c889ace7e", size = 13080745, upload-time = "2025-12-31T18:47:38.139Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/47/c6/4a03e540b0cbd7ea29437b547370a74732b35d23e22d20735718642a2140/gekko-1.3.2-py3-none-any.whl", hash = "sha256:d1ae9a096eb496f16df8f42a3dba7dcea59e2d17bf9a7d6d2b9187a06959e00a", size = 13169386, upload-time = "2025-12-31T18:47:34.987Z" },
 ]
 
 [[package]]
@@ -3082,6 +3119,9 @@ gliner = [
     { name = "gliner", extra = ["tokenizers"] },
     { name = "torch" },
 ]
+gptq = [
+    { name = "auto-gptq" },
+]
 hf = [
     { name = "accelerate" },
     { name = "huggingface-hub" },
@@ -3134,6 +3174,7 @@ spacy = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'hf'", specifier = ">=0.29" },
+    { name = "auto-gptq", marker = "extra == 'gptq'", specifier = ">=0.7.1" },
     { name = "autoawq", marker = "extra == 'awq'", specifier = ">=0.2.9" },
     { name = "click", marker = "extra == 'spacy'", specifier = ">=8.0" },
     { name = "coremltools", marker = "extra == 'coreml'", specifier = ">=8.0" },
@@ -3189,7 +3230,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["awq", "cli", "coreml", "dev", "docs", "gliner", "hf", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "presidio", "service", "spacy"]
+provides-extras = ["awq", "cli", "coreml", "dev", "docs", "gliner", "gptq", "hf", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "presidio", "service", "spacy"]
 
 [[package]]
 name = "orjson"
@@ -3440,6 +3481,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/05/56/6f450312ba05a27d7713b73857c1a25100dbda04fbc1331b13fb227a607d/pdfplumber-0.11.10.tar.gz", hash = "sha256:b95b2d28c66efb0a794a83b88c6c6aea5987532a445d20a1cbcfa657022e6e57", size = 102892, upload-time = "2026-06-15T03:31:31.035Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/9a/07d658e1e7fad860f1c541ab941348125dbdab773be3a0afaf32361866c7/pdfplumber-0.11.10-py3-none-any.whl", hash = "sha256:7741ea81bf165b474b153e6789d10d18e06b6ddcf3ec84289c3ef2fed6802580", size = 60047, upload-time = "2026-06-15T03:31:29.702Z" },
+]
+
+[[package]]
+name = "peft"
+version = "0.19.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "accelerate" },
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "packaging" },
+    { name = "psutil" },
+    { name = "pyyaml" },
+    { name = "safetensors" },
+    { name = "torch" },
+    { name = "tqdm" },
+    { name = "transformers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/86/cf/037f1e3d5186496c05513a6754639e2dab3038a05f384284d49a9bd06a2d/peft-0.19.1.tar.gz", hash = "sha256:0d97542fe96dcdaa20d3b81c06f26f988618f416a73544ab23c3618ccb674a40", size = 763738, upload-time = "2026-04-16T15:46:45.105Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/b6/f54d676ed93cc2dd2234c3b172ea9c8c3d7d29361e66b1b23dec57a67465/peft-0.19.1-py3-none-any.whl", hash = "sha256:2113f72a81621b5913ef28f9022204c742df111890c5f49d812716a4a301e356", size = 680692, upload-time = "2026-04-16T15:46:42.886Z" },
 ]
 
 [[package]]
@@ -4796,6 +4858,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c0/8f/0722ca900cc807c13a6a0c696dacf35430f72e0ec571c4275d2371fca3e9/rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36", size = 230680, upload-time = "2026-04-12T08:24:00.75Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb", size = 310654, upload-time = "2026-04-12T08:24:02.83Z" },
+]
+
+[[package]]
+name = "rouge"
+version = "1.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "six" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/db/e4/3420a1ab1e82a280fb6107f7ae99e88eb12383c978fe573c0c64d0327d6b/rouge-1.0.1.tar.gz", hash = "sha256:12b48346ca47d6bcf3c45061f315452b9ccec0620ee895ec85b7efc3d54aae34", size = 14292, upload-time = "2021-07-20T08:45:56.53Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/7c/650ae86f92460e9e8ef969cc5008b24798dcf56a9a8947d04c78f550b3f5/rouge-1.0.1-py3-none-any.whl", hash = "sha256:28d118536e8c774dc47d1d15ec266479b4dd0914c4672ce117d4002789bdc644", size = 13725, upload-time = "2021-07-20T08:45:54.605Z" },
 ]
 
 [[package]]

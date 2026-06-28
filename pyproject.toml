@@ -82,6 +82,10 @@ awq = [
   "autoawq>=0.2.9",
 ]
 
+gptq = [
+  "auto-gptq>=0.7.1",
+]
+
 langchain = [
   "langchain-core>=0.2,<2",
 ]
