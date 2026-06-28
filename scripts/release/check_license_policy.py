@@ -29,6 +29,8 @@ ALLOWED_LICENSE_MARKERS = (
     "BSD-2-CLAUSE",
     "BSD-3-CLAUSE",
     "ISC",
+    "MPL-2.0",
+    "MOZILLA PUBLIC LICENSE 2.0",
     "HPND",
     "HISTORICAL PERMISSION NOTICE AND DISCLAIMER",
 )
@@ -53,9 +55,12 @@ GPL_BRIDGE_EXCEPTIONS = {
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
+    "auto-gptq": "MIT",
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
+    "confluent-kafka": "Apache-2.0",
     "coremltools": "BSD-3-Clause",
+    "easyocr": "Apache-2.0",
     "faker": "MIT",
     "fastapi": "MIT",
     "gliner": "Apache-2.0",
@@ -76,7 +81,9 @@ REVIEWED_LICENSES = {
     "onnxscript": "MIT",
     "paddleocr": "Apache-2.0",
     "pdfplumber": "MIT",
+    "piexif": "MIT",
     "pillow": "HPND",
+    "pikepdf": "MPL-2.0",
     "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
