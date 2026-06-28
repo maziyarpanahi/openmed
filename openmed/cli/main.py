@@ -27,6 +27,7 @@ from ..core.config import (
 from ..core.model_card import render_model_card
 from ..core.model_registry import MANIFEST_PATH, get_model_info, load_manifest_rows
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
+from .active_learning import add_active_learning_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
 
@@ -143,6 +144,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
+    add_active_learning_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)
