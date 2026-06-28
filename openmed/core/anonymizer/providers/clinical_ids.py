@@ -22,6 +22,7 @@ deterministic:
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
   - Indonesian NIK with a decodable embedded birth date
+  - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL and South Korean RRN
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
@@ -591,6 +592,30 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Thai national ID (13 digits, weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_thai_national_id(*, rng: random.Random | None = None) -> str:
+    """Generate a Thai national ID accepted by ``validate_thai_national_id``."""
+    source = rng or random.Random()
+    body_digits = [source.randint(1, 9)]
+    body_digits.extend(source.randint(0, 9) for _ in range(11))
+
+    total = sum(weight * value for weight, value in zip(range(13, 1, -1), body_digits))
+    check = (11 - total % 11) % 10
+
+    return "".join(str(digit) for digit in body_digits) + str(check)
+
+
+class ThaiNationalIdProvider(BaseProvider):
+    """Generates valid 13-digit Thai national IDs."""
+
+    def thai_national_id(self) -> str:
+        return generate_thai_national_id(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
@@ -612,6 +637,7 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
     "generate_indonesian_nik",
@@ -621,6 +647,7 @@ __all__ = [
     "generate_pesel",
     "generate_spanish_nie",
     "generate_ssn",
+    "generate_thai_national_id",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",

@@ -196,7 +196,8 @@
               "ar",
               "ja",
               "tr",
-              "id"
+              "id",
+              "th"
             ],
             "title": "Lang",
             "type": "string"
@@ -315,7 +316,8 @@
               "ar",
               "ja",
               "tr",
-              "id"
+              "id",
+              "th"
             ],
             "title": "Lang",
             "type": "string"

@@ -69,6 +69,12 @@ class TestModelNaming:
         language_name = LANGUAGE_NAMES[lang]
         models = get_pii_models_by_language(lang)
         assert models
+        if DEFAULT_PII_MODELS[lang].startswith("OpenMed/privacy-filter"):
+            assert any(
+                info.model_id == DEFAULT_PII_MODELS[lang] for info in models.values()
+            )
+            return
+
         assert any(f"{language_name}-" in info.model_id for info in models.values())
 
     def test_all_pii_model_ids_are_openmed_repos(self):
@@ -87,7 +93,10 @@ class TestModelNaming:
             )
             return
         prefixed_keys = [key for key in models if key.startswith(f"pii_{lang}_")]
-        assert prefixed_keys, f"No pii_{lang}_ keys found"
+        if DEFAULT_PII_MODELS[lang].startswith("OpenMed/privacy-filter"):
+            assert any("privacy_filter_multilingual" in key for key in models)
+        else:
+            assert prefixed_keys, f"No pii_{lang}_ keys found"
 
 
 class TestHelperFunctions:

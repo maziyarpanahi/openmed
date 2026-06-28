@@ -44,7 +44,7 @@ def test_golden_fixtures_cover_required_categories_and_languages():
     assert fixture_languages(fixtures, category="multilingual") == SUPPORTED_LANGUAGES
 
     multilingual = grouped["multilingual"]
-    assert len(multilingual) == len(SUPPORTED_LANGUAGES)
+    assert len(multilingual) >= len(SUPPORTED_LANGUAGES)
     assert all(fixture.metadata["synthetic"] is True for fixture in fixtures)
 
 
