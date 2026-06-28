@@ -109,6 +109,34 @@ def test_safety_sweep_includes_id_subtype_metadata_for_id_matches():
     assert swept["npi"].metadata["safety_sweep"]["id_subtype"] == ID_SUBTYPE_NPI
 
 
+def test_safety_sweep_skips_bare_postcode_numbers_without_context():
+    five_digit_text = "Calibration count was 10001 before discharge."
+    six_digit_text = "Calibration count was 110001 before discharge."
+
+    assert "postcode" not in _swept_by_label(safety_sweep(five_digit_text, []))
+    assert "postcode" not in _swept_by_label(
+        safety_sweep(six_digit_text, [], lang="hi")
+    )
+
+
+def test_safety_sweep_keeps_postcode_when_context_present():
+    english_swept = _swept_by_label(safety_sweep("ZIP code 10001.", []))
+    italian_swept = _swept_by_label(safety_sweep("CAP 00100.", [], lang="it"))
+
+    assert english_swept["postcode"].text == "10001"
+    assert italian_swept["postcode"].text == "00100"
+
+
+def test_safety_sweep_keeps_valid_national_id_and_mrn_with_context():
+    national_id_swept = _swept_by_label(
+        safety_sweep("Steuer-ID 12345678912 verified.", [], lang="de")
+    )
+    mrn_swept = _swept_by_label(safety_sweep("MRN: 123456 verified.", []))
+
+    assert national_id_swept["national_id"].text == "12345678912"
+    assert mrn_swept["medical_record_number"].text == "MRN: 123456"
+
+
 def test_safety_sweep_never_adds_spans_overlapping_model_spans():
     text = "Card 4111 1111 1111 1111. Email jane.patient@example.com."
     model_card = _entity_for(text, "4111 1111 1111 1111", label="ID_NUM")

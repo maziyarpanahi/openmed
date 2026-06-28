@@ -20,6 +20,7 @@ nav:
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
       - Advanced NER & Output Formatting: output-formatting.md
+      - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
@@ -31,6 +32,7 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
+      - GPTQ Export: export-gptq.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md

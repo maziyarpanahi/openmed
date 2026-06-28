@@ -22,6 +22,15 @@ from .base import (
 )
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .metadata_scrub import (
+    MetadataFinding,
+    MetadataScrubError,
+    MetadataScrubResult,
+    ResidualMetadataReport,
+    assert_metadata_clean,
+    scrub_metadata,
+    verify_metadata,
+)
 
 # Importing the OCR module registers image-format handlers with the dispatcher
 # so ``redact_document`` can route scans/images. It stays import-light: OCR
@@ -55,6 +64,13 @@ __all__ = [
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
+    "MetadataFinding",
+    "ResidualMetadataReport",
+    "MetadataScrubResult",
+    "MetadataScrubError",
+    "scrub_metadata",
+    "verify_metadata",
+    "assert_metadata_clean",
     "OcrResult",
     "OcrWord",
     "OcrEngine",

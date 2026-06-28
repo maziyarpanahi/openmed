@@ -1,10 +1,11 @@
 """OCR contract and swappable engine adapters for the multimodal subsystem.
 
 Provides one OCR result shape (per-word text + bbox + confidence + page) with
-interchangeable backends (Tesseract, PaddleOCR) plus a deterministic in-memory
-fake engine for tests. OCR output bridges into :class:`ExtractedDocument` so
-scanned/image text flows through ``redact_document`` and detected PHI projects
-back to source pixel bounding boxes.
+interchangeable backends (Tesseract, EasyOCR, PaddleOCR) plus a deterministic
+in-memory fake engine for tests. OCR output bridges into
+:class:`ExtractedDocument` so scanned/image text flows through
+``redact_document`` and detected PHI projects back to source pixel bounding
+boxes.
 
 Like the rest of the package, this module imports no heavy dependency at module
 load time: each engine imports its backend lazily and raises a clear,
@@ -16,8 +17,8 @@ PII language code (en, fr, de, it, es, nl, hi, te, pt, ar, ja, tr) and maps them
 to each backend's identifiers. The language data itself is not bundled and must
 be installed separately: Tesseract needs the matching ``traineddata`` files
 (e.g. ``apt-get install tesseract-ocr-fra`` or the language pack for your OS),
-and PaddleOCR downloads the recognition model for the requested language on
-first use.
+EasyOCR downloads its detection/recognition models on first use, and PaddleOCR
+downloads the recognition model for the requested language on first use.
 """
 
 from __future__ import annotations
@@ -130,6 +131,7 @@ _TESSERACT_HINT = (
     "tesseract-ocr`)."
 )
 _PADDLE_HINT = 'Install with: pip install "openmed[ocr-paddle]".'
+_EASYOCR_HINT = 'Install with: pip install "openmed[multimodal]".'
 
 
 # --- language mapping -------------------------------------------------------
@@ -165,6 +167,22 @@ _PADDLE_LANGUAGES: dict[str, str] = {
     "pt": "pt",
     "ar": "ar",
     "ja": "japan",
+    "tr": "tr",
+}
+
+# OpenMed PII language code -> EasyOCR language identifier.
+_EASYOCR_LANGUAGES: dict[str, str] = {
+    "en": "en",
+    "fr": "fr",
+    "de": "de",
+    "it": "it",
+    "es": "es",
+    "nl": "nl",
+    "hi": "hi",
+    "te": "te",
+    "pt": "pt",
+    "ar": "ar",
+    "ja": "ja",
     "tr": "tr",
 }
 
@@ -206,6 +224,12 @@ def paddle_language(languages: str | Sequence[str] | None = None) -> str:
     """
     codes = _normalize_languages(languages)
     return _lookup_language(_PADDLE_LANGUAGES, codes[0])
+
+
+def easyocr_languages(languages: str | Sequence[str] | None = None) -> list[str]:
+    """Map OpenMed language code(s) to EasyOCR language identifiers."""
+    codes = _normalize_languages(languages)
+    return [_lookup_language(_EASYOCR_LANGUAGES, code) for code in codes]
 
 
 class TesseractEngine:
@@ -256,6 +280,33 @@ class TesseractEngine:
         return OcrResult(words=tuple(words), metadata={"engine": self.name})
 
 
+class EasyOcrEngine:
+    """OCR backend backed by EasyOCR."""
+
+    name = "easyocr"
+
+    def recognize(
+        self, image: Any, *, languages: Sequence[str] | None = None
+    ) -> OcrResult:
+        easyocr = _import_backend("easyocr", _EASYOCR_HINT)
+        engine = easyocr.Reader(easyocr_languages(languages))
+        predictions = engine.readtext(_load_easyocr_image(image))
+
+        words: list[OcrWord] = []
+        for box, text, confidence in _iter_easyocr_predictions(predictions):
+            bbox = _polygon_bbox(box)
+            for word in _split_detected_text(str(text), bbox):
+                words.append(
+                    OcrWord(
+                        text=word[0],
+                        bbox=word[1],
+                        confidence=float(confidence),
+                        page=0,
+                    )
+                )
+        return OcrResult(words=tuple(words), metadata={"engine": self.name})
+
+
 class PaddleOcrEngine:
     """OCR backend backed by PaddleOCR."""
 
@@ -299,6 +350,13 @@ def _load_paddle_image(image: Any) -> Any:
     return image
 
 
+def _load_easyocr_image(image: Any) -> Any:
+    """Normalize pathlib paths for EasyOCR without forcing Pillow."""
+    if isinstance(image, Path):
+        return str(image)
+    return image
+
+
 def _zero_based_page(page_num: Any) -> int:
     """Convert OCR backend page numbers to the SourceSpan zero-based contract."""
     return max(int(page_num) - 1, 0)
@@ -330,18 +388,71 @@ def _iter_paddle_pages(predictions: Any) -> Iterable[tuple[int, Any]]:
     return enumerate(predictions)
 
 
+def _iter_easyocr_predictions(predictions: Any) -> Iterable[tuple[Any, Any, Any]]:
+    """Yield EasyOCR ``(polygon, text, confidence)`` triples."""
+    if not predictions:
+        return ()
+    return (
+        (prediction[0], prediction[1], prediction[2])
+        for prediction in predictions
+        if isinstance(prediction, (list, tuple)) and len(prediction) >= 3
+    )
+
+
+def _polygon_bbox(
+    polygon: Sequence[Sequence[Any]],
+) -> tuple[float, float, float, float]:
+    """Convert an OCR polygon into the contract's axis-aligned pixel bbox."""
+    points = [(float(point[0]), float(point[1])) for point in polygon]
+    if not points:
+        raise ValueError("OCR polygon must contain at least one point.")
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _split_detected_text(
+    text: str, bbox: tuple[float, float, float, float]
+) -> Iterable[tuple[str, tuple[float, float, float, float]]]:
+    """Split a detected text run into word boxes using horizontal proportions."""
+    words = text.split()
+    if not words:
+        return ()
+    if len(words) == 1:
+        return ((words[0], bbox),)
+
+    x0, y0, x1, y1 = bbox
+    total = sum(len(word) for word in words)
+    width = x1 - x0
+    cursor = x0
+    split_words: list[tuple[str, tuple[float, float, float, float]]] = []
+    for index, word in enumerate(words):
+        if index == len(words) - 1:
+            word_x1 = x1
+        else:
+            word_x1 = cursor + (width * len(word) / total)
+        split_words.append((word, (cursor, y0, word_x1, y1)))
+        cursor = word_x1
+    return tuple(split_words)
+
+
 EngineFactory = Callable[[], OcrEngine]
 
 _ENGINES: dict[str, EngineFactory] = {
     "tesseract": TesseractEngine,
+    "easyocr": EasyOcrEngine,
     "paddleocr": PaddleOcrEngine,
 }
 
 # Backend import module per engine, used for availability-based auto-selection.
-_ENGINE_MODULES = {"tesseract": "pytesseract", "paddleocr": "paddleocr"}
+_ENGINE_MODULES = {
+    "tesseract": "pytesseract",
+    "easyocr": "easyocr",
+    "paddleocr": "paddleocr",
+}
 
 # Auto-selection priority when no engine is requested.
-_AUTO_ORDER = ("tesseract", "paddleocr")
+_AUTO_ORDER = ("tesseract", "easyocr", "paddleocr")
 
 
 def register_ocr_engine(name: str, factory: EngineFactory) -> None:
@@ -371,11 +482,12 @@ def resolve_engine(engine: str | OcrEngine | None = None) -> OcrEngine:
         if _engine_available(name):
             return _ENGINES[name]()
     raise MissingDependencyError(
-        dependency="pytesseract or paddleocr",
+        dependency="pytesseract, easyocr, or paddleocr",
         instruction=(
             "No OCR engine is installed. Install Tesseract via "
             'pip install "openmed[multimodal]" (plus the system Tesseract '
-            'binary), or PaddleOCR via pip install "openmed[ocr-paddle]".'
+            'binary), EasyOCR via pip install "openmed[multimodal]", or '
+            'PaddleOCR via pip install "openmed[ocr-paddle]".'
         ),
     )
 
