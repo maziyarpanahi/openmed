@@ -21,6 +21,8 @@ _MULTIMODAL_DEPENDENCIES: tuple[tuple[str, str], ...] = (
     ("pdfplumber", "pdfplumber"),
     ("docx", "python-docx"),
     ("PIL", "Pillow"),
+    ("piexif", "piexif"),
+    ("pikepdf", "pikepdf"),
 )
 
 _MULTIMODAL_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
@@ -186,6 +188,7 @@ def redact_document(
     *,
     policy: Any | None = None,
     models: Any | None = None,
+    lang: str | None = None,
 ) -> ExtractedDocument:
     """De-identify a document, dispatching by file extension to its ingester.
 
@@ -193,6 +196,11 @@ def redact_document(
     extra. Unknown extensions still check the optional dependency set first so
     installs missing the extra keep surfacing the actionable install hint before
     reporting unsupported formats.
+
+    ``lang`` is an optional OpenMed language code (e.g. ``"fr"``) configuring
+    language-aware ingestion: image handlers pass it through to OCR so scanned
+    documents are read in the right language. Handlers that do not use it accept
+    and ignore it. Defaults to English-equivalent behavior when unset.
     """
     extension = Path(str(path)).suffix.lower()
     specs = _HANDLERS.get(extension)
@@ -214,4 +222,4 @@ def redact_document(
 
     if spec.requires_multimodal:
         ensure_multimodal_available()
-    return spec.handler(path, policy=policy, models=models)
+    return spec.handler(path, policy=policy, models=models, lang=lang)
