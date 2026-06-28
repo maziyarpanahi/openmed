@@ -23,15 +23,19 @@ class PolicyName(str, Enum):
     HIPAA_SAFE_HARBOR = "hipaa_safe_harbor"
     HIPAA_EXPERT_REVIEW_ASSIST = "hipaa_expert_review_assist"
     GDPR_PSEUDONYMIZATION = "gdpr_pseudonymization"
+    GDPR_ART9_HEALTH = "gdpr_art9_health"
     RESEARCH_LIMITED_DATASET = "research_limited_dataset"
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
     CANADA_PIPEDA = "canada_pipeda"
+    AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
 POLICY_ALIASES: Mapping[str, str] = {
+    "au_privacy": PolicyName.AUSTRALIA_PRIVACY_ACT.value,
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
+    "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
 }
 
@@ -121,6 +125,23 @@ def list_policies() -> tuple[str, ...]:
     """Return the canonical policy names."""
 
     return CANONICAL_POLICY_NAMES
+
+
+def lint_policy(
+    name: str | PolicyName | PolicyProfile | Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Return schema validation errors for a policy profile."""
+
+    if isinstance(name, PolicyProfile):
+        return ()
+    try:
+        if isinstance(name, Mapping):
+            _profile_from_mapping(name, source="<mapping>")
+        else:
+            load_policy(name)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return (str(exc),)
+    return ()
 
 
 @lru_cache(maxsize=len(CANONICAL_POLICY_NAMES))
@@ -262,6 +283,7 @@ __all__ = [
     "PolicyName",
     "PolicyProfile",
     "canonical_policy_name",
+    "lint_policy",
     "list_policies",
     "load_policy",
 ]
