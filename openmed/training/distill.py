@@ -20,6 +20,7 @@ from openmed.core.decoding import (
     viterbi_decode,
     zero_viterbi_biases,
 )
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 from openmed.training.recipe import TrainingRecipeConfig, load_preset
 
 IGNORE_INDEX = -100
@@ -433,8 +434,9 @@ class ModeADistillationPipeline:
         student_backbone = (
             student_checkpoint or student_backbone_from_tiny_distill_preset()
         )
-        tokenizer = AutoTokenizer.from_pretrained(
+        tokenizer = get_tokenizer_with_loader(
             teacher_checkpoint,
+            AutoTokenizer.from_pretrained,
             local_files_only=local_files_only,
             trust_remote_code=trust_remote_code,
         )
