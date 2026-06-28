@@ -47,6 +47,24 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="presidio",
         description="Presidio RecognizerResult adapter",
     ),
+    "philter": AdapterSpec(
+        name="philter",
+        module="openmed.interop.philter",
+        extra="philter",
+        description="Philter PHI span adapter",
+    ),
+    "pydeid": AdapterSpec(
+        name="pydeid",
+        module="openmed.interop.pydeid",
+        extra="pydeid",
+        description="pyDeid PHI span adapter",
+    ),
+    "gliner_biomed": AdapterSpec(
+        name="gliner_biomed",
+        module="openmed.interop.gliner_biomed",
+        extra="gliner",
+        description="GLiNER-BioMed zero-shot entity adapter",
+    ),
     "spacy": AdapterSpec(
         name="spacy",
         module="openmed.interop.spacy_component",
