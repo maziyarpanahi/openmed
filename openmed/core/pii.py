@@ -50,6 +50,12 @@ if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
     from .models import ModelLoader
+    from .surrogate_vault import SurrogateVault
+
+from .result_cache import (
+    get_result_cache,
+    make_cache_key,
+)
 
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
@@ -153,6 +159,65 @@ class DeidentificationResult:
                 self.audit_report.to_dict() if self.audit_report is not None else None
             ),
         }
+
+    def to_dataframe(self) -> Any:
+        """Convert detected PII entities to a pandas DataFrame.
+
+        Returns:
+            A pandas DataFrame with one row per detected entity and columns
+            ``text``, ``label``, ``entity_type``, ``start``, ``end``,
+            ``confidence``, ``action``, and ``result_id``.
+
+        Raises:
+            ImportError: If pandas is not installed.
+        """
+        try:
+            import pandas as pd
+        except ImportError as exc:
+            raise ImportError(
+                "pandas is required to use DeidentificationResult.to_dataframe(). "
+                "Install it with `pip install pandas`."
+            ) from exc
+
+        columns = [
+            "text",
+            "label",
+            "entity_type",
+            "start",
+            "end",
+            "confidence",
+            "action",
+            "result_id",
+        ]
+        payload = self.to_dict()
+        result_id_source = {
+            "deidentified_text": payload["deidentified_text"],
+            "method": payload["method"],
+            "num_entities_redacted": payload["num_entities_redacted"],
+            "timestamp": payload["timestamp"],
+        }
+        result_id = hashlib.sha256(
+            json.dumps(
+                result_id_source,
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()
+
+        records = [
+            {
+                "text": entity.get("text"),
+                "label": entity.get("label"),
+                "entity_type": entity.get("entity_type"),
+                "start": entity.get("start"),
+                "end": entity.get("end"),
+                "confidence": entity.get("confidence"),
+                "action": entity.get("action"),
+                "result_id": result_id,
+            }
+            for entity in payload["pii_entities"]
+        ]
+        return pd.DataFrame.from_records(records, columns=columns)
 
 
 # Languages whose PII models were trained on accent-free text.
@@ -560,6 +625,14 @@ def _extract_pii_batch(
         for result in results:
             _apply_pii_smart_merging(result, effective_model, lang)
 
+    for result in results:
+        _apply_clinical_protection_to_result(
+            result.text,
+            result,
+            config=config,
+            lang=lang,
+        )
+
     from .quality_gates import validate_entity_spans
 
     for result in results:
@@ -575,6 +648,8 @@ def extract_pii(
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
     lang: str = "en",
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
     loader: Optional["ModelLoader"] = None,
@@ -606,6 +681,8 @@ def extract_pii(
             (accented) text.  ``None`` (default) auto-enables for languages
             in ``_ACCENT_NORMALIZE_LANGS`` (currently Spanish).
         loader: Optional shared model loader to reuse warmed pipelines.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         PredictionResult with detected PII entities
@@ -618,7 +695,14 @@ def extract_pii(
         >>> # French PII detection
         >>> result = extract_pii("Né le 15/01/1970", lang="fr")
     """
-    return _extract_pii_batch(
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("extract_pii", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
+    final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -628,6 +712,9 @@ def extract_pii(
         normalize_accents=normalize_accents,
         loader=loader,
     )[0]
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _resolve_deidentification_method(
@@ -782,6 +869,49 @@ def _detector_infos(
             )
         )
     return detectors
+
+
+def _apply_clinical_protection_to_result(
+    text: str,
+    pii_result: Any,
+    *,
+    config: Optional[OpenMedConfig] = None,
+    options: Optional[Mapping[str, Any]] = None,
+    lang: str = "en",
+) -> int:
+    """Suppress ambiguous PII entities that exactly match clinical terms."""
+    from .clinical_protect import (
+        filter_protected_spans,
+        protection_options_from_config,
+    )
+
+    protection_options = dict(options or protection_options_from_config(config))
+    result = filter_protected_spans(
+        list(getattr(pii_result, "entities", ()) or ()),
+        text,
+        lang=lang,
+        **protection_options,
+    )
+    pii_result.entities = result.spans
+    if hasattr(pii_result, "num_entities"):
+        pii_result.num_entities = len(result.spans)
+
+    metadata = dict(getattr(pii_result, "metadata", None) or {})
+    previous = metadata.get("clinical_protection")
+    previous_metadata = previous if isinstance(previous, Mapping) else {}
+    clinical_metadata = dict(result.metadata["clinical_protection"])
+    clinical_metadata["checked_spans"] += int(previous_metadata.get("checked_spans", 0))
+    clinical_metadata["suppressed_spans"] += int(
+        previous_metadata.get("suppressed_spans", 0)
+    )
+    clinical_metadata["protected_term_count"] = max(
+        int(clinical_metadata["protected_term_count"]),
+        int(previous_metadata.get("protected_term_count", 0)),
+    )
+    clinical_metadata["enabled"] = bool(protection_options.get("enabled", True))
+    metadata["clinical_protection"] = clinical_metadata
+    pii_result.metadata = metadata
+    return result.suppressed_count
 
 
 def _context_window(
@@ -1016,6 +1146,7 @@ def _build_deidentification_result(
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    surrogate_vault: Optional["SurrogateVault"] = None,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
     normalize_accents: Optional[bool] = None,
@@ -1113,6 +1244,7 @@ def _build_deidentification_result(
             ),
             lang=lang,
             anonymizer=anonymizer,
+            surrogate_vault=surrogate_vault,
         )
 
         if keep_mapping and entity_method == "remove":
@@ -1228,6 +1360,7 @@ def _deidentify_batch(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -1273,6 +1406,7 @@ def _deidentify_batch(
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             policy="hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
@@ -1297,10 +1431,13 @@ def deidentify(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
     audit: bool = False,
+    cache_results: bool = False,
+    max_cache_entries: int = 128,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -1342,6 +1479,10 @@ def deidentify(
             ``consistent=True`` replacements. Implies ``consistent=True``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"``. When ``None``, derived from ``lang``.
+        surrogate_vault: Optional cross-document surrogate vault. When provided
+            with ``method="replace"``, OpenMed stores only HMAC source hashes
+            and reuses the same surrogate for the same label/language/source
+            identifier across calls.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path
@@ -1349,6 +1490,8 @@ def deidentify(
             thresholds filter model detections and appear in audit output.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
+        cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
+        max_cache_entries: Maximum number of cached results.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -1367,6 +1510,14 @@ def deidentify(
         >>> result = deidentify(text, method="replace", lang="pt",
         ...                    locale="pt_BR", consistent=True, seed=42)
     """
+
+    if cache_results:
+        params = dict(locals())
+        cache_key = make_cache_key("deidentify", params)
+        cache = get_result_cache(max_entries=max_cache_entries)
+        final_result = cache.get(cache_key)
+        if final_result is not None:
+            return final_result
     from .pipeline import Pipeline
 
     pipeline = Pipeline(
@@ -1395,11 +1546,17 @@ def deidentify(
         consistent=consistent,
         seed=seed,
         locale=locale,
+        surrogate_vault=surrogate_vault,
         audit=audit,
     )
+
     if audit and result.deidentification_result.audit_report is not None:
-        return result.deidentification_result.audit_report
-    return result.deidentification_result
+        final_result = result.deidentification_result.audit_report
+    else:
+        final_result = result.deidentification_result
+    if cache_results:
+        cache.set(cache_key, final_result)
+    return final_result
 
 
 def _is_date_entity(entity: PIIEntity, lang: str = "en") -> bool:
@@ -1424,6 +1581,7 @@ def _redact_entity(
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -1436,6 +1594,7 @@ def _redact_entity(
         anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
+        surrogate_vault: Optional vault for stable cross-document replacements.
 
     Returns:
         Redacted text replacement
@@ -1450,8 +1609,26 @@ def _redact_entity(
 
     elif method == "replace":
         if anonymizer is not None:
+            original = entity.original_text or entity.text
+            if surrogate_vault is not None:
+                label = entity.canonical_label or entity.entity_type
+
+                def _create_surrogate(attempt: int) -> str:
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(
+                        source,
+                        entity.entity_type,
+                        lang=lang,
+                    )
+
+                return surrogate_vault.get_or_create(
+                    original,
+                    label=label,
+                    lang=lang,
+                    create_surrogate=_create_surrogate,
+                )
             return anonymizer.surrogate(
-                entity.original_text or entity.text,
+                original,
                 entity.entity_type,
                 lang=lang,
             )

@@ -12,6 +12,14 @@ from .config import (
 )
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
+from .redaction_preview import redaction_preview, render_redaction_preview
+from .surrogate_vault import (
+    InMemorySurrogateStore,
+    JsonFileSurrogateStore,
+    SurrogateEntry,
+    SurrogateKey,
+    SurrogateVault,
+)
 
 __all__ = [
     "ModelLoader",
@@ -24,6 +32,13 @@ __all__ = [
     "AuditSignature",
     "AuditSpan",
     "DetectorInfo",
+    "redaction_preview",
+    "render_redaction_preview",
+    "SurrogateVault",
+    "SurrogateKey",
+    "SurrogateEntry",
+    "InMemorySurrogateStore",
+    "JsonFileSurrogateStore",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",

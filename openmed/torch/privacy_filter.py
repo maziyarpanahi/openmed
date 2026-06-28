@@ -85,7 +85,7 @@ class PrivacyFilterTorchPipeline:
         model_name: HuggingFace model ID or local path. Default
             ``openai/privacy-filter``.
         device: Torch device string (``cpu``, ``cuda``, ``cuda:0``, ``mps``).
-            ``None`` autodetects: CUDA if available, else CPU.
+            ``None`` autodetects MPS, then CUDA, then CPU.
         dtype: Optional torch dtype (e.g. ``"float16"``, ``"bfloat16"``).
             Defaults to model native.
         aggregation_strategy: Passed through to HF's pipeline. ``"simple"``
@@ -140,9 +140,11 @@ class PrivacyFilterTorchPipeline:
         self.model_name = model_name
         self.aggregation_strategy = aggregation_strategy
 
-        resolved_device = device
-        if resolved_device is None:
-            resolved_device = "cuda" if torch.cuda.is_available() else "cpu"
+        from openmed.torch.device import apply_mps_tuning, resolve_torch_device
+
+        resolved_device = resolve_torch_device(device)
+        if resolved_device.startswith("mps"):
+            apply_mps_tuning()
 
         load_kwargs: Dict[str, Any] = {
             "local_files_only": local_files_only,
