@@ -102,6 +102,7 @@ class TestEnglishLabels:
             ("medical_record_number", ID_NUM),
             ("id_num", ID_NUM),
             ("national_id", ID_NUM),
+            ("teudat_zehut", ID_NUM),
             ("age", AGE),
             ("username", USERNAME),
             ("url_personal", URL),
@@ -271,6 +272,8 @@ class TestIdentifierSubtypes:
             ("nie", ID_SUBTYPE_NATIONAL_ID),
             ("bsn", ID_SUBTYPE_NATIONAL_ID),
             ("aadhaar", ID_SUBTYPE_NATIONAL_ID),
+            ("teudat_zehut", ID_SUBTYPE_NATIONAL_ID),
+            ("tz", ID_SUBTYPE_NATIONAL_ID),
             ("B-CPF", ID_SUBTYPE_NATIONAL_ID),
         ],
     )
