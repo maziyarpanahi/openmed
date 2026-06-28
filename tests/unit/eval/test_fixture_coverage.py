@@ -75,6 +75,6 @@ def test_fixture_coverage_markdown_is_byte_stable_and_aggregate_only() -> None:
     assert "| `ACCOUNT_NUMBER` | missing |" in markdown
     assert "| `en` | covered |" in markdown
     assert "| `nested_overlapping` | 1 | covered |" in markdown
-    assert "| `multilingual` | 12 | covered |" in markdown
+    assert f"| `multilingual` | {len(SUPPORTED_LANGUAGES)} | covered |" in markdown
     assert "golden-" not in markdown
     assert "Synthetic" not in markdown
