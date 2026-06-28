@@ -131,6 +131,10 @@ class ModelLoader:
             load_kwargs = dict(kwargs)
             device_preference = load_kwargs.pop("device", None)
             resolved_device = self._resolve_torch_device(device_preference)
+            quantization_config = self._build_load_quantization_config(
+                load_kwargs,
+                device=resolved_device,
+            )
 
             # Load config first to verify it's a token classification model
             config = AutoConfig.from_pretrained(
@@ -165,12 +169,17 @@ class ModelLoader:
 
             # Load model
             model_kwargs = {**pretrained_kwargs, **load_kwargs}
+            if quantization_config is not None:
+                model_kwargs["quantization_config"] = quantization_config
+            model_uses_quantization = (
+                model_kwargs.get("quantization_config") is not None
+            )
             model = AutoModelForTokenClassification.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
                 **model_kwargs,
             )
-            if hasattr(model, "to"):
+            if not model_uses_quantization and hasattr(model, "to"):
                 model.to(resolved_device)
 
             # Cache the loaded model and tokenizer
@@ -282,7 +291,23 @@ class ModelLoader:
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
             pipeline_kwargs.update(self._local_loading_kwargs(full_model_name, kwargs))
-            pipeline_kwargs.update(kwargs)
+            pipeline_load_kwargs = dict(kwargs)
+            model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
+            if "quantization_config" in pipeline_load_kwargs:
+                model_kwargs.setdefault(
+                    "quantization_config",
+                    pipeline_load_kwargs.pop("quantization_config"),
+                )
+            quantization_config = self._build_load_quantization_config(
+                pipeline_load_kwargs,
+                device=self._resolve_torch_device(kwargs.get("device")),
+                existing_quantization_config=model_kwargs.get("quantization_config"),
+            )
+            if quantization_config is not None:
+                model_kwargs["quantization_config"] = quantization_config
+            if model_kwargs:
+                pipeline_load_kwargs["model_kwargs"] = model_kwargs
+            pipeline_kwargs.update(pipeline_load_kwargs)
 
             ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
@@ -518,6 +543,38 @@ class ModelLoader:
         if self._as_existing_local_path(model_name) is not None:
             return {"local_files_only": True}
         return {}
+
+    def _build_load_quantization_config(
+        self,
+        load_kwargs: Dict[str, Any],
+        *,
+        device: str,
+        existing_quantization_config: Any | None = None,
+    ) -> Any | None:
+        """Extract loader quantization flags and return a model config."""
+        if (
+            existing_quantization_config is not None
+            or "quantization_config" in load_kwargs
+        ):
+            load_kwargs.pop("load_in_4bit", None)
+            load_kwargs.pop("bnb_4bit_use_double_quant", None)
+            return None
+
+        load_in_4bit = bool(load_kwargs.pop("load_in_4bit", self.config.load_in_4bit))
+        bnb_4bit_use_double_quant = bool(
+            load_kwargs.pop(
+                "bnb_4bit_use_double_quant",
+                self.config.bnb_4bit_use_double_quant,
+            )
+        )
+
+        from openmed.torch.loader_quant import build_bnb_4bit_quantization_config
+
+        return build_bnb_4bit_quantization_config(
+            load_in_4bit=load_in_4bit,
+            bnb_4bit_use_double_quant=bnb_4bit_use_double_quant,
+            device=device,
+        )
 
     def _build_pipeline_cache_key(
         self,
