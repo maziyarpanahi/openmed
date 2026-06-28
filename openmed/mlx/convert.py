@@ -5,8 +5,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Callable, Dict, Iterable, Mapping, Tuple
 
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
@@ -16,8 +17,15 @@ from openmed.mlx.models import (
     normalize_model_type,
     resolve_model_type,
 )
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
+
+_RECALL_DELTA_REPORT_FILENAME = "recall_delta.json"
+_RECALL_DELTA_REPORT_VERSION = 1
+_DEFAULT_QUANTIZE_GROUP_SIZE = 64
+
+QuantEvalRunner = Callable[[Any, str, str], Iterable[Any]]
 
 # ---- Weight key remapping ---------------------------------------------------
 
@@ -396,6 +404,7 @@ def save_mlx_model(
     quantize_bits: int | None = None,
     source_model_id: str | None = None,
     cache_dir: str | None = None,
+    quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
 ) -> Path:
     """Save converted weights and config to *output_dir*."""
     try:
@@ -415,9 +424,16 @@ def save_mlx_model(
         logger.info("Quantizing to %d bits ...", quantize_bits)
         model = build_model(config)
         model.load_weights(list(mlx_weights.items()))
-        nn.quantize(model, bits=quantize_bits)
+        quantize_kwargs = {"bits": quantize_bits}
+        if quantize_group_size is not None:
+            quantize_kwargs["group_size"] = quantize_group_size
+        nn.quantize(model, **quantize_kwargs)
         mlx_weights = dict(tree_flatten(model.parameters()))
-        config_to_save["_mlx_quantization"] = {"bits": quantize_bits}
+        config_to_save["_mlx_quantization"] = {
+            "bits": quantize_bits,
+            "format": _publish_format(quantize_bits),
+            "group_size": quantize_group_size,
+        }
     else:
         config_to_save.pop("_mlx_quantization", None)
 
@@ -538,6 +554,325 @@ def save_numpy_model(
     return output_dir
 
 
+def write_quant_recall_delta_report(
+    *,
+    source_model_id: str,
+    artifact_dir: str | Path,
+    eval_suite_path: str | Path,
+    format_name: str = "mlx-4bit",
+    quantize_bits: int = 4,
+    quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
+    output_path: str | Path | None = None,
+    cache_dir: str | None = None,
+    parent_runner: QuantEvalRunner | None = None,
+    candidate_runner: QuantEvalRunner | None = None,
+) -> dict[str, Any]:
+    """Run FP-parent versus quantized artifact recall and write evidence JSON."""
+    from openmed.eval.harness import load_fixtures, run_benchmark
+    from openmed.eval.quant_delta import (
+        evaluate_quant_recall_delta,
+        limit_for_format,
+    )
+
+    artifact_dir = Path(artifact_dir)
+    eval_suite_path = Path(eval_suite_path)
+    report_path = (
+        Path(output_path)
+        if output_path is not None
+        else artifact_dir / _RECALL_DELTA_REPORT_FILENAME
+    )
+    generated_at = _utc_now()
+    fixtures = load_fixtures(eval_suite_path)
+
+    parent_runner = parent_runner or _hf_token_classification_runner(
+        source_model_id,
+        cache_dir=cache_dir,
+    )
+    candidate_runner = candidate_runner or _mlx_artifact_runner(artifact_dir)
+
+    suite_name = eval_suite_path.stem or "eval-suite"
+    parent_report = run_benchmark(
+        fixtures,
+        suite=suite_name,
+        model_name=source_model_id,
+        device="fp-parent",
+        runner=parent_runner,
+        generated_at=generated_at,
+        metadata={"format": "mlx-fp", "source_model_id": source_model_id},
+    )
+    candidate_report = run_benchmark(
+        fixtures,
+        suite=suite_name,
+        model_name=str(artifact_dir),
+        device=format_name,
+        runner=candidate_runner,
+        generated_at=generated_at,
+        metadata={
+            "format": format_name,
+            "source_model_id": source_model_id,
+            "quantization": {
+                "bits": quantize_bits,
+                "group_size": quantize_group_size,
+            },
+        },
+    )
+
+    parent_recall = _per_label_recall(parent_report.metrics)
+    candidate_recall = _per_label_recall(candidate_report.metrics)
+    delta = evaluate_quant_recall_delta(
+        format_name=format_name,
+        candidate_recall=candidate_recall,
+        parent_recall=parent_recall,
+    )
+    delta_payload = delta.to_dict()
+    delta_payload["blocking_format"] = delta.blocking_format
+    limit = limit_for_format(format_name)
+    report_relpath = _artifact_relative_path(report_path, artifact_dir)
+
+    payload: dict[str, Any] = {
+        "schema_version": _RECALL_DELTA_REPORT_VERSION,
+        "generated_at": generated_at,
+        "source_model_id": source_model_id,
+        "artifact_path": str(artifact_dir),
+        "format": format_name,
+        "quantization": {
+            "bits": quantize_bits,
+            "group_size": quantize_group_size,
+        },
+        "eval_suite_path": str(eval_suite_path),
+        "fixture_count": len(fixtures),
+        "metric": "character_recall",
+        "limit": limit,
+        "certified": bool(delta.passed),
+        "quant_recall_delta": delta.max_delta,
+        "per_label": _per_label_recall_comparison(
+            parent_recall,
+            candidate_recall,
+            delta.per_label_delta,
+            quantized_label=f"int{quantize_bits}_recall",
+        ),
+        "fp_parent_per_label_recall": parent_recall,
+        "candidate_per_label_recall": candidate_recall,
+        "delta": delta_payload,
+        "report_path": report_relpath,
+    }
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with report_path.open("w", encoding="utf-8") as handle:
+        json.dump(payload, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+    _apply_quant_recall_certification(
+        artifact_dir,
+        payload,
+        report_relpath=report_relpath,
+    )
+    return payload
+
+
+def _hf_token_classification_runner(
+    model_id: str,
+    *,
+    cache_dir: str | None = None,
+) -> QuantEvalRunner:
+    pipeline_instance: Any | None = None
+
+    def run_fixture(fixture: Any, model_name: str, device: str) -> Iterable[Any]:
+        del model_name, device
+        nonlocal pipeline_instance
+        if pipeline_instance is None:
+            try:
+                from transformers import (
+                    AutoModelForTokenClassification,
+                    AutoTokenizer,
+                    pipeline,
+                )
+            except ImportError as exc:
+                raise ImportError(
+                    "transformers is required to certify MLX quantization. "
+                    "Install with: pip install transformers"
+                ) from exc
+
+            tokenizer = get_tokenizer_with_loader(
+                model_id,
+                AutoTokenizer.from_pretrained,
+                cache_dir=cache_dir,
+            )
+            model = AutoModelForTokenClassification.from_pretrained(
+                model_id,
+                cache_dir=cache_dir,
+            )
+            pipeline_instance = pipeline(
+                "token-classification",
+                model=model,
+                tokenizer=tokenizer,
+                aggregation_strategy="simple",
+            )
+        return pipeline_instance(fixture.text)
+
+    return run_fixture
+
+
+def _mlx_artifact_runner(artifact_dir: str | Path) -> QuantEvalRunner:
+    pipeline_instance: Any | None = None
+    artifact_dir = Path(artifact_dir)
+
+    def run_fixture(fixture: Any, model_name: str, device: str) -> Iterable[Any]:
+        del model_name, device
+        nonlocal pipeline_instance
+        if pipeline_instance is None:
+            from openmed.mlx.inference import create_mlx_pipeline
+
+            pipeline_instance = create_mlx_pipeline(
+                str(artifact_dir),
+                aggregation_strategy="simple",
+            )
+        return pipeline_instance(fixture.text)
+
+    return run_fixture
+
+
+def _per_label_recall(metrics: Mapping[str, Any]) -> dict[str, float]:
+    recall_slices = metrics.get("recall_slices")
+    if isinstance(recall_slices, Mapping):
+        by_label = recall_slices.get("by_label")
+        if isinstance(by_label, Mapping):
+            return _float_map(by_label)
+
+    per_label = metrics.get("per_label_recall")
+    if isinstance(per_label, Mapping):
+        return _float_map(per_label)
+    return {}
+
+
+def _per_label_recall_comparison(
+    parent_recall: Mapping[str, float],
+    candidate_recall: Mapping[str, float],
+    per_label_delta: Mapping[str, float],
+    *,
+    quantized_label: str,
+) -> dict[str, dict[str, float | None]]:
+    labels = sorted(set(parent_recall) | set(candidate_recall) | set(per_label_delta))
+    return {
+        label: {
+            "fp_recall": parent_recall.get(label),
+            quantized_label: candidate_recall.get(label),
+            "delta": per_label_delta.get(label),
+        }
+        for label in labels
+    }
+
+
+def _apply_quant_recall_certification(
+    artifact_dir: str | Path,
+    payload: Mapping[str, Any],
+    *,
+    report_relpath: str,
+) -> None:
+    artifact_dir = Path(artifact_dir)
+    config_path = artifact_dir / "config.json"
+    if not config_path.exists():
+        return
+
+    with config_path.open("r", encoding="utf-8") as handle:
+        config = json.load(handle)
+
+    quantization = dict(config.get("_mlx_quantization") or {})
+    quantization.update(
+        {
+            "bits": payload["quantization"]["bits"],
+            "certification_limit": payload["limit"],
+            "certified": payload["certified"],
+            "format": payload["format"],
+            "group_size": payload["quantization"].get("group_size"),
+            "quant_recall_delta": payload["quant_recall_delta"],
+            "recall_delta_path": report_relpath,
+        }
+    )
+    config["_mlx_quantization"] = quantization
+    config["quant_recall_delta"] = payload["quant_recall_delta"]
+    config["certified"] = payload["certified"]
+
+    with config_path.open("w", encoding="utf-8") as handle:
+        json.dump(config, handle, indent=2)
+        handle.write("\n")
+
+    _update_manifest_quant_certification(
+        artifact_dir,
+        quantization=quantization,
+        payload=payload,
+        report_relpath=report_relpath,
+    )
+
+
+def _update_manifest_quant_certification(
+    artifact_dir: Path,
+    *,
+    quantization: Mapping[str, Any],
+    payload: Mapping[str, Any],
+    report_relpath: str,
+) -> None:
+    from openmed.mlx.artifact import MANIFEST_FILENAME
+
+    manifest_path = artifact_dir / MANIFEST_FILENAME
+    if not manifest_path.exists():
+        return
+
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+
+    format_name = str(payload["format"])
+    manifest["formats"] = _dedupe_keep_order(
+        [format_name, *[str(item) for item in manifest.get("formats", [])]]
+    )
+    manifest["quantization"] = dict(quantization)
+    manifest["quant_recall_delta"] = payload["quant_recall_delta"]
+    manifest["certified"] = payload["certified"]
+    manifest["recall_delta_path"] = report_relpath
+    manifest["certification"] = {
+        "gate": "G4",
+        "limit": payload["limit"],
+        "metric": payload["metric"],
+        "report_path": report_relpath,
+    }
+
+    with manifest_path.open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, indent=2)
+        handle.write("\n")
+
+
+def _float_map(values: Mapping[str, Any]) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for key, value in values.items():
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            continue
+        result[str(key)] = parsed
+    return result
+
+
+def _artifact_relative_path(path: Path, artifact_dir: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(artifact_dir.resolve()))
+    except (OSError, ValueError):
+        return path.name
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _dedupe_keep_order(items: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in items:
+        if item and item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+
+
 def _finalize_artifact(
     output_dir: str | Path,
     *,
@@ -554,7 +889,11 @@ def _finalize_artifact(
     try:
         from transformers import AutoTokenizer
 
-        tokenizer = AutoTokenizer.from_pretrained(source_model_id, cache_dir=cache_dir)
+        tokenizer = get_tokenizer_with_loader(
+            source_model_id,
+            AutoTokenizer.from_pretrained,
+            cache_dir=cache_dir,
+        )
         tokenizer.save_pretrained(output_dir)
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
@@ -586,21 +925,27 @@ def convert(
     publish_token_env: str = "HF_WRITE_TOKEN",
     publish_private: bool = False,
     publish_overwrite_existing: bool = False,
+    quantize_group_size: int | None = _DEFAULT_QUANTIZE_GROUP_SIZE,
+    eval_suite_path: str | Path | None = None,
+    recall_delta_report_path: str | Path | None = None,
 ) -> Path:
     """End-to-end: download a model, remap it, and save an OpenMed MLX artifact."""
     weights, config = convert_weights(model_id, cache_dir=cache_dir)
+    quantized = False
 
     try:
         import mlx.core  # noqa: F401
 
         output_path = save_mlx_model(
-            weights,
-            config,
-            output_dir,
-            quantize_bits,
+            weights=weights,
+            config=config,
+            output_dir=output_dir,
+            quantize_bits=quantize_bits,
             source_model_id=model_id,
             cache_dir=cache_dir,
+            quantize_group_size=quantize_group_size,
         )
+        quantized = quantize_bits is not None
     except ImportError:
         if quantize_bits is not None:
             logger.warning(
@@ -612,6 +957,24 @@ def convert(
             config,
             output_dir,
             source_model_id=model_id,
+            cache_dir=cache_dir,
+        )
+
+    if eval_suite_path is not None:
+        if quantize_bits is None:
+            raise ValueError("eval_suite_path requires a quantized MLX artifact")
+        if not quantized:
+            raise ImportError(
+                "MLX is required to certify a quantized artifact with eval fixtures"
+            )
+        write_quant_recall_delta_report(
+            source_model_id=model_id,
+            artifact_dir=output_path,
+            eval_suite_path=eval_suite_path,
+            format_name=_publish_format(quantize_bits),
+            quantize_bits=quantize_bits,
+            quantize_group_size=quantize_group_size,
+            output_path=recall_delta_report_path,
             cache_dir=cache_dir,
         )
 
@@ -664,6 +1027,25 @@ def main() -> None:
         help="Quantize weights to N bits (4 or 8)",
     )
     parser.add_argument(
+        "--quantize-group-size",
+        type=int,
+        default=_DEFAULT_QUANTIZE_GROUP_SIZE,
+        help="Group size to use for MLX weight quantization",
+    )
+    parser.add_argument(
+        "--eval-suite",
+        default=None,
+        help=(
+            "Benchmark fixture JSON used to certify quantized recall against "
+            "the full-precision parent"
+        ),
+    )
+    parser.add_argument(
+        "--recall-delta-report",
+        default=None,
+        help="Optional output path for the quantization recall-delta JSON report",
+    )
+    parser.add_argument(
         "--cache-dir",
         default=None,
         help="Hugging Face cache directory",
@@ -713,10 +1095,13 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO)
     convert(
-        args.model,
-        args.output,
-        args.quantize,
-        args.cache_dir,
+        model_id=args.model,
+        output_dir=args.output,
+        quantize_bits=args.quantize,
+        cache_dir=args.cache_dir,
+        eval_suite_path=args.eval_suite,
+        recall_delta_report_path=args.recall_delta_report,
+        quantize_group_size=args.quantize_group_size,
         publish_to_hub=args.publish_to_hub,
         publish_repo_id=args.publish_repo_id,
         publish_org=args.publish_org,
