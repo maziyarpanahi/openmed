@@ -72,6 +72,7 @@ multimodal = [
   "piexif>=1.1",
   "pikepdf>=9.0",
   "pytesseract>=0.3.10",
+  "easyocr>=1.7",
 ]
 
 # PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
