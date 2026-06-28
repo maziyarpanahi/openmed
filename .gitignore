@@ -200,6 +200,8 @@ Thumbs.db
 # Security reports
 bandit-report.json
 safety-report.json
+pip-audit-report.json
+sbom.cdx.json
 
 # Temporary files
 *.tmp

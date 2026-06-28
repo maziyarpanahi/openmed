@@ -69,6 +69,7 @@ class WarmPool:
     warm_models: Tuple[str, ...] = ()
     max_resident_models: Optional[int] = None
     default_keep_alive_seconds: Optional[float] = None
+    metrics: Optional[Any] = None
     clock: Callable[[], float] = time.monotonic
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _entries: dict[str, WarmPoolEntry] = field(default_factory=dict, repr=False)
@@ -188,6 +189,7 @@ class WarmPool:
                 **kwargs,
             )
             entry.handles[cache_key] = handle
+            self._record_model_load_locked()
             entry.last_used = now
             self._evict_over_capacity_locked()
             return handle
@@ -220,6 +222,7 @@ class WarmPool:
                 **kwargs,
             )
             entry.handles[cache_key] = handle
+            self._record_model_load_locked()
             entry.last_used = now
             self._evict_over_capacity_locked()
             return handle
@@ -321,11 +324,20 @@ class WarmPool:
             if not active_models:
                 for model_name in list(self._timers):
                     self._cancel_timer_locked(model_name)
+                resident_count = sum(
+                    1 for entry in self._entries.values() if entry.resident
+                )
                 self._entries.clear()
                 unload_all = getattr(self.loader, "unload_all_models", None)
-                released = (
-                    unload_all() if callable(unload_all) else self._unload_all_loaded()
-                )
+                if callable(unload_all):
+                    released = unload_all()
+                    self._record_model_eviction_locked(
+                        resident_count or int(any(released.values()))
+                    )
+                else:
+                    released = self._unload_all_loaded()
+                    if resident_count and not any(released.values()):
+                        self._record_model_eviction_locked(resident_count)
                 return {
                     "unloaded": any(released.values()),
                     "released": released,
@@ -542,13 +554,19 @@ class WarmPool:
 
     def _unload_entry_locked(self, model_name: str) -> dict[str, Any]:
         self._cancel_timer_locked(model_name)
-        self._entries.pop(model_name, None)
+        entry = self._entries.pop(model_name, None)
+        was_resident = bool(entry is not None and entry.resident)
         unload = getattr(self.loader, "unload_model", None)
         if not callable(unload):
             released = self._zero_release()
             released["model_name"] = model_name
+            if was_resident:
+                self._record_model_eviction_locked()
             return released
-        return unload(model_name)
+        released = unload(model_name)
+        if was_resident or any(released.get(name, 0) for name in self._zero_release()):
+            self._record_model_eviction_locked()
+        return released
 
     def _unload_all_loaded(self) -> dict[str, int]:
         released = self._zero_release()
@@ -572,3 +590,13 @@ class WarmPool:
 
     def _zero_release(self) -> dict[str, int]:
         return {"models": 0, "tokenizers": 0, "pipelines": 0}
+
+    def _record_model_load_locked(self) -> None:
+        record = getattr(self.metrics, "record_model_load", None)
+        if callable(record):
+            record()
+
+    def _record_model_eviction_locked(self, count: int = 1) -> None:
+        record = getattr(self.metrics, "record_model_eviction", None)
+        if callable(record):
+            record(count)
