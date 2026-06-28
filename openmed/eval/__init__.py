@@ -70,6 +70,12 @@ from openmed.eval.fairness import (
     FairnessReport,
     fairness_report,
 )
+from openmed.eval.flaky import (
+    DEFAULT_FLAKY_TOLERANCE,
+    FlakyMetricReport,
+    FlakyReport,
+    detect_flaky_eval,
+)
 from openmed.eval.harness import (
     BenchmarkFixture,
     FixtureResult,
@@ -146,6 +152,7 @@ __all__ = [
     "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
+    "DEFAULT_FLAKY_TOLERANCE",
     "DEFAULT_PERTURBATIONS",
     "DatasetCard",
     "EvalCacheKey",
@@ -156,6 +163,8 @@ __all__ = [
     "EvidenceBundleResult",
     "FairnessGroupMetrics",
     "FairnessReport",
+    "FlakyMetricReport",
+    "FlakyReport",
     "FixtureResult",
     "FixtureCoverageReport",
     "GOLDEN_EDGE_CASE_CATEGORIES",
@@ -206,6 +215,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_cache_dir",
     "default_suite_calibration_samples",
+    "detect_flaky_eval",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
     "error_report",
