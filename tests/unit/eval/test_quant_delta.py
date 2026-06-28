@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from openmed.eval.quant_delta import evaluate_quant_recall_delta
+from openmed.eval.quant_delta import (
+    evaluate_onnx_logit_parity,
+    evaluate_quant_recall_delta,
+)
 
 
 def test_int8_delta_below_half_point_passes() -> None:
@@ -57,3 +60,35 @@ def test_precomputed_per_format_delta_blocks_only_that_format() -> None:
     assert int8.blocking_format == "mlx-8bit"
     assert int4.passed is True
     assert int4.blocking_format is None
+
+
+def test_onnx_logit_parity_passes_when_logits_and_spans_match() -> None:
+    result = evaluate_onnx_logit_parity(
+        baseline_logits=[[[0.99, 0.01, 0.0], [0.01, 0.98, 0.01], [0.01, 0.03, 0.96]]],
+        candidate_logits=[
+            [[0.99001, 0.00999, 0.0], [0.01, 0.98001, 0.01], [0.01, 0.03, 0.96]]
+        ],
+        id2label={"0": "O", "1": "B-NAME", "2": "I-NAME"},
+        offsets=[[[0, 0], [8, 12], [12, 16]]],
+        atol=1e-3,
+        rtol=1e-3,
+    )
+
+    assert result.passed is True
+    assert result.logits_within_tolerance is True
+    assert result.spans_identical is True
+    assert result.span_count == 1
+
+
+def test_onnx_logit_parity_fails_when_token_predictions_change() -> None:
+    result = evaluate_onnx_logit_parity(
+        baseline_logits=[[[0.1, 0.9], [0.8, 0.2]]],
+        candidate_logits=[[[0.9, 0.1], [0.8, 0.2]]],
+        atol=1.0,
+        rtol=1.0,
+    )
+
+    assert result.passed is False
+    assert result.logits_within_tolerance is True
+    assert result.spans_identical is False
+    assert result.token_mismatches == 1
