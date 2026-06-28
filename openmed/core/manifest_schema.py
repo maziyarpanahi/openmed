@@ -49,6 +49,7 @@ ALLOWED_FORMATS = (
     "mlx-8bit",
     "mlx-4bit",
     "onnx",
+    "transformersjs",
     "webgpu",
     "int8",
     "int4",
