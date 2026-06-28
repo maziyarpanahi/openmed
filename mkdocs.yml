@@ -18,7 +18,9 @@ nav:
       - REST Service (MVP): rest-service.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
+      - Model Manifest: model-manifest.md
       - Advanced NER & Output Formatting: output-formatting.md
+      - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
@@ -29,19 +31,32 @@ nav:
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - Device Tiers & SLOs: tiers.md
+      - AWQ Export: export-awq.md
+      - GPTQ Export: export-gptq.md
   - PII & De-identification:
+      - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
+      - LangChain Redaction Wrapper: integrations-langchain.md
+      - spaCy Pipeline Component: spacy-component.md
+      - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
       - FHIR Interop Helpers: fhir-interop.md
   - Apple Silicon & Mobile:
       - MLX Backend: mlx-backend.md
+      - Torch MPS Performance: performance-mps.md
+      - MLX Quantized Export: export-mlx-quant.md
+      - Transformers.js Export: export-transformersjs.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - FAQ: faq.md
+      - Onboarding: onboarding.md
       - Contributing & Releases: contributing.md
+      - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
+      - Supply Chain Controls: security/supply-chain.md
+      - Software Bill of Materials: security/sbom.md
       - Release Streams & Channels: release/semver-and-channels.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md

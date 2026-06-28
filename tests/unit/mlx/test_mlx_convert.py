@@ -420,6 +420,7 @@ class TestSaveNumpyModel:
 
         manifest = json.loads((output / "openmed-mlx.json").read_text())
         assert manifest["format"] == "openmed-mlx"
+        assert manifest["formats"] == ["mlx-fp"]
         assert manifest["source_model_id"] == "OpenMed/test-model"
         assert manifest["available_weights"]
         assert manifest["tokenizer"]["files"] == [

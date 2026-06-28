@@ -19,6 +19,9 @@ PUBLIC_DATASETS: tuple[str, ...] = (
     "medmentions",
     "ncbi_disease",
     "bc5cdr",
+    "jnlpba",
+    "species_800",
+    "bc2gm",
 )
 
 PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
@@ -36,6 +39,8 @@ PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
     "drugprot": {
         "chemical": "OTHER",
         "gene": "OTHER",
+        "gene-n": "OTHER",
+        "gene-y": "OTHER",
         "protein": "OTHER",
         "relation": "OTHER",
     },
@@ -55,6 +60,23 @@ PUBLIC_LABEL_MAPS: Mapping[str, Mapping[str, str]] = {
         "chemical": "OTHER",
         "disease": "OTHER",
         "relation": "OTHER",
+    },
+    "jnlpba": {
+        "cell_line": "OTHER",
+        "cell_type": "OTHER",
+        "dna": "OTHER",
+        "protein": "OTHER",
+        "rna": "OTHER",
+    },
+    "species_800": {
+        "organism": "MICROORGANISM",
+        "species": "MICROORGANISM",
+        "taxon": "MICROORGANISM",
+    },
+    "bc2gm": {
+        "gene": "OTHER",
+        "gene_mention": "OTHER",
+        "protein": "OTHER",
     },
 }
 

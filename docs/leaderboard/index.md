@@ -5,6 +5,7 @@ with the latest BenchmarkReport for each family, tier, and format.
 
 | System | Family | Tier | Format | Models | Current Leakage | Last Green Release | Harness Freshness | Evidence |
 |---|---|---|---|---:|---:|---|---|---|
+| OpenMed | `General` | `n/a` | `mlx-4bit` | 1 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `General` | `n/a` | `pytorch` | 3 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `NER` | `Large` | `pytorch` | 1 | n/a | `n/a` | `n/a` | `n/a` |
 | OpenMed | `NER` | `n/a` | `pytorch` | 332 | n/a | `n/a` | `n/a` | `n/a` |
