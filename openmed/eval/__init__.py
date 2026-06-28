@@ -128,6 +128,14 @@ from openmed.eval.section_recall import (
     compute_section_recall,
 )
 from openmed.eval.tiers import TIERS
+from openmed.eval.utility import (
+    CLINICAL_CATEGORIES,
+    CLINICAL_SPAN_KEYS,
+    UtilityCategoryLoss,
+    UtilityLossExample,
+    UtilityLossReport,
+    utility_loss_report,
+)
 
 __all__ = [
     "BenchmarkFixture",
@@ -138,6 +146,8 @@ __all__ = [
     "CalibrationSample",
     "CalibrationThresholdSet",
     "CACHE_SCHEMA_VERSION",
+    "CLINICAL_CATEGORIES",
+    "CLINICAL_SPAN_KEYS",
     "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
@@ -170,6 +180,9 @@ __all__ = [
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
+    "UtilityCategoryLoss",
+    "UtilityLossExample",
+    "UtilityLossReport",
     "UNSPECIFIED_GROUP",
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
@@ -224,6 +237,7 @@ __all__ = [
     "run_suite",
     "store",
     "TIERS",
+    "utility_loss_report",
     "whitespace_noise_perturbation",
     "write_calibration_artifacts",
 ]
