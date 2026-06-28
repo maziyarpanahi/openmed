@@ -2,7 +2,9 @@
 
 <img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
 
-<h3>Local-first healthcare AI that never leaves the device</h3>
+<h2>Local-first healthcare AI that never leaves the device</h2>
+
+<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
 Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
@@ -26,7 +28,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>12 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,000+ models</b> &nbsp;·&nbsp; <b>15 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -98,7 +100,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          1,000+          |        Limited         |
-| Languages                             |           12+            |         Varies         |
+| Languages                             |           13+            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
@@ -307,10 +309,10 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (12 languages)
+## Multilingual PII (15 languages)
 
-Extraction and de-identification support **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr` — **247 PII checkpoints** total.
+Extraction and de-identification support **15 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr` — **247 PII checkpoints** total.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -398,9 +400,10 @@ a local-first guardian for your most private data.
 
 ## Contributing
 
-Contributions welcome — bug reports, feature requests, and PRs alike.
+Contributions welcome — bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
+- [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
 - **Translations welcome** — help complete the other-language READMEs linked in the switcher at the top.
 
 ---
