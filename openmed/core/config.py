@@ -11,6 +11,9 @@ CONFIG_ENV_VAR = "OPENMED_CONFIG"
 # Environment variable for active profile
 PROFILE_ENV_VAR = "OPENMED_PROFILE"
 
+# Environment variable for the PyTorch/Transformers attention backend.
+TORCH_ATTENTION_BACKEND_ENV_VAR = "OPENMED_TORCH_ATTENTION_BACKEND"
+
 _xdg_config = os.getenv("XDG_CONFIG_HOME")
 if _xdg_config:
     _default_config_root = Path(_xdg_config)
@@ -82,6 +85,13 @@ class OpenMedConfig:
     # Inference backend: None (auto-detect), "hf" (HuggingFace/PyTorch), "mlx" (Apple MLX)
     backend: Optional[str] = None
 
+    # PyTorch/Transformers attention backend: auto, flash_attention_2, sdpa, or eager
+    torch_attention_backend: str = "auto"
+
+    # Optional load-time bitsandbytes 4-bit quantization for CUDA torch loads
+    load_in_4bit: bool = False
+    bnb_4bit_use_double_quant: bool = True
+
     # Active profile name (if any)
     profile: Optional[str] = None
 
@@ -129,6 +139,26 @@ class OpenMedConfig:
                 "no",
             }
 
+        env_attention_backend = os.getenv(TORCH_ATTENTION_BACKEND_ENV_VAR)
+        if env_attention_backend is not None:
+            self.torch_attention_backend = env_attention_backend
+
+        env_load_in_4bit = os.getenv("OPENMED_LOAD_IN_4BIT")
+        if env_load_in_4bit is not None:
+            self.load_in_4bit = env_load_in_4bit.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+
+        env_bnb_double_quant = os.getenv("OPENMED_BNB_4BIT_USE_DOUBLE_QUANT")
+        if env_bnb_double_quant is not None:
+            self.bnb_4bit_use_double_quant = env_bnb_double_quant.lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+
         # Check for profile environment variable
         env_profile = os.getenv(PROFILE_ENV_VAR)
         if env_profile and self.profile is None:
@@ -151,6 +181,9 @@ class OpenMedConfig:
             "clinical_protect_terms",
             "clinical_protect_use_builtin",
             "backend",
+            "torch_attention_backend",
+            "load_in_4bit",
+            "bnb_4bit_use_double_quant",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
@@ -208,6 +241,9 @@ class OpenMedConfig:
             "clinical_protect_terms": self.clinical_protect_terms,
             "clinical_protect_use_builtin": self.clinical_protect_use_builtin,
             "backend": self.backend,
+            "torch_attention_backend": self.torch_attention_backend,
+            "load_in_4bit": self.load_in_4bit,
+            "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
             "profile": self.profile,
         }
 

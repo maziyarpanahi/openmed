@@ -189,6 +189,24 @@ def test_models_diff_fail_on_removed_only_fails_when_repo_disappears(
     assert removed == 1
 
 
+def test_models_diff_missing_manifest_exits_nonzero(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    new_manifest = _write_manifest(tmp_path / "new.jsonl", [_row("OpenMed/stable")])
+    missing_manifest = tmp_path / "missing.jsonl"
+
+    result = main_module.main(
+        ["models", "diff", str(missing_manifest), str(new_manifest)]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 1
+    assert captured.out == ""
+    assert "Failed to diff manifests:" in captured.err
+    assert str(missing_manifest) in captured.err
+
+
 def _row(repo_id: str, **overrides: object) -> dict[str, object]:
     row = deepcopy(BASE_ROW)
     row["repo_id"] = repo_id

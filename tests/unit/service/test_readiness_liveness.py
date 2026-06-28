@@ -11,15 +11,25 @@ from fastapi.testclient import TestClient
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_PRELOAD_MODELS",
     "OPENMED_SERVICE_KEEP_ALIVE",
     "OPENMED_SERVICE_MAX_RESIDENT_MODELS",
     "OPENMED_SERVICE_MAX_TEXT_LENGTH",
+    "OPENMED_SERVICE_CORS_ORIGINS",
+    "OPENMED_SERVICE_TRUSTED_HOSTS",
     "OPENMED_SERVICE_BATCHING_ENABLED",
     "OPENMED_SERVICE_BATCH_MAX_SIZE",
     "OPENMED_SERVICE_BATCH_MAX_WAIT_MS",
+    "OPENMED_SERVICE_COALESCING_ENABLED",
     "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS",
+    "OPENMED_SERVICE_RATE_LIMIT_RPS",
+    "OPENMED_SERVICE_RATE_LIMIT_BURST",
+    "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY",
+    "OPENMED_SERVICE_THROTTLE_KEY",
+    "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS",
 )
 
 
@@ -59,7 +69,11 @@ def _assert_error_payload(response, status_code: int, code: str) -> dict[str, An
 
 def test_livez_ok_before_preload():
     app = create_app()
-    client = TestClient(app, raise_server_exceptions=False)
+    client = TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    )
     try:
         response = client.get("/livez")
     finally:
@@ -71,7 +85,11 @@ def test_livez_ok_before_preload():
 
 def test_readyz_503_before_preload():
     app = create_app()
-    client = TestClient(app, raise_server_exceptions=False)
+    client = TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    )
     try:
         response = client.get("/readyz")
     finally:
@@ -83,7 +101,11 @@ def test_readyz_503_before_preload():
 def test_readyz_200_after_preload():
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         response = client.get("/readyz")
 
     assert response.status_code == 200
@@ -93,7 +115,11 @@ def test_readyz_200_after_preload():
 def test_health_alias_still_ok():
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         response = client.get("/health")
 
     assert response.status_code == 200
@@ -107,7 +133,11 @@ def test_shutdown_flips_ready_and_drains(monkeypatch):
     monkeypatch.setenv("OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS", "0.2")
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         response = client.get("/readyz")
         assert response.status_code == 200
         client.app.state.inflight = 1
@@ -122,7 +152,11 @@ def test_shutdown_flips_ready_and_drains(monkeypatch):
 def test_model_request_rejected_during_shutdown():
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as client:
         client.app.state.shutting_down = True
         response = client.post("/analyze", json={"text": "sample"})
 

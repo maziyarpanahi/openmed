@@ -80,6 +80,10 @@ def diff_manifests(old_path: str | Path, new_path: str | Path) -> ManifestDiff:
 
     old_manifest = Path(old_path)
     new_manifest = Path(new_path)
+    for manifest in (old_manifest, new_manifest):
+        if not manifest.is_file():
+            raise FileNotFoundError(manifest)
+
     old_rows = _rows_by_repo(load_manifest_rows(old_manifest), old_manifest)
     new_rows = _rows_by_repo(load_manifest_rows(new_manifest), new_manifest)
 
