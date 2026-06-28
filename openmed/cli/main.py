@@ -134,6 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_pii_command(subparsers)
+    _add_policy_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
@@ -405,6 +406,35 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
         help="Minimum confidence for redaction.",
     )
     batch_parser.set_defaults(handler=_handle_pii_batch)
+
+
+def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
+    policy_parser = subparsers.add_parser(
+        "policy",
+        help="Inspect de-identification policy profiles.",
+    )
+    policy_sub = policy_parser.add_subparsers(dest="policy_command")
+
+    diff_parser = policy_sub.add_parser(
+        "diff",
+        help="Compare two policy profile configurations.",
+    )
+    diff_parser.add_argument(
+        "base",
+        help="Baseline bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "candidate",
+        help="Candidate bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format",
+        help="Output format.",
+    )
+    diff_parser.set_defaults(handler=_handle_policy_diff)
 
 
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
@@ -888,6 +918,23 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_policy_diff(args: argparse.Namespace) -> int:
+    from ..core.policy_diff import diff_policies, render
+
+    try:
+        diff = diff_policies(args.base, args.candidate)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"Policy diff failed: {exc}\n")
+        return 1
+
+    if args.output_format == "json":
+        payload = render(diff, fmt="dict")
+        sys.stdout.write(f"{json.dumps(payload, indent=2, sort_keys=True)}\n")
+    else:
+        sys.stdout.write(f"{render(diff, fmt='text')}\n")
+    return 0
 
 
 def _handle_benchmark_pii(args: argparse.Namespace) -> int:
