@@ -19,8 +19,10 @@ def test_calibration_loader_returns_deterministic_non_empty_samples() -> None:
 
     first = calibration.load_awq_calibration_texts(limit=3)
     second = calibration.load_awq_calibration_texts(limit=3)
+    shared = calibration.load_quantization_calibration_texts(limit=3)
 
     assert first == second
+    assert first == shared
     assert len(first) == 3
     assert all(sample.strip() for sample in first)
     assert calibration.calibration_texts_sha256(first) == (

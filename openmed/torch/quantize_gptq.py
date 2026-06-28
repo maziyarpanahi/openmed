@@ -1,4 +1,4 @@
-"""AWQ 4-bit quantization recipe for Hugging Face checkpoints."""
+"""GPTQ 4-bit quantization recipe for Hugging Face checkpoints."""
 
 from __future__ import annotations
 
@@ -8,8 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
-
 from .calibration import (
     QUANTIZATION_CALIBRATION_SOURCE,
     calibration_texts_sha256,
@@ -17,14 +15,13 @@ from .calibration import (
 )
 
 QUANT_CONFIG_FILENAME = "quant_config.json"
-AWQ_FORMAT = "openmed-awq"
-AWQ_FORMAT_VERSION = 1
-DEFAULT_AWQ_VERSION = "GEMM"
+GPTQ_FORMAT = "openmed-gptq"
+GPTQ_FORMAT_VERSION = 1
 
 
 @dataclass(frozen=True)
-class AwqQuantizationResult:
-    """Paths and metadata produced by :func:`quantize_awq`."""
+class GptqQuantizationResult:
+    """Paths and metadata produced by :func:`quantize_gptq`."""
 
     output_dir: Path
     quant_config_path: Path
@@ -33,48 +30,55 @@ class AwqQuantizationResult:
     calibration_sample_count: int
 
 
-def quantize_awq(
+def quantize_gptq(
     model_name: str,
     calib_texts: Iterable[str] | None,
     out_dir: str | Path,
-    w_bit: int = 4,
+    bits: int = 4,
     group_size: int = 128,
+    desc_act: bool = False,
     *,
     revision: str | None = None,
     trust_remote_code: bool = False,
     local_files_only: bool = False,
     device_map: str | Mapping[str, Any] | None = "auto",
-    zero_point: bool = True,
-    version: str = DEFAULT_AWQ_VERSION,
     max_calib_seq_len: int = 512,
-) -> AwqQuantizationResult:
-    """Quantize a Hugging Face checkpoint with AutoAWQ and record the recipe.
+    calib_batch_size: int = 1,
+    use_safetensors: bool = True,
+) -> GptqQuantizationResult:
+    """Quantize a Hugging Face checkpoint with AutoGPTQ and record the recipe.
 
     Args:
         model_name: Hugging Face model ID or local model directory.
         calib_texts: Calibration samples. When ``None``, OpenMed's committed
             synthetic clinical-note calibration set is used.
-        out_dir: Directory that receives the AWQ checkpoint and metadata.
-        w_bit: Weight bit width. OpenMed's recipe defaults to 4-bit AWQ.
-        group_size: AWQ quantization group size.
+        out_dir: Directory that receives the GPTQ checkpoint and metadata.
+        bits: Weight bit width. OpenMed's recipe defaults to 4-bit GPTQ.
+        group_size: GPTQ quantization group size.
+        desc_act: Whether AutoGPTQ should use activation-order quantization.
         revision: Optional source model revision. When omitted, the Hugging Face
             config commit hash is used when available.
-        trust_remote_code: Passed through to Hugging Face and AutoAWQ loaders.
+        trust_remote_code: Passed through to Hugging Face and AutoGPTQ loaders.
         local_files_only: Restrict Hugging Face resolution to local cache/files.
-        device_map: Device map passed to AutoAWQ.
-        zero_point: Whether to use zero-point quantization.
-        version: AutoAWQ kernel layout, such as ``"GEMM"``.
+        device_map: Device map passed to AutoGPTQ.
         max_calib_seq_len: Maximum sequence length for calibration samples.
+        calib_batch_size: Batch size passed to AutoGPTQ calibration.
+        use_safetensors: Save GPTQ weights with safetensors when supported.
 
     Raises:
-        ImportError: If the optional AWQ dependencies are not installed.
+        ImportError: If the optional GPTQ dependencies are not installed.
         ValueError: If quantization parameters or calibration texts are invalid.
     """
 
-    _validate_quant_params(w_bit=w_bit, group_size=group_size)
+    _validate_quant_params(bits=bits, group_size=group_size)
+    if calib_batch_size <= 0:
+        raise ValueError("calib_batch_size must be a positive integer")
+    if max_calib_seq_len <= 0:
+        raise ValueError("max_calib_seq_len must be a positive integer")
+
     calibration_texts = _normalize_calibration_texts(calib_texts)
 
-    AutoAWQForCausalLM = _require_autoawq()
+    AutoGPTQForCausalLM, BaseQuantizeConfig = _require_autogptq()
     AutoConfig, AutoTokenizer = _require_transformers()
 
     output_dir = Path(out_dir)
@@ -88,38 +92,36 @@ def quantize_awq(
         hf_kwargs["revision"] = revision
 
     config = AutoConfig.from_pretrained(model_name, **hf_kwargs)
-    tokenizer = get_tokenizer_with_loader(
-        model_name,
-        AutoTokenizer.from_pretrained,
-        **hf_kwargs,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(model_name, **hf_kwargs)
 
-    download_kwargs: dict[str, Any] = {"local_files_only": local_files_only}
-    if revision is not None:
-        download_kwargs["revision"] = revision
-
-    model = AutoAWQForCausalLM.from_pretrained(
-        model_name,
-        trust_remote_code=trust_remote_code,
-        safetensors=True,
-        device_map=device_map,
-        download_kwargs=download_kwargs,
-    )
-
-    autoawq_quant_config = {
-        "zero_point": zero_point,
-        "q_group_size": group_size,
-        "w_bit": w_bit,
-        "version": version,
+    autogptq_quant_config = {
+        "bits": bits,
+        "group_size": group_size,
+        "desc_act": desc_act,
     }
-    model.quantize(
-        tokenizer,
-        quant_config=autoawq_quant_config,
-        calib_data=calibration_texts,
-        max_calib_samples=len(calibration_texts),
+    quantize_config = BaseQuantizeConfig(**autogptq_quant_config)
+
+    model_kwargs: dict[str, Any] = {
+        "trust_remote_code": trust_remote_code,
+        "local_files_only": local_files_only,
+    }
+    if revision is not None:
+        model_kwargs["revision"] = revision
+    if device_map is not None:
+        model_kwargs["device_map"] = device_map
+
+    model = AutoGPTQForCausalLM.from_pretrained(
+        model_name,
+        quantize_config,
+        **model_kwargs,
+    )
+    calibration_examples = _build_calibration_examples(
+        tokenizer=tokenizer,
+        calibration_texts=calibration_texts,
         max_calib_seq_len=max_calib_seq_len,
     )
-    model.save_quantized(str(output_dir))
+    model.quantize(calibration_examples, batch_size=calib_batch_size)
+    model.save_quantized(str(output_dir), use_safetensors=use_safetensors)
     tokenizer.save_pretrained(output_dir)
 
     source_revision = _resolve_source_revision(
@@ -131,14 +133,16 @@ def quantize_awq(
         output_dir,
         source_model_id=model_name,
         source_revision=source_revision,
-        w_bit=w_bit,
+        bits=bits,
         group_size=group_size,
+        desc_act=desc_act,
         calibration_texts=calibration_texts,
-        autoawq_quant_config=autoawq_quant_config,
+        autogptq_quant_config=autogptq_quant_config,
         max_calib_seq_len=max_calib_seq_len,
+        calib_batch_size=calib_batch_size,
         config=config,
     )
-    return AwqQuantizationResult(
+    return GptqQuantizationResult(
         output_dir=output_dir,
         quant_config_path=quant_config_path,
         source_model_id=model_name,
@@ -152,14 +156,16 @@ def write_quant_config(
     *,
     source_model_id: str,
     source_revision: str,
-    w_bit: int,
+    bits: int,
     group_size: int,
+    desc_act: bool,
     calibration_texts: Iterable[str],
-    autoawq_quant_config: Mapping[str, Any],
+    autogptq_quant_config: Mapping[str, Any],
     max_calib_seq_len: int = 512,
+    calib_batch_size: int = 1,
     config: Any | None = None,
 ) -> Path:
-    """Write OpenMed AWQ recipe metadata into ``quant_config.json``."""
+    """Write OpenMed GPTQ recipe metadata into ``quant_config.json``."""
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -167,23 +173,22 @@ def write_quant_config(
     config_dict = _config_to_dict(config)
 
     quant_config = {
-        "format": AWQ_FORMAT,
-        "format_version": AWQ_FORMAT_VERSION,
-        "quantization_method": "awq",
+        "format": GPTQ_FORMAT,
+        "format_version": GPTQ_FORMAT_VERSION,
+        "quantization_method": "gptq",
         "source_model_id": source_model_id,
         "source_revision": source_revision,
         "task": str(config_dict.get("task") or "token-classification"),
         "family": str(config_dict.get("model_type") or "unknown"),
-        "w_bit": w_bit,
+        "bits": bits,
         "group_size": group_size,
-        "q_group_size": group_size,
-        "zero_point": bool(autoawq_quant_config.get("zero_point", True)),
-        "version": str(autoawq_quant_config.get("version", DEFAULT_AWQ_VERSION)),
+        "desc_act": desc_act,
         "calibration_sample_count": len(calibration_samples),
         "calibration_source": QUANTIZATION_CALIBRATION_SOURCE,
         "calibration_sha256": calibration_texts_sha256(calibration_samples),
         "max_calib_seq_len": max_calib_seq_len,
-        "autoawq_quant_config": dict(autoawq_quant_config),
+        "calib_batch_size": calib_batch_size,
+        "autogptq_quant_config": dict(autogptq_quant_config),
     }
 
     label_map = config_dict.get("id2label")
@@ -197,15 +202,15 @@ def write_quant_config(
     return quant_config_path
 
 
-def _require_autoawq() -> Any:
+def _require_autogptq() -> tuple[Any, Any]:
     try:
-        from awq import AutoAWQForCausalLM
+        from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
     except ImportError as exc:
         raise ImportError(
-            "AWQ quantization requires the optional `autoawq` dependency. "
-            "Install it with: pip install openmed[awq]"
+            "GPTQ quantization requires the optional `auto-gptq` dependency. "
+            "Install it with: pip install openmed[gptq]"
         ) from exc
-    return AutoAWQForCausalLM
+    return AutoGPTQForCausalLM, BaseQuantizeConfig
 
 
 def _require_transformers() -> tuple[Any, Any]:
@@ -213,10 +218,27 @@ def _require_transformers() -> tuple[Any, Any]:
         from transformers import AutoConfig, AutoTokenizer
     except ImportError as exc:
         raise ImportError(
-            "AWQ quantization requires Hugging Face Transformers. "
-            "Install with: pip install openmed[awq]"
+            "GPTQ quantization requires Hugging Face Transformers. "
+            "Install with: pip install openmed[gptq]"
         ) from exc
     return AutoConfig, AutoTokenizer
+
+
+def _build_calibration_examples(
+    *,
+    tokenizer: Any,
+    calibration_texts: Iterable[str],
+    max_calib_seq_len: int,
+) -> list[Any]:
+    return [
+        tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=max_calib_seq_len,
+        )
+        for text in calibration_texts
+    ]
 
 
 def _normalize_calibration_texts(calib_texts: Iterable[str] | None) -> list[str]:
@@ -231,9 +253,9 @@ def _normalize_calibration_texts(calib_texts: Iterable[str] | None) -> list[str]
     return normalized
 
 
-def _validate_quant_params(*, w_bit: int, group_size: int) -> None:
-    if w_bit != 4:
-        raise ValueError("OpenMed AWQ export currently supports w_bit=4")
+def _validate_quant_params(*, bits: int, group_size: int) -> None:
+    if bits != 4:
+        raise ValueError("OpenMed GPTQ export currently supports bits=4")
     if group_size <= 0:
         raise ValueError("group_size must be a positive integer")
 
@@ -273,10 +295,10 @@ def _config_to_dict(config: Any | None) -> dict[str, Any]:
 
 
 __all__ = [
-    "AWQ_FORMAT",
-    "AWQ_FORMAT_VERSION",
-    "AwqQuantizationResult",
+    "GPTQ_FORMAT",
+    "GPTQ_FORMAT_VERSION",
+    "GptqQuantizationResult",
     "QUANT_CONFIG_FILENAME",
-    "quantize_awq",
+    "quantize_gptq",
     "write_quant_config",
 ]
