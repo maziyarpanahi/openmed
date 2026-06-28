@@ -275,6 +275,27 @@ class ReliabilityBin:
         return self.to_dict()[key]
 
 
+@dataclass(frozen=True)
+class PairedSignificance:
+    """Observed paired delta and permutation-test p-value."""
+
+    observed_delta: float
+    p_value: float
+    n_resamples: int
+    method: str = "paired_permutation"
+
+    def to_dict(self) -> dict[str, float | int | str]:
+        return {
+            "observed_delta": self.observed_delta,
+            "p_value": self.p_value,
+            "n_resamples": self.n_resamples,
+            "method": self.method,
+        }
+
+    def __getitem__(self, key: str) -> float | int | str:
+        return self.to_dict()[key]
+
+
 def normalize_eval_span(
     span: Any,
     *,
@@ -941,6 +962,68 @@ def bootstrap_ci(
     )
 
 
+def paired_significance(
+    per_document_a: Sequence[Any],
+    per_document_b: Sequence[Any],
+    statistic: str | Callable[[Sequence[Any]], float],
+    n_resamples: int = 1000,
+    seed: int = 0,
+) -> PairedSignificance:
+    """Run a paired permutation test between two benchmark runs.
+
+    ``per_document_a`` and ``per_document_b`` must be aligned one-to-one by
+    benchmark document. The null hypothesis is that the two systems are
+    exchangeable within each aligned document pair, so each resample randomly
+    swaps the A/B labels per document before recomputing the scalar statistic.
+
+    The observed delta is ``statistic(A) - statistic(B)``. Built-in statistic
+    names are ``"leakage"``/``"leakage_rate"`` for leaked-character rates,
+    ``"character_recall"``/``"recall"`` for character recall, and
+    ``"f1"``/``"exact_span_f1"``/``"relaxed_span_f1"`` for span F1. Rate
+    inputs use per-document ``(numerator, denominator)`` pairs; F1 inputs use
+    ``(true_positives, false_positives, false_negatives)`` triples.
+    """
+    values_a = list(per_document_a)
+    values_b = list(per_document_b)
+    if len(values_a) != len(values_b):
+        raise ValueError("per_document_a and per_document_b must have the same length")
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be at least 1")
+
+    scorer = _paired_statistic(statistic)
+    observed_delta = float(scorer(values_a)) - float(scorer(values_b))
+    if not values_a:
+        return PairedSignificance(
+            observed_delta=observed_delta,
+            p_value=1.0,
+            n_resamples=n_resamples,
+        )
+
+    rng = random.Random(seed)
+    extreme = 0
+    observed_abs = abs(observed_delta)
+    tolerance = 1e-12
+    for _ in range(n_resamples):
+        sample_a: list[Any] = []
+        sample_b: list[Any] = []
+        for value_a, value_b in zip(values_a, values_b):
+            if rng.random() < 0.5:
+                sample_a.append(value_b)
+                sample_b.append(value_a)
+            else:
+                sample_a.append(value_a)
+                sample_b.append(value_b)
+        sample_delta = float(scorer(sample_a)) - float(scorer(sample_b))
+        if abs(sample_delta) + tolerance >= observed_abs:
+            extreme += 1
+
+    return PairedSignificance(
+        observed_delta=observed_delta,
+        p_value=(extreme + 1) / (n_resamples + 1),
+        n_resamples=n_resamples,
+    )
+
+
 def compute_confidence_intervals(
     per_document_spans: Sequence[tuple[Iterable[Any], Iterable[Any]]],
     *,
@@ -1048,6 +1131,26 @@ def _f1_over_docs(docs: Sequence[tuple[int, int, int]]) -> float:
         true_positives + false_positives,
         true_positives + false_negatives,
     ).f1
+
+
+def _paired_statistic(
+    statistic: str | Callable[[Sequence[Any]], float],
+) -> Callable[[Sequence[Any]], float]:
+    if callable(statistic):
+        return statistic
+    if not isinstance(statistic, str):
+        raise TypeError("statistic must be a supported name or callable")
+
+    normalized = statistic.lower().replace("-", "_").replace(" ", "_")
+    if normalized in {"leakage", "leakage_rate"}:
+        return lambda docs: _ratio_over_docs(docs, zero_denominator=0.0)
+    if normalized in {"character_recall", "char_recall", "recall"}:
+        return lambda docs: _ratio_over_docs(docs, zero_denominator=1.0)
+    if normalized in {"f1", "exact_span_f1", "relaxed_span_f1", "exact_f1"}:
+        return _f1_over_docs
+    raise ValueError(
+        "statistic must be one of leakage, character_recall, f1, or a callable"
+    )
 
 
 def _read_value(data: Mapping[str, Any], key: str) -> Any:
@@ -1269,6 +1372,7 @@ __all__ = [
     "ResourceMetrics",
     "BootstrapCI",
     "ReliabilityBin",
+    "PairedSignificance",
     "normalize_eval_span",
     "normalize_eval_spans",
     "compute_leakage_rate",
@@ -1286,5 +1390,6 @@ __all__ = [
     "expected_calibration_error",
     "compute_metrics_bundle",
     "bootstrap_ci",
+    "paired_significance",
     "compute_confidence_intervals",
 ]
