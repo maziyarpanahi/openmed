@@ -86,6 +86,10 @@ langchain = [
   "langchain-core>=0.2,<2",
 ]
 
+kafka = [
+  "confluent-kafka>=2.3",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",

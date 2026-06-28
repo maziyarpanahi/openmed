@@ -9,6 +9,13 @@ from .batch import (
     BatchResult,
     process_batch,
 )
+from .kafka_connector import (
+    ConsumerProtocol,
+    KafkaClientPair,
+    ProducerProtocol,
+    create_confluent_kafka_clients,
+    deidentify_stream,
+)
 from .outputs import OutputFormatter, format_predictions
 from .text import TextProcessor, postprocess_text, preprocess_text
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
@@ -27,5 +34,10 @@ __all__ = [
     "BatchProgress",
     "BatchResult",
     "process_batch",
+    "ConsumerProtocol",
+    "ProducerProtocol",
+    "KafkaClientPair",
+    "create_confluent_kafka_clients",
+    "deidentify_stream",
     "sentences",
 ]
