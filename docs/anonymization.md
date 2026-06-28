@@ -82,20 +82,45 @@ original anywhere.
 
 ```python
 result = deidentify(
-    "DOB 01/15/2020",
+    "Admit 01/15/2020, follow-up 01/25/2020",
     method="shift_dates",
     date_shift_days=30,
 )
 print(result.deidentified_text)
-# DOB [date]
+# Admit 02/14/2020, follow-up 02/24/2020
 ```
 
 The intent is for every date in a document to shift by the same offset, so
-durations between dates (e.g. "3 days after admission") stay correct. With
-the default English model, however, dates currently get masked instead of
-shifted — the model's raw label for dates is lowercase `date`, but the
-redaction code only shifts entities labeled exactly `DATE`. Tracked in
-#408.
+durations between dates (e.g. "3 days after admission") stay correct.
+`date_shift_days=30` is a fixed offset when no patient key is supplied.
+
+For longitudinal research, pass a stable `patient_key` so every document for
+that patient receives the same HMAC-derived offset across sessions:
+
+```python
+patient_token = load_patient_key_from_vault()
+hmac_key_material = load_date_shift_hmac_key()
+
+shared_kwargs = {
+    "method": "shift_dates",
+    "patient_key": patient_token,
+    "date_shift_max_days": 365,
+    "date_shift_secret": hmac_key_material,
+}
+
+first = deidentify("Visit 01/15/2020", **shared_kwargs)
+second = deidentify("Visit 03/15/2020", **shared_kwargs)
+```
+
+Equal patient keys and the same secret yield identical offsets, preserving
+intervals across documents. Different patient keys generally produce different
+offsets within `date_shift_max_days`. The raw patient key is used only as HMAC
+input and is not returned in shifted text, mappings, logs, or audit artifacts.
+Patient-keyed offsets require caller-supplied `date_shift_secret`; do not use
+PHI as that key material.
+If `patient_key` is supplied with the older `date_shift_days` option, that
+value is treated as the maximum absolute offset bound; prefer
+`date_shift_max_days` for new code.
 
 ### Reversing a de-identification: `reidentify()`
 
