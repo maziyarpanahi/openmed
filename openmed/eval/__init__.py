@@ -79,6 +79,7 @@ from openmed.eval.leakage_heatmap import (
 from openmed.eval.metrics import (
     DEVICE_TIERS,
     EvalSpan,
+    ReliabilityBin,
     compute_character_recall,
     compute_clinical_utility_loss,
     compute_date_shift_consistency,
@@ -91,6 +92,8 @@ from openmed.eval.metrics import (
     compute_relaxed_span_f1,
     compute_resource_metrics,
     compute_surrogate_consistency,
+    expected_calibration_error,
+    reliability_bins,
 )
 from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
@@ -162,6 +165,7 @@ __all__ = [
     "QUARANTINED",
     "QuantRecallDeltaResult",
     "ReidAttackResult",
+    "ReliabilityBin",
     "RELEASABLE",
     "Perturbation",
     "ReleaseGate",
@@ -200,6 +204,7 @@ __all__ = [
     "default_suite_calibration_samples",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
+    "expected_calibration_error",
     "error_report",
     "fairness_report",
     "fit_calibration_thresholds",
@@ -217,6 +222,7 @@ __all__ = [
     "perturb_fixture",
     "render_reid_leaderboard",
     "render_dataset_card_markdown",
+    "reliability_bins",
     "robustness_report",
     "run_benchmark",
     "run_reid_attack",
