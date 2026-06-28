@@ -77,6 +77,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
     "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    "tr": ("tr_TR", "ssn"),  # TCKN
     "id": ("id_ID", "indonesian_nik"),  # NIK
     "pl": ("pl_PL", "pesel"),  # PESEL
     "ko": ("ko_KR", "korean_rrn"),  # RRN

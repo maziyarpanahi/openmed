@@ -165,6 +165,7 @@ _LOCALE_ID_METHODS = {
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "ssn",
+    "tr_TR": "ssn",
     "id_ID": "indonesian_nik",
     "pl_PL": "pesel",
     "ko_KR": "korean_rrn",
