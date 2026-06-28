@@ -217,6 +217,9 @@ p = BatchProcessor(
 )
 p.process_texts([...])
 ```
+# Output:
+# Processed 3 documents | Entities found: 7
+# Doc 0: [{'entity': 'DISEASE', 'text': 'leukemia', ...}]
 
 </td>
 </tr>
@@ -233,6 +236,9 @@ result = analyze_text(
     config=OpenMedConfig(device="cpu"),
 )
 ```
+# Output:
+# DISEASE      chronic myeloid leukemia     0.98
+# DISEASE      Type 2 diabetes              0.96
 
 ---
 
@@ -266,6 +272,16 @@ deidentify(text, method="replace")  # Faker-backed, locale-aware, format-preserv
 deidentify(text, method="hash")     # Cryptographic hashing
 deidentify(text, method="shift_dates", date_shift_days=180)
 ```
+# Output (extract_pii):
+# [{'entity': 'NAME',  'text': 'John Doe',    'start': 9,  'end': 17, 'score': 0.99}]
+# [{'entity': 'DATE',  'text': '01/15/1970',  'start': 24, 'end': 34, 'score': 0.98}]
+# [{'entity': 'SSN',   'text': '123-45-6789', 'start': 41, 'end': 52, 'score': 0.99}]
+
+# Output (deidentify with mask):
+# "Patient: [NAME], DOB: [DATE], SSN: [SSN]"
+
+# Output (deidentify with replace):
+# "Patient: Emily Chen, DOB: 03/22/1985, SSN: 456-78-9012"
 
 - **Smart entity merging** keeps `01/15/1970` whole instead of fragmenting it.
 - **Faker-backed obfuscation** with custom clinical-ID providers (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
@@ -302,6 +318,8 @@ extract_pii(text, model_name="openai/privacy-filter")              # PyTorch bas
 extract_pii(text, model_name="OpenMed/privacy-filter-nemotron")    # same code, different weights
 extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silicon (MLX)
 ```
+# Output:
+# [('NAME', 'Sarah Connor'), ('DATE', '03/15/1985'), ('ID', '4471882')]
 
 On non-Apple-Silicon hosts, MLX model names are automatically substituted with the matching PyTorch checkpoint (with a one-time warning) — ship one model name, run anywhere. See [Privacy Filter architecture & backend routing](docs/anonymization.md#privacy-filter-family).
 
@@ -336,6 +354,13 @@ turkish    = extract_pii("Hasta Ayşe Yılmaz, telefon +90 532 123 45 67, TCKN 1
 for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
     print([(e.label, e.text) for e in r.entities])
 ```
+# Output:
+# [('NAME', 'Pedro Almeida'), ('ID', '123.456.789-09'), ('PHONE', '+351 912 345 678')]
+# [('NAME', 'Eva de Vries'), ('ID', '123456782'), ('PHONE', '+31 6 12345678')]
+# [('NAME', 'अनीता शर्मा'), ('PHONE', '+91 9876543210'), ('ADDRESS', 'नई दिल्ली 110001')]
+# [('NAME', 'ليلى حسن'), ('PHONE', '+20 10 1234 5678'), ('ID', '29801011234567')]
+# [('NAME', '佐藤 花子'), ('PHONE', '+81 90 1234 5678'), ('ID', '1234 5678 9012')]
+# [('NAME', 'Ayşe Yılmaz'), ('PHONE', '+90 532 123 45 67'), ('ID', '10000000146')]
 
 </details>
 
