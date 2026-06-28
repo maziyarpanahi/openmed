@@ -3276,6 +3276,7 @@ mlx = [
 ]
 multimodal = [
     { name = "easyocr" },
+    { name = "markdown-it-py" },
     { name = "pdfplumber" },
     { name = "piexif" },
     { name = "pikepdf" },
@@ -3333,6 +3334,7 @@ requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.30" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "langchain-core", marker = "extra == 'langchain'", specifier = ">=0.2,<2" },
+    { name = "markdown-it-py", marker = "extra == 'multimodal'", specifier = ">=3.0,<5" },
     { name = "mcp", marker = "extra == 'mcp'", specifier = ">=1.9" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6" },
     { name = "mkdocs-git-revision-date-localized-plugin", marker = "extra == 'docs'", specifier = ">=1.2.6" },

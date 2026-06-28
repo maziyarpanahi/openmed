@@ -24,7 +24,9 @@ HEAVY_MODULES = (
     "piexif",
     "pikepdf",
     "pytesseract",
+    "easyocr",
     "paddleocr",
+    "markdown_it",
 )
 
 
