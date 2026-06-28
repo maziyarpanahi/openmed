@@ -31,6 +31,7 @@ from openmed.mlx.artifact import (
     read_manifest,
     resolve_tokenizer_reference,
 )
+from openmed.processing.advanced_ner import stream_token_classifier
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,11 @@ class MLXTokenClassificationPipeline:
             return [self._predict_single(item) for item in text]
 
         return self._predict_single(text)
+
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental token-classification events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
 
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
         """Run token classification for a single input string."""
@@ -417,6 +423,11 @@ class PrivacyFilterMLXPipeline:
         if isinstance(text, (list, tuple)):
             return self._predict_batch(list(text))
         return self._predict_single(text)
+
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental privacy-filter events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
 
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
         token_ids = [

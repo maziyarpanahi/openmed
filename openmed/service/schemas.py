@@ -27,6 +27,10 @@ except ImportError:  # pragma: no cover
 
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+_DEFAULT_STREAM_CHUNK_SIZE = 1024
+_DEFAULT_STREAM_WINDOW_CHARS = 4096
+_DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
+_DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 KeepAliveValue = Union[int, float, str]
 
 # Languages accepted by the PII endpoints. This MUST mirror
@@ -193,6 +197,21 @@ if PYDANTIC_V2:
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
 
+    class PIIExtractStreamRequest(PIIExtractRequest):
+        """Request schema for /pii/extract/stream."""
+
+        chunk_size: int = Field(default=_DEFAULT_STREAM_CHUNK_SIZE, ge=1, le=32768)
+        window_chars: int = Field(default=_DEFAULT_STREAM_WINDOW_CHARS, ge=64)
+        tokenizer_context_chars: int = Field(
+            default=_DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS,
+            ge=0,
+        )
+        max_entity_chars: int = Field(
+            default=_DEFAULT_STREAM_MAX_ENTITY_CHARS,
+            ge=1,
+        )
+        include_text: bool = True
+
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
 
@@ -328,6 +347,21 @@ else:
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
+
+    class PIIExtractStreamRequest(PIIExtractRequest):
+        """Request schema for /pii/extract/stream."""
+
+        chunk_size: int = Field(default=_DEFAULT_STREAM_CHUNK_SIZE, ge=1, le=32768)
+        window_chars: int = Field(default=_DEFAULT_STREAM_WINDOW_CHARS, ge=64)
+        tokenizer_context_chars: int = Field(
+            default=_DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS,
+            ge=0,
+        )
+        max_entity_chars: int = Field(
+            default=_DEFAULT_STREAM_MAX_ENTITY_CHARS,
+            ge=1,
+        )
+        include_text: bool = True
 
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
