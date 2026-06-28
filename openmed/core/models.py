@@ -33,6 +33,7 @@ except (ImportError, OSError) as e:
 if TYPE_CHECKING:
     from .config import OpenMedConfig
 
+from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
 from .model_registry import (
     OPENMED_MODELS,
@@ -158,8 +159,10 @@ class ModelLoader:
                     )
 
             # Load tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(
+            tokenizer = get_tokenizer_with_loader(
                 full_model_name,
+                AutoTokenizer.from_pretrained,
+                refresh_cache=force_reload,
                 cache_dir=self.config.cache_dir,
                 **pretrained_kwargs,
             )
@@ -393,8 +396,9 @@ class ModelLoader:
 
         if tokenizer is None:
             try:
-                tokenizer = AutoTokenizer.from_pretrained(
+                tokenizer = get_tokenizer_with_loader(
                     full_model_name,
+                    AutoTokenizer.from_pretrained,
                     cache_dir=self.config.cache_dir,
                     use_fast=True,
                     **pretrained_kwargs,

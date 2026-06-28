@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
@@ -31,6 +32,29 @@ def test_auto_selects_flash_attention_2_when_available(monkeypatch) -> None:
     _set_availability(monkeypatch, flash=True, sdpa=True)
 
     assert select_attn_implementation("auto") == "flash_attention_2"
+
+
+def test_flash_attention_2_requires_package_and_cuda(monkeypatch) -> None:
+    monkeypatch.setattr(
+        attention.importlib.util,
+        "find_spec",
+        lambda name: object() if name == "flash_attn" else None,
+    )
+    monkeypatch.setattr(
+        attention,
+        "_import_torch",
+        lambda: SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: False)),
+    )
+
+    assert attention._flash_attention_2_is_available() is False
+
+    monkeypatch.setattr(
+        attention,
+        "_import_torch",
+        lambda: SimpleNamespace(cuda=SimpleNamespace(is_available=lambda: True)),
+    )
+
+    assert attention._flash_attention_2_is_available() is True
 
 
 def test_auto_selects_sdpa_when_flash_attention_2_is_unavailable(monkeypatch) -> None:
