@@ -29,6 +29,8 @@ ALLOWED_LICENSE_MARKERS = (
     "BSD-2-CLAUSE",
     "BSD-3-CLAUSE",
     "ISC",
+    "MPL-2.0",
+    "MOZILLA PUBLIC LICENSE 2.0",
     "HPND",
     "HISTORICAL PERMISSION NOTICE AND DISCLAIMER",
 )
@@ -77,7 +79,9 @@ REVIEWED_LICENSES = {
     "onnxscript": "MIT",
     "paddleocr": "Apache-2.0",
     "pdfplumber": "MIT",
+    "piexif": "MIT",
     "pillow": "HPND",
+    "pikepdf": "MPL-2.0",
     "presidio-analyzer": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
