@@ -17,6 +17,7 @@ from openmed.mlx.models import (
     normalize_model_type,
     resolve_model_type,
 )
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -692,7 +693,11 @@ def _hf_token_classification_runner(
                     "Install with: pip install transformers"
                 ) from exc
 
-            tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
+            tokenizer = get_tokenizer_with_loader(
+                model_id,
+                AutoTokenizer.from_pretrained,
+                cache_dir=cache_dir,
+            )
             model = AutoModelForTokenClassification.from_pretrained(
                 model_id,
                 cache_dir=cache_dir,
@@ -884,7 +889,11 @@ def _finalize_artifact(
     try:
         from transformers import AutoTokenizer
 
-        tokenizer = AutoTokenizer.from_pretrained(source_model_id, cache_dir=cache_dir)
+        tokenizer = get_tokenizer_with_loader(
+            source_model_id,
+            AutoTokenizer.from_pretrained,
+            cache_dir=cache_dir,
+        )
         tokenizer.save_pretrained(output_dir)
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
