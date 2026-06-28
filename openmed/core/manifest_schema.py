@@ -49,6 +49,11 @@ ALLOWED_FORMATS = (
     "mlx-8bit",
     "mlx-4bit",
     "onnx",
+    "webgpu",
+    "int8",
+    "int4",
+    "awq",
+    "gptq",
     "gguf",
     "unknown",
 )
