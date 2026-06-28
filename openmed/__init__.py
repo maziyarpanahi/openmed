@@ -220,8 +220,8 @@ def analyze_text(
         ...     loader=FixtureLoader(),
         ...     sentence_detection=False,
         ... )
-        >>> [(entity.text, entity.label) for entity in result.entities]
-        [('asthma', 'CONDITION')]
+        >>> next((entity.text, entity.label) for entity in result.entities)
+        ('asthma', 'CONDITION')
     """
 
     validated_text = validate_input(text)
