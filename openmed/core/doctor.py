@@ -127,16 +127,16 @@ def _check_optional_dependencies(checks: list[dict[str, Any]]) -> None:
 
 def _check_hf_token(checks: list[dict[str, Any]]) -> None:
     token_present = bool(os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACE_HUB_TOKEN"))
-    checks.append(
-        _check(
-            "hf_token",
-            "PASS" if token_present else "WARN",
-            f"present={token_present}",
-            None
-            if token_present
-            else "Set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable",
-        )
+    check = _check(
+        "hf_token",
+        "PASS" if token_present else "WARN",
+        f"present={token_present}",
+        None
+        if token_present
+        else "Set HF_TOKEN or HUGGINGFACE_HUB_TOKEN environment variable",
     )
+    check["present"] = token_present
+    checks.append(check)
 
 
 def _check_offline_mode(checks: list[dict[str, Any]]) -> None:
@@ -150,6 +150,13 @@ def _check_manifest(checks: list[dict[str, Any]]) -> None:
                 "manifest_exists",
                 "WARN",
                 f"{MANIFEST_PATH.name} not found",
+            )
+        )
+        checks.append(
+            _check(
+                "manifest_rows",
+                "WARN",
+                "not checked because manifest is missing",
             )
         )
         return
