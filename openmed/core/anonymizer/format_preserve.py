@@ -47,7 +47,7 @@ def preserve_phone_format(original: str, *, rng: Optional[random.Random] = None)
     out = []
     for ch in original:
         if ch.isdigit():
-            out.append(str(rng.randint(0, 9)))
+            out.append(_different_digit(ch, rng=rng))
         else:
             out.append(ch)
     return "".join(out)
@@ -135,16 +135,36 @@ def preserve_id_pattern(original: str, *, rng: Optional[random.Random] = None) -
     out = []
     for ch in original:
         if ch.isdigit():
-            out.append(str(rng.randint(0, 9)))
+            out.append(_different_digit(ch, rng=rng))
         elif ch.isalpha():
-            out.append(
-                rng.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+            alphabet = (
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                 if ch.isupper()
-                else rng.choice("abcdefghijklmnopqrstuvwxyz")
+                else "abcdefghijklmnopqrstuvwxyz"
             )
+            out.append(_different_choice(ch, alphabet, rng=rng))
         else:
             out.append(ch)
     return "".join(out)
+
+
+def _different_digit(original: str, *, rng: random.Random) -> str:
+    candidate = str(rng.randint(0, 8))
+    if candidate >= original:
+        return str(int(candidate) + 1)
+    return candidate
+
+
+def _different_choice(
+    original: str,
+    alphabet: str,
+    *,
+    rng: random.Random,
+) -> str:
+    choices = alphabet.replace(original, "")
+    if not choices:
+        return original
+    return rng.choice(choices)
 
 
 __all__ = [

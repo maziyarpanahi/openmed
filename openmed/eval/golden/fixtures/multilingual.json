@@ -246,13 +246,25 @@
     {
       "gold_spans": [
         {
-          "end": 44,
+          "end": 32,
+          "label": "PERSON",
+          "start": 24,
+          "text": "كريم حسن"
+        },
+        {
+          "end": 54,
+          "label": "DATE",
+          "start": 44,
+          "text": "14/03/2026"
+        },
+        {
+          "end": 83,
           "label": "ID_NUM",
           "metadata": {
             "checksum_status": "not_validated",
             "identifier_type": "egyptian_national_id"
           },
-          "start": 30,
+          "start": 69,
           "text": "29801011234567"
         }
       ],
@@ -262,24 +274,36 @@
         "category": "multilingual",
         "expected_output": {
           "method": "mask",
-          "text": "ملاحظة اصطناعية: الرقم القومي [ID_NUM] لمريض اختبار."
+          "text": "ملاحظة اصطناعية: المريض [PERSON] حضر بتاريخ [DATE] والرقم القومي [ID_NUM]."
         },
         "identifier_type": "egyptian_national_id",
         "locale": "ar_EG",
         "synthetic": true
       },
-      "text": "ملاحظة اصطناعية: الرقم القومي 29801011234567 لمريض اختبار."
+      "text": "ملاحظة اصطناعية: المريض كريم حسن حضر بتاريخ 14/03/2026 والرقم القومي 29801011234567."
     },
     {
       "gold_spans": [
         {
-          "end": 27,
+          "end": 16,
+          "label": "PERSON",
+          "start": 12,
+          "text": "山田太郎"
+        },
+        {
+          "end": 29,
+          "label": "DATE",
+          "start": 19,
+          "text": "2026年3月14日"
+        },
+        {
+          "end": 56,
           "label": "ID_NUM",
           "metadata": {
             "checksum_status": "not_validated",
             "identifier_type": "my_number"
           },
-          "start": 13,
+          "start": 42,
           "text": "1234 5678 9012"
         }
       ],
@@ -289,24 +313,36 @@
         "category": "multilingual",
         "expected_output": {
           "method": "mask",
-          "text": "合成メモ: マイナンバー [ID_NUM] はテスト患者用です。"
+          "text": "合成メモ: テスト患者 [PERSON] は [DATE] に受診し、マイナンバー [ID_NUM] を提示しました。"
         },
         "identifier_type": "my_number",
         "locale": "ja_JP",
         "synthetic": true
       },
-      "text": "合成メモ: マイナンバー 1234 5678 9012 はテスト患者用です。"
+      "text": "合成メモ: テスト患者 山田太郎 は 2026年3月14日 に受診し、マイナンバー 1234 5678 9012 を提示しました。"
     },
     {
       "gold_spans": [
         {
-          "end": 30,
+          "end": 25,
+          "label": "PERSON",
+          "start": 14,
+          "text": "Ayşe Yılmaz"
+        },
+        {
+          "end": 36,
+          "label": "DATE",
+          "start": 26,
+          "text": "14.03.2026"
+        },
+        {
+          "end": 70,
           "label": "ID_NUM",
           "metadata": {
             "checksum_status": "valid",
             "identifier_type": "tckn"
           },
-          "start": 19,
+          "start": 59,
           "text": "13198785260"
         }
       ],
@@ -316,13 +352,40 @@
         "category": "multilingual",
         "expected_output": {
           "method": "mask",
-          "text": "Sentetik not: TCKN [ID_NUM] test hastası içindir."
+          "text": "Sentetik not: [PERSON] [DATE] tarihinde geldi; TCKN [ID_NUM] test hastası içindir."
         },
         "identifier_type": "tckn",
         "locale": "tr_TR",
         "synthetic": true
       },
-      "text": "Sentetik not: TCKN 13198785260 test hastası içindir."
+      "text": "Sentetik not: Ayşe Yılmaz 14.03.2026 tarihinde geldi; TCKN 13198785260 test hastası içindir."
+    },
+    {
+      "gold_spans": [
+        {
+          "end": 38,
+          "label": "ID_NUM",
+          "metadata": {
+            "checksum_status": "valid",
+            "identifier_type": "nik"
+          },
+          "start": 22,
+          "text": "3174055708850001"
+        }
+      ],
+      "id": "golden-multilingual-id-nik",
+      "language": "id",
+      "metadata": {
+        "category": "multilingual",
+        "expected_output": {
+          "method": "mask",
+          "text": "Catatan sintetis: NIK [ID_NUM] untuk pasien uji."
+        },
+        "identifier_type": "nik",
+        "locale": "id_ID",
+        "synthetic": true
+      },
+      "text": "Catatan sintetis: NIK 3174055708850001 untuk pasien uji."
     },
     {
       "gold_spans": [

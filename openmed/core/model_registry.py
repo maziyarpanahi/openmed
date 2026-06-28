@@ -97,11 +97,13 @@ _LANGUAGE_NAME_TO_CODE = {
     "german": "de",
     "hebrew": "he",
     "hindi": "hi",
+    "indonesian": "id",
     "italian": "it",
     "japanese": "ja",
     "portuguese": "pt",
     "spanish": "es",
     "telugu": "te",
+    "thai": "th",
     "turkish": "tr",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
@@ -530,9 +532,25 @@ def _pii_compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     return aliases
 
 
+def _multilingual_pii_aliases(row: Dict[str, Any]) -> List[str]:
+    if _category_from_row(row) != "Privacy":
+        return []
+    repo_id = row["repo_id"].lower()
+    languages = row.get("languages") or []
+    if "privacy-filter" not in repo_id or "multilingual" not in repo_id:
+        return []
+    if len(languages) <= 1:
+        return []
+
+    base_key = _pii_registry_key(row)
+    suffix = base_key.removeprefix("pii_")
+    return [f"pii_{lang}_{suffix}" for lang in languages if lang != "en"]
+
+
 def _compatibility_aliases(row: Dict[str, Any]) -> List[str]:
     aliases = list(_LEGACY_MODEL_ALIASES.get(row["repo_id"], []))
     aliases.extend(_pii_compatibility_aliases(row))
+    aliases.extend(_multilingual_pii_aliases(row))
     return aliases
 
 
@@ -792,11 +810,29 @@ def get_pii_models_by_language(lang: str) -> Dict[str, ModelInfo]:
         }
 
     prefix = f"pii_{lang}_"
-    return {
+    language_models = {
         key: info
         for key, info in OPENMED_MODELS.items()
         if key.startswith(prefix)
         and info.category == "Privacy"
+        and lang in (info.languages or [])
+    }
+    if language_models:
+        return language_models
+
+    from .pii_i18n import DEFAULT_PII_MODELS
+
+    default_model_id = DEFAULT_PII_MODELS.get(lang)
+    if not default_model_id:
+        return {}
+    # Internal fallback: DEFAULT_PII_MODELS is the validated source of truth,
+    # so language-pack callers can reuse multilingual privacy filters safely.
+    return {
+        key: info
+        for key, info in OPENMED_MODELS.items()
+        if key.startswith("pii_")
+        and info.category == "Privacy"
+        and info.model_id == default_model_id
         and lang in (info.languages or [])
     }
 
