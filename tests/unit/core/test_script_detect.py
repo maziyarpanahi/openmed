@@ -1,4 +1,4 @@
-from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
 from openmed.core.script_detect import (
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
@@ -72,4 +72,4 @@ def test_script_language_hints_cover_detectable_scripts():
     for script in expected_scripts:
         hints = candidate_languages_for_script(script)
         assert hints
-        assert set(hints) <= SUPPORTED_LANGUAGES
+        assert set(hints) <= SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES

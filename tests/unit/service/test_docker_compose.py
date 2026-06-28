@@ -45,3 +45,7 @@ def test_docker_compose_persists_hf_and_openmed_model_cache():
         environment["OPENMED_CACHE_DIR"]
         == "${OPENMED_CACHE_DIR:-/root/.cache/huggingface/openmed}"
     )
+    assert (
+        environment["OPENMED_SERVICE_MAX_RESIDENT_MODELS"]
+        == "${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}"
+    )

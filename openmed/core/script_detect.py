@@ -32,7 +32,7 @@ SCRIPT_LANGUAGE_HINTS: dict[str, tuple[str, ...]] = {
     "Arabic": ("ar",),
     "Han": ("ja",),
     "Hiragana/Katakana": ("ja",),
-    "Hangul": ("en",),
+    "Hangul": ("ko",),
     "Cyrillic": ("en",),
     "Devanagari": ("hi",),
     "Telugu": ("te",),
