@@ -28,13 +28,8 @@ POLICY_COMPLIANCE = "policy_compliance"
 POLICY_COMPLIANCE_FIXTURE_PATH = (
     Path(__file__).parents[1] / "golden" / "fixtures" / "policy_compliance.jsonl"
 )
-BUNDLED_DEIDENTIFICATION_POLICIES: tuple[str, ...] = (
-    PolicyName.HIPAA_SAFE_HARBOR.value,
-    PolicyName.HIPAA_EXPERT_REVIEW_ASSIST.value,
-    PolicyName.GDPR_PSEUDONYMIZATION.value,
-    PolicyName.RESEARCH_LIMITED_DATASET.value,
-    PolicyName.STRICT_NO_LEAK.value,
-    PolicyName.CLINICAL_MINIMAL_REDACTION.value,
+BUNDLED_DEIDENTIFICATION_POLICIES: tuple[str, ...] = tuple(
+    policy.value for policy in PolicyName
 )
 EXPECTATION_SOURCE = "openmed.core.policy.PolicyProfile.action_for"
 
