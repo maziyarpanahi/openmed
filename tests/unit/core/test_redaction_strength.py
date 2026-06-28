@@ -103,10 +103,19 @@ def test_derived_profile_drives_pipeline_and_preserves_source_profile():
 def test_compare_action_maps_orders_synthetic_inputs():
     baseline = {"direct": "mask", "quasi": "mask"}
     weaker = {"direct": "mask", "quasi": "keep"}
+    format_preserving = {"direct": "mask", "quasi": "format_preserve"}
     stronger = {"direct": "redact", "quasi": "mask"}
     mixed = {"direct": "redact", "quasi": "keep"}
 
+    assert action_meets_floor("format_preserve", "keep")
+    assert action_strength("format_preserve") < action_strength("replace")
     assert compare_action_maps(weaker, baseline) == ActionMapComparison.WEAKER
+    assert (
+        compare_action_maps(format_preserving, baseline) == ActionMapComparison.WEAKER
+    )
+    assert (
+        compare_action_maps(format_preserving, weaker) == ActionMapComparison.STRONGER
+    )
     assert compare_action_maps(stronger, baseline) == ActionMapComparison.STRONGER
     assert compare_action_maps(mixed, baseline) == ActionMapComparison.INCOMPARABLE
     assert compare_action_maps(baseline, dict(baseline)) == ActionMapComparison.EQUAL
