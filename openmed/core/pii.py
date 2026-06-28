@@ -12,21 +12,12 @@ Key Features:
     - Integration with OpenMed's existing NER infrastructure
 
 Example:
-    >>> from openmed import extract_pii, deidentify
-    >>>
-    >>> # Extract PII entities
-    >>> result = extract_pii("Dr. Smith called John Doe at 555-1234")
-    >>> len(result.entities) > 0
-    True
-
-    >>> # De-identify with masking
-    >>> deid = deidentify(
-    ...     "Patient John Doe (DOB: 01/15/1970) at 555-123-4567",
-    ...     method="mask",
-    ...     keep_year=True
+    >>> from openmed import reidentify
+    >>> reidentify(
+    ...     "Patient [NAME] called [PHONE]",
+    ...     {"[NAME]": "Casey Example", "[PHONE]": "555-0100"},
     ... )
-    >>> print(deid.deidentified_text)
-    Patient [NAME] (DOB: [DATE]/1970) at [PHONE]
+    'Patient Casey Example called 555-0100'
 """
 
 from __future__ import annotations
@@ -50,6 +41,7 @@ if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
     from .models import ModelLoader
+    from .surrogate_vault import SurrogateVault
 
 from .result_cache import (
     get_result_cache,
@@ -702,12 +694,31 @@ def extract_pii(
         PredictionResult with detected PII entities
 
     Example:
-        >>> result = extract_pii("DOB: 01/15/1970, SSN: 123-45-6789")
-        >>> len(result.entities) > 0
-        True
-
-        >>> # French PII detection
-        >>> result = extract_pii("Né le 15/01/1970", lang="fr")
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import extract_pii
+        >>> from openmed.processing.outputs import EntityPrediction, PredictionResult
+        >>> fake_result = PredictionResult(
+        ...     text="Patient Casey Example called.",
+        ...     entities=[
+        ...         EntityPrediction(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             confidence=0.98,
+        ...             start=8,
+        ...             end=21,
+        ...         )
+        ...     ],
+        ...     model_name="fixture-pii-model",
+        ...     timestamp="2026-01-01T00:00:00",
+        ... )
+        >>> with patch("openmed.analyze_text", return_value=fake_result):
+        ...     result = extract_pii(
+        ...         "Patient Casey Example called.",
+        ...         model_name="fixture-pii-model",
+        ...         use_smart_merging=False,
+        ...     )
+        >>> [(entity.text, entity.label) for entity in result.entities]
+        [('Casey Example', 'NAME')]
     """
     if cache_results:
         params = dict(locals())
@@ -1162,6 +1173,7 @@ def _build_deidentification_result(
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    surrogate_vault: Optional["SurrogateVault"] = None,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
     normalize_accents: Optional[bool] = None,
@@ -1274,6 +1286,7 @@ def _build_deidentification_result(
             ),
             lang=lang,
             anonymizer=anonymizer,
+            surrogate_vault=surrogate_vault,
         )
         if entity_method == "format_preserve" and redacted == _mask_placeholder(entity):
             actual_entity_method = "mask"
@@ -1407,6 +1420,7 @@ def _deidentify_batch(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -1452,6 +1466,7 @@ def _deidentify_batch(
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             policy="hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
@@ -1476,6 +1491,7 @@ def deidentify(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
@@ -1528,6 +1544,10 @@ def deidentify(
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"`` and ``method="format_preserve"``. When
             ``None``, derived from ``lang``.
+        surrogate_vault: Optional cross-document surrogate vault. When provided
+            with ``method="replace"``, OpenMed stores only HMAC source hashes
+            and reuses the same surrogate for the same label/language/source
+            identifier across calls.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path
@@ -1543,17 +1563,44 @@ def deidentify(
         AuditReport when ``audit=True``.
 
     Example:
-        >>> result = deidentify(
-        ...     "Patient John Doe (DOB: 01/15/1970) called from 555-1234",
-        ...     method="mask",
-        ...     keep_year=True
+        >>> from datetime import datetime
+        >>> from types import SimpleNamespace
+        >>> from unittest.mock import patch
+        >>> from openmed.core.pii import (
+        ...     DeidentificationResult,
+        ...     PIIEntity,
+        ...     deidentify,
         ... )
-        >>> print(result.deidentified_text)
-        Patient [NAME] (DOB: [DATE]/1970) called from [PHONE]
-
-        >>> result = deidentify(text, method="replace", lang="de")
-        >>> result = deidentify(text, method="replace", lang="pt",
-        ...                    locale="pt_BR", consistent=True, seed=42)
+        >>> fixture = DeidentificationResult(
+        ...     original_text="Patient Casey Example",
+        ...     deidentified_text="Patient [NAME]",
+        ...     pii_entities=[
+        ...         PIIEntity(
+        ...             text="Casey Example",
+        ...             label="NAME",
+        ...             start=8,
+        ...             end=21,
+        ...             confidence=0.98,
+        ...             redacted_text="[NAME]",
+        ...         )
+        ...     ],
+        ...     method="mask",
+        ...     timestamp=datetime(2026, 1, 1, 0, 0, 0),
+        ...     mapping={"[NAME]": "Casey Example"},
+        ... )
+        >>> with patch("openmed.core.pipeline.Pipeline") as pipeline_cls:
+        ...     pipeline_cls.return_value.run.return_value = SimpleNamespace(
+        ...         deidentification_result=fixture
+        ...     )
+        ...     result = deidentify(
+        ...         "Patient Casey Example",
+        ...         method="mask",
+        ...         keep_mapping=True,
+        ...     )
+        >>> result.deidentified_text
+        'Patient [NAME]'
+        >>> result.mapping
+        {'[NAME]': 'Casey Example'}
     """
 
     if cache_results:
@@ -1591,6 +1638,7 @@ def deidentify(
         consistent=consistent,
         seed=seed,
         locale=locale,
+        surrogate_vault=surrogate_vault,
         audit=audit,
     )
 
@@ -1625,6 +1673,7 @@ def _redact_entity(
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -1638,6 +1687,7 @@ def _redact_entity(
             or ``method="format_preserve"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
+        surrogate_vault: Optional vault for stable cross-document replacements.
 
     Returns:
         Redacted text replacement
@@ -1652,8 +1702,26 @@ def _redact_entity(
 
     elif method == "replace":
         if anonymizer is not None:
+            original = entity.original_text or entity.text
+            if surrogate_vault is not None:
+                label = entity.canonical_label or entity.entity_type
+
+                def _create_surrogate(attempt: int) -> str:
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(
+                        source,
+                        entity.entity_type,
+                        lang=lang,
+                    )
+
+                return surrogate_vault.get_or_create(
+                    original,
+                    label=label,
+                    lang=lang,
+                    create_surrogate=_create_surrogate,
+                )
             return anonymizer.surrogate(
-                entity.original_text or entity.text,
+                original,
                 entity.entity_type,
                 lang=lang,
             )
@@ -2220,9 +2288,12 @@ def reidentify(
         Re-identified text with original PII restored
 
     Example:
-        >>> result = deidentify(text, method="mask", keep_mapping=True)
-        >>> original = reidentify(result.deidentified_text, result.mapping)
-        >>> assert original == text
+        >>> from openmed.core.pii import reidentify
+        >>> reidentify(
+        ...     "Patient [NAME] has record [ID]",
+        ...     {"[NAME]": "Casey Example", "[ID]": "MRN-0001"},
+        ... )
+        'Patient Casey Example has record MRN-0001'
 
     Note:
         Only works if keep_mapping=True was used during de-identification.
