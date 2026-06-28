@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
-from openmed.eval.metrics import _covered_char_count, normalize_eval_spans
+from openmed.eval.metrics import (
+    _covered_char_count,  # noqa: PLC2701
+    normalize_eval_spans,
+)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class LeakageHeatmapCell:
     """Leakage rate and counts for one canonical label and language cell."""
 
@@ -21,10 +25,37 @@ class LeakageHeatmapCell:
     total_chars: int
     rate: float
 
+    def __init__(
+        self,
+        canonical_label: str | None = None,
+        language: str = "",
+        leaked_chars: int = 0,
+        total_chars: int = 0,
+        rate: float = 0.0,
+        *,
+        label: str | None = None,
+    ) -> None:
+        resolved_label = canonical_label if canonical_label is not None else label
+        if resolved_label is None:
+            msg = "canonical_label or label is required"
+            raise TypeError(msg)
+
+        object.__setattr__(self, "canonical_label", resolved_label)
+        object.__setattr__(self, "language", language)
+        object.__setattr__(self, "leaked_chars", int(leaked_chars))
+        object.__setattr__(self, "total_chars", int(total_chars))
+        object.__setattr__(self, "rate", float(rate))
+
+    @property
+    def label(self) -> str:
+        """Return the canonical label using the interim heatmap API name."""
+        return self.canonical_label
+
     def to_dict(self) -> dict[str, int | float | str]:
         """Return a PHI-free dictionary representation of this cell."""
         return {
             "canonical_label": self.canonical_label,
+            "label": self.canonical_label,
             "language": self.language,
             "leaked_chars": self.leaked_chars,
             "total_chars": self.total_chars,
@@ -33,6 +64,9 @@ class LeakageHeatmapCell:
 
     def __getitem__(self, key: str) -> int | float | str:
         return self.to_dict()[key]
+
+
+HeatmapCell = LeakageHeatmapCell
 
 
 @dataclass(frozen=True)
@@ -45,6 +79,11 @@ class LeakageHeatmapTotal:
     canonical_label: str | None = None
     language: str | None = None
 
+    @property
+    def label(self) -> str | None:
+        """Return the canonical label using the interim heatmap API name."""
+        return self.canonical_label
+
     def to_dict(self) -> dict[str, int | float | str]:
         """Return a PHI-free dictionary representation of this aggregate."""
         payload: dict[str, int | float | str] = {
@@ -54,12 +93,45 @@ class LeakageHeatmapTotal:
         }
         if self.canonical_label is not None:
             payload["canonical_label"] = self.canonical_label
+            payload["label"] = self.canonical_label
         if self.language is not None:
             payload["language"] = self.language
         return payload
 
     def __getitem__(self, key: str) -> int | float | str:
         return self.to_dict()[key]
+
+
+class _HeatmapCells(dict[str, dict[str, LeakageHeatmapCell]]):
+    """Nested cell map with tuple-key lookup compatibility."""
+
+    def __getitem__(
+        self, key: str | tuple[str, str]
+    ) -> dict[str, LeakageHeatmapCell] | LeakageHeatmapCell:
+        if isinstance(key, tuple):
+            label, language = key
+            return super().__getitem__(label)[language]
+        return super().__getitem__(key)
+
+    def get(
+        self,
+        key: object,
+        default: Any = None,
+    ) -> dict[str, LeakageHeatmapCell] | LeakageHeatmapCell | Any:
+        if isinstance(key, tuple) and len(key) == 2:
+            label, language = key
+            language_cells = super().get(label)
+            if language_cells is None:
+                return default
+            return language_cells.get(language, default)
+        return super().get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        if isinstance(key, tuple) and len(key) == 2:
+            label, language = key
+            language_cells = super().get(label)
+            return language_cells is not None and language in language_cells
+        return super().__contains__(key)
 
 
 @dataclass(frozen=True)
@@ -74,26 +146,40 @@ class LeakageHeatmap:
     worst_cells: tuple[LeakageHeatmapCell, ...]
     total: LeakageHeatmapTotal
 
+    @property
+    def worst(self) -> list[LeakageHeatmapCell]:
+        """Return worst cells using the interim heatmap API name."""
+        return list(self.worst_cells)
+
+    @property
+    def col_totals(self) -> Mapping[str, LeakageHeatmapTotal]:
+        """Return column totals using the interim heatmap API name."""
+        return self.column_totals
+
     def to_dict(self) -> dict[str, Any]:
         """Return labels, languages, rates, and counts without source spans."""
+        cell_payload = {
+            label: {
+                language: cell.to_dict() for language, cell in language_cells.items()
+            }
+            for label, language_cells in self.cells.items()
+        }
+        row_payload = {
+            label: total.to_dict() for label, total in self.row_totals.items()
+        }
+        column_payload = {
+            language: total.to_dict() for language, total in self.column_totals.items()
+        }
+        worst_payload = [cell.to_dict() for cell in self.worst_cells]
         return {
             "labels": list(self.labels),
             "languages": list(self.languages),
-            "cells": {
-                label: {
-                    language: cell.to_dict()
-                    for language, cell in language_cells.items()
-                }
-                for label, language_cells in self.cells.items()
-            },
-            "row_totals": {
-                label: total.to_dict() for label, total in self.row_totals.items()
-            },
-            "column_totals": {
-                language: total.to_dict()
-                for language, total in self.column_totals.items()
-            },
-            "worst_cells": [cell.to_dict() for cell in self.worst_cells],
+            "cells": cell_payload,
+            "row_totals": row_payload,
+            "column_totals": column_payload,
+            "col_totals": column_payload,
+            "worst_cells": worst_payload,
+            "worst": worst_payload,
             "total": self.total.to_dict(),
         }
 
@@ -201,23 +287,26 @@ def compute_leakage_heatmap(
         total_by_language,
         leaked_by_language,
     )
-    cells = {
-        label: {
-            language: _cell(
-                label,
-                language,
-                leaked_by_cell[(label, language)],
-                total_by_cell[(label, language)],
-            )
-            for language in languages
+    cells = _HeatmapCells(
+        {
+            label: {
+                language: _cell(
+                    label,
+                    language,
+                    leaked_by_cell[(label, language)],
+                    total_by_cell[(label, language)],
+                )
+                for language in languages
+            }
+            for label in labels
         }
-        for label in labels
-    }
+    )
     row_totals = {
         label: _total(
             leaked_by_label[label],
             total_by_label[label],
             canonical_label=label,
+            language="all",
         )
         for label in labels
     }
@@ -225,6 +314,7 @@ def compute_leakage_heatmap(
         language: _total(
             leaked_by_language[language],
             total_by_language[language],
+            canonical_label="all",
             language=language,
         )
         for language in languages
