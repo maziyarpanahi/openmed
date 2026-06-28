@@ -37,6 +37,10 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequen
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
+from .date_shift import (
+    DEFAULT_DATE_SHIFT_MAX_DAYS,
+    stable_offset_for,
+)
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
@@ -865,6 +869,10 @@ def _resolve_deidentification_method(
     method: DeidentificationMethod,
     shift_dates: Optional[bool],
     date_shift_days: Optional[int],
+    *,
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
 ) -> DeidentificationMethod:
     """Resolve method aliases and validate date-shift-only parameters."""
     effective_method = method
@@ -875,6 +883,16 @@ def _resolve_deidentification_method(
 
     if date_shift_days is not None and effective_method != "shift_dates":
         raise ValueError("date_shift_days requires method='shift_dates'")
+    if patient_key is not None and effective_method != "shift_dates":
+        raise ValueError("patient_key requires method='shift_dates'")
+    if date_shift_max_days is not None and effective_method != "shift_dates":
+        raise ValueError("date_shift_max_days requires method='shift_dates'")
+    if date_shift_secret is not None and effective_method != "shift_dates":
+        raise ValueError("date_shift_secret requires method='shift_dates'")
+    if date_shift_secret is not None and patient_key is None:
+        raise ValueError("date_shift_secret requires patient_key")
+    if patient_key is not None and date_shift_secret is None:
+        raise ValueError("patient_key requires date_shift_secret")
     if effective_method not in DEIDENTIFICATION_METHODS:
         raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
 
@@ -1345,6 +1363,9 @@ def _build_deidentification_result(
     effective_method: DeidentificationMethod,
     keep_year: bool,
     date_shift_days: Optional[int],
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
     keep_mapping: bool,
     lang: str,
     consistent: bool,
@@ -1401,8 +1422,13 @@ def _build_deidentification_result(
 
     redaction_entities = sorted(pii_entities, key=lambda e: e.start, reverse=True)
 
-    if effective_method == "shift_dates" and date_shift_days is None:
-        date_shift_days = _random_nonzero_shift()
+    if effective_method == "shift_dates":
+        date_shift_days = _resolve_date_shift_days(
+            date_shift_days=date_shift_days,
+            patient_key=patient_key,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
+        )
 
     anonymizer = None
     if effective_method in {"replace", "format_preserve"} or any(
@@ -1586,6 +1612,9 @@ def _deidentify_batch(
     keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
     keep_mapping: bool = False,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
@@ -1607,6 +1636,9 @@ def _deidentify_batch(
         method,
         shift_dates,
         date_shift_days,
+        patient_key=patient_key,
+        date_shift_max_days=date_shift_max_days,
+        date_shift_secret=date_shift_secret,
     )
     stripped_texts = [text.strip() for text in texts]
     recognizer = coerce_custom_recognizer(custom_recognizer)
@@ -1645,6 +1677,9 @@ def _deidentify_batch(
             confidence_threshold=confidence_threshold,
             keep_year=keep_year,
             date_shift_days=date_shift_days,
+            patient_key=patient_key,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
             keep_mapping=keep_mapping,
             lang=lang,
             normalize_accents=normalize_accents,
@@ -1668,6 +1703,9 @@ def deidentify(
     keep_year: bool = False,
     shift_dates: Optional[bool] = None,
     date_shift_days: Optional[int] = None,
+    patient_key: Optional[str | bytes] = None,
+    date_shift_max_days: Optional[int] = None,
+    date_shift_secret: Optional[str | bytes] = None,
     keep_mapping: bool = False,
     config: Optional[OpenMedConfig] = None,
     use_smart_merging: bool = True,
@@ -1710,7 +1748,19 @@ def deidentify(
         confidence_threshold: Minimum confidence for redaction (default 0.7 for safety)
         keep_year: For dates, keep the year unchanged
         shift_dates: Deprecated alias for ``method="shift_dates"``.
-        date_shift_days: Specific number of days to shift (random non-zero if None)
+        date_shift_days: Specific number of days to shift when ``patient_key``
+            is omitted. When ``patient_key`` is supplied, this is treated as a
+            legacy maximum absolute offset bound unless ``date_shift_max_days``
+            is also supplied.
+        patient_key: Optional stable patient identifier used only to derive a
+            deterministic HMAC date-shift offset. Raw keys are not logged,
+            persisted, or returned.
+        date_shift_max_days: Maximum absolute offset for random or
+            patient-keyed date shifting. Defaults to 365 when ``patient_key``
+            is supplied and neither this nor ``date_shift_days`` is set.
+        date_shift_secret: Required HMAC key material for patient-keyed
+            offsets. Reuse the same value across sessions to keep offsets
+            stable.
         keep_mapping: Keep mapping for re-identification
         config: Optional configuration override
         use_smart_merging: Enable regex-based semantic unit merging (recommended)
@@ -1827,6 +1877,9 @@ def deidentify(
         keep_year=keep_year,
         shift_dates=shift_dates,
         date_shift_days=date_shift_days,
+        patient_key=patient_key,
+        date_shift_max_days=date_shift_max_days,
+        date_shift_secret=date_shift_secret,
         keep_mapping=keep_mapping,
         consistent=consistent,
         seed=seed,
@@ -2235,6 +2288,61 @@ def _random_nonzero_shift(low: int = -365, high: int = 365) -> int:
         shift_days = random.randint(low, high)
         if shift_days != 0:
             return shift_days
+
+
+def _validate_date_shift_max_days(max_days: int) -> int:
+    if isinstance(max_days, bool) or not isinstance(max_days, int):
+        raise TypeError("date_shift_max_days must be an integer")
+    if max_days <= 0:
+        raise ValueError("date_shift_max_days must be positive")
+    return max_days
+
+
+def _stable_date_shift_days(
+    patient_key: str | bytes,
+    *,
+    date_shift_days: Optional[int],
+    date_shift_max_days: Optional[int],
+    date_shift_secret: Optional[str | bytes],
+) -> int:
+    """Resolve a patient-keyed stable date shift without retaining the key."""
+    if date_shift_max_days is not None:
+        max_days = _validate_date_shift_max_days(date_shift_max_days)
+    elif date_shift_days is not None:
+        max_days = _validate_date_shift_max_days(abs(date_shift_days))
+    else:
+        max_days = DEFAULT_DATE_SHIFT_MAX_DAYS
+
+    return stable_offset_for(
+        patient_key,
+        max_days=max_days,
+        secret=date_shift_secret,
+    )
+
+
+def _resolve_date_shift_days(
+    *,
+    date_shift_days: Optional[int],
+    patient_key: Optional[str | bytes],
+    date_shift_max_days: Optional[int],
+    date_shift_secret: Optional[str | bytes],
+) -> int:
+    if patient_key is not None:
+        return _stable_date_shift_days(
+            patient_key,
+            date_shift_days=date_shift_days,
+            date_shift_max_days=date_shift_max_days,
+            date_shift_secret=date_shift_secret,
+        )
+
+    if date_shift_days is not None:
+        return date_shift_days
+
+    if date_shift_max_days is not None:
+        max_days = _validate_date_shift_max_days(date_shift_max_days)
+        return _random_nonzero_shift(-max_days, max_days)
+
+    return _random_nonzero_shift()
 
 
 def _shift_date(
