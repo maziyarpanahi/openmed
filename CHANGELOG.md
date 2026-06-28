@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added CycloneDX 1.6 SBOM generation (`scripts/security/generate_sbom.py`,
+  `make sbom`) that inventories `openmed` and its runtime dependencies; a CI
+  `sbom` job uploads `sbom.cdx.json` on every push and pull request, and the
+  publish workflow attaches it as an asset on each tagged GitHub release
+  (fail-open).
+- Added an `openmed models recommend --task <task> --language <lang> --tier
+  phone|laptop|workstation|server` command that reuses the manifest search core
+  and ranks on-device models by device-tier fit (via `recommended_tier` and, when
+  present, `peak_ram_mb` budgets), then smallest parameter count and highest
+  benchmark recall/F1, with `--json` output and a non-zero exit when nothing fits.
 - Expanded lab reference-range parsing in `openmed.clinical.lab_values` with
   tolerant separator/operator support and safer unknown explicit-flag handling.
 - Added a root `SECURITY.md` responsible-disclosure policy (private GitHub
@@ -19,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   security cross-links from the README and docs. Redaction-bypass / PHI leakage
   (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
   private-disclosure class.
+- Added LRU Cache implementation for analyze_text(), extract_pii(), and deidentify().
 
 ## [1.6.0] - 2026-06-22
 
