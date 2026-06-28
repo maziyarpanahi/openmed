@@ -333,6 +333,18 @@ class Pipeline:
                     pipeline_stage=STAGE_NAMES[5],
                 ),
             )
+            deterministic_spans = _stamp_span_sections(
+                deterministic_spans,
+                context.section_metadata,
+            )
+            model_spans = _stamp_span_sections(
+                model_spans,
+                context.section_metadata,
+            )
+            clinical_spans = _stamp_span_sections(
+                clinical_spans,
+                context.section_metadata,
+            )
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
@@ -369,6 +381,10 @@ class Pipeline:
                 normalized.normalized_text,
                 context,
             )
+            deterministic_spans = _stamp_span_sections(
+                deterministic_spans,
+                context.section_metadata,
+            )
             stage_results.append(
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
@@ -392,6 +408,7 @@ class Pipeline:
                     pipeline_stage=STAGE_NAMES[4],
                 ),
             )
+            model_spans = _stamp_span_sections(model_spans, context.section_metadata)
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
@@ -399,6 +416,10 @@ class Pipeline:
             clinical_spans = self.stage6_clinical_phi_model(
                 normalized.normalized_text,
                 context,
+            )
+            clinical_spans = _stamp_span_sections(
+                clinical_spans,
+                context.section_metadata,
             )
             stage_results.append(
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
@@ -413,6 +434,7 @@ class Pipeline:
             merged_spans,
             context,
         )
+        merged_spans = _stamp_span_sections(merged_spans, context.section_metadata)
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
@@ -436,6 +458,7 @@ class Pipeline:
         )
 
         policy_spans = self.stage8_policy_actions(merged_spans, context)
+        policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
@@ -510,6 +533,7 @@ class Pipeline:
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
+        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
         emission_spans = _remap_spans_to_original(
             final_spans,
             normalized,
@@ -1178,20 +1202,90 @@ def _evidence_for_entity(entity: Any) -> Mapping[str, Any]:
 
 def _section_for_span(
     start: int,
-    end: int,
+    _end: int,
     section_metadata: Mapping[str, Any],
 ) -> str | None:
+    """Return the section whose [start, end) range contains the span start."""
+    return _section_label_for_start(start, _section_ranges(section_metadata))
+
+
+def _stamp_span_sections(
+    spans: Sequence[OpenMedSpan],
+    section_metadata: Mapping[str, Any],
+) -> tuple[OpenMedSpan, ...]:
+    section_ranges = _section_ranges(section_metadata)
+    if not section_ranges:
+        return tuple(spans)
+
+    stamped: list[OpenMedSpan] = []
+    for span in spans:
+        section = _section_label_for_start(span.start, section_ranges)
+        if span.section == section:
+            stamped.append(span)
+        else:
+            stamped.append(replace(span, section=section))
+    return tuple(stamped)
+
+
+def _section_ranges(
+    section_metadata: Mapping[str, Any],
+) -> tuple[tuple[int, int, str], ...]:
     sections = section_metadata.get("sections")
     if not sections:
-        return None
-    for section in sections:
-        if not isinstance(section, Mapping):
+        return ()
+    try:
+        section_iter = iter(sections)
+    except TypeError:
+        return ()
+
+    ranges: list[tuple[int, int, str]] = []
+    for section in section_iter:
+        if isinstance(section, Mapping):
+            section_start = section.get("start")
+            section_end = section.get("end")
+            section_label = _section_label(section)
+        else:
+            section_start = getattr(section, "start", None)
+            section_end = getattr(section, "end", None)
+            section_label = _section_label(section)
+        if not (
+            isinstance(section_start, int)
+            and isinstance(section_end, int)
+            and section_start < section_end
+            and section_label is not None
+        ):
             continue
-        section_start = section.get("start")
-        section_end = section.get("end")
-        if isinstance(section_start, int) and isinstance(section_end, int):
-            if start >= section_start and end <= section_end:
-                return str(section.get("label") or section.get("name") or "")
+        ranges.append((section_start, section_end, section_label))
+    return tuple(sorted(ranges, key=lambda item: (item[0], item[1], item[2])))
+
+
+def _section_label(section: Any) -> str | None:
+    for field_name in (
+        "label",
+        "name",
+        "section",
+        "section_label",
+        "section_name",
+        "title",
+    ):
+        if isinstance(section, Mapping):
+            value = section.get(field_name)
+        else:
+            value = getattr(section, field_name, None)
+        if value is not None:
+            label = str(value).strip()
+            if label:
+                return label
+    return None
+
+
+def _section_label_for_start(
+    start: int,
+    section_ranges: Sequence[tuple[int, int, str]],
+) -> str | None:
+    for section_start, section_end, label in section_ranges:
+        if section_start <= start < section_end:
+            return label
     return None
 
 
