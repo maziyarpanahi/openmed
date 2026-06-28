@@ -58,17 +58,56 @@ PUBLIC_DATASET_LICENSES: Mapping[str, DatasetLicense] = {
     ),
     "ncbi_disease": DatasetLicense(
         dataset="ncbi_disease",
-        license_id="public-research-corpus",
+        license_id="CC0-1.0",
         source_url="https://www.ncbi.nlm.nih.gov/research/bionlp/Data/disease/",
-        redistribution="reference-only",
-        notes="Adapter stores no corpus rows and expects a local user-provided path.",
+        redistribution="download-on-demand",
+        notes=(
+            "BigBIO metadata lists CC0-1.0; adapter loads public rows by "
+            "reference and stores no corpus rows in the repository."
+        ),
     ),
     "bc5cdr": DatasetLicense(
         dataset="bc5cdr",
-        license_id="public-domain-us-government-work",
-        source_url="https://pubmed.ncbi.nlm.nih.gov/27161011/",
-        redistribution="reference-only",
-        notes="Adapter stores no corpus rows and expects a local user-provided path.",
+        license_id="Public-Domain-Mark-1.0",
+        source_url="https://huggingface.co/datasets/bigbio/bc5cdr",
+        redistribution="download-on-demand",
+        notes=(
+            "BigBIO metadata lists PUBLIC_DOMAIN_MARK_1p0; adapter loads "
+            "public rows by reference and stores no corpus rows in the "
+            "repository."
+        ),
+    ),
+    "jnlpba": DatasetLicense(
+        dataset="jnlpba",
+        license_id="CC-BY-3.0",
+        source_url="https://huggingface.co/datasets/bigbio/jnlpba",
+        redistribution="download-on-demand",
+        notes=(
+            "BigBIO metadata lists CC_BY_3p0; adapter loads public rows by "
+            "reference and stores no corpus rows in the repository."
+        ),
+    ),
+    "species_800": DatasetLicense(
+        dataset="species_800",
+        license_id="Medline-restrictions",
+        source_url="https://huggingface.co/datasets/spyysalo/species_800",
+        redistribution="download-on-demand",
+        notes=(
+            "Hugging Face dataset card lists license as unknown and notes "
+            "Medline restrictions; adapter loads by reference and stores no "
+            "corpus rows in the repository."
+        ),
+    ),
+    "bc2gm": DatasetLicense(
+        dataset="bc2gm",
+        license_id="unknown-source-license",
+        source_url="https://huggingface.co/datasets/bigbio/blurb",
+        redistribution="download-on-demand",
+        notes=(
+            "BigBIO BLURB metadata lists license as other; source corpus "
+            "licensing is not normalized to SPDX. Adapter loads public rows "
+            "by reference and stores no corpus rows in the repository."
+        ),
     ),
 }
 
