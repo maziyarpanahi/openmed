@@ -59,11 +59,22 @@ from openmed.eval.error_analysis import (
     ErrorSpanExample,
     error_report,
 )
+from openmed.eval.evidence_bundle import (
+    EvidenceArtifactSpec,
+    EvidenceBundleResult,
+    bundle_gate_evidence,
+)
 from openmed.eval.fairness import (
     UNSPECIFIED_GROUP,
     FairnessGroupMetrics,
     FairnessReport,
     fairness_report,
+)
+from openmed.eval.flaky import (
+    DEFAULT_FLAKY_TOLERANCE,
+    FlakyMetricReport,
+    FlakyReport,
+    detect_flaky_eval,
 )
 from openmed.eval.harness import (
     BenchmarkFixture,
@@ -79,6 +90,7 @@ from openmed.eval.leakage_heatmap import (
 from openmed.eval.metrics import (
     DEVICE_TIERS,
     EvalSpan,
+    PairedSignificance,
     compute_character_recall,
     compute_clinical_utility_loss,
     compute_date_shift_consistency,
@@ -91,6 +103,7 @@ from openmed.eval.metrics import (
     compute_relaxed_span_f1,
     compute_resource_metrics,
     compute_surrogate_consistency,
+    paired_significance,
 )
 from openmed.eval.quant_delta import (
     INT4_RECALL_DELTA_LIMIT,
@@ -141,14 +154,19 @@ __all__ = [
     "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
+    "DEFAULT_FLAKY_TOLERANCE",
     "DEFAULT_PERTURBATIONS",
     "DatasetCard",
     "EvalCacheKey",
     "EvalSpan",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
+    "EvidenceArtifactSpec",
+    "EvidenceBundleResult",
     "FairnessGroupMetrics",
     "FairnessReport",
+    "FlakyMetricReport",
+    "FlakyReport",
     "FixtureResult",
     "FixtureCoverageReport",
     "GOLDEN_EDGE_CASE_CATEGORIES",
@@ -159,6 +177,7 @@ __all__ = [
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
     "ModelStewardConfig",
+    "PairedSignificance",
     "QUARANTINED",
     "QuantRecallDeltaResult",
     "ReidAttackResult",
@@ -174,6 +193,7 @@ __all__ = [
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
     "build_report_key",
+    "bundle_gate_evidence",
     "build_thresholds_payload",
     "build_all_dataset_cards",
     "build_dataset_card",
@@ -198,6 +218,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "default_cache_dir",
     "default_suite_calibration_samples",
+    "detect_flaky_eval",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
     "error_report",
@@ -214,6 +235,7 @@ __all__ = [
     "load_calibration_thresholds",
     "load_or_compute",
     "ocr_noise_perturbation",
+    "paired_significance",
     "perturb_fixture",
     "render_reid_leaderboard",
     "render_dataset_card_markdown",

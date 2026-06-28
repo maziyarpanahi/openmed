@@ -53,6 +53,13 @@ from .core.result_cache import (
     get_result_cache,
     make_cache_key,
 )
+from .core.surrogate_vault import (
+    InMemorySurrogateStore,
+    JsonFileSurrogateStore,
+    SurrogateEntry,
+    SurrogateKey,
+    SurrogateVault,
+)
 from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
     BatchItem,
@@ -630,4 +637,9 @@ __all__ = [
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",
+    "SurrogateVault",
+    "SurrogateKey",
+    "SurrogateEntry",
+    "InMemorySurrogateStore",
+    "JsonFileSurrogateStore",
 ]
