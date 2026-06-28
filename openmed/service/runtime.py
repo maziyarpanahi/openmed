@@ -20,13 +20,29 @@ SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
 SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
+SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
+SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
+SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
+SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
+SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
+SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
+DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
 
 _BATCHING_ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BATCHING_DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
+_THROTTLE_KEY_ALIASES = {
+    "global": "global",
+    "process": "global",
+    "xff": "x-forwarded-for",
+    "x-forwarded-for": "x-forwarded-for",
+    "peer": "peer",
+    "client": "peer",
+    "remote": "peer",
+}
 
 
 @dataclass(frozen=True)
@@ -36,6 +52,75 @@ class ServiceBatchingConfig:
     enabled: bool = False
     max_batch_size: int = DEFAULT_SERVICE_BATCH_MAX_SIZE
     max_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
+
+
+@dataclass(frozen=True)
+class ServiceCoalescingConfig:
+    """Request coalescing settings for REST model-backed endpoints."""
+
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
+class ServiceThrottleConfig:
+    """Rate and concurrency limits for REST model-backed endpoints."""
+
+    rate_limit_rps: float = 0.0
+    rate_limit_burst: int = 0
+    max_concurrency: int = 0
+    concurrency_wait_seconds: float = DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS
+    key_by: str = "global"
+
+    @property
+    def rate_limit_enabled(self) -> bool:
+        """Return whether token-bucket rate limiting is active."""
+        return self.rate_limit_rps > 0 and self.rate_limit_burst > 0
+
+    @property
+    def concurrency_enabled(self) -> bool:
+        """Return whether in-flight concurrency limiting is active."""
+        return self.max_concurrency > 0
+
+    @property
+    def enabled(self) -> bool:
+        """Return whether any throttling gate is active."""
+        return self.rate_limit_enabled or self.concurrency_enabled
+
+
+def _parse_non_negative_float(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: float,
+) -> float:
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a non-negative number") from exc
+    if parsed < 0:
+        raise ValueError(f"{env_var} must be greater than or equal to 0")
+    return parsed
+
+
+def _parse_non_negative_int(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: int,
+) -> int:
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a non-negative integer") from exc
+    if parsed < 0:
+        raise ValueError(f"{env_var} must be greater than or equal to 0")
+    return parsed
 
 
 def parse_service_batching_enabled(raw_value: Optional[str]) -> bool:
@@ -52,6 +137,24 @@ def parse_service_batching_enabled(raw_value: Optional[str]) -> bool:
         return False
     raise ValueError(
         f"{SERVICE_BATCHING_ENABLED_ENV_VAR} must be a boolean value like "
+        "'true' or 'false'"
+    )
+
+
+def parse_service_coalescing_enabled(raw_value: Optional[str]) -> bool:
+    """Parse the request-coalescing feature flag."""
+    if raw_value is None:
+        return False
+
+    normalized = raw_value.strip().lower()
+    if not normalized:
+        return False
+    if normalized in _BATCHING_ENABLED_VALUES:
+        return True
+    if normalized in _BATCHING_DISABLED_VALUES:
+        return False
+    raise ValueError(
+        f"{SERVICE_COALESCING_ENABLED_ENV_VAR} must be a boolean value like "
         "'true' or 'false'"
     )
 
@@ -106,6 +209,76 @@ def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     return parsed
 
 
+def parse_service_rate_limit_rps(raw_value: Optional[str]) -> float:
+    """Parse the configured token-bucket refill rate in requests per second."""
+    return _parse_non_negative_float(
+        raw_value,
+        env_var=SERVICE_RATE_LIMIT_RPS_ENV_VAR,
+        default=0.0,
+    )
+
+
+def parse_service_rate_limit_burst(raw_value: Optional[str]) -> int:
+    """Parse the configured token-bucket burst capacity."""
+    return _parse_non_negative_int(
+        raw_value,
+        env_var=SERVICE_RATE_LIMIT_BURST_ENV_VAR,
+        default=0,
+    )
+
+
+def parse_service_max_concurrency(raw_value: Optional[str]) -> int:
+    """Parse the configured maximum number of in-flight model requests."""
+    return _parse_non_negative_int(
+        raw_value,
+        env_var=SERVICE_MAX_CONCURRENCY_ENV_VAR,
+        default=0,
+    )
+
+
+def parse_service_concurrency_wait_seconds(raw_value: Optional[str]) -> float:
+    """Parse the bounded wait before rejecting saturated requests."""
+    return _parse_non_negative_float(
+        raw_value,
+        env_var=SERVICE_CONCURRENCY_WAIT_ENV_VAR,
+        default=DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS,
+    )
+
+
+def parse_service_throttle_key(raw_value: Optional[str]) -> str:
+    """Parse how throttle buckets are keyed."""
+    if raw_value is None or not raw_value.strip():
+        return "global"
+
+    normalized = raw_value.strip().lower()
+    try:
+        return _THROTTLE_KEY_ALIASES[normalized]
+    except KeyError as exc:
+        raise ValueError(
+            f"{SERVICE_THROTTLE_KEY_ENV_VAR} must be one of: global, "
+            "x-forwarded-for, or peer"
+        ) from exc
+
+
+def parse_service_throttle_config() -> ServiceThrottleConfig:
+    """Read throttling settings from the current process environment."""
+    return ServiceThrottleConfig(
+        rate_limit_rps=parse_service_rate_limit_rps(
+            os.getenv(SERVICE_RATE_LIMIT_RPS_ENV_VAR)
+        ),
+        rate_limit_burst=parse_service_rate_limit_burst(
+            os.getenv(SERVICE_RATE_LIMIT_BURST_ENV_VAR)
+        ),
+        max_concurrency=parse_service_max_concurrency(
+            os.getenv(SERVICE_MAX_CONCURRENCY_ENV_VAR)
+        ),
+        concurrency_wait_seconds=parse_service_concurrency_wait_seconds(
+            os.getenv(SERVICE_CONCURRENCY_WAIT_ENV_VAR)
+        ),
+        key_by=parse_service_throttle_key(os.getenv(SERVICE_THROTTLE_KEY_ENV_VAR)),
+    )
+
+
 def parse_service_batching_config() -> ServiceBatchingConfig:
     """Read dynamic-batching settings from the current process environment."""
     return ServiceBatchingConfig(
@@ -118,6 +291,15 @@ def parse_service_batching_config() -> ServiceBatchingConfig:
         max_wait_ms=parse_service_batch_max_wait_ms(
             os.getenv(SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR)
         ),
+    )
+
+
+def parse_service_coalescing_config() -> ServiceCoalescingConfig:
+    """Read request-coalescing settings from the current process environment."""
+    return ServiceCoalescingConfig(
+        enabled=parse_service_coalescing_enabled(
+            os.getenv(SERVICE_COALESCING_ENABLED_ENV_VAR)
+        )
     )
 
 
@@ -154,13 +336,17 @@ class ServiceRuntime:
     default_keep_alive_seconds: Optional[float] = None
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
+    coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
+    throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
     _loader_factory: Optional[Callable[[OpenMedConfig], ModelLoader]] = None
     _loader: Optional[ModelLoader] = None
     _warm_pool: Optional[WarmPool] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
+    metrics: Optional[Any] = None
+
     @classmethod
-    def from_env(cls) -> "ServiceRuntime":
+    def from_env(cls, *, metrics: Optional[Any] = None) -> "ServiceRuntime":
         """Create a runtime using the current process environment."""
         profile = os.getenv(PROFILE_ENV_VAR, "prod")
         config = OpenMedConfig.from_profile(profile)
@@ -170,6 +356,8 @@ class ServiceRuntime:
         )
         keep_alive = parse_keep_alive(os.getenv(SERVICE_KEEP_ALIVE_ENV_VAR))
         batching = parse_service_batching_config()
+        coalescing = parse_service_coalescing_config()
+        throttle = parse_service_throttle_config()
         return cls(
             profile=profile,
             config=config,
@@ -180,7 +368,10 @@ class ServiceRuntime:
                 os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
             ),
             batching=batching,
+            coalescing=coalescing,
+            throttle=throttle,
             _loader_factory=ModelLoader,
+            metrics=metrics,
         )
 
     def get_model_loader(self) -> ModelLoader:
@@ -202,6 +393,7 @@ class ServiceRuntime:
                         warm_models=self.preload_models,
                         max_resident_models=self.max_resident_models,
                         default_keep_alive_seconds=self.default_keep_alive_seconds,
+                        metrics=self.metrics,
                     )
         return self._warm_pool
 

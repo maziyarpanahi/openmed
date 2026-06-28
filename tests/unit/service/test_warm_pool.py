@@ -180,6 +180,7 @@ def test_runtime_reads_warm_pool_config_from_env(monkeypatch) -> None:
     monkeypatch.setenv("OPENMED_SERVICE_PRELOAD_MODELS", "model-a,model-b")
     monkeypatch.setenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", "2")
     monkeypatch.setenv("OPENMED_SERVICE_KEEP_ALIVE", "10s")
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
 
     runtime = service_runtime.ServiceRuntime.from_env()
     pool = runtime.get_loader()

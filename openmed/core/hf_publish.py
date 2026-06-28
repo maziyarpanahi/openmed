@@ -26,6 +26,28 @@ DEFAULT_MODEL_CARD_COMMIT_MESSAGE = "Update generated model card"
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=$|-)")
 _SAFE_REPO_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_ONNX_FORMAT_ALIASES = {
+    "onnx",
+    "onnx-fp32",
+    "onnx-float32",
+    "webgpu",
+    "onnx-webgpu",
+    "webgpu-onnx",
+}
+_QUANTIZED_FORMAT_ALIASES = {
+    "int8": "int8",
+    "8bit": "int8",
+    "8-bit": "int8",
+    "onnx-int8": "int8",
+    "int4": "int4",
+    "4bit": "int4",
+    "4-bit": "int4",
+    "onnx-int4": "int4",
+    "awq": "awq",
+    "openmed-awq": "awq",
+    "gptq": "gptq",
+    "openmed-gptq": "gptq",
+}
 
 
 class HfPublishError(RuntimeError):
@@ -146,7 +168,7 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
                     continue
                 existing = json.loads(line)
                 if existing.get("repo_id") == row["repo_id"]:
-                    rows.append(row)
+                    rows.append(_merge_manifest_row(existing, row))
                     replaced = True
                 else:
                     rows.append(existing)
@@ -505,6 +527,11 @@ def _format_repo_suffix(format_name: str) -> str:
         return "mlx-4bit"
     if normalized == "coreml":
         return "coreml"
+    if normalized in _ONNX_FORMAT_ALIASES:
+        return "onnx"
+    quantized = _QUANTIZED_FORMAT_ALIASES.get(normalized)
+    if quantized is not None:
+        return f"onnx-{quantized}"
     return normalized
 
 
@@ -516,6 +543,13 @@ def _manifest_format_name(format_name: str) -> str:
         return "mlx-8bit"
     if normalized in {"mlx-4bit", "mlx-int4"}:
         return "mlx-4bit"
+    if normalized in {"onnx-fp32", "onnx-float32"}:
+        return "onnx"
+    if normalized in {"onnx-webgpu", "webgpu-onnx"}:
+        return "webgpu"
+    quantized = _QUANTIZED_FORMAT_ALIASES.get(normalized)
+    if quantized is not None:
+        return quantized
     return normalized
 
 
@@ -536,6 +570,23 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         value = json.load(handle)
     return value if isinstance(value, dict) else {}
+
+
+def _merge_manifest_row(
+    existing: dict[str, Any],
+    replacement: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(replacement)
+    existing_formats = existing.get("formats")
+    replacement_formats = replacement.get("formats")
+    if isinstance(existing_formats, list) and isinstance(replacement_formats, list):
+        merged["formats"] = _manifest_format_names(
+            [
+                *[str(item) for item in existing_formats],
+                *[str(item) for item in replacement_formats],
+            ]
+        )
+    return merged
 
 
 def _parse_json_object_arg(value: str) -> dict[str, Any]:
