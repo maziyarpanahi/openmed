@@ -45,6 +45,19 @@ def test_hf_token_not_exposed(monkeypatch):
     token_check = next(item for item in results if item["name"] == "hf_token")
 
     assert token_check["status"] == "PASS"
+    assert token_check["present"] is True
+
+
+def test_hf_token_absence_reports_boolean(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_HUB_TOKEN", raising=False)
+
+    results = run_diagnostics()
+
+    token_check = next(item for item in results if item["name"] == "hf_token")
+
+    assert token_check["status"] == "WARN"
+    assert token_check["present"] is False
 
 
 def test_unsupported_python_version_fails(monkeypatch):
@@ -119,6 +132,25 @@ def test_optional_dependencies_are_warn_or_pass():
             "PASS",
             "WARN",
         }
+
+
+def test_doctor_warns_when_optional_dependencies_are_missing(monkeypatch, capsys):
+    def missing_dependency(module_name):
+        raise ImportError(f"{module_name} missing")
+
+    monkeypatch.setattr(
+        doctor_module.importlib,
+        "import_module",
+        missing_dependency,
+    )
+
+    exit_code = _handle_doctor(argparse.Namespace(json=False))
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+
+    for name in doctor_module.OPTIONAL_EXTRAS:
+        assert f"WARN {name}:" in captured.out
 
 
 def test_doctor_returns_zero_when_no_fail():
