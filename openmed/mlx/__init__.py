@@ -14,12 +14,24 @@ from openmed.mlx.inference import (
     PrivacyFilterMLXPipeline,
     create_mlx_pipeline,
 )
+from openmed.mlx.lm import (
+    LANEFORMER_MLX_MODEL,
+    LANEFORMER_SOURCE_MODEL,
+    OpenMedMLXLanguageModel,
+    generate_text,
+    resolve_mlx_language_model,
+)
 
 __all__ = [
+    "LANEFORMER_MLX_MODEL",
+    "LANEFORMER_SOURCE_MODEL",
     "MLXTokenClassificationPipeline",
     "GLiNERMLXPipeline",
     "GLiClassMLXPipeline",
     "GLiNERRelexMLXPipeline",
+    "OpenMedMLXLanguageModel",
     "PrivacyFilterMLXPipeline",
     "create_mlx_pipeline",
+    "generate_text",
+    "resolve_mlx_language_model",
 ]

@@ -56,6 +56,7 @@ class DocumentLike:
 
 def fake_deidentify(text: str, **kwargs):
     assert kwargs["method"] == "mask"
+    assert kwargs["keep_year"] is False
     redacted = (
         text.replace("Jane Roe", "[PERSON]")
         .replace("jane.roe@example.com", "[EMAIL]")
