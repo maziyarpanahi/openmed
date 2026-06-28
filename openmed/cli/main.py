@@ -25,6 +25,7 @@ from ..core.config import (
 from ..core.model_registry import get_model_info
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
+from .gates import add_gates_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -138,6 +139,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_config_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
+    add_gates_command(subparsers)
     return parser
 
 
