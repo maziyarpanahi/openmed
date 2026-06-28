@@ -28,10 +28,12 @@ class PolicyName(str, Enum):
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
     CANADA_PIPEDA = "canada_pipeda"
+    AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
 POLICY_ALIASES: Mapping[str, str] = {
+    "au_privacy": PolicyName.AUSTRALIA_PRIVACY_ACT.value,
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
     "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
@@ -128,16 +130,16 @@ def list_policies() -> tuple[str, ...]:
 def lint_policy(
     name: str | PolicyName | PolicyProfile | Mapping[str, Any],
 ) -> tuple[str, ...]:
-    """Return validation errors for a bundled or in-memory policy profile."""
+    """Return schema validation errors for a policy profile."""
 
+    if isinstance(name, PolicyProfile):
+        return ()
     try:
-        if isinstance(name, PolicyProfile):
-            return ()
         if isinstance(name, Mapping):
-            _profile_from_mapping(name, source="<memory>")
+            _profile_from_mapping(name, source="<mapping>")
         else:
             load_policy(name)
-    except Exception as exc:
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
         return (str(exc),)
     return ()
 
