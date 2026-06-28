@@ -22,6 +22,7 @@ from ..core.config import (
     save_profile,
     set_config,
 )
+from ..core.manifest_diff import ManifestDiff, diff_manifests
 from ..core.model_registry import get_model_info
 from ..core.model_search import ModelSearchResult, recommend_models, search_models
 from .calibrate import add_calibrate_command
@@ -518,6 +519,32 @@ def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
         help="Reference median-age target in days.",
     )
     models_freshness.set_defaults(handler=_handle_models_freshness)
+
+    models_diff = models_sub.add_parser(
+        "diff",
+        help="Diff two canonical model manifest JSONL files.",
+    )
+    models_diff.add_argument(
+        "old_manifest",
+        type=Path,
+        help="Path to the older model manifest JSONL file.",
+    )
+    models_diff.add_argument(
+        "new_manifest",
+        type=Path,
+        help="Path to the newer model manifest JSONL file.",
+    )
+    models_diff.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the manifest diff as a single JSON document.",
+    )
+    models_diff.add_argument(
+        "--fail-on-removed",
+        action="store_true",
+        help="Exit non-zero when any repo was removed between manifests.",
+    )
+    models_diff.set_defaults(handler=_handle_models_diff)
 
     models_validate = models_sub.add_parser(
         "validate",
@@ -1196,6 +1223,59 @@ def _handle_models_freshness(args: argparse.Namespace) -> int:
     else:
         sys.stdout.write(metrics.to_markdown())
     return 0
+
+
+def _handle_models_diff(args: argparse.Namespace) -> int:
+    try:
+        diff = diff_manifests(args.old_manifest, args.new_manifest)
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"Failed to diff manifests: {exc}\n")
+        return 1
+
+    if args.json:
+        sys.stdout.write(f"{json.dumps(diff.to_dict(), indent=2, sort_keys=True)}\n")
+    else:
+        sys.stdout.write(_format_manifest_diff(diff))
+
+    return 1 if args.fail_on_removed and diff.has_removed else 0
+
+
+def _format_manifest_diff(diff: ManifestDiff) -> str:
+    lines = [
+        "Manifest diff",
+        f"Added: {len(diff.added)}",
+        f"Removed: {len(diff.removed)}",
+        f"Changed: {len(diff.changed)}",
+    ]
+
+    if diff.added:
+        lines.extend(["", "Added repos:"])
+        lines.extend(f"  + {repo_id}" for repo_id in diff.added)
+
+    if diff.removed:
+        lines.extend(["", "Removed repos:"])
+        lines.extend(f"  - {repo_id}" for repo_id in diff.removed)
+
+    if diff.changed:
+        lines.extend(["", "Changed repos:"])
+        for repo_change in diff.changed:
+            lines.append(f"  * {repo_change.repo_id}")
+            for field, change in repo_change.changes.items():
+                lines.append(
+                    f"    - {field}: "
+                    f"{_format_diff_value(change.before)} -> "
+                    f"{_format_diff_value(change.after)}"
+                )
+
+    return "\n".join(lines) + "\n"
+
+
+def _format_diff_value(value: Any) -> str:
+    if value is None:
+        return "null"
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return str(value)
 
 
 def _handle_models_validate(args: argparse.Namespace) -> int:
