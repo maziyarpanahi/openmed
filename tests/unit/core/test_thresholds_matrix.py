@@ -1,6 +1,8 @@
 import json
 from importlib import resources
 
+import pytest
+
 from openmed.core.arbitration import MODE_BALANCED, MODE_HIGH_RECALL_UNION, arbitrate
 from openmed.core.cascade import R2_BASE, CascadeRouter
 from openmed.core.pipeline import Pipeline
@@ -113,6 +115,16 @@ def test_fit_and_update_thresholds_return_valid_versioned_matrix():
     assert (
         lookup_threshold("EMAIL", "en", "balanced", matrix=updated)["keep_floor"] == 0.4
     )
+
+
+def test_load_thresholds_rejects_malformed_json(tmp_path):
+    path = tmp_path / "thresholds.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in threshold file") as exc_info:
+        load_thresholds(path)
+
+    assert str(path) in str(exc_info.value)
 
 
 def test_arbitration_reads_matrix_keep_floor_by_mode():
