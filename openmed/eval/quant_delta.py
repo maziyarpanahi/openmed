@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from openmed.core.labels import normalize_label
 
@@ -82,6 +82,34 @@ class QuantRecallDeltaResult:
         return payload
 
 
+@dataclass(frozen=True)
+class OnnxLogitParityResult:
+    """Numeric and span parity evidence for optimized ONNX token classifiers."""
+
+    passed: bool
+    logits_within_tolerance: bool
+    spans_identical: bool
+    max_abs_diff: float
+    max_rel_diff: float
+    token_mismatches: int
+    tokens_evaluated: int
+    span_count: int = 0
+    source: str = "computed_from_logits"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "logits_within_tolerance": self.logits_within_tolerance,
+            "spans_identical": self.spans_identical,
+            "max_abs_diff": self.max_abs_diff,
+            "max_rel_diff": self.max_rel_diff,
+            "token_mismatches": self.token_mismatches,
+            "tokens_evaluated": self.tokens_evaluated,
+            "span_count": self.span_count,
+            "source": self.source,
+        }
+
+
 def evaluate_quant_recall_delta(
     *,
     format_name: str,
@@ -152,6 +180,79 @@ def evaluate_quant_recall_delta(
     )
 
 
+def evaluate_onnx_logit_parity(
+    baseline_logits: Any,
+    candidate_logits: Any,
+    *,
+    id2label: Mapping[Any, str] | None = None,
+    offsets: Any = None,
+    rtol: float = 1e-4,
+    atol: float = 1e-4,
+) -> OnnxLogitParityResult:
+    """Compare logits and predicted spans from two token-classification graphs.
+
+    The helper accepts nested Python sequences or array-like values with a
+    ``tolist`` method. Span parity is derived from BIO labels when ``id2label``
+    and tokenizer offsets are provided; otherwise exact token prediction parity
+    is used as the span-safety proxy.
+    """
+
+    baseline = _as_nested_list(baseline_logits)
+    candidate = _as_nested_list(candidate_logits)
+    baseline_values = list(_flatten_numbers(baseline))
+    candidate_values = list(_flatten_numbers(candidate))
+    if len(baseline_values) != len(candidate_values) or not baseline_values:
+        return OnnxLogitParityResult(
+            passed=False,
+            logits_within_tolerance=False,
+            spans_identical=False,
+            max_abs_diff=math.inf,
+            max_rel_diff=math.inf,
+            token_mismatches=0,
+            tokens_evaluated=0,
+            source="shape_mismatch",
+        )
+
+    max_abs_diff = 0.0
+    max_rel_diff = 0.0
+    logits_within_tolerance = True
+    for left, right in zip(baseline_values, candidate_values):
+        abs_diff = abs(left - right)
+        rel_diff = abs_diff / max(abs(left), abs(right), 1e-12)
+        max_abs_diff = max(max_abs_diff, abs_diff)
+        max_rel_diff = max(max_rel_diff, rel_diff)
+        if abs_diff > (atol + rtol * abs(left)):
+            logits_within_tolerance = False
+
+    baseline_tokens = _argmax_token_ids(baseline)
+    candidate_tokens = _argmax_token_ids(candidate)
+    token_pairs = list(
+        zip(_flatten_token_ids(baseline_tokens), _flatten_token_ids(candidate_tokens))
+    )
+    token_mismatches = sum(1 for left, right in token_pairs if left != right)
+    tokens_evaluated = len(token_pairs)
+
+    if id2label is not None and offsets is not None:
+        baseline_spans = _bio_spans(baseline_tokens, offsets, id2label)
+        candidate_spans = _bio_spans(candidate_tokens, offsets, id2label)
+        spans_identical = baseline_spans == candidate_spans
+        span_count = len(baseline_spans)
+    else:
+        spans_identical = token_mismatches == 0 and tokens_evaluated > 0
+        span_count = 0
+
+    return OnnxLogitParityResult(
+        passed=logits_within_tolerance and spans_identical,
+        logits_within_tolerance=logits_within_tolerance,
+        spans_identical=spans_identical,
+        max_abs_diff=max_abs_diff,
+        max_rel_diff=max_rel_diff,
+        token_mismatches=token_mismatches,
+        tokens_evaluated=tokens_evaluated,
+        span_count=span_count,
+    )
+
+
 def is_quantized_format(format_name: str) -> bool:
     return limit_for_format(format_name) is not None
 
@@ -163,6 +264,142 @@ def limit_for_format(format_name: str) -> float | None:
     if "int4" in normalized or "4bit" in normalized or "4-bit" in normalized:
         return INT4_RECALL_DELTA_LIMIT
     return None
+
+
+def _as_nested_list(value: Any) -> Any:
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, tuple):
+        return [_as_nested_list(item) for item in value]
+    if isinstance(value, list):
+        return [_as_nested_list(item) for item in value]
+    return value
+
+
+def _flatten_numbers(value: Any) -> Iterable[float]:
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _flatten_numbers(item)
+        return
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return
+    if math.isfinite(number):
+        yield number
+
+
+def _argmax_token_ids(logits: Any) -> list[list[int]]:
+    batches = _as_nested_list(logits)
+    result: list[list[int]] = []
+    if not isinstance(batches, list):
+        return result
+    for batch in batches:
+        if not isinstance(batch, list):
+            continue
+        tokens: list[int] = []
+        for token_logits in batch:
+            if not isinstance(token_logits, list) or not token_logits:
+                continue
+            tokens.append(_argmax(token_logits))
+        result.append(tokens)
+    return result
+
+
+def _argmax(values: Sequence[Any]) -> int:
+    best_index = 0
+    best_value = -math.inf
+    for index, value in enumerate(values):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            number = -math.inf
+        if number > best_value:
+            best_index = index
+            best_value = number
+    return best_index
+
+
+def _flatten_token_ids(value: Sequence[Sequence[int]]) -> Iterable[int]:
+    for batch in value:
+        yield from batch
+
+
+def _bio_spans(
+    token_ids: Sequence[Sequence[int]],
+    offsets: Any,
+    id2label: Mapping[Any, str],
+) -> list[tuple[int, int, str]]:
+    offset_batches = _as_nested_list(offsets)
+    spans: list[tuple[int, int, str]] = []
+    for batch_index, batch_tokens in enumerate(token_ids):
+        batch_offsets = (
+            offset_batches[batch_index]
+            if isinstance(offset_batches, list) and batch_index < len(offset_batches)
+            else []
+        )
+        current: tuple[int, int, str] | None = None
+        for token_index, token_id in enumerate(batch_tokens):
+            label = _label_for_id(id2label, token_id)
+            offset = (
+                batch_offsets[token_index]
+                if isinstance(batch_offsets, list) and token_index < len(batch_offsets)
+                else None
+            )
+            if not _valid_offset(offset):
+                if current is not None:
+                    spans.append(current)
+                    current = None
+                continue
+
+            start = int(offset[0])
+            end = int(offset[1])
+            prefix, entity = _split_bio_label(label)
+            if prefix == "O" or entity is None:
+                if current is not None:
+                    spans.append(current)
+                    current = None
+                continue
+
+            if prefix == "B" or current is None or current[2] != entity:
+                if current is not None:
+                    spans.append(current)
+                current = (start, end, entity)
+            else:
+                current = (current[0], end, current[2])
+
+        if current is not None:
+            spans.append(current)
+    return spans
+
+
+def _label_for_id(id2label: Mapping[Any, str], token_id: int) -> str:
+    for key in (token_id, str(token_id)):
+        if key in id2label:
+            return str(id2label[key])
+    return str(token_id)
+
+
+def _valid_offset(value: Any) -> bool:
+    return (
+        isinstance(value, (list, tuple))
+        and len(value) == 2
+        and _optional_float(value[0]) is not None
+        and _optional_float(value[1]) is not None
+        and int(value[1]) > int(value[0])
+    )
+
+
+def _split_bio_label(label: str) -> tuple[str, str | None]:
+    normalized = str(label)
+    if normalized == "O":
+        return "O", None
+    if "-" not in normalized:
+        return "B", normalized
+    prefix, entity = normalized.split("-", 1)
+    if prefix not in {"B", "I"} or not entity:
+        return "B", normalized
+    return prefix, entity
 
 
 def _result_from_delta_map(
@@ -280,6 +517,8 @@ __all__ = [
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
     "QuantRecallDeltaResult",
+    "OnnxLogitParityResult",
+    "evaluate_onnx_logit_parity",
     "evaluate_quant_recall_delta",
     "is_quantized_format",
     "limit_for_format",
