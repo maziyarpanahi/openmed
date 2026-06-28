@@ -144,6 +144,19 @@ non-batch-compatible settings are still coalesced but executed independently.
 `OPENMED_SERVICE_BATCH_MAX_WAIT_MS` is a non-negative wait window in
 milliseconds.
 
+Optional request coalescing:
+
+```bash
+OPENMED_SERVICE_COALESCING_ENABLED=true \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+Request coalescing is off by default. When enabled, identical concurrent
+`/analyze`, `/pii/extract`, and `/pii/deidentify` requests share one in-flight
+model computation keyed by endpoint, normalized text, and request options. The
+single result, or the leader error, is fanned out to all joined waiters. This is
+not a persistent response cache; entries are evicted shortly after completion.
+
 Optional graceful-shutdown drain timeout:
 
 ```bash
@@ -181,6 +194,7 @@ content, and PHI are never used as label values.
 - `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
 - Dynamic request batching can be enabled for compatible `/analyze` and `/pii/extract` traffic with `OPENMED_SERVICE_BATCHING_ENABLED=true`.
+- Identical in-flight inference requests can be coalesced with `OPENMED_SERVICE_COALESCING_ENABLED=true`.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
