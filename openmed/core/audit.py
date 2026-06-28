@@ -352,7 +352,11 @@ class AuditReport:
 
     @classmethod
     def from_json(cls, data: str | bytes) -> "AuditReport":
-        return cls.from_dict(json.loads(data))
+        try:
+            parsed = json.loads(data)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON for AuditReport: {exc}") from exc
+        return cls.from_dict(parsed)
 
     def sign(
         self,
