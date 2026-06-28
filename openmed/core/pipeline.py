@@ -10,6 +10,7 @@ import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
@@ -190,6 +191,7 @@ class Pipeline:
         high_recall_label_floors: Mapping[str, float] | None = None,
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
+        custom_recognizer: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
         from . import pii
@@ -231,6 +233,7 @@ class Pipeline:
         self.high_recall_label_floors = high_recall_label_floors
         self.policy_actions = policy_actions
         self.section_detector = section_detector
+        self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
         self.hmac_secret = hmac_secret
         from .clinical_protect import protection_options_from_config
 
@@ -431,6 +434,10 @@ class Pipeline:
             (*deterministic_spans, *model_spans, *clinical_spans),
             context,
         )
+        merged_spans, allow_metadata = self._suppress_custom_allowed_spans(
+            normalized.normalized_text,
+            merged_spans,
+        )
         merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
             normalized.normalized_text,
             merged_spans,
@@ -455,7 +462,10 @@ class Pipeline:
                 7,
                 STAGE_NAMES[6],
                 spans=merged_spans,
-                metadata=clinical_protection_metadata,
+                metadata={
+                    **dict(allow_metadata),
+                    **dict(clinical_protection_metadata),
+                },
             )
         )
 
@@ -478,6 +488,11 @@ class Pipeline:
                 ]
                 pii_result.metadata = metadata
         else:
+            pii._suppress_custom_allowed_entities(
+                normalized.normalized_text,
+                pii_result,
+                self.custom_recognizer,
+            )
             pii_result = _append_span_predictions(
                 pii_result,
                 normalized.normalized_text,
@@ -485,7 +500,7 @@ class Pipeline:
                     span
                     for span in policy_spans
                     if span.action != ACTION_KEEP
-                    and str(span.detector or "").startswith("plugin:")
+                    and str(span.detector or "").startswith(("plugin:", "custom:"))
                 ],
             )
 
@@ -692,16 +707,20 @@ class Pipeline:
             lang=context.route.lang,
             patterns=_deterministic_patterns(context.route.lang),
         )
-        return self._entities_to_spans(
-            entities,
-            text,
-            context,
-            default_detector="rules:regex",
-            stage=STAGE_NAMES[3],
-        ) + self._registered_detector_spans(
-            text,
-            context,
-            pipeline_stage=STAGE_NAMES[3],
+        return (
+            self._entities_to_spans(
+                entities,
+                text,
+                context,
+                default_detector="rules:regex",
+                stage=STAGE_NAMES[3],
+            )
+            + self._custom_deny_spans(text, context)
+            + self._registered_detector_spans(
+                text,
+                context,
+                pipeline_stage=STAGE_NAMES[3],
+            )
         )
 
     def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
@@ -866,6 +885,14 @@ class Pipeline:
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
             raise RuntimeError("safety sweep must not reduce redacted character count")
+        if self.custom_recognizer is not None:
+            from . import pii
+
+            pii._suppress_custom_allowed_entities(
+                text,
+                pii_result,
+                self.custom_recognizer,
+            )
 
         spans = self._entities_to_spans(
             getattr(pii_result, "entities", ()),
@@ -881,6 +908,11 @@ class Pipeline:
             "spans_added": spans_added,
             "redacted_chars_before": before,
             "redacted_chars_after": after,
+            "custom_allow_spans": (
+                len(self.custom_recognizer.allow_matches(text))
+                if self.custom_recognizer is not None
+                else 0
+            ),
         }
 
     def _protect_clinical_spans(
@@ -1062,6 +1094,38 @@ class Pipeline:
                 )
         return tuple(spans)
 
+    def _custom_deny_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> tuple[OpenMedSpan, ...]:
+        if self.custom_recognizer is None:
+            return ()
+        entities = self.custom_recognizer.detect_entities(
+            text,
+            hmac_secret=self.hmac_secret,
+        )
+        return self._entities_to_spans(
+            entities,
+            text,
+            context,
+            default_detector=CUSTOM_DENY_DETECTOR,
+            stage=STAGE_NAMES[3],
+        )
+
+    def _suppress_custom_allowed_spans(
+        self,
+        text: str,
+        spans: Sequence[OpenMedSpan],
+    ) -> tuple[tuple[OpenMedSpan, ...], Mapping[str, Any]]:
+        if self.custom_recognizer is None:
+            return tuple(spans), {}
+        filtered, suppressed = self.custom_recognizer.suppress_spans(text, spans)
+        return filtered, {
+            "custom_allow_spans": len(self.custom_recognizer.allow_matches(text)),
+            "custom_allow_suppressed_spans": suppressed,
+        }
+
     def _audit_record(
         self,
         context: PipelineContext,
@@ -1232,7 +1296,9 @@ def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
 def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
-    if detector and str(detector).startswith(("rules:", "model:", "plugin:")):
+    if detector and str(detector).startswith(
+        ("rules:", "model:", "plugin:", "custom:")
+    ):
         return str(detector)
 
     sweep = metadata.get("safety_sweep") if isinstance(metadata, Mapping) else None
@@ -1262,6 +1328,8 @@ def _evidence_for_entity(entity: Any) -> Mapping[str, Any]:
         evidence["rule"] = metadata["safety_sweep"]
     if "patterns_version" in metadata:
         evidence["patterns_version"] = metadata["patterns_version"]
+    if "custom_recognizer" in metadata:
+        evidence["custom_recognizer"] = metadata["custom_recognizer"]
     return evidence
 
 
