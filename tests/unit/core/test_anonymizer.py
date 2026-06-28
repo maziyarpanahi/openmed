@@ -8,6 +8,7 @@ from openmed.core.anonymizer import (
     AnonymizerConfig,
     register_label_generator,
 )
+from openmed.core.anonymizer import locales as locale_module
 from openmed.core.anonymizer.format_preserve import (
     extract_digit_groups,
     preserve_email_pattern,
@@ -15,24 +16,12 @@ from openmed.core.anonymizer.format_preserve import (
     preserve_phone_format,
 )
 from openmed.core.labels import normalize_label
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 
 
 class TestLocaleResolution:
     def test_lang_to_locale_covers_all_supported_languages(self):
-        for lang in (
-            "en",
-            "fr",
-            "de",
-            "it",
-            "es",
-            "nl",
-            "hi",
-            "te",
-            "pt",
-            "ar",
-            "ja",
-            "tr",
-        ):
+        for lang in sorted(SUPPORTED_LANGUAGES):
             assert lang in LANG_TO_LOCALE
 
     def test_locale_override_per_call(self):
@@ -44,6 +33,7 @@ class TestLocaleResolution:
 
     def test_telugu_falls_back_to_indian_english(self):
         # Should not raise — just emits a warning the first time.
+        locale_module._warned.clear()
         with pytest.warns(UserWarning, match="te"):
             a = Anonymizer(lang="te")
             out = a.surrogate("Sita", "FIRSTNAME")

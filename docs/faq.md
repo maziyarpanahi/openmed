@@ -46,10 +46,10 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **13 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
+PII extraction and de-identification support **15 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr`.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-12-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-15-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.
