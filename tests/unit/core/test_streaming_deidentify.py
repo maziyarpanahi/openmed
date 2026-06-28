@@ -3,10 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import patch
 
+import pytest
+
 from openmed import deidentify_stream
 from openmed.core.pii import deidentify
 from openmed.core.pipeline import Pipeline
-from openmed.core.streaming import StreamingDeidentifier
+from openmed.core.streaming import StreamingBufferError, StreamingDeidentifier
 from openmed.processing.outputs import PredictionResult
 
 
@@ -70,6 +72,7 @@ def test_boundary_split_identifier_is_not_partially_emitted():
     )
     first_events = streamer.feed("Contact jane.patient@")
     second_events = streamer.feed("example.com before the appointment tomorrow.")
+    assert streamer.carry_buffer_length <= streamer.max_buffer
     final_events = streamer.flush()
 
     emitted = [*first_events, *second_events, *final_events]
@@ -80,6 +83,19 @@ def test_boundary_split_identifier_is_not_partially_emitted():
         assert "jane.patient" not in event.redacted_text
         assert "example.com" not in event.redacted_text
         assert "patient@example" not in event.redacted_text
+
+
+def test_too_small_buffer_raises_before_emitting_incomplete_identifier():
+    streamer = StreamingDeidentifier(
+        pipeline=Pipeline(
+            model_detector=_empty_model_detector,
+            use_safety_sweep=True,
+        ),
+        max_buffer=5,
+    )
+
+    with pytest.raises(StreamingBufferError):
+        streamer.feed("Contact jane.patient@")
 
 
 def test_carry_buffer_stays_within_configured_maximum_on_long_stream():
