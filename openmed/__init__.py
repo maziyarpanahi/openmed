@@ -56,6 +56,12 @@ from .core.result_cache import (
     make_cache_key,
 )
 from .core.results import AnalyzeResult
+from .core.streaming import (
+    StreamingBufferError,
+    StreamingDeidentificationEvent,
+    StreamingDeidentifier,
+    deidentify_stream,
+)
 from .core.surrogate_vault import (
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
@@ -657,6 +663,10 @@ __all__ = [
     "PIIEntity",
     "DeidentificationResult",
     "CustomRecognizer",
+    "StreamingBufferError",
+    "StreamingDeidentificationEvent",
+    "StreamingDeidentifier",
+    "deidentify_stream",
     "redaction_preview",
     "render_redaction_preview",
     # PII entity merging utilities
