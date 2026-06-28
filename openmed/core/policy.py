@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from functools import lru_cache
 from importlib import resources
@@ -96,6 +96,56 @@ class PolicyProfile:
             "policy_label_actions": dict(self.policy_label_actions),
             "metadata": dict(self.metadata),
         }
+
+    def derive(
+        self,
+        *,
+        name: str | None = None,
+        posture: str | None = None,
+        default_action: str | None = None,
+        default_action_bias: str | None = None,
+        actions: Mapping[str, str] | None = None,
+        policy_label_actions: Mapping[str, str] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> "PolicyProfile":
+        """Return a validated copy with selected profile fields replaced."""
+
+        resolved_name = self.name if name is None else _non_empty_str(name, "name")
+        resolved_posture = (
+            self.posture if posture is None else _non_empty_str(posture, "posture")
+        )
+        resolved_default_action = (
+            self.default_action
+            if default_action is None
+            else _action(default_action, "default_action")
+        )
+        resolved_default_action_bias = (
+            self.default_action_bias
+            if default_action_bias is None
+            else _non_empty_str(default_action_bias, "default_action_bias")
+        )
+        resolved_actions = (
+            dict(self.actions) if actions is None else _canonical_actions(actions)
+        )
+        resolved_policy_label_actions = (
+            dict(self.policy_label_actions)
+            if policy_label_actions is None
+            else _policy_label_actions(policy_label_actions)
+        )
+        resolved_metadata = dict(self.metadata)
+        if metadata is not None:
+            resolved_metadata.update(dict(metadata))
+
+        return replace(
+            self,
+            name=resolved_name,
+            posture=resolved_posture,
+            default_action=resolved_default_action,
+            default_action_bias=resolved_default_action_bias,
+            actions=resolved_actions,
+            policy_label_actions=resolved_policy_label_actions,
+            metadata=resolved_metadata,
+        )
 
 
 def canonical_policy_name(name: str | PolicyName) -> str:
