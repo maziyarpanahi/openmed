@@ -6,6 +6,7 @@ as the MLX path. Use this when MLX is unavailable, or when you
 intentionally choose the Hugging Face/PyTorch backend.
 """
 
+from .attention import select_attn_implementation
 from .calibration import load_awq_calibration_texts, load_quantization_calibration_texts
 from .device import apply_mps_tuning, resolve_torch_device
 from .privacy_filter import PrivacyFilterTorchPipeline
@@ -22,4 +23,5 @@ __all__ = [
     "quantize_awq",
     "quantize_gptq",
     "resolve_torch_device",
+    "select_attn_implementation",
 ]
