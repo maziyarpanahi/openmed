@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import importlib
 import inspect
 import logging
 import unicodedata
@@ -247,6 +248,7 @@ class Pipeline:
         consistent: bool = False,
         seed: Optional[int] = None,
         locale: Optional[str] = None,
+        surrogate_vault: Any = None,
         doc_id: str | None = None,
         audit: bool = False,
     ) -> PipelineResult:
@@ -520,6 +522,7 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=route.model_name,
             confidence_threshold=self.confidence_threshold,
             normalize_accents=self.normalize_accents,
@@ -573,6 +576,7 @@ class Pipeline:
         )
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
+        repair_encoding, encoding_repair_metadata = _encoding_repairer()
         normalized_parts: list[str] = []
         original_to_normalized: list[int | None] = [None] * len(text)
         normalized_to_original: list[int] = []
@@ -586,7 +590,7 @@ class Pipeline:
             else:
                 normalized_segment = unicodedata.normalize(
                     "NFC",
-                    _repair_encoding_segment(segment),
+                    _repair_encoding_segment(segment, repair_encoding=repair_encoding),
                 )
 
             if not normalized_segment:
@@ -616,6 +620,7 @@ class Pipeline:
                 "whitespace_collapsed": normalized_text != text,
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
+                "encoding_repair": encoding_repair_metadata,
             },
         )
 
@@ -643,16 +648,36 @@ class Pipeline:
             return dict(self.section_detector(text))
 
         try:
-            from openmed.clinical import sections
-        except ImportError:
-            return {"section_hook": "unavailable", "sections": ()}
+            sections = importlib.import_module("openmed.clinical.sections")
+        except ImportError as exc:
+            return {
+                "section_hook": "unavailable",
+                "sections": (),
+                "section_detection": _section_detection_unavailable_metadata(exc),
+            }
 
         if hasattr(sections, "detect_sections"):
             return {
                 "section_hook": "detect_sections",
                 "sections": sections.detect_sections(text),
+                "section_detection": {
+                    "feature": "clinical section detection",
+                    "available": True,
+                    "skipped": False,
+                    "dependency": "openmed.clinical.sections",
+                },
             }
-        return {"section_hook": "unavailable", "sections": ()}
+        return {
+            "section_hook": "unavailable",
+            "sections": (),
+            "section_detection": {
+                "feature": "clinical section detection",
+                "available": False,
+                "skipped": True,
+                "dependency": "openmed.clinical.sections.detect_sections",
+                "reason": "detect_sections hook is not registered",
+            },
+        }
 
     def stage4_deterministic_detectors(
         self,
@@ -889,6 +914,7 @@ class Pipeline:
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        surrogate_vault: Any = None,
         model_name: str,
         confidence_threshold: float,
         normalize_accents: Optional[bool],
@@ -912,6 +938,7 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=model_name,
             confidence_threshold=confidence_threshold,
             normalize_accents=normalize_accents,
@@ -1094,12 +1121,50 @@ def _iter_normalization_segments(text: str):
         yield start, index, text[start:index], False
 
 
-def _repair_encoding_segment(segment: str) -> str:
+def _identity_text(text: str) -> str:
+    return text
+
+
+def _encoding_repairer() -> tuple[Callable[[str], str], Mapping[str, Any]]:
+    from .pii import _optional_dependency_status
+
     try:
         from ftfy import fix_text
-    except ImportError:
-        return segment
-    return fix_text(segment)
+    except ImportError as exc:
+        return _identity_text, _optional_dependency_status(
+            package="ftfy",
+            feature="encoding repair",
+            available=False,
+            skipped=True,
+            reason=f"missing optional dependency: {exc.name or 'ftfy'}",
+        )
+    return fix_text, _optional_dependency_status(
+        package="ftfy",
+        feature="encoding repair",
+        available=True,
+        skipped=False,
+    )
+
+
+def _repair_encoding_segment(
+    segment: str,
+    *,
+    repair_encoding: Callable[[str], str] | None = None,
+) -> str:
+    if repair_encoding is None:
+        repair_encoding, _ = _encoding_repairer()
+    return repair_encoding(segment)
+
+
+def _section_detection_unavailable_metadata(exc: ImportError) -> dict[str, Any]:
+    dependency = exc.name or "openmed.clinical.sections"
+    return {
+        "feature": "clinical section detection",
+        "available": False,
+        "skipped": True,
+        "dependency": dependency,
+        "reason": f"missing optional capability: {dependency}",
+    }
 
 
 def _detect_script(text: str) -> str:
