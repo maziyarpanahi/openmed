@@ -16,7 +16,9 @@ from openmed.eval.metrics import (
     EvalSpan,
     compute_confidence_intervals,
     compute_metrics_bundle,
+    expected_calibration_error,
     normalize_eval_spans,
+    reliability_bins,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -121,6 +123,8 @@ def run_benchmark(
     ci_resamples: int = 1000,
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
+    calibration: bool = False,
+    calibration_bins: int = 10,
     cache_dir: str | Path | None = None,
     cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
@@ -156,6 +160,8 @@ def run_benchmark(
                 ci_resamples=ci_resamples,
                 ci_alpha=ci_alpha,
                 ci_seed=ci_seed,
+                calibration=calibration,
+                calibration_bins=calibration_bins,
             ),
             cache_dir=cache_dir,
         )
@@ -213,6 +219,13 @@ def run_benchmark(
             alpha=ci_alpha,
             seed=ci_seed,
         )
+    if calibration:
+        metrics = _attach_calibration_metrics(
+            metrics,
+            gold_spans,
+            predicted_spans,
+            n_bins=calibration_bins,
+        )
 
     report_metadata = dict(metadata or {})
     report_metadata.setdefault(
@@ -244,6 +257,8 @@ def run_suite(
     ci_resamples: int = 1000,
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
+    calibration: bool = False,
+    calibration_bins: int = 10,
     cache_dir: str | Path | None = None,
     cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
@@ -260,6 +275,8 @@ def run_suite(
         ci_resamples=ci_resamples,
         ci_alpha=ci_alpha,
         ci_seed=ci_seed,
+        calibration=calibration,
+        calibration_bins=calibration_bins,
         cache_dir=cache_dir,
         cache_code_hash=cache_code_hash,
     )
@@ -340,6 +357,59 @@ def _attach_confidence_intervals(
         if isinstance(metric, Mapping):
             merged[key] = {**metric, "confidence_interval": interval}
     return merged
+
+
+def _attach_calibration_metrics(
+    metrics: Mapping[str, Any],
+    gold_spans: Sequence[EvalSpan],
+    predicted_spans: Sequence[EvalSpan],
+    *,
+    n_bins: int,
+) -> dict[str, Any]:
+    """Merge reliability diagram data into the metric bundle."""
+    bins = reliability_bins(
+        _prediction_confidence_records(gold_spans, predicted_spans),
+        n_bins=n_bins,
+    )
+    merged = dict(metrics)
+    merged["calibration"] = {
+        "expected_calibration_error": expected_calibration_error(bins),
+        "reliability_bins": bins,
+        "n_bins": n_bins,
+    }
+    return merged
+
+
+def _prediction_confidence_records(
+    gold_spans: Sequence[EvalSpan],
+    predicted_spans: Sequence[EvalSpan],
+) -> list[dict[str, Any]]:
+    matched_gold: set[int] = set()
+    records: list[dict[str, Any]] = []
+    for predicted in predicted_spans:
+        correct = False
+        for index, gold in enumerate(gold_spans):
+            if index in matched_gold:
+                continue
+            if _exact_span_match(gold, predicted):
+                matched_gold.add(index)
+                correct = True
+                break
+        records.append(
+            {
+                "confidence": predicted.metadata.get("confidence", 1.0),
+                "correct": correct,
+            }
+        )
+    return records
+
+
+def _exact_span_match(gold_span: EvalSpan, predicted_span: EvalSpan) -> bool:
+    return (
+        gold_span.label == predicted_span.label
+        and gold_span.start == predicted_span.start
+        and gold_span.end == predicted_span.end
+    )
 
 
 def _corpus_coordinates(
