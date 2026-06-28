@@ -31,6 +31,7 @@ nav:
       - Eval Harness & Metrics: eval-harness.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
+      - GPTQ Export: export-gptq.md
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md

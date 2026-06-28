@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
     from .models import ModelLoader
+    from .surrogate_vault import SurrogateVault
 
 from .result_cache import (
     get_result_cache,
@@ -1155,6 +1156,7 @@ def _build_deidentification_result(
     consistent: bool,
     seed: Optional[int],
     locale: Optional[str],
+    surrogate_vault: Optional["SurrogateVault"] = None,
     model_name: str = _DEFAULT_EN_MODEL,
     confidence_threshold: float = 0.7,
     normalize_accents: Optional[bool] = None,
@@ -1252,6 +1254,7 @@ def _build_deidentification_result(
             ),
             lang=lang,
             anonymizer=anonymizer,
+            surrogate_vault=surrogate_vault,
         )
 
         if keep_mapping and entity_method == "remove":
@@ -1367,6 +1370,7 @@ def _deidentify_batch(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -1412,6 +1416,7 @@ def _deidentify_batch(
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             policy="hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
@@ -1436,6 +1441,7 @@ def deidentify(
     consistent: bool = False,
     seed: Optional[int] = None,
     locale: Optional[str] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
@@ -1483,6 +1489,10 @@ def deidentify(
             ``consistent=True`` replacements. Implies ``consistent=True``.
         locale: Faker locale override (``pt_BR``, ``en_GB``, ...) for
             ``method="replace"``. When ``None``, derived from ``lang``.
+        surrogate_vault: Optional cross-document surrogate vault. When provided
+            with ``method="replace"``, OpenMed stores only HMAC source hashes
+            and reuses the same surrogate for the same label/language/source
+            identifier across calls.
         policy: Optional policy profile name controlling arbitration, action
             selection, mandatory safety sweep behavior, and reversible mapping.
         calibration_thresholds_path: Optional thresholds.json artifact path
@@ -1573,6 +1583,7 @@ def deidentify(
         consistent=consistent,
         seed=seed,
         locale=locale,
+        surrogate_vault=surrogate_vault,
         audit=audit,
     )
 
@@ -1607,6 +1618,7 @@ def _redact_entity(
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
+    surrogate_vault: Optional["SurrogateVault"] = None,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -1619,6 +1631,7 @@ def _redact_entity(
         anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
+        surrogate_vault: Optional vault for stable cross-document replacements.
 
     Returns:
         Redacted text replacement
@@ -1633,8 +1646,26 @@ def _redact_entity(
 
     elif method == "replace":
         if anonymizer is not None:
+            original = entity.original_text or entity.text
+            if surrogate_vault is not None:
+                label = entity.canonical_label or entity.entity_type
+
+                def _create_surrogate(attempt: int) -> str:
+                    source = original if attempt == 0 else f"{original}|{attempt}"
+                    return anonymizer.surrogate(
+                        source,
+                        entity.entity_type,
+                        lang=lang,
+                    )
+
+                return surrogate_vault.get_or_create(
+                    original,
+                    label=label,
+                    lang=lang,
+                    create_surrogate=_create_surrogate,
+                )
             return anonymizer.surrogate(
-                entity.original_text or entity.text,
+                original,
                 entity.entity_type,
                 lang=lang,
             )
