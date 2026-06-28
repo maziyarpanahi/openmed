@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from functools import lru_cache
 from importlib import resources
@@ -23,16 +23,20 @@ class PolicyName(str, Enum):
     HIPAA_SAFE_HARBOR = "hipaa_safe_harbor"
     HIPAA_EXPERT_REVIEW_ASSIST = "hipaa_expert_review_assist"
     GDPR_PSEUDONYMIZATION = "gdpr_pseudonymization"
+    GDPR_ART9_HEALTH = "gdpr_art9_health"
     RESEARCH_LIMITED_DATASET = "research_limited_dataset"
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
     CANADA_PIPEDA = "canada_pipeda"
     UK_ICO_ANONYMISATION = "uk_ico_anonymisation"
+    AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
 POLICY_ALIASES: Mapping[str, str] = {
+    "au_privacy": PolicyName.AUSTRALIA_PRIVACY_ACT.value,
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
+    "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
     "uk_ico": PolicyName.UK_ICO_ANONYMISATION.value,
 }
@@ -95,6 +99,56 @@ class PolicyProfile:
             "metadata": dict(self.metadata),
         }
 
+    def derive(
+        self,
+        *,
+        name: str | None = None,
+        posture: str | None = None,
+        default_action: str | None = None,
+        default_action_bias: str | None = None,
+        actions: Mapping[str, str] | None = None,
+        policy_label_actions: Mapping[str, str] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> "PolicyProfile":
+        """Return a validated copy with selected profile fields replaced."""
+
+        resolved_name = self.name if name is None else _non_empty_str(name, "name")
+        resolved_posture = (
+            self.posture if posture is None else _non_empty_str(posture, "posture")
+        )
+        resolved_default_action = (
+            self.default_action
+            if default_action is None
+            else _action(default_action, "default_action")
+        )
+        resolved_default_action_bias = (
+            self.default_action_bias
+            if default_action_bias is None
+            else _non_empty_str(default_action_bias, "default_action_bias")
+        )
+        resolved_actions = (
+            dict(self.actions) if actions is None else _canonical_actions(actions)
+        )
+        resolved_policy_label_actions = (
+            dict(self.policy_label_actions)
+            if policy_label_actions is None
+            else _policy_label_actions(policy_label_actions)
+        )
+        resolved_metadata = dict(self.metadata)
+        if metadata is not None:
+            resolved_metadata.update(dict(metadata))
+
+        return replace(
+            self,
+            name=resolved_name,
+            posture=resolved_posture,
+            default_action=resolved_default_action,
+            default_action_bias=resolved_default_action_bias,
+            actions=resolved_actions,
+            policy_label_actions=resolved_policy_label_actions,
+            metadata=resolved_metadata,
+        )
+
 
 def canonical_policy_name(name: str | PolicyName) -> str:
     """Resolve aliases and validate a policy profile name."""
@@ -123,6 +177,23 @@ def list_policies() -> tuple[str, ...]:
     """Return the canonical policy names."""
 
     return CANONICAL_POLICY_NAMES
+
+
+def lint_policy(
+    name: str | PolicyName | PolicyProfile | Mapping[str, Any],
+) -> tuple[str, ...]:
+    """Return schema validation errors for a policy profile."""
+
+    if isinstance(name, PolicyProfile):
+        return ()
+    try:
+        if isinstance(name, Mapping):
+            _profile_from_mapping(name, source="<mapping>")
+        else:
+            load_policy(name)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return (str(exc),)
+    return ()
 
 
 @lru_cache(maxsize=len(CANONICAL_POLICY_NAMES))
@@ -264,6 +335,7 @@ __all__ = [
     "PolicyName",
     "PolicyProfile",
     "canonical_policy_name",
+    "lint_policy",
     "list_policies",
     "load_policy",
 ]

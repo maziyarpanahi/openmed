@@ -538,6 +538,8 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nie": ID_NUM,
     "bsn": ID_NUM,
     "aadhaar": ID_NUM,
+    "teudatzehut": ID_NUM,
+    "tz": ID_NUM,
     "npi": ID_NUM,
     "ssn": SSN,
     "socialsecuritynumber": SSN,
@@ -642,6 +644,8 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "nie": ID_SUBTYPE_NATIONAL_ID,
     "bsn": ID_SUBTYPE_NATIONAL_ID,
     "aadhaar": ID_SUBTYPE_NATIONAL_ID,
+    "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
+    "tz": ID_SUBTYPE_NATIONAL_ID,
 }
 
 

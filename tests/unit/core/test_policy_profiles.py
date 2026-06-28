@@ -12,6 +12,7 @@ from openmed.core.pipeline import Pipeline
 from openmed.core.policy import (
     CANONICAL_POLICY_NAMES,
     canonical_policy_name,
+    lint_policy,
     list_policies,
     load_policy,
 )
@@ -82,8 +83,45 @@ def test_all_policy_literals_load_and_gdpr_alias_resolves():
 
         assert profile.name == name
         assert set(profile.actions) == set(CANONICAL_LABELS)
+        assert lint_policy(name) == ()
 
     assert load_policy("gdpr").name == "gdpr_pseudonymization"
+
+
+def test_gdpr_art9_health_profile_and_alias_load():
+    profile = load_policy("gdpr_art9_health")
+    gdpr = load_policy("gdpr_pseudonymization")
+
+    assert profile.name == "gdpr_art9_health"
+    assert load_policy("gdpr_health").name == "gdpr_art9_health"
+    assert "gdpr_art9_health" in list_policies()
+    assert profile.safety_sweep_mandatory is True
+    assert "R3" in profile.forced_cascade_tiers
+    assert profile.action_for("LOCATION") == "mask"
+    assert profile.action_for("CONDITION") == "mask"
+    assert gdpr.action_for("CONDITION") == "keep"
+    assert lint_policy("gdpr_art9_health") == ()
+
+
+def test_gdpr_art9_health_masks_clinical_fixture_that_gdpr_keeps(monkeypatch):
+    text = "Patient has diabetes"
+    _patch_extract(monkeypatch, _entity(text, "diabetes", "CONDITION", 0.99))
+
+    gdpr = deidentify(
+        text,
+        policy="gdpr_pseudonymization",
+        use_safety_sweep=False,
+    )
+    article9 = deidentify(
+        text,
+        policy="gdpr_art9_health",
+        use_safety_sweep=False,
+    )
+
+    assert gdpr.deidentified_text == text
+    assert article9.deidentified_text == "Patient has [CONDITION]"
+    assert article9.pii_entities[0].action == "mask"
+    assert article9.pii_entities[0].metadata["policy_action"]["action"] == "mask"
 
 
 def test_canada_pipeda_profile_and_alias_load():
@@ -97,6 +135,21 @@ def test_canada_pipeda_profile_and_alias_load():
     assert profile.action_for("PERSON") == "replace"
     assert profile.keep_mapping is True
     assert profile.reversible_id is True
+
+
+def test_australia_privacy_act_profile_alias_and_lint_load():
+    profile = load_policy("australia_privacy_act")
+
+    assert profile.name == "australia_privacy_act"
+    assert load_policy("au_privacy").name == "australia_privacy_act"
+    assert "australia_privacy_act" in list_policies()
+    assert profile.action_for("ID_NUM") == "mask"
+    assert profile.action_for("SSN") == "mask"
+    assert profile.action_for("PERSON") == "replace"
+    assert profile.action_for("LOCATION") == "replace"
+    assert profile.keep_mapping is False
+    assert profile.reversible_id is False
+    assert lint_policy("australia_privacy_act") == ()
 
 
 def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):
@@ -166,6 +219,33 @@ def test_uk_ico_masks_nhs_number_and_pseudonymizes_quasi_identifier(monkeypatch)
     assert result.pii_entities[0].canonical_label == "ID_NUM"
     assert [entity.action for entity in result.pii_entities] == ["mask", "replace"]
     assert all(entity.reversible_id for entity in result.pii_entities)
+
+
+def test_australia_privacy_act_masks_medicare_and_tfn_entities(monkeypatch):
+    text = "Medicare 2123 45670 1 TFN 123 456 782"
+    _patch_extract_many(
+        monkeypatch,
+        [
+            _entity(text, "2123 45670 1", "ID_NUM", 0.99),
+            _entity(text, "123 456 782", "SSN", 0.99),
+        ],
+    )
+
+    result = deidentify(
+        text,
+        policy="australia_privacy_act",
+        use_safety_sweep=False,
+    )
+
+    assert result.deidentified_text == "Medicare [ID_NUM] TFN [SSN]"
+    assert result.mapping is None
+    assert [entity.action for entity in result.pii_entities] == ["mask", "mask"]
+    assert [
+        entity.metadata["policy_action"]["policy"] for entity in result.pii_entities
+    ] == [
+        "australia_privacy_act",
+        "australia_privacy_act",
+    ]
 
 
 def test_deidentify_without_policy_preserves_default_output(monkeypatch):
