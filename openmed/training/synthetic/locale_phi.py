@@ -22,6 +22,7 @@ from openmed.core.pii_i18n import (
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
+    validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_portuguese_cpf,
     validate_spanish_nie,
@@ -40,6 +41,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "te",
     "pt",
     "ar",
+    "he",
     "ja",
     "tr",
     "id",
@@ -167,6 +169,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". \u0645\u0648\u0639\u062f \u0627\u0644\u0645\u062a\u0627\u0628\u0639\u0629 ",
         ".",
     ),
+    "he": (
+        "\u05d4\u05e2\u05e8\u05d4 \u05e7\u05dc\u05d9\u05e0\u05d9\u05ea: \u05de\u05d8\u05d5\u05e4\u05dc ",
+        " \u05e0\u05d5\u05dc\u05d3 \u05d1\u05ea\u05d0\u05e8\u05d9\u05da ",
+        ". \u05de\u05d6\u05d4\u05d4 \u05de\u05d8\u05d5\u05e4\u05dc ",
+        ". \u05d8\u05dc\u05e4\u05d5\u05df ",
+        ". \u05db\u05ea\u05d5\u05d1\u05ea ",
+        ". \u05ea\u05d0\u05e8\u05d9\u05da \u05de\u05e2\u05e7\u05d1 ",
+        ".",
+    ),
     "ja": (
         "\u81e8\u5e8a\u30ce\u30fc\u30c8: \u60a3\u8005 ",
         "\u306e\u751f\u5e74\u6708\u65e5 ",
@@ -216,6 +227,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
+    "he": validate_israeli_teudat_zehut,
     "id": validate_indonesian_nik,
     "th": validate_thai_national_id,
 }
@@ -231,6 +243,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "te": "pii_i18n.validate_aadhaar",
     "pt": "pii_i18n.validate_portuguese_cpf",
     "tr": "pii_i18n.validate_turkish_tckn",
+    "he": "pii_i18n.validate_israeli_teudat_zehut",
     "id": "pii_i18n.validate_indonesian_nik",
     "th": "pii_i18n.validate_thai_national_id",
 }

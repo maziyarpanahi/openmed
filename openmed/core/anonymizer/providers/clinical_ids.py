@@ -21,6 +21,7 @@ deterministic:
     passes the official Verhoeff check — only ~1 in 20 by sampling)
   - Spanish NIE (Faker's built-in uses non-instance randomness)
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL and South Korean RRN
@@ -374,6 +375,40 @@ class GermanSteuerIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Israeli Teudat Zehut (9 digits, alternating 1/2 checksum)
+# ---------------------------------------------------------------------------
+
+
+def _teudat_zehut_check_digit(body_digits: Sequence[int]) -> int:
+    """Return the final check digit for the first eight Teudat Zehut digits."""
+    if len(body_digits) != 8:
+        raise ValueError("Teudat Zehut body must contain exactly eight digits")
+
+    total = 0
+    for index, digit in enumerate(body_digits):
+        product = digit * (1 if index % 2 == 0 else 2)
+        total += product if product < 10 else (product // 10) + (product % 10)
+    return (10 - total % 10) % 10
+
+
+def generate_teudat_zehut(*, rng: random.Random | None = None) -> str:
+    """Generate an Israeli Teudat Zehut that passes its checksum validator."""
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(8)]
+    if all(digit == 0 for digit in body):
+        body[-1] = 1
+    body.append(_teudat_zehut_check_digit(body))
+    return "".join(str(digit) for digit in body)
+
+
+class IsraeliTeudatZehutProvider(BaseProvider):
+    """Generates 9-digit Israeli Teudat Zehut numbers."""
+
+    def teudat_zehut(self) -> str:
+        return generate_teudat_zehut(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Spanish DNI (8 digits + modulo-23 letter)
 # ---------------------------------------------------------------------------
 
@@ -633,6 +668,7 @@ __all__ = [
     "AadhaarProvider",
     "GermanSteuerIdProvider",
     "IndonesianNIKProvider",
+    "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
@@ -641,6 +677,7 @@ __all__ = [
     "SpanishDNIProvider",
     "SpanishNIEProvider",
     "generate_indonesian_nik",
+    "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",

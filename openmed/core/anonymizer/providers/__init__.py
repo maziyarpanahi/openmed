@@ -10,6 +10,7 @@ from .clinical_ids import (
     AadhaarProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
+    IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     MedicalRecordNumberProvider,
     NPIProvider,
@@ -18,6 +19,7 @@ from .clinical_ids import (
     generate_indonesian_nik,
     generate_korean_rrn,
     generate_pesel,
+    generate_teudat_zehut,
     register_clinical_providers,
 )
 from .registry_ids import (
@@ -32,6 +34,7 @@ __all__ = [
     "GermanSteuerIdProvider",
     "ID_PROVIDER_REGISTRY",
     "IndonesianNIKProvider",
+    "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
@@ -39,6 +42,7 @@ __all__ = [
     "PolishPeselProvider",
     "SpanishDNIProvider",
     "generate_indonesian_nik",
+    "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_pesel",
     "get_national_id",
