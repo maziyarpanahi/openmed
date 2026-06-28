@@ -11,6 +11,7 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /analyze`
 - `POST /pii/extract`
 - `POST /pii/deidentify`
+- Optional `GET /metrics`
 
 This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, and a unified non-2xx error envelope.
 
@@ -26,6 +27,44 @@ Start the API server:
 
 ```bash
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+## Python Client
+
+The service extra includes the typed sync client and its `httpx` dependency:
+
+```bash
+uv pip install -e ".[hf,service]"
+```
+
+Use `OpenMedClient` against a running service:
+
+```python
+from openmed.service.client import OpenMedAPIError, OpenMedClient
+
+with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
+    result = client.analyze(
+        "Patient started imatinib for CML.",
+        model_name="disease_detection_superclinical",
+    )
+    pii = client.extract_pii("Paciente: Maria Garcia", lang="es")
+    redacted = client.deidentify(
+        "Paciente: Maria Garcia",
+        method="mask",
+        keep_mapping=True,
+    )
+    loaded = client.loaded_models()
+```
+
+Non-2xx responses raise `OpenMedAPIError` with the service error `code`,
+`message`, optional `details`, HTTP status, and any `X-Request-ID` returned by
+the service or proxy:
+
+```python
+try:
+    client.unload_model("disease_detection_superclinical")
+except OpenMedAPIError as exc:
+    print(exc.status_code, exc.code, exc.message, exc.request_id)
 ```
 
 ## Static OpenAPI Spec
@@ -129,6 +168,23 @@ During shutdown, readiness is flipped off, new model-backed work is rejected,
 and the service waits up to this timeout for in-flight `/analyze`,
 `/pii/extract`, and `/pii/deidentify` requests to finish. The default is `30`.
 
+Optional pull-only Prometheus metrics endpoint:
+
+```bash
+OPENMED_SERVICE_METRICS_ENABLED=true uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+```
+
+`GET /metrics` is disabled by default and returns `404` unless
+`OPENMED_SERVICE_METRICS_ENABLED` is set to a truthy value such as `true` or
+`1` before the app starts. When enabled, the endpoint renders Prometheus 0.0.4
+text exposition for aggregate request counts, request duration histograms,
+in-flight request count, and warm-pool model load/eviction counters. Metrics
+are pull-only: OpenMed does not push them to any remote service. Scrape it from
+a locally scoped Prometheus or sidecar, and avoid exposing it directly to
+untrusted networks. Metric labels are limited to static route templates and
+HTTP status codes; text, model outputs, entities, client identity, document
+content, and PHI are never used as label values.
+
 ## Reliability Changes
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
@@ -141,6 +197,7 @@ and the service waits up to this timeout for in-flight `/analyze`,
 - Identical in-flight inference requests can be coalesced with `OPENMED_SERVICE_COALESCING_ENABLED=true`.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
+- `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 

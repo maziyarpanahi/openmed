@@ -194,8 +194,11 @@
               "te",
               "pt",
               "ar",
+              "he",
               "ja",
-              "tr"
+              "tr",
+              "id",
+              "th"
             ],
             "title": "Lang",
             "type": "string"
@@ -312,8 +315,11 @@
               "te",
               "pt",
               "ar",
+              "he",
               "ja",
-              "tr"
+              "tr",
+              "id",
+              "th"
             ],
             "title": "Lang",
             "type": "string"
