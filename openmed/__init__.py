@@ -85,7 +85,14 @@ from .processing import (
     process_batch,
 )
 from .processing import sentences as sentence_utils
-from .processing.advanced_ner import AdvancedNERProcessor, create_advanced_processor
+from .processing.advanced_ner import (
+    AdvancedNERProcessor,
+    StreamingReplayResult,
+    StreamingTokenClassifier,
+    create_advanced_processor,
+    replay_token_classifier,
+    stream_token_classifier,
+)
 from .processing.outputs import PredictionResult
 from .utils import (
     Profiler,
@@ -622,6 +629,8 @@ __all__ = [
     "BatchResult",
     "process_batch",
     "AdvancedNERProcessor",
+    "StreamingReplayResult",
+    "StreamingTokenClassifier",
     "create_advanced_processor",
     "AnalyzeResult",
     "PredictionResult",
@@ -667,6 +676,8 @@ __all__ = [
     "StreamingDeidentificationEvent",
     "StreamingDeidentifier",
     "deidentify_stream",
+    "replay_token_classifier",
+    "stream_token_classifier",
     "redaction_preview",
     "render_redaction_preview",
     # PII entity merging utilities

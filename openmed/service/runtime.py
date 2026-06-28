@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
@@ -418,6 +418,61 @@ class ServiceRuntime:
         finally:
             pool.finish_request(model_key, keep_alive)
 
+    async def stream_pii_extract(
+        self,
+        *,
+        text: str,
+        model_name: str,
+        confidence_threshold: float,
+        use_smart_merging: bool,
+        lang: str,
+        normalize_accents: Optional[bool],
+        keep_alive: Any,
+        chunk_size: int,
+        window_chars: int,
+        tokenizer_context_chars: int,
+        max_entity_chars: int,
+    ) -> AsyncIterator[Any]:
+        """Yield incremental PII extraction events for a service request."""
+        import asyncio
+
+        import openmed
+        from openmed.processing.advanced_ner import StreamingTokenClassifier
+
+        model_key = self.begin_model_request(model_name)
+
+        def classify(window_text: str) -> Any:
+            return openmed.extract_pii(
+                window_text,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                config=self.config,
+                use_smart_merging=use_smart_merging,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                loader=self.get_loader(),
+            )
+
+        streamer = StreamingTokenClassifier(
+            classify,
+            window_chars=window_chars,
+            tokenizer_context_chars=tokenizer_context_chars,
+            max_entity_chars=max_entity_chars,
+            confidence_threshold=confidence_threshold,
+        )
+
+        try:
+            for chunk in _iter_text_chunks(text, chunk_size):
+                events = await asyncio.to_thread(streamer.append, chunk)
+                for event in events:
+                    yield event
+                await asyncio.sleep(0)
+            events = await asyncio.to_thread(streamer.finish)
+            for event in events:
+                yield event
+        finally:
+            self.finish_model_request(model_key, keep_alive)
+
     def begin_model_request(self, model_name: str) -> str:
         """Mark a resolved model as active and cancel pending idle unload."""
         return self.get_loader().begin_request(model_name)
@@ -457,3 +512,9 @@ class ServiceRuntime:
         if callable(resolver):
             return resolver(validated)
         return validated
+
+
+def _iter_text_chunks(text: str, chunk_size: int):
+    chunk_size = max(1, int(chunk_size))
+    for index in range(0, len(text), chunk_size):
+        yield text[index : index + chunk_size]
