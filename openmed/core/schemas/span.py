@@ -26,7 +26,15 @@ SCHEMA_NAMES = (
     "provenance",
 )
 ACTION_KEEP = "keep"
-ACTION_VALUES = (ACTION_KEEP, "redact", "replace", "mask", "hash")
+ACTION_FORMAT_PRESERVE = "format_preserve"
+ACTION_VALUES = (
+    ACTION_KEEP,
+    "redact",
+    "replace",
+    "mask",
+    "hash",
+    ACTION_FORMAT_PRESERVE,
+)
 _TEXT_HASH_RE = re.compile(r"^hmac-sha256:[0-9a-f]{64}$")
 
 
@@ -317,6 +325,7 @@ def _schema_state(schema: Mapping[str, Any]) -> dict[str, Any]:
 
 __all__ = [
     "ACTION_KEEP",
+    "ACTION_FORMAT_PRESERVE",
     "ACTION_VALUES",
     "CURRENT_SCHEMA_VERSION",
     "SCHEMA_NAMES",
