@@ -83,6 +83,13 @@ from openmed.eval.harness import (
     run_benchmark,
     run_suite,
 )
+from openmed.eval.history import (
+    BenchmarkHistoryDiff,
+    MetricDelta,
+    MetricHistoryPoint,
+    diff_against_baseline,
+    metric_history,
+)
 from openmed.eval.leakage_heatmap import (
     HeatmapCell,
     LeakageHeatmap,
@@ -176,6 +183,7 @@ from openmed.eval.utility import (
 
 __all__ = [
     "BenchmarkFixture",
+    "BenchmarkHistoryDiff",
     "BenchmarkReport",
     "CalibrationArtifactPaths",
     "CalibrationGroupReport",
@@ -215,6 +223,8 @@ __all__ = [
     "LeakageHeatmapTotal",
     "ModelScorecard",
     "ModelStewardConfig",
+    "MetricDelta",
+    "MetricHistoryPoint",
     "PairedSignificance",
     "QUARANTINED",
     "QuantRecallDeltaResult",
@@ -265,6 +275,7 @@ __all__ = [
     "default_cache_dir",
     "default_suite_calibration_samples",
     "detect_flaky_eval",
+    "diff_against_baseline",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
     "expected_calibration_error",
@@ -282,6 +293,7 @@ __all__ = [
     "load_calibration_samples",
     "load_calibration_thresholds",
     "load_or_compute",
+    "metric_history",
     "ocr_noise_perturbation",
     "paired_significance",
     "perturb_fixture",
