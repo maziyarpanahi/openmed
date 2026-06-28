@@ -24,6 +24,7 @@ from .schemas.span import ACTION_VALUES
 
 ACTION_STRENGTH_ORDER: tuple[str, ...] = (
     "keep",
+    "format_preserve",
     "replace",
     "hash",
     "mask",
