@@ -68,6 +68,7 @@ REVIEWED_LICENSES = {
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
     "langchain-core": "MIT",
+    "markdown-it-py": "MIT",
     "mcp": "MIT",
     "mkdocs": "BSD-2-Clause",
     "mkdocs-git-revision-date-localized-plugin": "MIT",
