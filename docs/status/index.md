@@ -5,6 +5,7 @@ baseline store, and latest BenchmarkReport inputs.
 
 | Family | Tier | Device | Format | Models | Current Leakage | Last Green Release | Last Regression + Rollback | Harness Freshness | Status |
 |---|---|---|---|---:|---:|---|---|---|---|
+| `General` | `n/a` | `mlx-4bit` | `mlx-4bit` | 1 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `General` | `n/a` | `pytorch` | `pytorch` | 3 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `NER` | `Large` | `pytorch` | `pytorch` | 1 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |
 | `NER` | `n/a` | `pytorch` | `pytorch` | 332 | n/a | `n/a` | `none recorded` | `n/a` | `amber` |

@@ -66,7 +66,10 @@ def load_thresholds(path: str | Path | None = None) -> dict[str, Any]:
         with resource.open("r", encoding="utf-8") as handle:
             payload = json.load(handle)
     else:
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in threshold file {path}: {exc}") from exc
     validate_threshold_matrix(payload)
     return payload
 

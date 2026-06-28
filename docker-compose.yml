@@ -8,6 +8,7 @@ services:
       OPENMED_PROFILE: ${OPENMED_PROFILE:-prod}
       OPENMED_CACHE_DIR: ${OPENMED_CACHE_DIR:-/root/.cache/huggingface/openmed}
       OPENMED_SERVICE_PRELOAD_MODELS: ${OPENMED_SERVICE_PRELOAD_MODELS:-}
+      OPENMED_SERVICE_MAX_RESIDENT_MODELS: ${OPENMED_SERVICE_MAX_RESIDENT_MODELS:-}
       HF_TOKEN: ${HF_TOKEN:-}
     volumes:
       - hf-cache:/root/.cache/huggingface

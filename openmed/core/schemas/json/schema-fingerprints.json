@@ -1,6 +1,6 @@
 {
   "action": {
-    "fingerprint": "sha256:c62cc995a07fbe13d199f55dc65009329de389aaf7d49c2478d14b2a9a064a43",
+    "fingerprint": "sha256:5f2c1c34c9472026264a8e96f39c7777119f43666145aab790a647df1ad85c0f",
     "properties": [
       "action",
       "metadata",
@@ -130,7 +130,7 @@
     "schema_version": 1
   },
   "span": {
-    "fingerprint": "sha256:29cb59267e46adfac0f277c94a41586357def44fcccb833d8324a0c5e21acc45",
+    "fingerprint": "sha256:273fb72f3c82b119ba35600d20e17ece75db1ff806fd1bbd26e766cafcca48b2",
     "properties": [
       "action",
       "canonical_label",
