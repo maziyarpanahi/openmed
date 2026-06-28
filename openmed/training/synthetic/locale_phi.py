@@ -25,6 +25,7 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_portuguese_cpf,
     validate_spanish_nie,
+    validate_thai_national_id,
     validate_turkish_tckn,
 )
 
@@ -42,6 +43,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "ja",
     "tr",
     "id",
+    "th",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -192,6 +194,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Tanggal kontrol ",
         ".",
     ),
+    "th": (
+        "บันทึกคลินิก: ผู้ป่วย ",
+        " วันเกิด ",
+        ". ID ผู้ป่วย ",
+        ". โทรศัพท์ ",
+        ". ที่อยู่ ",
+        ". วันที่นัด ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -206,6 +217,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
     "id": validate_indonesian_nik,
+    "th": validate_thai_national_id,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -220,6 +232,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "pt": "pii_i18n.validate_portuguese_cpf",
     "tr": "pii_i18n.validate_turkish_tckn",
     "id": "pii_i18n.validate_indonesian_nik",
+    "th": "pii_i18n.validate_thai_national_id",
 }
 
 

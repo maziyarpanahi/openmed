@@ -40,6 +40,7 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cpf,
     validate_spanish_dni,
     validate_spanish_nie,
+    validate_thai_national_id,
     validate_turkish_tckn,
 )
 
@@ -52,6 +53,7 @@ from .clinical_ids import (
     PolishPeselProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
+    ThaiNationalIdProvider,
     validate_npi,
 )
 
@@ -243,6 +245,13 @@ def _register_builtin_specs() -> None:
         validate=validate_indonesian_nik,
         faker_method="indonesian_nik",
         faker_provider=IndonesianNIKProvider,
+    )
+    _register_aliases(
+        ("th", "th_TH"),
+        id_type="thai_national_id",
+        validate=validate_thai_national_id,
+        faker_method="thai_national_id",
+        faker_provider=ThaiNationalIdProvider,
     )
     _register_aliases(
         ("pl", "pl_PL"),
