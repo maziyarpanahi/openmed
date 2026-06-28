@@ -85,6 +85,7 @@ REVIEWED_LICENSES = {
     "pillow": "HPND",
     "pikepdf": "MPL-2.0",
     "presidio-analyzer": "MIT",
+    "pyyaml": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
     "pytesseract": "Apache-2.0",
