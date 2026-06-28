@@ -391,7 +391,11 @@ class GateReport:
 
     @classmethod
     def from_json(cls, data: str | bytes) -> "GateReport":
-        return cls.from_dict(json.loads(data))
+        try:
+            parsed = json.loads(data)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON for GateReport: {exc}") from exc
+        return cls.from_dict(parsed)
 
 
 class ReleaseGate:
@@ -2056,7 +2060,10 @@ def _find_open_issue(*, repo: str, title: str) -> int | None:
         check=True,
         capture_output=True,
     )
-    issues = json.loads(result.stdout or "[]")
+    try:
+        issues = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return None
     for issue in issues:
         if isinstance(issue, Mapping) and issue.get("title") == title:
             return _optional_int(issue.get("number"))
