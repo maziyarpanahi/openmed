@@ -17,6 +17,7 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.custom_recognizer import CustomRecognizer
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -52,6 +53,13 @@ from .core.redaction_preview import redaction_preview, render_redaction_preview
 from .core.result_cache import (
     get_result_cache,
     make_cache_key,
+)
+from .core.surrogate_vault import (
+    InMemorySurrogateStore,
+    JsonFileSurrogateStore,
+    SurrogateEntry,
+    SurrogateKey,
+    SurrogateVault,
 )
 from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
@@ -186,6 +194,35 @@ def analyze_text(
 
     Returns:
         Prediction result in the requested ``output_format``.
+
+    Example:
+        >>> class FixtureLoader:
+        ...     config = None
+        ...
+        ...     def create_pipeline(self, model_name, **kwargs):
+        ...         def pipeline(text, **call_kwargs):
+        ...             return [
+        ...                 {
+        ...                     "entity_group": "CONDITION",
+        ...                     "score": 0.99,
+        ...                     "start": 11,
+        ...                     "end": 17,
+        ...                     "word": "asthma",
+        ...                 }
+        ...             ]
+        ...
+        ...         return pipeline
+        ...
+        ...     def get_max_sequence_length(self, model_name, tokenizer=None):
+        ...         return 128
+        >>> result = analyze_text(
+        ...     "History of asthma.",
+        ...     model_name="fixture-ner-model",
+        ...     loader=FixtureLoader(),
+        ...     sentence_detection=False,
+        ... )
+        >>> next((entity.text, entity.label) for entity in result.entities)
+        ('asthma', 'CONDITION')
     """
 
     validated_text = validate_input(text)
@@ -608,6 +645,7 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    "CustomRecognizer",
     "redaction_preview",
     "render_redaction_preview",
     # PII entity merging utilities
@@ -630,4 +668,9 @@ __all__ = [
     "LANG_TO_LOCALE",
     "register_clinical_provider",
     "register_label_generator",
+    "SurrogateVault",
+    "SurrogateKey",
+    "SurrogateEntry",
+    "InMemorySurrogateStore",
+    "JsonFileSurrogateStore",
 ]
