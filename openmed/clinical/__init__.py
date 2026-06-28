@@ -23,6 +23,9 @@ from .context import (
     Certainty,
     ClinicalAssertion,
     ClinicalContextResult,
+    ContextCueCategory,
+    ContextCueDirection,
+    ModifierHit,
     Negation,
     apply_section_context,
     assert_context_axes,
@@ -30,6 +33,7 @@ from .context import (
     resolve_span_context,
     resolve_temporality,
     resolve_uncertainty,
+    scan_context_cues,
 )
 from .lab_values import (
     LAB_FLAG_ADVISORY,
@@ -46,6 +50,10 @@ __all__ = [
     "Negation",
     "ClinicalContextResult",
     "ClinicalAssertion",
+    "ContextCueCategory",
+    "ContextCueDirection",
+    "ModifierHit",
+    "scan_context_cues",
     "resolve_negation",
     "apply_section_context",
     "resolve_span_context",
