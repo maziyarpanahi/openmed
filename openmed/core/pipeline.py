@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import copy
+import importlib
 import inspect
 import logging
 import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
@@ -189,6 +191,7 @@ class Pipeline:
         high_recall_label_floors: Mapping[str, float] | None = None,
         policy_actions: SpanHook | None = None,
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
+        custom_recognizer: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
     ) -> None:
         from . import pii
@@ -230,6 +233,7 @@ class Pipeline:
         self.high_recall_label_floors = high_recall_label_floors
         self.policy_actions = policy_actions
         self.section_detector = section_detector
+        self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
         self.hmac_secret = hmac_secret
         from .clinical_protect import protection_options_from_config
 
@@ -247,6 +251,7 @@ class Pipeline:
         consistent: bool = False,
         seed: Optional[int] = None,
         locale: Optional[str] = None,
+        surrogate_vault: Any = None,
         doc_id: str | None = None,
         audit: bool = False,
     ) -> PipelineResult:
@@ -333,6 +338,18 @@ class Pipeline:
                     pipeline_stage=STAGE_NAMES[5],
                 ),
             )
+            deterministic_spans = _stamp_span_sections(
+                deterministic_spans,
+                context.section_metadata,
+            )
+            model_spans = _stamp_span_sections(
+                model_spans,
+                context.section_metadata,
+            )
+            clinical_spans = _stamp_span_sections(
+                clinical_spans,
+                context.section_metadata,
+            )
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
@@ -369,6 +386,10 @@ class Pipeline:
                 normalized.normalized_text,
                 context,
             )
+            deterministic_spans = _stamp_span_sections(
+                deterministic_spans,
+                context.section_metadata,
+            )
             stage_results.append(
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
@@ -392,6 +413,7 @@ class Pipeline:
                     pipeline_stage=STAGE_NAMES[4],
                 ),
             )
+            model_spans = _stamp_span_sections(model_spans, context.section_metadata)
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
@@ -399,6 +421,10 @@ class Pipeline:
             clinical_spans = self.stage6_clinical_phi_model(
                 normalized.normalized_text,
                 context,
+            )
+            clinical_spans = _stamp_span_sections(
+                clinical_spans,
+                context.section_metadata,
             )
             stage_results.append(
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
@@ -408,11 +434,16 @@ class Pipeline:
             (*deterministic_spans, *model_spans, *clinical_spans),
             context,
         )
+        merged_spans, allow_metadata = self._suppress_custom_allowed_spans(
+            normalized.normalized_text,
+            merged_spans,
+        )
         merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
             normalized.normalized_text,
             merged_spans,
             context,
         )
+        merged_spans = _stamp_span_sections(merged_spans, context.section_metadata)
         if cascade_driven:
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
@@ -431,11 +462,15 @@ class Pipeline:
                 7,
                 STAGE_NAMES[6],
                 spans=merged_spans,
-                metadata=clinical_protection_metadata,
+                metadata={
+                    **dict(allow_metadata),
+                    **dict(clinical_protection_metadata),
+                },
             )
         )
 
         policy_spans = self.stage8_policy_actions(merged_spans, context)
+        policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
@@ -453,6 +488,11 @@ class Pipeline:
                 ]
                 pii_result.metadata = metadata
         else:
+            pii._suppress_custom_allowed_entities(
+                normalized.normalized_text,
+                pii_result,
+                self.custom_recognizer,
+            )
             pii_result = _append_span_predictions(
                 pii_result,
                 normalized.normalized_text,
@@ -460,7 +500,7 @@ class Pipeline:
                     span
                     for span in policy_spans
                     if span.action != ACTION_KEEP
-                    and str(span.detector or "").startswith("plugin:")
+                    and str(span.detector or "").startswith(("plugin:", "custom:"))
                 ],
             )
 
@@ -497,6 +537,7 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=route.model_name,
             confidence_threshold=self.confidence_threshold,
             normalize_accents=self.normalize_accents,
@@ -510,6 +551,7 @@ class Pipeline:
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
+        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
         emission_spans = _remap_spans_to_original(
             final_spans,
             normalized,
@@ -549,6 +591,7 @@ class Pipeline:
         )
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
+        repair_encoding, encoding_repair_metadata = _encoding_repairer()
         normalized_parts: list[str] = []
         original_to_normalized: list[int | None] = [None] * len(text)
         normalized_to_original: list[int] = []
@@ -562,7 +605,7 @@ class Pipeline:
             else:
                 normalized_segment = unicodedata.normalize(
                     "NFC",
-                    _repair_encoding_segment(segment),
+                    _repair_encoding_segment(segment, repair_encoding=repair_encoding),
                 )
 
             if not normalized_segment:
@@ -592,6 +635,7 @@ class Pipeline:
                 "whitespace_collapsed": normalized_text != text,
                 "original_length": len(text),
                 "normalized_length": len(normalized_text),
+                "encoding_repair": encoding_repair_metadata,
             },
         )
 
@@ -619,16 +663,36 @@ class Pipeline:
             return dict(self.section_detector(text))
 
         try:
-            from openmed.clinical import sections
-        except ImportError:
-            return {"section_hook": "unavailable", "sections": ()}
+            sections = importlib.import_module("openmed.clinical.sections")
+        except ImportError as exc:
+            return {
+                "section_hook": "unavailable",
+                "sections": (),
+                "section_detection": _section_detection_unavailable_metadata(exc),
+            }
 
         if hasattr(sections, "detect_sections"):
             return {
                 "section_hook": "detect_sections",
                 "sections": sections.detect_sections(text),
+                "section_detection": {
+                    "feature": "clinical section detection",
+                    "available": True,
+                    "skipped": False,
+                    "dependency": "openmed.clinical.sections",
+                },
             }
-        return {"section_hook": "unavailable", "sections": ()}
+        return {
+            "section_hook": "unavailable",
+            "sections": (),
+            "section_detection": {
+                "feature": "clinical section detection",
+                "available": False,
+                "skipped": True,
+                "dependency": "openmed.clinical.sections.detect_sections",
+                "reason": "detect_sections hook is not registered",
+            },
+        }
 
     def stage4_deterministic_detectors(
         self,
@@ -643,16 +707,20 @@ class Pipeline:
             lang=context.route.lang,
             patterns=_deterministic_patterns(context.route.lang),
         )
-        return self._entities_to_spans(
-            entities,
-            text,
-            context,
-            default_detector="rules:regex",
-            stage=STAGE_NAMES[3],
-        ) + self._registered_detector_spans(
-            text,
-            context,
-            pipeline_stage=STAGE_NAMES[3],
+        return (
+            self._entities_to_spans(
+                entities,
+                text,
+                context,
+                default_detector="rules:regex",
+                stage=STAGE_NAMES[3],
+            )
+            + self._custom_deny_spans(text, context)
+            + self._registered_detector_spans(
+                text,
+                context,
+                pipeline_stage=STAGE_NAMES[3],
+            )
         )
 
     def stage5_fast_pii_model(self, text: str, route: LanguageRoute) -> Any:
@@ -817,6 +885,14 @@ class Pipeline:
         after = _redacted_char_count(getattr(pii_result, "entities", ()))
         if after < before:
             raise RuntimeError("safety sweep must not reduce redacted character count")
+        if self.custom_recognizer is not None:
+            from . import pii
+
+            pii._suppress_custom_allowed_entities(
+                text,
+                pii_result,
+                self.custom_recognizer,
+            )
 
         spans = self._entities_to_spans(
             getattr(pii_result, "entities", ()),
@@ -832,6 +908,11 @@ class Pipeline:
             "spans_added": spans_added,
             "redacted_chars_before": before,
             "redacted_chars_after": after,
+            "custom_allow_spans": (
+                len(self.custom_recognizer.allow_matches(text))
+                if self.custom_recognizer is not None
+                else 0
+            ),
         }
 
     def _protect_clinical_spans(
@@ -865,6 +946,7 @@ class Pipeline:
         consistent: bool,
         seed: Optional[int],
         locale: Optional[str],
+        surrogate_vault: Any = None,
         model_name: str,
         confidence_threshold: float,
         normalize_accents: Optional[bool],
@@ -888,6 +970,7 @@ class Pipeline:
             consistent=consistent,
             seed=seed,
             locale=locale,
+            surrogate_vault=surrogate_vault,
             model_name=model_name,
             confidence_threshold=confidence_threshold,
             normalize_accents=normalize_accents,
@@ -1011,6 +1094,38 @@ class Pipeline:
                 )
         return tuple(spans)
 
+    def _custom_deny_spans(
+        self,
+        text: str,
+        context: PipelineContext,
+    ) -> tuple[OpenMedSpan, ...]:
+        if self.custom_recognizer is None:
+            return ()
+        entities = self.custom_recognizer.detect_entities(
+            text,
+            hmac_secret=self.hmac_secret,
+        )
+        return self._entities_to_spans(
+            entities,
+            text,
+            context,
+            default_detector=CUSTOM_DENY_DETECTOR,
+            stage=STAGE_NAMES[3],
+        )
+
+    def _suppress_custom_allowed_spans(
+        self,
+        text: str,
+        spans: Sequence[OpenMedSpan],
+    ) -> tuple[tuple[OpenMedSpan, ...], Mapping[str, Any]]:
+        if self.custom_recognizer is None:
+            return tuple(spans), {}
+        filtered, suppressed = self.custom_recognizer.suppress_spans(text, spans)
+        return filtered, {
+            "custom_allow_spans": len(self.custom_recognizer.allow_matches(text)),
+            "custom_allow_suppressed_spans": suppressed,
+        }
+
     def _audit_record(
         self,
         context: PipelineContext,
@@ -1070,12 +1185,50 @@ def _iter_normalization_segments(text: str):
         yield start, index, text[start:index], False
 
 
-def _repair_encoding_segment(segment: str) -> str:
+def _identity_text(text: str) -> str:
+    return text
+
+
+def _encoding_repairer() -> tuple[Callable[[str], str], Mapping[str, Any]]:
+    from .pii import _optional_dependency_status
+
     try:
         from ftfy import fix_text
-    except ImportError:
-        return segment
-    return fix_text(segment)
+    except ImportError as exc:
+        return _identity_text, _optional_dependency_status(
+            package="ftfy",
+            feature="encoding repair",
+            available=False,
+            skipped=True,
+            reason=f"missing optional dependency: {exc.name or 'ftfy'}",
+        )
+    return fix_text, _optional_dependency_status(
+        package="ftfy",
+        feature="encoding repair",
+        available=True,
+        skipped=False,
+    )
+
+
+def _repair_encoding_segment(
+    segment: str,
+    *,
+    repair_encoding: Callable[[str], str] | None = None,
+) -> str:
+    if repair_encoding is None:
+        repair_encoding, _ = _encoding_repairer()
+    return repair_encoding(segment)
+
+
+def _section_detection_unavailable_metadata(exc: ImportError) -> dict[str, Any]:
+    dependency = exc.name or "openmed.clinical.sections"
+    return {
+        "feature": "clinical section detection",
+        "available": False,
+        "skipped": True,
+        "dependency": dependency,
+        "reason": f"missing optional capability: {dependency}",
+    }
 
 
 def _detect_script(text: str) -> str:
@@ -1143,7 +1296,9 @@ def _entity_bounds(entity: Any, text: str) -> tuple[int, int] | None:
 def _detector_for_entity(entity: Any, default_detector: str) -> str:
     metadata = dict(getattr(entity, "metadata", None) or {})
     detector = metadata.get("detector") or metadata.get("source")
-    if detector and str(detector).startswith(("rules:", "model:", "plugin:")):
+    if detector and str(detector).startswith(
+        ("rules:", "model:", "plugin:", "custom:")
+    ):
         return str(detector)
 
     sweep = metadata.get("safety_sweep") if isinstance(metadata, Mapping) else None
@@ -1173,25 +1328,97 @@ def _evidence_for_entity(entity: Any) -> Mapping[str, Any]:
         evidence["rule"] = metadata["safety_sweep"]
     if "patterns_version" in metadata:
         evidence["patterns_version"] = metadata["patterns_version"]
+    if "custom_recognizer" in metadata:
+        evidence["custom_recognizer"] = metadata["custom_recognizer"]
     return evidence
 
 
 def _section_for_span(
     start: int,
-    end: int,
+    _end: int,
     section_metadata: Mapping[str, Any],
 ) -> str | None:
+    """Return the section whose [start, end) range contains the span start."""
+    return _section_label_for_start(start, _section_ranges(section_metadata))
+
+
+def _stamp_span_sections(
+    spans: Sequence[OpenMedSpan],
+    section_metadata: Mapping[str, Any],
+) -> tuple[OpenMedSpan, ...]:
+    section_ranges = _section_ranges(section_metadata)
+    if not section_ranges:
+        return tuple(spans)
+
+    stamped: list[OpenMedSpan] = []
+    for span in spans:
+        section = _section_label_for_start(span.start, section_ranges)
+        if span.section == section:
+            stamped.append(span)
+        else:
+            stamped.append(replace(span, section=section))
+    return tuple(stamped)
+
+
+def _section_ranges(
+    section_metadata: Mapping[str, Any],
+) -> tuple[tuple[int, int, str], ...]:
     sections = section_metadata.get("sections")
     if not sections:
-        return None
-    for section in sections:
-        if not isinstance(section, Mapping):
+        return ()
+    try:
+        section_iter = iter(sections)
+    except TypeError:
+        return ()
+
+    ranges: list[tuple[int, int, str]] = []
+    for section in section_iter:
+        if isinstance(section, Mapping):
+            section_start = section.get("start")
+            section_end = section.get("end")
+            section_label = _section_label(section)
+        else:
+            section_start = getattr(section, "start", None)
+            section_end = getattr(section, "end", None)
+            section_label = _section_label(section)
+        if not (
+            isinstance(section_start, int)
+            and isinstance(section_end, int)
+            and section_start < section_end
+            and section_label is not None
+        ):
             continue
-        section_start = section.get("start")
-        section_end = section.get("end")
-        if isinstance(section_start, int) and isinstance(section_end, int):
-            if start >= section_start and end <= section_end:
-                return str(section.get("label") or section.get("name") or "")
+        ranges.append((section_start, section_end, section_label))
+    return tuple(sorted(ranges, key=lambda item: (item[0], item[1], item[2])))
+
+
+def _section_label(section: Any) -> str | None:
+    for field_name in (
+        "label",
+        "name",
+        "section",
+        "section_label",
+        "section_name",
+        "title",
+    ):
+        if isinstance(section, Mapping):
+            value = section.get(field_name)
+        else:
+            value = getattr(section, field_name, None)
+        if value is not None:
+            label = str(value).strip()
+            if label:
+                return label
+    return None
+
+
+def _section_label_for_start(
+    start: int,
+    section_ranges: Sequence[tuple[int, int, str]],
+) -> str | None:
+    for section_start, section_end, label in section_ranges:
+        if section_start <= start < section_end:
+            return label
     return None
 
 

@@ -17,6 +17,7 @@ from openmed.onnx.transformersjs import (
     TRANSFORMERSJS_FORMAT,
     export_transformersjs_bundle,
 )
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +81,11 @@ def export_onnx(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
+    tokenizer = get_tokenizer_with_loader(
+        model_id,
+        AutoTokenizer.from_pretrained,
+        cache_dir=cache_dir,
+    )
     model = AutoModelForTokenClassification.from_pretrained(
         model_id,
         cache_dir=cache_dir,
@@ -312,7 +317,11 @@ def save_source_assets(
 
     tokenizer_files: list[str] = []
     try:
-        tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir)
+        tokenizer = get_tokenizer_with_loader(
+            model_id,
+            AutoTokenizer.from_pretrained,
+            cache_dir=cache_dir,
+        )
         tokenizer.save_pretrained(output_dir)
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
