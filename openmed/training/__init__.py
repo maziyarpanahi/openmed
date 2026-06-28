@@ -19,16 +19,25 @@ __all__ = [
     "DirectIDContractError",
     "DirectIDHeadContract",
     "DirectIDPresetValidation",
+    "DistillationReport",
+    "DistillationTargets",
     "HARD_NEGATIVE_CATEGORIES",
     "HardNegativeExample",
     "HardNegativeGenerator",
     "HardNegativeSampler",
+    "KDLossBreakdown",
+    "LabelRecallDelta",
+    "ModeADistillationPipeline",
     "RecipeConfigError",
+    "RepairedSpan",
     "TrainingRecipeConfig",
     "WeakLabelDecision",
     "WeakLabelSpan",
+    "build_distillation_report",
     "config_hash",
     "count_hard_negatives",
+    "compute_kd_loss",
+    "decode_repaired_spans",
     "dry_run_recipe",
     "gate_requirements_by_code",
     "load_preset",
@@ -39,6 +48,9 @@ __all__ = [
     "runtime_dependencies",
     "sample_hard_negatives",
     "sampler_for_recipe",
+    "soft_label_distributions",
+    "span_logits_from_repaired_spans",
+    "student_backbone_from_tiny_distill_preset",
     "validate_directid_contract",
     "validate_directid_preset",
     "weak_label_document",
@@ -96,6 +108,22 @@ def __getattr__(name: str) -> Any:
     }:
         adjudication = import_module(".adjudication", __name__)
         return getattr(adjudication, name)
+    if name in {
+        "DistillationReport",
+        "DistillationTargets",
+        "KDLossBreakdown",
+        "LabelRecallDelta",
+        "ModeADistillationPipeline",
+        "RepairedSpan",
+        "build_distillation_report",
+        "compute_kd_loss",
+        "decode_repaired_spans",
+        "soft_label_distributions",
+        "span_logits_from_repaired_spans",
+        "student_backbone_from_tiny_distill_preset",
+    }:
+        distill = import_module(".distill", __name__)
+        return getattr(distill, name)
     if name in {
         "WeakLabelDecision",
         "WeakLabelSpan",
