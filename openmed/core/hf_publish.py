@@ -26,6 +26,28 @@ DEFAULT_MODEL_CARD_COMMIT_MESSAGE = "Update generated model card"
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=$|-)")
 _SAFE_REPO_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_ONNX_FORMAT_ALIASES = {
+    "onnx",
+    "onnx-fp32",
+    "onnx-float32",
+    "webgpu",
+    "onnx-webgpu",
+    "webgpu-onnx",
+}
+_QUANTIZED_FORMAT_ALIASES = {
+    "int8": "int8",
+    "8bit": "int8",
+    "8-bit": "int8",
+    "onnx-int8": "int8",
+    "int4": "int4",
+    "4bit": "int4",
+    "4-bit": "int4",
+    "onnx-int4": "int4",
+    "awq": "awq",
+    "openmed-awq": "awq",
+    "gptq": "gptq",
+    "openmed-gptq": "gptq",
+}
 
 
 class HfPublishError(RuntimeError):
@@ -80,6 +102,7 @@ def build_manifest_row(
     source_model_id: str,
     artifact_dir: str | Path,
     format_name: str,
+    formats: list[str] | tuple[str, ...] | None = None,
     released: str | None = None,
     recipe: Any | None = None,
     data_manifest: Any | None = None,
@@ -93,6 +116,7 @@ def build_manifest_row(
     released = released or datetime.now(timezone.utc).date().isoformat()
     artifact_hash = artifact_sha256(artifact_dir)
     manifest_format = _manifest_format_name(format_name)
+    manifest_formats = _manifest_format_names(formats or [format_name])
     reproducibility_hash = compute_reproducibility_hash(
         recipe=recipe
         or _default_repro_recipe(
@@ -119,7 +143,7 @@ def build_manifest_row(
         "param_count": _param_count(repo_id),
         "architecture": _architecture(repo_id, config),
         "base_model": source_model_id,
-        "formats": [manifest_format],
+        "formats": manifest_formats,
         "canonical_labels": labels,
         "benchmark": {"dataset": None, "micro_f1": None, "recall": None},
         "arxiv": DEFAULT_ARXIV,
@@ -144,7 +168,7 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
                     continue
                 existing = json.loads(line)
                 if existing.get("repo_id") == row["repo_id"]:
-                    rows.append(row)
+                    rows.append(_merge_manifest_row(existing, row))
                     replaced = True
                 else:
                     rows.append(existing)
@@ -185,6 +209,7 @@ def publish_artifact(
     artifact_dir: str | Path,
     source_model_id: str,
     format_name: str,
+    formats: list[str] | tuple[str, ...] | None = None,
     repo_id: str | None = None,
     org: str = DEFAULT_ORG,
     version: int = 1,
@@ -227,6 +252,7 @@ def publish_artifact(
         source_model_id=source_model_id,
         artifact_dir=artifact_dir,
         format_name=format_name,
+        formats=formats,
         released=released,
         recipe=recipe,
         data_manifest=data_manifest,
@@ -340,6 +366,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="format_name",
         help="Published artifact format, such as mlx-fp, mlx-8bit, or coreml",
     )
+    parser.add_argument(
+        "--formats",
+        default=None,
+        help="Comma-separated manifest formats when one repo carries multiple artifacts",
+    )
     parser.add_argument("--repo-id", default=None, help="Explicit target repo id")
     parser.add_argument("--org", default=DEFAULT_ORG, help="Target organization")
     parser.add_argument(
@@ -421,6 +452,7 @@ def main(argv: list[str] | None = None) -> None:
         artifact_dir=args.artifact_dir,
         source_model_id=args.model,
         format_name=args.format_name,
+        formats=_parse_formats_arg(args.formats),
         repo_id=args.repo_id,
         org=args.org,
         version=args.version,
@@ -495,6 +527,11 @@ def _format_repo_suffix(format_name: str) -> str:
         return "mlx-4bit"
     if normalized == "coreml":
         return "coreml"
+    if normalized in _ONNX_FORMAT_ALIASES:
+        return "onnx"
+    quantized = _QUANTIZED_FORMAT_ALIASES.get(normalized)
+    if quantized is not None:
+        return f"onnx-{quantized}"
     return normalized
 
 
@@ -506,7 +543,25 @@ def _manifest_format_name(format_name: str) -> str:
         return "mlx-8bit"
     if normalized in {"mlx-4bit", "mlx-int4"}:
         return "mlx-4bit"
+    if normalized in {"onnx-fp32", "onnx-float32"}:
+        return "onnx"
+    if normalized in {"onnx-webgpu", "webgpu-onnx"}:
+        return "webgpu"
+    quantized = _QUANTIZED_FORMAT_ALIASES.get(normalized)
+    if quantized is not None:
+        return quantized
     return normalized
+
+
+def _manifest_format_names(format_names: list[str] | tuple[str, ...]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for format_name in format_names:
+        normalized = _manifest_format_name(format_name)
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
 
 
 def _read_optional_json(path: Path) -> dict[str, Any]:
@@ -517,6 +572,23 @@ def _read_optional_json(path: Path) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _merge_manifest_row(
+    existing: dict[str, Any],
+    replacement: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(replacement)
+    existing_formats = existing.get("formats")
+    replacement_formats = replacement.get("formats")
+    if isinstance(existing_formats, list) and isinstance(replacement_formats, list):
+        merged["formats"] = _manifest_format_names(
+            [
+                *[str(item) for item in existing_formats],
+                *[str(item) for item in replacement_formats],
+            ]
+        )
+    return merged
+
+
 def _parse_json_object_arg(value: str) -> dict[str, Any]:
     source = value
     if value.startswith("@"):
@@ -525,6 +597,13 @@ def _parse_json_object_arg(value: str) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise HfPublishError("--baseline-metrics must be a JSON object")
     return payload
+
+
+def _parse_formats_arg(value: str | None) -> list[str] | None:
+    if value is None:
+        return None
+    formats = [item.strip() for item in value.split(",") if item.strip()]
+    return formats or None
 
 
 def _refresh_status_outputs(

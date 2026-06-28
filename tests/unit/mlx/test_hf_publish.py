@@ -12,6 +12,7 @@ import pytest
 from openmed.core.hf_publish import (
     HfPublishError,
     append_manifest_row,
+    build_manifest_row,
     publish_artifact,
     target_repo_id,
 )
@@ -119,6 +120,21 @@ def test_publish_artifact_creates_repo_uploads_folder_and_writes_manifest(
     assert "secret-token" not in json.dumps(rows[0])
 
 
+def test_manifest_row_can_record_multiple_runtime_formats(tmp_path):
+    artifact = _write_mlx_artifact(tmp_path)
+
+    row = build_manifest_row(
+        repo_id="OpenMed/test-model-v1-onnx",
+        source_model_id="OpenMed/test-model",
+        artifact_dir=artifact,
+        format_name="onnx",
+        formats=["onnx", "webgpu", "onnx"],
+        git_sha="abc123",
+    )
+
+    assert row["formats"] == ["onnx", "webgpu"]
+
+
 def test_publish_artifact_skips_existing_repo_without_upload(tmp_path, monkeypatch):
     artifact = _write_mlx_artifact(tmp_path)
     fake_api = FakeApi(exists=True)
@@ -151,7 +167,7 @@ def test_publish_artifact_errors_when_token_is_missing(tmp_path, monkeypatch):
         )
 
 
-def test_manifest_append_replaces_existing_repo_row(tmp_path):
+def test_manifest_append_replaces_existing_repo_row_and_merges_formats(tmp_path):
     manifest = tmp_path / "models.jsonl"
     first = {"repo_id": "OpenMed/model", "formats": ["mlx-fp"]}
     second = {"repo_id": "OpenMed/model", "formats": ["coreml"]}
@@ -162,7 +178,7 @@ def test_manifest_append_replaces_existing_repo_row(tmp_path):
     rows = [
         json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
     ]
-    assert rows == [second]
+    assert rows == [{"repo_id": "OpenMed/model", "formats": ["mlx-fp", "coreml"]}]
 
 
 def test_conversion_modules_expose_publish_options():

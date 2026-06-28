@@ -25,6 +25,10 @@ Use the smallest extra that matches your runtime:
 - `openmed[hf]` for the standard Python model runtime.
 - `openmed[hf,service]` when you need the REST service.
 - `openmed[mlx]` for Python MLX acceleration on Apple Silicon.
+- `openmed[multimodal]` for document/image intake and Tesseract OCR; install
+  the system `tesseract` binary separately (`brew install tesseract` on macOS
+  or `sudo apt-get install tesseract-ocr` on Debian/Ubuntu).
+- `openmed[ocr-paddle]` for the heavier optional PaddleOCR backend.
 
 Start with the [Quick Start](getting-started.md), then use
 [Configuration & Validation](configuration.md) for cache paths, device selection, profiles, and environment overrides.
@@ -42,9 +46,10 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja`, and `tr`.
+PII extraction and de-identification support **13 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-12-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-13-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.

@@ -1,5 +1,11 @@
+import builtins
+import importlib
+import unicodedata
 from datetime import datetime
 
+import pytest
+
+from openmed.core.pii import MissingOptionalDependencyError
 from openmed.core.pipeline import Pipeline
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
@@ -33,6 +39,223 @@ def test_normalized_offsets_remap_combining_characters_to_original_positions():
         normalized_e,
         normalized_e + 1,
     ) == (original_e, original_combining + 1)
+
+
+def test_stage1_records_skipped_encoding_repair_when_ftfy_missing(monkeypatch):
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "ftfy" or name.startswith("ftfy."):
+            raise ImportError("ftfy unavailable")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    document = Pipeline().stage1_normalize("Patient Caf\u00e9")
+    metadata = document.metadata["encoding_repair"]
+
+    assert metadata["available"] is False
+    assert metadata["skipped"] is True
+    assert metadata["dependency"] == "ftfy"
+    assert "missing optional dependency" in metadata["reason"]
+    assert "pip install ftfy" in metadata["install"]
+
+
+def test_stage3_records_unavailable_section_hook_metadata(monkeypatch):
+    original_import_module = importlib.import_module
+
+    def fake_import_module(name, package=None):
+        if name == "openmed.clinical.sections":
+            raise ImportError("sections unavailable")
+        return original_import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", fake_import_module)
+
+    metadata = Pipeline().stage3_doc_type_section("Assessment: stable")
+    section_detection = metadata["section_detection"]
+
+    assert metadata["section_hook"] == "unavailable"
+    assert metadata["sections"] == ()
+    assert section_detection["available"] is False
+    assert section_detection["skipped"] is True
+    assert section_detection["dependency"] == "openmed.clinical.sections"
+    assert "missing optional capability" in section_detection["reason"]
+
+
+def test_normalized_span_round_trips_nfc_length_change_to_original_surface():
+    text = "Patient Jose\u0301 Garcia visited"
+    document = Pipeline().stage1_normalize(text)
+    normalized_surface = "José Garcia"
+    normalized_start = document.normalized_text.index(normalized_surface)
+    normalized_end = normalized_start + len(normalized_surface)
+
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    original_surface = text[original_start:original_end]
+
+    assert original_surface == "Jose\u0301 Garcia"
+    assert unicodedata.normalize("NFC", original_surface) == normalized_surface
+    assert document.offset_map.original_span_to_normalized(
+        original_start,
+        original_end,
+    ) == (normalized_start, normalized_end)
+
+
+def test_normalized_span_round_trips_collapsed_whitespace_to_original_surface():
+    text = "Patient John   Doe visited"
+    document = Pipeline().stage1_normalize(text)
+    normalized_surface = "John Doe"
+    normalized_start = document.normalized_text.index(normalized_surface)
+    normalized_end = normalized_start + len(normalized_surface)
+
+    original_start, original_end = (
+        document.offset_map.normalized_span_to_original_offsets(
+            normalized_start,
+            normalized_end,
+        )
+    )
+    original_surface = text[original_start:original_end]
+
+    assert original_surface == "John   Doe"
+    assert Pipeline().stage1_normalize(original_surface).normalized_text == (
+        normalized_surface
+    )
+    assert document.offset_map.original_span_to_normalized(
+        original_start,
+        original_end,
+    ) == (normalized_start, normalized_end)
+
+
+def test_deidentification_redacts_original_nfc_changed_entity_surface():
+    text = "Patient Jose\u0301 Garcia visited"
+
+    def model_detector(text, **kwargs):
+        entity_text = "José Garcia"
+        start = text.index(entity_text)
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text=entity_text,
+                    label="NAME",
+                    start=start,
+                    end=start + len(entity_text),
+                    confidence=0.95,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp=datetime.now().isoformat(),
+        )
+
+    result = Pipeline(
+        model_detector=model_detector,
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+    entity = result.deidentification_result.pii_entities[0]
+    span = result.spans[0]
+
+    assert result.deidentification_result.original_text == text
+    assert entity.original_text == "Jose\u0301 Garcia"
+    assert entity.text == "Jose\u0301 Garcia"
+    assert (entity.start, entity.end) == (
+        text.index("Jose\u0301 Garcia"),
+        text.index("Jose\u0301 Garcia") + len("Jose\u0301 Garcia"),
+    )
+    assert (span.start, span.end) == (entity.start, entity.end)
+    assert "normalized_text" not in (entity.metadata or {})
+    assert "normalized_text" not in span.metadata
+    assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
+    assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
+    assert result.redacted_text == "Patient [NAME] visited"
+
+
+def test_deidentification_redacts_original_collapsed_whitespace_entity_surface():
+    text = "Patient John   Doe visited"
+
+    def model_detector(text, **kwargs):
+        entity_text = "John Doe"
+        start = text.index(entity_text)
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text=entity_text,
+                    label="NAME",
+                    start=start,
+                    end=start + len(entity_text),
+                    confidence=0.95,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp=datetime.now().isoformat(),
+        )
+
+    result = Pipeline(
+        model_detector=model_detector,
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+    entity = result.deidentification_result.pii_entities[0]
+    span = result.spans[0]
+
+    assert result.deidentification_result.original_text == text
+    assert entity.original_text == "John   Doe"
+    assert entity.text == "John   Doe"
+    assert (entity.start, entity.end) == (
+        text.index("John   Doe"),
+        text.index("John   Doe") + len("John   Doe"),
+    )
+    assert (span.start, span.end) == (entity.start, entity.end)
+    assert "normalized_text" not in (entity.metadata or {})
+    assert "normalized_text" not in span.metadata
+    assert (entity.metadata or {})["normalized_text_hash"].startswith("hmac-sha256:")
+    assert span.metadata["normalized_text_hash"].startswith("hmac-sha256:")
+    assert result.redacted_text == "Patient [NAME] visited"
+
+
+def test_shift_dates_missing_dateutil_raises_clear_optional_extra_error(monkeypatch):
+    original_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "dateutil" or name.startswith("dateutil."):
+            raise ImportError("dateutil unavailable")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    text = "DOB 01/15/2020"
+
+    def model_detector(text, **kwargs):
+        entity_text = "01/15/2020"
+        start = text.index(entity_text)
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text=entity_text,
+                    label="DATE",
+                    start=start,
+                    end=start + len(entity_text),
+                    confidence=0.95,
+                )
+            ],
+            model_name=kwargs["model_name"],
+            timestamp=datetime.now().isoformat(),
+        )
+
+    with pytest.raises(MissingOptionalDependencyError) as excinfo:
+        Pipeline(
+            model_detector=model_detector,
+            use_safety_sweep=False,
+        ).run(text, method="shift_dates", date_shift_days=30)
+
+    message = str(excinfo.value)
+    assert "method='shift_dates'" in message
+    assert "python-dateutil" in message
+    assert "pip install openmed[dev]" in message
 
 
 def test_luhn_valid_mrn_is_detected_before_model_stage_runs():

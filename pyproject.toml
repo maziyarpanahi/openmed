@@ -28,6 +28,7 @@ keywords = [
 dependencies = [
   "pysbd>=0.3.4,<0.4",
   "faker>=22.0",
+  "pyyaml>=6.0",
 ]
 
 authors = [
@@ -42,7 +43,8 @@ dev = [
   "jsonschema>=4.0",
   "fastapi>=0.110",
   "httpx>=0.27",
-  "ruff==0.15.18",
+  "python-dateutil>=2.8",
+  "ruff==0.15.20",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -67,10 +69,41 @@ pydeid = [
   "pyDeid>=0.0.1",
 ]
 
+spacy = [
+  "click>=8.0",
+  "spacy>=3.5",
+]
+
 multimodal = [
   "pdfplumber>=0.11",
   "python-docx>=1.1",
   "Pillow>=10.0",
+  "piexif>=1.1",
+  "pikepdf>=9.0",
+  "pytesseract>=0.3.10",
+  "easyocr>=1.7",
+]
+
+# PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
+# it is opt-in rather than bundled into the general multimodal extra.
+ocr-paddle = [
+  "paddleocr>=2.7",
+]
+
+awq = [
+  "autoawq>=0.2.9",
+]
+
+gptq = [
+  "auto-gptq>=0.7.1",
+]
+
+langchain = [
+  "langchain-core>=0.2,<2",
+]
+
+kafka = [
+  "confluent-kafka>=2.3",
 ]
 
 hf = [
@@ -82,6 +115,7 @@ hf = [
 
 service = [
   "fastapi>=0.110",
+  "httpx>=0.27",
   "uvicorn[standard]>=0.29",
 ]
 
@@ -92,6 +126,7 @@ gliner = [
 
 mlx = [
   "mlx>=0.22",
+  "mlx-lm>=0.31",
   "huggingface-hub>=0.30",
   "transformers>=4.50",
   "tokenizers>=0.15",
@@ -102,6 +137,14 @@ mlx = [
 coreml = [
   "coremltools>=8.0",
   "huggingface-hub>=0.30",
+  "torch>=2.0",
+  "transformers>=4.50",
+]
+
+onnx = [
+  "onnx>=1.14",
+  "onnxruntime>=1.16",
+  "onnxscript>=0.1.0",
   "torch>=2.0",
   "transformers>=4.50",
 ]
@@ -145,7 +188,8 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 [tool.pytest.ini_options]
 markers = [
   "integration: marks end-to-end or external integration tests",
-  "slow: marks tests that are expected to run slowly"
+  "slow: marks tests that are expected to run slowly",
+  "doctest_examples: runs doctest examples for targeted public modules"
 ]
 python_files = [
   "test_*.py",

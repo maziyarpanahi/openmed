@@ -1,0 +1,3 @@
+patient_name,mrn,ssn,visit_date,diagnosis,notes
+John Doe,MRN-0001,123-45-6789,2026-01-15,hypertension,Called 555-0101 about labs
+Jane Roe,MRN-0002,987-65-4321,2026-02-20,diabetes,No callback needed
