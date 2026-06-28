@@ -32,7 +32,10 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_indonesian_nik,
     validate_italian_codice_fiscale,
+    validate_korean_rrn,
+    validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_spanish_dni,
@@ -43,7 +46,10 @@ from openmed.core.pii_i18n import (
 from .clinical_ids import (
     AadhaarProvider,
     GermanSteuerIdProvider,
+    IndonesianNIKProvider,
+    KoreanRRNProvider,
     NPIProvider,
+    PolishPeselProvider,
     SpanishDNIProvider,
     validate_npi,
 )
@@ -228,6 +234,34 @@ def _register_builtin_specs() -> None:
         validate=validate_aadhaar,
         faker_method="aadhaar",
         faker_provider=AadhaarProvider,
+    )
+    _register_aliases(
+        ("id", "id_ID"),
+        id_type="nik",
+        validate=validate_indonesian_nik,
+        faker_method="indonesian_nik",
+        faker_provider=IndonesianNIKProvider,
+    )
+    _register_aliases(
+        ("pl", "pl_PL"),
+        id_type="pesel",
+        validate=validate_polish_pesel,
+        faker_method="pesel",
+        faker_provider=PolishPeselProvider,
+    )
+    _register_aliases(
+        ("ko", "ko_KR"),
+        id_type="rrn",
+        validate=validate_korean_rrn,
+        faker_method="korean_rrn",
+        faker_provider=KoreanRRNProvider,
+    )
+    _register_aliases(
+        ("ko", "ko_KR"),
+        id_type="korean_rrn",
+        validate=validate_korean_rrn,
+        faker_method="korean_rrn",
+        faker_provider=KoreanRRNProvider,
     )
     _register_aliases(
         ("pt", "pt_BR"),

@@ -36,6 +36,16 @@ PaddleOCR is available as a heavier opt-in OCR backend:
 uv pip install ".[ocr-paddle]"
 ```
 
+CDA/C-CDA XML de-identification is available in the core install. It redacts
+structured header PHI, sweeps CDA section narrative text, keeps XML parseable,
+and only routes `.xml` files that look like CDA documents:
+
+```python
+from openmed.interop.cda import redact_cda
+
+redacted_xml = redact_cda("synthetic_ccda.xml", date_shift_days=30)
+```
+
 On an Apple Silicon Mac, you can start directly on the new MLX path:
 
 ```bash
@@ -70,14 +80,28 @@ Prefer a quick script entrypoint? Run a one-file smoke script:
 uv run python examples/pii_model_comparison.py
 ```
 
-## 3. Copy code snippets from the docs
+## 3. De-identify PII
+
+```python
+from openmed import deidentify
+
+result = deidentify("Patient John Doe, DOB 01/15/1970", method="mask")
+print(result.deidentified_text)
+# Patient [first_name] [last_name], DOB [date]
+```
+
+`deidentify()` supports five methods (`mask`, `remove`, `replace`, `hash`,
+`shift_dates`) — see the [Anonymization quickstart](anonymization.md#quickstart-choosing-a-method)
+for a runnable example of each, plus how to reverse one with `reidentify()`.
+
+## 4. Copy code snippets from the docs
 
 All code blocks ship with Material for MkDocs copy buttons. Invoking the command palette (`/` or `cmd/ctrl + K`) lets you
 search for “GLiNER,” “OpenMedConfig,” or “token classification,” then copy the snippet that appears in the preview pane.
 If you rely on AI copilots (ChatGPT, Copilot, etc.), point them at the published docs URL so they crawl the same
 structured Markdown and surface canonical answers.
 
-## 4. Optional: pin configuration
+## 5. Optional: pin configuration
 
 ```python
 from openmed.core import OpenMedConfig, ModelLoader

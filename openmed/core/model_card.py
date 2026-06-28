@@ -63,6 +63,12 @@ def render_model_card(row: dict[str, Any]) -> str:
         "",
         _labels_block(labels),
     ]
+    artifact_lines = _artifact_format_block(formats)
+    if artifact_lines:
+        lines.extend(["", "## Artifact Format", "", *artifact_lines])
+    distillation_lines = _distillation_block(row)
+    if distillation_lines:
+        lines.extend(["", "## Distillation Evidence", "", *distillation_lines])
     return "\n".join(lines) + "\n"
 
 
@@ -122,3 +128,109 @@ def _labels_block(labels: list[str]) -> str:
     if not labels:
         return "Not specified."
     return ", ".join(f"`{label}`" for label in labels)
+
+
+def _artifact_format_block(formats: list[str]) -> list[str]:
+    runtime_formats = []
+    quantization_formats = []
+    for value in formats:
+        if _normalize_format(value) in {"onnx", "webgpu"}:
+            runtime_formats.append(value)
+        quantization = _quantization_label(value)
+        if quantization is not None:
+            quantization_formats.append(quantization)
+    if not runtime_formats and not quantization_formats:
+        return []
+
+    return [
+        "| Field | Value |",
+        "|---|---|",
+        f"| Runtime artifacts | {_comma_or_unspecified(runtime_formats)} |",
+        f"| Quantization | {_comma_or_unspecified(quantization_formats)} |",
+    ]
+
+
+def _normalize_format(value: str) -> str:
+    return value.lower().replace("_", "-")
+
+
+def _quantization_label(value: str) -> str | None:
+    normalized = _normalize_format(value)
+    if normalized in {"int8", "8bit", "8-bit", "onnx-int8"}:
+        return "int8"
+    if normalized in {"int4", "4bit", "4-bit", "onnx-int4"}:
+        return "int4"
+    if normalized in {"awq", "openmed-awq"}:
+        return "awq"
+    if normalized in {"gptq", "openmed-gptq"}:
+        return "gptq"
+    return None
+
+
+def _distillation_block(row: dict[str, Any]) -> list[str]:
+    payload = _distillation_payload(row)
+    if not payload:
+        return []
+
+    critical_drops = _list(payload.get("critical_label_drops"))
+    lines = [
+        "| Field | Value |",
+        "|---|---|",
+        f"| Teacher | `{_string(payload.get('teacher_id'), 'Not reported')}` |",
+        f"| Student backbone | `{_string(payload.get('student_backbone'), 'Not reported')}` |",
+        f"| Temperature | {_metric(payload.get('temperature'))} |",
+        f"| Alpha | {_metric(payload.get('alpha'))} |",
+        f"| Recall gate | {_gate_status(payload.get('recall_gate_passed'))} |",
+        f"| Critical drops | {_critical_drops(critical_drops)} |",
+    ]
+
+    deltas = payload.get("per_label_recall_delta")
+    if isinstance(deltas, list) and deltas:
+        lines.extend(
+            [
+                "",
+                "| Label | Teacher recall | Student recall | Delta | Critical drop |",
+                "|---|---:|---:|---:|---|",
+            ]
+        )
+        for item in deltas:
+            if not isinstance(item, dict):
+                continue
+            lines.append(
+                f"| {_string(item.get('label'), 'UNKNOWN')} | "
+                f"{_metric(item.get('teacher_recall'))} | "
+                f"{_metric(item.get('student_recall'))} | "
+                f"{_metric(item.get('delta'))} | "
+                f"{_yes_no(item.get('critical_drop'))} |"
+            )
+    return lines
+
+
+def _distillation_payload(row: dict[str, Any]) -> dict[str, Any]:
+    payload = row.get("distillation")
+    if isinstance(payload, dict):
+        return payload
+    evidence = row.get("evidence")
+    if isinstance(evidence, dict) and isinstance(evidence.get("distillation"), dict):
+        return evidence["distillation"]
+    return {}
+
+
+def _gate_status(value: Any) -> str:
+    if value is True:
+        return "passed"
+    if value is False:
+        return "failed"
+    return "Not reported"
+
+
+def _critical_drops(values: list[str]) -> str:
+    return ", ".join(f"`{value}`" for value in values) if values else "None"
+
+
+def _yes_no(value: Any) -> str:
+    if value is True:
+        return "yes"
+    if value is False:
+        return "no"
+    return "Not reported"
