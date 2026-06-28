@@ -32,7 +32,11 @@ from openmed.core.anonymizer.locales import (
 )
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
 from openmed.core.pii_entity_merger import PII_PATTERNS
-from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS, SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import (
+    LANGUAGE_PII_PATTERNS,
+    NATIONAL_ID_ONLY_LANGUAGES,
+    SUPPORTED_LANGUAGES,
+)
 
 # Documented set of languages whose *default* Faker locale is an intentional
 # approximation. Kept here, independent of the code under test, so that wiring a
@@ -47,11 +51,13 @@ KNOWN_PROVIDERLESS_VALIDATORS = set()
 # Number of surrogates sampled per language for the round-trip check.
 SAMPLE_SIZE = 40
 
+REPORT_LANGUAGES = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+
 
 def _languages_with_national_id_validator():
     return {
         lang
-        for lang in SUPPORTED_LANGUAGES
+        for lang in REPORT_LANGUAGES
         if any(
             p.validator is not None and p.entity_type == "national_id"
             for p in LANGUAGE_PII_PATTERNS.get(lang, [])
@@ -81,11 +87,11 @@ def _national_id_validators(lang):
 
 
 class TestLocaleResolution:
-    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
+    @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
     def test_every_supported_language_has_locale_entry(self, lang):
         assert lang in LANG_TO_LOCALE, f"{lang!r} missing LANG_TO_LOCALE entry"
 
-    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
+    @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
     def test_resolved_locale_exists_in_faker(self, lang):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -137,7 +143,7 @@ class TestNationalIdRoundTrip:
 
 
 class TestApproximateLocaleWarnings:
-    @pytest.mark.parametrize("lang", sorted(SUPPORTED_LANGUAGES))
+    @pytest.mark.parametrize("lang", sorted(REPORT_LANGUAGES))
     def test_only_documented_approximations_warn(self, lang):
         L._warned.clear()  # reset the one-time-warning cache for a clean read
         with warnings.catch_warnings(record=True) as caught:
@@ -156,8 +162,8 @@ class TestApproximateLocaleWarnings:
 class TestLocaleCoherenceReport:
     def test_one_row_per_supported_language(self):
         rows = locale_coherence_report()
-        assert len(rows) == len(SUPPORTED_LANGUAGES)
-        assert {r["language"] for r in rows} == set(SUPPORTED_LANGUAGES)
+        assert len(rows) == len(REPORT_LANGUAGES)
+        assert {r["language"] for r in rows} == REPORT_LANGUAGES
 
     def test_row_shape_and_values(self):
         rows = {r["language"]: r for r in locale_coherence_report()}

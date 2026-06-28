@@ -21,6 +21,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_indonesian_nik,
     validate_italian_codice_fiscale,
     validate_portuguese_cpf,
     validate_spanish_nie,
@@ -40,6 +41,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "ar",
     "ja",
     "tr",
+    "id",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -181,6 +183,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Kontrol tarihi ",
         ".",
     ),
+    "id": (
+        "Catatan klinis: pasien ",
+        " lahir pada ",
+        ". ID pasien ",
+        ". Telepon ",
+        ". Alamat ",
+        ". Tanggal kontrol ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -194,6 +205,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "te": validate_aadhaar,
     "pt": validate_portuguese_cpf,
     "tr": validate_turkish_tckn,
+    "id": validate_indonesian_nik,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -207,6 +219,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "te": "pii_i18n.validate_aadhaar",
     "pt": "pii_i18n.validate_portuguese_cpf",
     "tr": "pii_i18n.validate_turkish_tckn",
+    "id": "pii_i18n.validate_indonesian_nik",
 }
 
 
