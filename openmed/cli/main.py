@@ -142,7 +142,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
-    _add_policy_command(subparsers)
     _add_config_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
@@ -445,35 +444,6 @@ def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
     bundle_parser.set_defaults(handler=_handle_fhir_bundle)
 
 
-def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
-    policy_parser = subparsers.add_parser(
-        "policy",
-        help="Inspect de-identification policy profiles.",
-    )
-    policy_sub = policy_parser.add_subparsers(dest="policy_command")
-
-    diff_parser = policy_sub.add_parser(
-        "diff",
-        help="Compare two policy profile configurations.",
-    )
-    diff_parser.add_argument(
-        "base",
-        help="Baseline bundled profile name or policy JSON path.",
-    )
-    diff_parser.add_argument(
-        "candidate",
-        help="Candidate bundled profile name or policy JSON path.",
-    )
-    diff_parser.add_argument(
-        "--format",
-        choices=["text", "json"],
-        default="text",
-        dest="output_format",
-        help="Output format.",
-    )
-    diff_parser.set_defaults(handler=_handle_policy_diff)
-
-
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
@@ -706,6 +676,27 @@ def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
         "policy", help="Inspect and validate OpenMed policy profiles."
     )
     policy_sub = policy_parser.add_subparsers(dest="policy_command")
+
+    diff_parser = policy_sub.add_parser(
+        "diff",
+        help="Compare two policy profile configurations.",
+    )
+    diff_parser.add_argument(
+        "base",
+        help="Baseline bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "candidate",
+        help="Candidate bundled profile name or policy JSON path.",
+    )
+    diff_parser.add_argument(
+        "--format",
+        choices=["text", "json"],
+        default="text",
+        dest="output_format",
+        help="Output format.",
+    )
+    diff_parser.set_defaults(handler=_handle_policy_diff)
 
     policy_lint = policy_sub.add_parser(
         "lint",
