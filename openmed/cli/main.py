@@ -140,6 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
     _add_models_command(subparsers)
+    _add_policy_command(subparsers)
     _add_config_command(subparsers)
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
@@ -673,6 +674,28 @@ def _add_config_command(subparsers: argparse._SubParsersAction) -> None:
     )
     profile_delete.add_argument("profile_name", help="Name of the profile to delete.")
     profile_delete.set_defaults(handler=_handle_profile_delete)
+
+
+def _add_policy_command(subparsers: argparse._SubParsersAction) -> None:
+    policy_parser = subparsers.add_parser(
+        "policy", help="Inspect and validate OpenMed policy profiles."
+    )
+    policy_sub = policy_parser.add_subparsers(dest="policy_command")
+
+    policy_lint = policy_sub.add_parser(
+        "lint",
+        help="Lint a bundled policy name or policy profile JSON file.",
+    )
+    policy_lint.add_argument(
+        "target",
+        help="Policy profile name or path to a policy profile JSON file.",
+    )
+    policy_lint.add_argument(
+        "--strict",
+        action="store_true",
+        help="Return a non-zero exit code when warnings are present.",
+    )
+    policy_lint.set_defaults(handler=_handle_policy_lint)
 
 
 def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1600,6 +1623,23 @@ def _coerce_value(key: str, value: str) -> Any:
         except ValueError:
             raise ValueError("timeout must be an integer") from None
     return value
+
+
+# ---------------------------------------------------------------------------
+# Policy Handlers
+# ---------------------------------------------------------------------------
+
+
+def _handle_policy_lint(args: argparse.Namespace) -> int:
+    from ..core.policy_lint import lint_policy
+
+    report = lint_policy(args.target)
+    sys.stdout.write(f"{json.dumps(report, indent=2, sort_keys=True)}\n")
+    if report["errors"]:
+        return 1
+    if args.strict and report["warnings"]:
+        return 1
+    return 0
 
 
 # ---------------------------------------------------------------------------
