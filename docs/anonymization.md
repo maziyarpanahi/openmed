@@ -144,6 +144,50 @@ placeholder (`[first_name]`, `[first_name_2]`, ...) so each one maps back to
 its own original value — this was a known limitation (#204) fixed by #222;
 `reidentify()` now round-trips correctly even when a type repeats.
 
+## Custom deny-list and allow-list recognizer
+
+Use `custom_recognizer` when your site has identifiers the model does not
+know, or benign values that must never be redacted. The argument accepts a
+plain mapping, a `CustomRecognizer` instance, or a `.json`/`.yaml` path.
+
+```python
+from openmed import deidentify, extract_pii
+
+custom_recognizer = {
+    "case_sensitive": False,
+    "deny": {
+        "terms": [
+            {"term": "Ward Phoenix", "label": "LOCATION"},
+        ],
+        "patterns": [
+            {"pattern": r"\bSTUDY-\d+\b", "label": "ID_NUM"},
+        ],
+    },
+    "allow": {
+        "terms": ["Mercy Trial"],
+        "patterns": [r"\bPUBLIC-\d+\b"],
+    },
+}
+
+entities = extract_pii(text, custom_recognizer=custom_recognizer)
+result = deidentify(text, method="mask", custom_recognizer=custom_recognizer)
+```
+
+Deny-list terms are literal strings. Deny-list patterns are regular
+expressions. Each deny entry needs a `label`; OpenMed keeps that label on the
+returned entity and normalizes it into the canonical label taxonomy for
+policy and audit handling. Matches are emitted with `custom:deny`
+provenance.
+
+Allow-list terms and patterns suppress any overlapping span from any detector,
+including model detections, deterministic rules, and custom deny-list matches.
+Allow-list precedence always wins over deny-list and model detections, so an
+allowed value is left untouched in `deidentify()` output.
+
+Recognizer metadata stores hashes and rule ids, not raw matched surfaces. In
+the staged pipeline, custom matching runs on normalized text and spans are
+remapped back to original offsets before redaction.
+
 ## The new `replace` engine
 
 `method="replace"` no longer picks from a small hardcoded list. It builds
@@ -200,6 +244,36 @@ Three modes:
 
 Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
+
+### Cross-document surrogate vaults
+
+Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
+calls need stable pseudonyms for the same identifier:
+
+```python
+from openmed import SurrogateVault, deidentify
+
+vault = SurrogateVault.from_file(
+    "surrogate-vault.json",
+    hmac_secret="rotate-and-store-this-secret-outside-the-vault",
+)
+
+first = deidentify(
+    "Patient John Doe was admitted.",
+    method="replace",
+    surrogate_vault=vault,
+)
+second = deidentify(
+    "John Doe returned for follow-up.",
+    method="replace",
+    surrogate_vault=vault,
+)
+```
+
+The vault file stores `(canonical_label, lang, HMAC text_hash) -> surrogate`
+entries plus `schema_version` and `hmac_scheme`; it does not store raw source
+surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
+data anyway: it can connect records across documents even without plaintext.
 
 ### Format preservation
 
@@ -263,8 +337,8 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr`.
+as its source of truth and supports **15 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr`.
 The multilingual privacy-filter family is a checkpoint family; it does not
 expand the per-language API allow-list.
 
@@ -272,7 +346,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 12-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 14-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

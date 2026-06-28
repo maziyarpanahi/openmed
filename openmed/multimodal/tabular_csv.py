@@ -415,7 +415,10 @@ def _tabular_csv_handler(
     *,
     policy: Any = None,
     models: Any = None,
+    lang: str | None = None,
 ) -> ExtractedDocument:
+    # ``lang`` is accepted for the shared handler contract; tabular text has no
+    # OCR step, so language selection does not apply here.
     return redact_table(path, policy=policy, models=models).to_document()
 
 
