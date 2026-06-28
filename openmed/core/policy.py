@@ -23,6 +23,7 @@ class PolicyName(str, Enum):
     HIPAA_SAFE_HARBOR = "hipaa_safe_harbor"
     HIPAA_EXPERT_REVIEW_ASSIST = "hipaa_expert_review_assist"
     GDPR_PSEUDONYMIZATION = "gdpr_pseudonymization"
+    GDPR_ART9_HEALTH = "gdpr_art9_health"
     RESEARCH_LIMITED_DATASET = "research_limited_dataset"
     STRICT_NO_LEAK = "strict_no_leak"
     CLINICAL_MINIMAL_REDACTION = "clinical_minimal_redaction"
@@ -34,6 +35,7 @@ CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
 POLICY_ALIASES: Mapping[str, str] = {
     "au_privacy": PolicyName.AUSTRALIA_PRIVACY_ACT.value,
     "gdpr": PolicyName.GDPR_PSEUDONYMIZATION.value,
+    "gdpr_health": PolicyName.GDPR_ART9_HEALTH.value,
     "pipeda": PolicyName.CANADA_PIPEDA.value,
 }
 
