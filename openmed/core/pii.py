@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
@@ -58,6 +58,74 @@ from .result_cache import (
 
 # Type alias for de-identification methods
 DeidentificationMethod = Literal["mask", "remove", "replace", "hash", "shift_dates"]
+
+
+class MissingOptionalDependencyError(ImportError):
+    """Raised when a requested optional capability needs an unavailable package."""
+
+    def __init__(
+        self,
+        *,
+        package: str,
+        feature: str,
+        extra: str | None = None,
+    ) -> None:
+        instruction = _optional_dependency_install_instruction(package, extra)
+        super().__init__(
+            f"{feature} requires optional dependency '{package}'. {instruction}"
+        )
+        self.package = package
+        self.feature = feature
+        self.extra = extra
+
+
+def _optional_dependency_install_instruction(
+    package: str,
+    extra: str | None = None,
+) -> str:
+    if extra:
+        return (
+            f"Install it with `pip install openmed[{extra}]` "
+            f"or `pip install {package}`."
+        )
+    return f"Install it with `pip install {package}`."
+
+
+def _optional_dependency_status(
+    *,
+    package: str,
+    feature: str,
+    available: bool,
+    skipped: bool,
+    extra: str | None = None,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    status: dict[str, Any] = {
+        "feature": feature,
+        "dependency": package,
+        "available": available,
+        "skipped": skipped,
+        "install": _optional_dependency_install_instruction(package, extra),
+    }
+    if extra is not None:
+        status["extra"] = extra
+    if reason is not None:
+        status["reason"] = reason
+    return status
+
+
+def _raise_missing_optional_dependency(
+    *,
+    package: str,
+    feature: str,
+    extra: str | None = None,
+    cause: ImportError | None = None,
+) -> NoReturn:
+    raise MissingOptionalDependencyError(
+        package=package,
+        feature=feature,
+        extra=extra,
+    ) from cause
 
 
 @dataclass
@@ -1242,6 +1310,7 @@ def _build_deidentification_result(
             ),
             lang=lang,
             anonymizer=anonymizer,
+            require_dateutil=effective_method == "shift_dates",
         )
 
         if keep_mapping and entity_method == "remove":
@@ -1570,6 +1639,7 @@ def _redact_entity(
     date_shift_days: Optional[int] = None,
     lang: str = "en",
     anonymizer: Optional["Anonymizer"] = None,
+    require_dateutil: bool = False,
 ) -> str:
     """Redact a single PII entity based on method.
 
@@ -1582,6 +1652,8 @@ def _redact_entity(
         anonymizer: Pre-built ``Anonymizer`` instance for ``method="replace"``.
             When ``None``, a fresh per-call instance is built using the
             language default (random, non-deterministic).
+        require_dateutil: Require python-dateutil instead of silently falling
+            back to the basic regex shifter.
 
     Returns:
         Redacted text replacement
@@ -1612,7 +1684,13 @@ def _redact_entity(
     elif method == "shift_dates":
         # Shift dates by offset
         if _is_date_entity(entity, lang) and date_shift_days is not None:
-            return _shift_date(entity.text, date_shift_days, keep_year, lang=lang)
+            return _shift_date(
+                entity.text,
+                date_shift_days,
+                keep_year,
+                lang=lang,
+                require_dateutil=require_dateutil,
+            )
         else:
             # Non-date entities get masked
             return f"[{entity.entity_type}]"
@@ -1899,6 +1977,8 @@ def _shift_date(
     shift_days: int,
     keep_year: bool = False,
     lang: str = "en",
+    *,
+    require_dateutil: bool = False,
 ) -> str:
     """Shift a date string by specified number of days.
 
@@ -1914,6 +1994,9 @@ def _shift_date(
         shift_days: Number of days to shift (positive = future, negative = past)
         keep_year: Keep the year unchanged (only shift month/day)
         lang: Language code for date format conventions
+        require_dateutil: Raise a clear optional-dependency error when
+            python-dateutil is unavailable. When false, fall back to the basic
+            regex shifter.
 
     Returns:
         Shifted date string in the same format as input
@@ -1935,7 +2018,14 @@ def _shift_date(
     # Try to parse and shift using dateutil if available
     try:
         from dateutil import parser as date_parser
-    except ImportError:
+    except ImportError as exc:
+        if require_dateutil:
+            _raise_missing_optional_dependency(
+                package="python-dateutil",
+                extra="dev",
+                feature="method='shift_dates' date parsing",
+                cause=exc,
+            )
         # Fallback without dateutil - basic pattern matching
         return _shift_date_basic(date_str, shift_days, keep_year, lang=lang)
 
