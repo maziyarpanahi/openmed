@@ -3293,8 +3293,14 @@ onnx = [
     { name = "torch" },
     { name = "transformers" },
 ]
+philter = [
+    { name = "philter-ucsf" },
+]
 presidio = [
     { name = "presidio-analyzer" },
+]
+pydeid = [
+    { name = "pydeid" },
 ]
 service = [
     { name = "fastapi" },
@@ -3340,11 +3346,13 @@ requires-dist = [
     { name = "onnxscript", marker = "extra == 'onnx'", specifier = ">=0.1.0" },
     { name = "paddleocr", marker = "extra == 'ocr-paddle'", specifier = ">=2.7" },
     { name = "pdfplumber", marker = "extra == 'multimodal'", specifier = ">=0.11" },
+    { name = "philter-ucsf", marker = "extra == 'philter'", specifier = ">=1.0.3,<2" },
     { name = "piexif", marker = "extra == 'multimodal'", specifier = ">=1.1" },
     { name = "pikepdf", marker = "extra == 'multimodal'", specifier = ">=9.0" },
     { name = "pillow", marker = "extra == 'multimodal'", specifier = ">=10.0" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.354,<3" },
+    { name = "pydeid", marker = "extra == 'pydeid'", specifier = ">=0.0.1" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.8" },
     { name = "pysbd", specifier = ">=0.3.4,<0.4" },
     { name = "pytesseract", marker = "extra == 'multimodal'", specifier = ">=0.3.10" },
@@ -3371,7 +3379,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["awq", "cli", "coreml", "dev", "docs", "gliner", "gptq", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "presidio", "service", "spacy"]
+provides-extras = ["awq", "cli", "coreml", "dev", "docs", "gliner", "gptq", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "philter", "presidio", "pydeid", "service", "spacy"]
 
 [[package]]
 name = "orjson"
@@ -3644,6 +3652,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/86/cf/037f1e3d5186496c0
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e8/b6/f54d676ed93cc2dd2234c3b172ea9c8c3d7d29361e66b1b23dec57a67465/peft-0.19.1-py3-none-any.whl", hash = "sha256:2113f72a81621b5913ef28f9022204c742df111890c5f49d812716a4a301e356", size = 680692, upload-time = "2026-04-16T15:46:42.886Z" },
 ]
+
+[[package]]
+name = "philter-ucsf"
+version = "1.0.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/de/ae69f774f1e4da9d13537c62d3bccf6b6add1be845d662d406d657699882/philter_ucsf-1.0.3.tar.gz", hash = "sha256:e50c0265d8f4d6b462f909deb8d2512187741157f2716424d22e23fc04896452", size = 2294251, upload-time = "2020-04-19T03:35:33.16Z" }
 
 [[package]]
 name = "phonenumbers"
@@ -4411,6 +4425,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5c/b5/8f48e906c3e0205276e8bd8cb7512217a87b2685304d64be27cad5b3019f/pydantic_settings-2.14.2.tar.gz", hash = "sha256:c19dd64b19097f1de80184f0cc7b0272a13ae6e170cbf240a3e27e381ed14a5f", size = 237700, upload-time = "2026-06-19T13:44:56.324Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/77/c1/6e422f34e569cf8e18df68d1939c81c099d2b61e4f7d9621c8a77560799c/pydantic_settings-2.14.2-py3-none-any.whl", hash = "sha256:a20c97b37910b6550d5ea50fbcc2d4187defe58cd57070b73863d069419c9440", size = 61715, upload-time = "2026-06-19T13:44:55.02Z" },
+]
+
+[[package]]
+name = "pydeid"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/4f/8d073a207e448686b7213b64750d5f49f68519a90b36e36be42202bcf354/pydeid-0.0.1.tar.gz", hash = "sha256:6f5cda510ce8018b8dfe87a0a009b326735f5efc5b77328e23a49762c4d68de0", size = 981, upload-time = "2019-01-31T19:39:19.049Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/16/bb9cf6f15d52d51e06c027c1e0ead59c8818850d421361ee43c00f3d8a70/pydeid-0.0.1-py2.py3-none-any.whl", hash = "sha256:946a47be34fcaf2d84263ad3c6d4980f935124176f74408243a8793ad239293d", size = 2033, upload-time = "2019-01-31T19:39:16.811Z" },
 ]
 
 [[package]]
