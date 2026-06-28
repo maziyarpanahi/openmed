@@ -1154,6 +1154,25 @@ def _resolve_mlx_model(
     return str(output_dir), full_model_id
 
 
+def create_mlx_language_model(
+    model_name: str,
+    *,
+    config: Any = None,
+    draft_model_name: str | None = None,
+    metrics: Any = None,
+) -> Any:
+    """Create an MLX-LM language-model runner with optional draft decoding."""
+
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    return OpenMedMLXLanguageModel(
+        model_name=model_name,
+        config=config,
+        draft_model_name=draft_model_name,
+        metrics=metrics,
+    )
+
+
 def create_mlx_pipeline(
     model_name: str,
     aggregation_strategy: Optional[str] = "simple",
