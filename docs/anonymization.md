@@ -176,6 +176,36 @@ Three modes:
 Determinism uses `hashlib.blake2b` over `(seed, canonical_label, original)`,
 so different originals always get different surrogates.
 
+### Cross-document surrogate vaults
+
+Use a `SurrogateVault` when separate `deidentify(..., method="replace")`
+calls need stable pseudonyms for the same identifier:
+
+```python
+from openmed import SurrogateVault, deidentify
+
+vault = SurrogateVault.from_file(
+    "surrogate-vault.json",
+    hmac_secret="rotate-and-store-this-secret-outside-the-vault",
+)
+
+first = deidentify(
+    "Patient John Doe was admitted.",
+    method="replace",
+    surrogate_vault=vault,
+)
+second = deidentify(
+    "John Doe returned for follow-up.",
+    method="replace",
+    surrogate_vault=vault,
+)
+```
+
+The vault file stores `(canonical_label, lang, HMAC text_hash) -> surrogate`
+entries plus `schema_version` and `hmac_scheme`; it does not store raw source
+surfaces or the HMAC secret. Treat the file as sensitive pseudonymous linkage
+data anyway: it can connect records across documents even without plaintext.
+
 ### Format preservation
 
 Phone numbers, dates, and emails preserve the structure of the original:
