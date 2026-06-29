@@ -12,12 +12,14 @@ from typing import Optional
 from fastapi import Request
 from starlette.responses import Response
 
+from .batcher import BackpressureError
 from .runtime import ServiceThrottleConfig
 
 PROBE_PATHS = frozenset({"/health", "/livez", "/readyz"})
 GLOBAL_THROTTLE_KEY = "global"
 ErrorResponseFactory = Callable[..., Response]
 CallNext = Callable[[Request], Awaitable[Response]]
+BackpressureCheck = Callable[[Request], Awaitable[Optional[BackpressureError]]]
 
 
 @dataclass
@@ -166,6 +168,7 @@ class ServiceThrottle:
         config: ServiceThrottleConfig,
         *,
         error_response: ErrorResponseFactory,
+        backpressure_check: Optional[BackpressureCheck] = None,
         limited_paths: Optional[Collection[str]] = None,
         exempt_paths: Collection[str] = PROBE_PATHS,
     ) -> None:
@@ -179,13 +182,14 @@ class ServiceThrottle:
             wait_seconds=config.concurrency_wait_seconds,
         )
         self._error_response = error_response
+        self._backpressure_check = backpressure_check
         self._limited_paths = frozenset(limited_paths) if limited_paths else None
         self._exempt_paths = frozenset(exempt_paths)
 
     @property
     def enabled(self) -> bool:
         """Return whether any throttle gate is active."""
-        return self.config.enabled
+        return self.config.enabled or self._backpressure_check is not None
 
     async def dispatch(self, request: Request, call_next: CallNext) -> Response:
         """Apply rate and concurrency gates around one HTTP request."""
@@ -208,6 +212,28 @@ class ServiceThrottle:
                 decision.retry_after_seconds
             )
             return response
+
+        if self._backpressure_check is not None:
+            try:
+                backpressure = await self._backpressure_check(request)
+            except ValueError as exc:
+                return self._error_response(
+                    400,
+                    "bad_request",
+                    str(exc),
+                    details={"reason": str(exc)},
+                )
+            if backpressure is not None:
+                response = self._error_response(
+                    503,
+                    "backpressure",
+                    str(backpressure),
+                    details=backpressure.to_details(),
+                )
+                response.headers["Retry-After"] = format_retry_after(
+                    backpressure.retry_after_seconds
+                )
+                return response
 
         permit = await self.concurrency_gate.acquire(key)
         if self.concurrency_gate.enabled and permit is None:

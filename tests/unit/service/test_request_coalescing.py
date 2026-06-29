@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from typing import Any
 
 import httpx
@@ -40,6 +41,7 @@ def _enable_coalescing_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
@@ -152,6 +154,59 @@ def test_identical_concurrent_requests_trigger_one_model_call(monkeypatch) -> No
     assert [response.status_code for response in responses] == [200, 200]
     assert [response.json()["text"] for response in responses] == ["alpha", "alpha"]
     assert calls == 1
+
+
+def test_high_priority_waiter_promotes_coalesced_bulk_batch(monkeypatch) -> None:
+    _enable_coalescing_env(monkeypatch)
+    monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "8")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "500")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", "8")
+    monkeypatch.setattr(service_runtime, "ModelLoader", FakeLoader)
+    lock = threading.Lock()
+    calls = 0
+
+    def fake_analyze(text: str, **kwargs: Any) -> dict[str, Any]:
+        nonlocal calls
+        with lock:
+            calls += 1
+        return _analyze_response(text, kwargs["model_name"])
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+    app = create_app()
+
+    async def scenario() -> tuple[list[httpx.Response], float]:
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url=LOOPBACK_BASE_URL,
+            ) as client:
+                first = asyncio.create_task(
+                    client.post(
+                        "/analyze",
+                        json={"text": "alpha"},
+                        headers={"x-openmed-priority": "bulk"},
+                    )
+                )
+                await asyncio.sleep(0.05)
+                start = time.perf_counter()
+                second = asyncio.create_task(
+                    client.post(
+                        "/analyze",
+                        json={"text": "alpha"},
+                        headers={"x-openmed-priority": "interactive"},
+                    )
+                )
+                responses = list(await asyncio.gather(first, second))
+                return responses, time.perf_counter() - start
+
+    responses, joined_latency = asyncio.run(scenario())
+
+    assert [response.status_code for response in responses] == [200, 200]
+    assert [response.json()["text"] for response in responses] == ["alpha", "alpha"]
+    assert calls == 1
+    assert joined_latency < 0.3
 
 
 @pytest.mark.parametrize(
