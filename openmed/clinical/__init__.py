@@ -4,6 +4,18 @@ Intended contents include sections.py, context.py, grounding.py, relations.py,
 sdoh.py, and FHIR/OMOP exporters.
 """
 
+from .assertion_graph import (
+    ASSERTION_GRAPH_ADVISORY,
+    ASSERTION_GRAPH_AXES,
+    SECTION_RECONCILIATION_PRECEDENCE,
+    AssertionAxis,
+    AssertionConflict,
+    AssertionEvidence,
+    AssertionGraphResult,
+    AxisProvenance,
+    ReconciledAssertion,
+    reconcile_assertions,
+)
 from .context import (
     AFFIRMED,
     CANONICAL_SECTION_LABELS,
@@ -29,6 +41,7 @@ from .context import (
     Negation,
     apply_section_context,
     assert_context_axes,
+    canonical_section_label,
     resolve_negation,
     resolve_span_context,
     resolve_temporality,
@@ -60,6 +73,7 @@ from .problem_list import (
     ProblemMention,
     ReconciledProblem,
     SpanOffset,
+    clinical_status_from_assertion,
     deduplicate_problem_list,
 )
 from .status_vocab import (
@@ -105,6 +119,7 @@ __all__ = [
     "scan_context_cues",
     "resolve_negation",
     "apply_section_context",
+    "canonical_section_label",
     "resolve_span_context",
     "assert_context_axes",
     "RECENT",
@@ -122,6 +137,16 @@ __all__ = [
     "UNCERTAIN",
     "CERTAINTY_VALUES",
     "resolve_uncertainty",
+    "ASSERTION_GRAPH_ADVISORY",
+    "ASSERTION_GRAPH_AXES",
+    "SECTION_RECONCILIATION_PRECEDENCE",
+    "AssertionAxis",
+    "AssertionConflict",
+    "AssertionEvidence",
+    "AssertionGraphResult",
+    "AxisProvenance",
+    "ReconciledAssertion",
+    "reconcile_assertions",
     "AbnormalFlag",
     "ReferenceRange",
     "LAB_FLAG_ADVISORY",
@@ -142,6 +167,7 @@ __all__ = [
     "ProblemMention",
     "ReconciledProblem",
     "SpanOffset",
+    "clinical_status_from_assertion",
     "deduplicate_problem_list",
     "FrequencyNormalization",
     "DurationNormalization",
