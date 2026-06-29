@@ -20,8 +20,11 @@ export type PIILanguage =
   | "te"
   | "pt"
   | "ar"
+  | "he"
   | "ja"
-  | "tr";
+  | "tr"
+  | "id"
+  | "th";
 
 export type DeidentificationMethod =
   | "mask"
@@ -75,6 +78,19 @@ export interface PIIDeidentifyRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface PrivacyGatewayRequest {
+  text: string;
+  model_name?: string;
+  confidence_threshold?: number;
+  detector_confidence_floor?: number;
+  policy?: string;
+  disallowed_entity_categories?: string[];
+  use_smart_merging?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
 export interface ModelUnloadRequest {
   model_name?: string | null;
   all?: boolean;
@@ -120,6 +136,19 @@ export interface PIIDeidentifyResponse {
   metadata: JsonObject;
   audit_report: JsonObject | null;
   mapping?: Record<string, string>;
+}
+
+export interface PrivacyGatewayResponse {
+  request_id: string;
+  redacted_prompt: string;
+  external_response: string;
+  reidentified_text: string;
+  entity_counts: Record<string, number>;
+  placeholder_hashes: string[];
+  audit: {
+    record_hash: string;
+    verified: boolean;
+  };
 }
 
 export type AnalyzeResponse = PredictionResult;
@@ -233,6 +262,12 @@ export class OpenMedClient {
     request: PIIDeidentifyRequest,
   ): Promise<PIIDeidentifyResponse> {
     return this.post("/pii/deidentify", request);
+  }
+
+  async privacyGateway(
+    request: PrivacyGatewayRequest,
+  ): Promise<PrivacyGatewayResponse> {
+    return this.post("/privacy-gateway/complete", request);
   }
 
   async health(): Promise<HealthResponse> {
