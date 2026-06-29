@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `examples/gradio_deid_app.py`, an interactive Gradio demo that runs
+  `deidentify` over synthetic text with a `mask`/`replace`/`hash` method
+  selector and shows the redacted output alongside the detected PII entities.
+  `gradio` stays an optional, example-local dependency with a graceful install
+  hint, and the example is covered by import-safe smoke tests.
 - Added CycloneDX 1.6 SBOM generation (`scripts/security/generate_sbom.py`,
   `make sbom`) that inventories `openmed` and its runtime dependencies; a CI
   `sbom` job uploads `sbom.cdx.json` on every push and pull request, and the
