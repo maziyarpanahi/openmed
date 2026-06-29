@@ -44,6 +44,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
 
     assert available_adapters() == (
         "cda",
+        "cdm_etl",
         "gliner_biomed",
         "hl7v2",
         "langchain",
@@ -53,6 +54,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "spacy",
     )
     assert adapter_spec("cda").extra == "core"
+    assert adapter_spec("cdm_etl").extra == ""
     assert adapter_spec("hl7v2").extra == ""
     assert adapter_spec("langchain").extra == "langchain"
     assert adapter_spec("presidio").extra == "presidio"
