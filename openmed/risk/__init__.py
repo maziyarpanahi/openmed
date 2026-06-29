@@ -13,7 +13,7 @@ from .budget import (
     evaluate_budget,
 )
 from .dashboard import render_risk_dashboard, write_risk_dashboard
-from .kanon import kanon_report
+from .kanon import build_generalization_hierarchies, enforce_kanon, kanon_report
 from .reid import risk_report
 
 __all__ = [
@@ -27,6 +27,8 @@ __all__ = [
     "budget_for_policy",
     "evaluate_budget",
     "risk_report",
+    "build_generalization_hierarchies",
+    "enforce_kanon",
     "kanon_report",
     "diff_audit_reports",
     "AuditDiff",

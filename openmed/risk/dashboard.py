@@ -150,7 +150,8 @@ def render_risk_dashboard(
 
     Args:
         risk: Mapping returned by :func:`openmed.risk.risk_report`.
-        kanon: Optional mapping returned by :func:`openmed.risk.kanon_report`.
+        kanon: Optional mapping returned by :func:`openmed.risk.kanon_report`
+            or :func:`openmed.risk.enforce_kanon`.
         title: Optional document and page title. Defaults to a stable title.
 
     Returns:
@@ -307,6 +308,9 @@ def _render_quasi_identifiers(quasi_identifiers: Any) -> str:
 
 
 def _render_kanon(kanon: Mapping[str, Any]) -> str:
+    if isinstance(kanon.get("kanon"), Mapping):
+        return _render_kanon_enforcement(kanon)
+
     size_distribution = _as_sequence(kanon.get("class_size_distribution") or ())
     class_rows = _equivalence_class_rows(kanon.get("equivalence_classes") or ())
 
@@ -346,6 +350,84 @@ def _render_kanon(kanon: Mapping[str, Any]) -> str:
         )
     else:
         sections.append('<p class="empty">No equivalence classes reported.</p>')
+
+    sections.append("</section>")
+    return "\n".join(sections)
+
+
+def _render_kanon_enforcement(enforcement: Mapping[str, Any]) -> str:
+    kanon = _mapping(enforcement.get("kanon"))
+    generalization = _mapping(enforcement.get("generalization"))
+    bounds = _mapping(enforcement.get("bounds"))
+    self_check = _mapping(bounds.get("numeric_self_check"))
+    selected_levels = _mapping(generalization.get("levels"))
+
+    sections = [
+        '<section aria-labelledby="kanon-enforcement">',
+        '<h2 id="kanon-enforcement">K-Anonymity Enforcement</h2>',
+        '<div class="metric-grid">',
+        _metric("Target k", _format_count(enforcement.get("target_k"))),
+        _metric("Measured k", _format_count(kanon.get("k"))),
+        _metric("Released", _format_count(enforcement.get("released_count"))),
+        _metric("Suppressed", _format_count(enforcement.get("suppressed_count"))),
+        _metric(
+            "Max re-id bound",
+            _format_rate(bounds.get("max_reidentification_upper_bound")),
+        ),
+        _metric("Bound check", "pass" if self_check.get("passed") else "fail"),
+        "</div>",
+    ]
+
+    if selected_levels:
+        sections.extend(
+            [
+                "<h2>Selected Generalization</h2>",
+                _table(
+                    ["Field", "Level", "Name", "Loss"],
+                    [
+                        [
+                            field,
+                            _display(_mapping(level).get("level")),
+                            _display(_mapping(level).get("name")),
+                            _display(_mapping(level).get("loss")),
+                        ]
+                        for field, level in sorted(selected_levels.items())
+                    ],
+                ),
+            ]
+        )
+
+    sections.extend(
+        [
+            "<h2>Enforced Equivalence Classes</h2>",
+            _table(
+                ["Key", "Size", "Members", "l-diversity", "t-closeness"],
+                _equivalence_class_rows(kanon.get("equivalence_classes") or ()),
+            )
+            if kanon.get("equivalence_classes")
+            else '<p class="empty">No equivalence classes reported.</p>',
+        ]
+    )
+
+    suppressed = _as_sequence(enforcement.get("suppressed_records") or ())
+    if suppressed:
+        sections.extend(
+            [
+                "<h2>Suppressed Records</h2>",
+                _table(
+                    ["Offset", "Record hash", "Reason"],
+                    [
+                        [
+                            _display(_mapping(record).get("offset")),
+                            _display(_mapping(record).get("record_hash")),
+                            _display(_mapping(record).get("reason")),
+                        ]
+                        for record in suppressed
+                        if isinstance(record, Mapping)
+                    ],
+                ),
+            ]
+        )
 
     sections.append("</section>")
     return "\n".join(sections)
@@ -480,6 +562,10 @@ def _as_sequence(value: Any) -> list[Any]:
     if isinstance(value, Sequence):
         return list(value)
     return [value]
+
+
+def _mapping(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, Mapping) else {}
 
 
 def _format_rate(value: Any) -> str:
