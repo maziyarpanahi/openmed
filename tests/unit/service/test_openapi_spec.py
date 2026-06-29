@@ -14,6 +14,7 @@ EXPECTED_PATHS = {
     "/analyze",
     "/pii/extract",
     "/pii/deidentify",
+    "/privacy-gateway/complete",
 }
 
 

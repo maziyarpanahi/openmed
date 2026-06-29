@@ -26,12 +26,23 @@ from .metrics import (
     PrometheusMetricsRegistry,
     metrics_enabled_from_env,
 )
+from .privacy_gateway import (
+    HttpExternalLLMTransport,
+    InMemoryReidentificationStore,
+    PrivacyGateway,
+    PrivacyGatewayAuditTrail,
+    PrivacyGatewayConfigurationError,
+    PrivacyGatewayError,
+    PrivacyGatewayPolicy,
+    PrivacyTransportError,
+)
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
     ModelUnloadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
+    PrivacyGatewayRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -42,7 +53,10 @@ from .security_headers import (
 from .throttle import ServiceThrottle
 
 SERVICE_NAME = "openmed-rest"
-_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
+_PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
+_MODEL_BACKED_PATHS = frozenset(
+    {"/analyze", "/pii/extract", "/pii/deidentify", _PRIVACY_GATEWAY_PATH}
+)
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
@@ -369,6 +383,42 @@ def create_app() -> FastAPI:
             details={"timeout_seconds": exc.timeout_seconds},
         )
 
+    @app.exception_handler(PrivacyGatewayConfigurationError)
+    async def _privacy_gateway_config_handler(
+        _: Request,
+        exc: PrivacyGatewayConfigurationError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            exc.error_code,
+            "Privacy gateway external endpoint is not configured",
+            details={"reason": exc.reason_code},
+        )
+
+    @app.exception_handler(PrivacyTransportError)
+    async def _privacy_gateway_transport_handler(
+        _: Request,
+        exc: PrivacyTransportError,
+    ) -> JSONResponse:
+        return _error_response(
+            502,
+            exc.error_code,
+            "External LLM transport failed",
+            details={"reason": exc.reason_code},
+        )
+
+    @app.exception_handler(PrivacyGatewayError)
+    async def _privacy_gateway_error_handler(
+        _: Request,
+        exc: PrivacyGatewayError,
+    ) -> JSONResponse:
+        return _error_response(
+            400,
+            exc.error_code,
+            str(exc),
+            details={"reason": exc.reason_code},
+        )
+
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
         reason = str(exc)
@@ -517,6 +567,29 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
+    @app.post(_PRIVACY_GATEWAY_PATH)
+    async def privacy_gateway_complete(
+        payload: PrivacyGatewayRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        runtime = _get_service_runtime(request)
+
+        async def _operation() -> Dict[str, Any]:
+            def _model_operation() -> Dict[str, Any]:
+                return runtime.run_model_request(
+                    payload.model_name,
+                    payload.keep_alive,
+                    lambda: _privacy_gateway_payload(
+                        payload,
+                        runtime,
+                        request.app,
+                    ),
+                )
+
+            return await _run_with_timeout(runtime, _model_operation)
+
+        return await _operation()
 
     return app
 
@@ -903,6 +976,73 @@ def _pii_deidentify_payload(
     if should_emit_mapping and getattr(result, "mapping", None):
         response["mapping"] = result.mapping
     return response
+
+
+def _privacy_gateway_payload(
+    payload: PrivacyGatewayRequest,
+    runtime: ServiceRuntime,
+    fastapi_app: FastAPI,
+) -> Dict[str, Any]:
+    transport = _get_privacy_gateway_transport(fastapi_app)
+    audit_trail = _get_privacy_gateway_audit_trail(fastapi_app)
+    store = _get_privacy_gateway_store(fastapi_app)
+
+    def _extractor(text: str, **kwargs: Any) -> Any:
+        return openmed.extract_pii(
+            text,
+            config=runtime.config,
+            loader=runtime.get_loader(),
+            **kwargs,
+        )
+
+    gateway = PrivacyGateway(
+        transport=transport,
+        extractor=_extractor,
+        audit_trail=audit_trail,
+        store=store,
+    )
+    policy = PrivacyGatewayPolicy(
+        name=payload.policy,
+        min_confidence=payload.confidence_threshold,
+        detector_confidence_floor=payload.detector_confidence_floor,
+        disallowed_entity_categories=frozenset(payload.disallowed_entity_categories),
+    )
+    result = gateway.complete(
+        payload.text,
+        policy=policy,
+        model_name=payload.model_name,
+        use_smart_merging=payload.use_smart_merging,
+        lang=payload.lang,
+        normalize_accents=payload.normalize_accents,
+    )
+    return result.to_dict()
+
+
+def _get_privacy_gateway_transport(fastapi_app: FastAPI) -> Any:
+    transport = getattr(fastapi_app.state, "privacy_gateway_transport", None)
+    if transport is not None:
+        return transport
+    transport = HttpExternalLLMTransport.from_env()
+    fastapi_app.state.privacy_gateway_transport = transport
+    return transport
+
+
+def _get_privacy_gateway_audit_trail(
+    fastapi_app: FastAPI,
+) -> PrivacyGatewayAuditTrail:
+    audit_trail = getattr(fastapi_app.state, "privacy_gateway_audit_trail", None)
+    if audit_trail is None:
+        audit_trail = PrivacyGatewayAuditTrail()
+        fastapi_app.state.privacy_gateway_audit_trail = audit_trail
+    return audit_trail
+
+
+def _get_privacy_gateway_store(fastapi_app: FastAPI) -> InMemoryReidentificationStore:
+    store = getattr(fastapi_app.state, "privacy_gateway_store", None)
+    if store is None:
+        store = InMemoryReidentificationStore()
+        fastapi_app.state.privacy_gateway_store = store
+    return store
 
 
 app = create_app()

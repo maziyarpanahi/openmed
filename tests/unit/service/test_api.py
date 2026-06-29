@@ -221,6 +221,7 @@ def test_analyze_blank_text_returns_validation_error(client):
         ("/analyze", {}),
         ("/pii/extract", {}),
         ("/pii/deidentify", {"method": "mask"}),
+        ("/privacy-gateway/complete", {}),
     ],
 )
 def test_oversized_text_returns_validation_error(

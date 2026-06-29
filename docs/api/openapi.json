@@ -356,6 +356,107 @@
         "title": "PIIExtractRequest",
         "type": "object"
       },
+      "PrivacyGatewayRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for /privacy-gateway/complete.",
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.85,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "detector_confidence_floor": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Detector Confidence Floor",
+            "type": "number"
+          },
+          "disallowed_entity_categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Disallowed Entity Categories",
+            "type": "array"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "policy": {
+            "default": "strict",
+            "title": "Policy",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PrivacyGatewayRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -627,6 +728,46 @@
           }
         },
         "summary": "Pii Extract"
+      }
+    },
+    "/privacy-gateway/complete": {
+      "post": {
+        "operationId": "privacy_gateway_complete_privacy_gateway_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacyGatewayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Privacy Gateway Complete Privacy Gateway Complete Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Privacy Gateway Complete"
       }
     },
     "/readyz": {
