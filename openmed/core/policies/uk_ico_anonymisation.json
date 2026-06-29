@@ -78,6 +78,10 @@
     "LAB_TEST": "keep",
     "PROCEDURE": "keep",
     "BODY_SITE": "keep",
+    "DIET_TYPE": "keep",
+    "NUTRITION_TARGET": "keep",
+    "FEEDING_ROUTE": "keep",
+    "NUTRITIONAL_STATUS": "keep",
     "OTHER": "keep"
   }
 }

@@ -103,6 +103,12 @@ LAB_TEST: Final = "LAB_TEST"
 PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
 
+#: Nutrition and diet-order concepts (issue #951)
+DIET_TYPE: Final = "DIET_TYPE"
+NUTRITION_TARGET: Final = "NUTRITION_TARGET"
+FEEDING_ROUTE: Final = "FEEDING_ROUTE"
+NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -181,6 +187,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         LAB_TEST,
         PROCEDURE,
         BODY_SITE,
+        DIET_TYPE,
+        NUTRITION_TARGET,
+        FEEDING_ROUTE,
+        NUTRITIONAL_STATUS,
         OTHER,
     }
 )
@@ -345,6 +355,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Nutrition and diet-order concepts (issue #951)
+    DIET_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -418,6 +433,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
+    # Nutritional and Diet concepts
+    DIET_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
+    FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -625,6 +645,12 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "anatomy": BODY_SITE,
     "anatomical": BODY_SITE,
     "organ": BODY_SITE,
+    # Nutrition and Diet concepts
+    "diettype": DIET_TYPE,
+    "diet": DIET_TYPE,
+    "nutritiontarget": NUTRITION_TARGET,
+    "feedingroute": FEEDING_ROUTE,
+    "nutritionalstatus": NUTRITIONAL_STATUS,
 }
 
 
@@ -831,5 +857,9 @@ __all__ = [
     "LAB_TEST",
     "PROCEDURE",
     "BODY_SITE",
+    "DIET_TYPE",
+    "NUTRITION_TARGET",
+    "FEEDING_ROUTE",
+    "NUTRITIONAL_STATUS",
     "OTHER",
 ]

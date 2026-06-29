@@ -199,6 +199,13 @@ _CATEGORY_ENTITY_TYPES = {
         "INTRAOCULAR_PRESSURE",
         "ANATOMY",
     ],
+    # Nutrition- registered (see issue #951)
+    "Nutrition": [
+        "DIET_TYPE",
+        "NUTRITION_TARGET",
+        "FEEDING_ROUTE",
+        "NUTRITIONAL_STATUS",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -746,6 +753,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "blood|lymph|leukemia|lymphoma": (
         "Hematology",
         "Contains hematological terms",
+    ),
+    "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
+        "Nutrition",
+        "Contains nutrition/diet-order terms",
     ),
 }
 
