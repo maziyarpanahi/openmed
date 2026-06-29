@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
@@ -11,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from openmed.core.safety_sweep import hashed_span_surface
 from openmed.eval.golden import GoldenFixture, load_golden_fixtures
 from openmed.eval.report import BenchmarkReport
 from openmed.risk import risk_report
@@ -239,6 +242,28 @@ class MembershipInferenceResult:
         }
 
 
+@dataclass(frozen=True)
+class SideChannelProbeResult:
+    """Mutual-information style probe for PHI encoded in timing metadata."""
+
+    flagged: bool
+    estimate_bits: float
+    threshold_bits: float
+    sample_count: int
+    findings: tuple[dict[str, Any], ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_metric(self) -> dict[str, Any]:
+        return {
+            "flagged": bool(self.flagged),
+            "estimate_bits": float(self.estimate_bits),
+            "threshold_bits": float(self.threshold_bits),
+            "sample_count": int(self.sample_count),
+            "findings": [dict(item) for item in self.findings],
+            "metadata": dict(self.metadata),
+        }
+
+
 def membership_inference_attack(
     deidentified_records: Sequence[Mapping[str, Any]],
     candidate_members: Sequence[Mapping[str, Any]],
@@ -308,6 +333,82 @@ def membership_inference_attack(
         record_count=len(deidentified),
         confident_count=confident_count,
         per_record=tuple(per_record),
+    )
+
+
+def probe_span_timing_side_channel(
+    fixtures: Sequence[Any],
+    timing_records: Sequence[Mapping[str, Any]],
+    *,
+    threshold_bits: float = 0.30,
+    min_samples: int = 4,
+) -> SideChannelProbeResult:
+    """Estimate whether span timings encode gold PHI beyond detection outputs.
+
+    The probe discretizes per-span duration around the median and compares that
+    bucket with a deterministic secret bit derived from the gold span surface.
+    Findings include only fixture ids, offsets, labels, and hashes.
+    """
+    gold_by_fixture = _gold_span_index(fixtures)
+    samples: list[tuple[int, float, dict[str, Any]]] = []
+
+    for record in timing_records:
+        fixture_id = str(record.get("fixture_id") or "")
+        duration = _optional_float(record.get("duration_ms"))
+        start = _optional_int(record.get("start"))
+        end = _optional_int(record.get("end"))
+        if duration is None or start is None or end is None:
+            continue
+        gold = _matching_gold_span(gold_by_fixture.get(fixture_id, ()), start, end)
+        if gold is None:
+            continue
+        surface = str(gold["surface"])
+        evidence = {
+            "fixture_id": fixture_id,
+            **hashed_span_surface(
+                str(gold["fixture_text"]),
+                int(gold["start"]),
+                int(gold["end"]),
+                label=str(gold["label"]),
+            ),
+        }
+        samples.append((_surface_secret_bit(surface), duration, evidence))
+
+    if len(samples) < min_samples:
+        return SideChannelProbeResult(
+            flagged=False,
+            estimate_bits=0.0,
+            threshold_bits=threshold_bits,
+            sample_count=len(samples),
+            metadata={"reason": "insufficient_timing_samples"},
+        )
+
+    durations = [duration for _secret_bit, duration, _evidence in samples]
+    median_duration = _median(durations)
+    bucketed = [
+        (secret_bit, int(duration > median_duration), evidence)
+        for secret_bit, duration, evidence in samples
+    ]
+    estimate = _mutual_information_bits(
+        [(secret_bit, timing_bucket) for secret_bit, timing_bucket, _ in bucketed]
+    )
+    flagged = estimate >= threshold_bits
+    findings = tuple(
+        {
+            **evidence,
+            "secret_bucket": secret_bit,
+            "timing_bucket": timing_bucket,
+        }
+        for secret_bit, timing_bucket, evidence in bucketed
+        if flagged
+    )
+    return SideChannelProbeResult(
+        flagged=flagged,
+        estimate_bits=estimate,
+        threshold_bits=threshold_bits,
+        sample_count=len(bucketed),
+        findings=findings,
+        metadata={"median_duration_ms": median_duration},
     )
 
 
@@ -568,6 +669,114 @@ def _rate(numerator: int, denominator: int) -> float:
     return float(numerator / denominator) if denominator else 0.0
 
 
+def _gold_span_index(fixtures: Sequence[Any]) -> dict[str, list[dict[str, Any]]]:
+    indexed: dict[str, list[dict[str, Any]]] = {}
+    for fixture in fixtures:
+        fixture_id = str(
+            _fixture_value(fixture, "fixture_id")
+            or _fixture_value(fixture, "id")
+            or "fixture"
+        )
+        text = str(_fixture_value(fixture, "text") or "")
+        spans = (
+            _fixture_value(fixture, "gold_spans")
+            or _fixture_value(fixture, "entities")
+            or ()
+        )
+        entries: list[dict[str, Any]] = []
+        for span in spans:
+            start = _optional_int(_span_value(span, "start"))
+            end = _optional_int(_span_value(span, "end"))
+            if start is None or end is None or not (0 <= start < end <= len(text)):
+                continue
+            entries.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "label": _span_value(span, "label")
+                    or _span_value(span, "entity_type")
+                    or "OTHER",
+                    "surface": text[start:end],
+                    "fixture_text": text,
+                }
+            )
+        indexed[fixture_id] = entries
+    return indexed
+
+
+def _matching_gold_span(
+    spans: Sequence[Mapping[str, Any]],
+    start: int,
+    end: int,
+) -> Mapping[str, Any] | None:
+    for span in spans:
+        if int(span["start"]) == start and int(span["end"]) == end:
+            return span
+    for span in spans:
+        if start < int(span["end"]) and end > int(span["start"]):
+            return span
+    return None
+
+
+def _surface_secret_bit(surface: str) -> int:
+    return hashlib.sha256(surface.encode("utf-8")).digest()[0] & 1
+
+
+def _median(values: Sequence[float]) -> float:
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[midpoint]
+    return (ordered[midpoint - 1] + ordered[midpoint]) / 2.0
+
+
+def _mutual_information_bits(samples: Sequence[tuple[int, int]]) -> float:
+    total = len(samples)
+    if total == 0:
+        return 0.0
+    joint = Counter(samples)
+    x_counts = Counter(secret for secret, _timing in samples)
+    y_counts = Counter(timing for _secret, timing in samples)
+    estimate = 0.0
+    for (secret, timing), count in joint.items():
+        p_xy = count / total
+        p_x = x_counts[secret] / total
+        p_y = y_counts[timing] / total
+        estimate += p_xy * math.log2(p_xy / (p_x * p_y))
+    return float(max(0.0, estimate))
+
+
+def _fixture_value(fixture: Any, key: str) -> Any:
+    if isinstance(fixture, Mapping):
+        return fixture.get(key)
+    return getattr(fixture, key, None)
+
+
+def _span_value(span: Any, key: str) -> Any:
+    if isinstance(span, Mapping):
+        return span.get(key)
+    return getattr(span, key, None)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -575,8 +784,10 @@ def _utc_now() -> str:
 __all__ = [
     "ReidAttackResult",
     "MembershipInferenceResult",
+    "SideChannelProbeResult",
     "generate_reid_leaderboard",
     "membership_inference_attack",
+    "probe_span_timing_side_channel",
     "render_reid_leaderboard",
     "run_reid_attack",
     "run_reid_benchmark",
