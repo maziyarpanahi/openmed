@@ -3,6 +3,8 @@
 from .loader import (
     GOLDEN_CATEGORIES,
     GoldenFixture,
+    benchmark_fixture_languages,
+    benchmark_fixtures_by_language,
     fixture_languages,
     fixtures_by_category,
     fixtures_by_language,
@@ -14,6 +16,8 @@ from .loader import (
 __all__ = [
     "GOLDEN_CATEGORIES",
     "GoldenFixture",
+    "benchmark_fixture_languages",
+    "benchmark_fixtures_by_language",
     "fixture_languages",
     "fixtures_by_category",
     "fixtures_by_language",
