@@ -85,10 +85,17 @@ from openmed.eval.harness import (
 )
 from openmed.eval.history import (
     BenchmarkHistoryDiff,
+    BenchmarkRunLedger,
+    BenchmarkRunLedgerEntry,
     MetricDelta,
     MetricHistoryPoint,
+    RunLedgerConflict,
+    append_run_ledger_entry,
+    append_run_to_ledger,
     diff_against_baseline,
+    load_run_ledger,
     metric_history,
+    write_run_ledger,
 )
 from openmed.eval.leakage_heatmap import (
     HeatmapCell,
@@ -185,6 +192,8 @@ __all__ = [
     "BenchmarkFixture",
     "BenchmarkHistoryDiff",
     "BenchmarkReport",
+    "BenchmarkRunLedger",
+    "BenchmarkRunLedgerEntry",
     "CalibrationArtifactPaths",
     "CalibrationGroupReport",
     "CalibrationReport",
@@ -231,6 +240,7 @@ __all__ = [
     "ReidAttackResult",
     "ReliabilityBin",
     "RELEASABLE",
+    "RunLedgerConflict",
     "Perturbation",
     "PolicyProfileComplianceResult",
     "ReleaseGate",
@@ -247,6 +257,8 @@ __all__ = [
     "UNSPECIFIED_GROUP",
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
+    "append_run_ledger_entry",
+    "append_run_to_ledger",
     "build_report_key",
     "bundle_gate_evidence",
     "build_thresholds_payload",
@@ -293,6 +305,7 @@ __all__ = [
     "load_calibration_samples",
     "load_calibration_thresholds",
     "load_or_compute",
+    "load_run_ledger",
     "metric_history",
     "ocr_noise_perturbation",
     "paired_significance",
@@ -317,4 +330,5 @@ __all__ = [
     "write_calibration_artifacts",
     "write_model_scorecard",
     "write_model_scorecard_json",
+    "write_run_ledger",
 ]
