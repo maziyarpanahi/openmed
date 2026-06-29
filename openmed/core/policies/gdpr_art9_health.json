@@ -10,7 +10,12 @@
   "safety_sweep_mandatory": true,
   "keep_mapping": true,
   "reversible_id": true,
-  "forced_cascade_tiers": ["R0", "R1", "R2", "R3"],
+  "forced_cascade_tiers": [
+    "R0",
+    "R1",
+    "R2",
+    "R3"
+  ],
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "replace",
     "QUASI_IDENTIFIER": "mask",
@@ -74,6 +79,10 @@
     "LAB_TEST": "mask",
     "PROCEDURE": "mask",
     "BODY_SITE": "mask",
+    "DIET_TYPE": "mask",
+    "NUTRITION_TARGET": "mask",
+    "FEEDING_ROUTE": "mask",
+    "NUTRITIONAL_STATUS": "mask",
     "OTHER": "mask"
   }
 }

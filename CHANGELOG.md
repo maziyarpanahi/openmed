@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
   private-disclosure class.
 - Added LRU Cache implementation for analyze_text(), extract_pii(), and deidentify().
+- Added a nutrition and diet-order zero-shot label-map domain (`DietType`,
+  `NutritionTarget`, `Supplement`, `FeedingRoute`, `IntakeFinding`,
+  `NutritionalStatus`, `FluidRestriction`) plus nutrition/diet-order keyword
+  routing metadata for future model registration. Public model suggestions
+  continue to fall back to existing general medical models until a Nutrition
+  model is registered. Added the four canonical policy labels (`DIET_TYPE`,
+  `NUTRITION_TARGET`, `FEEDING_ROUTE`, `NUTRITIONAL_STATUS`) to the privacy
+  label taxonomy and all bundled policy profiles.
 
 ## [1.6.0] - 2026-06-22
 
