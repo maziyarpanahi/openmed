@@ -296,6 +296,31 @@ class PairedSignificance:
         return self.to_dict()[key]
 
 
+@dataclass(frozen=True)
+class CoverageGap:
+    """Observed coverage against a target for one reporting slice."""
+
+    slice_key: str
+    target_coverage: float
+    realized_coverage: float
+    coverage_gap: float
+    covered_weight: float
+    total_weight: float
+
+    def to_dict(self) -> dict[str, float | str]:
+        return {
+            "slice_key": self.slice_key,
+            "target_coverage": self.target_coverage,
+            "realized_coverage": self.realized_coverage,
+            "coverage_gap": self.coverage_gap,
+            "covered_weight": self.covered_weight,
+            "total_weight": self.total_weight,
+        }
+
+    def __getitem__(self, key: str) -> float | str:
+        return self.to_dict()[key]
+
+
 def normalize_eval_span(
     span: Any,
     *,
@@ -833,6 +858,77 @@ def expected_calibration_error(
     return error
 
 
+def weighted_coverage(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    covered_key: str = "covered",
+    weight_key: str = "weight",
+    zero_denominator: float = 1.0,
+) -> RateMetric:
+    """Compute weighted coverage from rows carrying covered/weight fields."""
+
+    covered_weight = 0.0
+    total_weight = 0.0
+    for row in rows:
+        raw_weight = row.get(weight_key, 1.0)
+        try:
+            weight = float(raw_weight)
+        except (TypeError, ValueError):
+            continue
+        if not isfinite(weight) or weight <= 0.0:
+            continue
+        total_weight += weight
+        if bool(row.get(covered_key, False)):
+            covered_weight += weight
+    return RateMetric(
+        rate=_safe_rate(
+            covered_weight,
+            total_weight,
+            zero_denominator=zero_denominator,
+        ),
+        numerator=covered_weight,
+        denominator=total_weight,
+    )
+
+
+def coverage_gaps_by_language(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    target_coverage: float,
+    languages: Iterable[str] = SUPPORTED_LANGUAGES,
+    covered_key: str = "covered",
+    weight_key: str = "weight",
+    language_key: str = "language",
+) -> dict[str, dict[str, float | str]]:
+    """Return byte-stable per-language coverage gaps."""
+
+    grouped: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for row in rows:
+        language = str(row.get(language_key) or "en").lower()
+        grouped[language].append(row)
+
+    target = _bounded_unit_interval(target_coverage, "target_coverage")
+    result: dict[str, dict[str, float | str]] = {}
+    languages_to_report = {str(item).lower() for item in languages} | set(grouped)
+    for language in sorted(languages_to_report):
+        coverage = weighted_coverage(
+            grouped.get(language, ()),
+            covered_key=covered_key,
+            weight_key=weight_key,
+        )
+        realized = float(coverage.rate)
+        gap = max(target - realized, 0.0)
+        result[language] = CoverageGap(
+            slice_key=language,
+            target_coverage=target,
+            realized_coverage=realized,
+            coverage_gap=gap,
+            covered_weight=float(coverage.numerator),
+            total_weight=float(coverage.denominator),
+        ).to_dict()
+    return result
+
+
 def compute_metrics_bundle(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
@@ -1241,6 +1337,13 @@ def _safe_rate(
     return float(numerator) / float(denominator)
 
 
+def _bounded_unit_interval(value: Any, field_name: str) -> float:
+    result = float(value)
+    if not isfinite(result) or not 0.0 <= result <= 1.0:
+        raise ValueError(f"{field_name} must be between 0.0 and 1.0")
+    return result
+
+
 def _f1_from_counts(
     true_positives: int, predicted_count: int, gold_count: int
 ) -> F1Metrics:
@@ -1373,6 +1476,7 @@ __all__ = [
     "BootstrapCI",
     "ReliabilityBin",
     "PairedSignificance",
+    "CoverageGap",
     "normalize_eval_span",
     "normalize_eval_spans",
     "compute_leakage_rate",
@@ -1386,8 +1490,10 @@ __all__ = [
     "compute_surrogate_consistency",
     "compute_latency_summary",
     "compute_resource_metrics",
+    "coverage_gaps_by_language",
     "reliability_bins",
     "expected_calibration_error",
+    "weighted_coverage",
     "compute_metrics_bundle",
     "bootstrap_ci",
     "paired_significance",
