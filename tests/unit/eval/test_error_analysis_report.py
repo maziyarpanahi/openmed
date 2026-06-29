@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
+from typing import Any
 
-from openmed.eval.error_analysis import MISSED, SPURIOUS, error_report
+from openmed.eval.error_analysis import (
+    MISSED,
+    SPURIOUS,
+    error_report,
+    mine_gate_failure_labeling_queue,
+)
 from openmed.eval.harness import BenchmarkFixture
 
 
@@ -126,6 +133,180 @@ def test_error_analysis_report_serializes_deterministically() -> None:
     assert "| `z` | 1 |" in markdown
 
 
+def test_labeling_queue_from_error_report_is_phi_free_and_tracks_provenance() -> None:
+    text = "Patient Jordan Smith has SSN 123-45-6789 in Room 4."
+    fixture = BenchmarkFixture.from_mapping(
+        {
+            "id": "note-jordan-smith",
+            "text": text,
+            "language": "en",
+            "gold_spans": [
+                _span(text, "Jordan Smith", "PERSON"),
+                _span(text, "123-45-6789", "SSN"),
+            ],
+            "metadata": {"predicted_spans": []},
+        }
+    )
+    report = error_report(
+        "test-model",
+        [fixture],
+        suite_name="synthetic",
+        runner=_metadata_runner,
+        metadata={"language": "en"},
+    )
+
+    artifact = mine_gate_failure_labeling_queue(
+        report,
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:error-report",
+        label_gate_impacts={"SSN": 4.0, "PERSON": 1.0},
+    )
+    payload = artifact.to_dict()
+
+    assert [item["label"] for item in payload["items"]] == ["SSN", "PERSON"]
+    assert payload == artifact.to_dict()
+    assert "artifact_hash" in payload
+    assert all(
+        item["provenance"]["gate_run_hash"] == "sha256:gate-run"
+        and item["provenance"]["report_hash"] == "sha256:error-report"
+        for item in payload["items"]
+    )
+    assert all("fixture_hash" in item["provenance"] for item in payload["items"])
+    _assert_no_raw_phi(
+        payload,
+        ("Jordan", "Smith", "Jordan Smith", "123-45-6789", "note-jordan-smith"),
+    )
+
+
+def test_labeling_queue_candidate_context_is_sanitized() -> None:
+    artifact = mine_gate_failure_labeling_queue(
+        [
+            {
+                "label": "PERSON",
+                "kind": MISSED,
+                "language": "en",
+                "span_hash": "sha256:person",
+                "surrogate_context": "Patient Jordan Smith called 555-111-2222.",
+                "text": "Jordan Smith",
+                "source_text": "Patient Jordan Smith called 555-111-2222.",
+                "uncertainty": 0.8,
+                "gate_impact": 2.0,
+            }
+        ],
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:candidate-report",
+    )
+
+    payload = artifact.to_dict()
+
+    assert payload["items"][0]["surrogate_context"] == (
+        "<WORD> <WORD> <WORD> <WORD> <PHONE>."
+    )
+    _assert_no_raw_phi(
+        payload,
+        ("Jordan", "Smith", "Jordan Smith", "555-111-2222"),
+    )
+
+
+def test_labeling_queue_dedupe_reduces_duplicates_and_keeps_modes() -> None:
+    names = (
+        "Jordan Smith",
+        "Casey Brown",
+        "Riley Jones",
+        "Morgan Davis",
+        "Avery Miller",
+        "Quinn Wilson",
+        "Rowan Moore",
+        "Taylor Clark",
+        "Jamie Hall",
+        "Robin Young",
+    )
+    candidates: list[dict[str, Any]] = [
+        {
+            "label": "PERSON",
+            "kind": MISSED,
+            "language": "en",
+            "span_hash": f"sha256:person-{index}",
+            "surrogate_context": f"Patient {name} called today.",
+            "uncertainty": 0.9,
+            "gate_impact": 2.0,
+        }
+        for index, name in enumerate(names)
+    ]
+    candidates.extend(
+        [
+            {
+                "label": "DATE",
+                "kind": MISSED,
+                "language": "en",
+                "span_hash": f"sha256:date-{index}",
+                "surrogate_context": "Visit date 2026-07-04 was missed.",
+                "uncertainty": 0.7,
+                "gate_impact": 1.5,
+            }
+            for index in range(10)
+        ]
+    )
+
+    artifact = mine_gate_failure_labeling_queue(
+        candidates,
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:duplicates",
+    )
+    labels = {item.label for item in artifact.items}
+
+    assert artifact.raw_candidate_count == 20
+    assert artifact.dropped_duplicate_count == 18
+    assert artifact.duplicate_reduction_rate >= 0.8
+    assert labels == {"DATE", "PERSON"}
+
+
+def test_labeling_queue_ranking_is_deterministic_and_impact_weighted() -> None:
+    candidates = [
+        {
+            "label": "PERSON",
+            "kind": MISSED,
+            "language": "en",
+            "span_hash": "sha256:person",
+            "surrogate_context": "Patient <PERSON> was missed.",
+            "uncertainty": 0.9,
+            "gate_impact": 1.0,
+        },
+        {
+            "label": "LOCATION",
+            "kind": SPURIOUS,
+            "language": "en",
+            "span_hash": "sha256:location",
+            "surrogate_context": "Room <LOCATION> was over-redacted.",
+            "uncertainty": 0.4,
+            "gate_impact": 5.0,
+        },
+    ]
+
+    first = mine_gate_failure_labeling_queue(
+        candidates,
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:ranking",
+    )
+    repeat = mine_gate_failure_labeling_queue(
+        candidates,
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:ranking",
+    )
+    reversed_order = mine_gate_failure_labeling_queue(
+        list(reversed(candidates)),
+        gate_run_hash="sha256:gate-run",
+        report_hash="sha256:ranking",
+    )
+    payload = first.to_dict()
+
+    assert payload == repeat.to_dict()
+    assert [item["label"] for item in payload["items"]] == ["LOCATION", "PERSON"]
+    assert [item.label for item in reversed_order.items] == ["LOCATION", "PERSON"]
+    assert payload["items"][0]["priority"] == 2.0
+    assert payload["items"][1]["priority"] == 0.9
+
+
 def _metadata_runner(fixture, model_name, device):
     assert model_name == "test-model"
     assert device == "cpu"
@@ -138,3 +319,22 @@ def _span(text: str, value: str, label: str, occurrence: int = 0) -> dict[str, o
         index = text.index(value, start)
         start = index + 1
     return {"start": index, "end": index + len(value), "label": label}
+
+
+def _assert_no_raw_phi(payload: Any, raw_values: Iterable[str]) -> None:
+    serialized = json.dumps(payload, sort_keys=True)
+    strings = tuple(_strings(payload)) + (serialized,)
+    for raw_value in raw_values:
+        assert all(raw_value not in value for value in strings)
+
+
+def _strings(value: Any) -> Iterable[str]:
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            yield str(key)
+            yield from _strings(child)
+    elif isinstance(value, (list, tuple)):
+        for child in value:
+            yield from _strings(child)
