@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import ast
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from examples import clinical_ner_families
+import pytest
+
+from examples import clinical_ner_families, gradio_deid_app
 
 
 def test_clinical_ner_families_example_is_syntactically_valid():
@@ -91,3 +94,69 @@ def test_clinical_ner_families_reports_offline_unavailable(capsys):
     captured = capsys.readouterr().out
     assert "Disease: model unavailable offline" in captured
     assert "cached files not found" in captured
+
+
+def test_gradio_deid_app_is_syntactically_valid():
+    source = Path("examples/gradio_deid_app.py").read_text(encoding="utf-8")
+
+    ast.parse(source)
+
+
+def test_gradio_deid_app_exposes_public_surface():
+    assert gradio_deid_app.DEIDENTIFICATION_METHODS == ("mask", "replace", "hash")
+    assert callable(gradio_deid_app.build_demo)
+    assert callable(gradio_deid_app.run_deidentification)
+    assert "Synthetic note" in gradio_deid_app.SYNTHETIC_CLINICAL_TEXT
+
+
+def test_gradio_deid_app_builds_entity_rows():
+    entities = [
+        SimpleNamespace(label="NAME", text="John Doe", start=0, end=8, confidence=0.97),
+        SimpleNamespace(
+            label="EMAIL", text="j@x.org", start=20, end=27, confidence=0.5
+        ),
+    ]
+
+    rows = gradio_deid_app.entities_to_rows(entities)
+
+    assert rows == [
+        ["NAME", "John Doe", "0", "8", "0.97"],
+        ["EMAIL", "j@x.org", "20", "27", "0.50"],
+    ]
+
+
+def test_gradio_deid_app_run_uses_deidentify_without_network(monkeypatch):
+    calls = []
+
+    def fake_deidentify(text, *, method):
+        calls.append((text, method))
+        return SimpleNamespace(
+            deidentified_text="[NAME] was seen.",
+            pii_entities=[
+                SimpleNamespace(
+                    label="NAME", text="John Doe", start=0, end=8, confidence=0.9
+                )
+            ],
+        )
+
+    monkeypatch.setattr(gradio_deid_app, "deidentify", fake_deidentify)
+
+    view = gradio_deid_app.run_deidentification("John Doe was seen.", "mask")
+
+    assert calls == [("John Doe was seen.", "mask")]
+    assert view.deidentified_text == "[NAME] was seen."
+    assert view.entity_rows == [["NAME", "John Doe", "0", "8", "0.90"]]
+
+
+def test_gradio_deid_app_rejects_unknown_method():
+    with pytest.raises(ValueError, match="Unsupported method"):
+        gradio_deid_app.run_deidentification("text", "encrypt")
+
+
+def test_gradio_deid_app_missing_gradio_prints_hint(monkeypatch):
+    monkeypatch.setitem(sys.modules, "gradio", None)
+
+    with pytest.raises(SystemExit) as excinfo:
+        gradio_deid_app.build_demo()
+
+    assert "pip install gradio" in str(excinfo.value)
