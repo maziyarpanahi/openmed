@@ -43,6 +43,7 @@ from openmed.eval.report import BenchmarkReport
 
 RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
+FLAKINESS_GATE = "flakiness"
 
 G1A_V16_RECALL_FLOOR = 0.990
 G1A_V20_RECALL_FLOOR = 0.995
@@ -258,6 +259,7 @@ class GateReport:
     threshold_profile: str = ""
     target_leakage_rate: float = RESIDUAL_LEAKAGE_SOFT_CEILING
     blocked_formats: tuple[str, ...] = ()
+    stability_summary: Mapping[str, Any] = field(default_factory=dict)
     repro_hash: str = ""
     signature: AuditSignature | None = None
 
@@ -266,6 +268,7 @@ class GateReport:
         self.per_label_precision = _float_map(self.per_label_precision)
         self.blocked_formats = tuple(self.blocked_formats)
         self.gate_results = tuple(self.gate_results)
+        self.stability_summary = _mapping(self.stability_summary)
         if not self.repro_hash:
             self.repro_hash = self.recompute_repro_hash()
 
@@ -302,6 +305,8 @@ class GateReport:
             "target_leakage_rate": float(self.target_leakage_rate),
             "blocked_formats": list(self.blocked_formats),
         }
+        if self.stability_summary:
+            payload["stability_summary"] = _plain(self.stability_summary)
         if include_repro_hash:
             payload["repro_hash"] = self.repro_hash
         if include_signature:
@@ -381,6 +386,7 @@ class GateReport:
             blocked_formats=tuple(
                 str(item) for item in data.get("blocked_formats", [])
             ),
+            stability_summary=_mapping(data.get("stability_summary")),
             repro_hash=str(data.get("repro_hash", "")),
             signature=(
                 AuditSignature.from_dict(signature_data)
@@ -693,6 +699,62 @@ class ReleaseGate:
             denominators,
             _g2_floor(self.milestone),
         )
+
+
+def apply_flakiness_quarantine(
+    report: GateReport,
+    stability_report: Mapping[str, Any] | Any,
+) -> GateReport:
+    """Return *report* with a blocking flakiness gate when stability fails."""
+
+    summary = _stability_summary_payload(stability_report)
+    quarantined_gates = tuple(
+        str(gate) for gate in summary.get("quarantined_gates", []) if str(gate)
+    )
+    unstable_gates = tuple(
+        str(gate) for gate in summary.get("unstable_gates", []) if str(gate)
+    )
+    blocking_gates = tuple(sorted(set(quarantined_gates) | set(unstable_gates)))
+    passed = not blocking_gates
+    reason = (
+        "stable across configured seed sweep"
+        if passed
+        else "unstable gate verdicts quarantined: " + ", ".join(blocking_gates)
+    )
+    checks = [check for check in report.gate_results if check.gate != FLAKINESS_GATE]
+    checks.append(
+        GateCheck(
+            FLAKINESS_GATE,
+            passed,
+            reason=reason,
+            details={"stability_summary": summary},
+        )
+    )
+    decision = RELEASABLE if all(check.passed for check in checks) else QUARANTINED
+    return GateReport(
+        repo_id=report.repo_id,
+        family=report.family,
+        tier=report.tier,
+        param_count=report.param_count,
+        format=report.format,
+        per_label_recall=report.per_label_recall,
+        per_label_precision=report.per_label_precision,
+        critical_leakage_count=report.critical_leakage_count,
+        residual_leakage_rate=report.residual_leakage_rate,
+        quant_recall_delta=report.quant_recall_delta,
+        p50_ms=report.p50_ms,
+        p95_ms=report.p95_ms,
+        ram_mb=report.ram_mb,
+        eval_set_hash=report.eval_set_hash,
+        leakage_fixture_hash=report.leakage_fixture_hash,
+        decision=decision,
+        gate_results=tuple(checks),
+        policy=report.policy,
+        threshold_profile=report.threshold_profile,
+        target_leakage_rate=report.target_leakage_rate,
+        blocked_formats=report.blocked_formats,
+        stability_summary=summary,
+    )
 
 
 def _manifest_coherence_check(
@@ -1727,6 +1789,16 @@ def _mapping(value: Any) -> dict[str, Any]:
     return {}
 
 
+def _stability_summary_payload(value: Mapping[str, Any] | Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return _plain(value)
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        payload = value.to_dict()
+        if isinstance(payload, Mapping):
+            return _plain(payload)
+    raise TypeError("stability_report must be a mapping or expose to_dict()")
+
+
 def _nested(value: Mapping[str, Any], *path: str) -> Any:
     current: Any = value
     for key in path:
@@ -2113,6 +2185,7 @@ __all__ = [
     "G4_INT8_DELTA_LIMIT",
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
+    "FLAKINESS_GATE",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",
     "RELEASABLE",
@@ -2120,6 +2193,7 @@ __all__ = [
     "GateReport",
     "ModelStewardConfig",
     "ReleaseGate",
+    "apply_flakiness_quarantine",
     "build_arg_parser",
     "format_preview",
     "main",

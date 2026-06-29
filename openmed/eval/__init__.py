@@ -73,9 +73,19 @@ from openmed.eval.fairness import (
 )
 from openmed.eval.flaky import (
     DEFAULT_FLAKY_TOLERANCE,
+    DEFAULT_GATE_CONFIDENCE_LEVEL,
+    DEFAULT_GATE_FLIP_RATE_TOLERANCE,
+    DEFAULT_GATE_METRIC_VARIANCE_TOLERANCE,
+    DEFAULT_GATE_SEEDS,
+    DEFAULT_QUARANTINE_STABILITY_WINDOW,
     FlakyMetricReport,
     FlakyReport,
+    GateFlakinessReport,
+    GateInstabilityReport,
+    NondeterminismProbeReport,
+    NondeterministicGateRunError,
     detect_flaky_eval,
+    detect_gate_suite_flakiness,
 )
 from openmed.eval.harness import (
     BenchmarkFixture,
@@ -84,7 +94,10 @@ from openmed.eval.harness import (
     run_suite,
 )
 from openmed.eval.history import (
+    FLAKINESS_LEDGER_SCHEMA_VERSION,
     BenchmarkHistoryDiff,
+    FlakinessLedger,
+    FlakinessLedgerEntry,
     MetricDelta,
     MetricHistoryPoint,
     diff_against_baseline,
@@ -126,12 +139,14 @@ from openmed.eval.quant_delta import (
     evaluate_quant_recall_delta,
 )
 from openmed.eval.release_gates import (
+    FLAKINESS_GATE,
     QUARANTINED,
     RELEASABLE,
     GateCheck,
     GateReport,
     ModelStewardConfig,
     ReleaseGate,
+    apply_flakiness_quarantine,
 )
 from openmed.eval.report import BenchmarkReport
 from openmed.eval.robustness import (
@@ -197,7 +212,12 @@ __all__ = [
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
     "DEFAULT_FLAKY_TOLERANCE",
+    "DEFAULT_GATE_CONFIDENCE_LEVEL",
+    "DEFAULT_GATE_FLIP_RATE_TOLERANCE",
+    "DEFAULT_GATE_METRIC_VARIANCE_TOLERANCE",
+    "DEFAULT_GATE_SEEDS",
     "DEFAULT_PERTURBATIONS",
+    "DEFAULT_QUARANTINE_STABILITY_WINDOW",
     "DatasetCard",
     "EvalCacheKey",
     "EvalSpan",
@@ -207,6 +227,10 @@ __all__ = [
     "EvidenceBundleResult",
     "FairnessGroupMetrics",
     "FairnessReport",
+    "FLAKINESS_GATE",
+    "FLAKINESS_LEDGER_SCHEMA_VERSION",
+    "FlakinessLedger",
+    "FlakinessLedgerEntry",
     "FlakyMetricReport",
     "FlakyReport",
     "FixtureResult",
@@ -214,6 +238,8 @@ __all__ = [
     "GOLDEN_EDGE_CASE_CATEGORIES",
     "LinkageAttackResult",
     "GateCheck",
+    "GateFlakinessReport",
+    "GateInstabilityReport",
     "GateReport",
     "HeatmapCell",
     "INT4_RECALL_DELTA_LIMIT",
@@ -225,6 +251,8 @@ __all__ = [
     "ModelStewardConfig",
     "MetricDelta",
     "MetricHistoryPoint",
+    "NondeterminismProbeReport",
+    "NondeterministicGateRunError",
     "PairedSignificance",
     "QUARANTINED",
     "QuantRecallDeltaResult",
@@ -247,6 +275,7 @@ __all__ = [
     "UNSPECIFIED_GROUP",
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
+    "apply_flakiness_quarantine",
     "build_report_key",
     "bundle_gate_evidence",
     "build_thresholds_payload",
@@ -275,6 +304,7 @@ __all__ = [
     "default_cache_dir",
     "default_suite_calibration_samples",
     "detect_flaky_eval",
+    "detect_gate_suite_flakiness",
     "diff_against_baseline",
     "eval_code_hash",
     "evaluate_quant_recall_delta",
