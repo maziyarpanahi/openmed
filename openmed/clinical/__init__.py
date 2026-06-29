@@ -46,8 +46,10 @@ from .medication_sig import (
     MEDICATION_SIG_ADVISORY,
     DurationNormalization,
     FrequencyNormalization,
+    MedicationSigAttributeType,
     normalize_duration,
     normalize_frequency,
+    normalize_medication_attribute,
 )
 from .problem_list import (
     ACTIVE,
@@ -61,6 +63,17 @@ from .problem_list import (
     ReconciledProblem,
     SpanOffset,
     deduplicate_problem_list,
+)
+from .relations import (
+    MEDICATION_LINK_ADVISORY,
+    MedicationAttributeType,
+    MedicationRelation,
+    MedicationRelationGroup,
+    MedicationRelationScorer,
+    MedicationRelationType,
+    RelationCandidate,
+    SpanReference,
+    link_medication_attributes,
 )
 from .status_vocab import (
     CURRENT,
@@ -146,8 +159,19 @@ __all__ = [
     "FrequencyNormalization",
     "DurationNormalization",
     "MEDICATION_SIG_ADVISORY",
+    "MedicationSigAttributeType",
     "normalize_frequency",
     "normalize_duration",
+    "normalize_medication_attribute",
+    "MedicationAttributeType",
+    "MedicationRelation",
+    "MedicationRelationGroup",
+    "MedicationRelationScorer",
+    "MedicationRelationType",
+    "RelationCandidate",
+    "SpanReference",
+    "MEDICATION_LINK_ADVISORY",
+    "link_medication_attributes",
     "CURRENT",
     "FORMER",
     "NEVER",
