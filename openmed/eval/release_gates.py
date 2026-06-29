@@ -527,6 +527,7 @@ class ReleaseGate:
 
         checks.append(_manifest_coherence_check(identity, metadata))
         checks.append(_calibration_check(metadata, profile))
+        checks.append(_abstention_advisory_check(metrics, metadata, target_leakage))
         checks.append(
             self._g1a_check(
                 per_label_recall,
@@ -1159,6 +1160,58 @@ def _calibration_check(metadata: Mapping[str, Any], profile: Any | None) -> Gate
     )
 
 
+def _abstention_advisory_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    target_leakage: float,
+) -> GateCheck:
+    abstention = _first_mapping(
+        metadata.get("abstention"),
+        metrics.get("abstention"),
+    )
+    if not abstention:
+        return GateCheck(
+            "abstention_advisory",
+            True,
+            reason="not supplied",
+            details={"target_risk": target_leakage},
+        )
+
+    abstention_rate = _first_mapping(abstention.get("abstention_rate"))
+    residual_risk = _first_mapping(abstention.get("residual_risk"))
+    target_risk = _optional_float(abstention.get("target_risk"))
+    return GateCheck(
+        "abstention_advisory",
+        True,
+        reason="advisory",
+        details={
+            "target_risk": target_risk if target_risk is not None else target_leakage,
+            "confidence_level": _optional_float(abstention.get("confidence_level")),
+            "abstention_rate": {
+                "overall": _optional_float(abstention_rate.get("overall")) or 0.0,
+                "by_label": _float_map(abstention_rate.get("by_label")),
+                "by_language": _numeric_map(abstention_rate.get("by_language")),
+            },
+            "residual_risk": {
+                "overall": _optional_float(residual_risk.get("overall")) or 0.0,
+                "critical": _optional_float(residual_risk.get("critical")) or 0.0,
+                "by_label": _float_map(residual_risk.get("by_label")),
+                "by_language": _numeric_map(residual_risk.get("by_language")),
+                "bootstrap": dict(
+                    residual_risk.get("bootstrap")
+                    if isinstance(residual_risk.get("bootstrap"), Mapping)
+                    else {}
+                ),
+            },
+            "route_counts": dict(
+                abstention.get("route_counts")
+                if isinstance(abstention.get("route_counts"), Mapping)
+                else {}
+            ),
+        },
+    )
+
+
 def _recall_floor_check(
     gate: str,
     labels: frozenset[str],
@@ -1718,6 +1771,15 @@ def _float_map(value: Mapping[str, Any] | None) -> dict[str, float]:
         else:
             canonical = normalize_label(str(label))
         result[canonical] = parsed
+    return {key: result[key] for key in sorted(result)}
+
+
+def _numeric_map(value: Mapping[str, Any] | None) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for key, raw in _mapping(value).items():
+        parsed = _optional_float(raw)
+        if parsed is not None:
+            result[str(key)] = parsed
     return {key: result[key] for key in sorted(result)}
 
 
