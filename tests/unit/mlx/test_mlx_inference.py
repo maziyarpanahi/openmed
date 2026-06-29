@@ -480,6 +480,52 @@ class TestExperimentalMLXPipelineDispatch:
 class TestExperimentalGLiNERDecoding:
     """Regression tests for GLiNER-family prompt and span decoding helpers."""
 
+    def test_relex_relation_candidates_decode_through_span_graph(self):
+        from openmed.core.decoding import decode_span_graph
+        from openmed.mlx.inference import _decode_relation_graph
+
+        entities = [
+            {
+                "id": 0,
+                "text": "metformin",
+                "label": "medication",
+                "score": 0.95,
+                "start": 0,
+                "end": 9,
+            },
+            {
+                "id": 1,
+                "text": "nausea",
+                "label": "problem",
+                "score": 0.90,
+                "start": 18,
+                "end": 24,
+            },
+        ]
+
+        with patch(
+            "openmed.mlx.inference.decode_span_graph",
+            wraps=decode_span_graph,
+        ) as mock_decode:
+            relations = _decode_relation_graph(
+                entities=entities,
+                pair_scores=[[0.91, 0.20], [0.10, 0.86]],
+                pair_idx=[[0, 1], [1, 0]],
+                pair_mask=[True, True],
+                relations=["causes", "treated_by"],
+                relation_prompt_count=2,
+                relation_threshold=0.5,
+            )
+
+        assert mock_decode.called
+        assert {
+            (relation["label"], relation["head"]["id"], relation["tail"]["id"])
+            for relation in relations
+        } == {
+            ("causes", 0, 1),
+            ("treated_by", 1, 0),
+        }
+
     def test_gliner_word_splitter_matches_upstream_whitespace_splitter(self):
         from openmed.mlx.inference import _split_words_with_offsets
 
