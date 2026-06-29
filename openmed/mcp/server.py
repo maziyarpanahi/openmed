@@ -15,6 +15,11 @@ from openmed.core.pii_i18n import (
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.mcp.tool_registry import (
+    get_mcp_tool_definition,
+    validate_structured_output,
+)
+from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
@@ -324,11 +329,88 @@ def openmed_unload_model(
     return runtime.unload_model(validate_model_name(model_name))
 
 
+def openmed_run_workflow(
+    pipeline: Dict[str, Any],
+    session_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Run a stateful multi-step workflow with PHI-safe result egress."""
+    runtime = _runtime(runtime_provider)
+    runner = WorkflowRunner(
+        store=runtime.get_workflow_store(),
+        executors=_workflow_step_executors(runtime_provider),
+        deidentifier=_workflow_egress_deidentifier(runtime_provider),
+    )
+    result = runner.run(
+        pipeline,
+        session_id=session_id,
+        workflow_id=workflow_id,
+    )
+    validate_structured_output("openmed_run_workflow", result)
+    return result
+
+
+def _workflow_step_executors(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Dict[str, Callable[..., Any]]:
+    executors = builtin_workflow_step_executors()
+    executors.update(
+        {
+            "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+            "openmed_extract_pii": lambda **kwargs: openmed_extract_pii(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+            "openmed_deidentify": lambda **kwargs: _workflow_deidentify_step(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+        }
+    )
+    return executors
+
+
+def _workflow_deidentify_step(
+    *,
+    runtime_provider: Optional[RuntimeProvider],
+    text: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    if not isinstance(text, str):
+        text = json.dumps(text, sort_keys=True)
+    return openmed_deidentify(
+        text=text,
+        runtime_provider=runtime_provider,
+        **kwargs,
+    )
+
+
+def _workflow_egress_deidentifier(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Callable[[str], str]:
+    def deidentify_text(text: str) -> str:
+        response = openmed_deidentify(
+            text=text,
+            runtime_provider=runtime_provider,
+        )
+        deidentified = response.get("deidentified_text")
+        if isinstance(deidentified, str):
+            return deidentified
+        return "[REDACTED_TEXT]" if text else text
+
+    return deidentify_text
+
+
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
 ) -> None:
-    @server.tool(name="openmed_analyze_text")
+    @server.tool(name=get_mcp_tool_definition("openmed_analyze_text").name)
     def _analyze_text_tool(
         text: str,
         model_name: str = "disease_detection_superclinical",
@@ -356,7 +438,7 @@ def _register_tools(
             runtime_provider=runtime_provider,
         )
 
-    @server.tool(name="openmed_extract_pii")
+    @server.tool(name=get_mcp_tool_definition("openmed_extract_pii").name)
     def _extract_pii_tool(
         text: str,
         model_name: str = DEFAULT_PII_MODELS["en"],
@@ -378,7 +460,7 @@ def _register_tools(
             runtime_provider=runtime_provider,
         )
 
-    @server.tool(name="openmed_deidentify")
+    @server.tool(name=get_mcp_tool_definition("openmed_deidentify").name)
     def _deidentify_tool(
         text: str,
         method: str = "mask",
@@ -410,7 +492,7 @@ def _register_tools(
             runtime_provider=runtime_provider,
         )
 
-    @server.tool(name="openmed_list_models")
+    @server.tool(name=get_mcp_tool_definition("openmed_list_models").name)
     def _list_models_tool(
         category: Optional[str] = None,
         pii_language: Optional[str] = None,
@@ -423,17 +505,17 @@ def _register_tools(
             limit=limit,
         )
 
-    @server.tool(name="openmed_list_pii_languages")
+    @server.tool(name=get_mcp_tool_definition("openmed_list_pii_languages").name)
     def _list_pii_languages_tool() -> Dict[str, Any]:
         """List supported PII languages and default models."""
         return openmed_list_pii_languages()
 
-    @server.tool(name="openmed_loaded_models")
+    @server.tool(name=get_mcp_tool_definition("openmed_loaded_models").name)
     def _loaded_models_tool() -> Dict[str, Any]:
         """Return currently loaded model resources."""
         return openmed_loaded_models(runtime_provider=runtime_provider)
 
-    @server.tool(name="openmed_unload_model")
+    @server.tool(name=get_mcp_tool_definition("openmed_unload_model").name)
     def _unload_model_tool(
         model_name: Optional[str] = None,
         all_models: bool = False,
@@ -442,6 +524,20 @@ def _register_tools(
         return openmed_unload_model(
             model_name=model_name,
             all_models=all_models,
+            runtime_provider=runtime_provider,
+        )
+
+    @server.tool(name=get_mcp_tool_definition("openmed_run_workflow").name)
+    def _run_workflow_tool(
+        pipeline: Dict[str, Any],
+        session_id: Optional[str] = None,
+        workflow_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Run a stateful workflow while keeping intermediates server-side."""
+        return openmed_run_workflow(
+            pipeline=pipeline,
+            session_id=session_id,
+            workflow_id=workflow_id,
             runtime_provider=runtime_provider,
         )
 

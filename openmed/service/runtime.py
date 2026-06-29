@@ -342,6 +342,12 @@ class ServiceRuntime:
     _loader: Optional[ModelLoader] = None
     _warm_pool: Optional[WarmPool] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _workflow_store: Optional[Any] = field(default=None, init=False, repr=False)
+    _workflow_store_lock: threading.RLock = field(
+        default_factory=threading.RLock,
+        init=False,
+        repr=False,
+    )
 
     metrics: Optional[Any] = None
 
@@ -444,6 +450,16 @@ class ServiceRuntime:
                 "models": {},
             }
         return self.get_loader().loaded_models()
+
+    def get_workflow_store(self) -> Any:
+        """Return the in-process MCP workflow state store."""
+        if self._workflow_store is None:
+            with self._workflow_store_lock:
+                if self._workflow_store is None:
+                    from openmed.mcp.workflow import WorkflowStateStore
+
+                    self._workflow_store = WorkflowStateStore()
+        return self._workflow_store
 
     def _resolve_keep_alive_seconds(self, keep_alive: Any) -> Optional[float]:
         if keep_alive is None:
