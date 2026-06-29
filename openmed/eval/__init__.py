@@ -7,7 +7,9 @@ calibrate.py, and release_gates.py.
 from openmed.eval.attacks.linkage import LinkageAttackResult, linkage_attack
 from openmed.eval.attacks.reid import (
     ReidAttackResult,
+    SideChannelProbeResult,
     generate_reid_leaderboard,
+    probe_span_timing_side_channel,
     render_reid_leaderboard,
     run_reid_attack,
     run_reid_benchmark,
@@ -79,8 +81,14 @@ from openmed.eval.flaky import (
 )
 from openmed.eval.harness import (
     BenchmarkFixture,
+    BoundaryLeakageFinding,
+    BoundaryLeakageResult,
+    FederatedDetectorSpec,
+    FederatedEvalReport,
     FixtureResult,
+    SandboxViolation,
     run_benchmark,
+    run_federated_leakage_eval,
     run_suite,
 )
 from openmed.eval.history import (
@@ -132,6 +140,7 @@ from openmed.eval.release_gates import (
     GateReport,
     ModelStewardConfig,
     ReleaseGate,
+    evaluate_federated_boundary_gate,
 )
 from openmed.eval.report import BenchmarkReport
 from openmed.eval.robustness import (
@@ -185,6 +194,8 @@ __all__ = [
     "BenchmarkFixture",
     "BenchmarkHistoryDiff",
     "BenchmarkReport",
+    "BoundaryLeakageFinding",
+    "BoundaryLeakageResult",
     "CalibrationArtifactPaths",
     "CalibrationGroupReport",
     "CalibrationReport",
@@ -207,6 +218,8 @@ __all__ = [
     "EvidenceBundleResult",
     "FairnessGroupMetrics",
     "FairnessReport",
+    "FederatedDetectorSpec",
+    "FederatedEvalReport",
     "FlakyMetricReport",
     "FlakyReport",
     "FixtureResult",
@@ -241,6 +254,8 @@ __all__ = [
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
+    "SandboxViolation",
+    "SideChannelProbeResult",
     "UtilityCategoryLoss",
     "UtilityLossExample",
     "UtilityLossReport",
@@ -277,6 +292,7 @@ __all__ = [
     "detect_flaky_eval",
     "diff_against_baseline",
     "eval_code_hash",
+    "evaluate_federated_boundary_gate",
     "evaluate_quant_recall_delta",
     "expected_calibration_error",
     "error_report",
@@ -297,6 +313,7 @@ __all__ = [
     "ocr_noise_perturbation",
     "paired_significance",
     "perturb_fixture",
+    "probe_span_timing_side_channel",
     "render_reid_leaderboard",
     "render_dataset_card_markdown",
     "render_leakage_heatmap_markdown",
@@ -304,6 +321,7 @@ __all__ = [
     "reliability_bins",
     "robustness_report",
     "run_benchmark",
+    "run_federated_leakage_eval",
     "run_policy_compliance",
     "run_reid_attack",
     "run_reid_benchmark",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -192,8 +193,35 @@ def safety_sweep(
     return resolve_overlapping_entities(ordered)
 
 
+def hashed_span_surface(
+    text: str,
+    start: int,
+    end: int,
+    *,
+    label: str | None = None,
+) -> dict[str, Any]:
+    """Return offset-keyed, raw-text-free evidence for a sensitive span."""
+    bounded_start = max(0, min(int(start), len(text)))
+    bounded_end = max(bounded_start, min(int(end), len(text)))
+    surface = text[bounded_start:bounded_end]
+    payload: dict[str, Any] = {
+        "start": bounded_start,
+        "end": bounded_end,
+        "length": len(surface),
+        "text_hash": _hash_surface(surface),
+    }
+    if label is not None:
+        payload["label"] = str(label)
+    return payload
+
+
+def _hash_surface(surface: str) -> str:
+    return f"sha256:{hashlib.sha256(surface.encode('utf-8')).hexdigest()}"
+
+
 __all__ = [
     "SAFETY_SWEEP_PATTERNS_VERSION",
     "SAFETY_SWEEP_SOURCE",
+    "hashed_span_surface",
     "safety_sweep",
 ]
