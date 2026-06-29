@@ -20,6 +20,7 @@ SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
 SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
+SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE"
 SERVICE_COALESCING_ENABLED_ENV_VAR = "OPENMED_SERVICE_COALESCING_ENABLED"
 SERVICE_SHUTDOWN_DRAIN_ENV_VAR = "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS"
 SERVICE_RATE_LIMIT_RPS_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_RPS"
@@ -29,6 +30,7 @@ SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
 SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
+DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE = 256
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
 
@@ -52,6 +54,7 @@ class ServiceBatchingConfig:
     enabled: bool = False
     max_batch_size: int = DEFAULT_SERVICE_BATCH_MAX_SIZE
     max_wait_ms: float = DEFAULT_SERVICE_BATCH_MAX_WAIT_MS
+    max_queue_size: int = DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
 
 
 @dataclass(frozen=True)
@@ -191,6 +194,24 @@ def parse_service_batch_max_wait_ms(raw_value: Optional[str]) -> float:
     return parsed
 
 
+def parse_service_batch_max_queue_size(raw_value: Optional[str]) -> int:
+    """Parse the configured per-priority dynamic-batching queue capacity."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed <= 0:
+        raise ValueError(
+            f"{SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR} must be greater than 0"
+        )
+    return parsed
+
+
 def parse_shutdown_drain_seconds(raw_value: Optional[str]) -> float:
     """Parse the configured graceful-shutdown drain window in seconds."""
     if raw_value is None or not raw_value.strip():
@@ -290,6 +311,9 @@ def parse_service_batching_config() -> ServiceBatchingConfig:
         ),
         max_wait_ms=parse_service_batch_max_wait_ms(
             os.getenv(SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR)
+        ),
+        max_queue_size=parse_service_batch_max_queue_size(
+            os.getenv(SERVICE_BATCH_MAX_QUEUE_SIZE_ENV_VAR)
         ),
     )
 
