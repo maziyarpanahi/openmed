@@ -35,7 +35,7 @@ PROBLEM_LIST_RECONCILIATION_ADVISORY = (
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
-_IdentityKey = tuple[Literal["code", "text"], str, str]
+_IdentityKey = tuple[Literal["code", "coref", "text"], str, str]
 
 
 @dataclass(frozen=True)
@@ -44,6 +44,8 @@ class ProblemMention:
 
     The helper consumes existing mention text and optional coded identity. It
     does not ground concepts, assign codes, or emit FHIR Condition resources.
+    When ``coref_entity_id`` is supplied by a document-level coreference layer,
+    it becomes the preferred deduplication key for that mention.
     """
 
     text: str
@@ -52,6 +54,7 @@ class ProblemMention:
     offset: SpanOffset | None = None
     negation: Negation = AFFIRMED
     temporality: str = RECENT
+    coref_entity_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,7 @@ class ReconciledProblem:
     clinical_status: ProblemClinicalStatus
     mention_count: int
     source_offsets: tuple[SpanOffset, ...]
+    coref_entity_id: str | None = None
 
 
 def _clean_text(value: object) -> str:
@@ -127,6 +131,14 @@ def _mapping_offset(mapping: Mapping[str, object]) -> SpanOffset | None:
     return _validate_offset((start, end))
 
 
+def _mapping_coref_entity_id(mapping: Mapping[str, object]) -> str | None:
+    for key in ("coref_entity_id", "entity_id", "cluster_id"):
+        value = mapping.get(key)
+        if value is not None:
+            return _clean_optional_text(value)
+    return None
+
+
 def _normalize_negation(value: object) -> Negation:
     if value is None:
         return AFFIRMED
@@ -165,6 +177,7 @@ def _coerce_mention(
             offset=_validate_offset(mention.offset),
             negation=_normalize_negation(mention.negation),
             temporality=_normalize_temporality(mention.temporality),
+            coref_entity_id=_clean_optional_text(mention.coref_entity_id),
         )
 
     if isinstance(mention, Mapping):
@@ -175,12 +188,15 @@ def _coerce_mention(
             offset=_mapping_offset(mention),
             negation=_normalize_negation(mention.get("negation")),
             temporality=_normalize_temporality(mention.get("temporality")),
+            coref_entity_id=_mapping_coref_entity_id(mention),
         )
 
     raise TypeError("problem mentions must be ProblemMention instances or mappings")
 
 
 def _identity_key(mention: ProblemMention) -> _IdentityKey:
+    if mention.coref_entity_id:
+        return ("coref", mention.coref_entity_id, "")
     if mention.system and mention.code:
         return (
             "code",
@@ -209,10 +225,11 @@ def deduplicate_problem_list(
     """Collapse candidate problem mentions into reconciled problem entries.
 
     Group identity is deterministic and intentionally conservative: mentions
-    with both ``system`` and ``code`` are grouped by that coded identity, while
-    mentions without a complete coded identity fall back to normalized text
-    with whitespace collapsed and casing folded. This does not infer that an
-    uncoded text mention is the same concept as a coded mention.
+    with a ``coref_entity_id`` are grouped by that document-level entity,
+    mentions with both ``system`` and ``code`` are grouped by coded identity,
+    and mentions without either signal fall back to normalized text with
+    whitespace collapsed and casing folded. This does not infer that an uncoded
+    text mention is the same concept as a coded mention.
 
     Clinical status reconciliation is an advisory heuristic with explicit
     precedence. Negated mentions always contribute provenance and counts, but
@@ -228,6 +245,8 @@ def deduplicate_problem_list(
         mentions: Candidate problem mentions as ``ProblemMention`` instances
             or mappings with text-like fields and optional ``system``, ``code``,
             ``offset`` or ``start``/``end``, ``negation``, and ``temporality``.
+            ``coref_entity_id``/``entity_id``/``cluster_id`` may be supplied to
+            deduplicate by document-level coreference.
 
     Returns:
         A deterministic list of deduplicated problem entries with reconciled
@@ -250,6 +269,7 @@ def deduplicate_problem_list(
         group = groups[key]
         first = group[0]
         has_code_identity = key[0] == "code"
+        has_coref_identity = key[0] == "coref"
         reconciled.append(
             ReconciledProblem(
                 text=first.text,
@@ -261,6 +281,7 @@ def deduplicate_problem_list(
                 source_offsets=tuple(
                     mention.offset for mention in group if mention.offset is not None
                 ),
+                coref_entity_id=first.coref_entity_id if has_coref_identity else None,
             )
         )
 
