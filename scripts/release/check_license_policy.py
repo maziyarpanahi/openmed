@@ -91,6 +91,7 @@ REVIEWED_LICENSES = {
     "pyyaml": "MIT",
     "pymdown-extensions": "MIT",
     "pysbd": "MIT",
+    "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
     "rich": "MIT",
