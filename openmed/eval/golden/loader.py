@@ -161,6 +161,32 @@ def load_benchmark_fixtures(path: str | Path | None = None) -> list[BenchmarkFix
     return [fixture.to_benchmark_fixture() for fixture in load_golden_fixtures(path)]
 
 
+def benchmark_fixtures_by_language(
+    fixtures: list[BenchmarkFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> dict[str, list[BenchmarkFixture]]:
+    """Group benchmark fixtures by language in deterministic order."""
+    source = fixtures if fixtures is not None else load_benchmark_fixtures()
+    grouped: defaultdict[str, list[BenchmarkFixture]] = defaultdict(list)
+    for fixture in source:
+        if category is None or fixture.metadata.get("category") == category:
+            grouped[fixture.language].append(fixture)
+    return {
+        language: sorted(rows, key=lambda fixture: fixture.fixture_id)
+        for language, rows in sorted(grouped.items())
+    }
+
+
+def benchmark_fixture_languages(
+    fixtures: list[BenchmarkFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> set[str]:
+    """Return languages covered by benchmark fixtures."""
+    return set(benchmark_fixtures_by_language(fixtures, category=category))
+
+
 def fixtures_by_category(
     fixtures: list[GoldenFixture] | None = None,
 ) -> dict[str, list[GoldenFixture]]:
@@ -255,6 +281,8 @@ def _plain(value: Any) -> Any:
 __all__ = [
     "GOLDEN_CATEGORIES",
     "GoldenFixture",
+    "benchmark_fixture_languages",
+    "benchmark_fixtures_by_language",
     "fixture_languages",
     "fixtures_by_category",
     "fixtures_by_language",

@@ -66,9 +66,16 @@ from openmed.eval.evidence_bundle import (
     bundle_gate_evidence,
 )
 from openmed.eval.fairness import (
+    DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR,
+    TRANSFER_MATRIX_SCHEMA_VERSION,
     UNSPECIFIED_GROUP,
     FairnessGroupMetrics,
     FairnessReport,
+    TransferDeficiency,
+    TransferGapMetrics,
+    TransferMatrixCell,
+    TransferMatrixReport,
+    cross_lingual_transfer_report,
     fairness_report,
 )
 from openmed.eval.flaky import (
@@ -81,6 +88,8 @@ from openmed.eval.harness import (
     BenchmarkFixture,
     FixtureResult,
     run_benchmark,
+    run_cross_lingual_transfer,
+    run_cross_lingual_transfer_suite,
     run_suite,
 )
 from openmed.eval.history import (
@@ -198,6 +207,7 @@ __all__ = [
     "DEFAULT_CODE_HASH_MODULES",
     "DEFAULT_FLAKY_TOLERANCE",
     "DEFAULT_PERTURBATIONS",
+    "DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR",
     "DatasetCard",
     "EvalCacheKey",
     "EvalSpan",
@@ -238,6 +248,11 @@ __all__ = [
     "RobustnessVariant",
     "ThresholdSweepPoint",
     "ThresholdSweepReport",
+    "TRANSFER_MATRIX_SCHEMA_VERSION",
+    "TransferDeficiency",
+    "TransferGapMetrics",
+    "TransferMatrixCell",
+    "TransferMatrixReport",
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
@@ -272,6 +287,7 @@ __all__ = [
     "compute_resource_metrics",
     "compute_section_recall",
     "compute_surrogate_consistency",
+    "cross_lingual_transfer_report",
     "default_cache_dir",
     "default_suite_calibration_samples",
     "detect_flaky_eval",
@@ -304,6 +320,8 @@ __all__ = [
     "reliability_bins",
     "robustness_report",
     "run_benchmark",
+    "run_cross_lingual_transfer",
+    "run_cross_lingual_transfer_suite",
     "run_policy_compliance",
     "run_reid_attack",
     "run_reid_benchmark",

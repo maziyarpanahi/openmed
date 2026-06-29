@@ -297,6 +297,79 @@ def run_suite(
     return report
 
 
+def run_cross_lingual_transfer(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    suite: str,
+    model_name: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    output_json: str | Path | None = None,
+    output_markdown: str | Path | None = None,
+    languages: Sequence[str] | None = None,
+    leakage_floors: Mapping[str, float] | None = None,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
+) -> Any:
+    """Run the cross-lingual transfer matrix over benchmark fixtures.
+
+    The returned report is PHI-free and byte-stable. Its source-language
+    calibration context is passed to the runner through fixture metadata.
+    """
+    from openmed.eval.fairness import cross_lingual_transfer_report
+
+    report = cross_lingual_transfer_report(
+        model_name,
+        fixtures,
+        runner=runner,
+        device=device,
+        languages=languages,
+        leakage_floors=leakage_floors,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
+    )
+    report = replace(report, suite=suite)
+    if output_json is not None:
+        report.write_json(output_json)
+    if output_markdown is not None:
+        report.write_markdown(output_markdown)
+    return report
+
+
+def run_cross_lingual_transfer_suite(
+    fixture_path: str | Path,
+    *,
+    suite: str,
+    model_name: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    output_json: str | Path | None = None,
+    output_markdown: str | Path | None = None,
+    languages: Sequence[str] | None = None,
+    leakage_floors: Mapping[str, float] | None = None,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
+) -> Any:
+    """Load fixtures and run a cross-lingual transfer-matrix report."""
+    return run_cross_lingual_transfer(
+        load_fixtures(fixture_path),
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        runner=runner,
+        output_json=output_json,
+        output_markdown=output_markdown,
+        languages=languages,
+        leakage_floors=leakage_floors,
+        ci_resamples=ci_resamples,
+        ci_alpha=ci_alpha,
+        ci_seed=ci_seed,
+    )
+
+
 def _shared_default_model_runner() -> ModelRunner:
     shared_loader: Any | None = None
     accepts_loader = _runner_accepts_loader(default_model_runner)
@@ -479,5 +552,7 @@ __all__ = [
     "load_fixtures",
     "default_model_runner",
     "run_benchmark",
+    "run_cross_lingual_transfer",
+    "run_cross_lingual_transfer_suite",
     "run_suite",
 ]
