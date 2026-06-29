@@ -186,9 +186,9 @@ def test_labeling_queue_candidate_context_is_sanitized() -> None:
                 "kind": MISSED,
                 "language": "en",
                 "span_hash": "sha256:person",
-                "surrogate_context": "Patient Jordan Smith called 555-111-2222.",
-                "text": "Jordan Smith",
-                "source_text": "Patient Jordan Smith called 555-111-2222.",
+                "surrogate_context": "Patient José Álvarez called 555-111-2222.",
+                "text": "José Álvarez",
+                "source_text": "Patient José Álvarez called 555-111-2222.",
                 "uncertainty": 0.8,
                 "gate_impact": 2.0,
             }
@@ -204,7 +204,7 @@ def test_labeling_queue_candidate_context_is_sanitized() -> None:
     )
     _assert_no_raw_phi(
         payload,
-        ("Jordan", "Smith", "Jordan Smith", "555-111-2222"),
+        ("José", "Álvarez", "José Álvarez", "555-111-2222"),
     )
 
 

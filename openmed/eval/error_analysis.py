@@ -52,7 +52,7 @@ _DATE_RE = re.compile(r"\b\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\b")
 _ID_RE = re.compile(r"\b\d{3}[- ]?\d{2}[- ]?\d{4}\b")
 _PHONE_RE = re.compile(r"\b(?:\+?\d[\d .()/-]{6,}\d)\b")
 _NUMBER_RE = re.compile(r"\b\d+(?:[./:-]\d+)*\b")
-_WORD_RE = re.compile(r"\b[A-Za-z][A-Za-z'.-]*\b")
+_WORD_RE = re.compile(r"(?u)\b[^\W\d_][\w'.-]*\b")
 _TOKEN_RE = re.compile(r"<[A-Z0-9_:-]+>|[A-Za-z0-9_:-]+")
 
 
