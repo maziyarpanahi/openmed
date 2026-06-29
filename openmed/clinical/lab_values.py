@@ -7,7 +7,22 @@ import re
 from collections.abc import Mapping
 from typing import Literal, TypedDict
 
+from openmed.core.decoding import (
+    EdgeCardinality,
+    SpanEdge,
+    SpanGraph,
+    SpanGraphConstraints,
+    SpanNode,
+    decode_span_graph,
+)
+
 AbnormalFlag = Literal["low", "normal", "high", "critical", "unknown"]
+LabValueAttributeRole = Literal[
+    "lab_name",
+    "lab_value",
+    "reference_range",
+    "abnormal_flag",
+]
 
 
 class ReferenceRange(TypedDict):
@@ -17,6 +32,19 @@ class ReferenceRange(TypedDict):
     high: float | None
     low_inclusive: bool
     high_inclusive: bool
+
+
+class LabValueAttributeMention(TypedDict, total=False):
+    """Already-detected lab mention used by the lab attribute graph linker."""
+
+    id: str
+    label: LabValueAttributeRole
+    role: LabValueAttributeRole
+    type: LabValueAttributeRole
+    start: int
+    end: int
+    score: float
+    text_hash: str
 
 
 LAB_FLAG_ADVISORY = (
@@ -54,6 +82,19 @@ _EXPLICIT_FLAGS: Mapping[str, AbnormalFlag] = {
     "N": "normal",
     "NORMAL": "normal",
 }
+
+_LAB_VALUE_GRAPH_CONSTRAINTS = SpanGraphConstraints(
+    type_compatibility={
+        "has_value": (("lab_name", "lab_value"),),
+        "has_reference_range": (("lab_value", "reference_range"),),
+        "has_abnormal_flag": (("lab_value", "abnormal_flag"),),
+    },
+    cardinality={
+        "has_value": EdgeCardinality.one_to_one(),
+        "has_reference_range": EdgeCardinality.one_to_one(),
+        "has_abnormal_flag": EdgeCardinality.one_to_one(),
+    },
+)
 
 
 def _empty_reference_range() -> ReferenceRange:
@@ -222,10 +263,163 @@ def derive_abnormal_flag(
     return "normal"
 
 
+def link_lab_value_attributes(
+    mentions: list[LabValueAttributeMention | Mapping[str, object]],
+    *,
+    max_distance: int = 80,
+) -> SpanGraph:
+    """Link lab name/value/range/flag mentions into a constrained span graph.
+
+    The helper consumes mentions already found by an upstream extractor and
+    uses deterministic proximity scores plus graph constraints to attach one
+    value to one lab name, and optional range / abnormal flag attributes to one
+    value. It does not perform clinical interpretation or unit conversion.
+    """
+
+    if max_distance < 0:
+        raise ValueError("max_distance must be non-negative")
+
+    nodes = [
+        _coerce_lab_attribute_node(raw_mention, index)
+        for index, raw_mention in enumerate(mentions)
+    ]
+    candidates: list[SpanEdge] = []
+    candidates.extend(
+        _lab_attribute_edges(
+            nodes,
+            head_label="lab_name",
+            tail_label="lab_value",
+            edge_label="has_value",
+            max_distance=max_distance,
+        )
+    )
+    candidates.extend(
+        _lab_attribute_edges(
+            nodes,
+            head_label="lab_value",
+            tail_label="reference_range",
+            edge_label="has_reference_range",
+            max_distance=max_distance,
+        )
+    )
+    candidates.extend(
+        _lab_attribute_edges(
+            nodes,
+            head_label="lab_value",
+            tail_label="abnormal_flag",
+            edge_label="has_abnormal_flag",
+            max_distance=max_distance,
+        )
+    )
+    return decode_span_graph(
+        nodes,
+        candidates,
+        constraints=_LAB_VALUE_GRAPH_CONSTRAINTS,
+    )
+
+
+def _coerce_lab_attribute_node(
+    raw_mention: LabValueAttributeMention | Mapping[str, object],
+    index: int,
+) -> SpanNode:
+    if not isinstance(raw_mention, Mapping):
+        raise TypeError("lab attribute mentions must be mappings")
+
+    raw_label = (
+        raw_mention.get("label") or raw_mention.get("role") or raw_mention.get("type")
+    )
+    label = _lab_attribute_label(raw_label)
+    try:
+        start = int(raw_mention["start"])
+        end = int(raw_mention["end"])
+    except KeyError as exc:
+        raise KeyError("lab attribute mentions require start and end offsets") from exc
+    score = raw_mention.get("score")
+    text_hash = raw_mention.get("text_hash")
+    node_id = raw_mention.get("id") or f"{label}:{start}:{end}:{index}"
+    return SpanNode(
+        node_id=str(node_id),
+        start=start,
+        end=end,
+        label=label,
+        score=float(score) if score is not None else None,
+        text_hash=str(text_hash) if text_hash is not None else None,
+    )
+
+
+def _lab_attribute_label(raw_label: object) -> LabValueAttributeRole:
+    if not isinstance(raw_label, str):
+        raise TypeError("lab attribute mention label must be a string")
+    normalized = raw_label.strip().casefold()
+    if normalized in {"lab", "lab_name", "test", "analyte"}:
+        return "lab_name"
+    if normalized in {"value", "lab_value", "result"}:
+        return "lab_value"
+    if normalized in {"range", "reference_range", "ref_range"}:
+        return "reference_range"
+    if normalized in {"flag", "abnormal_flag", "abnormality"}:
+        return "abnormal_flag"
+    allowed = "lab_name, lab_value, reference_range, abnormal_flag"
+    raise ValueError(f"unknown lab attribute label {raw_label!r}; expected {allowed}")
+
+
+def _lab_attribute_edges(
+    nodes: list[SpanNode],
+    *,
+    head_label: LabValueAttributeRole,
+    tail_label: LabValueAttributeRole,
+    edge_label: str,
+    max_distance: int,
+) -> list[SpanEdge]:
+    heads = [node for node in nodes if node.label == head_label]
+    tails = [node for node in nodes if node.label == tail_label]
+    edges: list[SpanEdge] = []
+    for head in heads:
+        for tail in tails:
+            distance = _span_gap(head, tail)
+            if distance > max_distance:
+                continue
+            edges.append(
+                SpanEdge(
+                    head=head.node_id,
+                    tail=tail.node_id,
+                    label=edge_label,
+                    score=_lab_attribute_score(head, tail, distance, max_distance),
+                )
+            )
+    return edges
+
+
+def _span_gap(head: SpanNode, tail: SpanNode) -> int:
+    if head.end < tail.start:
+        return tail.start - head.end
+    if tail.end < head.start:
+        return head.start - tail.end
+    return 0
+
+
+def _lab_attribute_score(
+    head: SpanNode,
+    tail: SpanNode,
+    distance: int,
+    max_distance: int,
+) -> float:
+    head_score = float(head.score if head.score is not None else 1.0)
+    tail_score = float(tail.score if tail.score is not None else 1.0)
+    if max_distance == 0:
+        proximity = 1.0 if distance == 0 else 0.0
+    else:
+        proximity = max(0.0, 1.0 - (distance / (max_distance + 1)))
+    return (0.7 * ((head_score + tail_score) / 2.0)) + (0.3 * proximity)
+
+
 __all__ = [
     "AbnormalFlag",
     "LAB_FLAG_ADVISORY",
+    "LabValueAttributeMention",
+    "LabValueAttributeRole",
     "ReferenceRange",
     "derive_abnormal_flag",
+    "link_lab_value_attributes",
     "parse_reference_range",
 ]
