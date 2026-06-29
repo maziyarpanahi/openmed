@@ -40,6 +40,7 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .throttle import ServiceThrottle
+from .warm_pool import WarmPoolBackpressureError
 
 SERVICE_NAME = "openmed-rest"
 _MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
@@ -367,6 +368,23 @@ def create_app() -> FastAPI:
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(WarmPoolBackpressureError)
+    async def _warm_pool_backpressure_handler(
+        _: Request,
+        exc: WarmPoolBackpressureError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "model_name": exc.model_name,
+                "required_bytes": exc.required_bytes,
+                "budget_bytes": exc.budget_bytes,
+                "wait_seconds": exc.wait_seconds,
+            },
         )
 
     @app.exception_handler(ValueError)
