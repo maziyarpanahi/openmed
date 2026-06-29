@@ -406,6 +406,67 @@ def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
     assert result.blocked_formats == ("mlx-8bit",)
 
 
+def test_coreml_manifest_residency_and_parity_gate_passes(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "format": "coreml-fp16",
+                "coreml_conversion_manifest": _coreml_manifest(),
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert _check(result, "CoreML-ANE").passed is True
+    assert _check(result, "CoreML-parity").passed is True
+
+
+def test_coreml_manifest_blocks_cpu_fallback(tmp_path: Path) -> None:
+    manifest = _coreml_manifest()
+    manifest["variants"][0]["residency"]["cpu_fallback_layers"] = [
+        {"name": "classifier", "compute_unit": "CPU"}
+    ]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "format": "coreml-fp16",
+                "coreml_conversion_manifest": manifest,
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "CoreML-ANE")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.blocking_format == "coreml-fp16"
+
+
+def test_coreml_manifest_requires_int4_rejection_report(tmp_path: Path) -> None:
+    manifest = _coreml_manifest()
+    manifest["variants"][2]["parity"] = {"passed": False}
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "format": "coreml-fp16",
+                "coreml_conversion_manifest": manifest,
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "CoreML-parity")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert "coreml-int4" in check.details["failures"]
+
+
 def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> None:
     manifest = tmp_path / "models.jsonl"
     manifest.write_text(
@@ -442,3 +503,46 @@ def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> No
     assert result.decision == QUARANTINED
     assert check.passed is False
     assert check.details["mismatches"]["readme"]["models"]["readme_floor"] == 2
+
+
+def _coreml_manifest() -> dict[str, object]:
+    parity_pass = {
+        "passed": True,
+        "max_recall_delta": 0.0,
+        "span_mismatches": [],
+    }
+    return {
+        "format": "openmed-coreml",
+        "variants": [
+            {
+                "name": "coreml-fp16",
+                "precision": "float16",
+                "quantization": "none",
+                "ane_residency_percentage": 0.95,
+                "cpu_fallback_layers": [],
+                "residency": {
+                    "ane_residency_percentage": 0.95,
+                    "cpu_fallback_layers": [],
+                },
+                "parity": dict(parity_pass),
+            },
+            {
+                "name": "coreml-int8",
+                "precision": "float16",
+                "quantization": "int8",
+                "parity": dict(parity_pass),
+            },
+            {
+                "name": "coreml-int4",
+                "precision": "float16",
+                "quantization": "int4",
+                "parity": {
+                    "passed": False,
+                    "max_recall_delta": 0.01,
+                    "span_mismatches": [{"fixture_id": "stub"}],
+                    "auto_rejected": True,
+                    "rejection_reason": "recall delta exceeds limit",
+                },
+            },
+        ],
+    }

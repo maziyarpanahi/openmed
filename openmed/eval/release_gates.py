@@ -34,6 +34,7 @@ from openmed.core.thresholds import (
 from openmed.eval.metrics import normalize_eval_spans
 from openmed.eval.nano_cert import certify_measurements
 from openmed.eval.quant_delta import (
+    COREML_RECALL_DELTA_LIMIT,
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
     QuantRecallDeltaResult,
@@ -558,6 +559,12 @@ class ReleaseGate:
             )
         )
         checks.append(_g8_check(metadata))
+        coreml_manifest = _coreml_conversion_manifest(metadata)
+        if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
+            "coreml"
+        ):
+            checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
+            checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
 
         blocked_formats = tuple(
             sorted(
@@ -1071,6 +1078,77 @@ def _requires_manifest_row(
     )
 
 
+def _coreml_conversion_manifest(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    inline = _mapping(
+        metadata.get("coreml_conversion_manifest")
+        or metadata.get("coreml_manifest")
+        or metadata.get("conversion_manifest")
+    )
+    if inline:
+        return inline
+
+    manifest_path = _optional_path(
+        _first_value(
+            metadata.get("coreml_conversion_manifest_path"),
+            metadata.get("coreml_manifest_path"),
+            metadata.get("conversion_manifest_path"),
+        )
+    )
+    if manifest_path is None or not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return _mapping(loaded)
+
+
+def _coreml_variants(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    variants = manifest.get("variants") if manifest else None
+    if variants is None:
+        variants = metadata.get("coreml_variants")
+    if isinstance(variants, Mapping):
+        return [
+            {"name": str(name), **_mapping(value)} for name, value in variants.items()
+        ]
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        return [_mapping(item) for item in variants if _mapping(item)]
+    return []
+
+
+def _find_coreml_variant(
+    variants: Sequence[Mapping[str, Any]],
+    expected: str,
+) -> Mapping[str, Any] | None:
+    normalized_expected = _normalise_dimension(expected)
+    for variant in variants:
+        names = {
+            str(variant.get("name") or ""),
+            str(variant.get("format") or ""),
+            f"coreml-{variant.get('quantization')}",
+            f"coreml-{variant.get('precision')}",
+        }
+        if normalized_expected in {_normalise_dimension(name) for name in names}:
+            return variant
+    return None
+
+
+def _coreml_parity_passed(parity: Mapping[str, Any]) -> bool:
+    if not parity:
+        return False
+    if bool(parity.get("passed")) is not True:
+        return False
+    max_delta = _optional_float(parity.get("max_recall_delta"))
+    if max_delta is not None and max_delta > COREML_RECALL_DELTA_LIMIT:
+        return False
+    mismatches = parity.get("span_mismatches") or []
+    return not mismatches
+
+
 def _manifest_repo_ids(rows: Sequence[Mapping[str, Any]]) -> set[str]:
     return {
         str(row["repo_id"])
@@ -1221,6 +1299,98 @@ def _g4_check(result: QuantRecallDeltaResult) -> GateCheck:
         reason="ok" if result.passed else "quantized recall delta exceeds limit",
         details=result.to_dict(),
         blocking_format=result.blocking_format,
+    )
+
+
+def _coreml_ane_residency_check(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    variants = _coreml_variants(manifest, metadata)
+    fp16 = _find_coreml_variant(variants, "coreml-fp16")
+    if fp16 is None:
+        return GateCheck(
+            "CoreML-ANE",
+            False,
+            reason="CoreML fp16 variant residency evidence is required",
+        )
+
+    residency = _mapping(fp16.get("residency"))
+    residency_percentage = _optional_float(
+        fp16.get("ane_residency_percentage")
+        or residency.get("ane_residency_percentage")
+    )
+    fallback_layers = (
+        fp16.get("cpu_fallback_layers") or residency.get("cpu_fallback_layers") or []
+    )
+    fallback_count = (
+        len(fallback_layers) if isinstance(fallback_layers, Sequence) else 0
+    )
+    passed = (
+        residency_percentage is not None
+        and residency_percentage >= 0.90
+        and fallback_count == 0
+    )
+    return GateCheck(
+        "CoreML-ANE",
+        passed,
+        reason="ok" if passed else "fp16 CoreML variant is not ANE-resident",
+        details={
+            "variant": fp16.get("name") or fp16.get("format"),
+            "ane_residency_percentage": residency_percentage,
+            "minimum": 0.90,
+            "cpu_fallback_layers": fallback_layers,
+        },
+        blocking_format=None if passed else str(fp16.get("name") or "coreml-fp16"),
+    )
+
+
+def _coreml_variant_parity_check(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    variants = _coreml_variants(manifest, metadata)
+    if not variants:
+        return GateCheck(
+            "CoreML-parity",
+            False,
+            reason="CoreML parity evidence is required",
+        )
+
+    missing: list[str] = []
+    failures: dict[str, Any] = {}
+    for required in ("coreml-fp16", "coreml-int8"):
+        variant = _find_coreml_variant(variants, required)
+        if variant is None:
+            missing.append(required)
+            continue
+        parity = _mapping(variant.get("parity"))
+        if not _coreml_parity_passed(parity):
+            failures[required] = parity or {"error": "missing parity payload"}
+
+    int4 = _find_coreml_variant(variants, "coreml-int4")
+    if int4 is None:
+        missing.append("coreml-int4")
+    else:
+        int4_parity = _mapping(int4.get("parity"))
+        if not (
+            _coreml_parity_passed(int4_parity) or bool(int4_parity.get("auto_rejected"))
+        ):
+            failures["coreml-int4"] = int4_parity or {
+                "error": "missing int4 parity rejection payload"
+            }
+
+    passed = not missing and not failures
+    return GateCheck(
+        "CoreML-parity",
+        passed,
+        reason="ok" if passed else "CoreML span parity gate failed",
+        details={
+            "recall_delta_limit": COREML_RECALL_DELTA_LIMIT,
+            "missing": missing,
+            "failures": failures,
+        },
+        blocking_format=next(iter(failures), missing[0] if missing else None),
     )
 
 
