@@ -134,6 +134,7 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.config = runtime.config
     app.state.batching = runtime.batching
     app.state.coalescing = runtime.coalescing
+    app.state.paged_kv_cache = runtime.paged_kv_cache
     app.state.throttle = ServiceThrottle(
         runtime.throttle,
         error_response=_error_response,
