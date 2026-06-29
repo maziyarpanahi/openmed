@@ -16,6 +16,7 @@ import pytest
 import openmed.multimodal.ocr as ocr_mod
 from openmed.multimodal.exceptions import MissingDependencyError
 from openmed.multimodal.ocr import (
+    DocTrEngine,
     FakeOcrEngine,
     OcrEngine,
     OcrResult,
@@ -46,13 +47,16 @@ def test_fake_engine_satisfies_ocr_contract():
 
 def test_real_adapters_conform_to_engine_protocol():
     # Adapters must be constructible and conform without importing their deps.
+    assert isinstance(DocTrEngine(), OcrEngine)
     assert isinstance(TesseractEngine(), OcrEngine)
     assert isinstance(PaddleOcrEngine(), OcrEngine)
+    assert DocTrEngine().name == "doctr"
     assert TesseractEngine().name == "tesseract"
     assert PaddleOcrEngine().name == "paddleocr"
 
 
 def test_resolve_engine_by_name():
+    assert isinstance(resolve_engine("doctr"), DocTrEngine)
     assert isinstance(resolve_engine("tesseract"), TesseractEngine)
     assert isinstance(resolve_engine("paddleocr"), PaddleOcrEngine)
 
