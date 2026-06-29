@@ -537,6 +537,7 @@ class ReleaseGate:
         )
         checks.append(self._g1b_check(per_label_recall, recall_denominators))
         checks.append(self._g2_check(per_label_recall, recall_denominators))
+        checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
@@ -1194,6 +1195,58 @@ def _g3_check(critical_leakage_count: int) -> GateCheck:
             else "critical leakage must be exactly zero"
         ),
         details={"critical_leakage_count": critical_leakage_count},
+    )
+
+
+def _adversarial_recall_under_attack_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    payload = _first_mapping(
+        metadata.get("adversarial_robustness"),
+        metrics.get("adversarial_robustness"),
+    )
+    if not payload:
+        return GateCheck(
+            "adversarial_recall_under_attack",
+            True,
+            reason="not applicable",
+        )
+
+    recall = _float_map(
+        payload.get("post_defense_recall_under_attack_by_label")
+        or payload.get("recall_under_attack_by_label")
+    )
+    leaked = _float_map(
+        payload.get("post_defense_leaked_chars_by_label")
+        or payload.get("leaked_chars_by_label")
+    )
+    floor = _optional_float(payload.get("recall_floor"))
+    if floor is None:
+        floor = _optional_float(metadata.get("adversarial_recall_floor"))
+    if floor is None:
+        floor = G2_V20_RECALL_FLOOR
+
+    applicable = sorted(_G1_G2_LABELS & set(recall))
+    recall_violations = {
+        label: recall[label] for label in applicable if recall[label] < floor
+    }
+    direct_leaked = {
+        label: int(value)
+        for label, value in leaked.items()
+        if label in _G1_G2_LABELS and int(value) > 0
+    }
+    passed = not recall_violations and not direct_leaked
+    return GateCheck(
+        "adversarial_recall_under_attack",
+        passed,
+        reason="ok" if passed else "adversarial recall or leakage gate failed",
+        details={
+            "applicable_labels": applicable,
+            "direct_identifier_leaked_chars": direct_leaked,
+            "floor": floor,
+            "recall_violations": recall_violations,
+        },
     )
 
 
