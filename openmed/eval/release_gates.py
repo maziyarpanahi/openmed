@@ -27,6 +27,7 @@ from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.labels import normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.thresholds import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
     profile_recall_floor,
     validate_threshold_matrix,
@@ -557,6 +558,7 @@ class ReleaseGate:
                 target_leakage=target_leakage,
             )
         )
+        checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
 
         blocked_formats = tuple(
@@ -1349,6 +1351,96 @@ def _g7_check(
                 baseline_entry.get("key") if baseline_entry is not None else None
             ),
             "target_leakage": target_leakage,
+            "violations": violations,
+        },
+    )
+
+
+def _membership_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    metric = _first_mapping(
+        metrics.get("membership_leakage"),
+        metrics.get("membership_inference"),
+        metadata.get("membership_leakage"),
+        metadata.get("membership_inference"),
+    )
+    required = bool(
+        metadata.get("membership_leakage_required")
+        or metadata.get("membership_inference_required")
+    )
+    if not metric:
+        return GateCheck(
+            "membership_leakage",
+            not required,
+            reason=(
+                "membership leakage evidence not provided"
+                if not required
+                else "membership leakage evidence is required"
+            ),
+            details={"required": required},
+        )
+
+    advantage = _optional_float(
+        _first_value(metric.get("attacker_advantage"), metric.get("advantage"))
+    )
+    attacker_auc = _optional_float(metric.get("attacker_auc"))
+    ceiling = _optional_float(
+        _first_value(
+            metric.get("advantage_ceiling"),
+            metadata.get("membership_advantage_ceiling"),
+            metadata.get("membership_inference_advantage_ceiling"),
+        )
+    )
+    if ceiling is None:
+        ceiling = DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING
+    if advantage is None:
+        return GateCheck(
+            "membership_leakage",
+            False,
+            reason="membership attacker advantage is required",
+            details={"advantage_ceiling": ceiling},
+        )
+
+    per_label = _mapping(metric.get("per_label"))
+    label_violations: dict[str, Any] = {}
+    for label, values in per_label.items():
+        if not isinstance(values, Mapping):
+            continue
+        label_advantage = _optional_float(
+            _first_value(
+                values.get("attacker_advantage"),
+                values.get("advantage"),
+            )
+        )
+        if label_advantage is not None and label_advantage > ceiling:
+            label_violations[str(label)] = {
+                "observed": label_advantage,
+                "limit": ceiling,
+            }
+
+    violations: dict[str, Any] = {}
+    if advantage > ceiling:
+        violations["overall_advantage"] = {
+            "observed": advantage,
+            "limit": ceiling,
+        }
+    if label_violations:
+        violations["per_label_advantage"] = label_violations
+
+    return GateCheck(
+        "membership_leakage",
+        not violations,
+        reason=(
+            "ok" if not violations else "membership-inference advantage exceeds ceiling"
+        ),
+        details={
+            "attacker_advantage": advantage,
+            "attacker_auc": attacker_auc,
+            "advantage_ceiling": ceiling,
+            "feature_hash": metric.get("feature_hash"),
+            "defense": _mapping(metric.get("defense")),
             "violations": violations,
         },
     )

@@ -358,6 +358,68 @@ def test_g7_blocks_recall_regression_and_residual_leakage(tmp_path: Path) -> Non
     assert "residual_leakage_regression" in check.details["violations"]
 
 
+def test_membership_leakage_gate_blocks_leaky_configuration(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "membership_leakage": {
+                    "attacker_auc": 0.91,
+                    "attacker_advantage": 0.35,
+                    "advantage_ceiling": 0.05,
+                    "feature_hash": "sha256:features",
+                    "per_label": {
+                        "PERSON": {
+                            "attacker_advantage": 0.35,
+                            "feature_hash": "sha256:person",
+                        }
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "membership_leakage")
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert "overall_advantage" in check.details["violations"]
+    assert "PERSON" in check.details["violations"]["per_label_advantage"]
+
+
+def test_membership_leakage_gate_passes_defended_configuration(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "membership_leakage": {
+                    "attacker_auc": 0.5,
+                    "attacker_advantage": 0.0,
+                    "advantage_ceiling": 0.05,
+                    "feature_hash": "sha256:features",
+                    "defense": {"enabled": True, "clip_min": 0.5, "clip_max": 0.5},
+                    "per_label": {
+                        "PERSON": {
+                            "attacker_advantage": 0.0,
+                            "feature_hash": "sha256:person",
+                        }
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "membership_leakage")
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["defense"]["enabled"] is True
+
+
 def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> None:
     calls = {"strict": 0}
     original = release_gates.quality_gates.validate_entity_spans_strict
