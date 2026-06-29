@@ -9,6 +9,17 @@ from .batch import (
     BatchResult,
     process_batch,
 )
+from .distributed import (
+    DocumentIdExtractor,
+    DocumentShard,
+    DuplicateDocumentIDError,
+    MissingDocumentIDError,
+    ShardingError,
+    ShardPlan,
+    assign_document_shard,
+    plan_document_shards,
+    stable_document_hash,
+)
 from .kafka_connector import (
     ConsumerProtocol,
     KafkaClientPair,
@@ -37,6 +48,15 @@ __all__ = [
     "BatchProgress",
     "BatchResult",
     "process_batch",
+    "DocumentIdExtractor",
+    "DocumentShard",
+    "ShardPlan",
+    "ShardingError",
+    "MissingDocumentIDError",
+    "DuplicateDocumentIDError",
+    "stable_document_hash",
+    "assign_document_shard",
+    "plan_document_shards",
     "ConsumerProtocol",
     "ProducerProtocol",
     "KafkaClientPair",
