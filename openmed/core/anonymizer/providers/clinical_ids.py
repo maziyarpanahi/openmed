@@ -559,7 +559,7 @@ class LatvianPersonasKodsProvider(BaseProvider):
     """Generate synthetic Latvian personas kods values."""
 
     def personas_kods(self) -> str:
-        return generate_latvian_personas_kods(rng=self.generator.random)
+        return generate_latvian_personas_kods(rng=self.generator)
 
 
 # ---------------------------------------------------------------------------
