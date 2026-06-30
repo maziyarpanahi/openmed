@@ -607,9 +607,7 @@ def _parse_json_object_arg(value: str) -> dict[str, Any]:
     try:
         payload = json.loads(source)
     except json.JSONDecodeError as exc:
-        raise HfPublishError(
-            f"--baseline-metrics is not valid JSON: {exc}"
-        ) from exc
+        raise HfPublishError(f"--baseline-metrics is not valid JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise HfPublishError("--baseline-metrics must be a JSON object")
     return payload
