@@ -528,6 +528,55 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Latvian Personas Kods
+# ---------------------------------------------------------------------------
+
+
+def generate_latvian_personas_kods(
+    *, rng: random.Random | None = None
+) -> str:
+    """Generate a synthetic Latvian personas kods."""
+
+    source = rng or random.Random()
+
+    if source.random() < 0.5:
+        # legacy form DDMMYYXXXXX
+        day = source.randint(1, 28)
+        month = source.randint(1, 12)
+        year = source.randint(0, 99)
+
+        prefix = (
+            f"{day:02d}"
+            f"{month:02d}"
+            f"{year:02d}"
+        )
+
+        suffix = "".join(
+            str(source.randint(0, 9))
+            for _ in range(5)
+        )
+
+        return f"{prefix}-{suffix}"
+
+    # new 32-prefixed format
+    body = "".join(
+        str(source.randint(0, 9))
+        for _ in range(9)
+    )
+
+    return f"32{body}"
+
+
+class LatvianPersonasKodsProvider(BaseProvider):
+    """Generate synthetic Latvian personas kods values."""
+
+    def personas_kods(self) -> str:
+        return generate_latvian_personas_kods(
+            rng=self.generator.random
+        )
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -682,6 +731,7 @@ __all__ = [
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
+    "generate_latvian_personas_kods",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",

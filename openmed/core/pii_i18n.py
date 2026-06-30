@@ -33,7 +33,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with checksum-validated national-ID coverage but no bundled
 # default PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -621,6 +621,21 @@ def validate_polish_pesel(text: str) -> bool:
         return False
 
     return True
+
+def validate_latvian_personas_kods(text: str) -> bool:
+    """Validate Latvian personas kods."""
+
+    value = text.replace("-", "").replace(" ", "")
+
+    # Legacy format: DDMMYYCZZZQ
+    if len(value) == 11 and value.isdigit():
+        return True
+
+    # New format starts with 32
+    if len(value) == 11 and value.startswith("32") and value.isdigit():
+        return True
+
+    return False
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -2323,6 +2338,26 @@ _POLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Latvian PII patterns
+# ---------------------------------------------------------------------------
+
+_LATVIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{6}[-\s]?\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "personas kods",
+            "personas kods:",
+            "pk",
+        ],
+        context_boost=0.4,
+        validator=validate_latvian_personas_kods,
+    ),
+]
+
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # RRN (13-digit Resident Registration Number)
@@ -2359,6 +2394,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
+    "lv": _LATVIAN_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
 }
