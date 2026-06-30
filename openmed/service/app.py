@@ -224,7 +224,10 @@ def create_app() -> FastAPI:
             return runtime.unload_all_models()
         if payload.model_name is None:
             from fastapi import HTTPException
-            raise HTTPException(status_code=400, detail="model_name is required when 'all' is not set")
+
+            raise HTTPException(
+                status_code=400, detail="model_name is required when 'all' is not set"
+            )
         return runtime.unload_model(payload.model_name)
 
     @app.post("/analyze")
