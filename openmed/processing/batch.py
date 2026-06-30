@@ -386,7 +386,7 @@ class BatchProcessor:
                     )
                 )
             except (OSError, IOError) as e:
-                logger.warning(f"Failed to read file {path}: {e}")
+                logger.warning("Failed to read file %s: %s", path, e)
                 if not self.continue_on_error:
                     raise
                 items.append(
@@ -632,7 +632,7 @@ class BatchProcessor:
                 )
 
         except Exception as e:
-            logger.warning(f"Error processing batch chunk: {e}")
+            logger.warning("Error processing batch chunk: %s", e)
             if not self.continue_on_error:
                 raise
 
@@ -686,7 +686,7 @@ class BatchProcessor:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.warning(f"Error processing item {item.id}: {e}")
+            logger.warning("Error processing item %s: %s", item.id, e)
 
             if not self.continue_on_error:
                 raise
