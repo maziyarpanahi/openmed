@@ -49,6 +49,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "id": "id_ID",
     "th": "th_TH",
     "pl": "pl_PL",
+    "lv": "lv_LV",
     "ko": "ko_KR",
 }
 
@@ -84,6 +85,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "id": ("id_ID", "indonesian_nik"),  # NIK
     "th": ("th_TH", "thai_national_id"),  # Thai 13-digit national ID
     "pl": ("pl_PL", "pesel"),  # PESEL
+    "lv": ("lv_LV", "personas_kods"),
     "ko": ("ko_KR", "korean_rrn"),  # RRN
 }
 

@@ -25,6 +25,7 @@ from openmed.core.pii_i18n import (
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_latvian_personas_kods,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_spanish_dni,
@@ -61,7 +62,7 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -1385,6 +1386,14 @@ class TestIndonesianLocaleAndFixture:
         assert actual == expected
         for label, start, end, value in actual:
             assert text[start:end] == value, label
+
+
+def test_validate_latvian_personas_kods():
+    assert validate_latvian_personas_kods("010101-12345")
+    assert validate_latvian_personas_kods("32123456789")
+
+    assert not validate_latvian_personas_kods("abcdef")
+    assert not validate_latvian_personas_kods("123")
 
 
 if __name__ == "__main__":
