@@ -198,7 +198,7 @@ def load_model(model_path: str | Path) -> BertForTokenClassification:
     """
     model_path = Path(model_path)
 
-    with open(model_path / "config.json") as f:
+    with open(model_path / "config.json", encoding="utf-8") as f:
         config = json.load(f)
 
     model = BertForTokenClassification(config)

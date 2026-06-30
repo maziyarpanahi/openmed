@@ -72,7 +72,7 @@ def read_manifest(model_dir: str | Path) -> dict[str, Any] | None:
     manifest_path = Path(model_dir) / MANIFEST_FILENAME
     if not manifest_path.exists():
         return None
-    with open(manifest_path) as f:
+    with open(manifest_path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -85,7 +85,7 @@ def load_artifact_config(
     config_name = "config.json"
     if manifest is not None:
         config_name = manifest.get("config_path", config_name)
-    with open(model_dir / config_name) as f:
+    with open(model_dir / config_name, encoding="utf-8") as f:
         config = json.load(f)
     return manifest, config
 
@@ -228,6 +228,6 @@ def write_manifest(
         manifest["runtime"] = runtime
 
     manifest_path = model_dir / MANIFEST_FILENAME
-    with open(manifest_path, "w") as f:
+    with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     return manifest_path
