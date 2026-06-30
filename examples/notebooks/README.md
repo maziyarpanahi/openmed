@@ -2,6 +2,11 @@
 
 This directory contains comprehensive Jupyter notebooks demonstrating OpenMed's capabilities.
 
+## Script Quick Starts
+
+- [`../first_five_minutes_redact_extract_fhir.py`](../first_five_minutes_redact_extract_fhir.py) - A five-minute synthetic
+  redact -> extract -> FHIR walkthrough that prints the redacted note, extracted entities, and a FHIR Bundle.
+
 ## 📚 Available Notebooks
 
 ### 🆕 [PII_Detection_Complete_Guide.ipynb](./PII_Detection_Complete_Guide.ipynb)

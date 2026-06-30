@@ -197,7 +197,9 @@ class AdvancedNERProcessor:
             entities.append(current_entity)
 
         logger.debug(
-            f"Smart grouping created {len(entities)} entities from {len(tokens)} tokens"
+            "Smart grouping created %d entities from %d tokens",
+            len(entities),
+            len(tokens),
         )
         return entities
 
@@ -315,7 +317,8 @@ class AdvancedNERProcessor:
             List of processed EntitySpan objects
         """
         logger.info(
-            f"Processing pipeline output with {len(pipeline_output)} raw predictions"
+            "Processing pipeline output with %d raw predictions",
+            len(pipeline_output),
         )
 
         # Step 1: Smart grouping if requested and we have token-level output

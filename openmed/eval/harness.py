@@ -11,11 +11,14 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from openmed.core.quality_gates import validate_entity_spans
+from openmed.eval.cache import build_report_key, hash_fixture_set, load_or_compute
 from openmed.eval.metrics import (
     EvalSpan,
     compute_confidence_intervals,
     compute_metrics_bundle,
+    expected_calibration_error,
     normalize_eval_spans,
+    reliability_bins,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -67,12 +70,22 @@ class FixtureResult:
 
 
 def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
-    """Load benchmark fixtures from a JSON file.
+    """Load benchmark fixtures from a JSON or JSONL file.
 
     Accepted top-level shapes are either a list of fixture objects or a mapping
-    containing a ``fixtures`` list.
+    containing a ``fixtures`` list. JSONL files contain one fixture object per
+    non-empty line.
     """
     fixture_path = Path(path)
+    if fixture_path.suffix.lower() == ".jsonl":
+        fixtures = [
+            BenchmarkFixture.from_mapping(json.loads(line))
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        _validate_unique_fixture_ids(fixtures)
+        return fixtures
+
     raw = json.loads(fixture_path.read_text(encoding="utf-8"))
     rows = raw.get("fixtures") if isinstance(raw, Mapping) else raw
     if not isinstance(rows, list):
@@ -120,6 +133,10 @@ def run_benchmark(
     ci_resamples: int = 1000,
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
+    calibration: bool = False,
+    calibration_bins: int = 10,
+    cache_dir: str | Path | None = None,
+    cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
     """Run *model_name* over fixtures and return a benchmark report.
 
@@ -127,9 +144,38 @@ def run_benchmark(
     cheap), a non-parametric bootstrap over documents attaches a
     ``confidence_interval`` payload to the leakage, character recall, and exact
     and relaxed span F1 metrics. The bootstrap is deterministic for a fixed
-    ``ci_seed``.
+    ``ci_seed``. Passing ``cache_dir`` opts into a local filesystem cache keyed
+    by model, suite, device, fixture-set hash, and eval code hash.
     """
     _validate_unique_fixture_ids(fixtures)
+    if cache_dir is not None:
+        report_key = build_report_key(
+            model_name=model_name,
+            suite=suite,
+            fixture_set_hash=hash_fixture_set(fixtures),
+            code_hash=cache_code_hash,
+            device=device,
+        )
+        return load_or_compute(
+            report_key,
+            lambda: run_benchmark(
+                fixtures,
+                suite=suite,
+                model_name=model_name,
+                device=device,
+                runner=runner,
+                generated_at=generated_at,
+                metadata=metadata,
+                confidence_intervals=confidence_intervals,
+                ci_resamples=ci_resamples,
+                ci_alpha=ci_alpha,
+                ci_seed=ci_seed,
+                calibration=calibration,
+                calibration_bins=calibration_bins,
+            ),
+            cache_dir=cache_dir,
+        )
+
     model_runner = runner or _shared_default_model_runner()
     results: list[FixtureResult] = []
     peak_rss_start = _peak_rss_bytes()
@@ -183,6 +229,13 @@ def run_benchmark(
             alpha=ci_alpha,
             seed=ci_seed,
         )
+    if calibration:
+        metrics = _attach_calibration_metrics(
+            metrics,
+            gold_spans,
+            predicted_spans,
+            n_bins=calibration_bins,
+        )
 
     report_metadata = dict(metadata or {})
     report_metadata.setdefault(
@@ -214,6 +267,10 @@ def run_suite(
     ci_resamples: int = 1000,
     ci_alpha: float = 0.05,
     ci_seed: int = 0,
+    calibration: bool = False,
+    calibration_bins: int = 10,
+    cache_dir: str | Path | None = None,
+    cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
     """Load fixtures, run the benchmark, and optionally write reports."""
     report = run_benchmark(
@@ -228,6 +285,10 @@ def run_suite(
         ci_resamples=ci_resamples,
         ci_alpha=ci_alpha,
         ci_seed=ci_seed,
+        calibration=calibration,
+        calibration_bins=calibration_bins,
+        cache_dir=cache_dir,
+        cache_code_hash=cache_code_hash,
     )
     if output_json is not None:
         report.write_json(output_json)
@@ -306,6 +367,59 @@ def _attach_confidence_intervals(
         if isinstance(metric, Mapping):
             merged[key] = {**metric, "confidence_interval": interval}
     return merged
+
+
+def _attach_calibration_metrics(
+    metrics: Mapping[str, Any],
+    gold_spans: Sequence[EvalSpan],
+    predicted_spans: Sequence[EvalSpan],
+    *,
+    n_bins: int,
+) -> dict[str, Any]:
+    """Merge reliability diagram data into the metric bundle."""
+    bins = reliability_bins(
+        _prediction_confidence_records(gold_spans, predicted_spans),
+        n_bins=n_bins,
+    )
+    merged = dict(metrics)
+    merged["calibration"] = {
+        "expected_calibration_error": expected_calibration_error(bins),
+        "reliability_bins": bins,
+        "n_bins": n_bins,
+    }
+    return merged
+
+
+def _prediction_confidence_records(
+    gold_spans: Sequence[EvalSpan],
+    predicted_spans: Sequence[EvalSpan],
+) -> list[dict[str, Any]]:
+    matched_gold: set[int] = set()
+    records: list[dict[str, Any]] = []
+    for predicted in predicted_spans:
+        correct = False
+        for index, gold in enumerate(gold_spans):
+            if index in matched_gold:
+                continue
+            if _exact_span_match(gold, predicted):
+                matched_gold.add(index)
+                correct = True
+                break
+        records.append(
+            {
+                "confidence": predicted.metadata.get("confidence", 1.0),
+                "correct": correct,
+            }
+        )
+    return records
+
+
+def _exact_span_match(gold_span: EvalSpan, predicted_span: EvalSpan) -> bool:
+    return (
+        gold_span.label == predicted_span.label
+        and gold_span.start == predicted_span.start
+        and gold_span.end == predicted_span.end
+    )
 
 
 def _corpus_coordinates(

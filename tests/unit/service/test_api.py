@@ -16,6 +16,14 @@ from openmed.processing.outputs import EntityPrediction, PredictionResult
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
+
+@pytest.fixture(autouse=True)
+def clear_security_env(monkeypatch):
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+
 
 class FakeLoader:
     """Simple loader double with per-instance pipeline caching."""
@@ -139,9 +147,25 @@ def client(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
     app = create_app()
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
         yield test_client
 
 
@@ -163,7 +187,7 @@ def test_analyze_success_returns_prediction_result_shape(
 
     def fake_analyze(*args, **kwargs):
         assert kwargs["output_format"] == "dict"
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
@@ -276,7 +300,7 @@ def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
 
     def fake_extract(*args, **kwargs):
         assert kwargs["lang"] == "es"
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "extract_pii", fake_extract)
@@ -297,7 +321,7 @@ def test_pii_extract_accepts_new_langs(client, monkeypatch, fake_loader_cls, lan
 
     def fake_extract(*args, **kwargs):
         assert kwargs["lang"] == lang
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "extract_pii", fake_extract)
@@ -340,7 +364,8 @@ def test_pii_deidentify_mask_success(client, monkeypatch, fake_loader_cls):
 
     def fake_deidentify(*args, **kwargs):
         assert kwargs["method"] == "mask"
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["keep_year"] is False
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
@@ -362,7 +387,7 @@ def test_pii_deidentify_accepts_new_langs(client, monkeypatch, fake_loader_cls, 
 
     def fake_deidentify(*args, **kwargs):
         assert kwargs["lang"] == lang
-        assert kwargs["loader"] is fake_loader_cls.instances[0]
+        assert kwargs["loader"].loader is fake_loader_cls.instances[0]
         return result
 
     monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
@@ -508,9 +533,10 @@ def test_service_timeouts_return_gateway_timeout(
 def test_app_uses_profile_config_from_env(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "dev")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     app = create_app()
 
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as test_client:
         response = test_client.get("/health")
 
     assert response.status_code == 200
@@ -520,9 +546,10 @@ def test_app_uses_profile_config_from_env(monkeypatch, fake_loader_cls):
 def test_app_defaults_to_prod_profile_when_env_missing(monkeypatch, fake_loader_cls):
     monkeypatch.delenv("OPENMED_PROFILE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     app = create_app()
 
-    with TestClient(app) as test_client:
+    with TestClient(app, base_url=LOOPBACK_BASE_URL) as test_client:
         response = test_client.get("/health")
 
     assert response.status_code == 200
@@ -537,7 +564,7 @@ def test_preload_models_are_parsed_deduped_and_warmed(monkeypatch, fake_loader_c
     )
     app = create_app()
 
-    with TestClient(app):
+    with TestClient(app, base_url=LOOPBACK_BASE_URL):
         runtime = app.state.runtime
         loader = fake_loader_cls.instances[0]
 
@@ -554,7 +581,7 @@ def test_preload_invalid_model_name_fails_startup(monkeypatch, fake_loader_cls):
     app = create_app()
 
     with pytest.raises(ValueError, match="Invalid characters in model name"):
-        with TestClient(app):
+        with TestClient(app, base_url=LOOPBACK_BASE_URL):
             pass
 
 
@@ -572,7 +599,7 @@ def test_preload_model_load_failure_fails_startup(monkeypatch):
     app = create_app()
 
     with pytest.raises(ValueError, match="Could not load model"):
-        with TestClient(app):
+        with TestClient(app, base_url=LOOPBACK_BASE_URL):
             pass
 
 
@@ -665,7 +692,11 @@ def test_second_request_reuses_shared_warmed_pipeline(monkeypatch, fake_loader_c
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
         first = test_client.post("/analyze", json={"text": "sample"})
         second = test_client.post("/analyze", json={"text": "sample"})
 
@@ -701,6 +732,7 @@ def test_default_keep_alive_env_unloads_pipeline_after_request(
 ):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     monkeypatch.setenv("OPENMED_SERVICE_KEEP_ALIVE", "0")
 
     def fake_analyze(*args, **kwargs):
@@ -715,7 +747,11 @@ def test_default_keep_alive_env_unloads_pipeline_after_request(
     monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
     app = create_app()
 
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
         response = test_client.post("/analyze", json={"text": "sample"})
         loaded = test_client.get("/models/loaded")
 

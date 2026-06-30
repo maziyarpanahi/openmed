@@ -10,7 +10,7 @@ jobs:
   repo-policy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
@@ -25,38 +25,60 @@ jobs:
       run: |
         python scripts/release/check_license_policy.py
 
+    - name: Validate GitHub Actions references
+      run: |
+        python scripts/release/check_github_actions_refs.py
+
+  lockfile-drift:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Check uv.lock matches pyproject.toml
+      run: |
+        if ! uv lock --check; then
+          echo "::error title=uv.lock is out of date::Run 'uv lock' and commit the updated uv.lock."
+          exit 1
+        fi
+
   lint:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
         python-version: "3.11"
 
-    - name: Cache pip packages
-      uses: actions/cache@v5
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-lint-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-lint-
-          ${{ runner.os }}-pip-
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install lint dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python 3.11
 
     - name: Lint with Ruff
       run: |
-        ruff check --output-format=github .
+        uv run ruff check --output-format=github .
 
     - name: Check Ruff formatting
       run: |
-        ruff format --check .
+        uv run ruff format --check .
 
   test:
     needs: [repo-policy, lint]
@@ -73,33 +95,32 @@ jobs:
             python-version: "3.10"
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Cache pip packages
-      uses: actions/cache@v5
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
       with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python ${{ matrix.python-version }}
 
     - name: Validate model manifest schema
       run: |
-        python -m scripts.manifest.validate_manifest
+        uv run python -m scripts.manifest.validate_manifest
 
     - name: Test with pytest
       run: |
-        pytest --cov=openmed --cov-report=xml --cov-report=term-missing
+        uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v7
@@ -113,30 +134,40 @@ jobs:
     needs: repo-policy
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
         python-version: "3.11"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install bandit[toml] pip-audit
+        uv sync --frozen --extra dev --python 3.11
 
     - name: Run Bandit report
       run: |
-        bandit -r openmed -f json -o bandit-report.json --exit-zero
+        uv run --with 'bandit[toml]' bandit -r openmed -f json -o bandit-report.json --exit-zero
 
     - name: Enforce high-severity Bandit findings
       run: |
-        bandit -r openmed --severity-level high --confidence-level medium
+        uv run --with 'bandit[toml]' bandit -r openmed --severity-level high --confidence-level medium
 
     - name: Run pip-audit dependency gate
       run: |
-        python scripts/security/pip_audit_gate.py
+        uv run \
+          --with pip-audit \
+          --with 'requests>=2.33.0' \
+          --with 'urllib3>=2.7.0' \
+          python scripts/security/pip_audit_gate.py
 
     - name: Upload security reports
       uses: actions/upload-artifact@v7
@@ -147,6 +178,69 @@ jobs:
           pip-audit-report.json
       if: always()
 
+  sbom:
+    needs: repo-policy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Sync runtime environment
+      run: |
+        uv sync --frozen --python 3.11
+
+    - name: Generate CycloneDX SBOM
+      run: |
+        uv run --no-project --with 'cyclonedx-bom>=4.6,<7' python scripts/security/generate_sbom.py
+
+    - name: Upload SBOM artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: sbom
+        path: sbom.cdx.json
+      if: always()
+
+  spacy-integration:
+    needs: [repo-policy, lint]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Cache pip packages
+      uses: actions/cache@v6
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-spacy-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-spacy-
+          ${{ runner.os }}-pip-
+
+    - name: Install spaCy test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev,spacy]"
+
+    - name: Run spaCy adapter tests
+      run: |
+        pytest tests/unit/interop/test_spacy_component.py -q
+
   secret-scan:
     needs: repo-policy
     runs-on: ubuntu-latest
@@ -154,7 +248,7 @@ jobs:
       GITLEAKS_VERSION: "8.30.1"
       GITLEAKS_LINUX_X64_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         fetch-depth: 0
 
@@ -216,24 +310,27 @@ jobs:
           .
 
   build:
-    needs: [repo-policy, lint, test, security, secret-scan]
+    needs: [repo-policy, lint, test, security, secret-scan, spacy-integration]
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
 
     - name: Set up Python
       uses: actions/setup-python@v6
       with:
         python-version: "3.11"
 
-    - name: Install build dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install build
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
 
     - name: Build package
       run: |
-        python -m build
+        uv run --with build python -m build
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7

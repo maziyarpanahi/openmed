@@ -36,7 +36,21 @@ KeepAliveValue = Union[int, float, str]
 # parity is guarded by
 # ``tests/unit/service/test_api.py::test_pii_lang_literal_matches_supported_languages``.
 PIILanguage = Literal[
-    "en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"
+    "en",
+    "fr",
+    "de",
+    "it",
+    "es",
+    "nl",
+    "hi",
+    "te",
+    "pt",
+    "ar",
+    "he",
+    "ja",
+    "tr",
+    "id",
+    "th",
 ]
 
 
@@ -186,7 +200,7 @@ if PYDANTIC_V2:
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
         model_name: str = _DEFAULT_PII_MODEL
         confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
-        keep_year: bool = True
+        keep_year: bool = False
         shift_dates: Optional[bool] = None
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
@@ -322,7 +336,7 @@ else:
         method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
         model_name: str = _DEFAULT_PII_MODEL
         confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
-        keep_year: bool = True
+        keep_year: bool = False
         shift_dates: Optional[bool] = None
         date_shift_days: Optional[int] = None
         keep_mapping: bool = False
