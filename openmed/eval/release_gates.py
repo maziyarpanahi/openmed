@@ -1922,6 +1922,7 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
             ],
             input=body,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         return existing
@@ -1940,6 +1941,7 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
         ],
         input=body,
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
     )
@@ -1963,6 +1965,7 @@ def _find_open_issue(*, repo: str, title: str) -> int | None:
             "number,title",
         ],
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
     )
