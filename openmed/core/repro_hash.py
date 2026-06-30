@@ -50,6 +50,7 @@ def resolve_git_sha(*, cwd: str | Path | None = None) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
+            timeout=30,
         )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
