@@ -288,12 +288,12 @@ def analyze_text(
             if desired_max_length is not None:
                 try:
                     tokenizer.model_max_length = int(desired_max_length)
-                except Exception:
+                except (AttributeError, TypeError, ValueError):
                     pass
         else:
             try:
                 tokenizer.model_max_length = 0
-            except Exception:
+            except (AttributeError, TypeError, ValueError):
                 pass
 
     raw_segments: List[sentence_utils.SentenceSpan] = []

@@ -149,7 +149,7 @@ def load_gliner2_handle(
     if device and hasattr(model, "to"):
         try:
             model = model.to(device)
-        except Exception:  # pragma: no cover - defensive path
+        except (RuntimeError, OSError, ValueError):  # pragma: no cover - defensive path
             pass
 
     return GLiNER2Handle(model_id=model_id, model=model)
