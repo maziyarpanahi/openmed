@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
   private-disclosure class.
 - Added LRU Cache implementation for analyze_text(), extract_pii(), and deidentify().
+- Added an in-process ASGI load-test harness with configurable concurrency that reports requests per second, p50/p95/p99 latency, and error rate.
 
 ## [1.6.0] - 2026-06-22
 
