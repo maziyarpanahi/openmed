@@ -214,7 +214,7 @@ def _is_privacy_filter_artifact_path(model_name: str) -> bool:
             continue
 
         try:
-            payload = json.loads(candidate.read_text())
+            payload = json.loads(candidate.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
 
