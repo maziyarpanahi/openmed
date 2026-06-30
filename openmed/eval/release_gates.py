@@ -2016,7 +2016,9 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
             ],
             input=body,
             text=True,
+            encoding="utf-8",
             check=True,
+            timeout=60,
         )
         return existing
 
@@ -2034,8 +2036,10 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
         ],
         input=body,
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
+        timeout=60,
     )
     output = result.stdout.strip().rsplit("/", 1)[-1]
     return _optional_int(output.lstrip("#"))
@@ -2057,8 +2061,10 @@ def _find_open_issue(*, repo: str, title: str) -> int | None:
             "number,title",
         ],
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
+        timeout=60,
     )
     try:
         issues = json.loads(result.stdout or "[]")
