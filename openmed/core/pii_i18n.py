@@ -622,6 +622,7 @@ def validate_polish_pesel(text: str) -> bool:
 
     return True
 
+
 def validate_latvian_personas_kods(text: str) -> bool:
     """Validate Latvian personas kods."""
 
