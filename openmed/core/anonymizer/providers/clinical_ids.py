@@ -532,9 +532,7 @@ class PolishPeselProvider(BaseProvider):
 # ---------------------------------------------------------------------------
 
 
-def generate_latvian_personas_kods(
-    *, rng: random.Random | None = None
-) -> str:
+def generate_latvian_personas_kods(*, rng: random.Random | None = None) -> str:
     """Generate a synthetic Latvian personas kods."""
 
     source = rng or random.Random()
@@ -545,24 +543,14 @@ def generate_latvian_personas_kods(
         month = source.randint(1, 12)
         year = source.randint(0, 99)
 
-        prefix = (
-            f"{day:02d}"
-            f"{month:02d}"
-            f"{year:02d}"
-        )
+        prefix = f"{day:02d}{month:02d}{year:02d}"
 
-        suffix = "".join(
-            str(source.randint(0, 9))
-            for _ in range(5)
-        )
+        suffix = "".join(str(source.randint(0, 9)) for _ in range(5))
 
         return f"{prefix}-{suffix}"
 
     # new 32-prefixed format
-    body = "".join(
-        str(source.randint(0, 9))
-        for _ in range(9)
-    )
+    body = "".join(str(source.randint(0, 9)) for _ in range(9))
 
     return f"32{body}"
 
@@ -571,9 +559,7 @@ class LatvianPersonasKodsProvider(BaseProvider):
     """Generate synthetic Latvian personas kods values."""
 
     def personas_kods(self) -> str:
-        return generate_latvian_personas_kods(
-            rng=self.generator.random
-        )
+        return generate_latvian_personas_kods(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
