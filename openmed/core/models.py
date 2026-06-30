@@ -204,7 +204,7 @@ class ModelLoader:
 
         except Exception as e:
             logger.error(f"Failed to load model {full_model_name}: {e}")
-            raise ValueError(f"Could not load model {full_model_name}: {e}")
+            raise ValueError(f"Could not load model {full_model_name}: {e}") from e
 
     def create_pipeline(
         self,
