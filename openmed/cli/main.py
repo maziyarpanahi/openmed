@@ -163,6 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
+    _add_eval_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
     add_active_learning_command(subparsers)
@@ -1003,6 +1004,29 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
 
 
+def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
+    """Register evaluation commands with the CLI parser."""
+    eval_parser = subparsers.add_parser("eval", help="Run evaluation tools.")
+    eval_sub = eval_parser.add_subparsers(dest="eval_command")
+
+    load_parser = eval_sub.add_parser(
+        "load-test", help="Load test the ASGI app in-process."
+    )
+    load_parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=4,
+        help="Number of requests to run at once (default: 4).",
+    )
+    load_parser.add_argument(
+        "--total-requests",
+        type=int,
+        default=20,
+        help="Total number of requests to run (default: 20).",
+    )
+    load_parser.set_defaults(handler=_handle_eval_load_test)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """CLI entry point invoked by the console script."""
     parser = build_parser()
@@ -1477,6 +1501,20 @@ def _handle_policy_diff(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{json.dumps(payload, indent=2, sort_keys=True)}\n")
     else:
         sys.stdout.write(f"{render(diff, fmt='text')}\n")
+    return 0
+
+
+def _handle_eval_load_test(args: argparse.Namespace) -> int:
+    """Run the in-process ASGI load test and print its report."""
+    from openmed.eval.load_test import run_load_test
+    from openmed.service.app import app
+
+    report = run_load_test(
+        app,
+        concurrency=args.concurrency,
+        total_requests=args.total_requests,
+    )
+    print(json.dumps(vars(report), indent=2))
     return 0
 
 
