@@ -171,6 +171,7 @@ _LOCALE_ID_METHODS = {
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
     "pl_PL": "pesel",
+    "lv_LV": "personas_kods",
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
 }
