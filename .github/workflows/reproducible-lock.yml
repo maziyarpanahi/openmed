@@ -7,27 +7,25 @@ on:
   push:
     branches: [main, master, develop]
     paths:
-      - 'uv.lock'
-      - 'pyproject.toml'
+      - ".github/workflows/reproducible-lock.yml"
+      - "uv.lock"
+      - "pyproject.toml"
   pull_request:
     branches: [main, master, develop]
     paths:
-      - 'uv.lock'
-      - 'pyproject.toml'
+      - ".github/workflows/reproducible-lock.yml"
+      - "uv.lock"
+      - "pyproject.toml"
   workflow_dispatch:
 
 jobs:
-
-  # ── Job 1 ────────────────────────────────────────────────────────────────────
   # Parse uv.lock and assert that every resolved package carries:
   #   - an exact pinned version
   #   - at least one sha256 integrity hash
-  # Packages from git/path/directory sources are rejected because they cannot
-  # be content-addressed.  Virtual entries (the root project placeholder) are
-  # skipped.
+  # Packages from non-registry sources are rejected because they cannot be
+  # content-addressed by uv.lock hashes. The editable root project is skipped.
   # On success, emits a single reproducibility digest that fingerprints the
   # entire dependency set and uploads it as a CI artifact.
-  # ─────────────────────────────────────────────────────────────────────────────
   lock-integrity:
     name: Assert lock is fully pinned and hashed
     runs-on: ubuntu-latest
@@ -42,7 +40,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up uv (cache disabled — we want a clean resolver state)
+      - name: Set up uv (cache disabled for clean resolver state)
         uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: false
@@ -56,76 +54,86 @@ jobs:
             exit 1
           fi
 
-      # Core integrity check.  Parses uv.lock (TOML), walks every [[package]]
-      # entry, and enforces:
-      #   1. Version is present and pinned (no floating specifiers).
-      #   2. Source is a registry (PyPI-compatible), not git/path/directory.
-      #   3. At least one sha256 hash exists in the sdist or wheels entries.
-      # Then builds a sorted, deterministic string of "name==version:hashes"
-      # lines and SHA-256s the whole thing to produce the reproducibility digest.
       - name: Assert all packages are pinned with integrity hashes
         id: digest
         run: |
           python3 - <<'PYEOF'
-          import hashlib, os, sys, tomllib
+          import hashlib
+          import os
+          from pathlib import Path
+          import sys
+          import tomllib
 
-          with open("uv.lock", "rb") as fh:
-              lock = tomllib.loads(fh.read().decode())
+          LOCK_PATH = Path("uv.lock")
+
+          with LOCK_PATH.open("rb") as fh:
+              lock = tomllib.load(fh)
 
           packages = lock.get("package", [])
 
-          # uv inserts a "virtual" source entry for the root project itself.
-          # It has no wheel/sdist and is not a third-party dep — skip it.
-          SKIP_SOURCE_TYPES = {"virtual"}
+          def source_type(package):
+              source = package.get("source") or {}
+              return next(iter(source), None)
 
-          # These source types cannot carry content-addressable hashes.
-          # A git ref can change behind the same SHA; a local path is not
-          # reproducible across machines.
-          UNPINNABLE_SOURCE_TYPES = {"git", "path", "directory", "editable"}
+          def is_root_project(package):
+              source = package.get("source") or {}
+              return source.get("editable") == "." or source.get("virtual") == "."
 
           errors = []
           digest_parts = []
+          checked = 0
 
           for pkg in packages:
-              name    = pkg.get("name", "<unknown>")
+              name = pkg.get("name", "<unknown>")
               version = pkg.get("version")
-              source  = pkg.get("source", {})
-              # The first key in the source table tells us the source type.
-              source_type = next(iter(source), None)
 
-              if source_type in SKIP_SOURCE_TYPES:
+              if is_root_project(pkg):
                   continue
 
               if not version:
                   errors.append(f"  MISSING VERSION      : {name}")
                   continue
 
-              if source_type in UNPINNABLE_SOURCE_TYPES:
+              pkg_source_type = source_type(pkg)
+              if pkg_source_type != "registry":
                   errors.append(
-                      f"  UNPINNABLE SOURCE    : {name}=={version} "
-                      f"(source type '{source_type}' cannot carry integrity hashes — "
-                      f"use a PyPI release instead)"
+                      f"  UNSUPPORTED SOURCE   : {name}=={version} "
+                      f"(source type {pkg_source_type!r} is not registry-backed)"
                   )
                   continue
 
-              # Collect every sha256 hash recorded for this package.
               hashes = []
+              invalid_hashes = []
               sdist = pkg.get("sdist")
               if sdist and sdist.get("hash"):
-                  hashes.append(sdist["hash"])
+                  digest = sdist["hash"]
+                  if digest.startswith("sha256:"):
+                      hashes.append(digest)
+                  else:
+                      invalid_hashes.append(digest)
               for wheel in pkg.get("wheels", []):
                   if wheel.get("hash"):
-                      hashes.append(wheel["hash"])
+                      digest = wheel["hash"]
+                      if digest.startswith("sha256:"):
+                          hashes.append(digest)
+                      else:
+                          invalid_hashes.append(digest)
+
+              if invalid_hashes:
+                  errors.append(
+                      f"  INVALID HASH TYPE    : {name}=={version} "
+                      f"({', '.join(sorted(invalid_hashes))})"
+                  )
+                  continue
 
               if not hashes:
                   errors.append(f"  MISSING HASHES       : {name}=={version}")
                   continue
 
-              # Stable entry: sort the hashes so wheel-ordering differences
-              # across platforms do not affect the digest.
               digest_parts.append(
                   f"{name}=={version}:" + ",".join(sorted(hashes))
               )
+              checked += 1
 
           if errors:
               print("::error title=Lock integrity check failed::")
@@ -134,23 +142,21 @@ jobs:
                   print(e)
               sys.exit(1)
 
-          # Sort the entries so the digest is independent of the order uv
-          # writes packages into the lock file.
           digest_parts.sort()
-          raw    = "\n".join(digest_parts).encode()
+          raw = "\n".join(digest_parts).encode()
           digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+          lock_hash = hashlib.sha256(LOCK_PATH.read_bytes()).hexdigest()
 
-          lock_hash = hashlib.sha256(open("uv.lock", "rb").read()).hexdigest()
-
-          print(f"Lock integrity      : OK ({len(packages)} packages checked)")
+          print(f"Lock integrity      : OK ({checked} packages checked)")
           print(f"Reproducibility digest: {digest}")
 
-          with open("reproducibility-digest.txt", "w") as out:
-              out.write(f"digest: {digest}\n")
-              out.write(f"packages: {len(packages)}\n")
-              out.write(f"uv-lock-sha256: sha256:{lock_hash}\n")
+          Path("reproducibility-digest.txt").write_text(
+              f"digest: {digest}\n"
+              f"packages: {checked}\n"
+              f"uv-lock-sha256: sha256:{lock_hash}\n",
+              encoding="utf-8",
+          )
 
-          # Expose the digest as a job output so lock-gate can echo it.
           with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
               gh.write(f"digest={digest}\n")
           PYEOF
@@ -161,12 +167,10 @@ jobs:
           name: reproducibility-digest
           path: reproducibility-digest.txt
 
-  # ── Job 2 ────────────────────────────────────────────────────────────────────
   # Prove that running `uv sync --frozen` twice in completely independent, cache-
   # free virtual environments produces byte-for-byte the same installed package
   # set.  This catches any residual non-determinism in the resolution or
   # download layer that the lock file alone would not expose.
-  # ─────────────────────────────────────────────────────────────────────────────
   reproducibility:
     name: Prove two clean installs are identical
     needs: lock-integrity
@@ -180,7 +184,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Set up uv (cache disabled — each install must be fully independent)
+      - name: Set up uv (cache disabled for independent installs)
         uses: astral-sh/setup-uv@v8.2.0
         with:
           enable-cache: false
@@ -190,22 +194,22 @@ jobs:
       # --no-cache     : do not read from or write to uv's download cache.
       # --no-install-project : install only dependencies, not the openmed package
       #                        itself, so the list contains only third-party packages.
-      - name: Install #1 — first clean environment
+      - name: Install 1 - first clean environment
         run: |
           uv sync --frozen --no-cache --no-install-project --python 3.11
           uv pip freeze | sort > resolve-1.txt
-          echo "── Resolve 1 ──────────────────────────────────"
+          echo "Resolve 1"
           cat resolve-1.txt
           echo "Digest: $(sha256sum resolve-1.txt | awk '{print $1}')"
 
       # Tear down the venv entirely before the second install so there is
       # zero state carried over from the first run.
-      - name: Install #2 — second independent clean environment
+      - name: Install 2 - second independent clean environment
         run: |
           rm -rf .venv
           uv sync --frozen --no-cache --no-install-project --python 3.11
           uv pip freeze | sort > resolve-2.txt
-          echo "── Resolve 2 ──────────────────────────────────"
+          echo "Resolve 2"
           cat resolve-2.txt
           echo "Digest: $(sha256sum resolve-2.txt | awk '{print $1}')"
 
@@ -238,12 +242,10 @@ jobs:
             resolve-1.txt
             resolve-2.txt
 
-  # ── Job 3 ────────────────────────────────────────────────────────────────────
   # The named gate that branch-protection rules and downstream workflows reference
   # via 'needs: lock-gate'.  It only reaches this point if both jobs above passed,
   # so any other job that declares `needs: lock-gate` is guaranteed a fully
   # pinned, hash-verified, reproducible dependency set.
-  # ─────────────────────────────────────────────────────────────────────────────
   lock-gate:
     name: Lock gate (all checks passed)
     needs: [lock-integrity, reproducibility]
