@@ -16,6 +16,11 @@ Encounter).
   so there are no dangling internal references;
 * for ``transaction``/``batch`` bundles, each entry carries the ``request``
   block (``method``/``url``) a server needs to create the resource.
+* exporters may pre-compute deterministic ``urn:uuid`` references via
+  ``deterministic_fullurl(doc_id, index)``; those references survive
+  Bundle assembly unchanged, while literal ``"ResourceType/id"``
+  references continue to be rewritten when their targets are present
+  in the Bundle;
 
 The assembler is purely mechanical: it never synthesises resources (a Patient
 removed by de-identification stays absent) and does not validate profiles.
@@ -23,17 +28,12 @@ removed by de-identification stays absent) and does not validate profiles.
 
 from __future__ import annotations
 
-import uuid
 from typing import Any, Mapping, Sequence
+
+from .references import deterministic_fullurl
 
 __all__ = ["to_bundle"]
 
-# Fixed namespace so the generated ``urn:uuid`` values are reproducible across
-# runs and machines (uuid5 is a deterministic hash of namespace + name).
-_BUNDLE_NAMESPACE = uuid.uuid5(
-    uuid.NAMESPACE_URL,
-    "https://openmed.ai/fhir/bundle",
-)
 
 # Bundle types whose entries must carry a ``request`` block.
 _REQUEST_BUNDLE_TYPES = frozenset({"transaction", "batch"})
@@ -86,7 +86,7 @@ def to_bundle(
                 f"resource at index {index} is not a FHIR resource "
                 "(missing 'resourceType')"
             )
-        urns.append(_stable_urn(doc_id, index))
+        urns.append(deterministic_fullurl(doc_id, index))
 
     # Map ``"ResourceType/id"`` -> ``fullUrl`` so references can be resolved
     # against the resources that are actually present in this Bundle.
@@ -115,13 +115,6 @@ def to_bundle(
         entries.append(entry)
 
     return {"resourceType": "Bundle", "type": bundle_type, "entry": entries}
-
-
-def _stable_urn(doc_id: str, index: int) -> str:
-    """Return a reproducible ``urn:uuid`` for ``doc_id`` at ``index``."""
-
-    name = f"{doc_id}:{index}"
-    return f"urn:uuid:{uuid.uuid5(_BUNDLE_NAMESPACE, name)}"
 
 
 def _rewrite_references(node: Any, reference_map: Mapping[str, str]) -> Any:

@@ -2,7 +2,9 @@
 
 <img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
 
-<h3>Local-first healthcare AI that never leaves the device</h3>
+<h2>Local-first healthcare AI that never leaves the device</h2>
+
+<a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
 Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
@@ -26,7 +28,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>12 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,000+ models</b> &nbsp;·&nbsp; <b>15 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -98,7 +100,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          1,000+          |        Limited         |
-| Languages                             |           12+            |         Varies         |
+| Languages                             |           13+            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
@@ -125,7 +127,7 @@ dependencies: [
 ]
 ```
 
-- **MLX runtime** for PII token classification, the Privacy Filter family, and experimental GLiNER-family zero-shot tasks — with a CoreML fallback path.
+- **MLX runtime** for PII token classification, the Privacy Filter family, experimental GLiNER-family zero-shot tasks, and Python MLX-LM text generation with Laneformer; includes a CoreML fallback path for supported token-classification artifacts.
 - **One model name, every platform** — MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
 - **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
 
@@ -276,7 +278,7 @@ deidentify(text, method="shift_dates", date_shift_days=180)
   <sub><b>Batch processing</b> — up to <b>3.3×</b> higher throughput on CPU and <b>2.2×</b> on MLX vs. one document at a time.</sub>
 </div>
 
-[Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization](docs/anonymization.md)
+[Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization quickstart](docs/anonymization.md#quickstart-choosing-a-method)
 
 <details>
 <summary><b>Privacy Filter family</b> — three model families on the OpenAI Privacy Filter architecture</summary>
@@ -307,10 +309,10 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (12 languages)
+## Multilingual PII (15 languages)
 
-Extraction and de-identification support **12 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `hi`, `it`, `ja`, `nl`, `pt`, `te`, and `tr` — **247 PII checkpoints** total.
+Extraction and de-identification support **15 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr` — **247 PII checkpoints** total.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -379,6 +381,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
+| [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | |
 
 ---
 
@@ -397,10 +400,21 @@ a local-first guardian for your most private data.
 
 ## Contributing
 
-Contributions welcome — bug reports, feature requests, and PRs alike.
+Contributions welcome — bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
+- [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
 - **Translations welcome** — help complete the other-language READMEs linked in the switcher at the top.
+
+---
+
+## Security
+
+Found a vulnerability? OpenMed redacts PHI, so a **redaction bypass or PHI/PII
+leak is a security issue** — please report it **privately**, never as a public
+issue. See **[SECURITY.md](SECURITY.md)** for the responsible-disclosure policy
+and the [private reporting form](https://github.com/maziyarpanahi/openmed/security/advisories/new).
+Never include real patient data in a report.
 
 ---
 

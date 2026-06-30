@@ -176,6 +176,26 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     assert restored.to_json() == result.to_json()
 
 
+def test_gate_report_from_json_rejects_malformed_payload() -> None:
+    with pytest.raises(ValueError, match="Invalid JSON for GateReport"):
+        GateReport.from_json("{")
+
+
+def test_find_open_issue_returns_none_for_malformed_gh_json(monkeypatch) -> None:
+    class Result:
+        stdout = "{"
+
+    monkeypatch.setattr(
+        release_gates.subprocess,
+        "run",
+        lambda *args, **kwargs: Result(),
+    )
+
+    assert (
+        release_gates._find_open_issue(repo="owner/repo", title="Gate failure") is None
+    )
+
+
 @pytest.mark.parametrize(
     ("gate_name", "metric_updates", "metadata_updates"),
     [
@@ -272,6 +292,29 @@ def test_g4_blocks_only_the_offending_quantized_format(tmp_path: Path) -> None:
     assert fp.decision == RELEASABLE
     assert fp.blocked_formats == ()
     assert _check(fp, "G4").passed is True
+
+
+def test_g5_uses_nano_certificate_for_nano_declared_artifacts(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"tier": "Nano", "param_count": 44_000_000},
+            metric_updates={
+                "latency": {"p50_ms": 20.0, "p95_ms": 50.0},
+                "resources": {"peak_rss_mib": 128.0},
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G5")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "Nano sub-tier budget not certified"
+    assert check.details["failing_dimension"] == "param_count"
+    assert check.details["parent_tier"] == "Tiny"
 
 
 def test_missing_calibration_artifacts_fail_closed(tmp_path: Path) -> None:

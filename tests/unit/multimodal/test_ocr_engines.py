@@ -16,6 +16,7 @@ import pytest
 import openmed.multimodal.ocr as ocr_mod
 from openmed.multimodal.exceptions import MissingDependencyError
 from openmed.multimodal.ocr import (
+    DocTrEngine,
     FakeOcrEngine,
     OcrEngine,
     OcrResult,
@@ -46,13 +47,16 @@ def test_fake_engine_satisfies_ocr_contract():
 
 def test_real_adapters_conform_to_engine_protocol():
     # Adapters must be constructible and conform without importing their deps.
+    assert isinstance(DocTrEngine(), OcrEngine)
     assert isinstance(TesseractEngine(), OcrEngine)
     assert isinstance(PaddleOcrEngine(), OcrEngine)
+    assert DocTrEngine().name == "doctr"
     assert TesseractEngine().name == "tesseract"
     assert PaddleOcrEngine().name == "paddleocr"
 
 
 def test_resolve_engine_by_name():
+    assert isinstance(resolve_engine("doctr"), DocTrEngine)
     assert isinstance(resolve_engine("tesseract"), TesseractEngine)
     assert isinstance(resolve_engine("paddleocr"), PaddleOcrEngine)
 
@@ -65,8 +69,9 @@ def test_tesseract_adapter_maps_words_to_shared_result(monkeypatch):
         pytesseract = SimpleNamespace(TesseractNotFoundError=RuntimeError)
 
         @staticmethod
-        def image_to_data(loaded_image, *, output_type):
+        def image_to_data(loaded_image, *, lang, output_type):
             assert loaded_image is image
+            assert lang == "eng"  # English default
             assert output_type == "dict"
             return {
                 "text": ["", "Patient", "Doe"],
@@ -105,7 +110,7 @@ def test_tesseract_binary_error_is_actionable(monkeypatch):
         pytesseract = SimpleNamespace(TesseractNotFoundError=FakeTesseractNotFoundError)
 
         @staticmethod
-        def image_to_data(image, *, output_type):
+        def image_to_data(image, *, lang, output_type):
             raise FakeTesseractNotFoundError("missing binary")
 
     monkeypatch.setattr(
@@ -127,8 +132,9 @@ def test_paddle_adapter_maps_flat_predictions_to_shared_result(monkeypatch):
     box = [(1, 2), (41, 2), (41, 12), (1, 12)]
 
     class FakePaddleOCR:
-        def __init__(self, *, show_log):
+        def __init__(self, *, show_log, lang):
             seen["show_log"] = show_log
+            seen["lang"] = lang
 
         def ocr(self, image):
             seen["image"] = image
@@ -144,7 +150,7 @@ def test_paddle_adapter_maps_flat_predictions_to_shared_result(monkeypatch):
     result = PaddleOcrEngine().recognize(Path("scan.png"))
 
     _assert_ocr_result_shape(result)
-    assert seen == {"show_log": False, "image": "scan.png"}
+    assert seen == {"show_log": False, "lang": "en", "image": "scan.png"}
     assert result.words[0].text == "MRN"
     assert result.words[0].bbox == (1, 2, 41, 12)
     assert result.words[0].confidence == 0.88
@@ -156,7 +162,7 @@ def test_paddle_adapter_maps_paged_predictions_to_shared_result(monkeypatch):
     second_box = [(3, 4), (33, 4), (33, 14), (3, 14)]
 
     class FakePaddleOCR:
-        def __init__(self, *, show_log):
+        def __init__(self, *, show_log, lang):
             pass
 
         def ocr(self, image):

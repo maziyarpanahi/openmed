@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.labels import normalize_label as normalize_canonical_label
 from openmed.core.model_registry import (
     _CATEGORY_ENTITY_TYPES,
     OPENMED_MODELS,
@@ -19,7 +20,11 @@ from openmed.core.model_registry import (
     get_model_suggestions,
 )
 from openmed.core.pii_entity_merger import is_more_specific, normalize_label
-from openmed.ner.labels import available_domains, get_default_labels
+from openmed.ner.labels import (
+    available_domains,
+    get_default_labels,
+    load_default_label_map,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -74,6 +79,16 @@ class TestDefaultsJsonInvariants:
                     f"Domain {domain!r} label {label!r} drifts from the "
                     "letters-only display-label style"
                 )
+
+
+def test_load_default_label_map_rejects_malformed_override(tmp_path: Path) -> None:
+    path = tmp_path / "labels.json"
+    path.write_text("{", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Invalid JSON in label file") as exc_info:
+        load_default_label_map(path)
+
+    assert str(path) in str(exc_info.value)
 
 
 # ---------------------------------------------------------------------------
@@ -132,6 +147,63 @@ class TestCardiologyRouting:
         suggestions = get_model_suggestions(self.CARDIO_TEXT)
         assert suggestions  # still returns something useful
         assert all(info.category != "Cardiology" for _key, info, _reason in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Microbiology domain (issue #314)
+# ---------------------------------------------------------------------------
+
+
+class TestMicrobiologyDomain:
+    EXPECTED_LABELS = [
+        "Microorganism",
+        "Antibiotic",
+        "Susceptibility",
+        "SpecimenSource",
+        "CultureResult",
+    ]
+
+    MICROBIOLOGY_TEXT = "Blood culture grew MRSA, resistant to oxacillin"
+
+    def test_microbiology_in_available_domains(self):
+        assert "microbiology" in available_domains()
+
+    def test_get_default_labels_returns_microbiology_set(self):
+        labels = get_default_labels("microbiology")
+        assert labels == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        [
+            ("susceptibility", "SUSCEPTIBILITY"),
+            ("antibiotic", "ANTIBIOTIC"),
+            ("microorganism", "MICROORGANISM"),
+            ("organism", "MICROORGANISM"),
+        ],
+    )
+    def test_microbiology_labels_normalize(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+
+    def test_match_categories_routes_microbiology(self):
+        categories = [
+            category for category, _reason in _match_categories(self.MICROBIOLOGY_TEXT)
+        ]
+        assert categories[0] == "Microbiology"
+
+    def test_microbiology_is_registry_metadata_not_a_live_category(self):
+        # Domain metadata is ready before a dedicated Microbiology model is
+        # registered, matching the Cardiology forward-metadata pattern.
+        assert "Microbiology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Microbiology" not in CATEGORIES
+
+    def test_get_model_suggestions_still_returns_live_models(self):
+        suggestions = get_model_suggestions(self.MICROBIOLOGY_TEXT)
+        assert suggestions
+        assert all(
+            info.category != "Microbiology" for _key, info, _reason in suggestions
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -235,6 +307,7 @@ class TestNormalizeLabelIdempotency:
             "aadhaar",
             "cpf",
             "cnpj",
+            "teudat_zehut",
             "postcode",
             "zipcode",
             "zip",
@@ -286,6 +359,7 @@ class TestSpecificityHierarchy:
             "codice_fiscale",
             "cpf",
             "cnpj",
+            "teudat_zehut",
         ],
     }
 
@@ -349,7 +423,7 @@ class TestModelRegistryEntityTypes:
 
     def test_at_least_one_pii_model_per_supported_language(self):
         """Every supported language should have at least one PII model in the registry."""
-        from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+        from openmed.core.pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
 
         pii_keys = [k for k in OPENMED_MODELS if k.startswith("pii_")]
         for lang in SUPPORTED_LANGUAGES:
@@ -364,6 +438,13 @@ class TestModelRegistryEntityTypes:
                 ), "No English PII model found"
             else:
                 # Non-English keys use pii_{lang}_ prefix, e.g. pii_de_superclinical_small
-                assert any(k.startswith(f"pii_{lang}_") for k in pii_keys), (
+                has_language_key = any(k.startswith(f"pii_{lang}_") for k in pii_keys)
+                default_model_id = DEFAULT_PII_MODELS.get(lang)
+                has_default_model = any(
+                    info.model_id == default_model_id and lang in info.languages
+                    for info in OPENMED_MODELS.values()
+                    if info.category == "Privacy"
+                )
+                assert has_language_key or has_default_model, (
                     f"No PII model found for language {lang!r}"
                 )

@@ -16,8 +16,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.core.decoding import (
+    SpanEdge,
+    SpanNode,
     TokenLabelInfo,
     build_label_info,
+    decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
     trim_span_whitespace,
@@ -31,6 +34,7 @@ from openmed.mlx.artifact import (
     read_manifest,
     resolve_tokenizer_reference,
 )
+from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
 
@@ -67,15 +71,18 @@ def _load_auto_tokenizer(reference: str | Path) -> Any:
 
     def _from_pretrained(**kwargs: Any) -> Any:
         try:
-            return AutoTokenizer.from_pretrained(
+            return get_tokenizer_with_loader(
                 reference,
+                AutoTokenizer.from_pretrained,
                 fix_mistral_regex=True,
                 **kwargs,
             )
         except TypeError as exc:
             if "fix_mistral_regex" not in str(exc):
                 raise
-            return AutoTokenizer.from_pretrained(reference, **kwargs)
+            return get_tokenizer_with_loader(
+                reference, AutoTokenizer.from_pretrained, **kwargs
+            )
 
     try:
         return _from_pretrained()
@@ -971,30 +978,85 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
         pair_idx = relation_outputs["pair_idx"][0].tolist()
         pair_mask = relation_outputs["pair_mask"][0].tolist()
 
-        extracted_relations: list[dict[str, Any]] = []
-        for pair_index, is_valid in enumerate(pair_mask):
-            if not is_valid:
-                continue
-            head_index, tail_index = pair_idx[pair_index]
-            if head_index >= len(entities) or tail_index >= len(entities):
-                continue
-            for relation_index in range(relation_prompt_count):
-                score = float(pair_scores[pair_index][relation_index])
-                if score < relation_threshold:
-                    continue
-                extracted_relations.append(
-                    {
-                        "label": str(relations[relation_index]),
-                        "score": score,
-                        "head": entities[head_index],
-                        "tail": entities[tail_index],
-                    }
-                )
-
         return {
             "entities": entities,
-            "relations": extracted_relations,
+            "relations": _decode_relation_graph(
+                entities=entities,
+                pair_scores=pair_scores,
+                pair_idx=pair_idx,
+                pair_mask=pair_mask,
+                relations=relations,
+                relation_prompt_count=relation_prompt_count,
+                relation_threshold=relation_threshold,
+            ),
         }
+
+
+def _decode_relation_graph(
+    *,
+    entities: Sequence[dict[str, Any]],
+    pair_scores: Sequence[Sequence[float]],
+    pair_idx: Sequence[Sequence[int]],
+    pair_mask: Sequence[bool],
+    relations: Sequence[str],
+    relation_prompt_count: int,
+    relation_threshold: float,
+) -> list[dict[str, Any]]:
+    """Decode relation candidates through the shared SpanGraph decoder."""
+
+    nodes = [
+        SpanNode(
+            node_id=str(entity["id"]),
+            start=int(entity["start"]),
+            end=int(entity["end"]),
+            label=str(entity["label"]),
+            score=float(entity["score"]),
+        )
+        for entity in entities
+    ]
+    candidates: list[SpanEdge] = []
+    for pair_index, is_valid in enumerate(pair_mask):
+        if (
+            not is_valid
+            or pair_index >= len(pair_idx)
+            or pair_index >= len(pair_scores)
+        ):
+            continue
+        head_index, tail_index = pair_idx[pair_index]
+        if (
+            head_index < 0
+            or tail_index < 0
+            or head_index >= len(entities)
+            or tail_index >= len(entities)
+        ):
+            continue
+        score_row = pair_scores[pair_index]
+        for relation_index in range(
+            min(relation_prompt_count, len(relations), len(score_row))
+        ):
+            score = float(score_row[relation_index])
+            if score < relation_threshold:
+                continue
+            candidates.append(
+                SpanEdge(
+                    head=str(head_index),
+                    tail=str(tail_index),
+                    label=str(relations[relation_index]),
+                    score=score,
+                )
+            )
+
+    graph = decode_span_graph(nodes, candidates)
+    entity_by_id = {str(entity["id"]): entity for entity in entities}
+    return [
+        {
+            "label": edge.label,
+            "score": edge.score,
+            "head": entity_by_id[edge.head],
+            "tail": entity_by_id[edge.tail],
+        }
+        for edge in graph.edges
+    ]
 
 
 # -- MLX model registry -------------------------------------------------------

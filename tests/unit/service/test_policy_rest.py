@@ -11,6 +11,8 @@ from openmed.core.pii import DeidentificationResult, PIIEntity
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 
+LOOPBACK_BASE_URL = "http://127.0.0.1"
+
 
 class FakeLoader:
     instances: list["FakeLoader"] = []
@@ -27,6 +29,12 @@ class FakeLoader:
         return {}
 
 
+@pytest.fixture(autouse=True)
+def clear_security_env(monkeypatch):
+    monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
+
+
 @pytest.fixture
 def client(monkeypatch):
     FakeLoader.reset()
@@ -34,9 +42,23 @@ def client(monkeypatch):
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_RPS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_BURST", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_THROTTLE_KEY", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS", raising=False)
     app = create_app()
-    with TestClient(app, raise_server_exceptions=False) as test_client:
+    with TestClient(
+        app,
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
         yield test_client
 
 

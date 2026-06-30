@@ -19,6 +19,7 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     "multilingual",
     "checksum_ids",
     "date_arithmetic",
+    "policy_profile_actions",
 )
 
 _FIXTURE_VERSION = 1
@@ -119,17 +120,28 @@ class GoldenFixture:
 
 
 def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
-    """Return fixture JSON paths in deterministic order."""
+    """Return fixture paths in deterministic order."""
     fixture_path = Path(path) if path is not None else _FIXTURE_DIR
     if fixture_path.is_file():
         return (fixture_path,)
-    return tuple(sorted(fixture_path.glob("*.json")))
+    return tuple(
+        sorted((*fixture_path.glob("*.json"), *fixture_path.glob("**/*.jsonl")))
+    )
 
 
 def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:
     """Load and validate all golden fixtures under *path*."""
     fixtures: list[GoldenFixture] = []
     for fixture_path in list_fixture_paths(path):
+        if fixture_path.suffix.lower() == ".jsonl":
+            rows = [
+                json.loads(line)
+                for line in fixture_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            fixtures.extend(GoldenFixture.from_mapping(row) for row in rows)
+            continue
+
         raw = json.loads(fixture_path.read_text(encoding="utf-8"))
         if not isinstance(raw, Mapping):
             raise ValueError(f"{fixture_path} must contain a mapping")
@@ -157,6 +169,20 @@ def fixtures_by_category(
     grouped: defaultdict[str, list[GoldenFixture]] = defaultdict(list)
     for fixture in source:
         grouped[fixture.category].append(fixture)
+    return dict(grouped)
+
+
+def fixtures_by_language(
+    fixtures: list[GoldenFixture] | None = None,
+    *,
+    category: str | None = None,
+) -> dict[str, list[GoldenFixture]]:
+    """Group fixtures by language, optionally restricted to one category."""
+    source = fixtures if fixtures is not None else load_golden_fixtures()
+    grouped: defaultdict[str, list[GoldenFixture]] = defaultdict(list)
+    for fixture in source:
+        if category is None or fixture.category == category:
+            grouped[fixture.language].append(fixture)
     return dict(grouped)
 
 
@@ -231,6 +257,7 @@ __all__ = [
     "GoldenFixture",
     "fixture_languages",
     "fixtures_by_category",
+    "fixtures_by_language",
     "list_fixture_paths",
     "load_benchmark_fixtures",
     "load_golden_fixtures",

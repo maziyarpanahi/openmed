@@ -21,6 +21,9 @@ _MULTIMODAL_DEPENDENCIES: tuple[tuple[str, str], ...] = (
     ("pdfplumber", "pdfplumber"),
     ("docx", "python-docx"),
     ("PIL", "Pillow"),
+    ("markdown_it", "markdown-it-py"),
+    ("piexif", "piexif"),
+    ("pikepdf", "pikepdf"),
 )
 
 _MULTIMODAL_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
@@ -134,8 +137,17 @@ class ExtractedDocument:
 # Document handlers are registered lazily by per-format ingester modules so the
 # dispatcher never needs editing when a new format lands.
 DocumentHandler = Callable[..., ExtractedDocument]
+DocumentDetector = Callable[[str | Path], bool]
 
-_HANDLERS: dict[str, DocumentHandler] = {}
+
+@dataclass(frozen=True)
+class _HandlerSpec:
+    handler: DocumentHandler
+    detector: DocumentDetector | None = None
+    requires_multimodal: bool = True
+
+
+_HANDLERS: dict[str, list[_HandlerSpec]] = {}
 
 
 def _normalize_extension(extension: str) -> str:
@@ -146,12 +158,30 @@ def _normalize_extension(extension: str) -> str:
 def register_handler(
     extensions: str | Iterable[str],
     handler: DocumentHandler,
+    *,
+    detector: DocumentDetector | None = None,
+    requires_multimodal: bool = True,
 ) -> None:
     """Register ``handler`` for one or more file extensions (e.g. ``".pdf"``)."""
     if isinstance(extensions, str):
         extensions = [extensions]
+    spec = _HandlerSpec(
+        handler=handler,
+        detector=detector,
+        requires_multimodal=requires_multimodal,
+    )
     for extension in extensions:
-        _HANDLERS[_normalize_extension(extension)] = handler
+        _HANDLERS.setdefault(_normalize_extension(extension), []).append(spec)
+
+
+def _select_handler(
+    path: str | Path, specs: Iterable[_HandlerSpec]
+) -> _HandlerSpec | None:
+    ordered = sorted(tuple(specs), key=lambda spec: spec.detector is None)
+    for spec in ordered:
+        if spec.detector is None or spec.detector(path):
+            return spec
+    return None
 
 
 def redact_document(
@@ -159,20 +189,38 @@ def redact_document(
     *,
     policy: Any | None = None,
     models: Any | None = None,
+    lang: str | None = None,
 ) -> ExtractedDocument:
     """De-identify a document, dispatching by file extension to its ingester.
 
-    Raises :class:`MissingDependencyError` if the ``multimodal`` extra is not
-    installed, and :class:`UnsupportedDocumentError` if no handler is registered
-    for the file's extension.
+    Registered stdlib-only handlers may run without the full ``multimodal``
+    extra. Unknown extensions still check the optional dependency set first so
+    installs missing the extra keep surfacing the actionable install hint before
+    reporting unsupported formats.
+
+    ``lang`` is an optional OpenMed language code (e.g. ``"fr"``) configuring
+    language-aware ingestion: image handlers pass it through to OCR so scanned
+    documents are read in the right language. Handlers that do not use it accept
+    and ignore it. Defaults to English-equivalent behavior when unset.
     """
-    ensure_multimodal_available()
     extension = Path(str(path)).suffix.lower()
-    handler = _HANDLERS.get(extension)
-    if handler is None:
+    specs = _HANDLERS.get(extension)
+    if specs is None:
+        ensure_multimodal_available()
         supported = ", ".join(sorted(_HANDLERS)) or "none"
         raise UnsupportedDocumentError(
             f"No multimodal handler registered for extension "
             f"{extension or '(none)'!r}. Supported extensions: {supported}."
         )
-    return handler(path, policy=policy, models=models)
+
+    spec = _select_handler(path, specs)
+    if spec is None:
+        supported = ", ".join(sorted(_HANDLERS)) or "none"
+        raise UnsupportedDocumentError(
+            f"No registered handler matched content for extension "
+            f"{extension or '(none)'!r}. Supported extensions: {supported}."
+        )
+
+    if spec.requires_multimodal:
+        ensure_multimodal_available()
+    return spec.handler(path, policy=policy, models=models, lang=lang)
