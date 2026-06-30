@@ -318,7 +318,9 @@ def analyze_text(
                 or span_length > max_chunk_chars
             ):
                 if current_start is None or current_end is None:
-                    raise RuntimeError("chunking invariant violated: start/end indices are None")
+                    raise RuntimeError(
+                        "chunking invariant violated: start/end indices are None"
+                    )
                 chunk_descriptors.append(
                     {
                         "text": validated_text[current_start:current_end],

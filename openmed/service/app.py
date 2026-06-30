@@ -6,7 +6,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import Any, Dict, Mapping, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -223,7 +223,9 @@ def create_app() -> FastAPI:
         if payload.all:
             return runtime.unload_all_models()
         if payload.model_name is None:
-            raise HTTPException(status_code=400, detail="model_name is required when all=false")
+            raise HTTPException(
+                status_code=400, detail="model_name is required when all=false"
+            )
         return runtime.unload_model(payload.model_name)
 
     @app.post("/analyze")
