@@ -108,7 +108,7 @@ def convert(
     except ImportError as e:
         raise ImportError(
             f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
-        )
+        ) from e
 
     source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
     model_type = resolve_supported_model_type(source_config)
