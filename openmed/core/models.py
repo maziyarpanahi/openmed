@@ -115,7 +115,7 @@ class ModelLoader:
 
         # Check cache
         if not force_reload and full_model_name in self._models:
-            logger.info(f"Using cached model: {full_model_name}")
+            logger.info("Using cached model: %s", full_model_name)
             return {
                 "model": self._models[full_model_name],
                 "tokenizer": self._tokenizers[full_model_name],
@@ -123,7 +123,7 @@ class ModelLoader:
             }
 
         try:
-            logger.info(f"Loading model: {full_model_name}")
+            logger.info("Loading model: %s", full_model_name)
 
             auth_kwargs = self._hub_auth_kwargs()
             local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
@@ -172,7 +172,7 @@ class ModelLoader:
             self._models[full_model_name] = model
             self._tokenizers[full_model_name] = tokenizer
 
-            logger.info(f"Successfully loaded model: {full_model_name}")
+            logger.info("Successfully loaded model: %s", full_model_name)
 
             return {
                 "model": model,
@@ -181,7 +181,7 @@ class ModelLoader:
             }
 
         except Exception as e:
-            logger.error(f"Failed to load model {full_model_name}: {e}")
+            logger.error("Failed to load model %s: %s", full_model_name, e)
             raise ValueError(f"Could not load model {full_model_name}: {e}") from e
 
     def create_pipeline(
@@ -263,7 +263,7 @@ class ModelLoader:
         )
 
         if cache_key in self._pipelines:
-            logger.info(f"Using cached pipeline for {full_model_name}")
+            logger.info("Using cached pipeline for %s", full_model_name)
             return self._pipelines[cache_key]
 
         try:
@@ -281,11 +281,11 @@ class ModelLoader:
             ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
 
-            logger.info(f"Created pipeline for {full_model_name}")
+            logger.info("Created pipeline for %s", full_model_name)
             return ner_pipeline
 
         except Exception as e:
-            logger.error(f"Failed to create pipeline for {full_model_name}: {e}")
+            logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
             model_data = self.load_model(model_name)
 

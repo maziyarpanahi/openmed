@@ -93,7 +93,7 @@ class AdvancedNERProcessor:
         Returns:
             List of filtered EntitySpan objects
         """
-        logger.debug(f"Processing {len(pipeline_result)} raw entities")
+        logger.debug("Processing %d raw entities", len(pipeline_result))
 
         filtered_entities = []
 
@@ -127,7 +127,7 @@ class AdvancedNERProcessor:
 
             filtered_entities.append(span)
 
-        logger.debug(f"After filtering: {len(filtered_entities)} entities")
+        logger.debug("After filtering: %d entities", len(filtered_entities))
         return filtered_entities
 
     def smart_group_entities(
@@ -294,7 +294,7 @@ class AdvancedNERProcessor:
         # Don't forget the last entity
         merged.append(current)
 
-        logger.debug(f"Merge process: {len(entities)} -> {len(merged)} entities")
+        logger.debug("Merge process: %d -> %d entities", len(entities), len(merged))
         return merged
 
     def process_pipeline_output(
@@ -347,7 +347,7 @@ class AdvancedNERProcessor:
         if self.merge_adjacent:
             entities = self.merge_adjacent_entities(entities, text)
 
-        logger.info(f"Final result: {len(entities)} high-quality entities")
+        logger.info("Final result: %d high-quality entities", len(entities))
         return entities
 
     def create_entity_summary(self, entities: List[EntitySpan]) -> Dict[str, Any]:
