@@ -104,6 +104,15 @@ langchain = [
   "langchain-core>=0.2,<2",
 ]
 
+llamaindex = [
+  "llama-index-core>=0.10,<1",
+]
+
+agents = [
+  "langchain-core>=0.2,<2",
+  "llama-index-core>=0.10,<1",
+]
+
 kafka = [
   "confluent-kafka>=2.3",
 ]
