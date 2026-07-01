@@ -51,6 +51,7 @@ nav:
       - Transformers.js Export: export-transformersjs.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
+      - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
       - Onboarding: onboarding.md
