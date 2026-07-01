@@ -15,6 +15,9 @@ model reuse, explicit model unloading, and idle model cleanup:
 
 This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, and a unified non-2xx error envelope.
 
+For ready-to-run `curl` one-liners and a minimal Python `requests` client for the
+common calls, see the task-oriented [REST API Recipes](./rest-recipes.md).
+
 ## Run Locally
 
 Install the service dependencies:
