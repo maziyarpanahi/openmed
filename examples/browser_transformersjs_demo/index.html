@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMed Browser Transformers.js Demo</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230d6e6e'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-size='18' font-family='Arial,sans-serif' font-weight='700' fill='white'%3Eom%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <span class="brand-mark" aria-hidden="true">om</span>
+          <div class="brand-copy">
+            <h1>OpenMed Browser Transformers.js Demo</h1>
+            <p>Client-side token classification for synthetic clinical text</p>
+          </div>
+        </div>
+
+        <div class="header-actions" aria-label="Demo controls">
+          <button id="loadModelButton" class="secondary-button" type="button">
+            Load model
+          </button>
+          <button id="runButton" class="primary-button" type="button">
+            Run analysis
+          </button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="status-rail" aria-label="Model status">
+          <div class="status-summary">
+            <span id="statusDot" class="status-dot" aria-hidden="true"></span>
+            <div>
+              <p id="statusLabel">Ready</p>
+              <span id="statusDetail">
+                First run downloads model files, then inference runs in this
+                browser.
+              </span>
+            </div>
+          </div>
+          <div class="progress-box" aria-label="Download progress">
+            <div class="progress-meta">
+              <span>Download progress</span>
+              <strong id="progressLabel">0%</strong>
+            </div>
+            <div class="progress-track">
+              <span id="progressFill"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="runtime-grid" aria-label="Runtime metadata">
+          <div>
+            <span>Model</span>
+            <strong id="modelValue">Xenova/bert-base-NER</strong>
+          </div>
+          <div>
+            <span>Runtime</span>
+            <strong id="runtimeValue">Browser WASM</strong>
+          </div>
+          <div>
+            <span>Package</span>
+            <strong id="packageValue">@huggingface/transformers 4.2.0</strong>
+          </div>
+          <div>
+            <span>Input path</span>
+            <strong>Never leaves this page</strong>
+          </div>
+        </section>
+
+        <section class="sample-strip" aria-label="Synthetic samples">
+          <span>Synthetic samples</span>
+          <div id="sampleButtons" class="sample-buttons"></div>
+        </section>
+
+        <section class="analysis-grid" aria-label="Browser analysis workspace">
+          <article class="panel input-panel">
+            <header class="panel-header">
+              <div>
+                <span>Clinical note</span>
+                <h2>Input</h2>
+              </div>
+              <button id="clearButton" class="quiet-button" type="button">
+                Clear
+              </button>
+            </header>
+            <textarea
+              id="inputText"
+              spellcheck="false"
+              aria-label="Synthetic clinical text"
+            ></textarea>
+            <footer class="panel-footer">
+              <span><strong id="charCount">0</strong> chars</span>
+              <span><strong id="wordCount">0</strong> words</span>
+            </footer>
+          </article>
+
+          <article class="panel output-panel">
+            <header class="panel-header">
+              <div>
+                <span>Detected entities</span>
+                <h2>Output</h2>
+              </div>
+              <div class="mode-toggle" role="group" aria-label="Output mode">
+                <button
+                  class="mode-button is-active"
+                  data-mode="mask"
+                  type="button"
+                >
+                  Mask
+                </button>
+                <button class="mode-button" data-mode="review" type="button">
+                  Review
+                </button>
+              </div>
+            </header>
+            <div id="outputText" class="output-text" aria-live="polite">
+              <p class="empty-state">
+                Run analysis to create a browser-local redaction preview.
+              </p>
+            </div>
+            <footer class="panel-footer">
+              <span><strong id="entityCount">0</strong> entities</span>
+              <span><strong id="latencyValue">--</strong> latency</span>
+            </footer>
+          </article>
+        </section>
+
+        <section class="entity-section" aria-labelledby="entityTableTitle">
+          <div class="section-header">
+            <div>
+              <span>Entity table</span>
+              <h2 id="entityTableTitle">Transformer + local detector results</h2>
+            </div>
+            <p>
+              Transformer rows come from the NER model; deterministic rows come
+              from local browser regexes.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Text</th>
+                  <th>Source</th>
+                  <th>Confidence</th>
+                  <th>Offsets</th>
+                </tr>
+              </thead>
+              <tbody id="entityRows">
+                <tr>
+                  <td colspan="5" class="empty-row">
+                    No analysis has run yet.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
