@@ -47,15 +47,18 @@ from .metadata_scrub import (
 
 # Importing the OCR module registers image-format handlers with the dispatcher
 # so ``redact_document`` can route scans/images. It stays import-light: OCR
-# backends (and Pillow) are only imported when an engine actually runs. Only the
-# data types are re-exported here; the ``ocr()`` entry point is left in the
-# submodule (``openmed.multimodal.ocr``) to avoid shadowing it with a function.
+# backends (and Pillow) are only imported when an engine actually runs. The
+# ``ocr()`` entry point is left in the submodule (``openmed.multimodal.ocr``)
+# to avoid shadowing it with a function.
 from .ocr import (
+    DocTrEngine,
     FakeOcrEngine,
     OcrEngine,
     OcrResult,
     OcrWord,
+    available_ocr_engines,
     register_ocr_engine,
+    run_doctr_ocr,
 )
 from .tabular_csv import (
     ColumnDecision,
@@ -94,8 +97,11 @@ __all__ = [
     "OcrResult",
     "OcrWord",
     "OcrEngine",
+    "DocTrEngine",
     "FakeOcrEngine",
     "register_ocr_engine",
+    "available_ocr_engines",
+    "run_doctr_ocr",
     "ColumnDecision",
     "TableView",
     "RedactedTable",

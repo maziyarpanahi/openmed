@@ -21,6 +21,7 @@ HEAVY_MODULES = (
     "pdfplumber",
     "docx",
     "PIL",
+    "doctr",
     "piexif",
     "pikepdf",
     "pytesseract",
