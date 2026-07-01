@@ -48,6 +48,7 @@ dev = [
   "pandas>=2.0",
   "polars>=0.20",
   "python-dateutil>=2.8",
+  "rapidfuzz>=3",
   "ruff==0.15.20",
   "tomli>=2.0; python_version < '3.11'",
 ]
@@ -101,6 +102,10 @@ multimodal = [
 
 # PaddleOCR is a heavy, platform-sensitive backend (pulls in paddlepaddle), so
 # it is opt-in rather than bundled into the general multimodal extra.
+grounding = [
+  "rapidfuzz>=3",
+]
+
 ocr-paddle = [
   "paddleocr>=2.7",
 ]
