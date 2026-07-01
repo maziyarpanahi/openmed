@@ -592,13 +592,19 @@ def _mutable_prediction_result(result: Any) -> Any:
     )
 
 
-def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> Any:
+def _apply_pii_smart_merging(
+    result: Any,
+    effective_model: str,
+    lang: str,
+    *,
+    locale: Optional[str] = None,
+) -> Any:
     """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
     from .pii_i18n import get_patterns_for_language
 
-    lang_patterns = get_patterns_for_language(lang)
+    lang_patterns = get_patterns_for_language(lang, locale=locale)
     entity_dicts = [
         {
             "entity_type": e.label,
@@ -648,6 +654,7 @@ def _extract_pii_batch(
     normalize_accents: Optional[bool] = None,
     custom_recognizer: Any = None,
     *,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -738,7 +745,7 @@ def _extract_pii_batch(
 
     if use_smart_merging and not uses_privacy_filter:
         results = [
-            _apply_pii_smart_merging(result, effective_model, lang)
+            _apply_pii_smart_merging(result, effective_model, lang, locale=locale)
             for result in results
         ]
 
@@ -774,6 +781,7 @@ def extract_pii(
     max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     custom_recognizer: Any = None,
 ) -> PredictionResult:
@@ -857,6 +865,7 @@ def extract_pii(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        locale=locale,
         loader=loader,
         custom_recognizer=custom_recognizer,
     )[0]
@@ -910,6 +919,7 @@ def _apply_safety_sweep_to_result(
     pii_result: Any,
     *,
     lang: str,
+    locale: Optional[str] = None,
 ) -> tuple[Any, int]:
     """Run the deterministic sweep and record its net span contribution."""
     from .quality_gates import validate_entity_spans
@@ -920,7 +930,7 @@ def _apply_safety_sweep_to_result(
     )
 
     before_count = len(pii_result.entities)
-    entities = safety_sweep(text, pii_result.entities, lang=lang)
+    entities = safety_sweep(text, pii_result.entities, lang=lang, locale=locale)
     added_count = len(entities) - before_count
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
@@ -1650,6 +1660,7 @@ def _deidentify_batch(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        locale=locale,
         custom_recognizer=recognizer,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
@@ -1663,6 +1674,7 @@ def _deidentify_batch(
                 stripped_text,
                 pii_result,
                 lang=lang,
+                locale=locale,
             )
             _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
             swept_results.append(pii_result)
