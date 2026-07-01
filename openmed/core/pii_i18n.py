@@ -33,7 +33,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with checksum-validated national-ID coverage but no bundled
 # default PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "sk"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -621,6 +621,51 @@ def validate_polish_pesel(text: str) -> bool:
         return False
 
     return True
+
+
+def validate_latvian_personas_kods(text: str) -> bool:
+    """Validate Latvian personas kods.
+
+    Legacy values encode birth date as ``DDMMYY-CNNNQ``. New values issued
+    from 2017 use an opaque ``32`` prefix, but both formats keep an 11-digit
+    modulo-11 check digit.
+    """
+
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    check_digit = _latvian_personas_kods_check_digit(numbers[:10])
+    if numbers[10] != check_digit:
+        return False
+
+    if digits.startswith("32"):
+        return True
+
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:6])
+    century_digit = int(digits[6])
+    if century_digit not in (0, 1, 2):
+        return False
+
+    import calendar
+
+    year = 1800 + century_digit * 100 + year_suffix
+    try:
+        return day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
+    """Return the Latvian personas kods check digit for the first 10 digits."""
+    weights = (1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+    return (
+        (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
+    )
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -2385,6 +2430,70 @@ _POLISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Latvian PII patterns
+# ---------------------------------------------------------------------------
+
+_LATVIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datums",
+            "dzimsanas",
+            "dzimšanas",
+            "uznemts",
+            "uzņemts",
+            "izrakstits",
+            "izrakstīts",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+371\s?)?[267]\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefons", "talrunis", "tālrunis", "mobilais", "kontakts"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{6}[-\s]?\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "personas kods",
+            "personas kods:",
+            "pk",
+        ],
+        context_boost=0.4,
+        validator=validate_latvian_personas_kods,
+    ),
+    PIIPattern(
+        r"\b(?:[A-Z][A-Za-z.'-]+\s+(?:iela|gatve|bulvaris|prospekts)\s+\d{1,5}[A-Za-z]?|(?:iela|gatve|bulvaris|prospekts)\s+[A-Z][A-Za-z .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adrese", "dzivesvieta", "dzīvesvieta", "iela"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\bLV[-\s]?\d{4}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["pasta indekss", "indekss", "adrese"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # RRN (13-digit Resident Registration Number)
@@ -2532,6 +2641,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tr": _TURKISH_PII_PATTERNS,
     "id": _INDONESIAN_PII_PATTERNS,
     "th": _THAI_PII_PATTERNS,
+    "lv": _LATVIAN_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
     "sk": _SLOVAK_PII_PATTERNS,
@@ -2895,6 +3005,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["กรุงเทพมหานคร", "เชียงใหม่", "ภูเก็ต"],
         "ZIPCODE": ["10110", "50000", "83000"],
+    },
+    "lv": {
+        "NAME": ["Anna Kalnina", "Janis Berzins", "Ilze Ozolina", "Peteris Liepa"],
+        "FIRST_NAME": ["Anna", "Janis", "Ilze", "Peteris"],
+        "LAST_NAME": ["Kalnina", "Berzins", "Ozolina", "Liepa"],
+        "EMAIL": ["pacients@example.lv", "kontakts@example.org"],
+        "PHONE": ["+371 2123 4567", "2912 3456"],
+        "ID_NUM": ["161175-19997", "32867300679"],
+        "STREET_ADDRESS": ["Brivibas iela 12", "Dzirnavu iela 45"],
+        "URL_PERSONAL": ["https://example.lv"],
+        "USERNAME": ["pacients123", "lietotajs456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Riga", "Daugavpils", "Liepaja"],
+        "ZIPCODE": ["LV-1010", "LV-5401", "LV-3401"],
     },
     "sk": {
         "NAME": [

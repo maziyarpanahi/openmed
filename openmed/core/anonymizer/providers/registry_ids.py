@@ -37,6 +37,7 @@ from openmed.core.pii_i18n import (
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_korean_rrn,
+    validate_latvian_personas_kods,
     validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
@@ -52,6 +53,7 @@ from .clinical_ids import (
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
+    LatvianPersonasKodsProvider,
     NPIProvider,
     PolishPeselProvider,
     RodneCisloProvider,
@@ -270,6 +272,13 @@ def _register_builtin_specs() -> None:
         validate=validate_polish_pesel,
         faker_method="pesel",
         faker_provider=PolishPeselProvider,
+    )
+    _register_aliases(
+        ("lv", "lv_LV"),
+        id_type="personas_kods",
+        validate=validate_latvian_personas_kods,
+        faker_method="personas_kods",
+        faker_provider=LatvianPersonasKodsProvider,
     )
     _register_aliases(
         ("ko", "ko_KR"),
