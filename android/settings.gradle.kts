@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "openmed-android"
 include(":openmedkit")
+include(":OpenMedDemo:app")
