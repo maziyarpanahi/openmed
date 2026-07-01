@@ -229,7 +229,10 @@ def _load_path_payload(path: Path) -> dict[str, Any]:
 
 
 def _loads_tracking_duplicates(raw_json: str) -> Mapping[str, Any]:
-    return json.loads(raw_json, object_pairs_hook=_duplicate_tracking_hook)
+    try:
+        return json.loads(raw_json, object_pairs_hook=_duplicate_tracking_hook)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON: {exc}") from exc
 
 
 def _duplicate_tracking_hook(

@@ -120,6 +120,7 @@ def run_pip_audit(report_path: Path) -> dict[str, Any]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        timeout=300,
     )
 
     if result.stdout:
@@ -132,7 +133,7 @@ def run_pip_audit(report_path: Path) -> dict[str, Any]:
         raise RuntimeError(f"pip-audit exited with status {result.returncode}")
 
     try:
-        return json.loads(report_path.read_text())
+        return json.loads(report_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"pip-audit wrote invalid JSON: {exc}") from exc
 

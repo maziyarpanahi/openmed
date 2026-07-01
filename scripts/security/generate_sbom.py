@@ -76,9 +76,13 @@ def main() -> int:
             str(OUTFILE),
         ],
         check=True,
+        timeout=300,
     )
 
-    bom = json.loads(OUTFILE.read_text(encoding="utf-8"))
+    try:
+        bom = json.loads(OUTFILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"SBOM output is invalid JSON: {exc}") from exc
     component = bom.setdefault("metadata", {}).setdefault("component", {})
     component["version"] = version
     component["purl"] = f"pkg:pypi/openmed@{version}"
