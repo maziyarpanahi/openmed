@@ -61,6 +61,7 @@ nav:
       - Supply Chain Controls: security/supply-chain.md
       - Software Bill of Materials: security/sbom.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md
 
