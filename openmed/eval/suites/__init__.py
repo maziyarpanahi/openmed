@@ -4,6 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from openmed.eval.comparators import (
+    ComparatorAdapter,
+    ComparatorMatrixReport,
+    ComparatorMatrixRow,
+    ComparatorUnavailable,
+    run_comparator_matrix,
+)
 from openmed.eval.datasets.biomedical_ner import (
     BIOMEDICAL_NER,
     biomedical_ner_suite_metadata,
@@ -104,10 +111,15 @@ __all__ = [
     "DRUGPROT",
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
+    "ComparatorAdapter",
+    "ComparatorMatrixReport",
+    "ComparatorMatrixRow",
+    "ComparatorUnavailable",
     "DEFAULT_SUITES",
     "validate_suite_name",
     "load_suite_fixtures",
     "suite_metadata",
+    "run_comparator_matrix",
     "load_i2b2_deid",
     "i2b2_suite_metadata",
     "biomedical_ner_suite_metadata",
