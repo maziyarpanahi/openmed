@@ -229,13 +229,28 @@ def _gen_cvv(faker, original, *, locale):
 
 
 def _gen_iban(faker, original, *, locale):
-    return faker.iban()
+    if hasattr(faker, "financial_iban"):
+        return faker.financial_iban()
+
+    from .providers import clinical_ids
+
+    value = faker.iban()
+    if clinical_ids.validate_iban(value):
+        return value
+    return clinical_ids.generate_iban(rng=faker.random)
 
 
 def _gen_bic(faker, original, *, locale):
-    return (
-        faker.swift11() if hasattr(faker, "swift11") else faker.bothify("########XXX")
-    )
+    if hasattr(faker, "financial_bic"):
+        return faker.financial_bic()
+
+    from .providers import clinical_ids
+
+    if hasattr(faker, "swift11"):
+        value = faker.swift11()
+        if clinical_ids.validate_bic(value):
+            return value
+    return clinical_ids.generate_bic(include_branch=True, rng=faker.random)
 
 
 def _gen_amount(faker, original, *, locale):

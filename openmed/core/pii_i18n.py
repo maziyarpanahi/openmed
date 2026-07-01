@@ -91,6 +91,27 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
+# Financial Identifier Validators
+# ---------------------------------------------------------------------------
+
+
+def validate_iban(text: str) -> bool:
+    """Validate an IBAN using ISO 7064 MOD-97-10 checksum rules."""
+
+    from .anonymizer.providers import clinical_ids
+
+    return clinical_ids.validate_iban(text)
+
+
+def validate_bic(text: str) -> bool:
+    """Validate a SWIFT/BIC code's 8- or 11-character structure."""
+
+    from .anonymizer.providers import clinical_ids
+
+    return clinical_ids.validate_bic(text)
+
+
+# ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
 
