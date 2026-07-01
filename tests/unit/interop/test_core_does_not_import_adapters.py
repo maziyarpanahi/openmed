@@ -7,8 +7,10 @@ import pytest
 OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "langchain",
     "langchain_core",
+    "pandas",
     "presidio",
     "philter_ucsf",
+    "polars",
     "pyDeid",
     "pydeid",
     "gliner",
@@ -47,7 +49,9 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "gliner_biomed",
         "hl7v2",
         "langchain",
+        "pandas",
         "philter",
+        "polars",
         "presidio",
         "pydeid",
         "spacy",
@@ -55,8 +59,10 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("cda").extra == "core"
     assert adapter_spec("hl7v2").extra == ""
     assert adapter_spec("langchain").extra == "langchain"
+    assert adapter_spec("pandas").extra == "pandas"
     assert adapter_spec("presidio").extra == "presidio"
     assert adapter_spec("philter").extra == "philter"
+    assert adapter_spec("polars").extra == "polars"
     assert adapter_spec("pydeid").extra == "pydeid"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"
