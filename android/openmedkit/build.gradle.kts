@@ -3,6 +3,37 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
+val repoRoot = rootProject.projectDir.parentFile
+val generatedCatalogAssetsDir = layout.buildDirectory.dir("generated/assets/openmedCatalog")
+val generatedCatalogAsset = generatedCatalogAssetsDir.map {
+    it.file("openmed_model_catalog.jsonl")
+}
+val pythonExecutable = providers.gradleProperty("openmedPython")
+    .orElse(providers.environmentVariable("PYTHON"))
+    .orElse("python3")
+
+val generateAndroidModelCatalog by tasks.registering(Exec::class) {
+    val manifestFile = repoRoot.resolve("models.jsonl")
+    val scriptFile = repoRoot.resolve("scripts/android/build_android_catalog.py")
+
+    inputs.file(manifestFile)
+    inputs.file(scriptFile)
+    outputs.file(generatedCatalogAsset)
+
+    doFirst {
+        generatedCatalogAsset.get().asFile.parentFile.mkdirs()
+    }
+
+    commandLine(
+        pythonExecutable.get(),
+        scriptFile.absolutePath,
+        "--manifest",
+        manifestFile.absolutePath,
+        "--output",
+        generatedCatalogAsset.get().asFile.absolutePath,
+    )
+}
+
 android {
     namespace = "org.openmed.openmedkit"
     compileSdk = 33
@@ -26,10 +57,24 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+
+    sourceSets {
+        getByName("main") {
+            assets.srcDir(generatedCatalogAssetsDir)
+        }
+    }
 }
 
 kotlin {
     jvmToolchain(11)
+}
+
+tasks.matching { it.name.endsWith("Assets") }.configureEach {
+    dependsOn(generateAndroidModelCatalog)
+}
+
+tasks.matching { it.name.startsWith("test") }.configureEach {
+    dependsOn(generateAndroidModelCatalog)
 }
 
 dependencies {
