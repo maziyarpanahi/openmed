@@ -9,6 +9,11 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Optional, Set
 
+from .anonymizer.providers.clinical_ids import (
+    validate_uk_nhs_number,
+    validate_uk_nino,
+)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -1029,6 +1034,41 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
 # ---------------------------------------------------------------------------
 
 from .pii_entity_merger import PIIPattern  # noqa: E402
+
+_UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # UK NHS Number (10 digits, optional 3-3-4 spacing, Modulus 11 check).
+    PIIPattern(
+        r"\b\d{3}\s?\d{3}\s?\d{4}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "nhs",
+            "nhs number",
+            "nhs no",
+            "patient number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_uk_nhs_number,
+    ),
+    # UK National Insurance Number (NINO).
+    PIIPattern(
+        r"\b[A-Z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D]\b",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "national insurance",
+            "national insurance number",
+            "nino",
+            "ni number",
+        ],
+        context_boost=0.45,
+        validator=validate_uk_nino,
+        flags=re.IGNORECASE,
+    ),
+]
 
 _FRENCH_PII_PATTERNS: List[PIIPattern] = [
     # French dates DD/MM/YYYY
@@ -2647,6 +2687,10 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sk": _SLOVAK_PII_PATTERNS,
 }
 
+LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
+    "en_gb": _UK_ENGLISH_PII_PATTERNS,
+}
+
 
 # ---------------------------------------------------------------------------
 # Language-specific fake data
@@ -3049,17 +3093,46 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
 # ---------------------------------------------------------------------------
 
 
-def get_patterns_for_language(lang: str) -> List[PIIPattern]:
+def _normalize_pattern_language(lang: str) -> str:
+    return lang.strip().replace("-", "_").split("_", 1)[0].casefold()
+
+
+def _normalize_pattern_locale(locale: str) -> str:
+    return locale.strip().replace("-", "_").casefold()
+
+
+def _locale_pattern_keys(lang: str, locale: str | None) -> list[str]:
+    keys: list[str] = []
+    if locale:
+        keys.append(_normalize_pattern_locale(locale))
+    if "_" in lang or "-" in lang:
+        keys.append(_normalize_pattern_locale(lang))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for key in keys:
+        if key and key not in seen:
+            deduped.append(key)
+            seen.add(key)
+    return deduped
+
+
+def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIPattern]:
     """Return combined PII patterns for the given language.
 
     English patterns (email, URL, IP, etc.) are universal and always
     included. Language-specific patterns (dates, phones, national IDs,
-    addresses) are added on top.
+    addresses) are added on top. Locale-specific overlays, such as
+    ``en_GB`` UK identifiers, are appended when ``locale`` is provided or
+    when ``lang`` includes a region code.
 
     Args:
-        lang: ISO 639-1 language code. Model-backed languages are listed in
+        lang: ISO 639-1 language code, optionally with a region suffix for
+            pattern lookup. Model-backed languages are listed in
             :data:`SUPPORTED_LANGUAGES`; national-ID-only languages are listed
             in :data:`NATIONAL_ID_ONLY_LANGUAGES`.
+        locale: Optional locale override (for example, ``"en_GB"``) whose
+            locale-specific deterministic patterns should also be active.
 
     Returns:
         List of PIIPattern instances for the language
@@ -3068,7 +3141,8 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
         ValueError: If the language is not supported
     """
     supported_pattern_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
-    if lang not in supported_pattern_languages:
+    base_lang = _normalize_pattern_language(lang)
+    if base_lang not in supported_pattern_languages:
         raise ValueError(
             f"Unsupported language '{lang}'. "
             f"Supported: {sorted(supported_pattern_languages)}"
@@ -3079,9 +3153,11 @@ def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     # English patterns serve as universal base
     base = list(PII_PATTERNS)
 
-    if lang == "en":
-        return base
+    combined = base
+    if base_lang != "en":
+        combined = combined + LANGUAGE_PII_PATTERNS.get(base_lang, [])
 
-    # Add language-specific patterns
-    lang_patterns = LANGUAGE_PII_PATTERNS.get(lang, [])
-    return base + lang_patterns
+    for locale_key in _locale_pattern_keys(lang, locale):
+        combined = combined + LOCALE_PII_PATTERNS.get(locale_key, [])
+
+    return combined
