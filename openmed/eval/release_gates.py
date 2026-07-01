@@ -404,7 +404,7 @@ class ReleaseGate:
     def __init__(
         self,
         *,
-        milestone: str = "v1.6",
+        milestone: str = "v1.7",
         policy: str = "hipaa_safe_harbor",
         baseline_path: str | Path = baseline_store.BASELINE_PATH,
         thresholds_matrix: Mapping[str, Any] | None = None,
@@ -1799,7 +1799,7 @@ def preview(
     report: BenchmarkReport | Mapping[str, Any],
     baseline: Mapping[str, Any] | None = None,
     *,
-    milestone: str = "v1.6",
+    milestone: str = "v1.7",
     policy: str = "hipaa_safe_harbor",
     baseline_path: str | Path = baseline_store.BASELINE_PATH,
     thresholds_matrix: Mapping[str, Any] | None = None,
@@ -1869,7 +1869,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--milestone",
-        default="v1.6",
+        default="v1.7",
         help="Milestone version used for release thresholds.",
     )
     parser.add_argument(
