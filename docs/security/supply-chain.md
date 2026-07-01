@@ -34,3 +34,13 @@ attestations, giving each wheel and source distribution signed provenance from
 the release workflow identity. See the
 [PyPI Trusted Publishing](../release/trusted-publishing.md) guide for the PyPI
 configuration and token-retirement checklist.
+
+## SLSA build provenance
+
+Tagged releases generate SLSA provenance for the wheel, source distribution, and
+GHCR image digest before publishing can complete. The release workflow verifies
+the distribution attestations before the PyPI upload job runs, using the same
+builder workflow that produced the wheel and source distribution. The container
+workflow verifies the pushed manifest-list attestation before the image job can
+pass. See [SLSA Build Provenance](../supply-chain/provenance.md) for consumer
+verification commands.
