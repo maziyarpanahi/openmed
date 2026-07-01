@@ -19,6 +19,7 @@ import openmed
 from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
+from .auth import ServiceAuth, parse_service_auth_config
 from .batcher import BatchResult, DynamicBatcher
 from .coalesce import RequestCoalescer, coalescing_key
 from .metrics import (
@@ -288,6 +289,10 @@ def create_app() -> FastAPI:
         allowed_hosts=security_config.trusted_hosts,
         www_redirect=False,
     )
+    app.state.auth = ServiceAuth(
+        parse_service_auth_config(),
+        error_response=_error_response,
+    )
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )
@@ -347,6 +352,13 @@ def create_app() -> FastAPI:
         if throttle is None:
             return await call_next(request)
         return await throttle.dispatch(request, call_next)
+
+    @app.middleware("http")
+    async def _auth_middleware(request: Request, call_next):
+        auth = getattr(request.app.state, "auth", None)
+        if auth is None:
+            return await call_next(request)
+        return await auth.dispatch(request, call_next)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
