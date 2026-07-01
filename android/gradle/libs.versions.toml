@@ -1,0 +1,19 @@
+[versions]
+agp = "7.4.2"
+kotlin = "1.8.22"
+kotlinx-coroutines = "1.7.3"
+kotlinx-serialization-json = "1.5.1"
+onnxruntime = "1.16.3"
+junit = "4.13.2"
+robolectric = "4.11.1"
+
+[libraries]
+junit = { module = "junit:junit", version.ref = "junit" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
+onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+
+[plugins]
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
