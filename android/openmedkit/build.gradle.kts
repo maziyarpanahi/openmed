@@ -1,14 +1,17 @@
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.android)
 }
 
 android {
-    namespace = "com.openmed.openmedkit"
+    namespace = "org.openmed.openmedkit"
     compileSdk = 33
 
     defaultConfig {
+        // Android 8.0+ keeps on-device inference support aligned with current
+        // runtime and filesystem APIs without forcing recent-only devices.
         minSdk = 26
+        targetSdk = 33
     }
 
     compileOptions {
@@ -25,11 +28,16 @@ android {
     }
 }
 
-dependencies {
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
-    implementation("com.google.mlkit:text-recognition:16.0.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.1")
+kotlin {
+    jvmToolchain(11)
+}
 
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("org.robolectric:robolectric:4.11.1")
+dependencies {
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.onnxruntime.android)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
 }
