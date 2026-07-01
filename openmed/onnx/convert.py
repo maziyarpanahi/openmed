@@ -28,6 +28,14 @@ from openmed.onnx.android_profile import (
     export_android_fp16,
     validate_android_profile,
 )
+from openmed.onnx.openvino_export import (
+    OPENVINO_FORMAT,
+    OPENVINO_IR_DIRNAME,
+    OPENVINO_PROFILE_NAME,
+    build_synthetic_token_inputs,
+    export_openvino_ir,
+    run_onnx_reference_logits,
+)
 from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
@@ -220,6 +228,7 @@ def convert(
     opset: int | None = None,
     profile: str = DEFAULT_PROFILE_NAME,
     cache_dir: str | None = None,
+    sample_text: str = DEFAULT_SAMPLE_TEXT,
     publish_to_hub: bool = False,
     publish_repo_id: str | None = None,
     publish_org: str = "OpenMed",
@@ -242,7 +251,11 @@ def convert(
         opset=opset,
         profile=profile,
         cache_dir=cache_dir,
+        sample_text=sample_text,
     )
+
+    config: dict[str, Any] | None = None
+    tokenizer_files: list[str] | None = None
 
     if profile == ANDROID_PROFILE_NAME:
         android_validation = validate_android_profile(onnx_path)
@@ -266,12 +279,47 @@ def convert(
                 metadata=android_fp16_validation.to_metadata(),
             ),
         ]
+    elif profile == OPENVINO_PROFILE_NAME:
+        config, tokenizer_files = save_source_assets(
+            model_id,
+            output_dir,
+            cache_dir=cache_dir,
+            max_seq_length=max_seq_length,
+            require_id2label=True,
+        )
+        tokenizer = get_tokenizer_with_loader(
+            model_id,
+            _transformers_tokenizer_loader(cache_dir=cache_dir),
+            cache_dir=cache_dir,
+        )
+        synthetic_inputs = build_synthetic_token_inputs(
+            tokenizer,
+            text=sample_text,
+            max_seq_length=max_seq_length,
+        )
+        reference_logits = run_onnx_reference_logits(onnx_path, synthetic_inputs)
+        openvino_result = export_openvino_ir(
+            onnx_path,
+            output_dir / OPENVINO_IR_DIRNAME,
+            sample_inputs=synthetic_inputs,
+            reference_logits=reference_logits,
+            id2label=config["id2label"],
+            sample_text=sample_text,
+        )
+        artifacts = [
+            ExportArtifact(
+                format=OPENVINO_FORMAT,
+                path=openvino_result.model_xml_path,
+                precision="float32",
+                metadata=openvino_result.to_metadata(output_dir),
+            )
+        ]
     else:
         artifacts = [
             ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
         ]
 
-    if profile != ANDROID_PROFILE_NAME and include_webgpu:
+    if profile not in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME} and include_webgpu:
         webgpu_path = export_webgpu(
             onnx_path,
             output_dir / DEFAULT_WEBGPU_FILENAME,
@@ -280,13 +328,14 @@ def convert(
             ExportArtifact(format="webgpu", path=webgpu_path, precision="float16")
         )
 
-    config, tokenizer_files = save_source_assets(
-        model_id,
-        output_dir,
-        cache_dir=cache_dir,
-        max_seq_length=max_seq_length,
-        require_id2label=profile == ANDROID_PROFILE_NAME,
-    )
+    if config is None or tokenizer_files is None:
+        config, tokenizer_files = save_source_assets(
+            model_id,
+            output_dir,
+            cache_dir=cache_dir,
+            max_seq_length=max_seq_length,
+            require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
+        )
     if include_transformersjs:
         transformersjs_result = export_transformersjs_bundle(
             output_dir,
@@ -466,8 +515,11 @@ def _normalize_profile(profile: str) -> str:
         return DEFAULT_PROFILE_NAME
     if normalized == ANDROID_PROFILE_NAME:
         return ANDROID_PROFILE_NAME
+    if normalized == OPENVINO_PROFILE_NAME:
+        return OPENVINO_PROFILE_NAME
     raise ValueError(
-        f"unsupported ONNX export profile {profile!r}; expected default or android"
+        "unsupported ONNX export profile "
+        f"{profile!r}; expected default, android, or openvino"
     )
 
 
@@ -480,6 +532,24 @@ def _resolve_opset(*, profile: str, opset: int | None) -> int:
             )
         return ANDROID_ONNX_OPSET
     return DEFAULT_ONNX_OPSET if opset is None else opset
+
+
+def _transformers_tokenizer_loader(*, cache_dir: str | None) -> Any:
+    try:
+        from transformers import AutoTokenizer
+    except ImportError as exc:
+        raise ImportError(
+            "transformers is required for OpenVINO export verification. "
+            "Install with: pip install openmed[openvino]"
+        ) from exc
+
+    def load_tokenizer(model_id: str, **kwargs: Any) -> Any:
+        options = dict(kwargs)
+        if cache_dir is not None:
+            options.setdefault("cache_dir", cache_dir)
+        return AutoTokenizer.from_pretrained(model_id, **options)
+
+    return load_tokenizer
 
 
 def _ensure_id2label(config: Mapping[str, Any]) -> dict[str, str]:
@@ -565,9 +635,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--profile",
-        choices=[DEFAULT_PROFILE_NAME, ANDROID_PROFILE_NAME],
+        choices=[DEFAULT_PROFILE_NAME, ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME],
         default=DEFAULT_PROFILE_NAME,
-        help="Export profile. Use android for ONNX Runtime Mobile artifacts.",
+        help=(
+            "Export profile. Use android for ONNX Runtime Mobile artifacts "
+            "or openvino for Intel edge runtimes."
+        ),
     )
     parser.add_argument(
         "--max-seq-length",
@@ -583,6 +656,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--cache-dir", default=None, help="Hugging Face cache directory"
+    )
+    parser.add_argument(
+        "--sample-text",
+        default=DEFAULT_SAMPLE_TEXT,
+        help="Synthetic note used for export and runtime verification",
     )
     parser.add_argument(
         "--publish-to-hub",
@@ -631,6 +709,7 @@ def main() -> None:
         opset=args.opset,
         profile=args.profile,
         cache_dir=args.cache_dir,
+        sample_text=args.sample_text,
         publish_to_hub=args.publish_to_hub,
         publish_repo_id=args.publish_repo_id,
         publish_org=args.publish_org,
