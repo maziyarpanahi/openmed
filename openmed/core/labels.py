@@ -118,12 +118,15 @@ ID_SUBTYPE_MRN: Final = "mrn"
 ID_SUBTYPE_NPI: Final = "npi"
 ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
 ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
+#: ICAO 9303 passport/ID machine-readable zone; still normalizes to ID_NUM.
+ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
 ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
     {
         ID_SUBTYPE_MRN,
         ID_SUBTYPE_NPI,
         ID_SUBTYPE_NATIONAL_ID,
         ID_SUBTYPE_SSN_ADJACENT,
+        ID_SUBTYPE_PASSPORT_MRZ,
     }
 )
 
@@ -544,6 +547,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "idnum": ID_NUM,
     "id": ID_NUM,
     "identifier": ID_NUM,
+    "passportmrz": ID_NUM,
     "medicalrecordnumber": ID_NUM,
     "mrn": ID_NUM,
     "nhsnumber": ID_NUM,
@@ -657,6 +661,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
+    "passportmrz": ID_SUBTYPE_PASSPORT_MRZ,
     "npi": ID_SUBTYPE_NPI,
     "nhsnumber": ID_SUBTYPE_NATIONAL_ID,
     "nhs": ID_SUBTYPE_NATIONAL_ID,
