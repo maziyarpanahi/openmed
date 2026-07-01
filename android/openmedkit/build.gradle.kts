@@ -61,6 +61,7 @@ android {
     sourceSets {
         getByName("main") {
             assets.srcDir(generatedCatalogAssetsDir)
+            resources.srcDir("src/main/assets")
         }
     }
 }
@@ -84,5 +85,7 @@ dependencies {
     implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlin.test.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
 }
