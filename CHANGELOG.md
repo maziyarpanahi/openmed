@@ -33,6 +33,9 @@ changed, with no deleted or renamed files detected in the release range.
   dermatology and ophthalmology domains, clinical concept labels, and clinical
   term protection, plus deterministic substance, employment, and living-status
   normalization (#552, #410, #560, #718, #683, #773, #684, #691, #698, #767).
+- Added a nutrition and diet-order zero-shot domain, four canonical nutrition
+  policy labels, policy-profile coverage, routing metadata, and synthetic
+  fixture coverage for diet orders and feeding routes (#951).
 - Added language and locale capabilities for Indonesian, Thai, Hebrew RTL,
   PESEL, Korean RRN, Unicode script detection, locale checksum registries,
   deterministic locale PHI generation, and locale-aware date/number

@@ -21,9 +21,11 @@ from openmed.core.labels import (
     CVV,
     DATE,
     DATE_OF_BIRTH,
+    DIET_TYPE,
     EMAIL,
     ETHEREUM_ADDRESS,
     EYE_COLOR,
+    FEEDING_ROUTE,
     FIRST_NAME,
     GENDER,
     GPS_COORDINATES,
@@ -48,6 +50,8 @@ from openmed.core.labels import (
     MEDICATION,
     MICROORGANISM,
     MIDDLE_NAME,
+    NUTRITION_TARGET,
+    NUTRITIONAL_STATUS,
     OCCUPATION,
     ORDINAL_DIRECTION,
     ORGANIZATION,
@@ -495,7 +499,19 @@ class TestClinicalLabelsAreAdditive:
         }
     )
 
-    NEW_LABELS = frozenset({CONDITION, MEDICATION, LAB_TEST, PROCEDURE, BODY_SITE})
+    NEW_LABELS = frozenset(
+        {
+            CONDITION,
+            MEDICATION,
+            LAB_TEST,
+            PROCEDURE,
+            BODY_SITE,
+            DIET_TYPE,
+            NUTRITION_TARGET,
+            FEEDING_ROUTE,
+            NUTRITIONAL_STATUS,
+        }
+    )
 
     # Full pre-#266 alias map from master. These resolutions must stay
     # byte-identical while clinical aliases are added.

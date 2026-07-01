@@ -16,5 +16,6 @@
   "microbiology": ["Microorganism", "Antibiotic", "Susceptibility", "SpecimenSource", "CultureResult"],
   "dermatology": ["SkinLesion", "Morphology", "Distribution", "Anatomy"],
   "ophthalmology": ["EyeFinding", "VisualAcuity", "IntraocularPressure", "Anatomy"],
-  "generic": ["Person", "Organization", "Location", "Date"]
+  "generic": ["Person", "Organization", "Location", "Date"],
+  "nutrition_diet": ["DietType", "NutritionTarget", "Supplement", "FeedingRoute", "IntakeFinding", "NutritionalStatus", "FluidRestriction"]
 }
