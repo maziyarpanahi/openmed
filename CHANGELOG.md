@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (including prompt-injection and RAG-exfiltration leakage vectors) is named as a
   private-disclosure class.
 - Added LRU Cache implementation for analyze_text(), extract_pii(), and deidentify().
+- Added an `OPENMED_MLX_MMAP` toggle to `openmed.mlx.models.load_model`:
+  safetensors weights load through MLX's memory-mapped, lazy path by default
+  (keeping cold-start peak RSS low on the phone/laptop tiers), with
+  `OPENMED_MLX_MMAP=0` forcing eager materialization as a documented fallback
+  for debugging.
 
 ## [1.6.0] - 2026-06-22
 
