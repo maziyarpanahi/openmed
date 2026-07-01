@@ -25,3 +25,8 @@ Do not edit the lockfile by hand.
 CI and every tagged release also generate a CycloneDX SBOM (`sbom.cdx.json`)
 inventorying the dependency tree. See the
 [Software Bill of Materials](sbom.md) guide to regenerate or consume it.
+
+Container image releases also publish `image-sbom.cdx.json`, which inventories
+the built Docker image including OS packages and Python components. See the
+[Container Image SBOM](../supply-chain/sbom.md) guide for release artifacts,
+image labels, and digest verification.
