@@ -166,16 +166,16 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
 
     if path.exists():
         with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
                     continue
                 try:
                     existing = json.loads(line)
                 except json.JSONDecodeError:
                     logger.warning(
-                        "Skipping malformed JSONL line in %s: %s",
+                        "Skipping malformed JSONL line %s in %s",
+                        line_number,
                         path,
-                        line.strip()[:120],
                     )
                     continue
                 if existing.get("repo_id") == row["repo_id"]:
