@@ -11,15 +11,22 @@ __all__ = [
     "ANDROID_PROFILE_NAME",
     "AndroidProfileValidation",
     "ExportArtifact",
+    "INT8_ONNX_FILENAME",
+    "ONNX_INT8_FORMAT",
     "OnnxConversionResult",
+    "apply_int8_recall_certification",
     "convert",
     "export_android_fp16",
     "export_onnx",
     "export_transformersjs_bundle",
     "export_webgpu",
+    "int8_artifact_metadata",
+    "quantize_android_int8",
+    "quantize_dynamic_int8",
     "validate_android_profile",
     "validate_transformersjs_bundle",
     "validate_transformersjs_contract",
+    "write_int8_recall_delta_report",
     "write_export_manifest",
 ]
 
@@ -35,6 +42,17 @@ def __getattr__(name: str) -> Any:
             return getattr(module, name)
         if name.startswith(("export_transformersjs", "validate_transformersjs")):
             module = import_module("openmed.onnx.transformersjs")
+            return getattr(module, name)
+        if name in {
+            "INT8_ONNX_FILENAME",
+            "ONNX_INT8_FORMAT",
+            "apply_int8_recall_certification",
+            "int8_artifact_metadata",
+            "quantize_android_int8",
+            "quantize_dynamic_int8",
+            "write_int8_recall_delta_report",
+        }:
+            module = import_module("openmed.onnx.quantize_int8")
             return getattr(module, name)
         module = import_module("openmed.onnx.convert")
         return getattr(module, name)
