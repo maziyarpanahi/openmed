@@ -67,7 +67,7 @@ uv run python examples/pii_model_comparison.py
 The rest of the docs expand on this snippet—head to **Quick Start** for the end-to-end setup, then explore the guides for
 configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
-## 1.6 and 1.7 release highlights
+## Latest release highlights
 
 - [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – coverage checklist across examples, docs, website, and source modules.
 - [OpenMed 1.7.0 Release Notes](./release/v1.7.0.md) – detailed release inventory and migration notes.
