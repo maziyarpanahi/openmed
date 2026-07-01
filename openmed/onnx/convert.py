@@ -1,4 +1,12 @@
-"""Convert token-classification checkpoints to ONNX and WebGPU artifacts."""
+"""Convert token-classification checkpoints to ONNX runtime artifacts.
+
+Use the default profile for a standard fp32 ONNX export plus the WebGPU fp16
+variant. Use ``--profile android`` for Android ONNX Runtime Mobile artifacts:
+``model.onnx`` and ``model_fp16.onnx`` are exported at the fixed Android opset
+with `input_ids` and `attention_mask` inputs, optional `token_type_ids`, a
+`logits` output, and named dynamic `batch` and `sequence` axes. The fixed opset
+keeps the graph stable for the later `.ort` mobile-format conversion step.
+"""
 
 from __future__ import annotations
 
@@ -12,6 +20,14 @@ from typing import Any, Mapping, Sequence
 
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files
+from openmed.onnx.android_profile import (
+    ANDROID_FP16_FILENAME,
+    ANDROID_ONNX_FORMAT,
+    ANDROID_ONNX_OPSET,
+    ANDROID_PROFILE_NAME,
+    export_android_fp16,
+    validate_android_profile,
+)
 from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
@@ -26,6 +42,8 @@ MANIFEST_FORMAT = "openmed-onnx"
 MANIFEST_VERSION = 1
 DEFAULT_ONNX_FILENAME = "model.onnx"
 DEFAULT_WEBGPU_FILENAME = "model.webgpu.onnx"
+DEFAULT_ONNX_OPSET = 18
+DEFAULT_PROFILE_NAME = "default"
 DEFAULT_SAMPLE_TEXT = "Patient John Doe visited the clinic on 2024-01-15."
 
 
@@ -36,13 +54,17 @@ class ExportArtifact:
     format: str
     path: Path
     precision: str
+    metadata: Mapping[str, Any] | None = None
 
-    def to_manifest(self, root: Path) -> dict[str, str]:
-        return {
+    def to_manifest(self, root: Path) -> dict[str, Any]:
+        payload: dict[str, Any] = {
             "format": self.format,
             "path": self.path.relative_to(root).as_posix(),
             "precision": self.precision,
         }
+        if self.metadata:
+            payload["metadata"] = dict(self.metadata)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -55,7 +77,7 @@ class OnnxConversionResult:
 
     @property
     def formats(self) -> list[str]:
-        return [artifact.format for artifact in self.artifacts]
+        return _dedupe_keep_order([artifact.format for artifact in self.artifacts])
 
 
 def export_onnx(
@@ -63,7 +85,8 @@ def export_onnx(
     output_path: str | Path,
     *,
     max_seq_length: int = 512,
-    opset: int = 18,
+    opset: int | None = None,
+    profile: str = DEFAULT_PROFILE_NAME,
     cache_dir: str | None = None,
     sample_text: str = DEFAULT_SAMPLE_TEXT,
 ) -> Path:
@@ -80,6 +103,8 @@ def export_onnx(
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    profile = _normalize_profile(profile)
+    resolved_opset = _resolve_opset(profile=profile, opset=opset)
 
     tokenizer = get_tokenizer_with_loader(
         model_id,
@@ -134,7 +159,7 @@ def export_onnx(
         export_kwargs = {
             "input_names": input_names,
             "output_names": ["logits"],
-            "opset_version": opset,
+            "opset_version": resolved_opset,
             "do_constant_folding": True,
         }
         export_kwargs.update(
@@ -143,6 +168,7 @@ def export_onnx(
                 export_fn=torch.onnx.export,
                 input_names=input_names,
                 max_seq_length=max_seq_length,
+                profile=profile,
             )
         )
         torch.onnx.export(
@@ -191,7 +217,8 @@ def convert(
     include_webgpu: bool = True,
     include_transformersjs: bool = False,
     max_seq_length: int = 512,
-    opset: int = 18,
+    opset: int | None = None,
+    profile: str = DEFAULT_PROFILE_NAME,
     cache_dir: str | None = None,
     publish_to_hub: bool = False,
     publish_repo_id: str | None = None,
@@ -206,19 +233,45 @@ def convert(
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    profile = _normalize_profile(profile)
 
     onnx_path = export_onnx(
         model_id,
         output_dir / DEFAULT_ONNX_FILENAME,
         max_seq_length=max_seq_length,
         opset=opset,
+        profile=profile,
         cache_dir=cache_dir,
     )
-    artifacts = [
-        ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
-    ]
 
-    if include_webgpu:
+    if profile == ANDROID_PROFILE_NAME:
+        android_validation = validate_android_profile(onnx_path)
+        android_fp16_path = export_android_fp16(
+            onnx_path,
+            output_dir / ANDROID_FP16_FILENAME,
+            validate=False,
+        )
+        android_fp16_validation = validate_android_profile(android_fp16_path)
+        artifacts = [
+            ExportArtifact(
+                format=ANDROID_ONNX_FORMAT,
+                path=onnx_path,
+                precision="float32",
+                metadata=android_validation.to_metadata(),
+            ),
+            ExportArtifact(
+                format=ANDROID_ONNX_FORMAT,
+                path=android_fp16_path,
+                precision="float16",
+                metadata=android_fp16_validation.to_metadata(),
+            ),
+        ]
+    else:
+        artifacts = [
+            ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
+        ]
+
+    if profile != ANDROID_PROFILE_NAME and include_webgpu:
         webgpu_path = export_webgpu(
             onnx_path,
             output_dir / DEFAULT_WEBGPU_FILENAME,
@@ -232,6 +285,7 @@ def convert(
         output_dir,
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
+        require_id2label=profile == ANDROID_PROFILE_NAME,
     )
     if include_transformersjs:
         transformersjs_result = export_transformersjs_bundle(
@@ -290,6 +344,7 @@ def save_source_assets(
     *,
     cache_dir: str | None = None,
     max_seq_length: int = 512,
+    require_id2label: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     """Save config, labels, and tokenizer assets beside exported artifacts."""
 
@@ -304,6 +359,8 @@ def save_source_assets(
     output_dir = Path(output_dir)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir).to_dict()
     config["max_sequence_length"] = max_seq_length
+    if require_id2label:
+        config["id2label"] = _ensure_id2label(config)
 
     with (output_dir / "config.json").open("w", encoding="utf-8") as handle:
         json.dump(config, handle, indent=2)
@@ -403,16 +460,69 @@ def _dedupe_keep_order(items: Sequence[str]) -> list[str]:
     return result
 
 
+def _normalize_profile(profile: str) -> str:
+    normalized = profile.lower().replace("_", "-")
+    if normalized in {DEFAULT_PROFILE_NAME, "onnx"}:
+        return DEFAULT_PROFILE_NAME
+    if normalized == ANDROID_PROFILE_NAME:
+        return ANDROID_PROFILE_NAME
+    raise ValueError(
+        f"unsupported ONNX export profile {profile!r}; expected default or android"
+    )
+
+
+def _resolve_opset(*, profile: str, opset: int | None) -> int:
+    if profile == ANDROID_PROFILE_NAME:
+        if opset is not None and opset != ANDROID_ONNX_OPSET:
+            raise ValueError(
+                "Android ONNX profile requires fixed opset "
+                f"{ANDROID_ONNX_OPSET}; got {opset}"
+            )
+        return ANDROID_ONNX_OPSET
+    return DEFAULT_ONNX_OPSET if opset is None else opset
+
+
+def _ensure_id2label(config: Mapping[str, Any]) -> dict[str, str]:
+    id2label = config.get("id2label")
+    if isinstance(id2label, Mapping) and id2label:
+        return {str(key): str(value) for key, value in id2label.items()}
+
+    label2id = config.get("label2id")
+    if isinstance(label2id, Mapping) and label2id:
+        labels = sorted(
+            ((int(index), str(label)) for label, index in label2id.items()),
+            key=lambda item: item[0],
+        )
+        return {str(index): label for index, label in labels}
+
+    num_labels = config.get("num_labels")
+    if isinstance(num_labels, int) and num_labels > 0:
+        return {str(index): f"LABEL_{index}" for index in range(num_labels)}
+
+    raise ValueError("Android ONNX profile requires config.json id2label metadata")
+
+
 def _dynamic_export_kwargs(
     torch_module: Any,
     *,
     export_fn: Any,
     input_names: Sequence[str],
     max_seq_length: int,
+    profile: str = DEFAULT_PROFILE_NAME,
 ) -> dict[str, Any]:
     """Return Torch ONNX dynamic-shape kwargs for the installed exporter."""
 
     parameters = inspect.signature(export_fn).parameters
+    if profile == ANDROID_PROFILE_NAME:
+        kwargs: dict[str, Any] = {
+            "dynamic_axes": {
+                name: {0: "batch", 1: "sequence"} for name in [*input_names, "logits"]
+            }
+        }
+        if "dynamo" in parameters:
+            kwargs["dynamo"] = False
+        return kwargs
+
     if "dynamo" in parameters and "dynamic_shapes" in parameters:
         batch_dim = torch_module.export.Dim("batch", min=1)
         sequence_dim = torch_module.export.Dim(
@@ -454,12 +564,23 @@ def main() -> None:
         help="Also emit a Transformers.js bundle with model_quantized.onnx",
     )
     parser.add_argument(
+        "--profile",
+        choices=[DEFAULT_PROFILE_NAME, ANDROID_PROFILE_NAME],
+        default=DEFAULT_PROFILE_NAME,
+        help="Export profile. Use android for ONNX Runtime Mobile artifacts.",
+    )
+    parser.add_argument(
         "--max-seq-length",
         type=int,
         default=512,
         help="Maximum input sequence length",
     )
-    parser.add_argument("--opset", type=int, default=18, help="ONNX opset version")
+    parser.add_argument(
+        "--opset",
+        type=int,
+        default=None,
+        help="ONNX opset version; android always uses its fixed mobile opset",
+    )
     parser.add_argument(
         "--cache-dir", default=None, help="Hugging Face cache directory"
     )
@@ -508,6 +629,7 @@ def main() -> None:
         include_transformersjs=args.include_transformersjs,
         max_seq_length=args.max_seq_length,
         opset=args.opset,
+        profile=args.profile,
         cache_dir=args.cache_dir,
         publish_to_hub=args.publish_to_hub,
         publish_repo_id=args.publish_repo_id,
