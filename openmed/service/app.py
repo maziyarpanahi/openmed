@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.concurrency import run_in_threadpool
@@ -21,6 +21,7 @@ from openmed.utils.validation import validate_model_name
 
 from .batcher import BatchResult, DynamicBatcher
 from .coalesce import RequestCoalescer, coalescing_key
+from .jobs import DeidentifyJobQueue, job_response_payload
 from .metrics import (
     PROMETHEUS_CONTENT_TYPE,
     PrometheusMetricsRegistry,
@@ -29,6 +30,7 @@ from .metrics import (
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
+    DeidentifyJobRequest,
     ModelUnloadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
@@ -42,7 +44,9 @@ from .security_headers import (
 from .throttle import ServiceThrottle
 
 SERVICE_NAME = "openmed-rest"
-_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
+_MODEL_BACKED_PATHS = frozenset(
+    {"/analyze", "/pii/extract", "/pii/deidentify", "/jobs"}
+)
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
@@ -142,6 +146,14 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
     app.state.request_coalescer = None
+    existing_job_queue = getattr(app.state, "job_queue", None)
+    if (
+        existing_job_queue is None
+        or getattr(existing_job_queue, "runtime", None) is not runtime
+    ):
+        if existing_job_queue is not None:
+            existing_job_queue.shutdown()
+        app.state.job_queue = DeidentifyJobQueue.from_env(runtime)
     if runtime.coalescing.enabled:
         app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
@@ -215,6 +227,15 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     return batcher
 
 
+def _get_job_queue(request: Request) -> DeidentifyJobQueue:
+    queue = getattr(request.app.state, "job_queue", None)
+    if queue is None:
+        runtime = _get_service_runtime(request)
+        queue = DeidentifyJobQueue.from_env(runtime)
+        request.app.state.job_queue = queue
+    return queue
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -267,6 +288,9 @@ def create_app() -> FastAPI:
                 loop.time() < deadline
             ):
                 await asyncio.sleep(0.05)
+            job_queue = getattr(fastapi_app.state, "job_queue", None)
+            if job_queue is not None:
+                job_queue.shutdown()
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -522,6 +546,24 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
+    @app.post("/jobs", status_code=202)
+    async def create_job(
+        payload: DeidentifyJobRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        _get_service_runtime(request)
+        queue = _get_job_queue(request)
+        record = queue.submit(payload)
+        return job_response_payload(record, status_url=f"/jobs/{record['id']}")
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(job_id: str, request: Request) -> Dict[str, Any]:
+        queue = _get_job_queue(request)
+        record = queue.get(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job_response_payload(record, status_url=f"/jobs/{job_id}")
 
     return app
 

@@ -14,6 +14,8 @@ EXPECTED_PATHS = {
     "/analyze",
     "/pii/extract",
     "/pii/deidentify",
+    "/jobs",
+    "/jobs/{job_id}",
 }
 
 

@@ -95,6 +95,187 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "DeidentifyJobDocument": {
+        "additionalProperties": false,
+        "description": "One document in an async de-identification job.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "DeidentifyJobDocument",
+        "type": "object"
+      },
+      "DeidentifyJobRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for POST /jobs.",
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "date_shift_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Shift Days"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DeidentifyJobDocument"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "keep_mapping": {
+            "default": false,
+            "title": "Keep Mapping",
+            "type": "boolean"
+          },
+          "keep_year": {
+            "default": false,
+            "title": "Keep Year",
+            "type": "boolean"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "method": {
+            "default": "mask",
+            "enum": [
+              "mask",
+              "remove",
+              "replace",
+              "hash",
+              "shift_dates"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy"
+          },
+          "shift_dates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Dates"
+          },
+          "use_safety_sweep": {
+            "default": true,
+            "title": "Use Safety Sweep",
+            "type": "boolean"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobWebhookRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "DeidentifyJobRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -106,6 +287,40 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JobWebhookRequest": {
+        "additionalProperties": false,
+        "description": "Webhook callback configuration for async jobs.",
+        "properties": {
+          "backoff_seconds": {
+            "default": 0.5,
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Backoff Seconds",
+            "type": "number"
+          },
+          "max_attempts": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "secret"
+        ],
+        "title": "JobWebhookRequest",
         "type": "object"
       },
       "ModelUnloadRequest": {
@@ -465,6 +680,87 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/jobs": {
+      "post": {
+        "operationId": "create_job_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeidentifyJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Job Jobs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Job"
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Job Jobs  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job"
       }
     },
     "/livez": {
