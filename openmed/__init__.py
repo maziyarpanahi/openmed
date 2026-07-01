@@ -400,7 +400,11 @@ def analyze_text(
                 current_end = seg_end
 
         if current_indices:
-            assert current_start is not None and current_end is not None
+            if current_start is None or current_end is None:
+                raise ValueError(
+                    f"Internal error: chunk descriptor has indices but no span "
+                    f"(start={current_start}, end={current_end})"
+                )
             chunk_descriptors.append(
                 {
                     "text": validated_text[current_start:current_end],
