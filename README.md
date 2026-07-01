@@ -123,7 +123,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.6.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.7.0"),
 ]
 ```
 
@@ -350,8 +350,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.6.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.6.0
+docker build -t openmed:1.7.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.7.0
 ```
 
 ```bash
