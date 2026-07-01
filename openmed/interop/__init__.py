@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib import import_module
 from types import ModuleType
-from typing import Final
+from typing import Any, Final
 
 
 @dataclass(frozen=True)
@@ -98,6 +98,15 @@ def get_adapter(name: str) -> ModuleType:
     return import_module(spec.module)
 
 
+def adapter_tool_definitions(name: str) -> tuple[dict[str, Any], ...]:
+    """Return registry-rendered tool definitions for an adapter."""
+
+    spec = adapter_spec(name)
+    from openmed.mcp.tool_registry import render_adapter_tool_definitions
+
+    return render_adapter_tool_definitions(spec.name)
+
+
 def _normalize_adapter_name(name: str) -> str:
     return str(name or "").strip().lower().replace("-", "_")
 
@@ -110,6 +119,7 @@ def __getattr__(name: str) -> ModuleType:
 
 __all__ = [
     "AdapterSpec",
+    "adapter_tool_definitions",
     "adapter_spec",
     "available_adapters",
     "get_adapter",
