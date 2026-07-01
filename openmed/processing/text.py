@@ -122,7 +122,7 @@ class TextProcessor:
         if self.normalize_whitespace:
             text = re.sub(r"\s+", " ", text.strip())
 
-        logger.debug(f"Text cleaning: '{original_text[:50]}...' -> '{text[:50]}...'")
+        logger.debug("Text cleaning: '%s...' -> '%s...'", original_text[:50], text[:50])
         return text
 
     def segment_sentences(self, text: str) -> List[str]:

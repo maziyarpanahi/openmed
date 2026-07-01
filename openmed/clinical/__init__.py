@@ -38,8 +38,11 @@ from .context import (
 from .lab_values import (
     LAB_FLAG_ADVISORY,
     AbnormalFlag,
+    LabValueAttributeMention,
+    LabValueAttributeRole,
     ReferenceRange,
     derive_abnormal_flag,
+    link_lab_value_attributes,
     parse_reference_range,
 )
 from .medication_sig import (
@@ -123,10 +126,13 @@ __all__ = [
     "CERTAINTY_VALUES",
     "resolve_uncertainty",
     "AbnormalFlag",
+    "LabValueAttributeMention",
+    "LabValueAttributeRole",
     "ReferenceRange",
     "LAB_FLAG_ADVISORY",
     "parse_reference_range",
     "derive_abnormal_flag",
+    "link_lab_value_attributes",
     "CODING_COUNT_LABELS",
     "ENTITY_CATEGORY_LABELS",
     "ClinicalSummaryCard",

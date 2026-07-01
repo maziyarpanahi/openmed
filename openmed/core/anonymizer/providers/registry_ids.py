@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_czechoslovak_rodne_cislo,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
@@ -53,6 +54,7 @@ from .clinical_ids import (
     KoreanRRNProvider,
     NPIProvider,
     PolishPeselProvider,
+    RodneCisloProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
@@ -282,6 +284,13 @@ def _register_builtin_specs() -> None:
         validate=validate_korean_rrn,
         faker_method="korean_rrn",
         faker_provider=KoreanRRNProvider,
+    )
+    _register_aliases(
+        ("sk", "sk_SK"),
+        id_type="rodne_cislo",
+        validate=validate_czechoslovak_rodne_cislo,
+        faker_method="rodne_cislo",
+        faker_provider=RodneCisloProvider,
     )
     _register_aliases(
         ("pt", "pt_BR"),
