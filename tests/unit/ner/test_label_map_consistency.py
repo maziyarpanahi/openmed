@@ -282,6 +282,56 @@ class TestSpecialtyRouting:
 
 
 # ---------------------------------------------------------------------------
+# Nutrition and Diet-Order domains (issue #951)
+# ---------------------------------------------------------------------------
+class TestNutritionDomain:
+    EXPECTED_LABELS = [
+        "DietType",
+        "NutritionTarget",
+        "Supplement",
+        "FeedingRoute",
+        "IntakeFinding",
+        "NutritionalStatus",
+        "FluidRestriction",
+    ]
+
+    def test_nutrition_in_available_domains(self):
+        assert "nutrition_diet" in available_domains()
+
+    def test_get_default_labels_returns_nutrition_set(self):
+        assert get_default_labels("nutrition_diet") == self.EXPECTED_LABELS
+
+    def test_nutrition_labels_have_no_duplicates(self):
+        labels = get_default_labels("nutrition_diet")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Nutrition and Diet-Order routing in model_registry (issue #951)
+# ---------------------------------------------------------------------------
+
+
+class TestNutritionRouting:
+    NUTRITION_TEXT = "1800 kcal diabetic diet, PEG feeds at 60 mL/hr"
+
+    def test_match_categories_routes_nutrition(self):
+        categories = [c for c, _ in _match_categories(self.NUTRITION_TEXT)]
+        assert "Nutrition" in categories
+
+    def test_nutrition_is_registry_metadata_not_a_live_category(self):
+        assert "Nutrition" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Nutrition" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_nutrition(self):
+        suggestions = get_model_suggestions(self.NUTRITION_TEXT)
+        assert suggestions
+        assert all(info.category != "Nutrition" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
 
