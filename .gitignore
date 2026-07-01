@@ -173,6 +173,10 @@ swift/OpenMedKit/.build/
 swift/OpenMedKit/Package.resolved
 swift/**/xcuserdata/
 
+# Gradle / Android local state
+android/.gradle/
+android/local.properties
+
 # Model cache directories
 .cache/
 cache/
