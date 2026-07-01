@@ -26,6 +26,7 @@ from .metrics import (
     PrometheusMetricsRegistry,
     metrics_enabled_from_env,
 )
+from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
@@ -89,10 +90,12 @@ def _error_response(
     message: str,
     *,
     details: Optional[Any] = None,
+    headers: Optional[Mapping[str, str]] = None,
 ) -> JSONResponse:
     """Return a standardized API error response."""
     return JSONResponse(
         status_code=status_code,
+        headers=headers,
         content={
             "error": {
                 "code": code,
@@ -333,6 +336,10 @@ def create_app() -> FastAPI:
         @app.get("/metrics", include_in_schema=False)
         async def metrics(request: Request) -> Response:
             registry = request.app.state.metrics
+            runtime = _get_service_runtime(request)
+            registry.set_circuit_breaker_state_counts(
+                runtime.circuit_breaker_state_counts()
+            )
             return Response(
                 content=registry.render(),
                 media_type=PROMETHEUS_CONTENT_TYPE,
@@ -367,6 +374,20 @@ def create_app() -> FastAPI:
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(CircuitBreakerOpenError)
+    async def _circuit_breaker_handler(
+        _: Request,
+        exc: CircuitBreakerOpenError,
+    ) -> JSONResponse:
+        retry_after = str(exc.retry_after_seconds)
+        return _error_response(
+            503,
+            "circuit_breaker_open",
+            "Model backend is temporarily unavailable",
+            details=circuit_breaker_details(exc),
+            headers={"Retry-After": retry_after},
         )
 
     @app.exception_handler(ValueError)
@@ -674,7 +695,9 @@ def _finish_active_batch_requests(
 ) -> None:
     for index, model_key, keep_alive in active_jobs:
         try:
-            runtime.finish_model_request(model_key, keep_alive)
+            result = results[index]
+            error = result if isinstance(result, BaseException) else None
+            runtime.finish_model_request(model_key, keep_alive, error=error)
         except Exception as exc:
             if not isinstance(results[index], BaseException):
                 results[index] = exc
