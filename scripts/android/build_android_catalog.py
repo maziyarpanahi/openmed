@@ -97,9 +97,7 @@ def build_catalog_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]
                 "formats": android_formats,
                 "tier": row.get("tier"),
                 "param_count": row.get("param_count"),
-                "languages": [
-                    str(language) for language in row.get("languages") or []
-                ],
+                "languages": [str(language) for language in row.get("languages") or []],
                 "license": str(license_name),
             }
         )

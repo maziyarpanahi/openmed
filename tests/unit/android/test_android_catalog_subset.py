@@ -95,7 +95,9 @@ def test_write_catalog_emits_compact_jsonl(tmp_path: Path) -> None:
 
     lines = output.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
-    assert json.loads(lines[0]) == {field: row.get(field) for field in ANDROID_CATALOG_FIELDS}
+    assert json.loads(lines[0]) == {
+        field: row.get(field) for field in ANDROID_CATALOG_FIELDS
+    }
 
 
 def test_committed_manifest_derives_only_safe_android_rows() -> None:
@@ -108,4 +110,6 @@ def test_committed_manifest_derives_only_safe_android_rows() -> None:
         assert row["repo_id"]
         assert set(row) == set(ANDROID_CATALOG_FIELDS)
         assert row["formats"]
-        assert all(is_android_runnable_format(format_name) for format_name in row["formats"])
+        assert all(
+            is_android_runnable_format(format_name) for format_name in row["formats"]
+        )
