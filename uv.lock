@@ -3377,6 +3377,7 @@ multimodal = [
     { name = "piexif" },
     { name = "pikepdf" },
     { name = "pillow" },
+    { name = "pydicom" },
     { name = "pytesseract" },
     { name = "python-doctr" },
     { name = "python-docx" },
@@ -3462,6 +3463,7 @@ requires-dist = [
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.354,<3" },
     { name = "pydeid", marker = "extra == 'pydeid'", specifier = ">=0.0.1" },
+    { name = "pydicom", marker = "extra == 'multimodal'", specifier = ">=3.0" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.8" },
     { name = "pysbd", specifier = ">=0.3.4,<0.4" },
     { name = "pytesseract", marker = "extra == 'multimodal'", specifier = ">=0.3.10" },
@@ -4572,6 +4574,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/7a/4f/8d073a207e448686b7213b64750d5f49f68519a90b36e36be42202bcf354/pydeid-0.0.1.tar.gz", hash = "sha256:6f5cda510ce8018b8dfe87a0a009b326735f5efc5b77328e23a49762c4d68de0", size = 981, upload-time = "2019-01-31T19:39:19.049Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/16/bb9cf6f15d52d51e06c027c1e0ead59c8818850d421361ee43c00f3d8a70/pydeid-0.0.1-py2.py3-none-any.whl", hash = "sha256:946a47be34fcaf2d84263ad3c6d4980f935124176f74408243a8793ad239293d", size = 2033, upload-time = "2019-01-31T19:39:16.811Z" },
+]
+
+[[package]]
+name = "pydicom"
+version = "3.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7a/de/52aaf905f1f0ae7aba85996e2592ea2c1fe49157f3cfbcd1871965bdb51d/pydicom-3.0.2.tar.gz", hash = "sha256:5942bfc2d72c6fa4b3b5b62c527f54b7f2355f21d6f5d296df6bb30188df6a4f", size = 2886792, upload-time = "2026-03-19T21:46:20.935Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/46/e0/60466c6d712dad2cf807df315e39863e91609ffd1064ecb835994460bbda/pydicom-3.0.2-py3-none-any.whl", hash = "sha256:abf971a5440f84dbaf42c4b6758e30e62480902584f8b270b9a5d146e278a07b", size = 2376822, upload-time = "2026-03-19T21:46:19.042Z" },
 ]
 
 [[package]]

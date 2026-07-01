@@ -13,6 +13,8 @@ from __future__ import annotations
 # stdlib-only, so the public multimodal import path remains free of heavy deps.
 from openmed.interop import cda as _cda
 
+from . import dicom as _dicom
+
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_markdown as _documents_markdown
@@ -31,6 +33,12 @@ from .chatlog_jsonl import (
     iter_redacted_chatlog_jsonl,
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
+)
+from .dicom import (
+    DicomHeaderAction,
+    DicomHeaderDeidPolicy,
+    DicomHeaderDeidResult,
+    deidentify_dicom_headers,
 )
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
@@ -84,6 +92,10 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "DicomHeaderAction",
+    "DicomHeaderDeidPolicy",
+    "DicomHeaderDeidResult",
+    "deidentify_dicom_headers",
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
