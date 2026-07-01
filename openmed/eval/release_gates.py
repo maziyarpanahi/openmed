@@ -404,7 +404,7 @@ class ReleaseGate:
     def __init__(
         self,
         *,
-        milestone: str = "v1.6",
+        milestone: str = "v1.7",
         policy: str = "hipaa_safe_harbor",
         baseline_path: str | Path = baseline_store.BASELINE_PATH,
         thresholds_matrix: Mapping[str, Any] | None = None,
@@ -1799,7 +1799,7 @@ def preview(
     report: BenchmarkReport | Mapping[str, Any],
     baseline: Mapping[str, Any] | None = None,
     *,
-    milestone: str = "v1.6",
+    milestone: str = "v1.7",
     policy: str = "hipaa_safe_harbor",
     baseline_path: str | Path = baseline_store.BASELINE_PATH,
     thresholds_matrix: Mapping[str, Any] | None = None,
@@ -1869,7 +1869,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--milestone",
-        default="v1.6",
+        default="v1.7",
         help="Milestone version used for release thresholds.",
     )
     parser.add_argument(
@@ -2016,7 +2016,9 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
             ],
             input=body,
             text=True,
+            encoding="utf-8",
             check=True,
+            timeout=60,
         )
         return existing
 
@@ -2034,8 +2036,10 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
         ],
         input=body,
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
+        timeout=60,
     )
     output = result.stdout.strip().rsplit("/", 1)[-1]
     return _optional_int(output.lstrip("#"))
@@ -2057,8 +2061,10 @@ def _find_open_issue(*, repo: str, title: str) -> int | None:
             "number,title",
         ],
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
+        timeout=60,
     )
     try:
         issues = json.loads(result.stdout or "[]")
