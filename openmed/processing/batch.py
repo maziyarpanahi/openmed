@@ -385,7 +385,7 @@ class BatchProcessor:
                         source=str(path),
                     )
                 )
-            except (OSError, IOError) as e:
+            except OSError as e:
                 logger.warning("Failed to read file %s: %s", path, e)
                 if not self.continue_on_error:
                     raise
