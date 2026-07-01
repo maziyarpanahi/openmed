@@ -15,6 +15,9 @@ REQUEST_DURATION_NAME = "openmed_service_request_duration_seconds"
 INFLIGHT_NAME = "openmed_service_inflight_requests"
 MODEL_LOAD_NAME = "openmed_service_model_load_total"
 MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
+CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
+CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
+CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
 
 _ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -79,6 +82,11 @@ class PrometheusMetricsRegistry:
         self._inflight_requests = 0
         self._model_load_total = 0
         self._model_eviction_total = 0
+        self._circuit_breaker_state_counts = {
+            "closed": 0,
+            "open": 0,
+            "half_open": 0,
+        }
         self._lock = threading.RLock()
 
     def request_started(self) -> None:
@@ -133,6 +141,15 @@ class PrometheusMetricsRegistry:
         with self._lock:
             self._model_eviction_total += int(count)
 
+    def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
+        """Replace aggregate circuit-breaker state gauges."""
+        with self._lock:
+            self._circuit_breaker_state_counts = {
+                "closed": int(counts.get("closed", 0)),
+                "open": int(counts.get("open", 0)),
+                "half_open": int(counts.get("half_open", 0)),
+            }
+
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
@@ -146,6 +163,7 @@ class PrometheusMetricsRegistry:
             inflight_requests = self._inflight_requests
             model_load_total = self._model_load_total
             model_eviction_total = self._model_eviction_total
+            circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
 
         lines: list[str] = []
         _append_family_header(
@@ -208,6 +226,38 @@ class PrometheusMetricsRegistry:
             "counter",
         )
         lines.append(f"{MODEL_EVICTION_NAME} {model_eviction_total}")
+
+        _append_family_header(
+            lines,
+            CIRCUIT_BREAKER_CLOSED_NAME,
+            "Model/backend circuit breakers currently in the closed state.",
+            "gauge",
+        )
+        lines.append(
+            f"{CIRCUIT_BREAKER_CLOSED_NAME} "
+            f"{circuit_breaker_state_counts.get('closed', 0)}"
+        )
+
+        _append_family_header(
+            lines,
+            CIRCUIT_BREAKER_OPEN_NAME,
+            "Model/backend circuit breakers currently in the open state.",
+            "gauge",
+        )
+        lines.append(
+            f"{CIRCUIT_BREAKER_OPEN_NAME} {circuit_breaker_state_counts.get('open', 0)}"
+        )
+
+        _append_family_header(
+            lines,
+            CIRCUIT_BREAKER_HALF_OPEN_NAME,
+            "Model/backend circuit breakers currently in the half-open state.",
+            "gauge",
+        )
+        lines.append(
+            f"{CIRCUIT_BREAKER_HALF_OPEN_NAME} "
+            f"{circuit_breaker_state_counts.get('half_open', 0)}"
+        )
 
         return "\n".join(lines) + "\n"
 
