@@ -35,6 +35,17 @@ from .chatlog_jsonl import (
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .image import (
+    ImageMetadataReport,
+    ImageRedactionVerificationError,
+    RedactedImage,
+    ResidualPhi,
+    ResidualPhiReport,
+    assert_no_residual_phi,
+    redact_image,
+    verify_image_metadata,
+    verify_image_redaction,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -45,11 +56,11 @@ from .metadata_scrub import (
     verify_metadata,
 )
 
-# Importing the OCR module registers image-format handlers with the dispatcher
-# so ``redact_document`` can route scans/images. It stays import-light: OCR
-# backends (and Pillow) are only imported when an engine actually runs. The
-# ``ocr()`` entry point is left in the submodule (``openmed.multimodal.ocr``)
-# to avoid shadowing it with a function.
+# Importing the OCR module registers remaining OCR-only image-format handlers
+# (BMP/GIF/WebP). PNG/JPEG/TIFF are registered by ``image`` above because they
+# support pixel redaction and metadata stripping. OCR backends (and Pillow) are
+# only imported when an engine actually runs. The ``ocr()`` entry point is left
+# in the submodule (``openmed.multimodal.ocr``) to avoid shadowing it.
 from .ocr import (
     DocTrEngine,
     FakeOcrEngine,
@@ -94,6 +105,15 @@ __all__ = [
     "scrub_metadata",
     "verify_metadata",
     "assert_metadata_clean",
+    "ImageMetadataReport",
+    "ImageRedactionVerificationError",
+    "RedactedImage",
+    "ResidualPhi",
+    "ResidualPhiReport",
+    "assert_no_residual_phi",
+    "redact_image",
+    "verify_image_metadata",
+    "verify_image_redaction",
     "OcrResult",
     "OcrWord",
     "OcrEngine",
