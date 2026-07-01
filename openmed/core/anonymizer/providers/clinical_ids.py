@@ -24,7 +24,8 @@ deterministic:
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
-  - Polish PESEL, South Korean RRN, and Slovak rodne cislo
+  - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
+    cislo
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -528,6 +529,61 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Latvian Personas Kods
+# ---------------------------------------------------------------------------
+
+
+def generate_latvian_personas_kods(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Latvian personas kods accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    if source.random() < 0.5:
+        # Legacy form: DDMMYY-CNNNQ.
+        year = source.randint(1900, 2029)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        century = (year - 1800) // 100
+
+        body = [
+            day // 10,
+            day % 10,
+            month // 10,
+            month % 10,
+            (year % 100) // 10,
+            year % 10,
+            century,
+        ]
+        body.extend(source.randint(0, 9) for _ in range(3))
+        check = _latvian_personas_kods_check_digit(body)
+
+        digits = "".join(str(digit) for digit in body) + str(check)
+        return f"{digits[:6]}-{digits[6:]}"
+
+    # New 32-prefixed format: 32 + 8 random digits + check digit.
+    body = [3, 2]
+    body.extend(source.randint(0, 9) for _ in range(8))
+    check = _latvian_personas_kods_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
+    weights = (1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+    return (
+        (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
+    )
+
+
+class LatvianPersonasKodsProvider(BaseProvider):
+    """Generate synthetic Latvian personas kods values."""
+
+    def personas_kods(self) -> str:
+        return generate_latvian_personas_kods(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -715,6 +771,7 @@ __all__ = [
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
+    "LatvianPersonasKodsProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
@@ -728,6 +785,7 @@ __all__ = [
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
+    "generate_latvian_personas_kods",
     "generate_rodne_cislo",
     "generate_spanish_nie",
     "generate_ssn",
