@@ -52,6 +52,8 @@ changed, with no deleted or renamed files detected in the release range.
   coalescing, rate and concurrency limits, readiness/liveness endpoints,
   opt-in Prometheus metrics, and typed Python and TypeScript REST clients
   (#632, #630, #750, #742, #722, #788, #789, #756).
+- Added an in-process ASGI load-test harness with configurable concurrency
+  that reports requests per second, p50/p95/p99 latency, and error rate (#461).
 - Added evaluation, release-gate, and risk tooling: DrugProt and public
   biomedical NER suites, i2b2 loader, multilingual golden fixtures, dataset
   cards, fixture coverage, per-section recall, result cache, leakage heatmaps,
