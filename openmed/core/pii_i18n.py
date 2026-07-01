@@ -1087,6 +1087,155 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
 
 
 # ---------------------------------------------------------------------------
+# ICAO 9303 machine-readable zone (MRZ) validation
+# ---------------------------------------------------------------------------
+
+_MRZ_LINE_RE = re.compile(r"[A-Z0-9<]+")
+
+
+def _mrz_char_value(char: str) -> int:
+    """ICAO 9303 character value: digits 0-9, A-Z = 10-35, filler '<' = 0."""
+    if char == "<":
+        return 0
+    if char.isdigit():
+        return int(char)
+    if "A" <= char <= "Z":
+        return ord(char) - ord("A") + 10
+    return -1
+
+
+def _mrz_check_digit(field: str) -> Optional[int]:
+    """Compute the ICAO 9303 modulo-10 check digit (7-3-1 weighting)."""
+    weights = (7, 3, 1)
+    total = 0
+    for index, char in enumerate(field):
+        value = _mrz_char_value(char)
+        if value < 0:
+            return None
+        total += value * weights[index % 3]
+    return total % 10
+
+
+def _mrz_check_ok(field: str, check_char: str) -> bool:
+    expected = _mrz_check_digit(field)
+    if expected is None:
+        return False
+    if check_char.isdigit():
+        return expected == int(check_char)
+    if check_char == "<":  # filler check digit for all-filler fields
+        return expected == 0
+    return False
+
+
+def _mrz_lines(text: str, width: int, count: int) -> Optional[List[str]]:
+    """Return the ``count`` MRZ lines of exactly ``width`` chars, else None."""
+    lines = [line.strip() for line in text.strip().splitlines()]
+    candidates = [
+        line for line in lines if len(line) == width and _MRZ_LINE_RE.fullmatch(line)
+    ]
+    if len(candidates) != count:
+        return None
+    return candidates
+
+
+def validate_mrz_td3(text: str) -> bool:
+    """Validate an ICAO 9303 TD3 (passport) MRZ: two 44-character lines.
+
+    Confirms the document-number, date-of-birth, expiry, personal-number and
+    composite modulo-10 check digits. Date fields must be numeric (YYMMDD).
+    """
+    lines = _mrz_lines(text, 44, 2)
+    if lines is None:
+        return False
+    line2 = lines[1]
+    checks = (
+        (line2[0:9], line2[9]),  # document number
+        (line2[13:19], line2[19]),  # date of birth
+        (line2[21:27], line2[27]),  # expiry date
+        (line2[28:42], line2[42]),  # optional personal number
+        (line2[0:10] + line2[13:20] + line2[21:43], line2[43]),  # composite
+    )
+    if not all(_mrz_check_ok(field, check) for field, check in checks):
+        return False
+    return line2[13:19].isdigit() and line2[21:27].isdigit()
+
+
+def validate_mrz_td1(text: str) -> bool:
+    """Validate an ICAO 9303 TD1 (ID card) MRZ: three 30-character lines.
+
+    Confirms the document-number, date-of-birth, expiry and composite
+    modulo-10 check digits. Date fields must be numeric (YYMMDD).
+    """
+    lines = _mrz_lines(text, 30, 3)
+    if lines is None:
+        return False
+    line1, line2 = lines[0], lines[1]
+    composite = line1[5:30] + line2[0:7] + line2[8:15] + line2[18:29]
+    checks = (
+        (line1[5:14], line1[14]),  # document number
+        (line2[0:6], line2[6]),  # date of birth
+        (line2[8:14], line2[14]),  # expiry date
+        (composite, line2[29]),  # composite
+    )
+    if not all(_mrz_check_ok(field, check) for field, check in checks):
+        return False
+    return line2[0:6].isdigit() and line2[8:14].isdigit()
+
+
+_MRZ_FILLER = "<"
+_MRZ_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_MRZ_ALPHANUM = _MRZ_LETTERS + "0123456789"
+
+
+def _mrz_pad(text: str, length: int) -> str:
+    return (text + _MRZ_FILLER * length)[:length]
+
+
+def generate_mrz_td3(rng=None) -> str:
+    """Generate a synthetic but check-digit-valid TD3 (passport) MRZ block."""
+    import random as _random
+
+    rng = rng or _random.Random()
+    digits = lambda n: "".join(str(rng.randint(0, 9)) for _ in range(n))  # noqa: E731
+    country = "".join(rng.choice(_MRZ_LETTERS) for _ in range(3))
+    docnum = "".join(rng.choice(_MRZ_ALPHANUM) for _ in range(9))
+    dob, expiry = digits(6), digits(6)
+    sex = rng.choice("MF<")
+    personal = _MRZ_FILLER * 14
+    partial = (
+        f"{docnum}{_mrz_check_digit(docnum)}{country}"
+        f"{dob}{_mrz_check_digit(dob)}{sex}"
+        f"{expiry}{_mrz_check_digit(expiry)}"
+        f"{personal}{_mrz_check_digit(personal)}"
+    )
+    composite = partial[0:10] + partial[13:20] + partial[21:43]
+    line2 = partial + str(_mrz_check_digit(composite))
+    line1 = "P<" + country + _mrz_pad("SPECIMEN<<TRAVELLER", 39)
+    return f"{line1}\n{line2}"
+
+
+def generate_mrz_td1(rng=None) -> str:
+    """Generate a synthetic but check-digit-valid TD1 (ID-card) MRZ block."""
+    import random as _random
+
+    rng = rng or _random.Random()
+    digits = lambda n: "".join(str(rng.randint(0, 9)) for _ in range(n))  # noqa: E731
+    country = "".join(rng.choice(_MRZ_LETTERS) for _ in range(3))
+    docnum = "".join(rng.choice(_MRZ_ALPHANUM) for _ in range(9))
+    line1 = _mrz_pad(f"I<{country}{docnum}{_mrz_check_digit(docnum)}", 30)
+    dob, expiry = digits(6), digits(6)
+    sex = rng.choice("MF<")
+    middle = (
+        f"{dob}{_mrz_check_digit(dob)}{sex}"
+        f"{expiry}{_mrz_check_digit(expiry)}{country}{_MRZ_FILLER * 11}"
+    )
+    composite = line1[5:30] + middle[0:7] + middle[8:15] + middle[18:29]
+    line2 = middle + str(_mrz_check_digit(composite))
+    line3 = _mrz_pad("SPECIMEN<<TRAVELLER", 30)
+    return f"{line1}\n{line2}\n{line3}"
+
+
+# ---------------------------------------------------------------------------
 # Language-specific PII patterns
 # ---------------------------------------------------------------------------
 
@@ -1124,6 +1273,32 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_uk_nino,
         flags=re.IGNORECASE,
+    ),
+]
+
+
+# Language-agnostic ICAO 9303 machine-readable-zone patterns, guarded by the
+# check-digit validators and always included in the universal base set.
+MRZ_PII_PATTERNS: List[PIIPattern] = [
+    # TD3 passport MRZ: two 44-character lines.
+    PIIPattern(
+        r"^[A-Z0-9<]{44}\n[A-Z0-9<]{44}$",
+        "passport_mrz",
+        priority=15,
+        flags=re.MULTILINE,
+        base_score=0.7,
+        context_words=["passport", "mrz", "machine readable zone"],
+        validator=validate_mrz_td3,
+    ),
+    # TD1 identity-card MRZ: three 30-character lines.
+    PIIPattern(
+        r"^[A-Z0-9<]{30}\n[A-Z0-9<]{30}\n[A-Z0-9<]{30}$",
+        "passport_mrz",
+        priority=15,
+        flags=re.MULTILINE,
+        base_score=0.7,
+        context_words=["passport", "identity card", "mrz"],
+        validator=validate_mrz_td1,
     ),
 ]
 
@@ -3316,7 +3491,8 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     from .pii_entity_merger import PII_PATTERNS
 
     # English patterns serve as universal base
-    base = list(PII_PATTERNS)
+    # MRZ patterns are language-agnostic, so they join the universal base.
+    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS
 
     combined = base
     if base_lang != "en":
