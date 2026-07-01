@@ -35,11 +35,23 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "function_tools": AdapterSpec(
+        name="function_tools",
+        module="openmed.interop.function_tools",
+        extra="",
+        description="Generic function-calling and tool-use schema adapters",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
         extra="langchain",
         description="LangChain redaction runnable adapter",
+    ),
+    "llamaindex": AdapterSpec(
+        name="llamaindex",
+        module="openmed.interop.llamaindex",
+        extra="llamaindex",
+        description="LlamaIndex FunctionTool adapter",
     ),
     "presidio": AdapterSpec(
         name="presidio",
@@ -107,6 +119,38 @@ def adapter_tool_definitions(name: str) -> tuple[dict[str, Any], ...]:
     return render_adapter_tool_definitions(spec.name)
 
 
+def to_function_tools() -> tuple[dict[str, Any], ...]:
+    """Return generic function-calling tool definitions."""
+
+    from openmed.interop.function_tools import to_function_tools as _render
+
+    return _render()
+
+
+def to_tool_use_tools() -> tuple[dict[str, Any], ...]:
+    """Return generic tool-use input-schema definitions."""
+
+    from openmed.interop.function_tools import to_tool_use_tools as _render
+
+    return _render()
+
+
+def get_langchain_tools() -> tuple[Any, ...]:
+    """Return LangChain tool objects for every OpenMed registry tool."""
+
+    from openmed.interop.langchain import get_langchain_tools as _render
+
+    return _render()
+
+
+def get_llamaindex_tools() -> tuple[Any, ...]:
+    """Return LlamaIndex tool objects for every OpenMed registry tool."""
+
+    from openmed.interop.llamaindex import get_llamaindex_tools as _render
+
+    return _render()
+
+
 def _normalize_adapter_name(name: str) -> str:
     return str(name or "").strip().lower().replace("-", "_")
 
@@ -122,5 +166,9 @@ __all__ = [
     "adapter_tool_definitions",
     "adapter_spec",
     "available_adapters",
+    "get_langchain_tools",
+    "get_llamaindex_tools",
     "get_adapter",
+    "to_function_tools",
+    "to_tool_use_tools",
 ]
