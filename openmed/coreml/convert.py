@@ -395,7 +395,7 @@ def _id2label_dict(id2label) -> dict[str, str]:
 
 def _write_id2label(output_path: Path, id2label) -> None:
     id2label_path = output_path.parent / f"{output_path.stem}_id2label.json"
-    with open(id2label_path, "w") as f:
+    with open(id2label_path, "w", encoding="utf-8") as f:
         json.dump(_id2label_dict(id2label), f, indent=2)
 
 
