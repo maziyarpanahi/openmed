@@ -35,6 +35,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "duckdb": AdapterSpec(
+        name="duckdb",
+        module="openmed.interop.duckdb_udf",
+        extra="duckdb",
+        description="DuckDB scalar UDFs for in-query de-identification",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
