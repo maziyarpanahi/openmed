@@ -383,7 +383,8 @@ def analyze_text(
                 len(current_indices) >= max_chunk_sentences
                 or span_length > max_chunk_chars
             ):
-                assert current_start is not None and current_end is not None
+                if current_start is None or current_end is None:
+                    raise RuntimeError("chunk boundary unexpectedly None")
                 chunk_descriptors.append(
                     {
                         "text": validated_text[current_start:current_end],
@@ -400,7 +401,8 @@ def analyze_text(
                 current_end = seg_end
 
         if current_indices:
-            assert current_start is not None and current_end is not None
+            if current_start is None or current_end is None:
+                raise RuntimeError("chunk boundary unexpectedly None")
             chunk_descriptors.append(
                 {
                     "text": validated_text[current_start:current_end],
