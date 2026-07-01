@@ -1389,11 +1389,80 @@ class TestIndonesianLocaleAndFixture:
 
 
 def test_validate_latvian_personas_kods():
-    assert validate_latvian_personas_kods("010101-12345")
-    assert validate_latvian_personas_kods("32123456789")
+    assert validate_latvian_personas_kods("161175-19997")
+    assert validate_latvian_personas_kods("010101-12343")
+    assert validate_latvian_personas_kods("32867300679")
+    assert validate_latvian_personas_kods("328673-00679")
 
+    assert not validate_latvian_personas_kods("161175-19998")
+    assert not validate_latvian_personas_kods("32867300677")
+    assert not validate_latvian_personas_kods("161375-19997")
     assert not validate_latvian_personas_kods("abcdef")
     assert not validate_latvian_personas_kods("123")
+
+
+def test_generated_latvian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["lv"] == "lv_LV"
+
+    anonymizer = Anonymizer(lang="lv", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("161175-19997", "national_id")
+
+    assert validate_latvian_personas_kods(surrogate) is True
+
+
+def test_latvian_clinical_sample_expected_spans():
+    text = (
+        "Pacients: Anna Kalnina. Dzimsanas datums 16.11.1975, "
+        "telefons +371 2123 4567, personas kods 161175-19997, "
+        "adrese Brivibas iela 12, pasta indekss LV-1010."
+    )
+    expected = {
+        ("date", 41, 51, "16.11.1975"),
+        ("phone_number", 62, 76, "+371 2123 4567"),
+        ("national_id", 92, 104, "161175-19997"),
+        ("street_address", 113, 129, "Brivibas iela 12"),
+        ("postcode", 145, 152, "LV-1010"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("lv"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_latvian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/lv.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "lv"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 41, 51, "16.11.1975"),
+        ("PHONE", 62, 76, "+371 2123 4567"),
+        ("ID_NUM", 92, 104, "161175-19997"),
+        ("STREET_ADDRESS", 113, 129, "Brivibas iela 12"),
+        ("ZIPCODE", 145, 152, "LV-1010"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
 
 
 if __name__ == "__main__":
