@@ -25,3 +25,12 @@ Do not edit the lockfile by hand.
 CI and every tagged release also generate a CycloneDX SBOM (`sbom.cdx.json`)
 inventorying the dependency tree. See the
 [Software Bill of Materials](sbom.md) guide to regenerate or consume it.
+
+## PyPI provenance
+
+Tagged library releases use PyPI Trusted Publishing instead of a stored PyPI
+API token. The publish workflow uploads distributions with Sigstore
+attestations, giving each wheel and source distribution signed provenance from
+the release workflow identity. See the
+[PyPI Trusted Publishing](../release/trusted-publishing.md) guide for the PyPI
+configuration and token-retirement checklist.
