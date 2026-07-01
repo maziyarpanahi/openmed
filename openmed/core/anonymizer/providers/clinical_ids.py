@@ -24,7 +24,8 @@ deterministic:
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
-  - Polish PESEL, Latvian personas kods, and South Korean RRN
+  - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
+    cislo
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -682,6 +683,51 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
+# ---------------------------------------------------------------------------
+
+
+def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
+    """Generate a Slovak rodne cislo accepted by its checksum validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    for _ in range(500):
+        year = source.randint(1954, 2029)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+
+        encoded_month = month
+        if source.choice((False, True)):
+            encoded_month += 50
+        elif year >= 2004 and source.randint(0, 9) == 0:
+            encoded_month += 20
+
+        yy = year % 100
+        serial = source.randint(0, 999)
+        first_nine = f"{yy:02d}{encoded_month:02d}{day:02d}{serial:03d}"
+        check = (-int(first_nine) * 10) % 11
+        if check == 10:
+            continue
+
+        candidate = f"{first_nine[:6]}/{first_nine[6:]}{check}"
+        from openmed.core.pii_i18n import validate_czechoslovak_rodne_cislo
+
+        if validate_czechoslovak_rodne_cislo(candidate):
+            return candidate
+
+    return "850505/1236"
+
+
+class RodneCisloProvider(BaseProvider):
+    """Generates valid Slovak rodne cislo birth numbers."""
+
+    def rodne_cislo(self) -> str:
+        return generate_rodne_cislo(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Thai national ID (13 digits, weighted mod-11 checksum)
 # ---------------------------------------------------------------------------
 
@@ -729,6 +775,7 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "RodneCisloProvider",
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
@@ -739,6 +786,7 @@ __all__ = [
     "generate_npi",
     "generate_pesel",
     "generate_latvian_personas_kods",
+    "generate_rodne_cislo",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",

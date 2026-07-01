@@ -12,6 +12,7 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
+    validate_czechoslovak_rodne_cislo,
     validate_israeli_teudat_zehut,
     validate_latvian_personas_kods,
     validate_portuguese_cpf,
@@ -159,6 +160,7 @@ def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
 
 def test_latvian_i18n_jsonl_fixture_offsets_and_checksum():
     fixture_path = Path("openmed/eval/golden/fixtures/i18n/lv.jsonl")
+
     rows = [
         json.loads(line)
         for line in fixture_path.read_text(encoding="utf-8").splitlines()
@@ -175,6 +177,26 @@ def test_latvian_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "LV-1010"
     assert gold_by_label["STREET_ADDRESS"] == "Brivibas iela 12"
     assert validate_latvian_personas_kods(gold_by_label["ID_NUM"])
+
+
+def test_slovak_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/sk.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "sk"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "05.05.1985"
+    assert gold_by_label["PHONE"] == "+421 903 123 456"
+    assert gold_by_label["ZIPCODE"] == "81101"
+    assert gold_by_label["STREET_ADDRESS"] == "Hlavna ulica 12"
+    assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
 
 
 def test_nested_overlap_fixture_asserts_resolution_not_just_detection():

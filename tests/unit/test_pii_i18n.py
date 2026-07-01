@@ -19,6 +19,7 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
+    validate_czechoslovak_rodne_cislo,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
@@ -62,7 +63,7 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -433,6 +434,36 @@ class TestValidateThaiNationalId:
         assert validate_thai_national_id(surrogate) is True
 
 
+class TestValidateCzechoslovakRodneCislo:
+    """Tests for validate_czechoslovak_rodne_cislo()."""
+
+    def test_valid_slovak_rodne_cislo(self):
+        assert validate_czechoslovak_rodne_cislo("850505/1236") is True
+
+    def test_valid_slovak_female_rodne_cislo(self):
+        assert validate_czechoslovak_rodne_cislo("855505/1230") is True
+
+    def test_valid_slovak_overflow_series(self):
+        assert validate_czechoslovak_rodne_cislo("047521/1231") is True
+
+    def test_valid_slovak_rodne_cislo_without_slash(self):
+        assert validate_czechoslovak_rodne_cislo("8505051236") is True
+
+    def test_invalid_slovak_rodne_cislo_wrong_checksum(self):
+        assert validate_czechoslovak_rodne_cislo("850505/1237") is False
+
+    def test_invalid_slovak_rodne_cislo_impossible_date(self):
+        assert validate_czechoslovak_rodne_cislo("850231/0003") is False
+
+    def test_generated_slovak_surrogate_passes_validator(self):
+        assert LANG_TO_LOCALE["sk"] == "sk_SK"
+
+        anonymizer = Anonymizer(lang="sk", consistent=True, seed=42)
+        surrogate = anonymizer.surrogate("850505/1236", "national_id")
+
+        assert validate_czechoslovak_rodne_cislo(surrogate) is True
+
+
 # ---------------------------------------------------------------------------
 # Language-specific PII Patterns Tests
 # ---------------------------------------------------------------------------
@@ -496,6 +527,10 @@ class TestLanguagePIIPatterns:
     def test_indonesian_patterns_exist(self):
         assert "id" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["id"]) > 0
+
+    def test_slovak_patterns_exist(self):
+        assert "sk" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["sk"]) > 0
 
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
@@ -1094,6 +1129,29 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, f"Arabic phone pattern should match local format '{text}'"
 
+    def test_slovak_clinical_sample_expected_spans(self):
+        text = (
+            "Pacientka: Jana Kovacova. Datum narodenia 05.05.1985, "
+            "telefon +421 903 123 456, rodne cislo 855505/1230, "
+            "adresa Hlavna ulica 12, PSC 81101."
+        )
+        expected = {
+            ("date", 42, 52, "05.05.1985"),
+            ("phone_number", 62, 78, "+421 903 123 456"),
+            ("national_id", 92, 103, "855505/1230"),
+            ("street_address", 112, 127, "Hlavna ulica 12"),
+            ("postcode", 133, 138, "81101"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("sk"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
 
 # ---------------------------------------------------------------------------
 # get_patterns_for_language Tests
@@ -1190,6 +1248,12 @@ class TestGetPatternsForLanguage:
         base_count = len(PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["id"])
         assert len(id_patterns) == base_count + lang_count
+
+    def test_slovak_includes_base_and_language(self):
+        sk_patterns = get_patterns_for_language("sk")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["sk"])
+        assert len(sk_patterns) == base_count + lang_count
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
@@ -1463,6 +1527,48 @@ def test_latvian_i18n_golden_fixture_offsets():
     assert actual == expected
     for label, start, end, value in actual:
         assert text[start:end] == value, label
+
+
+class TestSlovakLocaleAndFixture:
+    """Tests for Slovak locale and golden fixture wiring."""
+
+    def test_locale_and_surrogate_rodne_cislo_round_trip(self):
+        assert LANG_TO_LOCALE["sk"] == "sk_SK"
+        anon = Anonymizer(lang="sk", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("850505/1236", "national_id")
+
+        assert validate_czechoslovak_rodne_cislo(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/sk.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "sk"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            ("DATE", 42, 52, "05.05.1985"),
+            ("PHONE", 62, 78, "+421 903 123 456"),
+            ("ID_NUM", 92, 103, "855505/1230"),
+            ("STREET_ADDRESS", 112, 127, "Hlavna ulica 12"),
+            ("ZIPCODE", 133, 138, "81101"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
 
 
 if __name__ == "__main__":

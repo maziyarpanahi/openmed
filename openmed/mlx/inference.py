@@ -57,7 +57,7 @@ def _tokenizer_has_list_extra_special_tokens(reference: str | Path) -> bool:
         return False
 
     try:
-        with open(tokenizer_config) as f:
+        with open(tokenizer_config, encoding="utf-8") as f:
             config = json.load(f)
     except (OSError, json.JSONDecodeError):
         return False
@@ -1188,7 +1188,7 @@ def _resolve_mlx_model(
             )
 
         try:
-            with open(local / "config.json") as f:
+            with open(local / "config.json", encoding="utf-8") as f:
                 local_config = json.load(f)
         except Exception:
             local_config = {}
