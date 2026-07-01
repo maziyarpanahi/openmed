@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenMed — Clinical AI that never leaves the device</title>
     <meta name="description"
-        content="OpenMed 1.7.0 brings policy-aware de-identification, signed audit reports, release gates, cardiology zero-shot labels, 1,000+ open-source healthcare LLM models, and Swift-native OpenMedKit, Apache-2.0 end to end." />
+        content="OpenMed 1.7.0 brings multimodal de-identification, OCR, FHIR and HL7 helpers, signed audit evidence, Transformers.js browser export, 1,000+ open-source healthcare LLM models, and Swift-native OpenMedKit." />
     <meta name="keywords"
         content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical language models, healthcare machine learning, clinical LLM workflows, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
     <meta name="author" content="Maziyar Panahi" />
@@ -20,7 +20,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="OpenMed — Clinical AI that never leaves the device" />
     <meta property="og:description"
-        content="OpenMed 1.7.0 — policy-aware de-identification, signed audit reports, fail-closed release gates, cardiology zero-shot labels, 1,000+ healthcare LLM models, and one local-first runtime across Python and Swift." />
+        content="OpenMed 1.7.0 — multimodal de-identification, OCR, FHIR/HL7, release evidence, Transformers.js browser export, 1,000+ healthcare LLM models, and local-first runtimes across Python, Swift, REST, and WebGPU." />
     <meta property="og:url" content="https://openmed.life/" />
     <meta property="og:site_name" content="OpenMed" />
     <meta property="og:image" content="https://openmed.life/og.png?v=20260425" />
@@ -34,7 +34,7 @@
     <meta name="twitter:creator" content="@MaziyarPanahi" />
     <meta name="twitter:title" content="OpenMed — Clinical AI that never leaves the device" />
     <meta name="twitter:description"
-        content="OpenMed 1.7.0 · policy-aware de-identification · signed audit reports · release gates · cardiology zero-shot labels · unified privacy routing · Swift-native OpenMedKit." />
+        content="OpenMed 1.7.0 · multimodal de-identification · OCR · FHIR/HL7 · signed audit evidence · Transformers.js browser export · Swift-native OpenMedKit." />
     <meta name="twitter:image" content="https://openmed.life/og.png?v=20260425" />
     <meta name="twitter:image:alt" content="OpenMed social preview showing local-first healthcare LLMs and an interactive clinical NER terminal." />
 
@@ -60,7 +60,7 @@
         "name": "OpenMed Clinical LLM Suite",
         "operatingSystem": "macOS, iOS, iPadOS, Cloud, On-Premises",
         "applicationCategory": "AIApplication",
-        "description": "OpenMed Clinical LLM Suite provides open-source healthcare language models, biomedical named-entity recognition, Python MLX acceleration, and Swift-native deployment toolkits for compliant medical workflows.",
+        "description": "OpenMed Clinical LLM Suite provides open-source healthcare language models, biomedical named-entity recognition, multimodal de-identification, Python MLX acceleration, browser Transformers.js export, and Swift-native deployment toolkits for compliant medical workflows.",
         "softwareVersion": "1.7.0",
         "url": "https://openmed.life/",
         "provider": { "@type": "Organization", "name": "OpenMed", "url": "https://openmed.life/" },
@@ -157,12 +157,12 @@
     <section id="home" class="hero bg-grid" data-screen>
         <div class="container hero-grid">
             <div>
-                <div class="eyebrow">OpenMed 1.7.0 · policy-aware de-identification · release gates</div>
+                <div class="eyebrow">OpenMed 1.7.0 · multimodal de-identification · browser export</div>
                 <h1 class="display-xl hero-title">
                     Clinical AI that never leaves the <span class="serif-italic">device</span>.
                 </h1>
                 <p class="body-lg hero-desc">
-                    1,000+ state-of-the-art healthcare LLM models, Nemotron Privacy Filter MLX, Faker-backed de-identification, PII across 15 supported languages (ar, de, en, es, fr, he, hi, id, it, ja, nl, pt, te, th, tr), and 25+ curated datasets — one local-first runtime story across Python MLX on Apple Silicon and Swift-native OpenMedKit.
+                    1,000+ state-of-the-art healthcare LLM models, Nemotron Privacy Filter MLX, OCR and multimodal redaction, FHIR/HL7 helpers, PII across 15 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, nl, pt, te, th, and tr, plus browser token classification through Transformers.js/WebGPU.
                 </p>
 
                 <div class="hero-ctas">
@@ -198,7 +198,7 @@
                         <svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M4 12c0-4 3-7 8-7s8 3 8 7-3 7-8 7-8-3-8-7zm4-1a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm8 0a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM9 14c.8 1.1 2 1.7 3 1.7s2.2-.6 3-1.7" />
                         </svg>
-                        1,000+ models
+                        Browser WebGPU
                     </span>
                     <span>·</span>
                     <span class="pip">
@@ -274,8 +274,8 @@
                     <div class="statband-label">PII Entities</div>
                 </div>
                 <div class="statband-cell">
-                    <div class="statband-num">12</div>
-                    <div class="statband-label">Languages</div>
+                    <div class="statband-num">15</div>
+                    <div class="statband-label">PII Languages</div>
                 </div>
                 <div class="statband-cell">
                     <div class="statband-num">&lt;1.2kg</div>
@@ -372,10 +372,10 @@
             <div class="section-head">
                 <div class="eyebrow">The runtime story</div>
                 <h2 class="display-lg" style="max-width:20ch">
-                    One <span class="serif-italic">MLX</span> story across Python and Swift.
+                    One local-first story across Python, Swift, REST, and browser.
                 </h2>
                 <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Prototype with Python MLX on Apple Silicon, then ship the same local-first PII and clinical LLM experience inside native Swift apps with OpenMedKit — same artifacts, same behavior.
+                    Prototype with Python MLX on Apple Silicon, ship native Swift apps with OpenMedKit, expose typed REST clients, or package ONNX/WebGPU artifacts for in-browser token classification through Transformers.js.
                 </p>
             </div>
 
@@ -418,12 +418,12 @@
                             <line x1="4" y1="21" x2="20" y2="21" />
                         </svg>
                     </div>
-                    <div class="eyebrow muted">Shared MLX artifacts</div>
-                    <h3 class="heading-md">Move from notebooks to native apps with less friction</h3>
+                    <div class="eyebrow muted">Browser / WebGPU</div>
+                    <h3 class="heading-md">Run token classification in the browser</h3>
                     <p class="body-sm">
-                        The same MLX artifacts power the Python and Swift paths — including <span class="code-inline">OpenMed/privacy-filter-nemotron-mlx</span> and the 8-bit variant — so you can prototype in a notebook, then ship the identical model into a native app without a second packaging track.
+                        Export ONNX token-classification artifacts into the <span class="code-inline">transformersjs/</span> layout and load them with Transformers.js for WebGPU-backed browser inference.
                     </p>
-                    <a class="link-arrow" href="docs/mlx-backend/#mlx-and-swift-apps">See the shared artifact story →</a>
+                    <a class="link-arrow" href="docs/export-transformersjs/">Read the Transformers.js export guide →</a>
                 </div>
             </div>
         </div>
@@ -440,7 +440,7 @@
                     Clinical text de-identification, built for <span class="serif-italic">HIPAA &amp; GDPR</span>.
                 </h2>
                 <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Language-aware PII models across 13 supported languages. Process data locally — your PHI never leaves your environment.
+                    Language-aware PII models across 15 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, nl, pt, te, th, and tr. Process data locally — your PHI never leaves your environment.
                 </p>
             </div>
 
