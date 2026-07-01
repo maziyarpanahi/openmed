@@ -9,9 +9,11 @@ from pathlib import Path
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_entity_merger import validate_luhn
 from openmed.core.pii_i18n import (
+    NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     validate_aadhaar,
     validate_israeli_teudat_zehut,
+    validate_latvian_personas_kods,
     validate_portuguese_cpf,
 )
 from openmed.eval import harness
@@ -41,9 +43,11 @@ def test_golden_directory_documents_synthetic_only_no_dua():
 def test_golden_fixtures_cover_required_categories_and_languages():
     fixtures = load_golden_fixtures()
     grouped = fixtures_by_category(fixtures)
+    multilingual_languages = fixture_languages(fixtures, category="multilingual")
 
     assert set(grouped) == set(GOLDEN_CATEGORIES)
-    assert fixture_languages(fixtures, category="multilingual") == SUPPORTED_LANGUAGES
+    assert SUPPORTED_LANGUAGES.issubset(multilingual_languages)
+    assert multilingual_languages <= SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
 
     multilingual = grouped["multilingual"]
     assert len(multilingual) >= len(SUPPORTED_LANGUAGES)
@@ -151,6 +155,26 @@ def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "6423905"
     assert gold_by_label["STREET_ADDRESS"] == "רחוב הרצל 12"
     assert validate_israeli_teudat_zehut(gold_by_label["ID_NUM"])
+
+
+def test_latvian_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/lv.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "lv"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "16.11.1975"
+    assert gold_by_label["PHONE"] == "+371 2123 4567"
+    assert gold_by_label["ZIPCODE"] == "LV-1010"
+    assert gold_by_label["STREET_ADDRESS"] == "Brivibas iela 12"
+    assert validate_latvian_personas_kods(gold_by_label["ID_NUM"])
 
 
 def test_nested_overlap_fixture_asserts_resolution_not_just_detection():
