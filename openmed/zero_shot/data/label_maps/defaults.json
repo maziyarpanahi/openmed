@@ -2,6 +2,7 @@
   "biomedical": ["Disease", "Drug", "Gene", "Organism"],
   "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
   "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
+  "genomic_variant": ["GeneSymbol", "VariantDescriptor", "ProteinChange", "Zygosity", "AlleleFrequency", "ClinicalSignificance", "ReferenceTranscript"],
   "finance": ["Company", "Ticker", "Instrument", "Event"],
   "legal": ["Case", "Court", "Judge", "Statute"],
   "news": ["Person", "Organization", "Location", "Date"],

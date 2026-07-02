@@ -81,6 +81,11 @@
     "NUTRITION_TARGET": "keep",
     "FEEDING_ROUTE": "keep",
     "NUTRITIONAL_STATUS": "keep",
+    "GENE_SYMBOL": "keep",
+    "VARIANT_DESCRIPTOR": "keep",
+    "PROTEIN_CHANGE": "keep",
+    "ZYGOSITY": "keep",
+    "CLINICAL_SIGNIFICANCE": "keep",
     "OTHER": "keep"
   }
 }
