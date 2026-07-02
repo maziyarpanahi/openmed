@@ -3327,6 +3327,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-dateutil" },
+    { name = "rapidfuzz" },
     { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
@@ -3345,6 +3346,9 @@ gliner = [
 ]
 gptq = [
     { name = "auto-gptq" },
+]
+grounding = [
+    { name = "rapidfuzz" },
 ]
 hf = [
     { name = "accelerate" },
@@ -3471,6 +3475,8 @@ requires-dist = [
     { name = "python-doctr", marker = "extra == 'multimodal'", specifier = ">=1.0" },
     { name = "python-docx", marker = "extra == 'multimodal'", specifier = ">=1.1" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rapidfuzz", marker = "extra == 'dev'", specifier = ">=3" },
+    { name = "rapidfuzz", marker = "extra == 'grounding'", specifier = ">=3" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.20" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
@@ -3489,7 +3495,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["awq", "cli", "coreml", "dev", "docs", "gliner", "gptq", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy"]
+provides-extras = ["awq", "cli", "coreml", "dev", "docs", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy"]
 
 [[package]]
 name = "orjson"
