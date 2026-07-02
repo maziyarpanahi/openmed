@@ -310,7 +310,10 @@ public enum OpenMedModelStore {
         var request = URLRequest(url: remoteURL)
         request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await OpenMedNetworkAccess.data(
+            for: request,
+            operation: .modelArtifactDownload
+        )
         guard let httpResponse = response as? HTTPURLResponse else {
             throw OpenMedModelStoreError.invalidResponse(remoteURL)
         }

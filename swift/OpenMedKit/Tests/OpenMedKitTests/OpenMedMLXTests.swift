@@ -704,8 +704,8 @@ final class OpenMedMLXTests: XCTestCase {
                 useSmartMerging: true
             )
 
-            print("=== SAMPLE OCR TEXT ===")
-            print(ocrText)
+            print("=== SAMPLE OCR SUMMARY ===")
+            print("characters=\(ocrText.count)")
             print("=== SAMPLE RAW ENTITIES ===")
             print(rawEntities.map(\.description).joined(separator: "\n"))
             print("=== SAMPLE FINAL PII ENTITIES ===")

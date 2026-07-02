@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// A single entity predicted by the NER pipeline.
@@ -29,10 +30,19 @@ public struct EntityPrediction: Codable, Equatable, Sendable {
         self.start = start
         self.end = end
     }
+
+    /// Stable SHA-256 digest of the matched text span for PHI-safe diagnostics.
+    public var textHash: String {
+        let digest = SHA256.hash(data: Data(text.utf8))
+        let hex = digest.map { String(format: "%02x", $0) }.joined()
+        return "sha256:\(hex)"
+    }
 }
 
 extension EntityPrediction: CustomStringConvertible {
     public var description: String {
-        "[\(label)] \"\(text)\" (\(start):\(end)) conf=\(String(format: "%.2f", confidence))"
+        let formattedConfidence = String(format: "%.2f", confidence)
+        return
+            "[\(label)] span=(\(start):\(end)) text_hash=\(textHash) conf=\(formattedConfidence)"
     }
 }
