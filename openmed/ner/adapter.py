@@ -8,12 +8,10 @@ from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Tupl
 
 from .infer import Entity
 
-
 class TokenizerProvider(Protocol):  # pragma: no cover - protocol definition
     """Protocol representing objects that can yield a tokenizer."""
 
     def get_tokenizer(self) -> Any: ...
-
 
 @dataclass
 class TokenAnnotation:
@@ -37,7 +35,6 @@ class TokenAnnotation:
             payload["entity"] = self.entity.to_dict()
         return payload
 
-
 @dataclass
 class TokenClassificationResult:
     tokens: List[TokenAnnotation]
@@ -53,7 +50,6 @@ class TokenClassificationResult:
             "tokens": [token.to_dict() for token in self.tokens],
             "metadata": self.metadata,
         }
-
 
 def to_token_classification(
     entities: Sequence[Entity],
@@ -111,7 +107,6 @@ def to_token_classification(
         tokens=annotations, scheme=scheme_upper, metadata=metadata
     )
 
-
 def _tokenize(text: str, tokenizer: Any) -> List[Tuple[str, int, int]]:
     if tokenizer is None:
         return _simple_tokenize(text)
@@ -144,19 +139,16 @@ def _tokenize(text: str, tokenizer: Any) -> List[Tuple[str, int, int]]:
         return tokens
     return _simple_tokenize(text)
 
-
 def _resolve_tokenizer(tokenizer: Any):
     if hasattr(tokenizer, "get_tokenizer"):
         return tokenizer.get_tokenizer()
     return tokenizer
-
 
 def _simple_tokenize(text: str) -> List[Tuple[str, int, int]]:
     tokens: List[Tuple[str, int, int]] = []
     for match in re.finditer(r"\S+", text):
         tokens.append((match.group(0), match.start(), match.end()))
     return tokens
-
 
 def _assign_entities_to_tokens(
     tokens: Sequence[Tuple[str, int, int]],
@@ -177,7 +169,6 @@ def _assign_entities_to_tokens(
 
     return assignments
 
-
 def _token_indices_for_entity(
     tokens: Sequence[Tuple[str, int, int]],
     entity: Entity,
@@ -188,7 +179,6 @@ def _token_indices_for_entity(
             indices.append(idx)
     return indices
 
-
 def _overlaps(
     token_start: int,
     token_end: int,
@@ -196,7 +186,6 @@ def _overlaps(
     entity_end: int,
 ) -> bool:
     return token_start < entity_end and token_end > entity_start
-
 
 def _label_for_position(
     label: str, position: int, span_length: int, scheme: str
@@ -215,7 +204,6 @@ def _label_for_position(
     else:
         prefix = "I"
     return f"{prefix}-{label}"
-
 
 __all__ = [
     "TokenizerProvider",

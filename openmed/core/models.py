@@ -46,7 +46,6 @@ from .model_registry import (
     ModelInfo as RegistryModelInfo,
 )
 
-
 class ModelLoader:
     """Handles loading and managing OpenMed models from HuggingFace Hub."""
 
@@ -674,7 +673,6 @@ class ModelLoader:
                 logger.debug(
                     "Failed to clear MPS cache after unloading model", exc_info=True
                 )
-
 
 # Convenience function for quick model loading
 def load_model(

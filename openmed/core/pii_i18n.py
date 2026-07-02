@@ -89,11 +89,9 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "th": "OpenMed/privacy-filter-multilingual",
 }
 
-
 # ---------------------------------------------------------------------------
 # National ID Validators
 # ---------------------------------------------------------------------------
-
 
 def validate_french_nir(text: str) -> bool:
     """Validate French NIR/INSEE number.
@@ -134,7 +132,6 @@ def validate_french_nir(text: str) -> bool:
     except (ValueError, IndexError):
         return False
 
-
 def validate_german_steuer_id(text: str) -> bool:
     """Validate German Steuer-ID (tax identification number).
 
@@ -172,7 +169,6 @@ def validate_german_steuer_id(text: str) -> bool:
 
     return True
 
-
 def validate_italian_codice_fiscale(text: str) -> bool:
     """Validate Italian Codice Fiscale format.
 
@@ -201,9 +197,7 @@ def validate_italian_codice_fiscale(text: str) -> bool:
     pattern = r"^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$"
     return bool(re.match(pattern, cleaned))
 
-
 _DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
-
 
 def validate_spanish_dni(text: str) -> bool:
     """Validate Spanish DNI (Documento Nacional de Identidad).
@@ -229,7 +223,6 @@ def validate_spanish_dni(text: str) -> bool:
     number = int(match.group(1))
     letter = match.group(2)
     return letter == _DNI_LETTERS[number % 23]
-
 
 def validate_spanish_nie(text: str) -> bool:
     """Validate Spanish NIE (N\u00famero de Identidad de Extranjero).
@@ -260,7 +253,6 @@ def validate_spanish_nie(text: str) -> bool:
     number = int(prefix_map[prefix] + digits)
     return letter == _DNI_LETTERS[number % 23]
 
-
 def validate_dutch_bsn(text: str) -> bool:
     """Validate Dutch BSN (Burgerservicenummer).
 
@@ -286,7 +278,6 @@ def validate_dutch_bsn(text: str) -> bool:
     checksum = sum(int(digit) * weight for digit, weight in zip(digits, weights))
     return checksum % 11 == 0
 
-
 # Verhoeff tables for Aadhaar checksum validation
 _VERHOEFF_D = [
     [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -310,7 +301,6 @@ _VERHOEFF_P = [
     [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
     [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
 ]
-
 
 def validate_aadhaar(text: str) -> bool:
     """Validate Indian Aadhaar number using the Verhoeff checksum.
@@ -338,7 +328,6 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
-
 
 def validate_portuguese_cpf(text: str) -> bool:
     """Validate Brazilian CPF number.
@@ -372,7 +361,6 @@ def validate_portuguese_cpf(text: str) -> bool:
         second_check = 0
 
     return numbers[9] == first_check and numbers[10] == second_check
-
 
 def validate_portuguese_cnpj(text: str) -> bool:
     """Validate Brazilian CNPJ number.
@@ -410,7 +398,6 @@ def validate_portuguese_cnpj(text: str) -> bool:
 
     return numbers[12] == first_check and numbers[13] == second_check
 
-
 def validate_turkish_tckn(text: str) -> bool:
     """Validate Turkish T.C. Kimlik No (TCKN).
 
@@ -438,7 +425,6 @@ def validate_turkish_tckn(text: str) -> bool:
     eleventh = sum(numbers[:10]) % 10
 
     return numbers[9] == tenth and numbers[10] == eleventh
-
 
 def validate_israeli_teudat_zehut(text: str) -> bool:
     """Validate an Israeli Teudat Zehut identity number.
@@ -468,7 +454,6 @@ def validate_israeli_teudat_zehut(text: str) -> bool:
         total += product if product < 10 else (product // 10) + (product % 10)
 
     return total % 10 == 0
-
 
 def validate_indonesian_nik(text: str) -> bool:
     """Validate Indonesian NIK (Nomor Induk Kependudukan) structure.
@@ -521,7 +506,6 @@ def validate_indonesian_nik(text: str) -> bool:
     except (ValueError, calendar.IllegalMonthError):
         return False
 
-
 def validate_thai_national_id(text: str) -> bool:
     """Validate Thai 13-digit national ID with its mod-11 checksum.
 
@@ -546,7 +530,6 @@ def validate_thai_national_id(text: str) -> bool:
     check = (11 - total % 11) % 10
 
     return numbers[12] == check
-
 
 def validate_polish_pesel(text: str) -> bool:
     """Validate Polish PESEL number.
@@ -622,7 +605,6 @@ def validate_polish_pesel(text: str) -> bool:
 
     return True
 
-
 def validate_latvian_personas_kods(text: str) -> bool:
     """Validate Latvian personas kods.
 
@@ -659,14 +641,12 @@ def validate_latvian_personas_kods(text: str) -> bool:
     except (ValueError, calendar.IllegalMonthError):
         return False
 
-
 def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     """Return the Latvian personas kods check digit for the first 10 digits."""
     weights = (1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
-
 
 def validate_korean_rrn(text: str) -> bool:
     """Validate South Korean Resident Registration Number (RRN).
@@ -743,7 +723,6 @@ def validate_korean_rrn(text: str) -> bool:
 
     return numbers[12] == check
 
-
 def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     """Validate a Czech/Slovak rodne cislo birth number.
 
@@ -804,7 +783,6 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
         except (ValueError, calendar.IllegalMonthError):
             continue
     return False
-
 
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
@@ -1022,7 +1000,6 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "ธันวาคม",
     ],
 }
-
 
 # ---------------------------------------------------------------------------
 # Language-specific PII patterns
@@ -2201,7 +2178,6 @@ _TURKISH_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
-
 # ---------------------------------------------------------------------------
 # Indonesian PII patterns
 # ---------------------------------------------------------------------------
@@ -2300,7 +2276,6 @@ _INDONESIAN_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
 ]
-
 
 _THAI_MONTH_PATTERN = (
     r"มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|"
@@ -2404,7 +2379,6 @@ _THAI_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
-
 # ---------------------------------------------------------------------------
 # Polish PII patterns
 # ---------------------------------------------------------------------------
@@ -2494,7 +2468,6 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
-
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # RRN (13-digit Resident Registration Number)
     PIIPattern(
@@ -2514,7 +2487,6 @@ _KOREAN_PII_PATTERNS: List[PIIPattern] = [
         validator=validate_korean_rrn,
     ),
 ]
-
 
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
@@ -2646,7 +2618,6 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ko": _KOREAN_PII_PATTERNS,
     "sk": _SLOVAK_PII_PATTERNS,
 }
-
 
 # ---------------------------------------------------------------------------
 # Language-specific fake data
@@ -3043,11 +3014,9 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
     },
 }
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def get_patterns_for_language(lang: str) -> List[PIIPattern]:
     """Return combined PII patterns for the given language.

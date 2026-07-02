@@ -2,11 +2,10 @@
 
 import logging
 import re
-import string
+
 from typing import Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
-
 
 class TextProcessor:
     """Handles text preprocessing and cleaning for medical text analysis."""
@@ -198,7 +197,6 @@ class TextProcessor:
 
         return entities
 
-
 def preprocess_text(
     text: str,
     lowercase: bool = False,
@@ -225,7 +223,6 @@ def preprocess_text(
         normalize_whitespace=normalize_whitespace,
     )
     return processor.clean_text(text)
-
 
 def postprocess_text(text: str, capitalize_first: bool = True) -> str:
     """Postprocess text for better readability.

@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 from typing import Any, List, Optional, Union
 
-
 def validate_input(
     text: Any,
     min_length: int = 1,
@@ -56,7 +55,6 @@ def validate_input(
 
     return text
 
-
 def validate_model_name(model_name: str) -> str:
     """Validate model name format.
 
@@ -104,7 +102,6 @@ def validate_model_name(model_name: str) -> str:
 
     return model_name
 
-
 def validate_confidence_threshold(threshold: float) -> float:
     """Validate confidence threshold value.
 
@@ -124,7 +121,6 @@ def validate_confidence_threshold(threshold: float) -> float:
         raise ValueError("Confidence threshold must be between 0.0 and 1.0")
 
     return float(threshold)
-
 
 def validate_output_format(format_name: str) -> str:
     """Validate output format name.
@@ -150,7 +146,6 @@ def validate_output_format(format_name: str) -> str:
 
     return format_name
 
-
 def validate_batch_size(batch_size: int, max_batch_size: int = 100) -> int:
     """Validate batch size for processing.
 
@@ -174,7 +169,6 @@ def validate_batch_size(batch_size: int, max_batch_size: int = 100) -> int:
         raise ValueError(f"Batch size too large. Maximum: {max_batch_size}")
 
     return batch_size
-
 
 def _contains_suspicious_content(text: str) -> bool:
     """Check if text contains suspicious content.
@@ -201,7 +195,6 @@ def _contains_suspicious_content(text: str) -> bool:
         return True
 
     return False
-
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename for safe file operations.
