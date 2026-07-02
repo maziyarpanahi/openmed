@@ -226,6 +226,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "analyze",
         "extract_pii",
         "deidentify",
+        "privacy_gateway",
         "loaded_models",
         "unload_model",
         "unload_all_models",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any, Literal, Optional, Union
 
 from openmed.core.policy import canonical_policy_name
@@ -85,6 +86,33 @@ def _normalize_policy_name(value: Any) -> Optional[str]:
     if value is None:
         return None
     return canonical_policy_name(str(value))
+
+
+def _normalize_gateway_policy(value: Any) -> str:
+    if value is None:
+        return "strict"
+    normalized = str(value).strip()
+    if not normalized:
+        raise ValueError("Policy must not be blank")
+    return normalized
+
+
+def _normalize_entity_categories(value: Any) -> list[str]:
+    from .privacy_gateway import normalize_entity_category
+
+    if value is None:
+        return []
+    if isinstance(value, str):
+        raw_values = [item.strip() for item in value.split(",")]
+    elif isinstance(value, Sequence):
+        raw_values = [str(item).strip() for item in value]
+    else:
+        raise ValueError("Entity categories must be a list of strings")
+
+    categories = {
+        normalize_entity_category(item) for item in raw_values if item.strip()
+    }
+    return sorted(categories)
 
 
 def _validate_keep_alive_value(value: Any) -> Any:
@@ -247,6 +275,52 @@ if PYDANTIC_V2:
                 setattr(self, field_name, value)
             return self
 
+    class PrivacyGatewayRequest(_StrictModel):
+        """Request schema for /privacy-gateway/complete."""
+
+        text: str
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+        detector_confidence_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        policy: str = "strict"
+        disallowed_entity_categories: list[str] = Field(default_factory=list)
+        use_smart_merging: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("text", mode="before")
+        @classmethod
+        def _validate_text(cls, value: Any) -> str:
+            return _normalize_text(value)
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @field_validator("confidence_threshold", "detector_confidence_floor")
+        @classmethod
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            assert normalized is not None
+            return normalized
+
+        @field_validator("policy", mode="before")
+        @classmethod
+        def _validate_gateway_policy(cls, value: Any) -> str:
+            return _normalize_gateway_policy(value)
+
+        @field_validator("disallowed_entity_categories", mode="before")
+        @classmethod
+        def _validate_disallowed_entity_categories(cls, value: Any) -> list[str]:
+            return _normalize_entity_categories(value)
+
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
     class ModelUnloadRequest(_StrictModel):
         """Request schema for /models/unload."""
 
@@ -376,6 +450,46 @@ else:
         @root_validator
         def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
             return _normalize_shift_dates_payload(values)
+
+    class PrivacyGatewayRequest(_StrictModel):
+        """Request schema for /privacy-gateway/complete."""
+
+        text: str
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+        detector_confidence_floor: float = Field(default=0.0, ge=0.0, le=1.0)
+        policy: str = "strict"
+        disallowed_entity_categories: list[str] = Field(default_factory=list)
+        use_smart_merging: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("text", pre=True)
+        def _validate_text(cls, value: Any) -> str:
+            return _normalize_text(value)
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @validator("confidence_threshold", "detector_confidence_floor")
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            assert normalized is not None
+            return normalized
+
+        @validator("policy", pre=True)
+        def _validate_gateway_policy(cls, value: Any) -> str:
+            return _normalize_gateway_policy(value)
+
+        @validator("disallowed_entity_categories", pre=True)
+        def _validate_disallowed_entity_categories(cls, value: Any) -> list[str]:
+            return _normalize_entity_categories(value)
+
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
 
     class ModelUnloadRequest(_StrictModel):
         """Request schema for /models/unload."""

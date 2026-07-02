@@ -23,6 +23,7 @@ CLIENT_METHOD_BY_PATH = {
     "/models/unload": "unloadModels",
     "/pii/deidentify": "deidentify",
     "/pii/extract": "extractPii",
+    "/privacy-gateway/complete": "privacyGateway",
     "/readyz": "readyz",
 }
 
