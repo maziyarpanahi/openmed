@@ -9,7 +9,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from openmed.core.config import OpenMedConfig, get_config
 from openmed.core.models import ModelLoader
 
-from .exceptions import MissingDependencyError
 from .families import (
     ModelFamily,
     ensure_gliner2_available,
@@ -20,7 +19,6 @@ from .families.gliner import GLiNERHandle, load_gliner_handle
 from .indexing import DEFAULT_INDEX_PATH, ModelIndex, ModelRecord, load_index
 from .labels import get_default_labels
 
-
 @dataclass
 class NerRequest:
     model_id: str
@@ -28,7 +26,6 @@ class NerRequest:
     threshold: float = 0.5
     labels: Optional[List[str]] = None
     domain: Optional[str] = None
-
 
 @dataclass
 class Entity:
@@ -54,7 +51,6 @@ class Entity:
             payload["extras"] = self.extras
         return payload
 
-
 @dataclass
 class NerResponse:
     entities: List[Entity]
@@ -65,7 +61,6 @@ class NerResponse:
             "entities": [entity.to_dict() for entity in self.entities],
             "meta": self.meta,
         }
-
 
 def infer(
     request: NerRequest,
@@ -118,23 +113,19 @@ def infer(
     )
     return response
 
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-
 def _load_index(index_path: Optional[Path]) -> ModelIndex:
     path = index_path or DEFAULT_INDEX_PATH
     return load_index(path)
-
 
 def _lookup_model(model_id: str, index: ModelIndex) -> ModelRecord:
     for record in index.models:
         if record.id == model_id:
             return record
     raise ValueError(f"Model '{model_id}' not found in index.")
-
 
 def _resolve_labels(
     request: NerRequest, record: ModelRecord
@@ -151,7 +142,6 @@ def _resolve_labels(
     if not labels:
         labels = get_default_labels("generic")
     return labels, domain
-
 
 def _run_gliner_inference(
     record: ModelRecord,
@@ -182,7 +172,6 @@ def _run_gliner_inference(
 
     return [_convert_gliner_entity(item) for item in raw_entities]
 
-
 def _run_gliner2_inference(
     record: ModelRecord,
     request: NerRequest,
@@ -212,7 +201,6 @@ def _run_gliner2_inference(
 
     return [_convert_gliner_entity(item) for item in raw_entities]
 
-
 def _convert_gliner_entity(item: Any) -> Entity:
     if isinstance(item, dict):
         start = _extract_position(item, "start", 0)
@@ -239,7 +227,6 @@ def _convert_gliner_entity(item: Any) -> Entity:
         extras=extras,
     )
 
-
 def _extract_position(item: Dict[str, Any], key: str, span_index: int) -> int:
     if key in item:
         return int(item[key])
@@ -247,7 +234,6 @@ def _extract_position(item: Dict[str, Any], key: str, span_index: int) -> int:
     if isinstance(span, (list, tuple)) and len(span) > span_index:
         return int(span[span_index])
     raise KeyError(f"Missing '{key}' in GLiNER entity: {item}")
-
 
 def _run_other_inference(
     record: ModelRecord,
@@ -267,7 +253,6 @@ def _run_other_inference(
     if isinstance(outputs, dict):
         outputs = [outputs]
     return [_convert_hf_entity(item) for item in outputs]
-
 
 def _convert_hf_entity(item: Dict[str, Any]) -> Entity:
     label = item.get("entity_group") or item.get("entity") or "UNKNOWN"
@@ -302,10 +287,8 @@ def _convert_hf_entity(item: Dict[str, Any]) -> Entity:
         extras=extras,
     )
 
-
 def _apply_threshold(entities: Iterable[Entity], threshold: float) -> List[Entity]:
     return [entity for entity in entities if entity.score >= threshold]
-
 
 __all__ = [
     "NerRequest",

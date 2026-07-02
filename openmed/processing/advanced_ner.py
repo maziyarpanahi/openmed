@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class EntitySpan:
     """Represents a single entity span with position information."""
@@ -27,7 +26,6 @@ class EntitySpan:
             "end": self.end,
             "score": self.score,
         }
-
 
 class AdvancedNERProcessor:
     """
@@ -415,7 +413,6 @@ class AdvancedNERProcessor:
                 "merge_adjacent": self.merge_adjacent,
             },
         }
-
 
 def create_advanced_processor(
     confidence_threshold: float = 0.60, **kwargs

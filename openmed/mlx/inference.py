@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-import math
+
 import re
 from bisect import bisect_left, bisect_right
 from pathlib import Path
@@ -45,7 +45,6 @@ try:
 except ImportError:
     MLX_AVAILABLE = False
 
-
 def _tokenizer_has_list_extra_special_tokens(reference: str | Path) -> bool:
     """Return True for local tokenizer configs with legacy list-shaped extras."""
     tokenizer_dir = Path(reference)
@@ -63,7 +62,6 @@ def _tokenizer_has_list_extra_special_tokens(reference: str | Path) -> bool:
         return False
 
     return isinstance(config.get("extra_special_tokens"), list)
-
 
 def _load_auto_tokenizer(reference: str | Path) -> Any:
     """Load a tokenizer, tolerating older exported tokenizer metadata."""
@@ -93,7 +91,6 @@ def _load_auto_tokenizer(reference: str | Path) -> Any:
             raise
         return _from_pretrained(extra_special_tokens={})
 
-
 def _resolve_model_max_length(tokenizer: Any, config: dict[str, Any]) -> int | None:
     """Resolve a practical tokenizer max length from artifact metadata."""
     candidates = (
@@ -110,7 +107,6 @@ def _resolve_model_max_length(tokenizer: Any, config: dict[str, Any]) -> int | N
             return max_length
     return None
 
-
 def _tokenize_with_optional_max_length(
     tokenizer: Any,
     max_length: int | None,
@@ -121,7 +117,6 @@ def _tokenize_with_optional_max_length(
     if max_length is not None and kwargs.get("truncation"):
         kwargs.setdefault("max_length", max_length)
     return tokenizer(*args, **kwargs)
-
 
 class MLXTokenClassificationPipeline:
     """NER inference pipeline backed by an MLX token-classification model.
@@ -333,7 +328,6 @@ class MLXTokenClassificationPipeline:
 
         return entities
 
-
 def _decode_tiktoken_offsets(
     token_ids: Sequence[int], encoding: Any
 ) -> tuple[str, list[int], list[int]]:
@@ -368,13 +362,11 @@ def _decode_tiktoken_offsets(
 
     return decoded_text, char_starts, char_ends
 
-
 # Span-refinement helpers moved to openmed.core.decoding.spans for reuse
 # across MLX and Torch privacy-filter pipelines. Keep local aliases so the
 # rest of this module reads unchanged.
 _trim_span_whitespace = trim_span_whitespace
 _refine_privacy_filter_span = refine_privacy_filter_span
-
 
 class PrivacyFilterMLXPipeline:
     """OpenAI Privacy Filter inference with tiktoken offsets and BIOES Viterbi."""
@@ -589,10 +581,8 @@ class PrivacyFilterMLXPipeline:
             )
         return entities
 
-
 def _sigmoid(logits: mx.array) -> mx.array:
     return 1.0 / (1.0 + mx.exp(-logits))
-
 
 def _split_words_with_offsets(text: str) -> tuple[list[str], list[tuple[int, int]]]:
     words: list[str] = []
@@ -601,7 +591,6 @@ def _split_words_with_offsets(text: str) -> tuple[list[str], list[tuple[int, int
         words.append(match.group(0))
         offsets.append((match.start(), match.end()))
     return words, offsets
-
 
 def _prepare_word_mask(
     tokenized_inputs: Any,
@@ -625,12 +614,10 @@ def _prepare_word_mask(
         previous_word_id = word_id
     return mask
 
-
 def _as_batched_lists(values: Any) -> list[list[int]]:
     if values and isinstance(values[0], list):
         return values
     return [values]
-
 
 def _build_ragged_span_batch(
     spans: list[list[tuple[int, int]]],
@@ -649,7 +636,6 @@ def _build_ragged_span_batch(
         mx.array(padded_mask, dtype=mx.bool_),
     )
 
-
 def _suppress_overlaps(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
     for entity in sorted(
@@ -664,7 +650,6 @@ def _suppress_overlaps(entities: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(
         selected, key=lambda item: (item["start"], item["end"], item["label"])
     )
-
 
 class _BaseExperimentalMLXPipeline:
     """Shared loader/tokenizer plumbing for experimental MLX tasks."""
@@ -715,7 +700,6 @@ class _BaseExperimentalMLXPipeline:
             or self.config.get("_mlx_prompt_spec")
             or {}
         )
-
 
 class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
     """Experimental MLX zero-shot NER pipeline for GLiNER span checkpoints."""
@@ -810,7 +794,6 @@ class GLiNERMLXPipeline(_BaseExperimentalMLXPipeline):
             entities, key=lambda item: (item["start"], item["end"], item["label"])
         )
 
-
 class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
     """Experimental MLX zero-shot classification pipeline for GLiClass."""
 
@@ -865,7 +848,6 @@ class GLiClassMLXPipeline(_BaseExperimentalMLXPipeline):
             if score >= threshold:
                 predictions.append({"label": str(labels[index]), "score": score})
         return sorted(predictions, key=lambda item: item["score"], reverse=True)
-
 
 class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
     """Experimental MLX relation-extraction pipeline for GLiNER relex checkpoints."""
@@ -991,7 +973,6 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
             ),
         }
 
-
 def _decode_relation_graph(
     *,
     entities: Sequence[dict[str, Any]],
@@ -1058,7 +1039,6 @@ def _decode_relation_graph(
         for edge in graph.edges
     ]
 
-
 # -- MLX model registry -------------------------------------------------------
 
 _MLX_MODEL_MAP: Dict[str, str] = {
@@ -1098,7 +1078,6 @@ _MLX_MODEL_MAP: Dict[str, str] = {
     "OpenMed/OpenMed-PII-Turkish-BigMed-Large-560M-v1": "OpenMed/OpenMed-PII-Turkish-BigMed-Large-560M-v1-mlx",
 }
 
-
 def _download_preconverted_mlx_model(
     repo_id: str,
     cache_dir: Optional[str] = None,
@@ -1132,7 +1111,6 @@ def _download_preconverted_mlx_model(
             "added_tokens.json",
         ],
     )
-
 
 def _resolve_mlx_model(
     model_name: str,
@@ -1210,7 +1188,6 @@ def _resolve_mlx_model(
 
     convert(full_model_id, output_dir, cache_dir=cache_dir)
     return str(output_dir), full_model_id
-
 
 def create_mlx_pipeline(
     model_name: str,

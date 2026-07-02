@@ -27,11 +27,9 @@ from .families.base import ModelFamily
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INDEX_PATH = PACKAGE_ROOT / "models" / "index.json"
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class ModelRecord:
@@ -56,7 +54,6 @@ class ModelRecord:
         if self.notes:
             payload["notes"] = self.notes
         return payload
-
 
 @dataclass(frozen=True)
 class ModelIndex:
@@ -90,11 +87,9 @@ class ModelIndex:
             domains.update(record.domains)
         return domains
 
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-
 
 def build_index(models_dir: Path) -> ModelIndex:
     """Discover models located under ``models_dir`` and return a structured index.
@@ -122,13 +117,11 @@ def build_index(models_dir: Path) -> ModelIndex:
         source_dir=models_dir,
     )
 
-
 def discover_models(models_dir: Path) -> Iterator[ModelRecord]:
     """Yield ``ModelRecord`` instances discovered under ``models_dir``."""
 
     for candidate in _iter_candidate_dirs(models_dir):
         yield _build_record(candidate, models_dir)
-
 
 def write_index(index: ModelIndex, path: Path, *, pretty: bool = True) -> None:
     """Persist ``index`` to ``path``.
@@ -149,11 +142,9 @@ def write_index(index: ModelIndex, path: Path, *, pretty: bool = True) -> None:
     tmp_path.write_text(content, encoding="utf-8")
     os.replace(tmp_path, path)
 
-
 # ---------------------------------------------------------------------------
 # Discovery heuristics
 # ---------------------------------------------------------------------------
-
 
 MODEL_CORE_FILES = {
     "config.json",
@@ -219,7 +210,6 @@ DOMAIN_TOKENS = {
     "generic": "generic",
 }
 
-
 def _iter_candidate_dirs(root: Path) -> Iterator[Path]:
     """Traverse ``root`` and yield directories likely to contain models."""
 
@@ -228,7 +218,6 @@ def _iter_candidate_dirs(root: Path) -> Iterator[Path]:
             continue
         if _looks_like_model_dir(path):
             yield path
-
 
 def _looks_like_model_dir(path: Path) -> bool:
     """Heuristic to decide whether ``path`` represents a model artefact."""
@@ -246,7 +235,6 @@ def _looks_like_model_dir(path: Path) -> bool:
         return True
 
     return False
-
 
 def _build_record(model_path: Path, root: Path) -> ModelRecord:
     """Create a ``ModelRecord`` for ``model_path``."""
@@ -267,7 +255,6 @@ def _build_record(model_path: Path, root: Path) -> ModelRecord:
         notes=notes,
     )
 
-
 def _format_model_id(relative_path: Path) -> str:
     """Turn a relative path into a stable identifier."""
 
@@ -275,14 +262,12 @@ def _format_model_id(relative_path: Path) -> str:
     normalized = "-".join(part.replace(" ", "_") for part in parts)
     return normalized.lower()
 
-
 def _guess_family(relative_path: Path) -> str:
     tokens = _tokenise_path(relative_path)
     for token in tokens:
         if token in FAMILY_HINTS:
             return FAMILY_HINTS[token].value
     return ModelFamily.OTHER.value
-
 
 def _guess_domains(relative_path: Path) -> Set[str]:
     domains: Set[str] = set()
@@ -294,7 +279,6 @@ def _guess_domains(relative_path: Path) -> Set[str]:
     if not domains:
         domains.add("generic")
     return domains
-
 
 def _guess_languages(relative_path: Path) -> Set[str]:
     langs: Set[str] = set()
@@ -309,7 +293,6 @@ def _guess_languages(relative_path: Path) -> Set[str]:
                 break
     return langs
 
-
 def _extract_notes(model_path: Path) -> Optional[str]:
     metadata_file = model_path / "metadata.json"
     if metadata_file.exists():
@@ -322,7 +305,6 @@ def _extract_notes(model_path: Path) -> Optional[str]:
             return note.strip()
     return None
 
-
 def _tokenise_path(path: Path) -> Set[str]:
     tokens: Set[str] = set()
     pattern = re.compile(r"[^\w]+")
@@ -334,14 +316,12 @@ def _tokenise_path(path: Path) -> Set[str]:
                 tokens.add(token)
     return tokens
 
-
 def _deduplicate(records: Iterable[ModelRecord]) -> Iterator[ModelRecord]:
     unique: Dict[str, ModelRecord] = {}
     for record in records:
         unique.setdefault(record.id, record)
     for record in sorted(unique.values(), key=lambda item: item.id):
         yield record
-
 
 def load_index(path: Optional[Path] = None) -> ModelIndex:
     """Load a previously generated index from ``path``."""
@@ -391,7 +371,6 @@ def load_index(path: Optional[Path] = None) -> ModelIndex:
         generated_at=generated_at.astimezone(timezone.utc),
         source_dir=source_dir,
     )
-
 
 __all__ = [
     "ModelRecord",

@@ -24,7 +24,6 @@ from typing import (
 logger = logging.getLogger(__name__)
 _warned_substitutions: set[str] = set()
 
-
 @runtime_checkable
 class InferenceBackend(Protocol):
     """Protocol for inference backends.
@@ -54,7 +53,6 @@ class InferenceBackend(Protocol):
         """
         ...
 
-
 class HuggingFaceBackend:
     """Backend using HuggingFace Transformers + PyTorch."""
 
@@ -82,7 +80,6 @@ class HuggingFaceBackend:
             aggregation_strategy=aggregation_strategy,
             **kwargs,
         )
-
 
 class MLXBackend:
     """Backend using Apple MLX for hardware-accelerated inference."""
@@ -116,14 +113,12 @@ class MLXBackend:
             **kwargs,
         )
 
-
 # -- Backend registry and auto-detection ------------------------------------
 
 _BACKENDS: Dict[str, type] = {
     "hf": HuggingFaceBackend,
     "mlx": MLXBackend,
 }
-
 
 def get_backend(
     name: Optional[str] = None,
@@ -163,7 +158,6 @@ def get_backend(
         "Install at least one: pip install openmed[hf] or pip install openmed[mlx]"
     )
 
-
 # -- Privacy-filter routing ------------------------------------------------
 
 # Default Torch fallback for the original OpenAI Privacy Filter MLX artifacts
@@ -173,7 +167,6 @@ def get_backend(
 # understand the substitution.
 PRIVACY_FILTER_TORCH_FALLBACK = "openai/privacy-filter"
 
-
 # Family-aware Torch fallbacks. Order matters: the first matching marker
 # wins. Add new privacy-filter families here as they're introduced so an
 # MLX-only request from Linux falls back to the same family's PyTorch model
@@ -182,7 +175,6 @@ _TORCH_FALLBACK_BY_FAMILY: tuple[tuple[str, str], ...] = (
     ("multilingual", "OpenMed/privacy-filter-multilingual"),
     ("nemotron", "OpenMed/privacy-filter-nemotron"),
 )
-
 
 def _torch_fallback_for(model_name: str) -> str:
     """Pick the Torch fallback that matches ``model_name``'s family.
@@ -194,7 +186,6 @@ def _torch_fallback_for(model_name: str) -> str:
         if marker in name_lc:
             return repo
     return PRIVACY_FILTER_TORCH_FALLBACK
-
 
 def select_privacy_filter_backend(
     model_name: str,
@@ -225,7 +216,6 @@ def select_privacy_filter_backend(
         return "mlx"
     return "torch"
 
-
 def resolve_privacy_filter_model(
     model_name: str,
     backend: Literal["mlx", "torch"],
@@ -254,7 +244,6 @@ def resolve_privacy_filter_model(
             _warned_substitutions.add(model_name)
         return target
     return model_name
-
 
 def create_privacy_filter_pipeline(model_name: str) -> Callable:
     """Build a privacy-filter pipeline appropriate for the host.

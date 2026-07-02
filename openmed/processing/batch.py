@@ -22,13 +22,10 @@ from typing import (
     Union,
 )
 
-from .outputs import PredictionResult
-
 logger = logging.getLogger(__name__)
 
 BatchOperation = Literal["analyze_text", "extract_pii", "deidentify"]
 _VALID_OPERATIONS = {"analyze_text", "extract_pii", "deidentify"}
-
 
 @dataclass
 class BatchItem:
@@ -38,7 +35,6 @@ class BatchItem:
     text: str
     source: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-
 
 @dataclass
 class BatchItemResult:
@@ -66,7 +62,6 @@ class BatchItemResult:
             "source": self.source,
         }
 
-
 @dataclass(frozen=True)
 class BatchProgress:
     """PHI-safe progress snapshot for a batch processing job."""
@@ -75,7 +70,6 @@ class BatchProgress:
     total: int
     current_index: int
     elapsed: float
-
 
 @dataclass
 class BatchResult:
@@ -142,8 +136,8 @@ class BatchResult:
     def summary(self) -> str:
         """Generate a human-readable summary of the batch results."""
         lines = [
-            f"Batch Processing Summary",
-            f"========================",
+            "Batch Processing Summary",
+            "========================",
             f"Model: {self.model_name}",
             f"Total items: {self.total_items}",
             f"Successful: {self.successful_items}",
@@ -154,11 +148,9 @@ class BatchResult:
         ]
         return "\n".join(lines)
 
-
 # Type alias for progress callback
 ProgressCallback = Callable[[int, int, Optional[BatchItemResult]], None]
 BatchProgressCallback = Callable[[BatchProgress], None]
-
 
 class BatchProcessor:
     """Process multiple texts efficiently with progress tracking.
@@ -735,7 +727,6 @@ class BatchProcessor:
                     on_progress=on_progress,
                 )
                 yield result
-
 
 def process_batch(
     texts: Sequence[str],

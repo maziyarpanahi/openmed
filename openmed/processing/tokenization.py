@@ -35,13 +35,11 @@ _MEDICAL_TOKEN_PATTERN = re.compile(
     r"|[^ \t\r\n]"  # any other non-space char as its own token
 )
 
-
 @dataclass(frozen=True)
 class SpanToken:
     text: str
     start: int
     end: int
-
 
 def medical_tokenize(
     text: str,
@@ -99,7 +97,6 @@ def medical_tokenize(
     return [
         t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start
     ]
-
 
 def remap_predictions_to_tokens(
     predictions: List[Dict[str, Any]],
@@ -182,7 +179,6 @@ def remap_predictions_to_tokens(
 
     return remapped
 
-
 def _is_reasonable_length(
     value: Optional[int], threshold: int = _UNSET_MAX_LENGTH_SENTINEL
 ) -> bool:
@@ -196,7 +192,6 @@ def _is_reasonable_length(
     if as_int <= 0:
         return False
     return as_int < threshold
-
 
 def infer_tokenizer_max_length(
     tokenizer: "PreTrainedTokenizer",
@@ -253,7 +248,6 @@ def infer_tokenizer_max_length(
         candidates,
     )
     return None
-
 
 class TokenizationHelper:
     """Helper class for tokenization operations in medical text."""

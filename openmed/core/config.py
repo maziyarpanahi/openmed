@@ -48,7 +48,6 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-
 @dataclass
 class OpenMedConfig:
     """Configuration class for OpenMed package."""
@@ -274,21 +273,17 @@ class OpenMedConfig:
         current["profile"] = profile_name
         return OpenMedConfig.from_dict(current)
 
-
 # Global configuration instance
 _config = OpenMedConfig()
-
 
 def get_config() -> OpenMedConfig:
     """Get the global configuration instance."""
     return _config
 
-
 def set_config(config: OpenMedConfig) -> None:
     """Set the global configuration instance."""
     global _config
     _config = config
-
 
 def resolve_config_path(path: Optional[Union[str, Path]] = None) -> Path:
     """Resolve the configuration file path, applying environment overrides."""
@@ -301,11 +296,9 @@ def resolve_config_path(path: Optional[Union[str, Path]] = None) -> Path:
 
     return DEFAULT_CONFIG_PATH
 
-
 def ensure_config_directory(path: Path) -> None:
     """Ensure that the configuration directory exists."""
     path.parent.mkdir(parents=True, exist_ok=True)
-
 
 def _parse_value(value: str) -> Any:
     lowered = value.lower()
@@ -331,7 +324,6 @@ def _parse_value(value: str) -> Any:
     # Fallback to raw string
     return value
 
-
 def _format_value(value: Any) -> str:
     if value is None:
         return "null"
@@ -340,7 +332,6 @@ def _format_value(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     return f'"{value}"'
-
 
 def _load_toml(path: Path) -> Dict[str, Any]:
     data: Dict[str, Any] = {}
@@ -357,7 +348,6 @@ def _load_toml(path: Path) -> Dict[str, Any]:
             data[key] = _parse_value(value)
     return data
 
-
 def _dump_toml(data: Dict[str, Any]) -> str:
     lines = [
         "# OpenMed configuration file",
@@ -367,7 +357,6 @@ def _dump_toml(data: Dict[str, Any]) -> str:
     for key, value in data.items():
         lines.append(f"{key} = {_format_value(value)}")
     return "\n".join(lines) + "\n"
-
 
 def load_config_from_file(path: Optional[Union[str, Path]] = None) -> OpenMedConfig:
     """Load configuration from a TOML file, merging with current defaults."""
@@ -384,7 +373,6 @@ def load_config_from_file(path: Optional[Union[str, Path]] = None) -> OpenMedCon
 
     return OpenMedConfig.from_dict(merged)
 
-
 def save_config_to_file(
     config: OpenMedConfig, path: Optional[Union[str, Path]] = None
 ) -> Path:
@@ -395,11 +383,9 @@ def save_config_to_file(
     config_path.write_text(toml_content, encoding="utf-8")
     return config_path
 
-
 # ---------------------------------------------------------------------------
 # Profile Management Functions
 # ---------------------------------------------------------------------------
-
 
 def list_profiles() -> List[str]:
     """List all available profiles (built-in and custom).
@@ -417,7 +403,6 @@ def list_profiles() -> List[str]:
                 profiles.append(profile_name)
 
     return sorted(profiles)
-
 
 def get_profile(profile_name: str) -> Dict[str, Any]:
     """Get the settings for a specific profile.
@@ -439,7 +424,6 @@ def get_profile(profile_name: str) -> Dict[str, Any]:
         return _load_toml(profile_path)
 
     raise ValueError(f"Unknown profile: {profile_name}")
-
 
 def save_profile(profile_name: str, settings: Dict[str, Any]) -> Path:
     """Save a custom profile to the profiles directory.
@@ -465,7 +449,6 @@ def save_profile(profile_name: str, settings: Dict[str, Any]) -> Path:
     profile_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return profile_path
 
-
 def delete_profile(profile_name: str) -> bool:
     """Delete a custom profile.
 
@@ -486,7 +469,6 @@ def delete_profile(profile_name: str) -> bool:
         profile_path.unlink()
         return True
     return False
-
 
 def load_config_with_profile(
     profile_name: Optional[str] = None,

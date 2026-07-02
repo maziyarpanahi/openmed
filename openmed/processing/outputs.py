@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
-
 def _to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
     """Convert value to built-in float if possible."""
     if value is None:
@@ -31,7 +30,6 @@ def _to_float(value: Any, default: Optional[float] = None) -> Optional[float]:
         logger.debug("Failed to convert %r to float", value)
         return default
 
-
 def _to_int(value: Any) -> Optional[int]:
     """Convert value to built-in int if possible."""
     if value is None:
@@ -51,7 +49,6 @@ def _to_int(value: Any) -> Optional[int]:
     except (TypeError, ValueError):
         logger.debug("Failed to convert %r to int", value)
         return None
-
 
 @dataclass
 class EntityPrediction:
@@ -75,7 +72,6 @@ class EntityPrediction:
             "metadata": self.metadata or {},
         }
 
-
 @dataclass
 class PredictionResult:
     """Represents the complete prediction result."""
@@ -93,7 +89,6 @@ class PredictionResult:
         result["entities"] = [entity.to_dict() for entity in self.entities]
         result["processing_time"] = _to_float(result.get("processing_time"))
         return result
-
 
 class OutputFormatter:
     """Formats model predictions into various output formats."""
@@ -432,15 +427,15 @@ class OutputFormatter:
         Returns:
             HTML string.
         """
-        html = f'<div class="openmed-result">\n'
-        html += f"<h3>Analysis Results</h3>\n"
+        html = '<div class="openmed-result">\n'
+        html += "<h3>Analysis Results</h3>\n"
         html += f"<p><strong>Model:</strong> {html_mod.escape(str(result.model_name))}</p>\n"
         html += f"<p><strong>Timestamp:</strong> {html_mod.escape(str(result.timestamp))}</p>\n"
 
         if result.processing_time:
             html += f"<p><strong>Processing Time:</strong> {result.processing_time:.3f}s</p>\n"
 
-        html += f'<div class="text-content">\n'
+        html += '<div class="text-content">\n'
 
         # Highlight entities in text
         highlighted_text = html_mod.escape(result.text)
@@ -472,13 +467,13 @@ class OutputFormatter:
             offset += len(highlight_start) + len(highlight_end)
 
         html += f"<p>{highlighted_text}</p>\n"
-        html += f"</div>\n"
+        html += "</div>\n"
 
         # Entity summary
         if result.entities:
-            html += f'<div class="entity-summary">\n'
+            html += '<div class="entity-summary">\n'
             html += f"<h4>Detected Entities ({len(result.entities)})</h4>\n"
-            html += f"<ul>\n"
+            html += "<ul>\n"
 
             for entity in result.entities:
                 confidence_str = (
@@ -488,10 +483,10 @@ class OutputFormatter:
                 )
                 html += f"<li><strong>{html_mod.escape(entity.label)}:</strong> {html_mod.escape(entity.text)}{confidence_str}</li>\n"
 
-            html += f"</ul>\n"
-            html += f"</div>\n"
+            html += "</ul>\n"
+            html += "</div>\n"
 
-        html += f"</div>\n"
+        html += "</div>\n"
         return html
 
     def _get_entity_color(self, label: str) -> str:
@@ -552,7 +547,6 @@ class OutputFormatter:
                     row[f"metadata_{key}"] = value
             rows.append(row)
         return rows
-
 
 def format_predictions(
     predictions: List[Dict[str, Any]],

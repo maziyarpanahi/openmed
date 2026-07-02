@@ -108,10 +108,8 @@ _GATED_CONTENT_MARKERS = (
 )
 _DATA_EXTENSIONS = {".csv", ".json", ".jsonl", ".ndjson", ".tsv", ".txt"}
 
-
 class DatasetUnavailable(FileNotFoundError):
     """Raised when a dataset source was requested but is absent."""
-
 
 @dataclass(frozen=True)
 class PublicDatasetSpan:
@@ -134,7 +132,6 @@ class PublicDatasetSpan:
                 "source_label": self.source_label or self.label,
             },
         )
-
 
 @dataclass(frozen=True)
 class PublicDatasetRecord:
@@ -185,7 +182,6 @@ class PublicDatasetRecord:
             "text": self.text,
         }
 
-
 @dataclass(frozen=True)
 class DatasetLoadResult:
     dataset: str
@@ -196,7 +192,6 @@ class DatasetLoadResult:
 
     def to_benchmark_fixtures(self) -> list[BenchmarkFixture]:
         return [record.to_benchmark_fixture() for record in self.records]
-
 
 @dataclass(frozen=True)
 class PublicDatasetAdapter:
@@ -283,7 +278,6 @@ class PublicDatasetAdapter:
             metadata=_clean_metadata(span.get("metadata") or {}),
         )
 
-
 def adapter_for(dataset: str) -> PublicDatasetAdapter:
     if dataset not in PUBLIC_DATASETS:
         raise ValueError(f"unknown public dataset: {dataset}")
@@ -293,12 +287,10 @@ def adapter_for(dataset: str) -> PublicDatasetAdapter:
         license=license_for(dataset),
     )
 
-
 def load_public_dataset(
     dataset: str, path: str | Path | None = None
 ) -> DatasetLoadResult:
     return adapter_for(dataset).load(path)
-
 
 def map_public_label(dataset: str, label: str, *, language: str = "en") -> str:
     label_map = PUBLIC_LABEL_MAPS.get(dataset)
@@ -309,7 +301,6 @@ def map_public_label(dataset: str, label: str, *, language: str = "en") -> str:
     if canonical not in CANONICAL_LABELS:
         return "OTHER"
     return canonical
-
 
 def assert_no_gated_content_committed(root: str | Path) -> None:
     """Fail if committed dataset payload files contain gated-code markers."""
@@ -325,7 +316,6 @@ def assert_no_gated_content_committed(root: str | Path) -> None:
         raise AssertionError(
             "gated dataset content must not be committed: " + ", ".join(offenders)
         )
-
 
 def _load_rows(path: Path) -> list[Mapping[str, Any]]:
     if path.is_dir():
@@ -357,7 +347,6 @@ def _load_rows(path: Path) -> list[Mapping[str, Any]]:
         raise ValueError("public dataset payload must contain a list of records")
     return [row for row in rows if isinstance(row, Mapping)]
 
-
 def _record_text(row: Mapping[str, Any]) -> str:
     if isinstance(row.get("text"), str):
         return str(row["text"])
@@ -368,7 +357,6 @@ def _record_text(row: Mapping[str, Any]) -> str:
     ]
     return " ".join(part for part in parts if part).strip()
 
-
 def _int_field(data: Mapping[str, Any], *keys: str) -> int:
     for key in keys:
         value = data.get(key)
@@ -378,7 +366,6 @@ def _int_field(data: Mapping[str, Any], *keys: str) -> int:
             return int(value)
     raise ValueError(f"span missing integer field from {keys!r}")
 
-
 def _clean_metadata(value: Mapping[str, Any]) -> dict[str, Any]:
     return {
         str(key): _plain_metadata(item)
@@ -386,14 +373,12 @@ def _clean_metadata(value: Mapping[str, Any]) -> dict[str, Any]:
         if str(key).lower() not in _CONTROLLED_METADATA_KEYS
     }
 
-
 def _plain_metadata(value: Any) -> Any:
     if isinstance(value, Mapping):
         return _clean_metadata(value)
     if isinstance(value, (list, tuple)):
         return [_plain_metadata(item) for item in value]
     return value
-
 
 def _iter_payload_files(root: Path) -> Iterable[Path]:
     if root.is_file():
@@ -403,7 +388,6 @@ def _iter_payload_files(root: Path) -> Iterable[Path]:
     for path in sorted(root.rglob("*")):
         if path.is_file() and path.suffix.lower() in _DATA_EXTENSIONS:
             yield path
-
 
 __all__ = [
     "DatasetLoadResult",
