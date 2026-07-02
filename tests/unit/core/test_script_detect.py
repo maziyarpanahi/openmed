@@ -5,6 +5,7 @@ from openmed.core.script_detect import (
     UNKNOWN_SCRIPT,
     candidate_languages_for_script,
     detect_script,
+    normalize_for_pii_detection,
     segment_by_script,
 )
 
@@ -73,3 +74,17 @@ def test_script_language_hints_cover_detectable_scripts():
         hints = candidate_languages_for_script(script)
         assert hints
         assert set(hints) <= SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+
+
+def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():
+    text = "Patient J\u200bo\u0301hn D\u03bfe"
+    normalized = normalize_for_pii_detection(text)
+
+    assert normalized.text == "Patient John Doe"
+    assert normalized.changed
+    assert normalized.mixed_script
+    assert normalized.removed_zero_width == 1
+    assert normalized.stripped_combining_marks == 1
+    assert normalized.folded_confusables == 1
+    assert normalized.remap_span(8, 16) == (8, len(text))
+    assert "Patient" not in normalized.to_metadata()
