@@ -385,8 +385,11 @@ class BatchProcessor:
                         source=str(path),
                     )
                 )
-            except OSError as e:
-                logger.warning("Failed to read file %s: %s", path, e)
+            except (OSError, IOError) as e:
+                logger.warning(
+                    "Failed to read batch input file: error_type=%s",
+                    type(e).__name__,
+                )
                 if not self.continue_on_error:
                     raise
                 items.append(
@@ -521,14 +524,20 @@ class BatchProcessor:
             )
             try:
                 on_progress(progress)
-            except Exception:
-                logger.warning("on_progress callback raised; continuing batch")
+            except Exception as e:
+                logger.warning(
+                    "on_progress callback raised; continuing batch: error_type=%s",
+                    type(e).__name__,
+                )
 
         if progress_callback:
             try:
                 progress_callback(completed, total, item_result)
-            except Exception:
-                logger.warning("progress_callback raised; continuing batch")
+            except Exception as e:
+                logger.warning(
+                    "progress_callback raised; continuing batch: error_type=%s",
+                    type(e).__name__,
+                )
 
     def _process_batch_chunk(self, items: List[BatchItem]) -> List[BatchItemResult]:
         """Process a contiguous item chunk for the selected operation."""
@@ -632,7 +641,10 @@ class BatchProcessor:
                 )
 
         except Exception as e:
-            logger.warning("Error processing batch chunk: %s", e)
+            logger.warning(
+                "Error processing batch chunk: error_type=%s",
+                type(e).__name__,
+            )
             if not self.continue_on_error:
                 raise
 
@@ -686,7 +698,10 @@ class BatchProcessor:
 
         except Exception as e:
             processing_time = time.time() - start_time
-            logger.warning("Error processing item %s: %s", item.id, e)
+            logger.warning(
+                "Error processing batch item: error_type=%s",
+                type(e).__name__,
+            )
 
             if not self.continue_on_error:
                 raise

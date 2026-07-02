@@ -13,6 +13,8 @@ publish the package to PyPI or GitHub Pages.
 - `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
 - `make docs-build` runs `mkdocs build --strict` for CI parity.
 - `uv pip install ".[dev]"` pulls in pytest + coverage; `uv pip install ".[dev,hf]"` stacks extras.
+- Follow the [no-raw-PHI logging policy](security/no-raw-phi-logging.md) for every PII, de-identification,
+  text-processing, service, and batch change.
 
 ## Code style
 
@@ -68,6 +70,8 @@ to publish outside CI, run `make docs-deploy`; it mirrors the workflow by buildi
 - **Security issues are different:** a redaction bypass or PHI/PII leak must be
   reported privately, never as a public issue. Follow the
   [Security & Disclosure policy](security/disclosure-policy.md).
+- Run `pytest tests/unit/test_no_raw_text_logging.py -q` when touching logging, text processing, service request
+  handling, PII extraction, or de-identification code.
 
 ## Governance references
 
