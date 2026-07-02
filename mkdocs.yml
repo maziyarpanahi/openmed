@@ -62,6 +62,7 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
       - Release Streams & Channels: release/semver-and-channels.md
       - PyPI Trusted Publishing: release/trusted-publishing.md
