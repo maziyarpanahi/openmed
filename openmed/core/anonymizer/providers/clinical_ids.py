@@ -23,6 +23,7 @@ deterministic:
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
+  - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
@@ -626,6 +627,39 @@ class IndonesianNIKProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Malaysian MyKad / NRIC (YYMMDD-PB-XXXX with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_malaysian_mykad(*, rng: random.Random | None = None) -> str:
+    """Generate a Malaysian MyKad accepted by ``validate_malaysian_mykad``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1940, 2009)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    place_code = source.randint(1, 99)
+    serial = source.randint(1, 9999)
+
+    candidate = f"{year % 100:02d}{month:02d}{day:02d}-{place_code:02d}-{serial:04d}"
+
+    from openmed.core.pii_i18n import validate_malaysian_mykad
+
+    if validate_malaysian_mykad(candidate):
+        return candidate
+    return "850817-14-5678"
+
+
+class MalaysianMyKadProvider(BaseProvider):
+    """Generates valid Malaysian MyKad / NRIC numbers."""
+
+    def mykad(self) -> str:
+        return generate_malaysian_mykad(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -772,6 +806,7 @@ __all__ = [
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
     "LatvianPersonasKodsProvider",
+    "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
@@ -786,6 +821,7 @@ __all__ = [
     "generate_npi",
     "generate_pesel",
     "generate_latvian_personas_kods",
+    "generate_malaysian_mykad",
     "generate_rodne_cislo",
     "generate_spanish_nie",
     "generate_ssn",

@@ -33,7 +33,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with checksum-validated national-ID coverage but no bundled
 # default PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -548,6 +548,49 @@ def validate_thai_national_id(text: str) -> bool:
     return numbers[12] == check
 
 
+def validate_malaysian_mykad(text: str) -> bool:
+    """Validate Malaysian MyKad / NRIC structure.
+
+    MyKad values are 12 digits, commonly written as ``YYMMDD-PB-XXXX``. OpenMed
+    validates only offline structural properties: an embedded birth date, a
+    non-zero place-of-birth code, and a non-zero serial. It does not bundle or
+    query Malaysian registry data.
+
+    Args:
+        text: MyKad string, with or without dashes.
+
+    Returns:
+        True when the value has a plausible MyKad structure and embedded date.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 12:
+        return False
+
+    year_suffix = int(digits[0:2])
+    month = int(digits[2:4])
+    day = int(digits[4:6])
+    place_code = int(digits[6:8])
+    serial = int(digits[8:12])
+
+    if place_code == 0 or serial == 0:
+        return False
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        return any(
+            day <= calendar.monthrange(century + year_suffix, month)[1]
+            for century in (1900, 2000)
+        )
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
 def validate_polish_pesel(text: str) -> bool:
     """Validate Polish PESEL number.
 
@@ -1006,6 +1049,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "Oktober",
         "November",
         "Desember",
+    ],
+    "ms": [
+        "Januari",
+        "Februari",
+        "Mac",
+        "April",
+        "Mei",
+        "Jun",
+        "Julai",
+        "Ogos",
+        "September",
+        "Oktober",
+        "November",
+        "Disember",
     ],
     "th": [
         "มกราคม",
@@ -2516,6 +2573,98 @@ _KOREAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_MALAY_MONTH_PATTERN = (
+    r"Januari|Februari|Mac|April|Mei|Jun|Julai|Ogos|September|"
+    r"Oktober|November|Disember"
+)
+
+_MALAY_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "tarikh",
+            "tarikh lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawatan",
+            "temu janji",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_MALAY_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "tarikh",
+            "tarikh lahir",
+            "lahir",
+            "masuk",
+            "keluar",
+            "rawatan",
+            "temu janji",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+60[\s.-]?|0)1\d(?:[\s.-]?\d{3,4}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telefon",
+            "tel",
+            "nombor telefon",
+            "bimbit",
+            "mudah alih",
+            "hubungi",
+            "kontak",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}(?:-\d{2}-|\d{2})\d{4}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "mykad",
+            "nric",
+            "kad pengenalan",
+            "no kad pengenalan",
+            "nombor kad pengenalan",
+            "no kp",
+            "ic",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_malaysian_mykad,
+    ),
+    PIIPattern(
+        r"\b(?:Jalan|Jl\.?|Lorong|Lrg\.?|Taman|Persiaran|Lebuh|Kampung)\s+[A-Z][A-Za-z0-9 .'-]{2,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "alamat",
+            "tinggal",
+            "kediaman",
+            "jalan",
+            "lorong",
+            "taman",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
     r"m[aá]j(?:a)?|j[uú]n(?:a)?|j[uú]l(?:a)?|august(?:a)?|"
@@ -2645,6 +2794,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
     "sk": _SLOVAK_PII_PATTERNS,
+    "ms": _MALAY_PII_PATTERNS,
 }
 
 
@@ -2982,6 +3132,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Jakarta", "Bandung", "Surabaya"],
         "ZIPCODE": ["10110", "40123", "60234"],
+    },
+    "ms": {
+        "NAME": ["Nur Aisyah", "Ahmad Hakim", "Siti Farah", "Lim Wei Han"],
+        "FIRST_NAME": ["Nur", "Ahmad", "Siti", "Wei Han"],
+        "LAST_NAME": ["Aisyah", "Hakim", "Farah", "Lim"],
+        "EMAIL": ["pesakit@contoh.my", "hubungi@contoh.org"],
+        "PHONE": ["+60 12-345 6789", "012-987 6543"],
+        "ID_NUM": ["850817-14-5678", "900101145678"],
+        "STREET_ADDRESS": ["Jalan Merdeka 10", "Lorong Damai 5"],
+        "URL_PERSONAL": ["https://contoh.my"],
+        "USERNAME": ["pesakit123", "pengguna456"],
+        "DATE": ["17/08/1985", "1 Januari 2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Kuala Lumpur", "Johor Bahru", "George Town"],
+        "ZIPCODE": ["50000", "80000", "10300"],
     },
     "th": {
         "NAME": [
