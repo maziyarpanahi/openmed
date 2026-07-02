@@ -12,6 +12,11 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.labels import (
+    CANONICAL_LABELS,
+    policy_label_for,
+    system_hints_for,
+)
 from openmed.core.labels import normalize_label as normalize_canonical_label
 from openmed.core.model_registry import (
     _CATEGORY_ENTITY_TYPES,
@@ -38,6 +43,7 @@ LABEL_MAPS_PATH = (
     / "label_maps"
     / "defaults.json"
 )
+CLINICAL_FIXTURES_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "clinical"
 
 
 @pytest.fixture
@@ -335,19 +341,28 @@ class TestNutritionRouting:
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
 
-# --------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Anesthesia domain (issue #952)
-# --------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+
 
 class TestAnesthesiaDomain:
     EXPECTED_LABELS = [
-    "AnesthesiaType",
-    "AnestheticAgent",
-    "AirwayManagement",
-    "ASAClass",
-    "MonitoringModality",
-    "IntraoperativeEvent",
-]
+        "AnesthesiaType",
+        "AnestheticAgent",
+        "AirwayManagement",
+        "ASAClass",
+        "MonitoringModality",
+        "IntraoperativeEvent",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "AnesthesiaType": "ANESTHESIA_TYPE",
+        "AnestheticAgent": "ANESTHETIC_AGENT",
+        "AirwayManagement": "AIRWAY_MANAGEMENT",
+        "ASAClass": "ASA_CLASS",
+        "MonitoringModality": "OTHER",
+        "IntraoperativeEvent": "OTHER",
+    }
 
     def test_anesthesia_in_available_domains(self):
         assert "anesthesia" in available_domains()
@@ -359,6 +374,66 @@ class TestAnesthesiaDomain:
         labels = get_default_labels("anesthesia")
         lowered = [l.lower() for l in labels]
         assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_anesthesia_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+
+        if expected != "OTHER":
+            assert expected in CANONICAL_LABELS
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert system_hints_for(expected)
+
+    def test_anesthesia_fixture_reports_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "anesthesia.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert rows
+
+        observed_labels = set()
+        for row in rows:
+            assert row["metadata"]["synthetic"] is True
+            disclaimer = row["metadata"]["disclaimer"]
+            assert "not clinical guidance" in disclaimer
+            assert "does not infer ASA class or dosing" in disclaimer
+            text = row["text"]
+            for entity in row["entities"]:
+                start = entity["start"]
+                end = entity["end"]
+                assert text[start:end] == entity["text"]
+                observed_labels.add(entity["label"])
+
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Anesthesia routing in model_registry (issue #952)
+# ---------------------------------------------------------------------------
+
+
+class TestAnesthesiaRouting:
+    ANESTHESIA_TEXT = "General anesthesia with sevoflurane, ETT, and ASA II"
+
+    def test_match_categories_routes_anesthesia(self):
+        categories = [c for c, _ in _match_categories(self.ANESTHESIA_TEXT)]
+        assert "Anesthesia" in categories
+
+    def test_anesthesia_is_registry_metadata_not_a_live_category(self):
+        assert "Anesthesia" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Anesthesia" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_anesthesia(self):
+        suggestions = get_model_suggestions(self.ANESTHESIA_TEXT)
+        assert suggestions
+        assert all(info.category != "Anesthesia" for _k, info, _r in suggestions)
 
 
 class TestNormalizeLabelIdempotency:
