@@ -19,10 +19,12 @@ from openmed.core.pii_i18n import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
+    validate_bic,
     validate_czechoslovak_rodne_cislo,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_iban,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
@@ -111,6 +113,153 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+# ---------------------------------------------------------------------------
+# Financial Identifier Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestFinancialIdentifierValidators:
+    """Tests for IBAN and SWIFT/BIC financial identifiers."""
+
+    @pytest.mark.parametrize(
+        "iban",
+        [
+            "GB82 WEST 1234 5698 7654 32",
+            "DE89 3704 0044 0532 0130 00",
+            "ES91 2100 0418 4502 0005 1332",
+            "FR14 2004 1010 0505 0001 3M02 606",
+            "NL91 ABNA 0417 1643 00",
+        ],
+    )
+    def test_validate_iban_accepts_known_valid_synthetic_values(self, iban):
+        assert validate_iban(iban) is True
+
+    @pytest.mark.parametrize(
+        "iban",
+        [
+            "GB83 WEST 1234 5698 7654 32",
+            "DE89 3704 0044 0532 0130",
+            "ZZ12 1234 5678 9012",
+            "GB82 WEST 1234 5698 7654 3!",
+        ],
+    )
+    def test_validate_iban_rejects_bad_checksum_length_or_shape(self, iban):
+        assert validate_iban(iban) is False
+
+    @pytest.mark.parametrize(
+        "bic",
+        [
+            "DEUTDEFF",
+            "AGRIFRPPXXX",
+            "CAIXESBBXXX",
+            "deutdeff500",
+        ],
+    )
+    def test_validate_bic_accepts_eight_or_eleven_character_codes(self, bic):
+        assert validate_bic(bic) is True
+
+    @pytest.mark.parametrize(
+        "bic",
+        [
+            "DEUTDEFF1",
+            "DEU1DEFF",
+            "DEUTD3FF",
+            "DEUTDEFF-XX",
+        ],
+    )
+    def test_validate_bic_rejects_wrong_length_or_structure(self, bic):
+        assert validate_bic(bic) is False
+
+
+class TestFinancialIdentifierDetection:
+    """Financial ID patterns are inherited by every language."""
+
+    @pytest.mark.parametrize(
+        ("lang", "text", "expected"),
+        [
+            (
+                "en",
+                "Billing note: IBAN GB82 WEST 1234 5698 7654 32 and BIC DEUTDEFF.",
+                {
+                    ("iban", 19, 46, "GB82 WEST 1234 5698 7654 32"),
+                    ("bic", 55, 63, "DEUTDEFF"),
+                },
+            ),
+            (
+                "es",
+                "Informe: IBAN ES91 2100 0418 4502 0005 1332 y SWIFT CAIXESBBXXX.",
+                {
+                    ("iban", 14, 43, "ES91 2100 0418 4502 0005 1332"),
+                    ("bic", 52, 63, "CAIXESBBXXX"),
+                },
+            ),
+            (
+                "fr",
+                "Note: IBAN FR14 2004 1010 0505 0001 3M02 606 et BIC AGRIFRPPXXX.",
+                {
+                    ("iban", 11, 44, "FR14 2004 1010 0505 0001 3M02 606"),
+                    ("bic", 52, 63, "AGRIFRPPXXX"),
+                },
+            ),
+        ],
+    )
+    def test_iban_and_bic_detect_with_offsets(self, lang, text, expected):
+        units = find_semantic_units(text, get_patterns_for_language(lang))
+        actual = {
+            (entity_type, start, end, text[start:end])
+            for start, end, entity_type, _score, _pattern, validated in units
+            if entity_type in {"iban", "bic"} and validated
+        }
+
+        assert actual == expected
+
+    @pytest.mark.parametrize("seed", list(range(10)))
+    def test_surrogate_iban_and_bic_round_trip_validators(self, seed):
+        anonymizer = Anonymizer(lang="en", consistent=True, seed=seed)
+
+        iban = anonymizer.surrogate("GB82 WEST 1234 5698 7654 32", "IBAN")
+        bic = anonymizer.surrogate("DEUTDEFF", "BIC")
+
+        assert validate_iban(iban), f"Invalid IBAN surrogate: {iban!r}"
+        assert validate_bic(bic), f"Invalid BIC surrogate: {bic!r}"
+
+    def test_financial_id_golden_fixture_deidentifies_without_leakage(self):
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from openmed.core.pii import deidentify
+        from openmed.eval.golden import GoldenFixture
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("openmed/eval/golden/financial_ids.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert {row["language"] for row in rows} == {"en", "es", "fr"}
+        for row in rows:
+            fixture = GoldenFixture.from_mapping(row)
+            with patch("openmed.core.pii.extract_pii") as mock_extract:
+                mock_extract.return_value = PredictionResult(
+                    text=fixture.text,
+                    entities=[],
+                    model_name="stub",
+                    timestamp=datetime.now().isoformat(),
+                )
+                result = deidentify(
+                    fixture.text,
+                    method="mask",
+                    lang=fixture.language,
+                )
+
+            assert result.metadata["safety_sweep"]["spans_added"] == 2
+            for span in fixture.gold_spans:
+                assert fixture.text[span.start : span.end] == span.text
+                assert span.text not in result.deidentified_text
 
 
 # ---------------------------------------------------------------------------

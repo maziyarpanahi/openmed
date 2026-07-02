@@ -18,12 +18,15 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     "chunk_boundary",
     "multilingual",
     "checksum_ids",
+    "financial_ids",
     "date_arithmetic",
     "policy_profile_actions",
 )
 
 _FIXTURE_VERSION = 1
-_FIXTURE_DIR = Path(__file__).with_name("fixtures")
+_GOLDEN_DIR = Path(__file__).resolve().parent
+_FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
+_TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
 
 
 @dataclass(frozen=True)
@@ -125,9 +128,10 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
     fixture_path = Path(path) if path is not None else _FIXTURE_DIR
     if fixture_path.is_file():
         return (fixture_path,)
-    return tuple(
-        sorted((*fixture_path.glob("*.json"), *fixture_path.glob("**/*.jsonl")))
-    )
+    paths = [*fixture_path.glob("*.json"), *fixture_path.glob("**/*.jsonl")]
+    if path is None:
+        paths.extend(fixture for fixture in _TOP_LEVEL_FIXTURES if fixture.exists())
+    return tuple(sorted(paths))
 
 
 def load_golden_fixtures(path: str | Path | None = None) -> list[GoldenFixture]:

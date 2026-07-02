@@ -28,6 +28,7 @@ deterministic:
     cislo
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
+  - IBAN and SWIFT/BIC financial identifiers with deterministic validation
 """
 
 from __future__ import annotations
@@ -255,6 +256,207 @@ _IBAN_LENGTHS = {
 }
 
 
+_IBAN_SURROGATE_COUNTRIES = ("GB", "DE", "FR", "ES", "NL", "BE", "IT", "PL")
+_BIC_SURROGATE_COUNTRIES = ("GB", "DE", "FR", "ES", "NL", "BE", "IT", "US")
+_BIC_COUNTRY_CODES = frozenset(_IBAN_LENGTHS) | {
+    "AG",
+    "AI",
+    "AM",
+    "AO",
+    "AQ",
+    "AR",
+    "AS",
+    "AU",
+    "AW",
+    "BB",
+    "BD",
+    "BF",
+    "BI",
+    "BJ",
+    "BM",
+    "BN",
+    "BO",
+    "BS",
+    "BT",
+    "BV",
+    "BW",
+    "BZ",
+    "CA",
+    "CC",
+    "CD",
+    "CF",
+    "CG",
+    "CI",
+    "CK",
+    "CL",
+    "CM",
+    "CN",
+    "CO",
+    "CU",
+    "CV",
+    "CW",
+    "CX",
+    "DJ",
+    "DM",
+    "DZ",
+    "ER",
+    "ET",
+    "FJ",
+    "FM",
+    "GA",
+    "GD",
+    "GF",
+    "GH",
+    "GM",
+    "GN",
+    "GP",
+    "GQ",
+    "GW",
+    "GY",
+    "HM",
+    "HK",
+    "ID",
+    "IN",
+    "IO",
+    "IQ",
+    "IR",
+    "JM",
+    "JP",
+    "KE",
+    "KG",
+    "KH",
+    "KI",
+    "KM",
+    "KN",
+    "KP",
+    "KR",
+    "LA",
+    "LK",
+    "LR",
+    "LS",
+    "LY",
+    "MA",
+    "MG",
+    "MH",
+    "ML",
+    "MM",
+    "MN",
+    "MO",
+    "MP",
+    "MQ",
+    "MS",
+    "MV",
+    "MW",
+    "MX",
+    "MY",
+    "MZ",
+    "NA",
+    "NC",
+    "NE",
+    "NF",
+    "NG",
+    "NI",
+    "NP",
+    "NR",
+    "NU",
+    "NZ",
+    "OM",
+    "PA",
+    "PE",
+    "PF",
+    "PG",
+    "PH",
+    "PM",
+    "PN",
+    "PR",
+    "PW",
+    "PY",
+    "RE",
+    "RU",
+    "RW",
+    "SB",
+    "SD",
+    "SG",
+    "SH",
+    "SL",
+    "SN",
+    "SO",
+    "SR",
+    "SS",
+    "ST",
+    "SV",
+    "SX",
+    "SY",
+    "SZ",
+    "TC",
+    "TD",
+    "TF",
+    "TG",
+    "TJ",
+    "TK",
+    "TM",
+    "TO",
+    "TT",
+    "TV",
+    "TW",
+    "TZ",
+    "UG",
+    "UM",
+    "US",
+    "UY",
+    "UZ",
+    "VC",
+    "VE",
+    "VI",
+    "VN",
+    "VU",
+    "WF",
+    "WS",
+    "YE",
+    "YT",
+    "ZA",
+    "ZM",
+    "ZW",
+}
+_UPPER_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_UPPER_ALNUM = _UPPER_ALPHA + "0123456789"
+
+
+def _mod97_remainder(value: str) -> int:
+    remainder = 0
+    for char in value:
+        if char.isdigit():
+            values = char
+        else:
+            values = str(ord(char) - 55)
+        for digit in values:
+            remainder = (remainder * 10 + int(digit)) % 97
+    return remainder
+
+
+def _random_alnum(length: int, rng: random.Random) -> str:
+    return "".join(rng.choice(_UPPER_ALNUM) for _ in range(length))
+
+
+def generate_iban(
+    *,
+    country_code: str | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic IBAN that passes :func:`validate_iban`."""
+
+    source = rng or random.Random()
+    country = (country_code or source.choice(_IBAN_SURROGATE_COUNTRIES)).upper()
+    expected_length = _IBAN_LENGTHS.get(country)
+    if expected_length is None:
+        raise ValueError(f"unsupported IBAN surrogate country: {country!r}")
+
+    bban = _random_alnum(expected_length - 4, source)
+    provisional = f"{country}00{bban}"
+    check_digits = 98 - _mod97_remainder(provisional[4:] + provisional[:4])
+    return f"{country}{check_digits:02d}{bban}"
+
+
 def validate_iban(iban_text: str) -> bool:
     """Validate an IBAN with the ISO 13616 mod-97 checksum."""
     cleaned = re.sub(r"[\s-]", "", iban_text).upper()
@@ -269,16 +471,48 @@ def validate_iban(iban_text: str) -> bool:
         return False
 
     rearranged = cleaned[4:] + cleaned[:4]
-    remainder = 0
-    for char in rearranged:
-        if char.isdigit():
-            values = char
-        else:
-            values = str(ord(char) - 55)
-        for digit in values:
-            remainder = (remainder * 10 + int(digit)) % 97
+    return _mod97_remainder(rearranged) == 1
 
-    return remainder == 1
+
+def validate_bic(bic_text: str) -> bool:
+    """Validate a SWIFT/BIC code's 8- or 11-character structure."""
+
+    cleaned = re.sub(r"\s", "", bic_text).upper()
+    if not re.fullmatch(r"[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?", cleaned):
+        return False
+    return cleaned[4:6] in _BIC_COUNTRY_CODES
+
+
+def generate_bic(
+    *,
+    country_code: str | None = None,
+    include_branch: bool | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic SWIFT/BIC accepted by :func:`validate_bic`."""
+
+    source = rng or random.Random()
+    country = (country_code or source.choice(_BIC_SURROGATE_COUNTRIES)).upper()
+    if not re.fullmatch(r"[A-Z]{2}", country):
+        raise ValueError("country_code must be a two-letter ISO code")
+
+    bank = "".join(source.choice(_UPPER_ALPHA) for _ in range(4))
+    location = _random_alnum(2, source)
+    should_include_branch = source.choice((False, True))
+    if include_branch is not None:
+        should_include_branch = include_branch
+    branch = _random_alnum(3, source) if should_include_branch else ""
+    return f"{bank}{country}{location}{branch}"
+
+
+class FinancialIdentifierProvider(BaseProvider):
+    """Generates checksum-valid IBANs and structurally valid SWIFT/BIC codes."""
+
+    def financial_iban(self) -> str:
+        return generate_iban(rng=self.generator.random)
+
+    def financial_bic(self) -> str:
+        return generate_bic(include_branch=True, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -763,10 +997,12 @@ def register_clinical_providers(faker) -> None:
     for provider in national_id_faker_provider_classes():
         faker.add_provider(provider)
     faker.add_provider(MedicalRecordNumberProvider)
+    faker.add_provider(FinancialIdentifierProvider)
 
 
 __all__ = [
     "AadhaarProvider",
+    "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
@@ -779,6 +1015,8 @@ __all__ = [
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
+    "generate_bic",
+    "generate_iban",
     "generate_indonesian_nik",
     "generate_teudat_zehut",
     "generate_korean_rrn",
@@ -792,6 +1030,7 @@ __all__ = [
     "generate_thai_national_id",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "validate_bic",
     "validate_iban",
     "validate_luhn",
     "validate_npi",
