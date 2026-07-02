@@ -63,11 +63,15 @@ from .core.streaming import (
     deidentify_stream,
 )
 from .core.surrogate_vault import (
+    ENCRYPTION_SCHEME,
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
     SurrogateEntry,
     SurrogateKey,
+    SurrogateSource,
     SurrogateVault,
+    VaultConsistencyReport,
+    VaultRotationResult,
 )
 from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
@@ -694,6 +698,10 @@ __all__ = [
     "SurrogateVault",
     "SurrogateKey",
     "SurrogateEntry",
+    "SurrogateSource",
+    "VaultConsistencyReport",
+    "VaultRotationResult",
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
+    "ENCRYPTION_SCHEME",
 ]
