@@ -83,6 +83,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="spacy",
         description="spaCy pipeline component for OpenMed PII spans",
     ),
+    "cdm_etl": AdapterSpec(
+        name="cdm_etl",
+        module="openmed.interop.cdm_etl",
+        extra="",
+        description="Deterministic clinical note to CDM-style ETL helpers",
+    ),
 }
 
 
