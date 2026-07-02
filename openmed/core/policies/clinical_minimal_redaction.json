@@ -81,6 +81,10 @@
     "NUTRITION_TARGET": "keep",
     "FEEDING_ROUTE": "keep",
     "NUTRITIONAL_STATUS": "keep",
+    "VACCINE_NAME": "keep",
+    "DOSE_NUMBER": "keep",
+    "ADMINISTRATION_ROUTE": "keep",
+    "VACCINE_SERIES": "keep",
     "OTHER": "keep"
   }
 }

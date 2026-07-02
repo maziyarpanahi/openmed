@@ -109,6 +109,12 @@ NUTRITION_TARGET: Final = "NUTRITION_TARGET"
 FEEDING_ROUTE: Final = "FEEDING_ROUTE"
 NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
 
+#: Immunization and vaccine administration concept (issue #897)
+VACCINE_NAME: Final = "VACCINE_NAME"
+DOSE_NUMBER: Final = "DOSE_NUMBER"
+ADMINISTRATION_ROUTE: Final = "ADMINISTRATION_ROUTE"
+VACCINE_SERIES: Final = "VACCINE_SERIES"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -191,6 +197,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         NUTRITION_TARGET,
         FEEDING_ROUTE,
         NUTRITIONAL_STATUS,
+        VACCINE_NAME,
+        DOSE_NUMBER,
+        ADMINISTRATION_ROUTE,
+        VACCINE_SERIES,
         OTHER,
     }
 )
@@ -360,6 +370,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Immunization and vaccine-administation concepts (issue #897)
+    VACCINE_NAME: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    DOSE_NUMBER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ADMINISTRATION_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VACCINE_SERIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -438,6 +453,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
     FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Immunization and Vaccine-administration concepts
+    VACCINE_NAME: HIPAA_UNIQUE_IDENTIFIER,
+    DOSE_NUMBER: HIPAA_UNIQUE_IDENTIFIER,
+    ADMINISTRATION_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_SERIES: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -651,6 +671,18 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nutritiontarget": NUTRITION_TARGET,
     "feedingroute": FEEDING_ROUTE,
     "nutritionalstatus": NUTRITIONAL_STATUS,
+    # Immunization and Vaccine Administration concepts
+    "vaccinename": VACCINE_NAME,
+    "vaccine": VACCINE_NAME,
+    "vaccinationname": VACCINE_NAME,
+    "vaccination": VACCINE_NAME,
+    "dosenumber": DOSE_NUMBER,
+    "dose": DOSE_NUMBER,
+    "administrationroute": ADMINISTRATION_ROUTE,
+    "vaccineroute": ADMINISTRATION_ROUTE,
+    "vaccineseries": VACCINE_SERIES,
+    "administrationdate": DATE,
+    "administrationsite": BODY_SITE,
 }
 
 
@@ -861,5 +893,9 @@ __all__ = [
     "NUTRITION_TARGET",
     "FEEDING_ROUTE",
     "NUTRITIONAL_STATUS",
+    "VACCINE_NAME",
+    "DOSE_NUMBER",
+    "ADMINISTRATION_ROUTE",
+    "VACCINE_SERIES",
     "OTHER",
 ]
