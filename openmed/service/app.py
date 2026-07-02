@@ -438,7 +438,8 @@ def create_app() -> FastAPI:
         runtime = _get_service_runtime(request)
         if payload.all:
             return runtime.unload_all_models()
-        assert payload.model_name is not None
+        if payload.model_name is None:
+            raise ValueError("model_name is required when all=False")
         return runtime.unload_model(payload.model_name)
 
     @app.post("/analyze")
