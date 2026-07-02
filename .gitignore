@@ -179,6 +179,10 @@ cache/
 *.cache/
 huggingface_cache/
 transformers_cache/
+!android/openmedkit/src/main/kotlin/com/openmed/openmedkit/cache/
+!android/openmedkit/src/main/kotlin/com/openmed/openmedkit/cache/**
+!android/openmedkit/src/test/kotlin/com/openmed/openmedkit/cache/
+!android/openmedkit/src/test/kotlin/com/openmed/openmedkit/cache/**
 
 # API keys and credentials
 *.key
