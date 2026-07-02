@@ -558,6 +558,7 @@ class ReleaseGate:
             )
         )
         checks.append(_g8_check(metadata))
+        checks.append(_k_floor_check(metrics, metadata))
 
         blocked_formats = tuple(
             sorted(
@@ -1405,6 +1406,107 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
             "problems": problems,
         },
     )
+
+
+def _k_floor_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _k_floor_evidence(metrics, metadata)
+    target_k = _optional_int(evidence.get("target_k"))
+    if target_k is None:
+        return GateCheck("k_floor", True, reason="not applicable")
+    if target_k < 1:
+        return GateCheck(
+            "k_floor",
+            False,
+            reason="target_k must be >= 1",
+            details={"target_k": target_k},
+        )
+
+    measured_k = _optional_int(evidence.get("measured_k"))
+    max_bound = _optional_float(evidence.get("max_reidentification_upper_bound"))
+    self_check = evidence.get("numeric_self_check")
+    self_check_passed = None
+    if isinstance(self_check, Mapping) and "passed" in self_check:
+        self_check_passed = bool(self_check.get("passed"))
+
+    violations: dict[str, Any] = {}
+    if measured_k is None:
+        violations["measured_k"] = "missing"
+    elif measured_k < target_k:
+        violations["measured_k"] = {"observed": measured_k, "target": target_k}
+
+    target_bound = 1.0 / target_k
+    if max_bound is None:
+        violations["max_reidentification_upper_bound"] = "missing"
+    elif max_bound > target_bound + 1e-12:
+        violations["max_reidentification_upper_bound"] = {
+            "observed": max_bound,
+            "limit": target_bound,
+        }
+
+    if self_check_passed is False:
+        violations["numeric_self_check"] = self_check
+
+    return GateCheck(
+        "k_floor",
+        not violations,
+        reason="ok" if not violations else "realized k or bound violates policy",
+        details={
+            "target_k": target_k,
+            "measured_k": measured_k,
+            "target_bound": target_bound,
+            "max_reidentification_upper_bound": max_bound,
+            "violations": violations,
+        },
+    )
+
+
+def _k_floor_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    source = _first_mapping(
+        metadata.get("kanon_enforcement"),
+        metrics.get("kanon_enforcement"),
+        metadata.get("k_anonymity_enforcement"),
+        metrics.get("k_anonymity_enforcement"),
+        metadata.get("k_floor"),
+        metrics.get("k_floor"),
+        metadata.get("kanon"),
+        metrics.get("kanon"),
+    )
+    target_k = _first_value(
+        source.get("target_k"),
+        metadata.get("target_k"),
+        metrics.get("target_k"),
+        _nested(metadata, "privacy_policy", "target_k"),
+        _nested(metrics, "privacy_policy", "target_k"),
+    )
+    kanon = _mapping(source.get("kanon"))
+    bounds = _mapping(source.get("bounds"))
+    return {
+        "target_k": target_k,
+        "measured_k": _first_value(
+            source.get("measured_k"),
+            source.get("realized_k"),
+            source.get("k"),
+            kanon.get("k"),
+            metadata.get("measured_k"),
+            metrics.get("measured_k"),
+        ),
+        "max_reidentification_upper_bound": _first_value(
+            source.get("max_reidentification_upper_bound"),
+            bounds.get("max_reidentification_upper_bound"),
+            metadata.get("max_reidentification_upper_bound"),
+            metrics.get("max_reidentification_upper_bound"),
+        ),
+        "numeric_self_check": _first_value(
+            source.get("numeric_self_check"),
+            bounds.get("numeric_self_check"),
+        ),
+    }
 
 
 def _report_payload(report: BenchmarkReport | Mapping[str, Any]) -> dict[str, Any]:
