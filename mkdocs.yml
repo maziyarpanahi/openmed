@@ -52,6 +52,7 @@ nav:
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
