@@ -335,6 +335,31 @@ class TestNutritionRouting:
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
 
+# --------------------------------------------------------------------
+# Anesthesia domain (issue #952)
+# --------------------------------------------------------------------
+
+class TestAnesthesiaDomain:
+    EXPECTED_LABELS = [
+    "AnesthesiaType",
+    "AnestheticAgent",
+    "AirwayManagement",
+    "ASAClass",
+    "MonitoringModality",
+    "IntraoperativeEvent",
+]
+
+    def test_anesthesia_in_available_domains(self):
+        assert "anesthesia" in available_domains()
+
+    def test_get_default_labels_returns_anesthesia_set(self):
+        assert get_default_labels("anesthesia") == self.EXPECTED_LABELS
+
+    def test_anesthesia_labels_have_no_duplicates(self):
+        labels = get_default_labels("anesthesia")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
 
 class TestNormalizeLabelIdempotency:
     @pytest.mark.parametrize(

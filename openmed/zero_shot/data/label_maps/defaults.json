@@ -17,5 +17,6 @@
   "dermatology": ["SkinLesion", "Morphology", "Distribution", "Anatomy"],
   "ophthalmology": ["EyeFinding", "VisualAcuity", "IntraocularPressure", "Anatomy"],
   "generic": ["Person", "Organization", "Location", "Date"],
+  "anesthesia": ["AnesthesiaType", "AnestheticAgent","AirwayManagement", "ASAClass","MonitoringModality","IntraoperativeEvent"],
   "nutrition_diet": ["DietType", "NutritionTarget", "Supplement", "FeedingRoute", "IntakeFinding", "NutritionalStatus", "FluidRestriction"]
 }
