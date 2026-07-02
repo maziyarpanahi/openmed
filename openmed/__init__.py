@@ -76,6 +76,8 @@ from .processing import (
     BatchProcessor,
     BatchProgress,
     BatchResult,
+    DatasetRedactionResult,
+    DatasetRedactionSummary,
     OutputFormatter,
     TextProcessor,
     TokenizationHelper,
@@ -83,6 +85,7 @@ from .processing import (
     postprocess_text,
     preprocess_text,
     process_batch,
+    redact_dataset,
 )
 from .processing import sentences as sentence_utils
 from .processing.advanced_ner import AdvancedNERProcessor, create_advanced_processor
@@ -622,7 +625,10 @@ __all__ = [
     "BatchItemResult",
     "BatchProgress",
     "BatchResult",
+    "DatasetRedactionResult",
+    "DatasetRedactionSummary",
     "process_batch",
+    "redact_dataset",
     "AdvancedNERProcessor",
     "create_advanced_processor",
     "AnalyzeResult",
