@@ -1,0 +1,29 @@
+{
+    "text": "Patient received Tdap, dose 1 of 1, IM, left deltoid on 03/14/2026.",
+    "entities": [
+        {"label": "VACCINE_NAME", "start": 17, "end": 21},
+        {"label": "DOSE_NUMBER", "start": 23, "end": 34},
+        {"label": "ADMINISTRATION_ROUTE", "start": 36, "end": 38},
+        {"label": "BODY_SITE", "start": 40, "end": 52},
+        {"label": "DATE", "start": 56, "end": 66},
+    ],
+}
+{
+    "text": "MMR vaccine administered IM in the right deltoid, lot number A123B, series 2 of 2.",
+    "entities": [
+        {"label": "VACCINE_NAME", "start": 0, "end": 11},
+        {"label": "ADMINISTRATION_ROUTE", "start": 25, "end": 27},
+        {"label": "BODY_SITE", "start": 35, "end": 48},
+        {"label": "VaccineLot", "start": 61, "end": 66},
+        {"label": "VACCINE_SERIES", "start": 75, "end": 81},
+    ],
+}
+{
+    "text": "Influenza vaccine, 0.5 mL, IM, left arm, administered on 10/02/2025.",
+    "entities": [
+        {"label": "VACCINE_NAME", "start": 0, "end": 17},
+        {"label": "ADMINISTRATION_ROUTE", "start": 27, "end": 29},
+        {"label": "BODY_SITE", "start": 31, "end": 39},
+        {"label": "DATE", "start": 57, "end": 67},
+    ],
+}

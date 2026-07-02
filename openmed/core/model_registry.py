@@ -206,6 +206,13 @@ _CATEGORY_ENTITY_TYPES = {
         "FEEDING_ROUTE",
         "NUTRITIONAL_STATUS",
     ],
+    # Immunization - registered (see issue #897)
+    "Immunization": [
+        "VACCINE_NAME",
+        "DOSE_NUMBER",
+        "ADMINISTRATION_ROUTE",
+        "VACCINE_SERIES",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -757,6 +764,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",
         "Contains nutrition/diet-order terms",
+    ),
+    "vaccine|immunization|dose\s*\d|IM\b|deltoid|Tdap|MMR": (
+        "Immunization",
+        "Contains immunization/vaccine-administration terms",
     ),
 }
 

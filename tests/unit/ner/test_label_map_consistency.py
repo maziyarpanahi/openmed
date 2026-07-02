@@ -332,6 +332,55 @@ class TestNutritionRouting:
 
 
 # ---------------------------------------------------------------------------
+# Immunization and Vaccine-Administration domain (issue #897)
+# ---------------------------------------------------------------------------
+class TestImmunizationDomain:
+    EXPECTED_LABELS = [
+        "VaccineName",
+        "DoseNumber",
+        "AdministrationRoute",
+        "AdministrationSite",
+        "VaccineLot",
+        "AdministrationDate",
+        "VaccineSeries",
+    ]
+
+    def test_immunization_in_available_domains(self):
+        assert "immunization" in available_domains()
+
+    def test_get_default_labels_returns_immunization_set(self):
+        assert get_default_labels("immunization") == self.EXPECTED_LABELS
+
+    def test_immunization_labels_have_no_duplicates(self):
+        labels = get_default_labels("immunization")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+
+# ---------------------------------------------------------------------------
+# Immunization and Vaccine-Administration routing in model_registry (issue #897)
+# ---------------------------------------------------------------------------
+class TestImmunizationRouting:
+    IMMUNIZATION_TEXT = "Tdap, dose 1 of 1, IM, left deltoid"
+
+    def test_match_categories_routes_immunization(self):
+        categories = [c for c, _ in _match_categories(self.IMMUNIZATION_TEXT)]
+        assert "Immunization" in categories
+
+    def test_immunization_is_registry_metadata_not_a_live_category(self):
+        assert "Immunization" in _CATEGORY_ENTITY_TYPES
+
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Immunization" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_immunization(self):
+        suggestions = get_model_suggestions(self.IMMUNIZATION_TEXT)
+        assert suggestions
+        assert all(info.category != "Immunization" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
 # normalize_label idempotency
 # ---------------------------------------------------------------------------
 

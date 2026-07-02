@@ -4,6 +4,7 @@ import pytest
 
 from openmed.core.labels import (
     ACCOUNT_NUMBER,
+    ADMINISTRATION_ROUTE,
     AGE,
     AMOUNT,
     ANTIBIOTIC,
@@ -22,6 +23,7 @@ from openmed.core.labels import (
     DATE,
     DATE_OF_BIRTH,
     DIET_TYPE,
+    DOSE_NUMBER,
     EMAIL,
     ETHEREUM_ADDRESS,
     EYE_COLOR,
@@ -69,6 +71,8 @@ from openmed.core.labels import (
     URL,
     USER_AGENT,
     USERNAME,
+    VACCINE_NAME,
+    VACCINE_SERIES,
     VEHICLE_REGISTRATION,
     VIN,
     ZIPCODE,
@@ -510,6 +514,10 @@ class TestClinicalLabelsAreAdditive:
             NUTRITION_TARGET,
             FEEDING_ROUTE,
             NUTRITIONAL_STATUS,
+            VACCINE_NAME,
+            VACCINE_SERIES,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
         }
     )
 
