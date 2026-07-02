@@ -14,7 +14,16 @@ from .budget import (
 )
 from .dashboard import render_risk_dashboard, write_risk_dashboard
 from .kanon import kanon_report
-from .reid import risk_report
+from .reid import (
+    LongitudinalCorpus,
+    LongitudinalEvidence,
+    LongitudinalNote,
+    LongitudinalPatient,
+    build_longitudinal_corpus,
+    longitudinal_attack_fingerprint,
+    longitudinal_risk_report,
+    risk_report,
+)
 
 __all__ = [
     "DEFAULT_POLICY_BUDGETS",
@@ -24,8 +33,15 @@ __all__ = [
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
     "RiskBudgetViolation",
+    "LongitudinalCorpus",
+    "LongitudinalEvidence",
+    "LongitudinalNote",
+    "LongitudinalPatient",
     "budget_for_policy",
+    "build_longitudinal_corpus",
     "evaluate_budget",
+    "longitudinal_attack_fingerprint",
+    "longitudinal_risk_report",
     "risk_report",
     "kanon_report",
     "diff_audit_reports",
