@@ -109,6 +109,13 @@ NUTRITION_TARGET: Final = "NUTRITION_TARGET"
 FEEDING_ROUTE: Final = "FEEDING_ROUTE"
 NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
 
+#: Clinical-genomics variant-mention concepts (issue #906)
+GENE_SYMBOL: Final = "GENE_SYMBOL"
+VARIANT_DESCRIPTOR: Final = "VARIANT_DESCRIPTOR"
+PROTEIN_CHANGE: Final = "PROTEIN_CHANGE"
+ZYGOSITY: Final = "ZYGOSITY"
+CLINICAL_SIGNIFICANCE: Final = "CLINICAL_SIGNIFICANCE"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -191,6 +198,11 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         NUTRITION_TARGET,
         FEEDING_ROUTE,
         NUTRITIONAL_STATUS,
+        GENE_SYMBOL,
+        VARIANT_DESCRIPTOR,
+        PROTEIN_CHANGE,
+        ZYGOSITY,
+        CLINICAL_SIGNIFICANCE,
         OTHER,
     }
 )
@@ -360,6 +372,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Clinical genomics
+    GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PROTEIN_CHANGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ZYGOSITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CLINICAL_SIGNIFICANCE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -438,6 +456,12 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
     FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Clinical genomics
+    GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
+    VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    PROTEIN_CHANGE: HIPAA_UNIQUE_IDENTIFIER,
+    ZYGOSITY: HIPAA_UNIQUE_IDENTIFIER,
+    CLINICAL_SIGNIFICANCE: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -651,6 +675,21 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nutritiontarget": NUTRITION_TARGET,
     "feedingroute": FEEDING_ROUTE,
     "nutritionalstatus": NUTRITIONAL_STATUS,
+    # Clinical genomics
+    "gene": GENE_SYMBOL,
+    "genesymbol": GENE_SYMBOL,
+    "genename": GENE_SYMBOL,
+    "variantdescriptor": VARIANT_DESCRIPTOR,
+    "hgvs": VARIANT_DESCRIPTOR,
+    "variant": VARIANT_DESCRIPTOR,
+    "variantnotation": VARIANT_DESCRIPTOR,
+    "proteinchange": PROTEIN_CHANGE,
+    "aminoacidchange": PROTEIN_CHANGE,
+    "zygosity": ZYGOSITY,
+    "heterozygous": ZYGOSITY,
+    "homozygous": ZYGOSITY,
+    "clinicalsignificance": CLINICAL_SIGNIFICANCE,
+    "pathogenicity": CLINICAL_SIGNIFICANCE,
 }
 
 
@@ -861,5 +900,10 @@ __all__ = [
     "NUTRITION_TARGET",
     "FEEDING_ROUTE",
     "NUTRITIONAL_STATUS",
+    "GENE_SYMBOL",
+    "VARIANT_DESCRIPTOR",
+    "PROTEIN_CHANGE",
+    "ZYGOSITY",
+    "CLINICAL_SIGNIFICANCE",
     "OTHER",
 ]
