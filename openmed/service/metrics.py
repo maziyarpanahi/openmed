@@ -15,6 +15,11 @@ REQUEST_DURATION_NAME = "openmed_service_request_duration_seconds"
 INFLIGHT_NAME = "openmed_service_inflight_requests"
 MODEL_LOAD_NAME = "openmed_service_model_load_total"
 MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
+MODEL_RESIDENT_NAME = "openmed_service_model_resident_total"
+MODEL_RESIDENT_BYTES_NAME = "openmed_service_model_resident_bytes"
+MODEL_PENDING_LOAD_BYTES_NAME = "openmed_service_model_pending_load_bytes"
+MODEL_LOAD_DURATION_NAME = "openmed_service_model_load_duration_seconds"
+MODEL_REJECTION_NAME = "openmed_service_model_rejection_total"
 
 _ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -79,6 +84,12 @@ class PrometheusMetricsRegistry:
         self._inflight_requests = 0
         self._model_load_total = 0
         self._model_eviction_total = 0
+        self._model_resident_total = 0
+        self._model_resident_bytes = 0
+        self._model_pending_load_bytes = 0
+        self._model_load_duration_count = 0
+        self._model_load_duration_sum = 0.0
+        self._model_rejection_total = 0
         self._lock = threading.RLock()
 
     def request_started(self) -> None:
@@ -133,6 +144,33 @@ class PrometheusMetricsRegistry:
         with self._lock:
             self._model_eviction_total += int(count)
 
+    def record_model_residency(
+        self,
+        *,
+        resident_count: int,
+        resident_bytes: int,
+        pending_bytes: int,
+    ) -> None:
+        """Record the current aggregate warm-pool residency state."""
+        with self._lock:
+            self._model_resident_total = max(int(resident_count), 0)
+            self._model_resident_bytes = max(int(resident_bytes), 0)
+            self._model_pending_load_bytes = max(int(pending_bytes), 0)
+
+    def record_model_load_latency(self, seconds: float) -> None:
+        """Record one cold model load duration in seconds."""
+        observed = max(float(seconds), 0.0)
+        with self._lock:
+            self._model_load_duration_count += 1
+            self._model_load_duration_sum += observed
+
+    def record_model_rejection(self, count: int = 1) -> None:
+        """Record model admission rejections from warm-pool backpressure."""
+        if count <= 0:
+            return
+        with self._lock:
+            self._model_rejection_total += int(count)
+
     def render(self) -> str:
         """Render metrics using the Prometheus 0.0.4 text format."""
         with self._lock:
@@ -146,6 +184,12 @@ class PrometheusMetricsRegistry:
             inflight_requests = self._inflight_requests
             model_load_total = self._model_load_total
             model_eviction_total = self._model_eviction_total
+            model_resident_total = self._model_resident_total
+            model_resident_bytes = self._model_resident_bytes
+            model_pending_load_bytes = self._model_pending_load_bytes
+            model_load_duration_count = self._model_load_duration_count
+            model_load_duration_sum = self._model_load_duration_sum
+            model_rejection_total = self._model_rejection_total
 
         lines: list[str] = []
         _append_family_header(
@@ -208,6 +252,50 @@ class PrometheusMetricsRegistry:
             "counter",
         )
         lines.append(f"{MODEL_EVICTION_NAME} {model_eviction_total}")
+
+        _append_family_header(
+            lines,
+            MODEL_RESIDENT_NAME,
+            "Resident models currently held by the service warm-pool.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_RESIDENT_NAME} {model_resident_total}")
+
+        _append_family_header(
+            lines,
+            MODEL_RESIDENT_BYTES_NAME,
+            "Resident model memory currently accounted by the service warm-pool.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_RESIDENT_BYTES_NAME} {model_resident_bytes}")
+
+        _append_family_header(
+            lines,
+            MODEL_PENDING_LOAD_BYTES_NAME,
+            "Reserved model memory for in-progress warm-pool loads.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_PENDING_LOAD_BYTES_NAME} {model_pending_load_bytes}")
+
+        _append_family_header(
+            lines,
+            MODEL_LOAD_DURATION_NAME,
+            "Cold model load duration observed by the service warm-pool.",
+            "summary",
+        )
+        lines.append(f"{MODEL_LOAD_DURATION_NAME}_count {model_load_duration_count}")
+        lines.append(
+            f"{MODEL_LOAD_DURATION_NAME}_sum "
+            f"{_format_sample_value(model_load_duration_sum)}"
+        )
+
+        _append_family_header(
+            lines,
+            MODEL_REJECTION_NAME,
+            "Model admission rejections from warm-pool backpressure.",
+            "counter",
+        )
+        lines.append(f"{MODEL_REJECTION_NAME} {model_rejection_total}")
 
         return "\n".join(lines) + "\n"
 
