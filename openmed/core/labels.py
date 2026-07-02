@@ -103,6 +103,11 @@ LAB_TEST: Final = "LAB_TEST"
 PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
 
+ANESTHESIA_TYPE: Final = "ANESTHESIA_TYPE"
+ANESTHETIC_AGENT: Final = "ANESTHETIC_AGENT"
+AIRWAY_MANAGEMENT: Final = "AIRWAY_MANAGEMENT"
+ASA_CLASS: Final = "ASA_CLASS"
+
 #: Nutrition and diet-order concepts (issue #951)
 DIET_TYPE: Final = "DIET_TYPE"
 NUTRITION_TARGET: Final = "NUTRITION_TARGET"
@@ -645,6 +650,14 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "anatomy": BODY_SITE,
     "anatomical": BODY_SITE,
     "organ": BODY_SITE,
+    
+    "anesthesiatype": ANESTHESIA_TYPE,
+    "anestheticagent": ANESTHETIC_AGENT,
+    "airwaymanagement": AIRWAY_MANAGEMENT,
+    "asaclass": ASA_CLASS,
+    "monitoringmodality": OTHER,
+    "intraoperativeevent": OTHER,
+    
     # Nutrition and Diet concepts
     "diettype": DIET_TYPE,
     "diet": DIET_TYPE,
