@@ -22,6 +22,7 @@ from .reid import _coerce_records, _normalize_qi_value, _profile_record
 
 __all__ = ["kanon_report"]
 
+_SUPPORTED_L_METRICS = ("distinct", "entropy")
 _SUPPORTED_T_DISTANCES = ("variational",)
 
 
@@ -53,6 +54,11 @@ def kanon_report(
         k (min class size), per-class l-diversity and t-closeness, and the
         worst-case (overall) l-diversity and t-closeness.
     """
+    if l_metric not in _SUPPORTED_L_METRICS:
+        raise ValueError(
+            f"Unsupported l_metric {l_metric!r}; "
+            f"supported: {', '.join(_SUPPORTED_L_METRICS)}."
+        )
     if t_distance not in _SUPPORTED_T_DISTANCES:
         raise ValueError(
             f"Unsupported t_distance {t_distance!r}; "
@@ -60,7 +66,7 @@ def kanon_report(
         )
 
     coerced = _coerce_records(records, source="deidentified")
-    sensitive = list(sensitive_attributes or [])
+    sensitive = sorted(dict.fromkeys(sensitive_attributes or []))
 
     members: defaultdict[Any, list[int]] = defaultdict(list)
     json_keys: dict[Any, list[Any]] = {}
@@ -140,6 +146,7 @@ def kanon_report(
         "class_count": len(classes),
         "class_size_distribution": _size_distribution(sizes),
         "equivalence_classes": classes,
+        "l": _headline_l_diversity(overall_l, l_metric),
         "l_diversity": overall_l,
         "t_closeness": overall_t,
         "l_metric": l_metric,
@@ -201,6 +208,14 @@ def _variational_distance(
 def _size_distribution(sizes: Sequence[int]) -> list[list[int]]:
     counts = Counter(sizes)
     return [[size, counts[size]] for size in sorted(counts)]
+
+
+def _headline_l_diversity(
+    overall_l: Mapping[str, Mapping[str, int | float]],
+    l_metric: str,
+) -> dict[str, int | float]:
+    field = "min_distinct" if l_metric == "distinct" else "min_entropy"
+    return {attr: metrics[field] for attr, metrics in overall_l.items()}
 
 
 def _reported_quasi_identifiers(
