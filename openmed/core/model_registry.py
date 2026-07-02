@@ -83,7 +83,54 @@ class ModelInfo:
         return None
 
 
+@dataclass(frozen=True)
+class DraftModelInfo:
+    """Separate draft-model artifact metadata for speculative decoding."""
+
+    target_model_id: str
+    draft_model_id: str
+    display_name: str
+    license: str
+    tokenizer: str = "shared"
+    format: str = "mlx-4bit"
+    description: str = ""
+
+    @property
+    def permissive_license(self) -> bool:
+        """Return whether the declared draft license is permissive."""
+        return self.license.lower() in PERMISSIVE_DRAFT_MODEL_LICENSES
+
+
 MANIFEST_PATH = Path(__file__).resolve().parents[2] / "models.jsonl"
+
+PERMISSIVE_DRAFT_MODEL_LICENSES = frozenset(
+    {
+        "apache-2.0",
+        "bsd-2-clause",
+        "bsd-3-clause",
+        "mit",
+    }
+)
+
+GENERATION_DRAFT_MODELS: Dict[str, DraftModelInfo] = {
+    "OpenMed/laneformer-2b-it-q4-mlx": DraftModelInfo(
+        target_model_id="OpenMed/laneformer-2b-it-q4-mlx",
+        draft_model_id="OpenMed/laneformer-pii-draft-350m-q4-mlx",
+        display_name="Laneformer PII draft 350M Q4 MLX",
+        license="apache-2.0",
+        tokenizer="shared",
+        format="mlx-4bit",
+        description=(
+            "Small draft model packaged as a separate MLX-LM artifact for "
+            "exact speculative verification by the target model."
+        ),
+    ),
+}
+
+_GENERATION_DRAFT_TARGET_ALIASES = {
+    "laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
+    "kogai/laneformer-2b-it": "OpenMed/laneformer-2b-it-q4-mlx",
+}
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 _PARAM_RE = re.compile(r"^\d+(?:\.\d+)?[mb]$", re.IGNORECASE)
@@ -662,6 +709,30 @@ def get_model_info(model_key: str) -> Optional[ModelInfo]:
         if model.model_id == model_key:
             return model
     return None
+
+
+def resolve_draft_model_for(
+    target_model: str,
+    *,
+    require_permissive: bool = True,
+) -> DraftModelInfo | None:
+    """Return a separate draft artifact for a generative target model.
+
+    The returned artifact is intentionally independent from the target model
+    manifest row so target packages do not silently bundle or load draft weights.
+    """
+
+    target_model_id = _GENERATION_DRAFT_TARGET_ALIASES.get(target_model, target_model)
+    model_info = get_model_info(target_model_id)
+    if model_info is not None:
+        target_model_id = model_info.model_id
+
+    draft_info = GENERATION_DRAFT_MODELS.get(target_model_id)
+    if draft_info is None:
+        return None
+    if require_permissive and not draft_info.permissive_license:
+        return None
+    return draft_info
 
 
 def get_models_by_category(category: str) -> List[ModelInfo]:
