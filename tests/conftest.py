@@ -9,6 +9,14 @@ import openmed
 from openmed.core.config import OpenMedConfig
 from openmed.processing.tokenizer_cache import clear_tokenizer_cache
 
+_PAGED_KV_SERVICE_ENV_VARS = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS",
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN",
+)
+
 
 @pytest.fixture
 def sample_config():
@@ -160,6 +168,13 @@ def reset_tokenizer_cache():
     clear_tokenizer_cache()
     yield
     clear_tokenizer_cache()
+
+
+@pytest.fixture(autouse=True)
+def clear_paged_kv_service_env(monkeypatch):
+    """Keep optional MLX paged KV-cache service env from leaking into tests."""
+    for env_var in _PAGED_KV_SERVICE_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
 
 
 class TestHelpers:

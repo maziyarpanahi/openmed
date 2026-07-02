@@ -217,6 +217,31 @@ untrusted networks. Metric labels are limited to static route templates and
 HTTP status codes; text, model outputs, entities, client identity, document
 content, and PHI are never used as label values.
 
+Optional MLX-LM paged KV-cache budget for long-note generation:
+
+```bash
+OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET=512MiB \
+OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS=128 \
+OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS=512 \
+OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN=65536 \
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+```
+
+`OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET` is disabled when unset. It accepts
+raw bytes or size suffixes such as `MiB` and `GiB`. The exact dense-equivalent
+context is
+`floor(budget / (page_tokens * bytes_per_token)) * page_tokens`. If
+`OPENMED_SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS` is lower than that capacity,
+the lower window is used. Longer prompts remain bounded to the configured
+resident window and surface aggregate occupancy/eviction counters through
+`/metrics`:
+
+- `openmed_service_mlx_paged_kv_cache_occupancy_pages`
+- `openmed_service_mlx_paged_kv_cache_capacity_pages`
+- `openmed_service_mlx_paged_kv_cache_peak_pages`
+- `openmed_service_mlx_paged_kv_cache_eviction_total`
+- `openmed_service_mlx_paged_kv_cache_budget_bytes`
+
 ## Reliability Changes
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
