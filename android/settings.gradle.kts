@@ -27,5 +27,6 @@ dependencyResolutionManagement {
 rootProject.name = "openmed-android"
 
 include(":openmedkit")
+include(":OpenMedDemo:app")
 // Reserved for a future app/demo module; enable once android/sample exists.
 // include(":sample")
