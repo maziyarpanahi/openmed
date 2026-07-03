@@ -22,6 +22,7 @@ from openmed.eval.datasets.i2b2 import (
     i2b2_suite_metadata,
     load_i2b2_deid,
 )
+from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
@@ -61,6 +62,8 @@ def validate_suite_name(name: str) -> str:
 def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     """Load benchmark fixtures for a named suite."""
     suite = validate_suite_name(name)
+    if suite == GOLDEN:
+        return load_benchmark_fixtures(kwargs.get("path"))
     if suite == I2B2:
         return load_i2b2_deid(
             path=kwargs.get("path"),
@@ -106,6 +109,7 @@ __all__ = [
     "BIOMEDICAL_NER",
     "DEFAULT_SUITES",
     "validate_suite_name",
+    "load_benchmark_fixtures",
     "load_suite_fixtures",
     "suite_metadata",
     "load_i2b2_deid",

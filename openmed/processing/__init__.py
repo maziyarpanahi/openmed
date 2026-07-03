@@ -7,7 +7,10 @@ from .batch import (
     BatchProcessor,
     BatchProgress,
     BatchResult,
+    DatasetRedactionResult,
+    DatasetRedactionSummary,
     process_batch,
+    redact_dataset,
 )
 from .checkpoint import (
     DEDUPE_HEADER,
@@ -50,7 +53,10 @@ __all__ = [
     "BatchItemResult",
     "BatchProgress",
     "BatchResult",
+    "DatasetRedactionResult",
+    "DatasetRedactionSummary",
     "process_batch",
+    "redact_dataset",
     "DEDUPE_HEADER",
     "CheckpointRecord",
     "InMemoryCheckpointStore",
