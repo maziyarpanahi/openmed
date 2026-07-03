@@ -29,6 +29,7 @@ CLIENT_METHOD_BY_PATH = {
     "/pii/deidentify": "deidentify",
     "/pii/extract": "extractPii",
     "/pii/extract/stream": "extractPiiStream",
+    "/privacy-gateway/complete": "privacyGateway",
     "/readyz": "readyz",
 }
 
