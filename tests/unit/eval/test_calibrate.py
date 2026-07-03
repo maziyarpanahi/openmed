@@ -192,6 +192,7 @@ def test_threshold_artifact_round_trip_and_report_fields(tmp_path: Path) -> None
         "language",
     }.issubset(group)
 
+
 def test_conformal_calibration_preserves_shifted_critical_coverage() -> None:
     calibration, gate = _shifted_critical_samples()
 
