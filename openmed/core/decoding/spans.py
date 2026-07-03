@@ -9,7 +9,7 @@ dependencies.
 from __future__ import annotations
 
 import re
-from typing import Final
+from typing import Any, Final
 
 
 def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
@@ -63,4 +63,19 @@ def refine_privacy_filter_span(
     return trim_span_whitespace(start, end, text)
 
 
-__all__ = ["trim_span_whitespace", "refine_privacy_filter_span"]
+def stable_span_key(span: Any) -> tuple[int, int, str, str]:
+    """Return a deterministic ordering key for span-like objects.
+
+    The key intentionally depends only on source offsets plus optional label and
+    text fields, so downstream decoders can make stable tie-break decisions
+    without depending on object identity or model output order.
+    """
+
+    start = int(getattr(span, "start", 0))
+    end = int(getattr(span, "end", start))
+    label = str(getattr(span, "label", ""))
+    span_text = str(getattr(span, "text", ""))
+    return start, end, label.casefold(), span_text.casefold()
+
+
+__all__ = ["trim_span_whitespace", "refine_privacy_filter_span", "stable_span_key"]

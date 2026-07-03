@@ -157,6 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analyze_command(subparsers)
     _add_batch_command(subparsers)
     _add_deid_command(subparsers)
+    _add_redact_dataset_command(subparsers)
     _add_pii_command(subparsers)
     _add_audit_command(subparsers)
     _add_risk_command(subparsers)
@@ -372,6 +373,87 @@ def _add_deid_command(subparsers: argparse._SubParsersAction) -> None:
         help="Keep year in dates.",
     )
     deid_parser.set_defaults(handler=_handle_deid)
+
+
+def _add_redact_dataset_command(subparsers: argparse._SubParsersAction) -> None:
+    redact_parser = subparsers.add_parser(
+        "redact-dataset",
+        help="Redact selected free-text columns in a CSV, JSONL, or Parquet dataset.",
+    )
+    redact_parser.add_argument(
+        "path",
+        type=Path,
+        help="Input .csv, .jsonl, .ndjson, or .parquet file.",
+    )
+    redact_parser.add_argument(
+        "--text-column",
+        dest="text_column",
+        action="append",
+        default=[],
+        help="Free-text column to redact. Repeat for multiple columns.",
+    )
+    redact_parser.add_argument(
+        "--text-columns",
+        dest="text_columns",
+        default=None,
+        help="Comma-separated free-text columns to redact.",
+    )
+    redact_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Output dataset path. Defaults to <stem>.redacted<suffix>.",
+    )
+    redact_parser.add_argument(
+        "--policy",
+        default=None,
+        help="Policy profile name to pass to de-identification.",
+    )
+    redact_parser.add_argument(
+        "--method",
+        choices=["mask", "remove", "replace", "hash", "shift_dates"],
+        default="mask",
+        help="Fallback de-identification method.",
+    )
+    redact_parser.add_argument(
+        "--model",
+        default=_DEFAULT_PII_MODEL,
+        help="PII detection model.",
+    )
+    redact_parser.add_argument(
+        "--confidence-threshold",
+        type=float,
+        default=0.7,
+        help="Minimum confidence for redaction.",
+    )
+    redact_parser.add_argument(
+        "--lang",
+        default="en",
+        help="Language hint for PII detection and redaction.",
+    )
+    redact_parser.add_argument(
+        "--encoding",
+        default="utf-8",
+        help="Text encoding for CSV and JSONL inputs.",
+    )
+    redact_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=512,
+        help="Row batch size for Parquet processing.",
+    )
+    redact_parser.add_argument(
+        "--keep-year",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Keep year in dates where applicable. Use --no-keep-year to disable.",
+    )
+    redact_parser.add_argument(
+        "--no-safety-sweep",
+        action="store_true",
+        help="Disable deterministic structured-identifier sweep.",
+    )
+    redact_parser.set_defaults(handler=_handle_redact_dataset)
 
 
 def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
@@ -931,6 +1013,12 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Optional path for the BenchmarkReport JSON.",
     )
     pii_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Optional directory for per-model JSON and Markdown reports.",
+    )
+    pii_parser.add_argument(
         "--leaderboard-output",
         type=Path,
         default=None,
@@ -960,7 +1048,7 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     clinical_parser.add_argument(
         "--task",
-        choices=["ner", "relation"],
+        choices=["ner", "linking", "assertion", "relation"],
         default="ner",
         help="Clinical benchmark task view to load.",
     )
@@ -1002,6 +1090,37 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
         help="Optional path for a JSON suite-resolution summary.",
     )
     clinical_parser.set_defaults(handler=_handle_benchmark_clinical)
+
+    mobile_parser = benchmark_sub.add_parser(
+        "mobile",
+        help="Parse mobile benchmark options.",
+    )
+    mobile_parser.add_argument(
+        "--models",
+        nargs="+",
+        required=True,
+        metavar="MODEL",
+        help="Model id(s), comma-separated ids, or @manifest.",
+    )
+    mobile_parser.add_argument(
+        "--device",
+        choices=["mlx", "coreml"],
+        required=True,
+        help="Mobile runtime device.",
+    )
+    mobile_parser.add_argument(
+        "--tier",
+        choices=["phone", "laptop", "workstation", "server"],
+        required=True,
+        help="Device tier to benchmark.",
+    )
+    mobile_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory where benchmark reports will be written.",
+    )
+    mobile_parser.set_defaults(handler=_handle_benchmark_mobile)
 
 
 def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1187,6 +1306,13 @@ def _handle_batch(args: argparse.Namespace) -> int:
         sys.stdout.write(f"{output}\n")
 
     return 0 if result.failed_items == 0 else 1
+
+
+def _handle_redact_dataset(args: argparse.Namespace) -> int:
+    from .redact_dataset import run_from_args
+
+    config = _load_and_apply_config(args)
+    return run_from_args(args, config=config)
 
 
 def _handle_audit_verify(args: argparse.Namespace) -> int:
@@ -1525,7 +1651,11 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     from openmed.eval.harness import run_benchmark
     from openmed.eval.suites import SHIELD, load_suite_fixtures, suite_metadata
 
-    models = _parse_model_args(args.models or [])
+    try:
+        models = _parse_model_args(args.models or [])
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
     if not models:
         sys.stderr.write("At least one model identifier is required.\n")
         return 1
@@ -1542,6 +1672,10 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
     except (PermissionError, RuntimeError, ValueError) as exc:
         sys.stderr.write(f"Failed to load benchmark suite: {exc}\n")
         return 1
+
+    metadata = dict(metadata)
+    metadata.setdefault("benchmark_domain", "pii")
+    metadata.setdefault("source_suite", suite)
 
     reports = [
         run_benchmark(
@@ -1561,6 +1695,25 @@ def _handle_benchmark_pii(args: argparse.Namespace) -> int:
             "reports": [report.to_dict() for report in reports],
             "suite": suite,
         }
+
+    if args.output_dir:
+        try:
+            paths = _write_benchmark_report_files(
+                reports,
+                output_dir=args.output_dir,
+                domain="pii",
+                suite=suite,
+                device=str(args.device),
+            )
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+        if args.output is None:
+            sys.stdout.write("Benchmark reports written:\n")
+            for json_path, markdown_path in paths:
+                sys.stdout.write(f"  JSON: {json_path}\n")
+                sys.stdout.write(f"  Markdown: {markdown_path}\n")
+            return 0
 
     output = json.dumps(payload, indent=2, sort_keys=True)
     if args.output:
@@ -1585,6 +1738,11 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
     try:
         suite = str(args.suite)
         task = str(args.task)
+        if task in {"linking", "assertion"}:
+            sys.stderr.write(
+                f"Clinical benchmark task '{task}' is not implemented yet.\n"
+            )
+            return 1
         load_kwargs: dict[str, Any] = {
             "task": task,
             "path": args.input,
@@ -1605,7 +1763,11 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
 
     if suite == BIOMEDICAL_NER and task == "ner":
         split = str(args.split) if args.split is not None else "test"
-        models = _parse_model_args(args.models or [])
+        try:
+            models = _parse_model_args(args.models or [])
+        except ValueError as exc:
+            sys.stderr.write(f"{exc}\n")
+            return 1
         if not models:
             models = ["disease_detection_superclinical"]
         reports = [
@@ -1646,6 +1808,19 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
     return _write_json_payload(payload, args.output)
 
 
+def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
+    try:
+        models = _parse_model_args(args.models or [])
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    sys.stderr.write(
+        "Mobile benchmark execution is not implemented yet for "
+        f"models={', '.join(models)}, device={args.device}, tier={args.tier}.\n"
+    )
+    return 1
+
+
 def _write_json_payload(payload: Any, output_path: Path | None) -> int:
     output = json.dumps(payload, indent=2, sort_keys=True)
     if output_path:
@@ -1659,10 +1834,66 @@ def _write_json_payload(payload: Any, output_path: Path | None) -> int:
     return 0
 
 
+def _write_benchmark_report_files(
+    reports: Sequence[Any],
+    *,
+    output_dir: Path,
+    domain: str,
+    suite: str,
+    device: str,
+) -> list[tuple[Path, Path]]:
+    paths: list[tuple[Path, Path]] = []
+    for report in reports:
+        json_path, markdown_path = _benchmark_report_paths(
+            output_dir=output_dir,
+            domain=domain,
+            suite=suite,
+            model_name=str(report.model_name),
+            device=device,
+        )
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        report.write_json(json_path)
+        report.write_markdown(markdown_path)
+        paths.append((json_path, markdown_path))
+    return paths
+
+
+def _benchmark_report_paths(
+    *,
+    output_dir: Path,
+    domain: str,
+    suite: str,
+    model_name: str,
+    device: str,
+) -> tuple[Path, Path]:
+    stem = f"{_path_token(model_name)}-{_path_token(device)}"
+    directory = output_dir / _path_token(domain) / _path_token(suite)
+    return directory / f"{stem}.json", directory / f"{stem}.md"
+
+
+def _path_token(value: str) -> str:
+    token = "".join(
+        character if character.isalnum() or character in "._-" else "-"
+        for character in value
+    ).strip("-")
+    return token or "value"
+
+
 def _parse_model_args(values: Sequence[str]) -> list[str]:
     models: list[str] = []
     for value in values:
         models.extend(item.strip() for item in value.split(",") if item.strip())
+    if models == ["@manifest"]:
+        manifest_models = [
+            str(row["repo_id"])
+            for row in load_manifest_rows(MANIFEST_PATH)
+            if isinstance(row.get("repo_id"), str) and row["repo_id"]
+        ]
+        if not manifest_models:
+            raise ValueError(f"model manifest is empty: {MANIFEST_PATH}")
+        return manifest_models
+    if "@manifest" in models:
+        raise ValueError("--models @manifest cannot be combined with explicit ids")
     return models
 
 
