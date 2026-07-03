@@ -42,6 +42,7 @@ from .date_shift import (
     stable_offset_for,
 )
 from .offline import network_blocked_if_offline
+from .script_detect import DetectionNormalization, normalize_for_pii_detection
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
@@ -550,12 +551,20 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     return model_name
 
 
+@dataclass(frozen=True)
+class _PreparedPIIText:
+    original_text: str
+    inference_text: str
+    do_normalize: bool
+    detection_normalization: DetectionNormalization
+
+
 def _prepare_pii_text(
     text: str,
     *,
     lang: str,
     normalize_accents: Optional[bool],
-) -> tuple[str, str, bool]:
+) -> _PreparedPIIText:
     """Return original stripped text, inference text, and normalization flag."""
     do_normalize = (
         normalize_accents
@@ -564,8 +573,18 @@ def _prepare_pii_text(
     )
 
     original_text = text.strip()
-    inference_text = _strip_accents(original_text) if do_normalize else original_text
-    return original_text, inference_text, do_normalize
+    detection_normalization = normalize_for_pii_detection(original_text)
+    inference_text = detection_normalization.text
+    if do_normalize:
+        inference_text = _strip_accents(inference_text)
+    return _PreparedPIIText(
+        original_text=original_text,
+        inference_text=inference_text,
+        do_normalize=bool(do_normalize)
+        or detection_normalization.changed
+        or detection_normalization.mixed_script,
+        detection_normalization=detection_normalization,
+    )
 
 
 def _replace_analysis_result(result: Any, **updates: Any) -> Any:
@@ -595,6 +614,44 @@ def _mutable_prediction_result(result: Any) -> Any:
         timestamp=result.timestamp,
         processing_time=result.processing_time,
         metadata=dict(result.metadata) if result.metadata is not None else None,
+    )
+
+
+def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
+    """Map normalized inference spans back to the original input text."""
+    normalization = prepared.detection_normalization
+    if (
+        result.text == prepared.original_text
+        and not normalization.changed
+        and not normalization.mixed_script
+    ):
+        return result
+
+    entities: list[EntityPrediction] = []
+    for entity in result.entities:
+        start = int(entity.start or 0)
+        end = int(entity.end or start)
+        original_start, original_end = normalization.remap_span(start, end)
+        metadata = dict(entity.metadata or {})
+        metadata.setdefault("unicode_defense", normalization.to_metadata())
+        entities.append(
+            EntityPrediction(
+                text=prepared.original_text[original_start:original_end],
+                label=entity.label,
+                start=original_start,
+                end=original_end,
+                confidence=entity.confidence,
+                metadata=metadata,
+            )
+        )
+
+    metadata = dict(getattr(result, "metadata", None) or {})
+    metadata["unicode_defense"] = normalization.to_metadata()
+    return _replace_analysis_result(
+        result,
+        text=prepared.original_text,
+        entities=entities,
+        metadata=metadata,
     )
 
 
@@ -692,7 +749,7 @@ def _extract_pii_batch(
             pipeline = create_privacy_filter_pipeline(effective_model)
         else:
             pipeline = create_privacy_filter_pipeline(effective_model, config=config)
-        inference_texts = [item[1] for item in prepared]
+        inference_texts = [item.inference_text for item in prepared]
         privacy_call_kwargs = {
             key: pipeline_kwargs[key]
             for key in ("batch_size", "num_workers")
@@ -702,17 +759,18 @@ def _extract_pii_batch(
             raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
-            _prediction_result_from_privacy_filter_raw(
-                raw,
-                inference_text,
-                model_name=effective_model,
-                confidence_threshold=confidence_threshold,
-                original_text=original_text,
-                do_normalize=do_normalize,
+            _remap_prepared_pii_result(
+                _prediction_result_from_privacy_filter_raw(
+                    raw,
+                    item.inference_text,
+                    model_name=effective_model,
+                    confidence_threshold=confidence_threshold,
+                    original_text=item.inference_text,
+                    do_normalize=False,
+                ),
+                item,
             )
-            for raw, (original_text, inference_text, do_normalize) in zip(
-                batched_raw, prepared
-            )
+            for raw, item in zip(batched_raw, prepared)
         ]
     else:
         from .. import analyze_text
@@ -722,9 +780,9 @@ def _extract_pii_batch(
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
-        for original_text, inference_text, do_normalize in prepared:
+        for item in prepared:
             result = analyze_text(
-                inference_text,
+                item.inference_text,
                 model_name=effective_model,
                 confidence_threshold=confidence_threshold,
                 config=config,
@@ -733,25 +791,7 @@ def _extract_pii_batch(
                 **pipeline_kwargs,
             )
             result = _mutable_prediction_result(result)
-
-            if do_normalize and original_text != inference_text:
-                normalized_entities = [
-                    EntityPrediction(
-                        text=original_text[e.start : e.end],
-                        label=e.label,
-                        start=e.start,
-                        end=e.end,
-                        confidence=e.confidence,
-                    )
-                    for e in result.entities
-                ]
-                result = _replace_analysis_result(
-                    result,
-                    text=original_text,
-                    entities=normalized_entities,
-                )
-
-            results.append(result)
+            results.append(_remap_prepared_pii_result(result, item))
 
     if use_smart_merging and not uses_privacy_filter:
         results = [
