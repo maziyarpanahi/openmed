@@ -1,6 +1,12 @@
 """Text processing utilities for OpenMed."""
 
 from . import sentences
+from .advanced_ner import (
+    StreamingReplayResult,
+    StreamingTokenClassifier,
+    replay_token_classifier,
+    stream_token_classifier,
+)
 from .batch import (
     BatchItem,
     BatchItemResult,
@@ -53,6 +59,10 @@ __all__ = [
     "ObjectStorageItemResult",
     "ObjectProgressCallback",
     "deidentify_bucket",
+    "StreamingReplayResult",
+    "StreamingTokenClassifier",
+    "replay_token_classifier",
+    "stream_token_classifier",
     "ConsumerProtocol",
     "ProducerProtocol",
     "KafkaClientPair",
