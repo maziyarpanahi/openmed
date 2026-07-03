@@ -13,6 +13,8 @@ publish the package to PyPI or GitHub Pages.
 - `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
 - `make docs-build` runs `mkdocs build --strict` for CI parity.
 - `uv pip install ".[dev]"` pulls in pytest + coverage; `uv pip install ".[dev,hf]"` stacks extras.
+- Follow the [no-raw-PHI logging policy](security/no-raw-phi-logging.md) for every PII, de-identification,
+  text-processing, service, and batch change.
 
 ## Code style
 
@@ -41,7 +43,7 @@ make lint-swift
 
 1. Bump the version via `make bump-patch` (or `bump-minor` / `bump-major`). These commands update `openmed/__about__.py`.
 2. Run `python3 -m build` (or `make build`) to produce wheels and sdists.
-3. Publish by pushing a tag (`vX.Y.Z`) to trigger `.github/workflows/publish.yml`.
+3. Confirm the PyPI Trusted Publisher setup in [PyPI Trusted Publishing](release/trusted-publishing.md), then publish by pushing a tag (`vX.Y.Z`) to trigger `.github/workflows/publish.yml`.
 4. Update `CHANGELOG.md` with release notes before tagging.
 
 ## Documentation deploys
@@ -68,10 +70,13 @@ to publish outside CI, run `make docs-deploy`; it mirrors the workflow by buildi
 - **Security issues are different:** a redaction bypass or PHI/PII leak must be
   reported privately, never as a public issue. Follow the
   [Security & Disclosure policy](security/disclosure-policy.md).
+- Run `pytest tests/unit/test_no_raw_text_logging.py -q` when touching logging, text processing, service request
+  handling, PII extraction, or de-identification code.
 
 ## Governance references
 
 - [Release Streams & Channels](release/semver-and-channels.md) defines model artifact and library release cadence.
+- [PyPI Trusted Publishing](release/trusted-publishing.md) documents package publishing, attestations, and token retirement.
 - [Generative Model Policy](generative-model-policy.md) defines approved and prohibited model-assisted workflows.
 
 Ported rule-set files must start with an upstream attribution header naming the

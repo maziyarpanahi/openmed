@@ -723,6 +723,17 @@ def canonical_section_name(section: Any) -> str | None:
     return _canonical_section_name(section)
 
 
+def canonical_section_label(section: Any) -> str | None:
+    """Return the canonical section key for a user-facing section label.
+
+    The returned key is one of ``SECTION_LABEL_ALIASES`` values such as
+    ``"assessment"`` or ``"past_medical_history"``. Unknown, empty, or missing
+    section labels return ``None`` rather than inventing a category.
+    """
+
+    return _canonical_section_name(section)
+
+
 def _has_explicit_temporality_cue(span: Any) -> bool:
     return any(
         _HYPOTHETICAL_RE.search(part)
@@ -1100,6 +1111,7 @@ def assert_context_axes(
     assertion = ClinicalAssertion(
         temporality=resolve_temporality(span, modifier_hits),
         certainty=resolve_uncertainty(span, modifier_hits),
+        negation=resolve_negation(span, modifier_hits),
     )
     return apply_section_context(span, section, assertion)
 
@@ -1184,6 +1196,8 @@ __all__ = [
     "CANONICAL_SECTION_LABELS",
     "SECTION_LABEL_ALIASES",
     "SECTION_CONTEXT_PRIORS",
+    "canonical_section_name",
+    "canonical_section_label",
     "apply_section_context",
     "resolve_span_context",
     "assert_context_axes",

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -17,6 +18,7 @@ DEFAULT_RESOURCE = "thresholds.json"
 DEFAULT_POLICY_PROFILE = "balanced"
 STRICT_NO_LEAK_PROFILE = "strict_no_leak"
 WILDCARD_LANGUAGE = "*"
+DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING = 0.05
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,78 @@ class RecallGuardResult:
         return f"protected recall below floor for {labels}"
 
 
+@dataclass(frozen=True)
+class MembershipDefensePolicy:
+    """Score defense applied before thresholding release detector outputs."""
+
+    enabled: bool = False
+    clip_min: float = 0.0
+    clip_max: float = 1.0
+    temperature: float = 1.0
+    smoothing: float = 0.0
+    recall_floor: float | None = None
+    advantage_ceiling: float = DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING
+
+    @classmethod
+    def from_mapping(
+        cls,
+        value: Mapping[str, Any] | "MembershipDefensePolicy" | None,
+        *,
+        recall_floor: float | None = None,
+    ) -> "MembershipDefensePolicy":
+        if isinstance(value, MembershipDefensePolicy):
+            return value
+        source = dict(value or {})
+        policy = cls(
+            enabled=bool(source.get("enabled", False)),
+            clip_min=_bounded_probability(source.get("clip_min", 0.0), "clip_min"),
+            clip_max=_bounded_probability(source.get("clip_max", 1.0), "clip_max"),
+            temperature=_positive_float(source.get("temperature", 1.0), "temperature"),
+            smoothing=_bounded_probability(source.get("smoothing", 0.0), "smoothing"),
+            recall_floor=(
+                _bounded_probability(source.get("recall_floor"), "recall_floor")
+                if source.get("recall_floor") is not None
+                else recall_floor
+            ),
+            advantage_ceiling=_bounded_probability(
+                source.get(
+                    "advantage_ceiling",
+                    DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
+                ),
+                "advantage_ceiling",
+            ),
+        )
+        if policy.clip_min > policy.clip_max:
+            raise ValueError("membership defense clip_min must be <= clip_max")
+        return policy
+
+    def to_dict(self) -> dict[str, float | bool | None]:
+        return {
+            "enabled": bool(self.enabled),
+            "clip_min": float(self.clip_min),
+            "clip_max": float(self.clip_max),
+            "temperature": float(self.temperature),
+            "smoothing": float(self.smoothing),
+            "recall_floor": (
+                None if self.recall_floor is None else float(self.recall_floor)
+            ),
+            "advantage_ceiling": float(self.advantage_ceiling),
+        }
+
+    def apply_score(self, score: float) -> float:
+        """Return the defended score used for inference thresholding."""
+
+        value = _bounded_probability(score, "score")
+        if not self.enabled:
+            return value
+
+        if self.temperature != 1.0:
+            value = _sigmoid(_logit(value) / self.temperature)
+        if self.smoothing:
+            value = 0.5 + ((value - 0.5) * (1.0 - self.smoothing))
+        return min(self.clip_max, max(self.clip_min, value))
+
+
 def load_thresholds(path: str | Path | None = None) -> dict[str, Any]:
     """Load and validate the versioned thresholds matrix."""
 
@@ -82,12 +156,20 @@ def validate_threshold_matrix(matrix: Mapping[str, Any]) -> None:
     profiles = matrix.get("profiles")
     if not isinstance(profiles, Mapping) or not profiles:
         raise ValueError("thresholds matrix requires profiles")
+    _validate_membership_defense(
+        matrix.get("membership_defense"),
+        "membership_defense",
+    )
 
     for profile_name, profile in profiles.items():
         if not isinstance(profile, Mapping):
             raise ValueError(f"profile {profile_name!r} must be an object")
         _validate_recall_floor(profile.get("recall_floor"), profile_name)
         _validate_entry(profile.get("default"), f"{profile_name}.default")
+        _validate_membership_defense(
+            profile.get("membership_defense"),
+            f"{profile_name}.membership_defense",
+        )
         labels = profile.get("labels") or {}
         if not isinstance(labels, Mapping):
             raise ValueError(f"profile {profile_name!r} labels must be an object")
@@ -157,6 +239,54 @@ def profile_recall_floor(
     validate_threshold_matrix(payload)
     profile_name = _resolve_profile_name(payload, policy_profile)
     return float(payload["profiles"][profile_name]["recall_floor"])
+
+
+def membership_defense_for_profile(
+    policy_profile: str = DEFAULT_POLICY_PROFILE,
+    *,
+    matrix: Mapping[str, Any] | None = None,
+    overrides: Mapping[str, Any] | MembershipDefensePolicy | None = None,
+) -> MembershipDefensePolicy:
+    """Resolve the membership-inference score defense for a policy profile."""
+
+    payload = matrix if matrix is not None else load_thresholds()
+    validate_threshold_matrix(payload)
+    profile_name = _resolve_profile_name(payload, policy_profile)
+    profile = payload["profiles"][profile_name]
+    base: dict[str, Any] = {}
+    matrix_default = payload.get("membership_defense")
+    if isinstance(matrix_default, Mapping):
+        base.update(matrix_default)
+    profile_value = profile.get("membership_defense")
+    if isinstance(profile_value, Mapping):
+        base.update(profile_value)
+    if overrides is not None:
+        if isinstance(overrides, MembershipDefensePolicy):
+            base.update(overrides.to_dict())
+        else:
+            base.update(dict(overrides))
+    return MembershipDefensePolicy.from_mapping(
+        base,
+        recall_floor=profile_recall_floor(profile_name, matrix=payload),
+    )
+
+
+def apply_membership_defense_to_score(
+    score: float,
+    *,
+    policy: MembershipDefensePolicy | Mapping[str, Any] | None = None,
+    policy_profile: str = DEFAULT_POLICY_PROFILE,
+    matrix: Mapping[str, Any] | None = None,
+) -> float:
+    """Apply the configured membership-inference defense to one score."""
+
+    if isinstance(policy, MembershipDefensePolicy):
+        defense = policy
+    elif policy is not None:
+        defense = MembershipDefensePolicy.from_mapping(policy)
+    else:
+        defense = membership_defense_for_profile(policy_profile, matrix=matrix)
+    return defense.apply_score(score)
 
 
 def label_keep_floors(
@@ -324,16 +454,61 @@ def _validate_entry(entry: Any, path: str) -> None:
         raise ValueError(f"{path}.action must be one of {ACTION_VALUES!r}")
 
 
+def _validate_membership_defense(entry: Any, path: str) -> None:
+    if entry is None:
+        return
+    if not isinstance(entry, Mapping):
+        raise ValueError(f"{path} must be an object")
+    MembershipDefensePolicy.from_mapping(entry)
+
+
+def _bounded_probability(value: Any, field_name: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be between 0.0 and 1.0") from exc
+    if not math.isfinite(result) or not 0.0 <= result <= 1.0:
+        raise ValueError(f"{field_name} must be between 0.0 and 1.0")
+    return result
+
+
+def _positive_float(value: Any, field_name: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be positive") from exc
+    if not math.isfinite(result) or result <= 0.0:
+        raise ValueError(f"{field_name} must be positive")
+    return result
+
+
+def _logit(score: float) -> float:
+    clipped = min(1.0 - 1e-12, max(1e-12, score))
+    return math.log(clipped / (1.0 - clipped))
+
+
+def _sigmoid(value: float) -> float:
+    if value >= 0.0:
+        z = math.exp(-value)
+        return 1.0 / (1.0 + z)
+    z = math.exp(value)
+    return z / (1.0 + z)
+
+
 __all__ = [
     "CURRENT_SCHEMA_VERSION",
     "DEFAULT_POLICY_PROFILE",
+    "DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING",
+    "MembershipDefensePolicy",
     "RecallGuardResult",
     "STRICT_NO_LEAK_PROFILE",
     "Threshold",
+    "apply_membership_defense_to_score",
     "fit_thresholds",
     "label_keep_floors",
     "load_thresholds",
     "lookup_threshold",
+    "membership_defense_for_profile",
     "profile_recall_floor",
     "recall_floor_guard",
     "update_thresholds",
