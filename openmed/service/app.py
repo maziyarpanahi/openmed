@@ -584,6 +584,7 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
     @app.post(_PRIVACY_GATEWAY_PATH)
     async def privacy_gateway_complete(
         payload: PrivacyGatewayRequest,
