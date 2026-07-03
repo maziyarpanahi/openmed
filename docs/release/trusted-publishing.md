@@ -11,8 +11,10 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 
 - It runs from `push` events for `v*` tags only.
 - It does not run from `pull_request` or forked pull request events.
-- The build job creates and checks the distributions without `id-token: write`.
-- The publish job downloads the built distributions, uses
+- The reusable provenance job in `.github/workflows/provenance.yml` builds and
+  checks the distributions, generates SLSA provenance, and verifies the
+  attestations before upload.
+- The publish job downloads those verified distributions, uses
   `pypa/gh-action-pypi-publish`, and grants only `contents: read` plus
   `id-token: write`.
 - The publish action is configured without `user`, `password`, or
@@ -59,7 +61,9 @@ should find nothing. The test command must pass before the release tag is
 pushed.
 
 After the tagged publish succeeds, verify the PyPI release page lists provenance
-or attestations for the uploaded wheel and source distribution.
+or attestations for the uploaded wheel and source distribution. For the
+repository-level SLSA provenance check, see
+[SLSA Build Provenance](../supply-chain/provenance.md).
 
 ## Token retirement
 
