@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 UNKNOWN_SCRIPT = "Unknown"
 
@@ -41,6 +42,114 @@ SCRIPT_LANGUAGE_HINTS: dict[str, tuple[str, ...]] = {
     "Thai": ("en",),
     UNKNOWN_SCRIPT: ("en",),
 }
+
+ZERO_WIDTH_CHARS = frozenset(
+    {
+        "\u200b",  # zero width space
+        "\u200c",  # zero width non-joiner
+        "\u200d",  # zero width joiner
+        "\u2060",  # word joiner
+        "\ufeff",  # zero width no-break space
+    }
+)
+
+_CONFUSABLE_FOLD: dict[str, str] = {
+    "\u0391": "A",
+    "\u0392": "B",
+    "\u0395": "E",
+    "\u0397": "H",
+    "\u0399": "I",
+    "\u039a": "K",
+    "\u039c": "M",
+    "\u039d": "N",
+    "\u039f": "O",
+    "\u03a1": "P",
+    "\u03a4": "T",
+    "\u03a7": "X",
+    "\u03b1": "a",
+    "\u03b5": "e",
+    "\u03b7": "n",
+    "\u03b9": "i",
+    "\u03ba": "k",
+    "\u03bc": "u",
+    "\u03bf": "o",
+    "\u03c1": "p",
+    "\u03c4": "t",
+    "\u03c5": "u",
+    "\u03c7": "x",
+    "\u0410": "A",
+    "\u0412": "B",
+    "\u0415": "E",
+    "\u041a": "K",
+    "\u041c": "M",
+    "\u041d": "H",
+    "\u041e": "O",
+    "\u0420": "P",
+    "\u0421": "C",
+    "\u0422": "T",
+    "\u0425": "X",
+    "\u0430": "a",
+    "\u0435": "e",
+    "\u043e": "o",
+    "\u0440": "p",
+    "\u0441": "c",
+    "\u0445": "x",
+    "\u0456": "i",
+}
+
+
+@dataclass(frozen=True)
+class DetectionNormalization:
+    """Offset-preserving Unicode normalization for PII detection."""
+
+    text: str
+    original_length: int
+    offset_starts: tuple[int, ...]
+    offset_ends: tuple[int, ...]
+    removed_zero_width: int = 0
+    stripped_combining_marks: int = 0
+    folded_confusables: int = 0
+    scripts: tuple[str, ...] = ()
+    mixed_script: bool = False
+
+    @property
+    def changed(self) -> bool:
+        """Return whether the normalized text differs structurally."""
+        return (
+            self.removed_zero_width > 0
+            or self.stripped_combining_marks > 0
+            or self.folded_confusables > 0
+        )
+
+    def remap_span(self, start: int, end: int) -> tuple[int, int]:
+        """Map normalized-text offsets back to original-text offsets."""
+        safe_start = max(0, min(int(start), len(self.text)))
+        safe_end = max(safe_start, min(int(end), len(self.text)))
+        if not self.offset_starts:
+            return 0, 0
+        if safe_start >= len(self.offset_starts):
+            original_start = self.original_length
+        else:
+            original_start = self.offset_starts[safe_start]
+        if safe_end <= 0:
+            original_end = original_start
+        elif safe_end - 1 >= len(self.offset_ends):
+            original_end = self.original_length
+        else:
+            original_end = self.offset_ends[safe_end - 1]
+        return original_start, max(original_start, original_end)
+
+    def to_metadata(self) -> dict[str, object]:
+        """Return PHI-free normalization metadata."""
+        return {
+            "changed": self.changed,
+            "folded_confusables": self.folded_confusables,
+            "mixed_script": self.mixed_script,
+            "removed_zero_width": self.removed_zero_width,
+            "scripts": list(self.scripts),
+            "stripped_combining_marks": self.stripped_combining_marks,
+        }
+
 
 _SCRIPT_RANGES: tuple[tuple[str, tuple[tuple[int, int], ...]], ...] = (
     (
@@ -207,6 +316,51 @@ def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
 
 
+def normalize_for_pii_detection(text: str) -> DetectionNormalization:
+    """Fold adversarial Unicode artifacts while preserving offset remapping.
+
+    The defense strips zero-width controls and standalone combining marks, folds
+    common Latin-lookalike Greek/Cyrillic/full-width characters, and records a
+    script-consistency summary without storing source text.
+    """
+
+    scripts = tuple(sorted(_script_counts(text)))
+    output: list[str] = []
+    starts: list[int] = []
+    ends: list[int] = []
+    removed_zero_width = 0
+    stripped_combining_marks = 0
+    folded_confusables = 0
+
+    for index, char in enumerate(text):
+        if char in ZERO_WIDTH_CHARS:
+            removed_zero_width += 1
+            continue
+        if unicodedata.category(char) == "Mn":
+            stripped_combining_marks += 1
+            continue
+
+        replacement = _fold_confusable_char(char)
+        if replacement != char:
+            folded_confusables += 1
+        for replacement_char in replacement:
+            output.append(replacement_char)
+            starts.append(index)
+            ends.append(index + 1)
+
+    return DetectionNormalization(
+        text="".join(output),
+        original_length=len(text),
+        offset_starts=tuple(starts),
+        offset_ends=tuple(ends),
+        removed_zero_width=removed_zero_width,
+        stripped_combining_marks=stripped_combining_marks,
+        folded_confusables=folded_confusables,
+        scripts=scripts,
+        mixed_script=len(scripts) > 1,
+    )
+
+
 def _script_for_char(char: str) -> str | None:
     category = unicodedata.category(char)
     if category[0] not in {"L", "M"}:
@@ -219,11 +373,36 @@ def _script_for_char(char: str) -> str | None:
     return None
 
 
+def _script_counts(text: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for char in text:
+        script = _script_for_char(char)
+        if script is None:
+            continue
+        counts[script] = counts.get(script, 0) + 1
+    return counts
+
+
+def _fold_confusable_char(char: str) -> str:
+    folded = _CONFUSABLE_FOLD.get(char)
+    if folded is not None:
+        return folded
+
+    codepoint = ord(char)
+    if 0xFF01 <= codepoint <= 0xFF5E:
+        return chr(codepoint - 0xFEE0)
+
+    return char
+
+
 __all__ = [
+    "DetectionNormalization",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
+    "ZERO_WIDTH_CHARS",
     "candidate_languages_for_script",
     "detect_script",
+    "normalize_for_pii_detection",
     "segment_by_script",
 ]
