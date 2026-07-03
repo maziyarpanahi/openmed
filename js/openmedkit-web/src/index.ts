@@ -45,6 +45,40 @@ export {
   isLocalModelReference,
   loadTokenClassificationPipeline,
 } from "./model-loader";
+export {
+  detectOrtWebCapabilities,
+  selectOrtWebBackend,
+} from "./runtime/capability";
+export type {
+  CapabilityDetectionOptions,
+  OrtCapabilityGlobalScope,
+  OrtWebBackend,
+  OrtWebBackendChoice,
+  OrtWebCapabilityProfile,
+} from "./runtime/capability";
+export {
+  assertOfflineAssetPath,
+  clearOrtWebSessionCache,
+  configureOrtWebRuntime,
+  loadOrtWebSession,
+  loadOrtWebTokenClassificationPipeline,
+  normalizeOrtAssetPath,
+} from "./runtime/ort-web-loader";
+export type {
+  OrtExecutionProvider,
+  OrtFeeds,
+  OrtInferenceSession,
+  OrtResults,
+  OrtSessionCreateOptions,
+  OrtTensorLike,
+  OrtTokenClassificationDecodeContext,
+  OrtWebLoadedSession,
+  OrtWebLoaderOptions,
+  OrtWebRuntime,
+  OrtWebRuntimeProvider,
+  OrtWebSessionCache,
+  OrtWebTokenClassificationPipelineOptions,
+} from "./runtime/ort-web-loader";
 
 const DEFAULT_MODEL_ID = "OpenMed/privacy-filter-transformersjs";
 const DEFAULT_HASH_SECRET = "openmedkit-web";
