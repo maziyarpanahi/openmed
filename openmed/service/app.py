@@ -46,6 +46,13 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .throttle import ServiceThrottle
+from .tracing import (
+    OpenTelemetryMiddleware,
+    result_summary_attributes,
+    service_tracing_from_env,
+    set_current_span_attributes,
+    trace_service_stage,
+)
 
 SERVICE_NAME = "openmed-rest"
 _MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
@@ -233,7 +240,14 @@ async def _run_maybe_coalesced(
     if coalescer is None:
         return await operation()
 
-    return await coalescer.run(coalescing_key(endpoint, payload), operation)
+    with trace_service_stage(
+        "request_coalescing",
+        {
+            "openmed.endpoint": endpoint,
+            "openmed.coalescing.enabled": True,
+        },
+    ):
+        return await coalescer.run(coalescing_key(endpoint, payload), operation)
 
 
 def _metrics_route_label(request: Request) -> str:
@@ -275,6 +289,9 @@ def create_app() -> FastAPI:
                 loop.time() < deadline
             ):
                 await asyncio.sleep(0.05)
+            tracing = getattr(fastapi_app.state, "tracing", None)
+            if tracing is not None:
+                tracing.shutdown()
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -299,6 +316,7 @@ def create_app() -> FastAPI:
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )
+    app.state.tracing = service_tracing_from_env()
 
     @app.middleware("http")
     async def _readiness_middleware(request: Request, call_next):
@@ -474,7 +492,15 @@ def create_app() -> FastAPI:
                     lambda: _analyze_payload(payload, runtime),
                 )
 
-            return await _run_with_timeout(runtime, _model_operation)
+            with trace_service_stage(
+                "model_request",
+                {
+                    "openmed.endpoint": "/analyze",
+                    "openmed.input.length": len(payload.text),
+                    "openmed.model_name": payload.model_name,
+                },
+            ):
+                return await _run_with_timeout(runtime, _model_operation)
 
         return await _run_maybe_coalesced(request, "/analyze", payload, _operation)
 
@@ -501,7 +527,15 @@ def create_app() -> FastAPI:
                     lambda: _pii_extract_payload(payload, runtime),
                 )
 
-            return await _run_with_timeout(runtime, _model_operation)
+            with trace_service_stage(
+                "model_request",
+                {
+                    "openmed.endpoint": "/pii/extract",
+                    "openmed.input.length": len(payload.text),
+                    "openmed.model_name": payload.model_name,
+                },
+            ):
+                return await _run_with_timeout(runtime, _model_operation)
 
         return await _run_maybe_coalesced(
             request,
@@ -526,7 +560,15 @@ def create_app() -> FastAPI:
                     lambda: _pii_deidentify_payload(payload, runtime),
                 )
 
-            return await _run_with_timeout(runtime, _model_operation)
+            with trace_service_stage(
+                "model_request",
+                {
+                    "openmed.endpoint": "/pii/deidentify",
+                    "openmed.input.length": len(payload.text),
+                    "openmed.model_name": payload.model_name,
+                },
+            ):
+                return await _run_with_timeout(runtime, _model_operation)
 
         return await _run_maybe_coalesced(
             request,
@@ -535,6 +577,11 @@ def create_app() -> FastAPI:
             _operation,
         )
 
+    if app.state.tracing.enabled:
+        app.add_middleware(
+            OpenTelemetryMiddleware,
+            tracing=app.state.tracing,
+        )
     app.add_middleware(
         CorrelationIdMiddleware,
         log_config=service_log_config_from_env(),
@@ -588,7 +635,18 @@ def _dispatch_analyze_group(
         payloads = [jobs[index].payload for index in active_indexes]
         if _can_backend_batch_analyze(payloads, runtime):
             try:
-                batch_results = _analyze_payload_batch(payloads, runtime)
+                with trace_service_stage(
+                    "analyze_batch",
+                    {
+                        "openmed.batch.size": len(payloads),
+                        "openmed.input.count": len(payloads),
+                        "openmed.input.total_length": sum(
+                            len(payload.text) for payload in payloads
+                        ),
+                        "openmed.model_name": payloads[0].model_name,
+                    },
+                ):
+                    batch_results = _analyze_payload_batch(payloads, runtime)
                 if len(batch_results) != len(active_indexes):
                     raise ValueError(
                         "Analyze batch returned "
@@ -660,7 +718,18 @@ def _dispatch_pii_extract_group(
             return
         payloads = [jobs[index].payload for index in active_indexes]
         try:
-            batch_results = _pii_extract_payload_batch(payloads, runtime)
+            with trace_service_stage(
+                "pii_extract_batch",
+                {
+                    "openmed.batch.size": len(payloads),
+                    "openmed.input.count": len(payloads),
+                    "openmed.input.total_length": sum(
+                        len(payload.text) for payload in payloads
+                    ),
+                    "openmed.model_name": payloads[0].model_name,
+                },
+            ):
+                batch_results = _pii_extract_payload_batch(payloads, runtime)
             if len(batch_results) != len(active_indexes):
                 raise ValueError(
                     "PII extract batch returned "
@@ -856,38 +925,58 @@ def _pii_extract_payload_batch(
 def _analyze_payload(
     payload: AnalyzeRequest, runtime: ServiceRuntime
 ) -> Dict[str, Any]:
-    result = openmed.analyze_text(
-        payload.text,
-        model_name=payload.model_name,
-        config=runtime.config,
-        loader=runtime.get_loader(),
-        aggregation_strategy=payload.aggregation_strategy,
-        output_format="dict",
-        confidence_threshold=payload.confidence_threshold,
-        group_entities=payload.group_entities,
-        sentence_detection=payload.sentence_detection,
-        sentence_language=payload.sentence_language,
-        sentence_clean=payload.sentence_clean,
-        use_fast_tokenizer=payload.use_fast_tokenizer,
-    )
-    return _result_to_dict(result)
+    with trace_service_stage(
+        "analyze_pipeline",
+        {
+            "openmed.endpoint": "/analyze",
+            "openmed.input.length": len(payload.text),
+            "openmed.model_name": payload.model_name,
+        },
+    ):
+        result = openmed.analyze_text(
+            payload.text,
+            model_name=payload.model_name,
+            config=runtime.config,
+            loader=runtime.get_loader(),
+            aggregation_strategy=payload.aggregation_strategy,
+            output_format="dict",
+            confidence_threshold=payload.confidence_threshold,
+            group_entities=payload.group_entities,
+            sentence_detection=payload.sentence_detection,
+            sentence_language=payload.sentence_language,
+            sentence_clean=payload.sentence_clean,
+            use_fast_tokenizer=payload.use_fast_tokenizer,
+        )
+        response = _result_to_dict(result)
+        set_current_span_attributes(result_summary_attributes(response))
+        return response
 
 
 def _pii_extract_payload(
     payload: PIIExtractRequest,
     runtime: ServiceRuntime,
 ) -> Dict[str, Any]:
-    result = openmed.extract_pii(
-        payload.text,
-        model_name=payload.model_name,
-        confidence_threshold=payload.confidence_threshold,
-        config=runtime.config,
-        use_smart_merging=payload.use_smart_merging,
-        lang=payload.lang,
-        normalize_accents=payload.normalize_accents,
-        loader=runtime.get_loader(),
-    )
-    return _result_to_dict(result)
+    with trace_service_stage(
+        "pii_extract_pipeline",
+        {
+            "openmed.endpoint": "/pii/extract",
+            "openmed.input.length": len(payload.text),
+            "openmed.model_name": payload.model_name,
+        },
+    ):
+        result = openmed.extract_pii(
+            payload.text,
+            model_name=payload.model_name,
+            confidence_threshold=payload.confidence_threshold,
+            config=runtime.config,
+            use_smart_merging=payload.use_smart_merging,
+            lang=payload.lang,
+            normalize_accents=payload.normalize_accents,
+            loader=runtime.get_loader(),
+        )
+        response = _result_to_dict(result)
+        set_current_span_attributes(result_summary_attributes(response))
+        return response
 
 
 def _pii_deidentify_payload(
@@ -896,34 +985,43 @@ def _pii_deidentify_payload(
 ) -> Dict[str, Any]:
     from openmed.core.policy import canonical_policy_name, load_policy
 
-    policy_name = canonical_policy_name(payload.policy) if payload.policy else None
-    policy_profile = load_policy(policy_name) if policy_name is not None else None
+    with trace_service_stage(
+        "pii_deidentify_pipeline",
+        {
+            "openmed.endpoint": "/pii/deidentify",
+            "openmed.input.length": len(payload.text),
+            "openmed.model_name": payload.model_name,
+        },
+    ):
+        policy_name = canonical_policy_name(payload.policy) if payload.policy else None
+        policy_profile = load_policy(policy_name) if policy_name is not None else None
 
-    result = openmed.deidentify(
-        payload.text,
-        method=payload.method,
-        model_name=payload.model_name,
-        confidence_threshold=payload.confidence_threshold,
-        keep_year=payload.keep_year,
-        shift_dates=payload.shift_dates,
-        date_shift_days=payload.date_shift_days,
-        keep_mapping=payload.keep_mapping,
-        config=runtime.config,
-        use_smart_merging=payload.use_smart_merging,
-        use_safety_sweep=payload.use_safety_sweep,
-        lang=payload.lang,
-        normalize_accents=payload.normalize_accents,
-        loader=runtime.get_loader(),
-        policy=policy_name,
-    )
+        result = openmed.deidentify(
+            payload.text,
+            method=payload.method,
+            model_name=payload.model_name,
+            confidence_threshold=payload.confidence_threshold,
+            keep_year=payload.keep_year,
+            shift_dates=payload.shift_dates,
+            date_shift_days=payload.date_shift_days,
+            keep_mapping=payload.keep_mapping,
+            config=runtime.config,
+            use_smart_merging=payload.use_smart_merging,
+            use_safety_sweep=payload.use_safety_sweep,
+            lang=payload.lang,
+            normalize_accents=payload.normalize_accents,
+            loader=runtime.get_loader(),
+            policy=policy_name,
+        )
 
-    response = _result_to_dict(result)
-    should_emit_mapping = payload.keep_mapping or bool(
-        policy_profile is not None and policy_profile.keep_mapping
-    )
-    if should_emit_mapping and getattr(result, "mapping", None):
-        response["mapping"] = result.mapping
-    return response
+        response = _result_to_dict(result)
+        set_current_span_attributes(result_summary_attributes(response))
+        should_emit_mapping = payload.keep_mapping or bool(
+            policy_profile is not None and policy_profile.keep_mapping
+        )
+        if should_emit_mapping and getattr(result, "mapping", None):
+            response["mapping"] = result.mapping
+        return response
 
 
 app = create_app()
