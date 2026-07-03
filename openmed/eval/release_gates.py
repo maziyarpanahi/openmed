@@ -561,6 +561,9 @@ class ReleaseGate:
         )
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        federated_check = _federated_boundary_check(metrics, metadata)
+        if federated_check is not None:
+            checks.append(federated_check)
         checks.append(_k_floor_check(metrics, metadata))
 
         blocked_formats = tuple(
@@ -1553,6 +1556,64 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     )
 
 
+def _federated_boundary_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck | None:
+    boundary = _mapping(metrics.get("boundary_leakage"))
+    side_channel = _mapping(metrics.get("side_channel"))
+    has_federated_signal = bool(
+        boundary
+        or side_channel
+        or metadata.get("federated_eval")
+        or metrics.get("federated_boundary_leakage_rate") is not None
+    )
+    if not has_federated_signal:
+        return None
+
+    leakage_rate = _optional_float(
+        _first_value(
+            boundary.get("rate"),
+            metrics.get("federated_boundary_leakage_rate"),
+            metadata.get("federated_boundary_leakage_rate"),
+        )
+    )
+    leakage_rate = 1.0 if leakage_rate is None else leakage_rate
+    leaked_bytes = _optional_int(boundary.get("leaked_bytes")) or 0
+    side_flagged = bool(side_channel.get("flagged", False))
+    side_estimate = _optional_float(side_channel.get("estimate_bits")) or 0.0
+    sandbox_count = _optional_int(metrics.get("sandbox_violation_count"))
+    if sandbox_count is None:
+        sandbox_count = len(metadata.get("sandbox_violations") or ())
+
+    violations: dict[str, Any] = {}
+    if leakage_rate > 0.0 or leaked_bytes > 0:
+        violations["boundary_leakage"] = {
+            "rate": leakage_rate,
+            "leaked_bytes": leaked_bytes,
+        }
+    if side_flagged:
+        violations["side_channel"] = {
+            "estimate_bits": side_estimate,
+            "threshold_bits": side_channel.get("threshold_bits"),
+        }
+    if sandbox_count:
+        violations["sandbox"] = {"violation_count": sandbox_count}
+
+    return GateCheck(
+        "federated_boundary",
+        not violations,
+        reason="ok" if not violations else "federated boundary leakage gate failed",
+        details={
+            "boundary_leakage_rate": leakage_rate,
+            "leaked_bytes": leaked_bytes,
+            "side_channel_estimate_bits": side_estimate,
+            "sandbox_violation_count": sandbox_count,
+            "violations": violations,
+        },
+    )
+
+
 def _k_floor_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -1605,6 +1666,28 @@ def _k_floor_check(
             "max_reidentification_upper_bound": max_bound,
             "violations": violations,
         },
+    )
+
+
+def evaluate_federated_boundary_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+) -> GateCheck:
+    """Evaluate only the federated boundary leakage gate for a report."""
+    payload = _report_payload(report)
+    metrics = dict(_mapping(payload.get("metrics") or payload))
+    if "sandbox_violation_count" not in metrics and isinstance(
+        payload.get("sandbox_violations"),
+        Sequence,
+    ):
+        metrics["sandbox_violation_count"] = len(payload["sandbox_violations"])
+    metadata = _mapping(payload.get("metadata"))
+    check = _federated_boundary_check(metrics, metadata)
+    if check is not None:
+        return check
+    return GateCheck(
+        "federated_boundary",
+        False,
+        reason="federated boundary metrics are required",
     )
 
 
@@ -1784,6 +1867,8 @@ def _residual_leakage_rate(
     value = _first_value(
         metadata.get("residual_leakage_rate"),
         metrics.get("residual_leakage_rate"),
+        metrics.get("federated_boundary_leakage_rate"),
+        _nested(metrics, "boundary_leakage", "rate"),
         _nested(metrics, "leakage", "overall"),
     )
     parsed = _optional_float(value)
@@ -2374,6 +2459,7 @@ __all__ = [
     "ModelStewardConfig",
     "ReleaseGate",
     "build_arg_parser",
+    "evaluate_federated_boundary_gate",
     "format_preview",
     "main",
     "preview",
