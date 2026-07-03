@@ -4,7 +4,12 @@ Intended contents include harness.py, metrics.py, suites/, golden/, report.py,
 calibrate.py, and release_gates.py.
 """
 
-from openmed.eval.attacks.linkage import LinkageAttackResult, linkage_attack
+from openmed.eval.attacks.linkage import (
+    LinkageAttackResult,
+    LongitudinalLinkageAttackResult,
+    linkage_attack,
+    longitudinal_linkage_attack,
+)
 from openmed.eval.attacks.reid import (
     ReidAttackResult,
     SideChannelProbeResult,
@@ -107,9 +112,16 @@ from openmed.eval.evidence_bundle import (
     bundle_gate_evidence,
 )
 from openmed.eval.fairness import (
+    DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR,
+    TRANSFER_MATRIX_SCHEMA_VERSION,
     UNSPECIFIED_GROUP,
     FairnessGroupMetrics,
     FairnessReport,
+    TransferDeficiency,
+    TransferGapMetrics,
+    TransferMatrixCell,
+    TransferMatrixReport,
+    cross_lingual_transfer_report,
     fairness_report,
 )
 from openmed.eval.flaky import (
@@ -143,6 +155,8 @@ from openmed.eval.harness import (
     FixtureResult,
     SandboxViolation,
     run_benchmark,
+    run_cross_lingual_transfer,
+    run_cross_lingual_transfer_suite,
     run_federated_leakage_eval,
     run_suite,
 )
@@ -287,6 +301,7 @@ __all__ = [
     "DEFAULT_DEDUPE_SIMILARITY",
     "DEFAULT_FLAKY_TOLERANCE",
     "DEFAULT_PERTURBATIONS",
+    "DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR",
     "DatasetCard",
     "DistributionShiftEstimate",
     "EvalModelCard",
@@ -313,6 +328,7 @@ __all__ = [
     "HardNegativeMiningResult",
     "HardNegativeOverRedactionReport",
     "LinkageAttackResult",
+    "LongitudinalLinkageAttackResult",
     "GateCheck",
     "GateReport",
     "HeatmapCell",
@@ -352,6 +368,11 @@ __all__ = [
     "STATUS_SCORED",
     "ThresholdSweepPoint",
     "ThresholdSweepReport",
+    "TRANSFER_MATRIX_SCHEMA_VERSION",
+    "TransferDeficiency",
+    "TransferGapMetrics",
+    "TransferMatrixCell",
+    "TransferMatrixReport",
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
@@ -393,6 +414,7 @@ __all__ = [
     "compute_resource_metrics",
     "compute_section_recall",
     "compute_surrogate_consistency",
+    "cross_lingual_transfer_report",
     "coverage_gaps_by_language",
     "default_cache_dir",
     "default_suite_calibration_samples",
@@ -416,6 +438,7 @@ __all__ = [
     "invalidate",
     "iter_synthetic_corpus_shard",
     "linkage_attack",
+    "longitudinal_linkage_attack",
     "load",
     "load_calibration_samples",
     "load_calibration_thresholds",
@@ -439,6 +462,8 @@ __all__ = [
     "robustness_report",
     "run_benchmark",
     "run_comparator_matrix",
+    "run_cross_lingual_transfer",
+    "run_cross_lingual_transfer_suite",
     "run_federated_leakage_eval",
     "run_policy_compliance",
     "run_reid_attack",
