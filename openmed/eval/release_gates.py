@@ -32,9 +32,11 @@ from openmed.core.thresholds import (
     profile_recall_floor,
     validate_threshold_matrix,
 )
+from openmed.eval.fairness import DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR
 from openmed.eval.metrics import normalize_eval_spans
 from openmed.eval.nano_cert import certify_measurements
 from openmed.eval.quant_delta import (
+    COREML_RECALL_DELTA_LIMIT,
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
     QuantRecallDeltaResult,
@@ -568,6 +570,13 @@ class ReleaseGate:
         )
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        coreml_manifest = _coreml_conversion_manifest(metadata)
+        if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
+            "coreml"
+        ):
+            checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
+            checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
+        checks.append(_zero_shot_language_leakage_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
             checks.append(federated_check)
@@ -1141,6 +1150,77 @@ def _requires_manifest_row(
     )
 
 
+def _coreml_conversion_manifest(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    inline = _mapping(
+        metadata.get("coreml_conversion_manifest")
+        or metadata.get("coreml_manifest")
+        or metadata.get("conversion_manifest")
+    )
+    if inline:
+        return inline
+
+    manifest_path = _optional_path(
+        _first_value(
+            metadata.get("coreml_conversion_manifest_path"),
+            metadata.get("coreml_manifest_path"),
+            metadata.get("conversion_manifest_path"),
+        )
+    )
+    if manifest_path is None or not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return _mapping(loaded)
+
+
+def _coreml_variants(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    variants = manifest.get("variants") if manifest else None
+    if variants is None:
+        variants = metadata.get("coreml_variants")
+    if isinstance(variants, Mapping):
+        return [
+            {"name": str(name), **_mapping(value)} for name, value in variants.items()
+        ]
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        return [_mapping(item) for item in variants if _mapping(item)]
+    return []
+
+
+def _find_coreml_variant(
+    variants: Sequence[Mapping[str, Any]],
+    expected: str,
+) -> Mapping[str, Any] | None:
+    normalized_expected = _normalise_dimension(expected)
+    for variant in variants:
+        names = {
+            str(variant.get("name") or ""),
+            str(variant.get("format") or ""),
+            f"coreml-{variant.get('quantization')}",
+            f"coreml-{variant.get('precision')}",
+        }
+        if normalized_expected in {_normalise_dimension(name) for name in names}:
+            return variant
+    return None
+
+
+def _coreml_parity_passed(parity: Mapping[str, Any]) -> bool:
+    if not parity:
+        return False
+    if bool(parity.get("passed")) is not True:
+        return False
+    max_delta = _optional_float(parity.get("max_recall_delta"))
+    if max_delta is not None and max_delta > COREML_RECALL_DELTA_LIMIT:
+        return False
+    mismatches = parity.get("span_mismatches") or []
+    return not mismatches
+
+
 def _manifest_repo_ids(rows: Sequence[Mapping[str, Any]]) -> set[str]:
     return {
         str(row["repo_id"])
@@ -1494,6 +1574,98 @@ def _g4_check(result: QuantRecallDeltaResult) -> GateCheck:
     )
 
 
+def _coreml_ane_residency_check(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    variants = _coreml_variants(manifest, metadata)
+    fp16 = _find_coreml_variant(variants, "coreml-fp16")
+    if fp16 is None:
+        return GateCheck(
+            "CoreML-ANE",
+            False,
+            reason="CoreML fp16 variant residency evidence is required",
+        )
+
+    residency = _mapping(fp16.get("residency"))
+    residency_percentage = _optional_float(
+        fp16.get("ane_residency_percentage")
+        or residency.get("ane_residency_percentage")
+    )
+    fallback_layers = (
+        fp16.get("cpu_fallback_layers") or residency.get("cpu_fallback_layers") or []
+    )
+    fallback_count = (
+        len(fallback_layers) if isinstance(fallback_layers, Sequence) else 0
+    )
+    passed = (
+        residency_percentage is not None
+        and residency_percentage >= 0.90
+        and fallback_count == 0
+    )
+    return GateCheck(
+        "CoreML-ANE",
+        passed,
+        reason="ok" if passed else "fp16 CoreML variant is not ANE-resident",
+        details={
+            "variant": fp16.get("name") or fp16.get("format"),
+            "ane_residency_percentage": residency_percentage,
+            "minimum": 0.90,
+            "cpu_fallback_layers": fallback_layers,
+        },
+        blocking_format=None if passed else str(fp16.get("name") or "coreml-fp16"),
+    )
+
+
+def _coreml_variant_parity_check(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    variants = _coreml_variants(manifest, metadata)
+    if not variants:
+        return GateCheck(
+            "CoreML-parity",
+            False,
+            reason="CoreML parity evidence is required",
+        )
+
+    missing: list[str] = []
+    failures: dict[str, Any] = {}
+    for required in ("coreml-fp16", "coreml-int8"):
+        variant = _find_coreml_variant(variants, required)
+        if variant is None:
+            missing.append(required)
+            continue
+        parity = _mapping(variant.get("parity"))
+        if not _coreml_parity_passed(parity):
+            failures[required] = parity or {"error": "missing parity payload"}
+
+    int4 = _find_coreml_variant(variants, "coreml-int4")
+    if int4 is None:
+        missing.append("coreml-int4")
+    else:
+        int4_parity = _mapping(int4.get("parity"))
+        if not (
+            _coreml_parity_passed(int4_parity) or bool(int4_parity.get("auto_rejected"))
+        ):
+            failures["coreml-int4"] = int4_parity or {
+                "error": "missing int4 parity rejection payload"
+            }
+
+    passed = not missing and not failures
+    return GateCheck(
+        "CoreML-parity",
+        passed,
+        reason="ok" if passed else "CoreML span parity gate failed",
+        details={
+            "recall_delta_limit": COREML_RECALL_DELTA_LIMIT,
+            "missing": missing,
+            "failures": failures,
+        },
+        blocking_format=next(iter(failures), missing[0] if missing else None),
+    )
+
+
 def _g5_check(
     tier: str,
     p50_ms: float | None,
@@ -1767,6 +1939,43 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     )
 
 
+def _zero_shot_language_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _transfer_matrix_evidence(metrics, metadata)
+    if not evidence:
+        return GateCheck(
+            "G9_zero_shot_language_leakage",
+            True,
+            reason="not applicable",
+            details={"transfer_matrix_present": False},
+        )
+
+    languages = _transfer_languages(evidence)
+    violations = [
+        *_transfer_matrix_violations(evidence, metadata, languages),
+        *_transfer_deficiency_violations(evidence, metadata),
+    ]
+    violations = _dedupe_transfer_violations(violations)
+
+    return GateCheck(
+        "G9_zero_shot_language_leakage",
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "zero-shot language leakage exceeds per-language floor"
+        ),
+        details={
+            "transfer_matrix_present": True,
+            "language_count": len(languages),
+            "default_floor": DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR,
+            "violations": violations,
+        },
+    )
+
+
 def _federated_boundary_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -1877,6 +2086,192 @@ def _k_floor_check(
             "max_reidentification_upper_bound": max_bound,
             "violations": violations,
         },
+    )
+
+
+def _transfer_matrix_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    return _first_mapping(
+        metadata.get("cross_lingual_transfer"),
+        metadata.get("transfer_matrix_report"),
+        metadata.get("transfer_matrix"),
+        metrics.get("cross_lingual_transfer"),
+        metrics.get("transfer_matrix_report"),
+        metrics.get("transfer_matrix"),
+        _nested(metrics, "fairness", "cross_lingual_transfer"),
+    )
+
+
+def _transfer_languages(evidence: Mapping[str, Any]) -> list[str]:
+    languages = _string_set(evidence.get("languages"))
+    matrix = _mapping(evidence.get("matrix"))
+    for source_language, targets in matrix.items():
+        if str(source_language):
+            languages.add(str(source_language))
+        languages.update(_mapping(targets))
+    if not languages:
+        languages = set(SUPPORTED_LANGUAGES)
+    return sorted(languages)
+
+
+def _transfer_floor_map(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    languages: Sequence[str],
+) -> dict[str, float]:
+    floors = {language: DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR for language in languages}
+    floor_source = _first_mapping(
+        evidence.get("leakage_floors"),
+        evidence.get("per_language_leakage_floors"),
+        metadata.get("leakage_floors_by_language"),
+        metadata.get("per_language_leakage_floors"),
+    )
+    for language, floor in floor_source.items():
+        parsed = _optional_float(floor)
+        if parsed is not None:
+            floors[str(language)] = parsed
+    return floors
+
+
+def _transfer_matrix_violations(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    languages: Sequence[str],
+) -> list[dict[str, Any]]:
+    matrix = _mapping(evidence.get("matrix"))
+    floors = _transfer_floor_map(evidence, metadata, languages)
+    violations: list[dict[str, Any]] = []
+    for source_language, targets in sorted(matrix.items()):
+        source = str(source_language)
+        for target_language, raw_cell in sorted(_mapping(targets).items()):
+            target = str(target_language)
+            if source == target:
+                continue
+            cell = _mapping(raw_cell)
+            leakage_rate = _optional_float(
+                _first_value(
+                    cell.get("leakage_rate"),
+                    cell.get("rate"),
+                    cell.get("leakage"),
+                )
+            )
+            if leakage_rate is None:
+                continue
+            floor = floors.get(target, DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR)
+            if leakage_rate <= floor:
+                continue
+            violations.append(
+                _transfer_violation(
+                    source_language=source,
+                    target_language=target,
+                    leakage_rate=leakage_rate,
+                    leakage_floor=floor,
+                    leaked_chars=_optional_int(cell.get("leaked_chars")),
+                    total_chars=_optional_int(cell.get("total_chars")),
+                )
+            )
+    return violations
+
+
+def _transfer_deficiency_violations(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    raw_rows = evidence.get("deficiencies") or []
+    if not isinstance(raw_rows, Sequence) or isinstance(raw_rows, (str, bytes)):
+        return []
+    floors = _transfer_floor_map(evidence, metadata, _transfer_languages(evidence))
+    violations: list[dict[str, Any]] = []
+    for raw_row in raw_rows:
+        row = _mapping(raw_row)
+        target = str(row.get("target_language") or row.get("language") or "")
+        source = str(row.get("source_language") or row.get("source") or "")
+        leakage_rate = _optional_float(
+            _first_value(
+                row.get("leakage_rate"),
+                row.get("rate"),
+                row.get("leakage"),
+            )
+        )
+        if not target or not source or leakage_rate is None:
+            continue
+        floor = _optional_float(
+            _first_value(row.get("leakage_floor"), row.get("floor"))
+        )
+        if floor is None:
+            floor = floors.get(target, DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR)
+        excess = _optional_float(row.get("excess"))
+        if excess is None:
+            excess = leakage_rate - floor
+        if excess <= 0.0 and leakage_rate <= floor:
+            continue
+        violations.append(
+            _transfer_violation(
+                source_language=source,
+                target_language=target,
+                leakage_rate=leakage_rate,
+                leakage_floor=floor,
+                leaked_chars=_optional_int(row.get("leaked_chars")),
+                total_chars=_optional_int(row.get("total_chars")),
+                rank=_optional_int(row.get("rank")),
+            )
+        )
+    return violations
+
+
+def _transfer_violation(
+    *,
+    source_language: str,
+    target_language: str,
+    leakage_rate: float,
+    leakage_floor: float,
+    leaked_chars: int | None,
+    total_chars: int | None,
+    rank: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "source_language": source_language,
+        "target_language": target_language,
+        "leakage_rate": leakage_rate,
+        "leakage_floor": leakage_floor,
+        "excess": leakage_rate - leakage_floor,
+    }
+    if leaked_chars is not None:
+        payload["leaked_chars"] = leaked_chars
+    if total_chars is not None:
+        payload["total_chars"] = total_chars
+    if rank is not None:
+        payload["rank"] = rank
+    return payload
+
+
+def _dedupe_transfer_violations(
+    violations: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    deduped: dict[tuple[str, str], dict[str, Any]] = {}
+    for violation in violations:
+        row = dict(violation)
+        key = (
+            str(row.get("target_language") or ""),
+            str(row.get("source_language") or ""),
+        )
+        if not all(key):
+            continue
+        current = deduped.get(key)
+        if current is None or float(row.get("excess", 0.0)) > float(
+            current.get("excess", 0.0)
+        ):
+            deduped[key] = row
+    return sorted(
+        deduped.values(),
+        key=lambda row: (
+            -float(row.get("excess", 0.0)),
+            -float(row.get("leakage_rate", 0.0)),
+            str(row.get("target_language") or ""),
+            str(row.get("source_language") or ""),
+        ),
     )
 
 
