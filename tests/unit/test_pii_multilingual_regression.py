@@ -165,7 +165,7 @@ class TestFrenchRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("01 23 45 67 89", "phone_number", 50, 64, 0.87),
+                _ent("01 23 45 67 89", "phone_number", 49, 63, 0.87),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="fr")
@@ -177,7 +177,7 @@ class TestFrenchRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("1 90 05 75 108 042 36", "national_id", 70, 91, 0.85),
+                _ent("1 90 05 75 108 042 36", "national_id", 69, 90, 0.85),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="fr")
@@ -264,7 +264,7 @@ class TestItalianRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("Marco Rossi", "first_name", 10, 21, 0.90),
+                _ent("Marco Rossi", "first_name", 9, 20, 0.90),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="it")
@@ -289,7 +289,7 @@ class TestItalianRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("06 1234567", "phone_number", 48, 58, 0.87),
+                _ent("06 1234567", "phone_number", 47, 57, 0.87),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="it")
@@ -310,7 +310,7 @@ class TestSpanishRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("María García", "first_name", 10, 22, 0.90),
+                _ent("María García", "first_name", 9, 21, 0.90),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="es")
@@ -347,7 +347,7 @@ class TestSpanishRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("Carlos López", "first_name", 10, 22, 0.85),
+                _ent("Carlos López", "first_name", 9, 21, 0.85),
             ],
         )
         result = extract_pii(
@@ -709,7 +709,7 @@ class TestDutchRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("Jan de Vries", "first_name", 9, 21, 0.89),
+                _ent("Jan de Vries", "first_name", 8, 20, 0.89),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="nl")
@@ -769,7 +769,7 @@ class TestHindiRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("15/05/1990", "date_of_birth", 22, 32, 0.86),
+                _ent("15/05/1990", "date_of_birth", 21, 31, 0.86),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="hi")
@@ -781,7 +781,7 @@ class TestHindiRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("9876543210", "phone_number", 38, 48, 0.85),
+                _ent("9876543210", "phone_number", 37, 47, 0.85),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="hi")
@@ -810,7 +810,7 @@ class TestHindiRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("2345 6789 0123", "national_id", 14, 28, 0.85),
+                _ent("2345 6789 0123", "national_id", 13, 27, 0.85),
             ],
         )
         result = extract_pii(text, use_smart_merging=False, lang="hi")
@@ -855,7 +855,7 @@ class TestTeluguRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("9876543210", "phone_number", 47, 57, 0.83),
+                _ent("9876543210", "phone_number", 48, 58, 0.83),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="te")
@@ -883,7 +883,7 @@ class TestTeluguRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("2345 6789 0123", "national_id", 12, 26, 0.83),
+                _ent("2345 6789 0123", "national_id", 11, 25, 0.83),
             ],
         )
         result = extract_pii(text, use_smart_merging=False, lang="te")
