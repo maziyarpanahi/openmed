@@ -8,6 +8,7 @@ import pytest
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
+from openmed.core.anonymizer.providers.clinical_ids import generate_philhealth_pin
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -28,6 +29,8 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_philhealth_pin,
+    validate_philsys_psn,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_spanish_dni,
@@ -64,7 +67,7 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms", "tl"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -465,6 +468,53 @@ class TestValidateMalaysianMyKad:
         assert validate_malaysian_mykad(surrogate) is True
 
 
+class TestValidatePhilippineIds:
+    """Tests for Philippine PhilSys and PhilHealth validators."""
+
+    def test_valid_philsys_psn_with_dashes(self):
+        assert validate_philsys_psn("1234-5678-9012") is True
+
+    def test_valid_philsys_psn_without_dashes(self):
+        assert validate_philsys_psn("123456789012") is True
+
+    def test_invalid_philsys_psn_wrong_grouping(self):
+        assert validate_philsys_psn("98-765432109-8") is False
+
+    def test_invalid_philsys_psn_trivial_digits(self):
+        assert validate_philsys_psn("0000-0000-0000") is False
+
+    def test_invalid_philsys_psn_wrong_length(self):
+        assert validate_philsys_psn("1234-5678-901") is False
+
+    def test_valid_philhealth_pin_with_dashes(self):
+        assert validate_philhealth_pin("98-765432109-8") is True
+
+    def test_valid_philhealth_pin_without_dashes(self):
+        assert validate_philhealth_pin("987654321098") is True
+
+    def test_invalid_philhealth_pin_wrong_grouping(self):
+        assert validate_philhealth_pin("1234-5678-9012") is False
+
+    def test_invalid_philhealth_pin_zero_groups(self):
+        assert validate_philhealth_pin("00-000000000-0") is False
+
+    def test_invalid_philhealth_pin_wrong_length(self):
+        assert validate_philhealth_pin("98-765432109") is False
+
+    def test_generated_tl_surrogate_passes_philsys_validator(self):
+        assert LANG_TO_LOCALE["tl"] == "fil_PH"
+
+        anonymizer = Anonymizer(lang="tl", consistent=True, seed=42)
+        surrogate = anonymizer.surrogate("1234-5678-9012", "national_id")
+
+        assert validate_philsys_psn(surrogate) is True
+
+    def test_generated_philhealth_provider_passes_validator(self):
+        surrogate = generate_philhealth_pin()
+
+        assert validate_philhealth_pin(surrogate) is True
+
+
 class TestValidateCzechoslovakRodneCislo:
     """Tests for validate_czechoslovak_rodne_cislo()."""
 
@@ -566,6 +616,10 @@ class TestLanguagePIIPatterns:
     def test_malay_patterns_exist(self):
         assert "ms" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["ms"]) > 0
+
+    def test_tagalog_patterns_exist(self):
+        assert "tl" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["tl"]) > 0
 
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
@@ -1065,6 +1119,45 @@ class TestLanguagePIIPatterns:
             matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
             assert matched, f"Malay address pattern should match '{text}'"
 
+    def test_tagalog_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "date"]
+        text = "17 Agosto 1985"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Tagalog date pattern should match '{text}'"
+
+    def test_tagalog_phone(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "phone_number"
+        ]
+        texts = ["+63 917 123 4567", "0917-987-6543"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Tagalog phone pattern should match '{text}'"
+
+    def test_tagalog_philippine_id_patterns(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "national_id"
+        ]
+        examples = {
+            "1234-5678-9012": validate_philsys_psn,
+            "98-765432109-8": validate_philhealth_pin,
+        }
+        for text, validator in examples.items():
+            matched = any(
+                re.search(p.pattern, text, p.flags) and validator(text)
+                for p in patterns
+            )
+            assert matched, f"Tagalog national ID pattern should match '{text}'"
+
+    def test_tagalog_address_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "street_address"
+        ]
+        texts = ["Barangay Maligaya", "Kalye Rizal 12", "Purok Sampaguita"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Tagalog address pattern should match '{text}'"
+
     def test_indonesian_clinical_sample_expected_spans(self):
         text = (
             "Pasien Siti Aminah lahir 17/08/1985. Telepon +62 812 3456 7890. "
@@ -1099,6 +1192,29 @@ class TestLanguagePIIPatterns:
         }
         observed = set()
         for pattern in get_patterns_for_language("ms"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_tagalog_clinical_sample_expected_spans(self):
+        text = (
+            "Pasyente Maria Santos ipinanganak 17/08/1985. Telepono "
+            "+63 917 123 4567. PSN 1234-5678-9012. PhilHealth "
+            "98-765432109-8. Tirahan Barangay Maligaya."
+        )
+        expected = {
+            ("date", 34, 44, "17/08/1985"),
+            ("phone_number", 55, 71, "+63 917 123 4567"),
+            ("national_id", 77, 91, "1234-5678-9012"),
+            ("national_id", 104, 118, "98-765432109-8"),
+            ("street_address", 128, 145, "Barangay Maligaya"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("tl"):
             for match in re.finditer(pattern.pattern, text, pattern.flags):
                 value = match.group(0)
                 if pattern.validator is not None and not pattern.validator(value):
@@ -1353,6 +1469,12 @@ class TestGetPatternsForLanguage:
         lang_count = len(LANGUAGE_PII_PATTERNS["ms"])
         assert len(ms_patterns) == base_count + lang_count
 
+    def test_tagalog_includes_base_and_language(self):
+        tl_patterns = get_patterns_for_language("tl")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["tl"])
+        assert len(tl_patterns) == base_count + lang_count
+
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
             get_patterns_for_language("xx")
@@ -1511,6 +1633,10 @@ class TestLanguageFakeData:
         phones = LANGUAGE_FAKE_DATA["ms"]["PHONE"]
         assert any("+60" in p or p.startswith("0") for p in phones)
 
+    def test_tagalog_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["tl"]["PHONE"]
+        assert any("+63" in p or p.startswith("0") for p in phones)
+
 
 class TestIndonesianLocaleAndFixture:
     """Tests for Indonesian locale and golden fixture wiring."""
@@ -1585,6 +1711,48 @@ class TestMalayLocaleAndFixture:
             ("PHONE", 45, 60, "+60 12-345 6789"),
             ("ID_NUM", 68, 82, "850817-14-5678"),
             ("STREET_ADDRESS", 91, 107, "Jalan Merdeka 10"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+
+class TestTagalogLocaleAndFixture:
+    """Tests for Tagalog/Filipino locale and golden fixture wiring."""
+
+    def test_locale_and_surrogate_philsys_round_trip(self):
+        assert LANG_TO_LOCALE["tl"] == "fil_PH"
+        anon = Anonymizer(lang="tl", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("1234-5678-9012", "national_id")
+
+        assert validate_philsys_psn(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/tl.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "tl"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            ("DATE", 34, 44, "17/08/1985"),
+            ("PHONE", 55, 71, "+63 917 123 4567"),
+            ("ID_NUM", 77, 91, "1234-5678-9012"),
+            ("ID_NUM", 104, 118, "98-765432109-8"),
+            ("STREET_ADDRESS", 128, 145, "Barangay Maligaya"),
         }
         actual = {
             (span["label"], span["start"], span["end"], span["text"])

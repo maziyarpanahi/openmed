@@ -1,4 +1,4 @@
-"""Locale national-ID checksum provider registry.
+"""Locale national-ID validator provider registry.
 
 Language packs add checksum-backed national IDs here by following these steps:
 
@@ -39,6 +39,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_philhealth_pin,
+    validate_philsys_psn,
     validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
@@ -57,6 +59,7 @@ from .clinical_ids import (
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
     NPIProvider,
+    PhilippinesIdProvider,
     PolishPeselProvider,
     RodneCisloProvider,
     SpanishDNIProvider,
@@ -260,6 +263,20 @@ def _register_builtin_specs() -> None:
         validate=validate_malaysian_mykad,
         faker_method="mykad",
         faker_provider=MalaysianMyKadProvider,
+    )
+    _register_aliases(
+        ("tl", "fil_PH", "tl_PH", "ph"),
+        id_type="philsys_psn",
+        validate=validate_philsys_psn,
+        faker_method="philsys_psn",
+        faker_provider=PhilippinesIdProvider,
+    )
+    _register_aliases(
+        ("tl", "fil_PH", "tl_PH", "ph"),
+        id_type="philhealth_pin",
+        validate=validate_philhealth_pin,
+        faker_method="philhealth_pin",
+        faker_provider=PhilippinesIdProvider,
     )
     _register_aliases(
         ("th", "th_TH"),
