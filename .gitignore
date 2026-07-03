@@ -236,3 +236,5 @@ docs/api/_build/
 PLANS/**
 
 CLAUDE.md
+
+node_modules/
