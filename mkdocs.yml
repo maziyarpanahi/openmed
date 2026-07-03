@@ -70,6 +70,7 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
