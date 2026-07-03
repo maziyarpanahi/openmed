@@ -149,6 +149,12 @@ def test_convert_android_profile_records_fp32_fp16_artifacts_and_metadata(
         path.write_bytes(b"fp16")
         return path
 
+    def fake_quantize_dynamic_int8(onnx_path, output_path, **kwargs):
+        assert Path(onnx_path).name == "model.onnx"
+        path = Path(output_path)
+        path.write_bytes(b"int8")
+        return path
+
     def fake_validate_android_profile(model_path, **kwargs):
         return types.SimpleNamespace(
             to_metadata=lambda: {
@@ -178,6 +184,7 @@ def test_convert_android_profile_records_fp32_fp16_artifacts_and_metadata(
 
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_android_fp16", fake_export_android_fp16)
+    monkeypatch.setattr(module, "quantize_dynamic_int8", fake_quantize_dynamic_int8)
     monkeypatch.setattr(
         module, "validate_android_profile", fake_validate_android_profile
     )
@@ -206,17 +213,20 @@ def test_convert_android_profile_records_fp32_fp16_artifacts_and_metadata(
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert export_calls[0]["profile"] == "android"
-    assert result.formats == ["onnx-android"]
-    assert manifest["formats"] == ["onnx-android"]
+    assert result.formats == ["onnx-android", "onnx-int8"]
+    assert manifest["formats"] == ["onnx-android", "onnx-int8"]
     assert [item["path"] for item in manifest["artifacts"]] == [
         "model.onnx",
         "model_fp16.onnx",
+        "model_int8.onnx",
     ]
     assert [item["precision"] for item in manifest["artifacts"]] == [
         "float32",
         "float16",
+        "int8",
     ]
     assert manifest["artifacts"][0]["format"] == "onnx-android"
+    assert manifest["artifacts"][2]["format"] == "onnx-int8"
     assert manifest["artifacts"][0]["metadata"]["opset"] == module.ANDROID_ONNX_OPSET
     config = json.loads((result.output_dir / "config.json").read_text())
     assert config["id2label"] == {"0": "O", "1": "B-NAME"}
