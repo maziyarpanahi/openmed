@@ -25,6 +25,7 @@ from faker.config import AVAILABLE_LOCALES
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer import locales as L
 from openmed.core.anonymizer.locales import (
+    FAKER_BACKEND_LOCALE,
     LANG_TO_LOCALE,
     NATIONAL_ID_PROVIDERS,
     locale_coherence_report,
@@ -42,7 +43,7 @@ from openmed.core.pii_i18n import (
 # approximation. Kept here, independent of the code under test, so that wiring a
 # new pack to a wrong/approximate locale flips the assertions red until a human
 # consciously updates this set.
-DOCUMENTED_APPROXIMATE = {"te"}
+DOCUMENTED_APPROXIMATE = {"te", "ms"}
 
 # Languages that register a national-ID checksum validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
@@ -108,7 +109,10 @@ class TestNationalIdRoundTrip:
         """Each provider's method must match the registry's locale dispatch and
         point at a real Faker locale."""
         for lang, (locale, method) in NATIONAL_ID_PROVIDERS.items():
-            assert locale in AVAILABLE_LOCALES, f"{lang!r} -> unknown locale {locale!r}"
+            backend_locale = FAKER_BACKEND_LOCALE.get(locale, locale)
+            assert backend_locale in AVAILABLE_LOCALES, (
+                f"{lang!r} -> unknown Faker backend locale {backend_locale!r}"
+            )
             assert _LOCALE_ID_METHODS.get(locale) == method, (
                 f"{lang!r} provider {method!r} disagrees with registry dispatch "
                 f"for {locale!r} ({_LOCALE_ID_METHODS.get(locale)!r})"

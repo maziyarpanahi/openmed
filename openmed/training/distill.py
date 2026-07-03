@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -53,6 +53,97 @@ class RepairedSpan:
 
 
 @dataclass(frozen=True)
+class LabeledSpan:
+    """Minimal labeled token span used for teacher/student agreement loss."""
+
+    label: str
+    token_start: int
+    token_end: int
+    start: int | None = None
+    end: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.token_start < 0 or self.token_end < self.token_start:
+            raise ValueError("span token offsets must be ordered and non-negative")
+        if (self.start is None) != (self.end is None):
+            raise ValueError("span character offsets must be provided together")
+        if self.start is not None and self.end is not None and self.end < self.start:
+            raise ValueError("span character offsets must be ordered")
+
+    def to_dict(self) -> dict[str, int | str]:
+        """Return a deterministic, PHI-free span payload."""
+
+        payload: dict[str, int | str] = {
+            "label": self.label,
+            "token_end": self.token_end,
+            "token_start": self.token_start,
+        }
+        if self.start is not None:
+            payload["start"] = self.start
+        if self.end is not None:
+            payload["end"] = self.end
+        return payload
+
+
+@dataclass(frozen=True)
+class EntityTypeWeights:
+    """Per-entity loss weights keyed by canonical or BIOES label names."""
+
+    weights: Mapping[str, float] = field(default_factory=dict)
+    default_weight: float = 1.0
+
+    def __post_init__(self) -> None:
+        _validate_loss_weight(self.default_weight, "default_weight")
+        normalized = {
+            _entity_type_name(label): _validated_loss_weight(weight, label)
+            for label, weight in self.weights.items()
+        }
+        object.__setattr__(self, "weights", normalized)
+        object.__setattr__(self, "default_weight", float(self.default_weight))
+
+    def weight_for_label(self, label: str | None) -> float:
+        """Return the configured weight for a canonical or BIOES label."""
+
+        return float(self.weights.get(_entity_type_name(label), self.default_weight))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-serializable weight payload."""
+
+        return {
+            "default_weight": self.default_weight,
+            "weights": dict(sorted(self.weights.items())),
+        }
+
+
+@dataclass(frozen=True)
+class SpanAgreementBreakdown:
+    """Weighted span-boundary agreement evidence for distillation losses."""
+
+    total: float
+    missed: float
+    boundary: float
+    false_positive: float
+    matched: int
+    teacher_count: int
+    student_count: int
+    weight_sum: float
+
+    def to_dict(self) -> dict[str, float | int]:
+        """Return deterministic span-agreement loss components."""
+
+        return {
+            "boundary": self.boundary,
+            "false_positive": self.false_positive,
+            "matched": self.matched,
+            "missed": self.missed,
+            "student_count": self.student_count,
+            "teacher_count": self.teacher_count,
+            "total": self.total,
+            "weight_sum": self.weight_sum,
+        }
+
+
+@dataclass(frozen=True)
 class DistillationTargets:
     """Teacher outputs used to fit a smaller token-classification student."""
 
@@ -74,11 +165,15 @@ class KDLossBreakdown:
     alpha: float
     temperature: float
     span_loss_weight: float
+    span_agreement: Any = 0.0
+    span_agreement_weight: float = 0.0
 
     def to_dict(self) -> dict[str, float]:
         return {
             "alpha": self.alpha,
             "hard_ce": _scalar_float(self.hard_ce),
+            "span_agreement": _scalar_float(self.span_agreement),
+            "span_agreement_weight": self.span_agreement_weight,
             "soft_kl": _scalar_float(self.soft_kl),
             "span_loss_weight": self.span_loss_weight,
             "span_transfer": _scalar_float(self.span_transfer),
@@ -183,6 +278,81 @@ def soft_label_distributions(logits: Any, *, temperature: float = 1.0) -> Any:
     )
 
 
+def compute_span_agreement_loss(
+    *,
+    teacher_spans: Sequence[Any],
+    student_spans: Sequence[Any],
+    entity_type_weights: Mapping[str, float] | EntityTypeWeights | None = None,
+) -> SpanAgreementBreakdown:
+    """Compute weighted teacher/student span-boundary disagreement.
+
+    The loss is zero when every teacher span has a same-label student span with
+    identical boundaries and there are no extra student spans. Missing spans,
+    shifted boundaries, and false positives are weighted by entity type.
+    """
+
+    weights = _normalize_entity_type_weights(entity_type_weights)
+    teacher_batches = _as_batched_spans(teacher_spans)
+    student_batches = _as_batched_spans(student_spans)
+    if len(teacher_batches) != len(student_batches):
+        raise ValueError(
+            "teacher_spans and student_spans must have the same batch size"
+        )
+
+    missed = 0.0
+    boundary = 0.0
+    false_positive = 0.0
+    matched = 0
+    teacher_count = 0
+    student_count = 0
+    weight_sum = 0.0
+
+    for teacher_sample, student_sample in zip(
+        teacher_batches,
+        student_batches,
+        strict=True,
+    ):
+        teacher_count += len(teacher_sample)
+        student_count += len(student_sample)
+        unmatched_student = set(range(len(student_sample)))
+
+        for teacher_span in teacher_sample:
+            teacher_weight = weights.weight_for_label(teacher_span.label)
+            weight_sum += teacher_weight
+            candidate = _best_student_span_match(
+                teacher_span,
+                student_sample,
+                unmatched_student,
+            )
+            if candidate is None:
+                missed += teacher_weight
+                continue
+
+            student_index, distance = candidate
+            unmatched_student.remove(student_index)
+            matched += 1
+            boundary += teacher_weight * distance
+
+        for student_index in sorted(unmatched_student):
+            student_span = student_sample[student_index]
+            student_weight = weights.weight_for_label(student_span.label)
+            weight_sum += student_weight
+            false_positive += student_weight
+
+    raw_total = missed + boundary + false_positive
+    total = raw_total / weight_sum if weight_sum > 0.0 else 0.0
+    return SpanAgreementBreakdown(
+        total=total,
+        missed=missed,
+        boundary=boundary,
+        false_positive=false_positive,
+        matched=matched,
+        teacher_count=teacher_count,
+        student_count=student_count,
+        weight_sum=weight_sum,
+    )
+
+
 def compute_kd_loss(
     *,
     student_logits: Any,
@@ -191,11 +361,16 @@ def compute_kd_loss(
     teacher_soft_labels: Any | None = None,
     student_span_logits: Any | None = None,
     teacher_span_logits: Any | None = None,
+    teacher_spans: Sequence[Any] | None = None,
+    student_spans: Sequence[Any] | None = None,
     mask: Any | None = None,
     span_mask: Any | None = None,
     temperature: float = 2.0,
     alpha: float = 0.5,
     span_loss_weight: float = 1.0,
+    span_agreement_weight: float = 0.0,
+    entity_type_weights: Mapping[str, float] | EntityTypeWeights | None = None,
+    id2label: Mapping[int | str, str] | None = None,
     ignore_index: int = IGNORE_INDEX,
 ) -> KDLossBreakdown:
     """Compute Mode-A KD loss for token classification.
@@ -213,6 +388,8 @@ def compute_kd_loss(
             ``temperature``. Used directly when supplied.
         student_span_logits: Optional student span-level logits.
         teacher_span_logits: Optional teacher span-level logits.
+        teacher_spans: Optional teacher spans for discrete boundary agreement.
+        student_spans: Optional student spans for discrete boundary agreement.
         mask: Optional boolean token mask. Positions with ``ignore_index`` are
             always excluded.
         span_mask: Optional boolean mask for span-logit rows.
@@ -220,10 +397,22 @@ def compute_kd_loss(
         alpha: Teacher-loss mixing weight in ``[0, 1]``.
         span_loss_weight: Weight for the span-logit transfer term inside the
             teacher side of the mixture.
+        span_agreement_weight: Weight for discrete span-boundary agreement.
+        entity_type_weights: Optional per-entity weights used for token loss
+            rows and span agreement.
+        id2label: Optional token-label id mapping used to resolve entity
+            weights for hard labels and teacher probability distributions.
         ignore_index: Hard-label sentinel excluded from loss terms.
     """
 
     _validate_kd_weights(alpha, temperature, span_loss_weight)
+    _validate_loss_weight(span_agreement_weight, "span_agreement_weight")
+    if span_agreement_weight > 0.0 and (teacher_spans is None or student_spans is None):
+        raise ValueError(
+            "teacher_spans and student_spans are required when "
+            "span_agreement_weight > 0"
+        )
+    normalized_weights = _normalize_entity_type_weights(entity_type_weights)
     if alpha > 0.0 and teacher_logits is None and teacher_soft_labels is None:
         raise ValueError(
             "teacher_logits or teacher_soft_labels is required when alpha > 0"
@@ -237,11 +426,16 @@ def compute_kd_loss(
             teacher_soft_labels=teacher_soft_labels,
             student_span_logits=student_span_logits,
             teacher_span_logits=teacher_span_logits,
+            teacher_spans=teacher_spans,
+            student_spans=student_spans,
             mask=mask,
             span_mask=span_mask,
             temperature=temperature,
             alpha=alpha,
             span_loss_weight=span_loss_weight,
+            span_agreement_weight=span_agreement_weight,
+            entity_type_weights=normalized_weights,
+            id2label=id2label,
             ignore_index=ignore_index,
         )
 
@@ -252,10 +446,15 @@ def compute_kd_loss(
         teacher_soft_labels=teacher_soft_labels,
         student_span_logits=student_span_logits,
         teacher_span_logits=teacher_span_logits,
+        teacher_spans=teacher_spans,
+        student_spans=student_spans,
         mask=mask,
         temperature=temperature,
         alpha=alpha,
         span_loss_weight=span_loss_weight,
+        span_agreement_weight=span_agreement_weight,
+        entity_type_weights=normalized_weights,
+        id2label=id2label,
         ignore_index=ignore_index,
     )
 
@@ -553,11 +752,16 @@ def _compute_torch_kd_loss(
     teacher_soft_labels: Any | None,
     student_span_logits: Any | None,
     teacher_span_logits: Any | None,
+    teacher_spans: Sequence[Any] | None,
+    student_spans: Sequence[Any] | None,
     mask: Any | None,
     span_mask: Any | None,
     temperature: float,
     alpha: float,
     span_loss_weight: float,
+    span_agreement_weight: float,
+    entity_type_weights: EntityTypeWeights,
+    id2label: Mapping[int | str, str] | None,
     ignore_index: int,
 ) -> KDLossBreakdown:
     torch = _import_torch()
@@ -581,9 +785,20 @@ def _compute_torch_kd_loss(
     flat_logits = student_logits.reshape(-1, student_logits.shape[-1])
     flat_labels = safe_labels.reshape(-1)
     flat_valid = valid.reshape(-1)
+    class_weights = _torch_tensor(
+        _class_weight_vector(student_logits.shape[-1], id2label, entity_type_weights),
+        torch=torch,
+        device=student_logits.device,
+        dtype=student_logits.dtype,
+    )
     if bool(flat_valid.any()):
         ce_rows = functional.cross_entropy(flat_logits, flat_labels, reduction="none")
-        hard_ce = ce_rows[flat_valid].mean()
+        ce_weights = class_weights[flat_labels]
+        hard_ce = _torch_weighted_mean(
+            ce_rows[flat_valid],
+            ce_weights[flat_valid],
+            zero_like=student_logits.sum() * 0.0,
+        )
     else:
         hard_ce = student_logits.sum() * 0.0
 
@@ -608,11 +823,12 @@ def _compute_torch_kd_loss(
             teacher_probs,
             reduction="none",
         ).sum(dim=-1)
-        soft_kl = (
-            kl_rows[valid].mean() * (temperature * temperature)
-            if bool(valid.any())
-            else hard_ce * 0.0
-        )
+        kl_weights = (teacher_probs * class_weights).sum(dim=-1)
+        soft_kl = _torch_weighted_mean(
+            kl_rows[valid],
+            kl_weights[valid],
+            zero_like=hard_ce * 0.0,
+        ) * (temperature * temperature)
     span_transfer = _torch_span_transfer(
         student_span_logits,
         teacher_span_logits,
@@ -620,8 +836,17 @@ def _compute_torch_kd_loss(
         torch=torch,
         like=student_logits,
     )
+    span_agreement = _torch_span_agreement(
+        teacher_spans,
+        student_spans,
+        entity_type_weights=entity_type_weights,
+        torch=torch,
+        like=student_logits,
+    )
     total = (1.0 - alpha) * hard_ce + alpha * (
-        soft_kl + span_loss_weight * span_transfer
+        soft_kl
+        + span_loss_weight * span_transfer
+        + span_agreement_weight * span_agreement
     )
     return KDLossBreakdown(
         total=total,
@@ -631,6 +856,8 @@ def _compute_torch_kd_loss(
         alpha=alpha,
         temperature=temperature,
         span_loss_weight=span_loss_weight,
+        span_agreement=span_agreement,
+        span_agreement_weight=span_agreement_weight,
     )
 
 
@@ -642,10 +869,15 @@ def _compute_python_kd_loss(
     teacher_soft_labels: Any | None,
     student_span_logits: Any | None,
     teacher_span_logits: Any | None,
+    teacher_spans: Sequence[Any] | None,
+    student_spans: Sequence[Any] | None,
     mask: Any | None,
     temperature: float,
     alpha: float,
     span_loss_weight: float,
+    span_agreement_weight: float,
+    entity_type_weights: EntityTypeWeights,
+    id2label: Mapping[int | str, str] | None,
     ignore_index: int,
 ) -> KDLossBreakdown:
     valid_rows = _valid_token_rows(student_logits, hard_labels, mask, ignore_index)
@@ -667,7 +899,9 @@ def _compute_python_kd_loss(
             else None
         )
         for batch_index, token_index, student_row, label in valid_rows:
-            ce_values.append(-_log_softmax(student_row)[label])
+            label_name = _label_name_for_index(label, id2label)
+            ce_weight = entity_type_weights.weight_for_label(label_name)
+            ce_values.append((-_log_softmax(student_row)[label], ce_weight))
             if not has_teacher_terms:
                 continue
             student_log_probs = _log_softmax(student_row, temperature=temperature)
@@ -680,17 +914,35 @@ def _compute_python_kd_loss(
                 )
             else:  # pragma: no cover - guarded by public entrypoint
                 raise ValueError("teacher logits or soft labels are required")
-            kl_values.append(_kl_divergence(teacher_probs, student_log_probs))
-        hard_ce = sum(ce_values) / len(ce_values)
+            kl_weight = _teacher_distribution_weight(
+                teacher_probs,
+                id2label,
+                entity_type_weights,
+            )
+            kl_values.append(
+                (_kl_divergence(teacher_probs, student_log_probs), kl_weight)
+            )
+        hard_ce = _weighted_mean(ce_values)
         soft_kl = (
-            (sum(kl_values) / len(kl_values)) * (temperature * temperature)
+            _weighted_mean(kl_values) * (temperature * temperature)
             if kl_values
             else 0.0
         )
 
     span_transfer = _python_span_transfer(student_span_logits, teacher_span_logits)
+    span_agreement = (
+        compute_span_agreement_loss(
+            teacher_spans=teacher_spans,
+            student_spans=student_spans,
+            entity_type_weights=entity_type_weights,
+        ).total
+        if teacher_spans is not None and student_spans is not None
+        else 0.0
+    )
     total = (1.0 - alpha) * hard_ce + alpha * (
-        soft_kl + span_loss_weight * span_transfer
+        soft_kl
+        + span_loss_weight * span_transfer
+        + span_agreement_weight * span_agreement
     )
     return KDLossBreakdown(
         total=total,
@@ -700,6 +952,8 @@ def _compute_python_kd_loss(
         alpha=alpha,
         temperature=temperature,
         span_loss_weight=span_loss_weight,
+        span_agreement=span_agreement,
+        span_agreement_weight=span_agreement_weight,
     )
 
 
@@ -726,6 +980,164 @@ def _valid_token_rows(
                 raise ValueError("hard label is outside the token-label space")
             rows.append((batch_index, token_index, student_row, label))
     return rows
+
+
+def _normalize_entity_type_weights(
+    weights: Mapping[str, float] | EntityTypeWeights | None,
+) -> EntityTypeWeights:
+    if isinstance(weights, EntityTypeWeights):
+        return weights
+    if weights is None:
+        return EntityTypeWeights()
+    return EntityTypeWeights(weights=weights)
+
+
+def _weighted_mean(values: Sequence[tuple[float, float]]) -> float:
+    numerator = sum(float(value) * float(weight) for value, weight in values)
+    denominator = sum(float(weight) for _, weight in values)
+    return numerator / denominator if denominator > 0.0 else 0.0
+
+
+def _class_weight_vector(
+    width: int,
+    id2label: Mapping[int | str, str] | None,
+    entity_type_weights: EntityTypeWeights,
+) -> list[float]:
+    return [
+        entity_type_weights.weight_for_label(_label_name_for_index(index, id2label))
+        for index in range(width)
+    ]
+
+
+def _label_name_for_index(
+    index: int,
+    id2label: Mapping[int | str, str] | None,
+) -> str:
+    if id2label is None:
+        return str(index)
+    value = id2label.get(index)
+    if value is None:
+        value = id2label.get(str(index))
+    return str(value if value is not None else index)
+
+
+def _teacher_distribution_weight(
+    teacher_probs: Sequence[float],
+    id2label: Mapping[int | str, str] | None,
+    entity_type_weights: EntityTypeWeights,
+) -> float:
+    total = 0.0
+    for index, probability in enumerate(teacher_probs):
+        label_name = _label_name_for_index(index, id2label)
+        total += float(probability) * entity_type_weights.weight_for_label(label_name)
+    return total
+
+
+def _entity_type_name(label: str | None) -> str:
+    if label is None:
+        return "O"
+    value = str(label).strip()
+    if not value:
+        return "O"
+    prefix, separator, suffix = value.partition("-")
+    if separator and prefix.upper() in {"B", "I", "E", "L", "S", "U"}:
+        value = suffix
+    return value.upper()
+
+
+def _best_student_span_match(
+    teacher_span: LabeledSpan,
+    student_spans: Sequence[LabeledSpan],
+    unmatched_student: set[int],
+) -> tuple[int, float] | None:
+    candidates = []
+    for student_index in sorted(unmatched_student):
+        student_span = student_spans[student_index]
+        if _entity_type_name(student_span.label) != _entity_type_name(
+            teacher_span.label
+        ):
+            continue
+        candidates.append(
+            (
+                _span_boundary_distance(teacher_span, student_span),
+                student_index,
+            )
+        )
+    if not candidates:
+        return None
+    distance, student_index = min(candidates)
+    return student_index, distance
+
+
+def _span_boundary_distance(
+    teacher_span: LabeledSpan, student_span: LabeledSpan
+) -> float:
+    if (
+        teacher_span.start is not None
+        and teacher_span.end is not None
+        and student_span.start is not None
+        and student_span.end is not None
+    ):
+        teacher_length = max(1, teacher_span.end - teacher_span.start)
+        distance = abs(teacher_span.start - student_span.start) + abs(
+            teacher_span.end - student_span.end
+        )
+        return min(1.0, distance / (2.0 * teacher_length))
+
+    teacher_length = max(1, teacher_span.token_end - teacher_span.token_start)
+    distance = abs(teacher_span.token_start - student_span.token_start) + abs(
+        teacher_span.token_end - student_span.token_end
+    )
+    return min(1.0, distance / (2.0 * teacher_length))
+
+
+def _as_batched_spans(value: Sequence[Any]) -> list[list[LabeledSpan]]:
+    raw = list(value)
+    if not raw:
+        return [[]]
+    if _is_span_like(raw[0]):
+        return [[_coerce_labeled_span(span) for span in raw]]
+    return [[_coerce_labeled_span(span) for span in sample] for sample in raw]
+
+
+def _is_span_like(value: Any) -> bool:
+    if isinstance(value, (LabeledSpan, RepairedSpan)):
+        return True
+    if isinstance(value, Mapping):
+        return "label" in value and "token_start" in value and "token_end" in value
+    return all(hasattr(value, name) for name in ("label", "token_start", "token_end"))
+
+
+def _coerce_labeled_span(value: Any) -> LabeledSpan:
+    if isinstance(value, LabeledSpan):
+        return value
+    if isinstance(value, RepairedSpan):
+        return LabeledSpan(
+            label=value.label,
+            token_start=value.token_start,
+            token_end=value.token_end,
+            start=value.start,
+            end=value.end,
+        )
+    if isinstance(value, Mapping):
+        return LabeledSpan(
+            label=str(value["label"]),
+            token_start=int(value["token_start"]),
+            token_end=int(value["token_end"]),
+            start=_optional_span_offset(value.get("start")),
+            end=_optional_span_offset(value.get("end")),
+        )
+    return LabeledSpan(
+        label=str(getattr(value, "label")),
+        token_start=int(getattr(value, "token_start")),
+        token_end=int(getattr(value, "token_end")),
+        start=_optional_span_offset(getattr(value, "start", None)),
+        end=_optional_span_offset(getattr(value, "end", None)),
+    )
+
+
+def _optional_span_offset(value: Any) -> int | None:
+    return None if value is None else int(value)
 
 
 def _torch_span_transfer(
@@ -762,6 +1174,31 @@ def _torch_span_transfer(
             mask = mask.unsqueeze(-1)
         squared = squared[mask.expand_as(squared)]
     return squared.mean() if squared.numel() else like.sum() * 0.0
+
+
+def _torch_weighted_mean(values: Any, weights: Any, *, zero_like: Any) -> Any:
+    denominator = weights.sum()
+    if bool(denominator.gt(0.0)):
+        return (values * weights).sum() / denominator
+    return zero_like
+
+
+def _torch_span_agreement(
+    teacher_spans: Sequence[Any] | None,
+    student_spans: Sequence[Any] | None,
+    *,
+    entity_type_weights: EntityTypeWeights,
+    torch: Any,
+    like: Any,
+) -> Any:
+    if teacher_spans is None or student_spans is None:
+        return like.sum() * 0.0
+    loss = compute_span_agreement_loss(
+        teacher_spans=teacher_spans,
+        student_spans=student_spans,
+        entity_type_weights=entity_type_weights,
+    ).total
+    return torch.as_tensor(loss, device=like.device, dtype=like.dtype)
 
 
 def _python_span_transfer(
@@ -968,6 +1405,17 @@ def _validate_temperature(temperature: float) -> None:
         raise ValueError("temperature must be positive")
 
 
+def _validated_loss_weight(value: Any, name: str) -> float:
+    parsed = float(value)
+    _validate_loss_weight(parsed, str(name))
+    return parsed
+
+
+def _validate_loss_weight(value: float, name: str) -> None:
+    if not math.isfinite(float(value)) or float(value) < 0.0:
+        raise ValueError(f"{name} must be a finite non-negative weight")
+
+
 def _validate_kd_weights(
     alpha: float,
     temperature: float,
@@ -983,12 +1431,16 @@ def _validate_kd_weights(
 __all__ = [
     "DistillationReport",
     "DistillationTargets",
+    "EntityTypeWeights",
     "IGNORE_INDEX",
     "KDLossBreakdown",
+    "LabeledSpan",
     "LabelRecallDelta",
     "ModeADistillationPipeline",
     "RepairedSpan",
+    "SpanAgreementBreakdown",
     "build_distillation_report",
+    "compute_span_agreement_loss",
     "compute_kd_loss",
     "decode_repaired_spans",
     "soft_label_distributions",
