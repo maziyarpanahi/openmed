@@ -739,6 +739,48 @@ _LIST_PII_LANGUAGES_OUTPUT = _object(
     required=("count", "languages"),
 )
 _GENERIC_OBJECT_OUTPUT = _object()
+_WORKFLOW_TRACE_STEP_OUTPUT = _object(
+    properties={
+        "step_id": _schema("string"),
+        "tool": _schema("string"),
+        "status": _schema(
+            "string",
+            enum=["completed", "failed", "resumed", "skipped"],
+        ),
+        "duration_ms": _schema("number"),
+        "retry_count": _schema("integer"),
+        "attempt_count": _schema("integer"),
+        "input_handles": _array(_schema("string")),
+        "output_handle": _nullable("string"),
+        "error_type": _schema("string"),
+        "resumed": _schema("boolean"),
+    },
+    required=("step_id", "tool", "status", "duration_ms", "retry_count"),
+)
+_WORKFLOW_RESULT_OUTPUT = _object(
+    properties={
+        "schema_version": _schema("string"),
+        "session_id": _schema("string"),
+        "workflow_id": _schema("string"),
+        "status": _schema("string", enum=["completed", "failed"]),
+        "handles": _object(),
+        "final_handle": _nullable("string"),
+        "final_output": {},
+        "outputs": _object(),
+        "trace": _array(_WORKFLOW_TRACE_STEP_OUTPUT),
+    },
+    required=(
+        "schema_version",
+        "session_id",
+        "workflow_id",
+        "status",
+        "handles",
+        "final_handle",
+        "final_output",
+        "outputs",
+        "trace",
+    ),
+)
 
 
 def _tool_spec(
@@ -851,6 +893,19 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             _parameter("all_models", _schema("boolean"), bool, False),
         ),
         output_schema=_GENERIC_OBJECT_OUTPUT,
+    ),
+    _tool_spec(
+        name="openmed_run_workflow",
+        description=(
+            "Run a stateful multi-step OpenMed workflow with server-side "
+            "intermediate handles and PHI-safe egress."
+        ),
+        parameters=(
+            _parameter("pipeline", _object(), dict[str, Any]),
+            _parameter("session_id", _nullable("string"), Optional[str], None),
+            _parameter("workflow_id", _nullable("string"), Optional[str], None),
+        ),
+        output_schema=_WORKFLOW_RESULT_OUTPUT,
     ),
 )
 
