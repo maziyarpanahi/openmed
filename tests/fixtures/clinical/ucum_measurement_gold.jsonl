@@ -1,0 +1,12 @@
+{"value": 1.4, "value_unit": "g/L", "range": {"low": 70, "high": 110, "unit": "mg/dL"}, "expected": "high"}
+{"value": 13.5, "value_unit": "g/dL", "range": {"low": 120, "high": 160, "unit": "g/L"}, "expected": "normal"}
+{"value": 3.4, "value_unit": "g/dL", "range": {"low": 35, "high": 50, "unit": "g/L"}, "expected": "low"}
+{"value": 25, "value_unit": "mg/L", "range": {"low": null, "high": 0.5, "high_inclusive": false, "unit": "mg/dL"}, "expected": "high"}
+{"value": 0.39, "value_unit": "g/L", "range": {"low": 40, "high": null, "low_inclusive": true, "unit": "mg/dL"}, "expected": "low"}
+{"value": 4.5, "value_unit": "10*3/uL", "range": {"low": 4, "high": 11, "unit": "10*9/L"}, "expected": "normal"}
+{"value": 3.9, "value_unit": "K/uL", "range": {"low": 4, "high": 11, "unit": "10*9/L"}, "expected": "low"}
+{"value": 410, "value_unit": "10*9/L", "range": {"low": 150, "high": 400, "unit": "K/uL"}, "expected": "high"}
+{"value": 96, "value_unit": "%", "range": {"low": 0.95, "high": 1.0, "unit": "1"}, "expected": "normal"}
+{"value": 98.6, "value_unit": "F", "range": {"low": 36.5, "high": 37.5, "unit": "C"}, "expected": "normal"}
+{"value": 0.8, "value_unit": "mg/dL", "range": {"low": 70, "high": 110, "unit": "umol/L"}, "expected": "unknown"}
+{"value": 120, "value_unit": "mmHg", "range": {"low": 12, "high": 16, "unit": "kPa"}, "expected": "normal"}
