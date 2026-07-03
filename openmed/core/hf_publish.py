@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from openmed.core.model_card import DEFAULT_ARXIV, render_model_card, write_mode
 from openmed.core.model_registry import load_manifest_rows
 from openmed.core.repro_hash import compute_reproducibility_hash, resolve_git_sha
 from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
@@ -163,10 +166,18 @@ def append_manifest_row(path: str | Path, row: dict[str, Any]) -> None:
 
     if path.exists():
         with path.open("r", encoding="utf-8") as handle:
-            for line in handle:
+            for line_number, line in enumerate(handle, start=1):
                 if not line.strip():
                     continue
-                existing = json.loads(line)
+                try:
+                    existing = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning(
+                        "Skipping malformed JSONL line %s in %s",
+                        line_number,
+                        path,
+                    )
+                    continue
                 if existing.get("repo_id") == row["repo_id"]:
                     rows.append(_merge_manifest_row(existing, row))
                     replaced = True
@@ -593,7 +604,10 @@ def _parse_json_object_arg(value: str) -> dict[str, Any]:
     source = value
     if value.startswith("@"):
         source = Path(value[1:]).read_text(encoding="utf-8")
-    payload = json.loads(source)
+    try:
+        payload = json.loads(source)
+    except json.JSONDecodeError as exc:
+        raise HfPublishError(f"--baseline-metrics is not valid JSON: {exc}") from exc
     if not isinstance(payload, dict):
         raise HfPublishError("--baseline-metrics must be a JSON object")
     return payload

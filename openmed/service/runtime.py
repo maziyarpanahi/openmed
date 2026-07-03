@@ -484,6 +484,14 @@ class ServiceRuntime:
             }
         return self.get_loader().loaded_models()
 
+    def record_speculative_decode(self, metrics: Any) -> None:
+        """Forward aggregate speculative decode metrics to the metrics registry."""
+        if self.metrics is None:
+            return
+        recorder = getattr(self.metrics, "record_speculative_decode", None)
+        if callable(recorder):
+            recorder(metrics)
+
     def _resolve_keep_alive_seconds(self, keep_alive: Any) -> Optional[float]:
         if keep_alive is None:
             return self.default_keep_alive_seconds
