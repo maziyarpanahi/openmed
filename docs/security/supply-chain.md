@@ -34,3 +34,11 @@ attestations, giving each wheel and source distribution signed provenance from
 the release workflow identity. See the
 [PyPI Trusted Publishing](../release/trusted-publishing.md) guide for the PyPI
 configuration and token-retirement checklist.
+
+## Container image signatures
+
+Published service images are signed by digest with Sigstore keyless signing.
+The signing workflow also attaches signed CycloneDX SBOM and SLSA provenance
+attestations, then verifies the signature and both attestations before the run
+can pass. See [Container Image Signing](../supply-chain/image-signing.md) for
+verification commands and the cluster admission policy.

@@ -101,6 +101,7 @@ REVIEWED_LICENSES = {
     "python-doctr": "Apache-2.0",
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
+    "rapidfuzz": "MIT",
     "rich": "MIT",
     "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
@@ -114,6 +115,34 @@ REVIEWED_LICENSES = {
 }
 
 NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
+RESTRICTED_VOCAB_DATA_MARKERS = (
+    "mrconso",
+    "mrrel",
+    "mrsty",
+    "sct2",
+    "snomed",
+    "umls",
+)
+RESTRICTED_VOCAB_DATA_SUFFIXES = frozenset(
+    {
+        ".arrow",
+        ".bz2",
+        ".csv",
+        ".db",
+        ".gz",
+        ".json",
+        ".jsonl",
+        ".parquet",
+        ".rrf",
+        ".sqlite",
+        ".sqlite3",
+        ".tsv",
+        ".txt",
+        ".xml",
+        ".xz",
+        ".zip",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -287,6 +316,27 @@ def audit_pyproject(
     return results
 
 
+def audit_restricted_vocab_data(project_root: Path = ROOT) -> list[Path]:
+    """Return package data files that look like restricted vocabulary dumps."""
+
+    package_root = project_root / "openmed"
+    if not package_root.exists():
+        return []
+
+    findings: list[Path] = []
+    for path in package_root.rglob("*"):
+        if (
+            not path.is_file()
+            or path.suffix.lower() not in RESTRICTED_VOCAB_DATA_SUFFIXES
+        ):
+            continue
+        relative = path.relative_to(project_root)
+        normalized = str(relative).lower().replace("\\", "/")
+        if any(marker in normalized for marker in RESTRICTED_VOCAB_DATA_MARKERS):
+            findings.append(relative)
+    return findings
+
+
 def print_results(results: Sequence[LicenseAuditResult]) -> None:
     """Print a compact human-readable audit summary."""
 
@@ -319,6 +369,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_PYPROJECT,
         help="Path to pyproject.toml to audit.",
     )
+    parser.add_argument(
+        "--project-root",
+        type=Path,
+        default=ROOT,
+        help="Project root to scan for restricted bundled vocabulary data.",
+    )
     return parser.parse_args(argv)
 
 
@@ -328,7 +384,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     results = audit_pyproject(args.pyproject)
     print_results(results)
-    return 1 if any(not result.allowed for result in results) else 0
+    restricted_data = audit_restricted_vocab_data(args.project_root)
+    if restricted_data:
+        print("Restricted vocabulary data policy failed:", file=sys.stderr)
+        for path in restricted_data:
+            print(f"- {path}", file=sys.stderr)
+    return 1 if any(not result.allowed for result in results) or restricted_data else 0
 
 
 if __name__ == "__main__":

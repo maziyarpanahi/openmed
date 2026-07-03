@@ -12,7 +12,10 @@ __all__ = [
     "AndroidProfileValidation",
     "ExportArtifact",
     "OnnxConversionResult",
+    "ORT_ANDROID_FORMAT",
+    "OrtMobileConversionResult",
     "convert",
+    "convert_android_onnx_to_ort",
     "export_android_fp16",
     "export_onnx",
     "export_transformersjs_bundle",
@@ -35,6 +38,13 @@ def __getattr__(name: str) -> Any:
             return getattr(module, name)
         if name.startswith(("export_transformersjs", "validate_transformersjs")):
             module = import_module("openmed.onnx.transformersjs")
+            return getattr(module, name)
+        if (
+            name.startswith("ORT_")
+            or name.startswith("OrtMobile")
+            or name == "convert_android_onnx_to_ort"
+        ):
+            module = import_module("openmed.onnx.ort_mobile")
             return getattr(module, name)
         module = import_module("openmed.onnx.convert")
         return getattr(module, name)
