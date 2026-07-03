@@ -22,13 +22,17 @@
     "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run typecheck && npm run test:node",
-    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts"
+    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_ort_web_loader.spec.ts"
   },
   "peerDependencies": {
-    "@huggingface/transformers": ">=3.0.0"
+    "@huggingface/transformers": ">=3.0.0",
+    "onnxruntime-web": ">=1.20.0"
   },
   "peerDependenciesMeta": {
     "@huggingface/transformers": {
+      "optional": true
+    },
+    "onnxruntime-web": {
       "optional": true
     }
   },

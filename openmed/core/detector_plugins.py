@@ -56,6 +56,7 @@ from dataclasses import dataclass
 from threading import RLock
 from typing import Any, Callable
 
+from .labels import CANONICAL_LABELS, normalize_label
 from .schemas.span import OpenMedSpan
 
 DETECTOR_ENTRY_POINT_GROUP = "openmed.detectors"
@@ -68,6 +69,55 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class DetectorCapability:
+    """Compile-time detector coverage used by policy proof checks."""
+
+    name: str
+    stage: str
+    covered_labels: Sequence[str] | str
+    languages: Sequence[str] | str = ("*",)
+    provenance_prefix: str = "builtin"
+
+    def __post_init__(self) -> None:
+        name = str(self.name).strip()
+        if not name:
+            raise ValueError("DetectorCapability.name must be non-empty")
+        if ":" in name:
+            raise ValueError("DetectorCapability.name must not contain ':'")
+
+        stage = _normalize_stage(self.stage)
+        languages = _normalize_languages(self.languages)
+        covered_labels = _normalize_covered_labels(self.covered_labels)
+        provenance_prefix = str(self.provenance_prefix or "builtin").strip().rstrip(":")
+        if not provenance_prefix:
+            raise ValueError("DetectorCapability.provenance_prefix must be non-empty")
+
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "stage", stage)
+        object.__setattr__(self, "languages", languages)
+        object.__setattr__(self, "covered_labels", covered_labels)
+        object.__setattr__(self, "provenance_prefix", provenance_prefix)
+
+    @property
+    def detector_id(self) -> str:
+        """Return the stable detector identifier used in compiled plans."""
+
+        return f"{self.provenance_prefix}:{self.name}"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible capability record."""
+
+        return {
+            "name": self.name,
+            "stage": self.stage,
+            "detector_id": self.detector_id,
+            "covered_labels": list(self.covered_labels),
+            "languages": list(self.languages),
+            "provenance_prefix": self.provenance_prefix,
+        }
+
+
+@dataclass(frozen=True)
 class DetectorSpec:
     """Registration contract for an in-pipeline detector plugin."""
 
@@ -76,6 +126,7 @@ class DetectorSpec:
     languages: Sequence[str] | str
     detect: DetectCallable
     provenance_prefix: str = "plugin"
+    covered_labels: Sequence[str] | str = ()
 
     def __post_init__(self) -> None:
         name = str(self.name).strip()
@@ -89,6 +140,10 @@ class DetectorSpec:
         stage = _normalize_stage(self.stage)
         languages = _normalize_languages(self.languages)
         provenance_prefix = str(self.provenance_prefix or "plugin").strip().rstrip(":")
+        covered_labels = _normalize_covered_labels(
+            self.covered_labels,
+            allow_empty=True,
+        )
         if not provenance_prefix:
             raise ValueError("DetectorSpec.provenance_prefix must be non-empty")
 
@@ -96,6 +151,20 @@ class DetectorSpec:
         object.__setattr__(self, "stage", stage)
         object.__setattr__(self, "languages", languages)
         object.__setattr__(self, "provenance_prefix", provenance_prefix)
+        object.__setattr__(self, "covered_labels", covered_labels)
+
+    def capability(self) -> DetectorCapability | None:
+        """Return this plugin's policy-compiler capability, if declared."""
+
+        if not self.covered_labels:
+            return None
+        return DetectorCapability(
+            name=self.name,
+            stage=self.stage,
+            covered_labels=self.covered_labels,
+            languages=self.languages,
+            provenance_prefix=self.provenance_prefix,
+        )
 
 
 DETECTOR_REGISTRY: dict[str, dict[str, DetectorSpec]] = {
@@ -131,6 +200,57 @@ def iter_detectors(stage: str, lang: str | None = None) -> tuple[DetectorSpec, .
         specs = tuple(DETECTOR_REGISTRY.get(normalized_stage, {}).values())
     return tuple(
         spec for spec in specs if _language_matches(spec.languages, normalized_lang)
+    )
+
+
+def default_detector_capabilities() -> tuple[DetectorCapability, ...]:
+    """Return built-in detector coverage available to compiled policies."""
+
+    return (
+        DetectorCapability(
+            name="privacy_label_model",
+            stage="fast_pii",
+            covered_labels=tuple(sorted(CANONICAL_LABELS)),
+        ),
+    )
+
+
+def iter_detector_capabilities(
+    stage: str | None = None,
+    lang: str | None = None,
+    *,
+    include_builtin: bool = True,
+) -> tuple[DetectorCapability, ...]:
+    """Return declared detector capabilities for policy compilation."""
+
+    normalized_stage = _normalize_stage(stage) if stage is not None else None
+    normalized_lang = _normalize_language(lang or "*")
+    capabilities: list[DetectorCapability] = []
+
+    if include_builtin:
+        capabilities.extend(default_detector_capabilities())
+
+    discover_detectors()
+    with _DISCOVERY_LOCK:
+        specs = tuple(
+            spec
+            for registry_stage in sorted(DETECTOR_REGISTRY)
+            for spec in DETECTOR_REGISTRY.get(registry_stage, {}).values()
+        )
+
+    for spec in specs:
+        if normalized_stage is not None and spec.stage != normalized_stage:
+            continue
+        if not _language_matches(spec.languages, normalized_lang):
+            continue
+        capability = spec.capability()
+        if capability is not None:
+            capabilities.append(capability)
+
+    return tuple(
+        capability
+        for capability in capabilities
+        if normalized_stage is None or capability.stage == normalized_stage
     )
 
 
@@ -220,6 +340,36 @@ def _normalize_language(lang: str) -> str:
     return str(lang or "*").strip().lower().replace("_", "-")
 
 
+def _normalize_covered_labels(
+    labels: Sequence[str] | str,
+    *,
+    allow_empty: bool = False,
+) -> tuple[str, ...]:
+    if isinstance(labels, str):
+        values = (labels,)
+    else:
+        values = tuple(labels)
+    if len(values) == 1 and str(values[0]).strip().lower() in {"*", "all", "any"}:
+        return tuple(sorted(CANONICAL_LABELS))
+
+    normalized: set[str] = set()
+    for value in values:
+        label = str(value).strip()
+        if not label:
+            continue
+        canonical = normalize_label(label)
+        if canonical != label:
+            raise ValueError(
+                "covered_labels must use canonical labels, "
+                f"got {label!r} for {canonical!r}"
+            )
+        normalized.add(canonical)
+
+    if not normalized and not allow_empty:
+        raise ValueError("covered_labels must not be empty")
+    return tuple(sorted(normalized))
+
+
 def _language_matches(languages: Sequence[str], lang: str) -> bool:
     language_set = set(languages)
     return bool(language_set & LANGUAGE_WILDCARDS) or lang in language_set
@@ -238,10 +388,13 @@ __all__ = [
     "DETECTOR_ENTRY_POINT_GROUP",
     "DETECTOR_REGISTRY",
     "DETECTOR_STAGES",
+    "DetectorCapability",
     "DetectorSpec",
     "DetectCallable",
+    "default_detector_capabilities",
     "detector_provenance",
     "discover_detectors",
+    "iter_detector_capabilities",
     "iter_detectors",
     "register_detector",
 ]

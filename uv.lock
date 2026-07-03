@@ -3409,6 +3409,9 @@ gliner = [
 gptq = [
     { name = "auto-gptq" },
 ]
+grounding = [
+    { name = "rapidfuzz" },
+]
 hf = [
     { name = "accelerate" },
     { name = "huggingface-hub" },
@@ -3436,6 +3439,7 @@ mlx = [
 multimodal = [
     { name = "easyocr" },
     { name = "markdown-it-py" },
+    { name = "numpy" },
     { name = "pdfplumber" },
     { name = "piexif" },
     { name = "pikepdf" },
@@ -3517,6 +3521,7 @@ requires-dist = [
     { name = "mlx-lm", marker = "extra == 'mlx'", specifier = ">=0.31" },
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'duckdb'", specifier = ">=1.26" },
+    { name = "numpy", marker = "extra == 'multimodal'", specifier = ">=1.26" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.14" },
     { name = "onnxruntime", marker = "extra == 'onnx'", specifier = ">=1.16" },
     { name = "onnxscript", marker = "extra == 'onnx'", specifier = ">=0.1.0" },
@@ -3549,6 +3554,7 @@ requires-dist = [
     { name = "python-doctr", marker = "extra == 'multimodal'", specifier = ">=1.0" },
     { name = "python-docx", marker = "extra == 'multimodal'", specifier = ">=1.1" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rapidfuzz", marker = "extra == 'grounding'", specifier = ">=3.9,<4" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.20" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
@@ -3567,7 +3573,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["awq", "cli", "coreml", "dev", "docs", "duckdb", "gliner", "gptq", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy"]
+provides-extras = ["awq", "cli", "coreml", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy"]
 
 [[package]]
 name = "opentelemetry-api"

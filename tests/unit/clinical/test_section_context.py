@@ -14,6 +14,7 @@ from openmed.clinical import (
     ClinicalAssertion,
     apply_section_context,
     assert_context_axes,
+    canonical_section_label,
 )
 from openmed.core.labels import CONDITION
 from openmed.core.schemas import OpenMedSpan, hmac_text_hash
@@ -124,3 +125,4 @@ def test_section_label_mapping_documents_om_086_detector_alignment() -> None:
     assert "Past Medical History" in CANONICAL_SECTION_LABELS["past_medical_history"]
     assert SECTION_LABEL_ALIASES["past medical history"] == "past_medical_history"
     assert SECTION_LABEL_ALIASES["hpi"] == "history_of_present_illness"
+    assert canonical_section_label("HPI") == "history_of_present_illness"
