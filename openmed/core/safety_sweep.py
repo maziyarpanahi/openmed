@@ -49,13 +49,13 @@ def _overlaps(start: int, end: int, spans: Sequence[Any]) -> bool:
     return False
 
 
-def _patterns_for_language(lang: str) -> list[PIIPattern]:
-    if lang == "en":
+def _patterns_for_language(lang: str, locale: str | None = None) -> list[PIIPattern]:
+    if lang == "en" and locale is None:
         return list(PII_PATTERNS)
 
     from .pii_i18n import get_patterns_for_language
 
-    return list(get_patterns_for_language(lang))
+    return list(get_patterns_for_language(lang, locale=locale))
 
 
 def _validated(pattern: PIIPattern, text: str) -> bool:
@@ -150,6 +150,7 @@ def safety_sweep(
     spans: Sequence[Any],
     *,
     lang: str = "en",
+    locale: str | None = None,
     patterns: Sequence[PIIPattern] | None = None,
 ) -> list[Any]:
     """Add deterministic structured identifier spans not covered by ML spans.
@@ -163,7 +164,9 @@ def safety_sweep(
     selected: list[_Candidate] = []
     active_spans: list[Any] = list(existing)
     sweep_patterns = (
-        list(patterns) if patterns is not None else _patterns_for_language(lang)
+        list(patterns)
+        if patterns is not None
+        else _patterns_for_language(lang, locale=locale)
     )
 
     for candidate in _collect_candidates(text, sweep_patterns):
