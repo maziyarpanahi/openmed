@@ -2,18 +2,27 @@
 
 from .audit_diff import AuditDiff, diff_audit_reports
 from .budget import (
+    DEFAULT_DP_SURROGATE_SENSITIVITIES,
     DEFAULT_POLICY_BUDGETS,
     DEFAULT_QI_WEIGHTS,
+    DEFAULT_RDP_ORDERS,
     DEFAULT_RISK_BUDGET,
+    DPSurrogateBudget,
+    DPSurrogateBudgetExceeded,
+    DPSurrogateComposition,
+    DPSurrogateSensitivity,
+    DPSurrogateSensitivityRegistry,
+    DPSurrogateSpend,
     RiskBudget,
     RiskBudgetExceeded,
     RiskBudgetVerdict,
     RiskBudgetViolation,
+    SurrogateDrawKind,
     budget_for_policy,
     evaluate_budget,
 )
 from .dashboard import render_risk_dashboard, write_risk_dashboard
-from .kanon import kanon_report
+from .kanon import build_generalization_hierarchies, enforce_kanon, kanon_report
 from .reid import (
     LongitudinalCorpus,
     LongitudinalEvidence,
@@ -26,9 +35,17 @@ from .reid import (
 )
 
 __all__ = [
+    "DEFAULT_DP_SURROGATE_SENSITIVITIES",
     "DEFAULT_POLICY_BUDGETS",
     "DEFAULT_QI_WEIGHTS",
+    "DEFAULT_RDP_ORDERS",
     "DEFAULT_RISK_BUDGET",
+    "DPSurrogateBudget",
+    "DPSurrogateBudgetExceeded",
+    "DPSurrogateComposition",
+    "DPSurrogateSensitivity",
+    "DPSurrogateSensitivityRegistry",
+    "DPSurrogateSpend",
     "RiskBudget",
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
@@ -37,12 +54,15 @@ __all__ = [
     "LongitudinalEvidence",
     "LongitudinalNote",
     "LongitudinalPatient",
+    "SurrogateDrawKind",
     "budget_for_policy",
     "build_longitudinal_corpus",
     "evaluate_budget",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
     "risk_report",
+    "build_generalization_hierarchies",
+    "enforce_kanon",
     "kanon_report",
     "diff_audit_reports",
     "AuditDiff",

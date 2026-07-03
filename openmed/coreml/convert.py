@@ -108,7 +108,7 @@ def convert(
     except ImportError as e:
         raise ImportError(
             f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
-        )
+        ) from e
 
     source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
     model_type = resolve_supported_model_type(source_config)
@@ -395,7 +395,7 @@ def _id2label_dict(id2label) -> dict[str, str]:
 
 def _write_id2label(output_path: Path, id2label) -> None:
     id2label_path = output_path.parent / f"{output_path.stem}_id2label.json"
-    with open(id2label_path, "w") as f:
+    with open(id2label_path, "w", encoding="utf-8") as f:
         json.dump(_id2label_dict(id2label), f, indent=2)
 
 
