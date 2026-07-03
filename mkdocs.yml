@@ -54,7 +54,9 @@ nav:
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
+      - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
@@ -65,6 +67,7 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Container Image Signing: supply-chain/image-signing.md
       - Software Bill of Materials: security/sbom.md
       - Release Streams & Channels: release/semver-and-channels.md
       - PyPI Trusted Publishing: release/trusted-publishing.md

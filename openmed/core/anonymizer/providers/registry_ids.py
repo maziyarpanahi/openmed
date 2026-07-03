@@ -46,6 +46,8 @@ from openmed.core.pii_i18n import (
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uk_nhs_number,
+    validate_uk_nino,
 )
 
 from .clinical_ids import (
@@ -62,6 +64,8 @@ from .clinical_ids import (
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
+    UKNHSNumberProvider,
+    UKNINOProvider,
     validate_npi,
 )
 
@@ -334,6 +338,20 @@ def _register_builtin_specs() -> None:
         validate=validate_npi,
         faker_method="npi",
         faker_provider=NPIProvider,
+    )
+    _register_aliases(
+        ("en", "en_GB", "gb", "uk"),
+        id_type="nhs_number",
+        validate=validate_uk_nhs_number,
+        faker_method="nhs_number",
+        faker_provider=UKNHSNumberProvider,
+    )
+    _register_aliases(
+        ("en", "en_GB", "gb", "uk"),
+        id_type="nino",
+        validate=validate_uk_nino,
+        faker_method="nino",
+        faker_provider=UKNINOProvider,
     )
 
 
