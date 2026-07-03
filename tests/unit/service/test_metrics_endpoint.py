@@ -16,6 +16,12 @@ from openmed.service.metrics import (
     METRICS_ENABLED_ENV_VAR,
     MODEL_EVICTION_NAME,
     MODEL_LOAD_NAME,
+    SPECULATIVE_ACCEPTANCE_RATE_NAME,
+    SPECULATIVE_ACCEPTED_TOKEN_NAME,
+    SPECULATIVE_DECODE_NAME,
+    SPECULATIVE_DRAFT_TOKEN_NAME,
+    SPECULATIVE_FALLBACK_NAME,
+    SPECULATIVE_ROLLBACK_NAME,
     PrometheusMetricsRegistry,
 )
 from openmed.service.warm_pool import WarmPool
@@ -221,3 +227,25 @@ def test_batch_queue_metrics_are_exported_per_priority() -> None:
     assert f'{BATCH_QUEUE_DEPTH_NAME}{{priority="bulk"}} 1' in metrics_text
     assert f'{BATCH_QUEUE_WAIT_NAME}_count{{priority="interactive"}} 1' in metrics_text
     assert f'{BATCH_SHED_NAME}{{priority="bulk"}} 1' in metrics_text
+
+
+def test_speculative_decode_metrics_are_aggregate_only() -> None:
+    registry = PrometheusMetricsRegistry()
+
+    registry.record_speculative_decode(
+        {
+            "drafted_tokens": 6,
+            "accepted_tokens": 4,
+            "rollback_count": 1,
+            "fallback_reason": "tokenizer_mismatch",
+        }
+    )
+    metrics_text = registry.render()
+
+    assert f"{SPECULATIVE_DECODE_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_DRAFT_TOKEN_NAME} 6" in metrics_text
+    assert f"{SPECULATIVE_ACCEPTED_TOKEN_NAME} 4" in metrics_text
+    assert f"{SPECULATIVE_ROLLBACK_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_FALLBACK_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_ACCEPTANCE_RATE_NAME} 0.666666666667" in metrics_text
+    assert "tokenizer_mismatch" not in metrics_text
