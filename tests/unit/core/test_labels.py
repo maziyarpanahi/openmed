@@ -32,9 +32,11 @@ from openmed.core.labels import (
     FEEDING_ROUTE,
     FIRST_NAME,
     GENDER,
+    GLYCEMIC_MEASURE,
     GPS_COORDINATES,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
+    HORMONE_LEVEL,
     IBAN,
     ID_NUM,
     ID_SUBTYPE_MRN,
@@ -42,6 +44,7 @@ from openmed.core.labels import (
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
     IMEI,
+    INSULIN_REGIMEN,
     IP_ADDRESS,
     JOB_DEPARTMENT,
     JOB_TITLE,
@@ -69,6 +72,7 @@ from openmed.core.labels import (
     SSN,
     STREET_ADDRESS,
     SUSCEPTIBILITY,
+    THYROID_MEASURE,
     TIME,
     URL,
     USER_AGENT,
@@ -442,6 +446,49 @@ class TestClinicalConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestEndocrinologyConceptLabels:
+    """Endocrinology canonical labels and representative aliases for issue #895."""
+
+    NEW_LABELS = (
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("glycemic measure", GLYCEMIC_MEASURE),
+            ("HbA1c", GLYCEMIC_MEASURE),
+            ("glucose", GLYCEMIC_MEASURE),
+            ("thyroid function measure", THYROID_MEASURE),
+            ("TSH", THYROID_MEASURE),
+            ("hormone level", HORMONE_LEVEL),
+            ("cortisol", HORMONE_LEVEL),
+            ("insulin regimen", INSULIN_REGIMEN),
+            ("basal-bolus", INSULIN_REGIMEN),
+            ("insulin pump", INSULIN_REGIMEN),
+            ("glargine", INSULIN_REGIMEN),
+            ("metabolic finding", CONDITION),
+            ("endocrine gland", BODY_SITE),
+        ],
+    )
+    def test_endocrinology_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_endocrinology_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_endocrinology_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestAnesthesiaConceptLabels:
     """Anesthesia-record canonical labels added for issue #952."""
 
@@ -562,6 +609,10 @@ class TestClinicalLabelsAreAdditive:
             NUTRITION_TARGET,
             FEEDING_ROUTE,
             NUTRITIONAL_STATUS,
+            GLYCEMIC_MEASURE,
+            THYROID_MEASURE,
+            HORMONE_LEVEL,
+            INSULIN_REGIMEN,
         }
     )
 

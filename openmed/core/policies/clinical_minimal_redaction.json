@@ -85,6 +85,10 @@
     "NUTRITION_TARGET": "keep",
     "FEEDING_ROUTE": "keep",
     "NUTRITIONAL_STATUS": "keep",
+    "GLYCEMIC_MEASURE": "keep",
+    "THYROID_MEASURE": "keep",
+    "HORMONE_LEVEL": "keep",
+    "INSULIN_REGIMEN": "keep",
     "OTHER": "keep"
   }
 }
