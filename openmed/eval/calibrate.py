@@ -947,6 +947,7 @@ def artifact_dir_for(model_id: str, suite: str) -> Path:
 
     return Path("artifacts") / "calibration" / _slug(model_id) / _slug(suite)
 
+
 def _fit_temperature_scaling(
     samples: Sequence[CalibrationSample],
     *,
