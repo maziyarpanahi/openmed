@@ -91,6 +91,14 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
     ),
 }
 
+_GATEWAY_EXPORTS: Final[dict[str, str]] = {
+    "PrivacyGateway": "PrivacyGateway",
+    "PrivacyGatewayConfig": "PrivacyGatewayConfig",
+    "RedactionMapping": "RedactionMapping",
+    "assert_redacted": "assert_redacted",
+    "restore_text": "restore_text",
+}
+
 
 def available_adapters() -> tuple[str, ...]:
     """Return registered adapter names without importing adapter modules."""
@@ -129,16 +137,27 @@ def _normalize_adapter_name(name: str) -> str:
     return str(name or "").strip().lower().replace("-", "_")
 
 
-def __getattr__(name: str) -> ModuleType:
+def __getattr__(name: str) -> Any:
     if name in _ADAPTERS:
         return get_adapter(name)
+    if name == "gateway":
+        return import_module("openmed.interop.gateway")
+    if name in _GATEWAY_EXPORTS:
+        module = import_module("openmed.interop.gateway")
+        return getattr(module, _GATEWAY_EXPORTS[name])
     raise AttributeError(name)
 
 
 __all__ = [
     "AdapterSpec",
+    "PrivacyGateway",
+    "PrivacyGatewayConfig",
+    "RedactionMapping",
     "adapter_tool_definitions",
     "adapter_spec",
+    "assert_redacted",
     "available_adapters",
+    "gateway",
     "get_adapter",
+    "restore_text",
 ]

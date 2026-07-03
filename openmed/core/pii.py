@@ -2619,7 +2619,7 @@ def _format_date_like_original(
 
 def reidentify(
     deidentified_text: str,
-    mapping: dict[str, str],
+    mapping: Mapping[str, str],
 ) -> str:
     """Re-identify text using stored mapping.
 
