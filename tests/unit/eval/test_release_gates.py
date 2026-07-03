@@ -379,6 +379,58 @@ def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> 
     assert _check(result, "G8").details["spans_checked"] == 3
 
 
+def test_k_floor_release_gate_passes_signed_enforcement_evidence(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "kanon_enforcement": {
+                    "target_k": 2,
+                    "kanon": {"k": 2},
+                    "bounds": {
+                        "max_reidentification_upper_bound": 0.5,
+                        "numeric_self_check": {"passed": True},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert _check(result, "k_floor").passed is True
+
+
+def test_k_floor_release_gate_fails_realized_k_below_target(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "kanon_enforcement": {
+                    "target_k": 3,
+                    "kanon": {"k": 2},
+                    "bounds": {
+                        "max_reidentification_upper_bound": 0.5,
+                        "numeric_self_check": {"passed": False},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "k_floor")
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["violations"]["measured_k"] == {"observed": 2, "target": 3}
+
+
 def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
     result = _gate().evaluate(
         _report(
