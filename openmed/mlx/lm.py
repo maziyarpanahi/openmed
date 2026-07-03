@@ -975,12 +975,12 @@ class OpenMedMLXLanguageModel:
             prompt,
             max_tokens=max_tokens,
             temp=temp,
-                top_p=top_p,
-                verbose=verbose,
-                generate_kwargs=kwargs,
-                paged_kv_cache=paged_kv_cache,
-                metrics_sink=metrics,
-            )
+            top_p=top_p,
+            verbose=verbose,
+            generate_kwargs=kwargs,
+            paged_kv_cache=paged_kv_cache,
+            metrics_sink=metrics,
+        )
         if return_metrics:
             metrics_payload = SpeculativeDecodeMetrics(requested=False)
             return SpeculativeDecodeResult(text=text, metrics=metrics_payload)
