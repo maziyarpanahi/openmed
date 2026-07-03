@@ -21,7 +21,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/ml-explore/mlx-swift.git",
-            from: "0.31.3"
+            exact: "0.31.3"
         ),
         .package(
             url: "https://github.com/weichsel/ZIPFoundation.git",

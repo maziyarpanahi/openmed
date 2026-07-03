@@ -280,10 +280,16 @@ class LatencyMetrics:
 
     p50_ms: float
     p95_ms: float
+    p99_ms: float
     count: int
 
     def to_dict(self) -> dict[str, int | float]:
-        return {"p50_ms": self.p50_ms, "p95_ms": self.p95_ms, "count": self.count}
+        return {
+            "p50_ms": self.p50_ms,
+            "p95_ms": self.p95_ms,
+            "p99_ms": self.p99_ms,
+            "count": self.count,
+        }
 
     def __getitem__(self, key: str) -> int | float:
         return self.to_dict()[key]
@@ -1079,13 +1085,14 @@ def compute_surrogate_consistency(
 
 
 def compute_latency_summary(latencies_ms: Sequence[int | float]) -> LatencyMetrics:
-    """Compute p50 and p95 latency from elapsed milliseconds."""
+    """Compute p50, p95, and p99 latency from elapsed milliseconds."""
     if not latencies_ms:
-        return LatencyMetrics(p50_ms=0.0, p95_ms=0.0, count=0)
+        return LatencyMetrics(p50_ms=0.0, p95_ms=0.0, p99_ms=0.0, count=0)
     values = sorted(float(value) for value in latencies_ms)
     return LatencyMetrics(
         p50_ms=_percentile(values, 50),
         p95_ms=_percentile(values, 95),
+        p99_ms=_percentile(values, 99),
         count=len(values),
     )
 
