@@ -20,8 +20,15 @@ from openmed.core.surrogate_vault import SurrogateVault
 SECRET = "unit-test-secret"
 
 
-def _seed(vault: SurrogateVault, surface: str, label: str, surrogate: str) -> None:
-    key = vault.key_for(surface, label=label, lang="en")
+def _seed(
+    vault: SurrogateVault,
+    surface: str,
+    label: str,
+    surrogate: str,
+    *,
+    lang: str = "en",
+) -> None:
+    key = vault.key_for(surface, label=label, lang=lang)
     vault.store.set(key, surrogate)
 
 
@@ -56,6 +63,19 @@ def test_package_gathers_only_the_requested_subject_entries():
     assert surrogates == {"Robert Jones", "MRN-90001"}
     # The unrelated subject's surrogate is absent.
     assert "Alice Brown" not in surrogates
+
+
+def test_package_matches_identifier_label_and_language():
+    vault = SurrogateVault.in_memory(SECRET)
+    _seed(vault, "12345", "id_num", "MRN-90001", lang="en")
+    _seed(vault, "12345", "phone", "555-0100", lang="en")
+    _seed(vault, "12345", "id_num", "MRN-FR-90001", lang="fr")
+
+    package = assemble_dsar_package(
+        [SubjectIdentifier("12345", "id_num", lang="en")], vault
+    )
+
+    assert {entry.surrogate for entry in package.entries} == {"MRN-90001"}
 
 
 def test_package_reports_held_categories():

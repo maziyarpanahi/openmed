@@ -22,7 +22,7 @@ non-destructive by default.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from openmed.core.audit import stable_hash
 from openmed.core.surrogate_vault import SurrogateVault
@@ -94,7 +94,11 @@ def _matching_entries(
     identifiers: Sequence[SubjectIdentifier],
     vault: SurrogateVault,
 ) -> tuple[tuple[DsarEntry, ...], frozenset[str]]:
-    subject_hashes = {vault.text_hash(ident.surface) for ident in identifiers}
+    subject_keys = {
+        vault.key_for(ident.surface, label=ident.label, lang=ident.lang)
+        for ident in identifiers
+    }
+    subject_hashes = {key.text_hash for key in subject_keys}
     entries = tuple(
         DsarEntry(
             canonical_label=entry.key.canonical_label,
@@ -103,7 +107,7 @@ def _matching_entries(
             surrogate=entry.surrogate,
         )
         for entry in vault.entries()
-        if entry.key.text_hash in subject_hashes
+        if entry.key in subject_keys
     )
     return entries, frozenset(subject_hashes)
 
