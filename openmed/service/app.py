@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, 
 
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
@@ -38,6 +39,7 @@ from .schemas import (
     ModelUnloadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
+    PIIExtractStreamRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -48,7 +50,9 @@ from .security_headers import (
 from .throttle import ServiceThrottle
 
 SERVICE_NAME = "openmed-rest"
-_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
+_MODEL_BACKED_PATHS = frozenset(
+    {"/analyze", "/pii/extract", "/pii/extract/stream", "/pii/deidentify"}
+)
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
@@ -509,6 +513,33 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
+    @app.post("/pii/extract/stream")
+    async def pii_extract_stream(
+        payload: PIIExtractStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
+        runtime = _get_service_runtime(request)
+
+        async def _events():
+            async for event in runtime.stream_pii_extract(
+                text=payload.text,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                use_smart_merging=payload.use_smart_merging,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                keep_alive=payload.keep_alive,
+                chunk_size=payload.chunk_size,
+                window_chars=payload.window_chars,
+                tokenizer_context_chars=payload.tokenizer_context_chars,
+                max_entity_chars=payload.max_entity_chars,
+            ):
+                event_payload = event.to_dict(include_text=payload.include_text)
+                event_payload["audit"] = event.to_audit_dict()
+                yield json.dumps(event_payload, sort_keys=True) + "\n"
+
+        return StreamingResponse(_events(), media_type="application/x-ndjson")
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(
