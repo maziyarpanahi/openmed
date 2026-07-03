@@ -823,6 +823,7 @@ class Pipeline:
             model_id=result_model,
             language=route.lang,
         )
+        defense = self.calibration_thresholds.membership_defense_policy
         retained = []
         filtered = 0
         for entity in getattr(pii_result, "entities", ()):
@@ -842,8 +843,21 @@ class Pipeline:
                 "model_id": result_model,
                 "language": route.lang,
             }
+            raw_confidence = float(getattr(entity, "confidence", 0.0) or 0.0)
+            defended_confidence = defense.apply_score(raw_confidence)
+            if defense.enabled:
+                metadata["membership_defense"] = {
+                    "enabled": True,
+                    "raw_confidence": raw_confidence,
+                    "defended_confidence": defended_confidence,
+                    "clip_min": defense.clip_min,
+                    "clip_max": defense.clip_max,
+                    "temperature": defense.temperature,
+                    "smoothing": defense.smoothing,
+                }
+                entity.confidence = defended_confidence
             entity.metadata = metadata
-            if float(getattr(entity, "confidence", 0.0) or 0.0) >= threshold:
+            if defended_confidence >= threshold:
                 retained.append(entity)
             else:
                 filtered += 1
@@ -859,6 +873,7 @@ class Pipeline:
             "schema_version": self.calibration_thresholds.schema_version,
             "model_id": result_model,
             "suite": self.calibration_thresholds.suite,
+            "membership_defense": defense.to_dict(),
         }
         pii_result.metadata = metadata
 
