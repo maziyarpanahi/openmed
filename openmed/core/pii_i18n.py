@@ -36,9 +36,9 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "th",
 }
 
-# Languages with checksum-validated national-ID coverage but no bundled
-# default PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms"}
+# Languages with validator-backed national-ID coverage but no bundled default
+# PII model or full language pack yet.
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms", "tl"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -615,6 +615,52 @@ def validate_malaysian_mykad(text: str) -> bool:
         )
     except (ValueError, calendar.IllegalMonthError):
         return False
+
+
+def _matches_digit_grouping(text: str, group_sizes: tuple[int, ...]) -> bool:
+    """Return whether ``text`` has contiguous digits or the requested grouping."""
+    stripped = text.strip()
+    total_digits = sum(group_sizes)
+    if re.fullmatch(rf"\d{{{total_digits}}}", stripped):
+        return True
+
+    grouped_pattern = r"[\s-]+".join(rf"\d{{{size}}}" for size in group_sizes)
+    return re.fullmatch(grouped_pattern, stripped) is not None
+
+
+def validate_philsys_psn(text: str) -> bool:
+    """Validate Philippine PhilSys PSN structure.
+
+    PhilSys PSNs are 12 digits, commonly written as ``NNNN-NNNN-NNNN``.
+    OpenMed performs offline structural validation only: expected length,
+    expected grouping when separators are present, and non-trivial digits.
+    It does not query Philippine registry data.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 12:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return _matches_digit_grouping(text, (4, 4, 4))
+
+
+def validate_philhealth_pin(text: str) -> bool:
+    """Validate Philippine PhilHealth Identification Number structure.
+
+    PhilHealth PINs are 12 digits, commonly written as ``NN-NNNNNNNNN-N``.
+    OpenMed checks only local structural properties: expected length,
+    expected grouping when separators are present, and non-trivial groups.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 12:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    if digits[:2] == "00" or digits[2:11] == "000000000":
+        return False
+    return _matches_digit_grouping(text, (2, 9, 1))
 
 
 def validate_polish_pesel(text: str) -> bool:
@@ -2726,6 +2772,119 @@ _MALAY_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_TAGALOG_MONTH_PATTERN = (
+    r"Enero|Pebrero|Marso|Abril|Mayo|Hunyo|Hulyo|Agosto|Setyembre|"
+    r"Oktubre|Nobyembre|Disyembre"
+)
+
+_TAGALOG_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "petsa",
+            "petsa ng kapanganakan",
+            "kapanganakan",
+            "ipinanganak",
+            "isinilang",
+            "admit",
+            "discharge",
+            "nilabas",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_TAGALOG_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "petsa",
+            "petsa ng kapanganakan",
+            "kapanganakan",
+            "ipinanganak",
+            "isinilang",
+            "admit",
+            "discharge",
+            "nilabas",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+63[\s.-]?|0)9\d{2}[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telepono",
+            "tel",
+            "mobile",
+            "cellphone",
+            "numero",
+            "numero ng telepono",
+            "kontak",
+            "tawagan",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{4}(?:[\s-]?\d{4}){2}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "psn",
+            "philsys",
+            "philippine identification",
+            "philippine national id",
+            "pambansang id",
+            "national id",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_philsys_psn,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{2}[\s-]?\d{9}[\s-]?\d(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "philhealth",
+            "philhealth pin",
+            "philhealth number",
+            "philhealth no",
+            "pin",
+            "numero ng philhealth",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_philhealth_pin,
+    ),
+    PIIPattern(
+        r"\b(?:Barangay|Brgy\.?|Bgy\.?|Kalye|Kalsada|Daang|Daan|Avenida|Sitio|Purok)\s+[A-Z][A-Za-z0-9 .'-]{2,60}\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "tirahan",
+            "address",
+            "adres",
+            "barangay",
+            "kalye",
+            "kalsada",
+            "sitio",
+            "purok",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
     r"m[aá]j(?:a)?|j[uú]n(?:a)?|j[uú]l(?:a)?|august(?:a)?|"
@@ -2856,6 +3015,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ko": _KOREAN_PII_PATTERNS,
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
+    "tl": _TAGALOG_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -3212,6 +3372,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Kuala Lumpur", "Johor Bahru", "George Town"],
         "ZIPCODE": ["50000", "80000", "10300"],
+    },
+    "tl": {
+        "NAME": [
+            "Maria Santos",
+            "Jose Reyes",
+            "Ana Cruz",
+            "Juan dela Cruz",
+        ],
+        "FIRST_NAME": ["Maria", "Jose", "Ana", "Juan"],
+        "LAST_NAME": ["Santos", "Reyes", "Cruz", "dela Cruz"],
+        "EMAIL": ["pasyente@example.ph", "kontak@example.org"],
+        "PHONE": ["+63 917 123 4567", "0917-987-6543"],
+        "ID_NUM": ["1234-5678-9012", "98-765432109-8"],
+        "STREET_ADDRESS": ["Barangay Maligaya", "Kalye Rizal 12"],
+        "URL_PERSONAL": ["https://example.ph"],
+        "USERNAME": ["pasyente123", "gumagamit456"],
+        "DATE": ["17/08/1985", "17 Agosto 1985"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Manila", "Quezon City", "Cebu City"],
+        "ZIPCODE": ["1000", "1100", "6000"],
     },
     "th": {
         "NAME": [
