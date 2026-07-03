@@ -65,6 +65,7 @@ REVIEWED_LICENSES = {
     "easyocr": "Apache-2.0",
     "faker": "MIT",
     "fastapi": "MIT",
+    "fsspec": "BSD-3-Clause",
     "gcsfs": "BSD-3-Clause",
     "gliner": "Apache-2.0",
     "griffe": "ISC",
