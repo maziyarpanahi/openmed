@@ -81,6 +81,10 @@ polars = [
   "polars>=0.20",
 ]
 
+columnar = [
+  "pyarrow>=16",
+]
+
 spacy = [
   "click>=8.0",
   "spacy>=3.5",
