@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from openmed.core.labels import normalize_label
 from openmed.core.pii import PIIEntity
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
+from openmed.mcp.tool_registry import render_presidio_tool_definitions
 
 _PRESIDIO_TO_CANONICAL = {
     "PERSON": "PERSON",
@@ -121,6 +122,12 @@ def merge_with_openmed(
         allow_label_expansion=True,
     )
     return [_merger_dict_to_entity(item, text) for item in _resolve_overlaps(merged)]
+
+
+def create_tool_definitions() -> tuple[dict[str, Any], ...]:
+    """Return Presidio-facing OpenMed tool definitions from the registry."""
+
+    return render_presidio_tool_definitions()
 
 
 def _load_presidio_result_cls() -> type[Any]:
@@ -319,6 +326,7 @@ def _copy_entities(entities: Sequence[PIIEntity], *, source: str) -> list[PIIEnt
 
 __all__ = [
     "PresidioAdapterConfig",
+    "create_tool_definitions",
     "from_canonical",
     "merge_with_openmed",
     "to_canonical",

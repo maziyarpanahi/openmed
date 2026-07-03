@@ -4,6 +4,16 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    resolutionStrategy {
+        eachPlugin {
+            when (requested.id.id) {
+                "com.android.library" ->
+                    useModule("com.android.tools.build:gradle:${requested.version}")
+                "org.jetbrains.kotlin.android" ->
+                    useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:${requested.version}")
+            }
+        }
+    }
 }
 
 dependencyResolutionManagement {
@@ -14,5 +24,8 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OpenMedAndroid"
+rootProject.name = "openmed-android"
+
 include(":openmedkit")
+// Reserved for a future app/demo module; enable once android/sample exists.
+// include(":sample")

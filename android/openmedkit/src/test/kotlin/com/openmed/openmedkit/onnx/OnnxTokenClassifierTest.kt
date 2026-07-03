@@ -1,9 +1,5 @@
 package com.openmed.openmedkit.onnx
 
-import ai.onnxruntime.OnnxJavaType
-import ai.onnxruntime.OnnxTensor
-import ai.onnxruntime.OrtEnvironment
-import ai.onnxruntime.TensorInfo
 import java.nio.file.Files
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -20,8 +16,6 @@ import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
 class OnnxTokenClassifierTest {
-    private val environment: OrtEnvironment = OrtEnvironment.getEnvironment()
-
     @Test
     fun loadsId2LabelJsonWithStringKeys() {
         val id2Label = Files.createTempFile("id2label", ".json").toFile()
@@ -84,8 +78,8 @@ class OnnxTokenClassifierTest {
         assertEquals(1, session.runCount)
         assertContentEquals(longArrayOf(1, 4), session.inputIdsShape)
         assertContentEquals(longArrayOf(1, 4), session.attentionMaskShape)
-        assertEquals(OnnxJavaType.INT64, session.inputIdsType)
-        assertEquals(OnnxJavaType.INT64, session.attentionMaskType)
+        assertEquals(TensorElementType.INT64, session.inputIdsType)
+        assertEquals(TensorElementType.INT64, session.attentionMaskType)
         assertEquals(listOf(101L, 11L, 22L, 102L), session.inputIdsValues)
         assertEquals(listOf(1L, 1L, 1L, 1L), session.attentionMaskValues)
     }
@@ -111,8 +105,8 @@ class OnnxTokenClassifierTest {
         )
 
         assertEquals(2, predictions.size)
-        assertEquals(OnnxJavaType.INT32, session.inputIdsType)
-        assertEquals(OnnxJavaType.INT32, session.attentionMaskType)
+        assertEquals(TensorElementType.INT32, session.inputIdsType)
+        assertEquals(TensorElementType.INT32, session.attentionMaskType)
         assertEquals(listOf(42, 43), session.inputIdsValues)
         assertEquals(listOf(1, 0), session.attentionMaskValues)
     }
@@ -204,7 +198,7 @@ class OnnxTokenClassifierTest {
         session: RecordingSession,
         tensorElementType: TensorElementType = TensorElementType.INT64,
     ) = OnnxTokenClassifier(
-        environment = environment,
+        environment = null,
         session = session,
         id2Label = mapOf(0 to "O", 1 to "B-NAME", 2 to "I-DATE"),
         inputTensorType = tensorElementType,
@@ -235,16 +229,16 @@ class OnnxTokenClassifierTest {
             private set
         var attentionMaskShape: LongArray = longArrayOf()
             private set
-        var inputIdsType: OnnxJavaType? = null
+        var inputIdsType: TensorElementType? = null
             private set
-        var attentionMaskType: OnnxJavaType? = null
+        var attentionMaskType: TensorElementType? = null
             private set
         var inputIdsValues: List<Any> = emptyList()
             private set
         var attentionMaskValues: List<Any> = emptyList()
             private set
 
-        override fun run(inputs: Map<String, OnnxTensor>): Map<String, Any?> {
+        override fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?> {
             assertFalse(closed)
             runCount += 1
 
@@ -272,25 +266,17 @@ class OnnxTokenClassifierTest {
 
 private data class TensorCapture(
     val shape: LongArray,
-    val type: OnnxJavaType,
+    val type: TensorElementType,
     val values: List<Any>,
 )
 
-private fun OnnxTensor.capture(): TensorCapture {
-    val info = info as TensorInfo
+private fun TokenInputTensor.capture(): TensorCapture {
     return TensorCapture(
-        shape = info.shape,
-        type = info.type,
-        values = flattenTensorValues(value),
+        shape = shape,
+        type = elementType,
+        values = when (elementType) {
+            TensorElementType.INT64 -> values.map { it.toLong() }
+            TensorElementType.INT32 -> values.toList()
+        },
     )
-}
-
-private fun flattenTensorValues(value: Any): List<Any> {
-    val batch = value as Array<*>
-    val row = batch.single()
-    return when (row) {
-        is LongArray -> row.toList()
-        is IntArray -> row.toList()
-        else -> error("unexpected tensor row type: ${row?.javaClass}")
-    }
 }
