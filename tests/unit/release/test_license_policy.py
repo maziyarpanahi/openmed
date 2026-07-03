@@ -33,6 +33,10 @@ def test_current_non_dev_dependencies_are_permissive():
     } == set()
 
 
+def test_current_package_data_has_no_restricted_vocab_dumps():
+    assert policy.audit_restricted_vocab_data(ROOT) == []
+
+
 def test_gpl_dependency_fails_policy(tmp_path):
     pyproject = write_pyproject(
         tmp_path,
@@ -93,6 +97,17 @@ dependencies = ["permissive-package>=1"]
 
     assert len(results) == 1
     assert results[0].allowed is True
+
+
+def test_restricted_vocab_data_marker_fails_policy(tmp_path):
+    restricted_dir = tmp_path / "openmed" / "clinical" / "grounding" / "data"
+    restricted_dir.mkdir(parents=True)
+    restricted_file = restricted_dir / "sct2_Concept_Full.txt"
+    restricted_file.write_text("restricted fixture placeholder\n", encoding="utf-8")
+
+    assert policy.audit_restricted_vocab_data(tmp_path) == [
+        Path("openmed/clinical/grounding/data/sct2_Concept_Full.txt")
+    ]
 
 
 def test_dev_optional_dependencies_are_not_audited(tmp_path):
