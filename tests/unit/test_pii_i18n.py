@@ -20,6 +20,7 @@ from openmed.core.pii_i18n import (
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
     validate_czechoslovak_rodne_cislo,
+    validate_danish_cpr,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
@@ -64,7 +65,7 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms", "da"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -465,6 +466,39 @@ class TestValidateMalaysianMyKad:
         assert validate_malaysian_mykad(surrogate) is True
 
 
+class TestValidateDanishCPR:
+    """Tests for validate_danish_cpr()."""
+
+    def test_valid_cpr_with_dash(self):
+        assert validate_danish_cpr("170885-1234") is True
+
+    def test_valid_cpr_without_dash(self):
+        assert validate_danish_cpr("1708851234") is True
+
+    def test_valid_modern_cpr_without_mod11_requirement(self):
+        assert validate_danish_cpr("010101-4001") is True
+
+    def test_invalid_cpr_impossible_birth_date(self):
+        assert validate_danish_cpr("320185-1234") is False
+
+    def test_invalid_cpr_wrong_grouping(self):
+        assert validate_danish_cpr("170885-12-34") is False
+
+    def test_invalid_cpr_zero_serial(self):
+        assert validate_danish_cpr("170885-0000") is False
+
+    def test_invalid_cpr_wrong_length(self):
+        assert validate_danish_cpr("170885-123") is False
+
+    def test_generated_danish_surrogate_passes_validator(self):
+        assert LANG_TO_LOCALE["da"] == "da_DK"
+
+        anonymizer = Anonymizer(lang="da", consistent=True, seed=42)
+        surrogate = anonymizer.surrogate("170885-1234", "national_id")
+
+        assert validate_danish_cpr(surrogate) is True
+
+
 class TestValidateCzechoslovakRodneCislo:
     """Tests for validate_czechoslovak_rodne_cislo()."""
 
@@ -566,6 +600,10 @@ class TestLanguagePIIPatterns:
     def test_malay_patterns_exist(self):
         assert "ms" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["ms"]) > 0
+
+    def test_danish_patterns_exist(self):
+        assert "da" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["da"]) > 0
 
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
@@ -1065,6 +1103,51 @@ class TestLanguagePIIPatterns:
             matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
             assert matched, f"Malay address pattern should match '{text}'"
 
+    def test_danish_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["da"] if p.entity_type == "date"]
+        text = "17 august 1985"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Danish date pattern should match '{text}'"
+
+    def test_danish_phone(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["da"] if p.entity_type == "phone_number"
+        ]
+        texts = ["+45 20 12 34 56", "30 45 67 89"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Danish phone pattern should match '{text}'"
+
+    def test_danish_cpr_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["da"] if p.entity_type == "national_id"
+        ]
+        texts = ["170885-1234", "1708851234"]
+        for text in texts:
+            matched = any(
+                re.search(p.pattern, text, p.flags) and p.validator(text)
+                for p in patterns
+            )
+            assert matched, f"Danish CPR pattern should match and validate '{text}'"
+
+    def test_danish_address_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["da"] if p.entity_type == "street_address"
+        ]
+        texts = ["Bredgade 12", "Roskildevej 45"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Danish address pattern should match '{text}'"
+
+    def test_danish_postcode_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["da"] if p.entity_type == "postcode"
+        ]
+        texts = ["1260", "DK-8000"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Danish postcode pattern should match '{text}'"
+
     def test_indonesian_clinical_sample_expected_spans(self):
         text = (
             "Pasien Siti Aminah lahir 17/08/1985. Telepon +62 812 3456 7890. "
@@ -1099,6 +1182,28 @@ class TestLanguagePIIPatterns:
         }
         observed = set()
         for pattern in get_patterns_for_language("ms"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_danish_clinical_sample_expected_spans(self):
+        text = (
+            "Patient Anna Nielsen foedt 17/08/1985. Telefon +45 20 12 34 56. "
+            "CPR 170885-1234. Adresse Bredgade 12, 1260 Kobenhavn."
+        )
+        expected = {
+            ("date", 27, 37, "17/08/1985"),
+            ("phone_number", 47, 62, "+45 20 12 34 56"),
+            ("national_id", 68, 79, "170885-1234"),
+            ("street_address", 89, 100, "Bredgade 12"),
+            ("postcode", 102, 106, "1260"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("da"):
             for match in re.finditer(pattern.pattern, text, pattern.flags):
                 value = match.group(0)
                 if pattern.validator is not None and not pattern.validator(value):
@@ -1353,6 +1458,12 @@ class TestGetPatternsForLanguage:
         lang_count = len(LANGUAGE_PII_PATTERNS["ms"])
         assert len(ms_patterns) == base_count + lang_count
 
+    def test_danish_includes_base_and_language(self):
+        da_patterns = get_patterns_for_language("da")
+        base_count = len(PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["da"])
+        assert len(da_patterns) == base_count + lang_count
+
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
             get_patterns_for_language("xx")
@@ -1511,6 +1622,10 @@ class TestLanguageFakeData:
         phones = LANGUAGE_FAKE_DATA["ms"]["PHONE"]
         assert any("+60" in p or p.startswith("0") for p in phones)
 
+    def test_danish_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["da"]["PHONE"]
+        assert any("+45" in p or len(re.sub(r"[^0-9]", "", p)) == 8 for p in phones)
+
 
 class TestIndonesianLocaleAndFixture:
     """Tests for Indonesian locale and golden fixture wiring."""
@@ -1585,6 +1700,48 @@ class TestMalayLocaleAndFixture:
             ("PHONE", 45, 60, "+60 12-345 6789"),
             ("ID_NUM", 68, 82, "850817-14-5678"),
             ("STREET_ADDRESS", 91, 107, "Jalan Merdeka 10"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+
+class TestDanishLocaleAndFixture:
+    """Tests for Danish locale and golden fixture wiring."""
+
+    def test_locale_and_surrogate_cpr_round_trip(self):
+        assert LANG_TO_LOCALE["da"] == "da_DK"
+        anon = Anonymizer(lang="da", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("170885-1234", "national_id")
+
+        assert validate_danish_cpr(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/da.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "da"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            ("DATE", 27, 37, "17/08/1985"),
+            ("PHONE", 47, 62, "+45 20 12 34 56"),
+            ("ID_NUM", 68, 79, "170885-1234"),
+            ("STREET_ADDRESS", 89, 100, "Bredgade 12"),
+            ("ZIPCODE", 102, 106, "1260"),
         }
         actual = {
             (span["label"], span["start"], span["end"], span["text"])

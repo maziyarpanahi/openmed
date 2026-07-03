@@ -31,9 +31,9 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "th",
 }
 
-# Languages with checksum-validated national-ID coverage but no bundled
-# default PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms"}
+# Languages with validator-backed national-ID coverage but no bundled default
+# PII model or full language pack yet.
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms", "da"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -589,6 +589,61 @@ def validate_malaysian_mykad(text: str) -> bool:
         )
     except (ValueError, calendar.IllegalMonthError):
         return False
+
+
+def _danish_cpr_candidate_years(
+    year_suffix: int, century_digit: int
+) -> tuple[int, ...]:
+    """Return possible birth years encoded by a Danish CPR century digit."""
+    if 0 <= century_digit <= 3:
+        return (1900 + year_suffix,)
+    if century_digit in (4, 9):
+        if year_suffix <= 36:
+            return (2000 + year_suffix,)
+        return (1900 + year_suffix,)
+    if 5 <= century_digit <= 8:
+        if year_suffix <= 57:
+            return (2000 + year_suffix,)
+        return (1800 + year_suffix,)
+    return ()
+
+
+def validate_danish_cpr(text: str) -> bool:
+    """Validate Danish CPR/personnummer structure.
+
+    CPR values are 10 digits, commonly written as ``DDMMYY-SSSS``. The first
+    six digits encode date of birth, and the first serial digit disambiguates
+    the century. OpenMed intentionally does not require the historical
+    modulus-11 checksum because Danish CPR numbers without that check have been
+    validly issued since 2007.
+    """
+    stripped = text.strip()
+    if re.fullmatch(r"\d{6}(?:[-\s]?\d{4})", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:6])
+    century_digit = int(digits[6])
+    serial = int(digits[6:10])
+
+    if serial == 0:
+        return False
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    for year in _danish_cpr_candidate_years(year_suffix, century_digit):
+        try:
+            if day <= calendar.monthrange(year, month)[1]:
+                return True
+        except (ValueError, calendar.IllegalMonthError):
+            continue
+    return False
 
 
 def validate_polish_pesel(text: str) -> bool:
@@ -2665,6 +2720,106 @@ _MALAY_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_DANISH_MONTH_PATTERN = (
+    r"januar|februar|marts|april|maj|juni|juli|august|september|"
+    r"oktober|november|december"
+)
+
+_DANISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "dato",
+            "født",
+            "foedt",
+            "fodt",
+            "fødselsdato",
+            "foedselsdato",
+            "indlagt",
+            "udskrevet",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\.?\s+(?:{_DANISH_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "dato",
+            "født",
+            "foedt",
+            "fodt",
+            "fødselsdato",
+            "foedselsdato",
+            "indlagt",
+            "udskrevet",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+45[\s.-]?)?(?:\d{2}[\s.-]?){3}\d{2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telefon",
+            "tlf",
+            "mobil",
+            "kontakt",
+            "ring",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{6}[-\s]?\d{4}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "cpr",
+            "cpr-nummer",
+            "cpr nummer",
+            "personnummer",
+            "person nr",
+            "person-id",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_danish_cpr,
+    ),
+    PIIPattern(
+        r"\b(?!(?:adresse|bopæl|bopael)\b)[A-ZÆØÅ][A-Za-zÆØÅæøå .'-]{2,60}(?:gade|vej|all[eé]|plads|torv|str[æa]de)\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adresse",
+            "bopæl",
+            "bopael",
+            "vej",
+            "gade",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:DK[-\s]?)?\d{4}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["postnummer", "postnr", "postkode", "adresse"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
     r"m[aá]j(?:a)?|j[uú]n(?:a)?|j[uú]l(?:a)?|august(?:a)?|"
@@ -2795,6 +2950,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ko": _KOREAN_PII_PATTERNS,
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
+    "da": _DANISH_PII_PATTERNS,
 }
 
 
@@ -3147,6 +3303,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Kuala Lumpur", "Johor Bahru", "George Town"],
         "ZIPCODE": ["50000", "80000", "10300"],
+    },
+    "da": {
+        "NAME": ["Anna Nielsen", "Peter Jensen", "Mette Hansen", "Lars Andersen"],
+        "FIRST_NAME": ["Anna", "Peter", "Mette", "Lars"],
+        "LAST_NAME": ["Nielsen", "Jensen", "Hansen", "Andersen"],
+        "EMAIL": ["patient@example.dk", "kontakt@example.org"],
+        "PHONE": ["+45 20 12 34 56", "30 45 67 89"],
+        "ID_NUM": ["170885-1234", "010101-4001"],
+        "STREET_ADDRESS": ["Bredgade 12", "Roskildevej 45"],
+        "URL_PERSONAL": ["https://example.dk"],
+        "USERNAME": ["patient123", "bruger456"],
+        "DATE": ["17/08/1985", "17 august 1985"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Kobenhavn", "Aarhus", "Odense"],
+        "ZIPCODE": ["1260", "8000", "5000"],
     },
     "th": {
         "NAME": [
