@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measures, hormone levels, insulin regimens, metabolic findings, and endocrine
   glands, with canonical label normalization, keyword routing metadata, and
   synthetic fixture coverage (#895).
+- Added `examples/gradio_deid_app.py`, an interactive Gradio demo that runs
+  `deidentify` over synthetic text with a `mask`/`replace`/`hash` method
+  selector and shows the redacted output alongside the detected PII entities.
+  `gradio` stays an optional, example-local dependency with a graceful install
+  hint, and the example is covered by import-safe smoke tests (#484).
 
 ## [1.7.0] - 2026-07-01
 
