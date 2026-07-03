@@ -15,6 +15,8 @@ EXPECTED_PATHS = {
     "/pii/extract",
     "/pii/extract/stream",
     "/pii/deidentify",
+    "/jobs",
+    "/jobs/{job_id}",
 }
 
 
