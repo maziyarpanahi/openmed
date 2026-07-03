@@ -8,7 +8,8 @@
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
 Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
-your own hardware — from a one-liner in Python to a native Swift app on iPhone, powered by Apple MLX.
+your own hardware — from a one-liner in Python to native Swift apps, REST services,
+and browser token classification through Transformers.js/WebGPU.
 No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 <p>
@@ -23,6 +24,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 <p>
   <a href="swift/OpenMedKit"><img alt="Swift — OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
   <a href="docs/mlx-backend.md"><img alt="Apple Silicon — MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="docs/export-transformersjs.md"><img alt="Browser — Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
   <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
 </p>
@@ -100,15 +102,16 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          1,000+          |        Limited         |
-| Languages                             |           13+            |         Varies         |
+| Languages                             |            15            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
+| Browser/WebGPU token classification   | ✅ via Transformers.js   |         Varies         |
 | Vendor lock-in                        |    None — Apache-2.0     |          Yes           |
 
 - **Specialized models** — 1,000+ curated biomedical & clinical models, many outperforming proprietary stacks.
 - **HIPAA-aware de-identification** — all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
-- **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), and natively in iOS/macOS apps via OpenMedKit.
+- **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, REST services, and browser/WebGPU bundles via Transformers.js.
 - **One-line deployment** — Python API, Dockerized REST service, or batch pipelines.
 - **Zero lock-in** — Apache-2.0, your infrastructure, your data.
 
@@ -123,7 +126,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.6.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.7.0"),
 ]
 ```
 
@@ -222,6 +225,31 @@ p.process_texts([...])
 </tr>
 </table>
 
+**Browser / WebGPU**
+
+Package ONNX token-classification exports for in-browser inference through
+Transformers.js:
+
+```bash
+python -m openmed.onnx.convert \
+  --model OpenMed/example-token-classifier \
+  --output dist/example-onnx \
+  --include-transformersjs
+```
+
+```javascript
+import { pipeline } from "@huggingface/transformers";
+
+const detector = await pipeline(
+  "token-classification",
+  "/models/openmed-pii/transformersjs",
+  { device: "webgpu" },
+);
+const entities = await detector("Patient Casey Example called 212-555-0198.");
+```
+
+[Transformers.js export guide](docs/export-transformersjs.md)
+
 **Offline / air-gapped?** Point `model_name` (or `model_id`) at a local directory and OpenMed loads it without contacting the Hugging Face Hub:
 
 ```python
@@ -268,9 +296,10 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 ```
 
 - **Smart entity merging** keeps `01/15/1970` whole instead of fragmenting it.
+- **Policy-aware pipelines** add HIPAA/GDPR/research profiles, calibrated thresholds, signed audit reports, redaction previews, and minimum-necessary action selection.
 - **Faker-backed obfuscation** with custom clinical-ID providers (CPF, CNPJ, BSN, NIR, Codice Fiscale, NIE, Aadhaar, Steuer-ID, NPI).
 - **HIPAA**: all 18 Safe Harbor identifiers, configurable confidence thresholds.
-- **Batch PII** (v1.5.5): extract or de-identify across many documents with `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)`.
+- **Batch and streaming PII**: extract or de-identify across many documents with `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)` or incremental streaming helpers.
 
 <div align="center">
   <img src="docs/assets/pii-batch-benchmark.png" alt="Batch PII processing throughput — up to 3.3x on CPU and 2.2x on MLX" width="840" />
@@ -350,8 +379,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.6.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.6.0
+docker build -t openmed:1.7.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.7.0
 ```
 
 ```bash
@@ -360,7 +389,10 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
   -d '{"text":"Paciente: Maria Garcia, DNI: 12345678Z","lang":"es"}'
 ```
 
-**Model lifecycle (v1.5.5):** free memory on demand with `GET /models/loaded`, `POST /models/unload`, and a `keep_alive` idle window:
+**Model lifecycle and service controls:** free memory on demand with
+`GET /models/loaded`, `POST /models/unload`, and a `keep_alive` idle window;
+v1.7 also adds warm pools, dynamic batching, request coalescing, rate and
+concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
 
 ```bash
 OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
@@ -380,6 +412,8 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [Getting Started](https://openmed.life/docs/) | [Analyze Text](https://openmed.life/docs/analyze-text) | [Model Registry](https://openmed.life/docs/model-registry) |
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
+| [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
+| [v1.6-v1.7 Feature Coverage](docs/release/v1.6-v1.7-feature-coverage.md) | [OpenMed 1.7.0 Release Notes](docs/release/v1.7.0.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | |
 
@@ -420,7 +454,7 @@ Never include real patient data in a report.
 
 ## Credits
 
-OpenMed builds on excellent open-source work — particular thanks to **OpenAI** (the [Privacy Filter](https://huggingface.co/openai/privacy-filter) architecture), **NVIDIA** (the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)), **Hugging Face** (`transformers` & the model ecosystem), **Apple** ([MLX](https://github.com/ml-explore/mlx)), and the **[Faker](https://faker.readthedocs.io/)** maintainers.
+OpenMed builds on excellent open-source work — particular thanks to **OpenAI** (the [Privacy Filter](https://huggingface.co/openai/privacy-filter) architecture), **NVIDIA** (the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)), **Hugging Face** (`transformers`, Transformers.js & the model ecosystem), **Apple** ([MLX](https://github.com/ml-explore/mlx)), and the **[Faker](https://faker.readthedocs.io/)** maintainers.
 
 ## License
 
