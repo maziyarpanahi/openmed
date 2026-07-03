@@ -12,8 +12,14 @@ EXPECTED_PATHS = {
     "/models/loaded",
     "/models/unload",
     "/analyze",
+    "/fhir/smart-backend/ingestions",
+    "/fhir/smart-backend/ingestions/{job_id}",
+    "/fhir/smart-backend/ingestions/{job_id}/summary",
     "/pii/extract",
+    "/pii/extract/stream",
     "/pii/deidentify",
+    "/jobs",
+    "/jobs/{job_id}",
 }
 
 
