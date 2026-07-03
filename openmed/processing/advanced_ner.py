@@ -29,6 +29,25 @@ class EntitySpan:
     end: int
     score: float
 
+    @classmethod
+    def from_mapping(cls, data: Dict[str, Any]) -> "EntitySpan":
+        """Create an entity span from a mapping-like model output."""
+
+        return cls(
+            text=str(data.get("text", data.get("word", ""))),
+            label=str(data.get("label", data.get("entity", "")))
+            .replace("B-", "")
+            .replace("I-", ""),
+            start=int(data.get("start", 0)),
+            end=int(data.get("end", 0)),
+            score=float(data.get("score", 1.0)),
+        )
+
+    def offset_key(self) -> tuple[int, int]:
+        """Return the source character-offset identity for this span."""
+
+        return self.start, self.end
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
         return {
@@ -417,7 +436,7 @@ class AdvancedNERProcessor:
         Returns:
             List of filtered EntitySpan objects
         """
-        logger.debug(f"Processing {len(pipeline_result)} raw entities")
+        logger.debug("Processing %d raw entities", len(pipeline_result))
 
         filtered_entities = []
 
@@ -451,7 +470,7 @@ class AdvancedNERProcessor:
 
             filtered_entities.append(span)
 
-        logger.debug(f"After filtering: {len(filtered_entities)} entities")
+        logger.debug("After filtering: %d entities", len(filtered_entities))
         return filtered_entities
 
     def smart_group_entities(
@@ -521,7 +540,9 @@ class AdvancedNERProcessor:
             entities.append(current_entity)
 
         logger.debug(
-            f"Smart grouping created {len(entities)} entities from {len(tokens)} tokens"
+            "Smart grouping created %d entities from %d tokens",
+            len(entities),
+            len(tokens),
         )
         return entities
 
@@ -618,7 +639,7 @@ class AdvancedNERProcessor:
         # Don't forget the last entity
         merged.append(current)
 
-        logger.debug(f"Merge process: {len(entities)} -> {len(merged)} entities")
+        logger.debug("Merge process: %d -> %d entities", len(entities), len(merged))
         return merged
 
     def process_pipeline_output(
@@ -639,7 +660,8 @@ class AdvancedNERProcessor:
             List of processed EntitySpan objects
         """
         logger.info(
-            f"Processing pipeline output with {len(pipeline_output)} raw predictions"
+            "Processing pipeline output with %d raw predictions",
+            len(pipeline_output),
         )
 
         # Step 1: Smart grouping if requested and we have token-level output
@@ -671,7 +693,7 @@ class AdvancedNERProcessor:
         if self.merge_adjacent:
             entities = self.merge_adjacent_entities(entities, text)
 
-        logger.info(f"Final result: {len(entities)} high-quality entities")
+        logger.info("Final result: %d high-quality entities", len(entities))
         return entities
 
     def create_entity_summary(self, entities: List[EntitySpan]) -> Dict[str, Any]:

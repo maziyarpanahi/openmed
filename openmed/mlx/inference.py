@@ -16,8 +16,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
 from openmed.core.decoding import (
+    SpanEdge,
+    SpanNode,
     TokenLabelInfo,
     build_label_info,
+    decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
     trim_span_whitespace,
@@ -55,7 +58,7 @@ def _tokenizer_has_list_extra_special_tokens(reference: str | Path) -> bool:
         return False
 
     try:
-        with open(tokenizer_config) as f:
+        with open(tokenizer_config, encoding="utf-8") as f:
             config = json.load(f)
     except (OSError, json.JSONDecodeError):
         return False
@@ -986,30 +989,85 @@ class GLiNERRelexMLXPipeline(_BaseExperimentalMLXPipeline):
         pair_idx = relation_outputs["pair_idx"][0].tolist()
         pair_mask = relation_outputs["pair_mask"][0].tolist()
 
-        extracted_relations: list[dict[str, Any]] = []
-        for pair_index, is_valid in enumerate(pair_mask):
-            if not is_valid:
-                continue
-            head_index, tail_index = pair_idx[pair_index]
-            if head_index >= len(entities) or tail_index >= len(entities):
-                continue
-            for relation_index in range(relation_prompt_count):
-                score = float(pair_scores[pair_index][relation_index])
-                if score < relation_threshold:
-                    continue
-                extracted_relations.append(
-                    {
-                        "label": str(relations[relation_index]),
-                        "score": score,
-                        "head": entities[head_index],
-                        "tail": entities[tail_index],
-                    }
-                )
-
         return {
             "entities": entities,
-            "relations": extracted_relations,
+            "relations": _decode_relation_graph(
+                entities=entities,
+                pair_scores=pair_scores,
+                pair_idx=pair_idx,
+                pair_mask=pair_mask,
+                relations=relations,
+                relation_prompt_count=relation_prompt_count,
+                relation_threshold=relation_threshold,
+            ),
         }
+
+
+def _decode_relation_graph(
+    *,
+    entities: Sequence[dict[str, Any]],
+    pair_scores: Sequence[Sequence[float]],
+    pair_idx: Sequence[Sequence[int]],
+    pair_mask: Sequence[bool],
+    relations: Sequence[str],
+    relation_prompt_count: int,
+    relation_threshold: float,
+) -> list[dict[str, Any]]:
+    """Decode relation candidates through the shared SpanGraph decoder."""
+
+    nodes = [
+        SpanNode(
+            node_id=str(entity["id"]),
+            start=int(entity["start"]),
+            end=int(entity["end"]),
+            label=str(entity["label"]),
+            score=float(entity["score"]),
+        )
+        for entity in entities
+    ]
+    candidates: list[SpanEdge] = []
+    for pair_index, is_valid in enumerate(pair_mask):
+        if (
+            not is_valid
+            or pair_index >= len(pair_idx)
+            or pair_index >= len(pair_scores)
+        ):
+            continue
+        head_index, tail_index = pair_idx[pair_index]
+        if (
+            head_index < 0
+            or tail_index < 0
+            or head_index >= len(entities)
+            or tail_index >= len(entities)
+        ):
+            continue
+        score_row = pair_scores[pair_index]
+        for relation_index in range(
+            min(relation_prompt_count, len(relations), len(score_row))
+        ):
+            score = float(score_row[relation_index])
+            if score < relation_threshold:
+                continue
+            candidates.append(
+                SpanEdge(
+                    head=str(head_index),
+                    tail=str(tail_index),
+                    label=str(relations[relation_index]),
+                    score=score,
+                )
+            )
+
+    graph = decode_span_graph(nodes, candidates)
+    entity_by_id = {str(entity["id"]): entity for entity in entities}
+    return [
+        {
+            "label": edge.label,
+            "score": edge.score,
+            "head": entity_by_id[edge.head],
+            "tail": entity_by_id[edge.tail],
+        }
+        for edge in graph.edges
+    ]
 
 
 # -- MLX model registry -------------------------------------------------------
@@ -1055,6 +1113,7 @@ _MLX_MODEL_MAP: Dict[str, str] = {
 def _download_preconverted_mlx_model(
     repo_id: str,
     cache_dir: Optional[str] = None,
+    local_files_only: bool = False,
 ) -> str:
     """Download a pre-converted MLX model snapshot from the Hugging Face Hub."""
     try:
@@ -1068,6 +1127,7 @@ def _download_preconverted_mlx_model(
         repo_id=repo_id,
         repo_type="model",
         cache_dir=cache_dir,
+        local_files_only=local_files_only,
         allow_patterns=[
             MANIFEST_FILENAME,
             "config.json",
@@ -1099,12 +1159,15 @@ def _resolve_mlx_model(
     3. On-the-fly conversion from HuggingFace
     """
     from openmed.core.model_registry import OPENMED_MODELS
+    from openmed.core.offline import is_local_only, raise_offline_error
 
     # Resolve registry key to full model ID
     if model_name in OPENMED_MODELS:
         full_model_id = OPENMED_MODELS[model_name].model_id
     else:
         full_model_id = model_name
+
+    local_only = is_local_only(config)
 
     cache_dir = None
     if config is not None:
@@ -1114,9 +1177,14 @@ def _resolve_mlx_model(
     if full_model_id in _MLX_MODEL_MAP:
         repo_id = _MLX_MODEL_MAP[full_model_id]
         try:
-            mlx_path = _download_preconverted_mlx_model(repo_id, cache_dir=cache_dir)
+            download_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+            if local_only:
+                download_kwargs["local_files_only"] = True
+            mlx_path = _download_preconverted_mlx_model(repo_id, **download_kwargs)
             return mlx_path, full_model_id
         except Exception as exc:
+            if local_only:
+                raise_offline_error(f"MLX model snapshot lookup for {repo_id}")
             logger.warning(
                 "Unable to download pre-converted MLX model %s for %s; "
                 "falling back to local conversion: %s",
@@ -1141,7 +1209,7 @@ def _resolve_mlx_model(
             )
 
         try:
-            with open(local / "config.json") as f:
+            with open(local / "config.json", encoding="utf-8") as f:
                 local_config = json.load(f)
         except Exception:
             local_config = {}
@@ -1158,11 +1226,33 @@ def _resolve_mlx_model(
         logger.info("Using cached MLX model at %s", output_dir)
         return str(output_dir), full_model_id
 
+    if local_only:
+        raise_offline_error(f"MLX conversion or download for {full_model_id}")
+
     logger.info("Converting %s to MLX format (one-time) ...", full_model_id)
     from openmed.mlx.convert import convert
 
     convert(full_model_id, output_dir, cache_dir=cache_dir)
     return str(output_dir), full_model_id
+
+
+def create_mlx_language_model(
+    model_name: str,
+    *,
+    config: Any = None,
+    draft_model_name: str | None = None,
+    metrics: Any = None,
+) -> Any:
+    """Create an MLX-LM language-model runner with optional draft decoding."""
+
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    return OpenMedMLXLanguageModel(
+        model_name=model_name,
+        config=config,
+        draft_model_name=draft_model_name,
+        metrics=metrics,
+    )
 
 
 def create_mlx_pipeline(
