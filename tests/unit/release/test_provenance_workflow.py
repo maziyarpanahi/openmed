@@ -39,11 +39,11 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert "actions/attest@v4" in content
     assert "subject-checksums: release-artifact-digests.txt" in content
     assert "release-artifact-digests.txt" in content
-    assert "gh attestation verify \"$artifact\"" in content
+    assert 'gh attestation verify "$artifact"' in content
     assert "--predicate-type https://slsa.dev/provenance/v1" in content
     assert ".github/workflows/provenance.yml" in content
-    assert "--source-digest \"$GITHUB_SHA\"" in content
-    assert "--source-ref \"$GITHUB_REF\"" in content
+    assert '--source-digest "$GITHUB_SHA"' in content
+    assert '--source-ref "$GITHUB_REF"' in content
     assert "actions/upload-artifact@v7" in content
 
 
@@ -78,10 +78,10 @@ def test_container_workflow_attests_pushed_manifest_digest():
     assert "subject-digest: ${{ steps.push.outputs.digest }}" in content
     assert "push-to-registry: true" in content
     assert "create-storage-record: false" in content
-    assert "gh attestation verify \"oci://${image_ref}\"" in content
+    assert 'gh attestation verify "oci://${image_ref}"' in content
     assert ".github/workflows/container-multiarch.yml" in content
-    assert "--source-digest \"$GITHUB_SHA\"" in content
-    assert "--source-ref \"$GITHUB_REF\"" in content
+    assert '--source-digest "$GITHUB_SHA"' in content
+    assert '--source-ref "$GITHUB_REF"' in content
 
 
 def test_provenance_docs_are_published_and_cover_offline_verification():
@@ -91,8 +91,8 @@ def test_provenance_docs_are_published_and_cover_offline_verification():
     assert "supply-chain/provenance.md" in nav
     assert "gh attestation download" in docs
     assert "gh attestation trusted-root > trusted_root.jsonl" in docs
-    assert "--bundle \"$BUNDLE\"" in docs
+    assert '--bundle "$BUNDLE"' in docs
     assert "--custom-trusted-root trusted_root.jsonl" in docs
-    assert "--source-digest \"$COMMIT\"" in docs
+    assert '--source-digest "$COMMIT"' in docs
     assert "sha256sum --check artifact.sha256" in docs
     assert "oci://ghcr.io/maziyarpanahi/openmed@$DIGEST" in docs
