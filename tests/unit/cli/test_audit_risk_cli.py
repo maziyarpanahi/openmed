@@ -76,7 +76,7 @@ def _audit_report() -> AuditReport:
                 "quasi_identifiers": [],
             },
         },
-        openmed_version="1.6.0",
+        openmed_version="1.7.0",
         manifest_hash="sha256:manifest",
         document_length=len(original),
         input_hash=hash_text(original),

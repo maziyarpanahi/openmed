@@ -46,9 +46,11 @@ def resolve_git_sha(*, cwd: str | Path | None = None) -> str:
             ["git", "rev-parse", "HEAD"],
             cwd=str(cwd) if cwd is not None else None,
             text=True,
+            encoding="utf-8",
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
+            timeout=30,
         )
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
