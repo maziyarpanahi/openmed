@@ -21,6 +21,7 @@ data class ModelCatalogEntry(
     val paramCount: Long?,
     val languages: List<String>,
     val license: String?,
+    val reproducibilityHash: String,
 )
 
 /**
@@ -91,6 +92,10 @@ class ModelCatalog private constructor(
                 paramCount = jsonObject.longValue("param_count"),
                 languages = jsonObject.stringList("languages"),
                 license = jsonObject.stringValue("license"),
+                reproducibilityHash = jsonObject.stringValue("reproducibility_hash")
+                    ?: throw IllegalArgumentException(
+                        "Catalog entry missing reproducibility_hash on line $lineNumber",
+                    ),
             )
         }
 
