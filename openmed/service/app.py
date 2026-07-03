@@ -43,6 +43,7 @@ from .schemas import (
     PIIDeidentifyRequest,
     PIIExtractRequest,
     PIIExtractStreamRequest,
+    SMARTBackendIngestionRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -50,12 +51,21 @@ from .security_headers import (
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
 )
+from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .throttle import ServiceThrottle
 from .warm_pool import WarmPoolBackpressureError
 
 SERVICE_NAME = "openmed-rest"
+_SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _MODEL_BACKED_PATHS = frozenset(
-    {"/analyze", "/pii/extract", "/pii/extract/stream", "/pii/deidentify", "/jobs"}
+    {
+        "/analyze",
+        "/pii/extract",
+        "/pii/extract/stream",
+        "/pii/deidentify",
+        "/jobs",
+        _SMART_BACKEND_START_PATH,
+    }
 )
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
@@ -239,6 +249,14 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     return batcher
 
 
+def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
+    manager = getattr(request.app.state, "smart_backend_jobs", None)
+    if manager is None:
+        manager = SMARTBackendJobManager()
+        request.app.state.smart_backend_jobs = manager
+    return manager
+
+
 def _get_job_queue(request: Request) -> DeidentifyJobQueue:
     queue = getattr(request.app.state, "job_queue", None)
     if queue is None:
@@ -278,6 +296,8 @@ def create_app() -> FastAPI:
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
         _attach_runtime(fastapi_app, runtime)
+        if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
+            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
@@ -300,6 +320,9 @@ def create_app() -> FastAPI:
                 loop.time() < deadline
             ):
                 await asyncio.sleep(0.05)
+            manager = getattr(fastapi_app.state, "smart_backend_jobs", None)
+            if manager is not None:
+                await manager.cancel_all()
             job_queue = getattr(fastapi_app.state, "job_queue", None)
             if job_queue is not None:
                 job_queue.shutdown()
@@ -617,6 +640,48 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
+    @app.post(_SMART_BACKEND_START_PATH)
+    async def start_smart_backend_ingestion(
+        payload: SMARTBackendIngestionRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        runtime = _get_service_runtime(request)
+        manager = _get_smart_backend_manager(request)
+        config = _smart_backend_config_from_payload(payload)
+        deidentifier = _smart_backend_deidentifier(payload, runtime)
+        return manager.start(config, deidentifier=deidentifier).to_dict()
+
+    @app.get("/fhir/smart-backend/ingestions/{job_id}")
+    async def smart_backend_ingestion_status(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_smart_backend_manager(request).get(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+
+    @app.get("/fhir/smart-backend/ingestions/{job_id}/summary")
+    async def smart_backend_ingestion_summary(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_smart_backend_manager(request).summary(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+        except ValueError as exc:
+            raise StarletteHTTPException(
+                status_code=409,
+                detail=str(exc),
+            ) from exc
 
     @app.post("/jobs", status_code=202)
     async def create_job(
@@ -1025,6 +1090,61 @@ def _pii_deidentify_payload(
     if should_emit_mapping and getattr(result, "mapping", None):
         response["mapping"] = result.mapping
     return response
+
+
+def _smart_backend_config_from_payload(
+    payload: SMARTBackendIngestionRequest,
+) -> SMARTBackendConfig:
+    return SMARTBackendConfig(
+        fhir_base_url=payload.fhir_base_url,
+        token_url=payload.token_url,
+        client_id=payload.client_id,
+        private_key_pem=payload.private_key_pem,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        key_id=payload.key_id,
+        scope=payload.scope,
+        export_path=payload.export_path,
+        max_inflight_downloads=payload.max_inflight_downloads,
+        poll_interval_seconds=payload.poll_interval_seconds,
+        request_timeout_seconds=payload.request_timeout_seconds,
+        policy=payload.policy or "hipaa_safe_harbor",
+        method=payload.method,
+    )
+
+
+def _smart_backend_deidentifier(
+    payload: SMARTBackendIngestionRequest,
+    runtime: ServiceRuntime,
+):
+    def _deidentifier(text: str, **kwargs: Any) -> Any:
+        method = str(kwargs.get("method", payload.method))
+        policy = kwargs.get("policy") or payload.policy
+        consistent = bool(kwargs.get("consistent", False))
+
+        def _operation() -> Any:
+            return openmed.deidentify(
+                text,
+                method=method,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                config=runtime.config,
+                use_smart_merging=payload.use_smart_merging,
+                use_safety_sweep=payload.use_safety_sweep,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                loader=runtime.get_loader(),
+                policy=policy,
+                consistent=consistent,
+            )
+
+        return runtime.run_model_request(
+            payload.model_name,
+            payload.keep_alive,
+            _operation,
+        )
+
+    return _deidentifier
 
 
 app = create_app()
