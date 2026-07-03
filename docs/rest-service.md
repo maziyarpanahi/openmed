@@ -16,7 +16,7 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /privacy-gateway/complete`
 - Optional `GET /metrics`
 
-This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, and a unified non-2xx error envelope.
+This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, optional no-PHI OpenTelemetry tracing, and a unified non-2xx error envelope.
 
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
@@ -260,6 +260,20 @@ untrusted networks. Metric labels are limited to static route templates and
 HTTP status codes; text, model outputs, entities, client identity, document
 content, and PHI are never used as label values.
 
+Optional OpenTelemetry tracing:
+
+```bash
+OPENMED_SERVICE_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces \
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
+```
+
+Tracing is disabled by default and the OTLP exporter is created only when
+`OPENMED_SERVICE_TRACING_ENABLED=true` or `OPENMED_SERVICE_OTLP_ENDPOINT` is
+set. Request spans honor incoming W3C `traceparent` headers and include only
+no-PHI attributes such as route templates, status codes, request IDs, stage
+names, counts, labels, lengths, and durations. See
+[REST Tracing](./serving/tracing.md) for the full configuration contract.
+
 ## Reliability Changes
 
 - Requests now run against one shared service runtime per process, including a shared `OpenMedConfig` and bounded warm-pool loader.
@@ -279,6 +293,7 @@ content, and PHI are never used as label values.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
+- OpenTelemetry tracing is opt-in, honors incoming trace context, and exports only no-PHI span attributes when configured.
 - Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
