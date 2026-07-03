@@ -10,9 +10,9 @@ import pytest
 
 from openmed.mcp.server import _register_tools
 from openmed.mcp.tool_registry import (
-    StructuredOutputValidationError,
-    get_mcp_tool_definition,
-    validate_structured_output,
+    TOOL_REGISTRY,
+    ToolSchemaValidationError,
+    validate_registered_tool_output,
 )
 from openmed.mcp.workflow import (
     TransientWorkflowError,
@@ -114,7 +114,7 @@ def test_four_step_pipeline_passes_intermediates_by_handle_without_phi_egress():
     assert set(result["handles"]) == {"extract", "map", "export", "deidentify"}
     assert result["final_handle"] == result["handles"]["deidentify"]
     assert counters == {"extract": 1, "deidentify": 1}
-    assert validate_structured_output("openmed_run_workflow", result) is True
+    assert validate_registered_tool_output("openmed_run_workflow", result) == result
 
     raw_extract = store.get(result["session_id"], result["handles"]["extract"])
     assert raw_extract["source_text"] == PHI_NOTE
@@ -355,7 +355,7 @@ def test_execution_trace_contains_only_phi_free_metadata():
 
 
 def test_workflow_tool_is_registered_and_schema_validated():
-    definition = get_mcp_tool_definition("openmed_run_workflow")
+    definition = TOOL_REGISTRY.get("openmed_run_workflow")
     assert definition.name == "openmed_run_workflow"
     assert definition.output_schema["required"]
 
@@ -370,12 +370,15 @@ def test_workflow_tool_is_registered_and_schema_validated():
         "outputs": {},
         "trace": [],
     }
-    assert validate_structured_output("openmed_run_workflow", valid_payload) is True
+    assert (
+        validate_registered_tool_output("openmed_run_workflow", valid_payload)
+        == valid_payload
+    )
 
     invalid_payload = dict(valid_payload)
     invalid_payload.pop("trace")
-    with pytest.raises(StructuredOutputValidationError):
-        validate_structured_output("openmed_run_workflow", invalid_payload)
+    with pytest.raises(ToolSchemaValidationError):
+        validate_registered_tool_output("openmed_run_workflow", invalid_payload)
 
     class FakeServer:
         def __init__(self) -> None:
