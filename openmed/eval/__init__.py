@@ -56,9 +56,13 @@ from openmed.eval.dataset_card import (
     render_dataset_card_markdown,
 )
 from openmed.eval.error_analysis import (
+    DEFAULT_DEDUPE_SIMILARITY,
     ErrorAnalysisReport,
     ErrorSpanExample,
+    LabelingQueueArtifact,
+    LabelingQueueItem,
     error_report,
+    mine_gate_failure_labeling_queue,
 )
 from openmed.eval.evidence_bundle import (
     EvidenceArtifactSpec,
@@ -205,6 +209,7 @@ __all__ = [
     "DATASET_CARD_SUITES",
     "DEVICE_TIERS",
     "DEFAULT_CODE_HASH_MODULES",
+    "DEFAULT_DEDUPE_SIMILARITY",
     "DEFAULT_FLAKY_TOLERANCE",
     "DEFAULT_PERTURBATIONS",
     "DatasetCard",
@@ -227,6 +232,8 @@ __all__ = [
     "HeatmapCell",
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
+    "LabelingQueueArtifact",
+    "LabelingQueueItem",
     "LeakageHeatmap",
     "LeakageHeatmapCell",
     "LeakageHeatmapTotal",
@@ -307,6 +314,7 @@ __all__ = [
     "load_or_compute",
     "load_run_ledger",
     "metric_history",
+    "mine_gate_failure_labeling_queue",
     "ocr_noise_perturbation",
     "paired_significance",
     "perturb_fixture",
