@@ -49,7 +49,7 @@ def _add_preview_command(subparsers: argparse._SubParsersAction) -> None:
     )
     preview_parser.add_argument(
         "--milestone",
-        default="v1.6",
+        default="v1.7",
         help="Milestone version used for release thresholds.",
     )
     preview_parser.add_argument(
