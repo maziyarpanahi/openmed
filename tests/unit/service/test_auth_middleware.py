@@ -202,7 +202,7 @@ def _jwt_rs256(payload: dict[str, Any]) -> str:
         private_exponent,
         modulus,
     )
-    return f"{signing_input}.{_b64url_int(signature)}"
+    return f"{signing_input}.{_b64url(signature.to_bytes(key_size, 'big'))}"
 
 
 def test_auth_defaults_to_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
