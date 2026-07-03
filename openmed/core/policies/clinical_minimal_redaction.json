@@ -90,6 +90,10 @@
     "PROTEIN_CHANGE": "keep",
     "ZYGOSITY": "keep",
     "CLINICAL_SIGNIFICANCE": "keep",
+    "GLYCEMIC_MEASURE": "keep",
+    "THYROID_MEASURE": "keep",
+    "HORMONE_LEVEL": "keep",
+    "INSULIN_REGIMEN": "keep",
     "OTHER": "keep"
   }
 }
