@@ -11,10 +11,15 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /analyze`
 - `POST /pii/extract`
 - `POST /pii/deidentify`
+- `POST /jobs`
+- `GET /jobs/{id}`
 - `POST /privacy-gateway/complete`
 - Optional `GET /metrics`
 
 This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, and a unified non-2xx error envelope.
+
+For large de-identification batches that should not hold a client connection
+open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
 
 ## Run Locally
 
