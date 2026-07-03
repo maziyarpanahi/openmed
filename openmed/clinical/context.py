@@ -38,6 +38,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from typing import Any, Literal
 
 Negation = Literal["affirmed", "negated"]
@@ -258,6 +259,10 @@ _CONTEXT_CUE_CATEGORY_BY_TEXT = _cue_category_lookup()
 
 PATIENT_EXPERIENCER = "patient"
 FAMILY_EXPERIENCER = "family"
+
+# Experiencer labels shared by downstream grouping layers. Patient/family
+# disagreement is a hard safety boundary for coreference-style aggregation.
+EXPERIENCER_VALUES = (PATIENT_EXPERIENCER, FAMILY_EXPERIENCER)
 
 # Canonical names are lower_snake_case keys expected to compose with the
 # user-facing labels OM-086's detect_sections will emit. Aliases are normalized
@@ -706,6 +711,19 @@ def _canonical_section_name(section: Any) -> str | None:
     return SECTION_LABEL_ALIASES.get(normalized)
 
 
+def canonical_section_name(section: Any) -> str | None:
+    """Return the canonical section key used by clinical context priors.
+
+    The returned value is the lower_snake_case key from
+    ``SECTION_CONTEXT_PRIORS``/``SECTION_LABEL_ALIASES``. Unknown or missing
+    section labels return ``None``. This keeps section compatibility checks in
+    downstream deterministic grouping code aligned with the same OM-086 section
+    vocabulary used by ``apply_section_context``.
+    """
+
+    return _canonical_section_name(section)
+
+
 def canonical_section_label(section: Any) -> str | None:
     """Return the canonical section key for a user-facing section label.
 
@@ -1019,6 +1037,34 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     return RECENT
 
 
+def reconcile_temporality_with_interval(
+    *,
+    temporality: str,
+    interval_start: date | None,
+    interval_end: date | None,
+    reference_date: date | None,
+) -> str:
+    """Reconcile ConText temporality with a resolved timeline interval.
+
+    This helper keeps the ConText axis advisory while preventing impossible
+    combinations after absolute timeline resolution.  In particular, a span
+    resolved after the document reference date cannot remain historical.
+    """
+
+    if (
+        temporality == HYPOTHETICAL
+        or interval_start is None
+        or interval_end is None
+        or reference_date is None
+    ):
+        return temporality
+    if temporality == HISTORICAL and interval_start > reference_date:
+        return RECENT
+    if temporality == RECENT and interval_end < reference_date:
+        return HISTORICAL
+    return temporality
+
+
 def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
     """Classify a clinical span as certain or uncertain/hypothetical.
 
@@ -1167,6 +1213,7 @@ __all__ = [
     "HYPOTHETICAL_CUES",
     "RECENT_TEMPORALITY_CUES",
     "resolve_temporality",
+    "reconcile_temporality_with_interval",
     "Certainty",
     "CERTAIN",
     "UNCERTAIN",
@@ -1179,6 +1226,7 @@ __all__ = [
     "CANONICAL_SECTION_LABELS",
     "SECTION_LABEL_ALIASES",
     "SECTION_CONTEXT_PRIORS",
+    "canonical_section_name",
     "canonical_section_label",
     "apply_section_context",
     "resolve_span_context",
