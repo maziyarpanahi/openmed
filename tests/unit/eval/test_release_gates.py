@@ -357,6 +357,7 @@ def test_g7_blocks_recall_regression_and_residual_leakage(tmp_path: Path) -> Non
     assert "recall_drop" in check.details["violations"]
     assert "residual_leakage_regression" in check.details["violations"]
 
+
 def test_zero_shot_language_gate_quarantines_transfer_floor_breach(
     tmp_path: Path,
 ) -> None:

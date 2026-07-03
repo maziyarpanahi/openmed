@@ -1501,6 +1501,7 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
         },
     )
 
+
 def _zero_shot_language_leakage_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
