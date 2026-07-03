@@ -1,21 +1,17 @@
-# Tags matching v* publish the openmed package to PyPI.
-# workflow_dispatch runs the same guarded publish job manually.
+# Tags matching v* build and publish the openmed package to PyPI.
 name: Publish to PyPI
 
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
 
 jobs:
-  publish:
+  build:
+    name: Build distributions
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/openmed
     permissions:
-      contents: write  # attach the SBOM asset to the tagged GitHub release
+      contents: read
 
     steps:
       - uses: actions/checkout@v7
@@ -30,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install build hatch
+          pip install build twine
 
       - name: Clean package cache
         run: |
@@ -91,16 +87,56 @@ jobs:
 
       - name: Check package
         run: |
-          pip install twine
           twine check dist/*
 
-      - name: Publish to PyPI
-        env:
-          HATCH_INDEX_USER: __token__
-          HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}
-          HATCH_KEYRING: disabled
-        run: |
-          hatch publish
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-package-distributions
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish distributions
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/openmed
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.14.0
+        with:
+          attestations: true
+
+  sbom:
+    name: Generate release SBOM
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # attach the SBOM asset to the tagged GitHub release
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
 
       # SBOM generation runs after publish and is fail-open: a hiccup in any of
       # these steps must never block an otherwise-successful release.
