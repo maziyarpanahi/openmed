@@ -21,6 +21,7 @@ from openmed.mcp.tool_registry import (
     render_tool_registry_document,
     validate_registered_tool_output,
 )
+from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
@@ -338,6 +339,78 @@ def openmed_unload_model(
     return validate_registered_tool_output("openmed_unload_model", response)
 
 
+def openmed_run_workflow(
+    pipeline: Dict[str, Any],
+    session_id: Optional[str] = None,
+    workflow_id: Optional[str] = None,
+    *,
+    runtime_provider: Optional[RuntimeProvider] = None,
+) -> Dict[str, Any]:
+    """Run a stateful multi-step workflow with PHI-safe result egress."""
+    runtime = _runtime(runtime_provider)
+    runner = WorkflowRunner(
+        store=runtime.get_workflow_store(),
+        executors=_workflow_step_executors(runtime_provider),
+        deidentifier=_workflow_egress_deidentifier(runtime_provider),
+    )
+    response = runner.run(pipeline, session_id=session_id, workflow_id=workflow_id)
+    return validate_registered_tool_output("openmed_run_workflow", response)
+
+
+def _workflow_step_executors(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Dict[str, Callable[..., Any]]:
+    executors = builtin_workflow_step_executors()
+    executors.update(
+        {
+            "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+            "openmed_extract_pii": lambda **kwargs: openmed_extract_pii(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+            "openmed_deidentify": lambda **kwargs: _workflow_deidentify_step(
+                runtime_provider=runtime_provider,
+                **kwargs,
+            ),
+        }
+    )
+    return executors
+
+
+def _workflow_deidentify_step(
+    *,
+    runtime_provider: Optional[RuntimeProvider],
+    text: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    if not isinstance(text, str):
+        text = json.dumps(text, sort_keys=True)
+    return openmed_deidentify(
+        text=text,
+        runtime_provider=runtime_provider,
+        **kwargs,
+    )
+
+
+def _workflow_egress_deidentifier(
+    runtime_provider: Optional[RuntimeProvider],
+) -> Callable[[str], str]:
+    def deidentify_text(text: str) -> str:
+        response = openmed_deidentify(
+            text=text,
+            runtime_provider=runtime_provider,
+        )
+        deidentified = response.get("deidentified_text")
+        if isinstance(deidentified, str):
+            return deidentified
+        return "[REDACTED_TEXT]" if text else text
+
+    return deidentify_text
+
+
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
@@ -364,6 +437,10 @@ def _register_tools(
             runtime_provider=runtime_provider,
         ),
         "openmed_unload_model": lambda **kwargs: openmed_unload_model(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+        "openmed_run_workflow": lambda **kwargs: openmed_run_workflow(
             **kwargs,
             runtime_provider=runtime_provider,
         ),
