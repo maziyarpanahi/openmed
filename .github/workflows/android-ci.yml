@@ -1,0 +1,55 @@
+name: Android CI (OpenMedKit)
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/android-ci.yml'
+      - 'android/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '.github/workflows/android-ci.yml'
+      - 'android/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test Android OpenMedKit
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Java
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '11'
+        cache: gradle
+        cache-dependency-path: |
+          android/*.gradle*
+          android/gradle.properties
+          android/gradle/libs.versions.toml
+          android/gradle/wrapper/gradle-wrapper.properties
+          android/**/build.gradle*
+
+    - name: Assemble OpenMedKit debug library
+      working-directory: android
+      run: ./gradlew :openmedkit:assembleDebug --stacktrace
+
+    - name: Run OpenMedKit unit tests
+      working-directory: android
+      run: ./gradlew :openmedkit:testDebugUnitTest --stacktrace
+
+    - name: Upload unit test report
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: android-unit-test-report
+        path: |
+          android/openmedkit/build/reports/tests/testDebugUnitTest/
+          android/openmedkit/build/test-results/testDebugUnitTest/
+        if-no-files-found: ignore
