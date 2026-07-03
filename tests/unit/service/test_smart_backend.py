@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import resource
 import sys
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
+
+try:
+    import resource
+except ModuleNotFoundError:  # pragma: no cover - Windows collection guard
+    resource = None
 
 import httpx
 import pytest
@@ -185,6 +189,8 @@ def _run_ingestion(
 
 
 def _maxrss_bytes() -> int:
+    if resource is None:
+        pytest.skip("resource module is unavailable on this platform")
     value = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if sys.platform == "darwin":
         return int(value)
