@@ -7,6 +7,7 @@ import pytest
 from openmed.clinical import (
     LAB_FLAG_ADVISORY,
     derive_abnormal_flag,
+    link_lab_value_attributes,
     parse_reference_range,
 )
 
@@ -141,3 +142,46 @@ def test_derive_abnormal_flag_returns_unknown_when_it_cannot_derive(
 def test_lab_flag_advisory_documents_heuristic_scope():
     assert "heuristic" in LAB_FLAG_ADVISORY
     assert "originating laboratory" in LAB_FLAG_ADVISORY
+
+
+def test_link_lab_value_attributes_uses_constrained_span_graph():
+    graph = link_lab_value_attributes(
+        [
+            {
+                "id": "sodium",
+                "label": "lab_name",
+                "start": 0,
+                "end": 6,
+                "score": 0.95,
+            },
+            {
+                "id": "sodium-value",
+                "label": "lab_value",
+                "start": 7,
+                "end": 10,
+                "score": 0.95,
+            },
+            {
+                "id": "sodium-range",
+                "label": "reference_range",
+                "start": 12,
+                "end": 19,
+                "score": 0.9,
+            },
+            {
+                "id": "sodium-low",
+                "label": "abnormal_flag",
+                "start": 21,
+                "end": 24,
+                "score": 0.9,
+            },
+        ],
+        max_distance=20,
+    )
+
+    assert set(graph.edge_keys()) == {
+        ("has_value", "sodium", "sodium-value"),
+        ("has_reference_range", "sodium-value", "sodium-range"),
+        ("has_abnormal_flag", "sodium-value", "sodium-low"),
+    }
+    assert graph.explain().to_dict()["metadata"]["edge_count"] == 3

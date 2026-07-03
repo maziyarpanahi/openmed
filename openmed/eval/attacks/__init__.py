@@ -9,11 +9,13 @@ from .linkage import (
 from .reid import (
     MembershipInferenceResult,
     ReidAttackResult,
+    ShadowMembershipInferenceResult,
     generate_reid_leaderboard,
     membership_inference_attack,
     render_reid_leaderboard,
     run_reid_attack,
     run_reid_benchmark,
+    shadow_membership_inference_attack,
 )
 
 __all__ = [
@@ -21,6 +23,7 @@ __all__ = [
     "LongitudinalLinkageAttackResult",
     "ReidAttackResult",
     "MembershipInferenceResult",
+    "ShadowMembershipInferenceResult",
     "generate_reid_leaderboard",
     "linkage_attack",
     "longitudinal_linkage_attack",
@@ -28,4 +31,5 @@ __all__ = [
     "render_reid_leaderboard",
     "run_reid_attack",
     "run_reid_benchmark",
+    "shadow_membership_inference_attack",
 ]
