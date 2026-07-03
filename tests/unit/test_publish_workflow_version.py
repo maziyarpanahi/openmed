@@ -33,14 +33,20 @@ def test_about_version_is_parseable_without_runtime_dependencies():
     assert re.fullmatch(r"\d+\.\d+\.\d+", match.group(1))
 
 
-def test_only_publish_workflow_runs_hatch_publish():
+def test_only_publish_workflow_uses_trusted_publishing_action():
     publishing_workflows = [
         workflow
         for workflow in WORKFLOWS_DIR.glob("*.yml")
-        if "hatch publish" in workflow.read_text(encoding="utf-8")
+        if "pypa/gh-action-pypi-publish" in workflow.read_text(encoding="utf-8")
     ]
 
     assert publishing_workflows == [PUBLISH_WORKFLOW]
+
+    for workflow in WORKFLOWS_DIR.glob("*.yml"):
+        content = workflow.read_text(encoding="utf-8")
+        assert "hatch publish" not in content
+        assert "PYPI_API_TOKEN" not in content
+        assert "HATCH_INDEX_AUTH" not in content
 
 
 def test_publish_workflow_keeps_release_gates():
@@ -48,7 +54,8 @@ def test_publish_workflow_keeps_release_gates():
 
     assert "fetch-depth: 0" in workflow
     assert "tags:\n      - 'v*'" in workflow
-    assert "workflow_dispatch:" in workflow
+    assert "workflow_dispatch:" not in workflow
+    assert "pull_request:" not in workflow
     assert "python scripts/release/check_repo_policy.py" in workflow
     assert "Compute release metadata" in workflow
     assert "python scripts/release/changelog.py" in workflow
@@ -56,7 +63,10 @@ def test_publish_workflow_keeps_release_gates():
     assert "Verify version matches tag" in workflow
     assert "twine check dist/*" in workflow
     assert "name: pypi" in workflow
-    assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" in workflow
+    assert "id-token: write" in workflow
+    assert "pypa/gh-action-pypi-publish@v1.14.0" in workflow
+    assert "attestations: true" in workflow
+    assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in workflow
 
 
 def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():

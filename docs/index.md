@@ -1,24 +1,41 @@
 # OpenMed Documentation
 
-OpenMed bundles curated biomedical models, advanced extraction utilities, and one-call orchestration so you can ship
-clinical NLP workflows without wrangling infrastructure. This documentation keeps the most copied snippets and workflows
-close at hand—each section is Markdown-first, searchable, and optimized for quick scanning or copy/paste into notebooks.
+OpenMed bundles curated biomedical models, advanced de-identification,
+multimodal intake, structured health-data utilities, and one-call
+orchestration so you can ship clinical NLP workflows without wrangling
+infrastructure. This documentation keeps copied snippets and workflows close
+at hand: each section is Markdown-first, searchable, and optimized for quick
+scanning or copy/paste into notebooks.
 
-OpenMed `1.5.5` expands multilingual PII and the Apple story:
+OpenMed `1.7.0` extends the v1.6 privacy foundation into a broader local-first
+clinical data platform:
 
-- **Python MLX** on Apple Silicon Macs through `openmed[mlx]`
-- **OpenMedKit** for native macOS, iOS, and iPadOS apps
-- **Shared MLX artifacts** so Python and Swift can consume the same packaged model layout
-- **Arabic, Japanese, and Turkish PII extraction** with SDK defaults, localized regexes, anonymizer locales, and preconverted MLX routing for supported checkpoints
-- **Native Privacy Filter, OpenAI Nemotron Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family runtimes** for local-first PII, classification, and relation extraction workflows
+- **Policy-aware de-identification** with signed audit reports, reproducibility
+  hashes, review bundles, redaction previews, and release gates.
+- **Multimodal and structured inputs** across OCR, images, PDFs, Markdown,
+  AsciiDoc, CSV/TSV, JSONL chat logs, HL7 v2, CDA/C-CDA, FHIR operations, and
+  FHIR Bulk NDJSON.
+- **Python, Swift, REST, TypeScript, and browser paths** including OpenMedKit,
+  typed REST clients, ONNX/WebGPU, and Transformers.js export bundles.
+- **15 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja,
+  nl, pt, te, th, and tr** with locale-aware validation and surrogate
+  generation.
+- **Release evidence** for leakage heatmaps, model scorecards, threshold
+  sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, and
+  reproducible dependency locks.
 
 ## What you get
 
 - **Curated registries** – discoverable Hugging Face models with metadata (domain, size, device guidance).
 - **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for scripts, notebooks, or services.
-- **PII detection & de-identification** – HIPAA-compliant smart entity merging for production-ready de-identification.
+- **PII detection & de-identification** – HIPAA-aware smart entity merging,
+  policy profiles, signed audit reports, and production-ready de-identification.
 - **Apple Silicon acceleration** – MLX-backed Python inference plus Swift-native app integration through `OpenMedKit`.
-- **REST service MVP** – FastAPI endpoints for `/health`, `/analyze`, `/pii/extract`, and `/pii/deidentify`.
+- **REST service** – FastAPI endpoints for `/livez`, `/readyz`, `/analyze`,
+  `/pii/extract`, `/pii/deidentify`, warm pools, batching, metrics, and
+  typed Python/TypeScript clients.
+- **Browser export** – ONNX/WebGPU bundles for Transformers.js token
+  classification in browser runtimes.
 - **Advanced NER post-processing** – score-aware grouping, PHI-friendly filtering, and CSV/JSON/HTML export helpers.
 - **Composable config** – `OpenMedConfig` reads YAML/ENV so deployments stay reproducible across laptops and clusters.
 
@@ -50,18 +67,21 @@ uv run python examples/pii_model_comparison.py
 The rest of the docs expand on this snippet—head to **Quick Start** for the end-to-end setup, then explore the guides for
 configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
-## 1.5.5 release highlights
+## Latest release highlights
 
-- [MLX Backend](./mlx-backend.md) – Python MLX on Apple Silicon, Privacy Filter family support, 28 new Arabic/Japanese/Turkish PII MLX artifacts, shared artifact packaging, and backend auto-detection.
-- [OpenMedKit (Swift Package)](./swift-openmedkit.md) – native macOS/iOS/iPadOS integration with MLX, CoreML, Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family APIs.
-- [CoreML Packaging](./coreml-export.md) – current status of the bundled Apple model route alongside the new MLX flow.
-- [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, and Apple runtimes.
+- [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – coverage checklist across examples, docs, website, and source modules.
+- [OpenMed 1.7.0 Release Notes](./release/v1.7.0.md) – detailed release inventory and migration notes.
+- [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, Apple runtimes, browser export, multimodal inputs, and FHIR/HL7.
+- [Transformers.js Export](./export-transformersjs.md) – browser/WebGPU packaging for token classification bundles.
+- [FHIR Interop Helpers](./fhir-interop.md) and [HL7 v2 De-identification](./hl7v2-deidentification.md) – structured health-data workflows.
+- [MLX Backend](./mlx-backend.md), [OpenMedKit](./swift-openmedkit.md), and [CoreML Packaging](./coreml-export.md) – local Apple runtime paths.
 
 ## How these docs are structured
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. Core guides:
+3. [v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – verify release feature coverage across examples and docs.
+4. Core guides:
    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
    - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.
    - [PII Detection & Smart Merging](./pii-smart-merging.md) for HIPAA-compliant de-identification (v0.5.0).
@@ -80,5 +100,5 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
    - [Release Streams & Channels](./release/semver-and-channels.md) – model artifact and library release policy.
    - [Generative Model Policy](./generative-model-policy.md) – approved and prohibited model-assisted workflows.
 
-Need something that is not here yet? Drop an issue on GitHub and mention the missing recipe. Every addition is just a
-Markdown file away.
+Need something that is not here yet? Drop an issue on GitHub and mention the
+missing recipe. Every addition is just a Markdown file away.

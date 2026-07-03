@@ -38,6 +38,7 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_korean_rrn,
     validate_latvian_personas_kods,
+    validate_malaysian_mykad,
     validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
@@ -45,6 +46,8 @@ from openmed.core.pii_i18n import (
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uk_nhs_number,
+    validate_uk_nino,
 )
 
 from .clinical_ids import (
@@ -54,12 +57,15 @@ from .clinical_ids import (
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
     LatvianPersonasKodsProvider,
+    MalaysianMyKadProvider,
     NPIProvider,
     PolishPeselProvider,
     RodneCisloProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
+    UKNHSNumberProvider,
+    UKNINOProvider,
     validate_npi,
 )
 
@@ -253,6 +259,13 @@ def _register_builtin_specs() -> None:
         faker_provider=IndonesianNIKProvider,
     )
     _register_aliases(
+        ("ms", "ms_MY"),
+        id_type="mykad",
+        validate=validate_malaysian_mykad,
+        faker_method="mykad",
+        faker_provider=MalaysianMyKadProvider,
+    )
+    _register_aliases(
         ("th", "th_TH"),
         id_type="thai_national_id",
         validate=validate_thai_national_id,
@@ -325,6 +338,20 @@ def _register_builtin_specs() -> None:
         validate=validate_npi,
         faker_method="npi",
         faker_provider=NPIProvider,
+    )
+    _register_aliases(
+        ("en", "en_GB", "gb", "uk"),
+        id_type="nhs_number",
+        validate=validate_uk_nhs_number,
+        faker_method="nhs_number",
+        faker_provider=UKNHSNumberProvider,
+    )
+    _register_aliases(
+        ("en", "en_GB", "gb", "uk"),
+        id_type="nino",
+        validate=validate_uk_nino,
+        faker_method="nino",
+        faker_provider=UKNINOProvider,
     )
 
 
