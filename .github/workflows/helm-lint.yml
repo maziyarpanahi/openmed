@@ -1,0 +1,54 @@
+name: Helm Chart
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/helm-lint.yml"
+      - "deploy/helm/openmed-service/**"
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/helm-lint.yml"
+      - "deploy/helm/openmed-service/**"
+  workflow_dispatch:
+
+jobs:
+  helm-lint-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.15.3
+
+      - name: Lint chart with default values
+        run: |
+          helm lint deploy/helm/openmed-service
+
+      - name: Render chart with default values
+        run: |
+          helm template openmed-service deploy/helm/openmed-service \
+            --namespace openmed \
+            > rendered-default.yaml
+
+      - name: Lint chart with synthetic values
+        run: |
+          helm lint deploy/helm/openmed-service \
+            --values deploy/helm/openmed-service/ci-values.yaml
+
+      - name: Render chart with synthetic values
+        run: |
+          helm template openmed-service deploy/helm/openmed-service \
+            --namespace openmed \
+            --values deploy/helm/openmed-service/ci-values.yaml \
+            > rendered-ci.yaml
+
+      - name: Check rendered service wiring
+        run: |
+          grep -q "/livez" rendered-default.yaml
+          grep -q "/readyz" rendered-default.yaml
+          grep -q "model-cache" rendered-default.yaml
+          grep -q "OPENMED_CACHE_DIR" rendered-default.yaml
