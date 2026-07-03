@@ -20,7 +20,7 @@ public enum class TensorElementType {
 }
 
 public class OnnxTokenClassifier internal constructor(
-    private val environment: OrtEnvironment,
+    private val environment: OrtEnvironment?,
     private val session: TokenClassificationSession,
     id2Label: Map<Int, String>,
     private val inputTensorType: TensorElementType = TensorElementType.INT64,
@@ -103,7 +103,7 @@ public class OnnxTokenClassifier internal constructor(
 
         if (ownsEnvironment) {
             try {
-                environment.close()
+                environment?.close()
             } catch (error: Throwable) {
                 if (closeFailure == null) {
                     closeFailure = error
@@ -126,19 +126,15 @@ public class OnnxTokenClassifier internal constructor(
         ensureOpen()
         validateInputs(inputIds, attentionMask, offsets)
 
-        createInputTensor(inputIds).use { inputIdsTensor ->
-            createInputTensor(attentionMask).use { attentionMaskTensor ->
-                val outputs = session.run(
-                    mapOf(
-                        INPUT_IDS_NAME to inputIdsTensor,
-                        ATTENTION_MASK_NAME to attentionMaskTensor,
-                    )
-                )
-                val logitsOutput = outputs[LOGITS_NAME]
-                    ?: throw InferenceError.MissingOutput(LOGITS_NAME)
-                return decodePredictions(normalizeLogits(logitsOutput), offsets)
-            }
-        }
+        val outputs = session.run(
+            mapOf(
+                INPUT_IDS_NAME to createInputTensor(inputIds),
+                ATTENTION_MASK_NAME to createInputTensor(attentionMask),
+            )
+        )
+        val logitsOutput = outputs[LOGITS_NAME]
+            ?: throw InferenceError.MissingOutput(LOGITS_NAME)
+        return decodePredictions(normalizeLogits(logitsOutput), offsets)
     }
 
     private fun ensureOpen() {
@@ -174,17 +170,12 @@ public class OnnxTokenClassifier internal constructor(
         }
     }
 
-    private fun createInputTensor(values: IntArray): OnnxTensor {
-        return when (inputTensorType) {
-            TensorElementType.INT64 -> OnnxTensor.createTensor(
-                environment,
-                arrayOf(LongArray(values.size) { index -> values[index].toLong() }),
-            )
-            TensorElementType.INT32 -> OnnxTensor.createTensor(
-                environment,
-                arrayOf(IntArray(values.size) { index -> values[index] }),
-            )
-        }
+    private fun createInputTensor(values: IntArray): TokenInputTensor {
+        return TokenInputTensor(
+            shape = longArrayOf(1L, values.size.toLong()),
+            elementType = inputTensorType,
+            values = values.copyOf(),
+        )
     }
 
     private fun decodePredictions(
@@ -331,7 +322,7 @@ public class OnnxTokenClassifier internal constructor(
             }
             return RuntimeComponents(
                 environment,
-                OnnxRuntimeTokenClassificationSession(session),
+                OnnxRuntimeTokenClassificationSession(environment, session),
             )
         }
 
@@ -348,7 +339,7 @@ public class OnnxTokenClassifier internal constructor(
             }
             return RuntimeComponents(
                 environment,
-                OnnxRuntimeTokenClassificationSession(session),
+                OnnxRuntimeTokenClassificationSession(environment, session),
             )
         }
 
@@ -368,7 +359,26 @@ public class OnnxTokenClassifier internal constructor(
 }
 
 internal interface TokenClassificationSession : Closeable {
-    fun run(inputs: Map<String, OnnxTensor>): Map<String, Any?>
+    fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?>
+}
+
+internal data class TokenInputTensor(
+    val shape: LongArray,
+    val elementType: TensorElementType,
+    val values: IntArray,
+)
+
+private fun TokenInputTensor.toOnnxTensor(environment: OrtEnvironment): OnnxTensor {
+    return when (elementType) {
+        TensorElementType.INT64 -> OnnxTensor.createTensor(
+            environment,
+            arrayOf(LongArray(values.size) { index -> values[index].toLong() }),
+        )
+        TensorElementType.INT32 -> OnnxTensor.createTensor(
+            environment,
+            arrayOf(IntArray(values.size) { index -> values[index] }),
+        )
+    }
 }
 
 private data class RuntimeComponents(
@@ -377,15 +387,21 @@ private data class RuntimeComponents(
 )
 
 private class OnnxRuntimeTokenClassificationSession(
+    private val environment: OrtEnvironment,
     private val session: OrtSession,
 ) : TokenClassificationSession {
-    override fun run(inputs: Map<String, OnnxTensor>): Map<String, Any?> {
-        session.run(inputs).use { result ->
-            val logits = result.get(OnnxTokenClassifier.LOGITS_NAME)
-            if (logits.isEmpty) {
-                return emptyMap()
+    override fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?> {
+        val tensors = inputs.mapValues { (_, tensor) -> tensor.toOnnxTensor(environment) }
+        try {
+            session.run(tensors).use { result ->
+                val logits = result.get(OnnxTokenClassifier.LOGITS_NAME)
+                if (logits.isEmpty) {
+                    return emptyMap()
+                }
+                return mapOf(OnnxTokenClassifier.LOGITS_NAME to logits.get().value)
             }
-            return mapOf(OnnxTokenClassifier.LOGITS_NAME to logits.get().value)
+        } finally {
+            tensors.values.forEach { tensor -> tensor.close() }
         }
     }
 
