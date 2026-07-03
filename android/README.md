@@ -21,3 +21,21 @@ The library currently targets SDK 33 and sets `minSdk` to 26. Android 8.0 is the
 baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
 local-first pipeline.
+
+## Maven Central Publishing
+
+OpenMedKit publishes from `.github/workflows/android-publish.yml` on `v*` tags or
+manual dispatch only. The workflow builds a signed Central Portal bundle from the
+Gradle `release` Maven publication and uploads it to Sonatype after the required
+Android checks have passed.
+
+The release commit must already have successful check runs named
+`Build & Test Android OpenMedKit` and `Android AAR size and cold-start gate`.
+Missing or failing checks block the upload.
+
+Required repository secrets:
+
+- `ANDROID_SIGNING_KEY`: ASCII-armored GPG private key for artifact signing.
+- `ANDROID_SIGNING_KEY_PASSWORD`: passphrase for the signing key.
+- `SONATYPE_USERNAME`: Central Portal user-token username.
+- `SONATYPE_PASSWORD`: Central Portal user-token password.

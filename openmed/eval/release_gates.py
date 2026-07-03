@@ -27,13 +27,16 @@ from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.labels import normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.thresholds import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
     profile_recall_floor,
     validate_threshold_matrix,
 )
+from openmed.eval.fairness import DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR
 from openmed.eval.metrics import normalize_eval_spans
 from openmed.eval.nano_cert import certify_measurements
 from openmed.eval.quant_delta import (
+    COREML_RECALL_DELTA_LIMIT,
     INT4_RECALL_DELTA_LIMIT,
     INT8_RECALL_DELTA_LIMIT,
     QuantRecallDeltaResult,
@@ -43,6 +46,7 @@ from openmed.eval.report import BenchmarkReport
 
 RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
+FLAKINESS_GATE = "flakiness"
 
 G1A_V16_RECALL_FLOOR = 0.990
 G1A_V20_RECALL_FLOOR = 0.995
@@ -258,6 +262,7 @@ class GateReport:
     threshold_profile: str = ""
     target_leakage_rate: float = RESIDUAL_LEAKAGE_SOFT_CEILING
     blocked_formats: tuple[str, ...] = ()
+    stability_summary: Mapping[str, Any] = field(default_factory=dict)
     repro_hash: str = ""
     signature: AuditSignature | None = None
 
@@ -266,6 +271,7 @@ class GateReport:
         self.per_label_precision = _float_map(self.per_label_precision)
         self.blocked_formats = tuple(self.blocked_formats)
         self.gate_results = tuple(self.gate_results)
+        self.stability_summary = _mapping(self.stability_summary)
         if not self.repro_hash:
             self.repro_hash = self.recompute_repro_hash()
 
@@ -302,6 +308,8 @@ class GateReport:
             "target_leakage_rate": float(self.target_leakage_rate),
             "blocked_formats": list(self.blocked_formats),
         }
+        if self.stability_summary:
+            payload["stability_summary"] = _plain(self.stability_summary)
         if include_repro_hash:
             payload["repro_hash"] = self.repro_hash
         if include_signature:
@@ -381,6 +389,7 @@ class GateReport:
             blocked_formats=tuple(
                 str(item) for item in data.get("blocked_formats", [])
             ),
+            stability_summary=_mapping(data.get("stability_summary")),
             repro_hash=str(data.get("repro_hash", "")),
             signature=(
                 AuditSignature.from_dict(signature_data)
@@ -527,6 +536,7 @@ class ReleaseGate:
 
         checks.append(_manifest_coherence_check(identity, metadata))
         checks.append(_calibration_check(metadata, profile))
+        checks.append(_conformal_coverage_check(metrics, metadata))
         checks.append(
             self._g1a_check(
                 per_label_recall,
@@ -537,6 +547,7 @@ class ReleaseGate:
         )
         checks.append(self._g1b_check(per_label_recall, recall_denominators))
         checks.append(self._g2_check(per_label_recall, recall_denominators))
+        checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
@@ -557,7 +568,19 @@ class ReleaseGate:
                 target_leakage=target_leakage,
             )
         )
+        checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        coreml_manifest = _coreml_conversion_manifest(metadata)
+        if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
+            "coreml"
+        ):
+            checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
+            checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
+        checks.append(_zero_shot_language_leakage_check(metrics, metadata))
+        federated_check = _federated_boundary_check(metrics, metadata)
+        if federated_check is not None:
+            checks.append(federated_check)
+        checks.append(_k_floor_check(metrics, metadata))
 
         blocked_formats = tuple(
             sorted(
@@ -693,6 +716,62 @@ class ReleaseGate:
             denominators,
             _g2_floor(self.milestone),
         )
+
+
+def apply_flakiness_quarantine(
+    report: GateReport,
+    stability_report: Mapping[str, Any] | Any,
+) -> GateReport:
+    """Return *report* with a blocking flakiness gate when stability fails."""
+
+    summary = _stability_summary_payload(stability_report)
+    quarantined_gates = tuple(
+        str(gate) for gate in summary.get("quarantined_gates", []) if str(gate)
+    )
+    unstable_gates = tuple(
+        str(gate) for gate in summary.get("unstable_gates", []) if str(gate)
+    )
+    blocking_gates = tuple(sorted(set(quarantined_gates) | set(unstable_gates)))
+    passed = not blocking_gates
+    reason = (
+        "stable across configured seed sweep"
+        if passed
+        else "unstable gate verdicts quarantined: " + ", ".join(blocking_gates)
+    )
+    checks = [check for check in report.gate_results if check.gate != FLAKINESS_GATE]
+    checks.append(
+        GateCheck(
+            FLAKINESS_GATE,
+            passed,
+            reason=reason,
+            details={"stability_summary": summary},
+        )
+    )
+    decision = RELEASABLE if all(check.passed for check in checks) else QUARANTINED
+    return GateReport(
+        repo_id=report.repo_id,
+        family=report.family,
+        tier=report.tier,
+        param_count=report.param_count,
+        format=report.format,
+        per_label_recall=report.per_label_recall,
+        per_label_precision=report.per_label_precision,
+        critical_leakage_count=report.critical_leakage_count,
+        residual_leakage_rate=report.residual_leakage_rate,
+        quant_recall_delta=report.quant_recall_delta,
+        p50_ms=report.p50_ms,
+        p95_ms=report.p95_ms,
+        ram_mb=report.ram_mb,
+        eval_set_hash=report.eval_set_hash,
+        leakage_fixture_hash=report.leakage_fixture_hash,
+        decision=decision,
+        gate_results=tuple(checks),
+        policy=report.policy,
+        threshold_profile=report.threshold_profile,
+        target_leakage_rate=report.target_leakage_rate,
+        blocked_formats=report.blocked_formats,
+        stability_summary=summary,
+    )
 
 
 def _manifest_coherence_check(
@@ -1071,6 +1150,77 @@ def _requires_manifest_row(
     )
 
 
+def _coreml_conversion_manifest(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    inline = _mapping(
+        metadata.get("coreml_conversion_manifest")
+        or metadata.get("coreml_manifest")
+        or metadata.get("conversion_manifest")
+    )
+    if inline:
+        return inline
+
+    manifest_path = _optional_path(
+        _first_value(
+            metadata.get("coreml_conversion_manifest_path"),
+            metadata.get("coreml_manifest_path"),
+            metadata.get("conversion_manifest_path"),
+        )
+    )
+    if manifest_path is None or not manifest_path.exists():
+        return {}
+    try:
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return _mapping(loaded)
+
+
+def _coreml_variants(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    variants = manifest.get("variants") if manifest else None
+    if variants is None:
+        variants = metadata.get("coreml_variants")
+    if isinstance(variants, Mapping):
+        return [
+            {"name": str(name), **_mapping(value)} for name, value in variants.items()
+        ]
+    if isinstance(variants, Sequence) and not isinstance(variants, (str, bytes)):
+        return [_mapping(item) for item in variants if _mapping(item)]
+    return []
+
+
+def _find_coreml_variant(
+    variants: Sequence[Mapping[str, Any]],
+    expected: str,
+) -> Mapping[str, Any] | None:
+    normalized_expected = _normalise_dimension(expected)
+    for variant in variants:
+        names = {
+            str(variant.get("name") or ""),
+            str(variant.get("format") or ""),
+            f"coreml-{variant.get('quantization')}",
+            f"coreml-{variant.get('precision')}",
+        }
+        if normalized_expected in {_normalise_dimension(name) for name in names}:
+            return variant
+    return None
+
+
+def _coreml_parity_passed(parity: Mapping[str, Any]) -> bool:
+    if not parity:
+        return False
+    if bool(parity.get("passed")) is not True:
+        return False
+    max_delta = _optional_float(parity.get("max_recall_delta"))
+    if max_delta is not None and max_delta > COREML_RECALL_DELTA_LIMIT:
+        return False
+    mismatches = parity.get("span_mismatches") or []
+    return not mismatches
+
+
 def _manifest_repo_ids(rows: Sequence[Mapping[str, Any]]) -> set[str]:
     return {
         str(row["repo_id"])
@@ -1159,6 +1309,154 @@ def _calibration_check(metadata: Mapping[str, Any], profile: Any | None) -> Gate
     )
 
 
+def _conformal_coverage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    report, error, explicit = _conformal_coverage_report(metrics, metadata)
+    required = bool(
+        _first_value(
+            metadata.get("require_conformal_coverage"),
+            metrics.get("require_conformal_coverage"),
+            False,
+        )
+    )
+    if error:
+        return GateCheck("conformal_coverage", False, reason=error)
+    if not report:
+        if required:
+            return GateCheck(
+                "conformal_coverage",
+                False,
+                reason="calibration-under-shift report is required",
+            )
+        return GateCheck(
+            "conformal_coverage",
+            True,
+            reason="not provided",
+            details={"required": False},
+        )
+
+    groups = report.get("groups")
+    if not isinstance(groups, Sequence) or isinstance(groups, (str, bytes)):
+        return GateCheck(
+            "conformal_coverage",
+            False,
+            reason="calibration-under-shift report requires groups",
+        )
+
+    default_alpha = _optional_float(report.get("alpha"))
+    default_target = _optional_float(report.get("target_coverage"))
+    if default_target is None and default_alpha is not None:
+        default_target = 1.0 - default_alpha
+    if default_target is None:
+        default_target = 1.0 - 0.05
+    tolerance = _optional_float(report.get("coverage_tolerance"))
+    if tolerance is None:
+        tolerance = 0.01
+
+    evaluated: list[str] = []
+    violations: dict[str, Any] = {}
+    for item in groups:
+        if not isinstance(item, Mapping):
+            continue
+        label = normalize_label(str(item.get("label") or ""))
+        if label not in _CRITICAL_LABELS:
+            continue
+        gate_weight = _optional_float(
+            _first_value(
+                item.get("positive_gate_weight"), item.get("total_gate_weight")
+            )
+        )
+        if gate_weight is not None and gate_weight <= 0.0:
+            continue
+        coverage = _optional_float(
+            _first_value(item.get("positive_coverage"), item.get("realized_coverage"))
+        )
+        if coverage is None:
+            coverage = 0.0
+        target = _optional_float(item.get("target_coverage"))
+        if target is None:
+            target = default_target
+        language = str(item.get("language") or "").lower()
+        key = f"{label}:{language or '*'}"
+        evaluated.append(key)
+        gap = max(float(target) - float(coverage), 0.0)
+        if float(coverage) + float(tolerance) < float(target):
+            violations[key] = {
+                "label": label,
+                "language": language,
+                "coverage": coverage,
+                "target_coverage": target,
+                "coverage_gap": gap,
+                "tolerance": tolerance,
+            }
+
+    if violations:
+        return GateCheck(
+            "conformal_coverage",
+            False,
+            reason="critical-label conformal coverage below target",
+            details={
+                "target_coverage": default_target,
+                "coverage_tolerance": tolerance,
+                "critical_labels_evaluated": sorted(evaluated),
+                "violations": violations,
+                "language_coverage": _mapping(report.get("language_coverage")),
+                "explicit": explicit,
+            },
+        )
+
+    return GateCheck(
+        "conformal_coverage",
+        True,
+        details={
+            "target_coverage": default_target,
+            "coverage_tolerance": tolerance,
+            "critical_labels_evaluated": sorted(evaluated),
+            "language_coverage": _mapping(report.get("language_coverage")),
+            "explicit": explicit,
+        },
+    )
+
+
+def _conformal_coverage_report(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, Any], str, bool]:
+    inline = _first_mapping(
+        metadata.get("calibration_under_shift"),
+        metadata.get("calibration_under_shift_report"),
+        metadata.get("conformal_coverage"),
+        metrics.get("calibration_under_shift"),
+        metrics.get("calibration_under_shift_report"),
+        metrics.get("conformal_coverage"),
+    )
+    if inline:
+        return inline, "", True
+
+    path_value = _first_value(
+        metadata.get("calibration_under_shift_report_path"),
+        metadata.get("under_shift_report_path"),
+        metadata.get("conformal_coverage_path"),
+        metrics.get("calibration_under_shift_report_path"),
+        metrics.get("under_shift_report_path"),
+        metrics.get("conformal_coverage_path"),
+    )
+    if path_value is None:
+        return {}, "", False
+    path = Path(str(path_value))
+    if not path.is_file():
+        return {}, f"calibration-under-shift report not found: {path}", True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"could not read calibration-under-shift report: {exc}", True
+    if not isinstance(payload, Mapping):
+        return {}, "calibration-under-shift report must be a JSON object", True
+    return dict(payload), "", True
+
+
 def _recall_floor_check(
     gate: str,
     labels: frozenset[str],
@@ -1197,6 +1495,58 @@ def _g3_check(critical_leakage_count: int) -> GateCheck:
     )
 
 
+def _adversarial_recall_under_attack_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    payload = _first_mapping(
+        metadata.get("adversarial_robustness"),
+        metrics.get("adversarial_robustness"),
+    )
+    if not payload:
+        return GateCheck(
+            "adversarial_recall_under_attack",
+            True,
+            reason="not applicable",
+        )
+
+    recall = _float_map(
+        payload.get("post_defense_recall_under_attack_by_label")
+        or payload.get("recall_under_attack_by_label")
+    )
+    leaked = _float_map(
+        payload.get("post_defense_leaked_chars_by_label")
+        or payload.get("leaked_chars_by_label")
+    )
+    floor = _optional_float(payload.get("recall_floor"))
+    if floor is None:
+        floor = _optional_float(metadata.get("adversarial_recall_floor"))
+    if floor is None:
+        floor = G2_V20_RECALL_FLOOR
+
+    applicable = sorted(_G1_G2_LABELS & set(recall))
+    recall_violations = {
+        label: recall[label] for label in applicable if recall[label] < floor
+    }
+    direct_leaked = {
+        label: int(value)
+        for label, value in leaked.items()
+        if label in _G1_G2_LABELS and int(value) > 0
+    }
+    passed = not recall_violations and not direct_leaked
+    return GateCheck(
+        "adversarial_recall_under_attack",
+        passed,
+        reason="ok" if passed else "adversarial recall or leakage gate failed",
+        details={
+            "applicable_labels": applicable,
+            "direct_identifier_leaked_chars": direct_leaked,
+            "floor": floor,
+            "recall_violations": recall_violations,
+        },
+    )
+
+
 def _g4_check(result: QuantRecallDeltaResult) -> GateCheck:
     if not result.quantized:
         return GateCheck(
@@ -1221,6 +1571,98 @@ def _g4_check(result: QuantRecallDeltaResult) -> GateCheck:
         reason="ok" if result.passed else "quantized recall delta exceeds limit",
         details=result.to_dict(),
         blocking_format=result.blocking_format,
+    )
+
+
+def _coreml_ane_residency_check(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    variants = _coreml_variants(manifest, metadata)
+    fp16 = _find_coreml_variant(variants, "coreml-fp16")
+    if fp16 is None:
+        return GateCheck(
+            "CoreML-ANE",
+            False,
+            reason="CoreML fp16 variant residency evidence is required",
+        )
+
+    residency = _mapping(fp16.get("residency"))
+    residency_percentage = _optional_float(
+        fp16.get("ane_residency_percentage")
+        or residency.get("ane_residency_percentage")
+    )
+    fallback_layers = (
+        fp16.get("cpu_fallback_layers") or residency.get("cpu_fallback_layers") or []
+    )
+    fallback_count = (
+        len(fallback_layers) if isinstance(fallback_layers, Sequence) else 0
+    )
+    passed = (
+        residency_percentage is not None
+        and residency_percentage >= 0.90
+        and fallback_count == 0
+    )
+    return GateCheck(
+        "CoreML-ANE",
+        passed,
+        reason="ok" if passed else "fp16 CoreML variant is not ANE-resident",
+        details={
+            "variant": fp16.get("name") or fp16.get("format"),
+            "ane_residency_percentage": residency_percentage,
+            "minimum": 0.90,
+            "cpu_fallback_layers": fallback_layers,
+        },
+        blocking_format=None if passed else str(fp16.get("name") or "coreml-fp16"),
+    )
+
+
+def _coreml_variant_parity_check(
+    manifest: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    variants = _coreml_variants(manifest, metadata)
+    if not variants:
+        return GateCheck(
+            "CoreML-parity",
+            False,
+            reason="CoreML parity evidence is required",
+        )
+
+    missing: list[str] = []
+    failures: dict[str, Any] = {}
+    for required in ("coreml-fp16", "coreml-int8"):
+        variant = _find_coreml_variant(variants, required)
+        if variant is None:
+            missing.append(required)
+            continue
+        parity = _mapping(variant.get("parity"))
+        if not _coreml_parity_passed(parity):
+            failures[required] = parity or {"error": "missing parity payload"}
+
+    int4 = _find_coreml_variant(variants, "coreml-int4")
+    if int4 is None:
+        missing.append("coreml-int4")
+    else:
+        int4_parity = _mapping(int4.get("parity"))
+        if not (
+            _coreml_parity_passed(int4_parity) or bool(int4_parity.get("auto_rejected"))
+        ):
+            failures["coreml-int4"] = int4_parity or {
+                "error": "missing int4 parity rejection payload"
+            }
+
+    passed = not missing and not failures
+    return GateCheck(
+        "CoreML-parity",
+        passed,
+        reason="ok" if passed else "CoreML span parity gate failed",
+        details={
+            "recall_delta_limit": COREML_RECALL_DELTA_LIMIT,
+            "missing": missing,
+            "failures": failures,
+        },
+        blocking_format=next(iter(failures), missing[0] if missing else None),
     )
 
 
@@ -1354,6 +1796,96 @@ def _g7_check(
     )
 
 
+def _membership_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    metric = _first_mapping(
+        metrics.get("membership_leakage"),
+        metrics.get("membership_inference"),
+        metadata.get("membership_leakage"),
+        metadata.get("membership_inference"),
+    )
+    required = bool(
+        metadata.get("membership_leakage_required")
+        or metadata.get("membership_inference_required")
+    )
+    if not metric:
+        return GateCheck(
+            "membership_leakage",
+            not required,
+            reason=(
+                "membership leakage evidence not provided"
+                if not required
+                else "membership leakage evidence is required"
+            ),
+            details={"required": required},
+        )
+
+    advantage = _optional_float(
+        _first_value(metric.get("attacker_advantage"), metric.get("advantage"))
+    )
+    attacker_auc = _optional_float(metric.get("attacker_auc"))
+    ceiling = _optional_float(
+        _first_value(
+            metric.get("advantage_ceiling"),
+            metadata.get("membership_advantage_ceiling"),
+            metadata.get("membership_inference_advantage_ceiling"),
+        )
+    )
+    if ceiling is None:
+        ceiling = DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING
+    if advantage is None:
+        return GateCheck(
+            "membership_leakage",
+            False,
+            reason="membership attacker advantage is required",
+            details={"advantage_ceiling": ceiling},
+        )
+
+    per_label = _mapping(metric.get("per_label"))
+    label_violations: dict[str, Any] = {}
+    for label, values in per_label.items():
+        if not isinstance(values, Mapping):
+            continue
+        label_advantage = _optional_float(
+            _first_value(
+                values.get("attacker_advantage"),
+                values.get("advantage"),
+            )
+        )
+        if label_advantage is not None and label_advantage > ceiling:
+            label_violations[str(label)] = {
+                "observed": label_advantage,
+                "limit": ceiling,
+            }
+
+    violations: dict[str, Any] = {}
+    if advantage > ceiling:
+        violations["overall_advantage"] = {
+            "observed": advantage,
+            "limit": ceiling,
+        }
+    if label_violations:
+        violations["per_label_advantage"] = label_violations
+
+    return GateCheck(
+        "membership_leakage",
+        not violations,
+        reason=(
+            "ok" if not violations else "membership-inference advantage exceeds ceiling"
+        ),
+        details={
+            "attacker_advantage": advantage,
+            "attacker_auc": attacker_auc,
+            "advantage_ceiling": ceiling,
+            "feature_hash": metric.get("feature_hash"),
+            "defense": _mapping(metric.get("defense")),
+            "violations": violations,
+        },
+    )
+
+
 def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     fixtures = _span_fixtures(metadata)
     if not fixtures:
@@ -1405,6 +1937,410 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
             "problems": problems,
         },
     )
+
+
+def _zero_shot_language_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _transfer_matrix_evidence(metrics, metadata)
+    if not evidence:
+        return GateCheck(
+            "G9_zero_shot_language_leakage",
+            True,
+            reason="not applicable",
+            details={"transfer_matrix_present": False},
+        )
+
+    languages = _transfer_languages(evidence)
+    violations = [
+        *_transfer_matrix_violations(evidence, metadata, languages),
+        *_transfer_deficiency_violations(evidence, metadata),
+    ]
+    violations = _dedupe_transfer_violations(violations)
+
+    return GateCheck(
+        "G9_zero_shot_language_leakage",
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "zero-shot language leakage exceeds per-language floor"
+        ),
+        details={
+            "transfer_matrix_present": True,
+            "language_count": len(languages),
+            "default_floor": DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR,
+            "violations": violations,
+        },
+    )
+
+
+def _federated_boundary_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck | None:
+    boundary = _mapping(metrics.get("boundary_leakage"))
+    side_channel = _mapping(metrics.get("side_channel"))
+    has_federated_signal = bool(
+        boundary
+        or side_channel
+        or metadata.get("federated_eval")
+        or metrics.get("federated_boundary_leakage_rate") is not None
+    )
+    if not has_federated_signal:
+        return None
+
+    leakage_rate = _optional_float(
+        _first_value(
+            boundary.get("rate"),
+            metrics.get("federated_boundary_leakage_rate"),
+            metadata.get("federated_boundary_leakage_rate"),
+        )
+    )
+    leakage_rate = 1.0 if leakage_rate is None else leakage_rate
+    leaked_bytes = _optional_int(boundary.get("leaked_bytes")) or 0
+    side_flagged = bool(side_channel.get("flagged", False))
+    side_estimate = _optional_float(side_channel.get("estimate_bits")) or 0.0
+    sandbox_count = _optional_int(metrics.get("sandbox_violation_count"))
+    if sandbox_count is None:
+        sandbox_count = len(metadata.get("sandbox_violations") or ())
+
+    violations: dict[str, Any] = {}
+    if leakage_rate > 0.0 or leaked_bytes > 0:
+        violations["boundary_leakage"] = {
+            "rate": leakage_rate,
+            "leaked_bytes": leaked_bytes,
+        }
+    if side_flagged:
+        violations["side_channel"] = {
+            "estimate_bits": side_estimate,
+            "threshold_bits": side_channel.get("threshold_bits"),
+        }
+    if sandbox_count:
+        violations["sandbox"] = {"violation_count": sandbox_count}
+
+    return GateCheck(
+        "federated_boundary",
+        not violations,
+        reason="ok" if not violations else "federated boundary leakage gate failed",
+        details={
+            "boundary_leakage_rate": leakage_rate,
+            "leaked_bytes": leaked_bytes,
+            "side_channel_estimate_bits": side_estimate,
+            "sandbox_violation_count": sandbox_count,
+            "violations": violations,
+        },
+    )
+
+
+def _k_floor_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _k_floor_evidence(metrics, metadata)
+    target_k = _optional_int(evidence.get("target_k"))
+    if target_k is None:
+        return GateCheck("k_floor", True, reason="not applicable")
+    if target_k < 1:
+        return GateCheck(
+            "k_floor",
+            False,
+            reason="target_k must be >= 1",
+            details={"target_k": target_k},
+        )
+
+    measured_k = _optional_int(evidence.get("measured_k"))
+    max_bound = _optional_float(evidence.get("max_reidentification_upper_bound"))
+    self_check = evidence.get("numeric_self_check")
+    self_check_passed = None
+    if isinstance(self_check, Mapping) and "passed" in self_check:
+        self_check_passed = bool(self_check.get("passed"))
+
+    violations: dict[str, Any] = {}
+    if measured_k is None:
+        violations["measured_k"] = "missing"
+    elif measured_k < target_k:
+        violations["measured_k"] = {"observed": measured_k, "target": target_k}
+
+    target_bound = 1.0 / target_k
+    if max_bound is None:
+        violations["max_reidentification_upper_bound"] = "missing"
+    elif max_bound > target_bound + 1e-12:
+        violations["max_reidentification_upper_bound"] = {
+            "observed": max_bound,
+            "limit": target_bound,
+        }
+
+    if self_check_passed is False:
+        violations["numeric_self_check"] = self_check
+
+    return GateCheck(
+        "k_floor",
+        not violations,
+        reason="ok" if not violations else "realized k or bound violates policy",
+        details={
+            "target_k": target_k,
+            "measured_k": measured_k,
+            "target_bound": target_bound,
+            "max_reidentification_upper_bound": max_bound,
+            "violations": violations,
+        },
+    )
+
+
+def _transfer_matrix_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    return _first_mapping(
+        metadata.get("cross_lingual_transfer"),
+        metadata.get("transfer_matrix_report"),
+        metadata.get("transfer_matrix"),
+        metrics.get("cross_lingual_transfer"),
+        metrics.get("transfer_matrix_report"),
+        metrics.get("transfer_matrix"),
+        _nested(metrics, "fairness", "cross_lingual_transfer"),
+    )
+
+
+def _transfer_languages(evidence: Mapping[str, Any]) -> list[str]:
+    languages = _string_set(evidence.get("languages"))
+    matrix = _mapping(evidence.get("matrix"))
+    for source_language, targets in matrix.items():
+        if str(source_language):
+            languages.add(str(source_language))
+        languages.update(_mapping(targets))
+    if not languages:
+        languages = set(SUPPORTED_LANGUAGES)
+    return sorted(languages)
+
+
+def _transfer_floor_map(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    languages: Sequence[str],
+) -> dict[str, float]:
+    floors = {language: DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR for language in languages}
+    floor_source = _first_mapping(
+        evidence.get("leakage_floors"),
+        evidence.get("per_language_leakage_floors"),
+        metadata.get("leakage_floors_by_language"),
+        metadata.get("per_language_leakage_floors"),
+    )
+    for language, floor in floor_source.items():
+        parsed = _optional_float(floor)
+        if parsed is not None:
+            floors[str(language)] = parsed
+    return floors
+
+
+def _transfer_matrix_violations(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    languages: Sequence[str],
+) -> list[dict[str, Any]]:
+    matrix = _mapping(evidence.get("matrix"))
+    floors = _transfer_floor_map(evidence, metadata, languages)
+    violations: list[dict[str, Any]] = []
+    for source_language, targets in sorted(matrix.items()):
+        source = str(source_language)
+        for target_language, raw_cell in sorted(_mapping(targets).items()):
+            target = str(target_language)
+            if source == target:
+                continue
+            cell = _mapping(raw_cell)
+            leakage_rate = _optional_float(
+                _first_value(
+                    cell.get("leakage_rate"),
+                    cell.get("rate"),
+                    cell.get("leakage"),
+                )
+            )
+            if leakage_rate is None:
+                continue
+            floor = floors.get(target, DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR)
+            if leakage_rate <= floor:
+                continue
+            violations.append(
+                _transfer_violation(
+                    source_language=source,
+                    target_language=target,
+                    leakage_rate=leakage_rate,
+                    leakage_floor=floor,
+                    leaked_chars=_optional_int(cell.get("leaked_chars")),
+                    total_chars=_optional_int(cell.get("total_chars")),
+                )
+            )
+    return violations
+
+
+def _transfer_deficiency_violations(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    raw_rows = evidence.get("deficiencies") or []
+    if not isinstance(raw_rows, Sequence) or isinstance(raw_rows, (str, bytes)):
+        return []
+    floors = _transfer_floor_map(evidence, metadata, _transfer_languages(evidence))
+    violations: list[dict[str, Any]] = []
+    for raw_row in raw_rows:
+        row = _mapping(raw_row)
+        target = str(row.get("target_language") or row.get("language") or "")
+        source = str(row.get("source_language") or row.get("source") or "")
+        leakage_rate = _optional_float(
+            _first_value(
+                row.get("leakage_rate"),
+                row.get("rate"),
+                row.get("leakage"),
+            )
+        )
+        if not target or not source or leakage_rate is None:
+            continue
+        floor = _optional_float(
+            _first_value(row.get("leakage_floor"), row.get("floor"))
+        )
+        if floor is None:
+            floor = floors.get(target, DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR)
+        excess = _optional_float(row.get("excess"))
+        if excess is None:
+            excess = leakage_rate - floor
+        if excess <= 0.0 and leakage_rate <= floor:
+            continue
+        violations.append(
+            _transfer_violation(
+                source_language=source,
+                target_language=target,
+                leakage_rate=leakage_rate,
+                leakage_floor=floor,
+                leaked_chars=_optional_int(row.get("leaked_chars")),
+                total_chars=_optional_int(row.get("total_chars")),
+                rank=_optional_int(row.get("rank")),
+            )
+        )
+    return violations
+
+
+def _transfer_violation(
+    *,
+    source_language: str,
+    target_language: str,
+    leakage_rate: float,
+    leakage_floor: float,
+    leaked_chars: int | None,
+    total_chars: int | None,
+    rank: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "source_language": source_language,
+        "target_language": target_language,
+        "leakage_rate": leakage_rate,
+        "leakage_floor": leakage_floor,
+        "excess": leakage_rate - leakage_floor,
+    }
+    if leaked_chars is not None:
+        payload["leaked_chars"] = leaked_chars
+    if total_chars is not None:
+        payload["total_chars"] = total_chars
+    if rank is not None:
+        payload["rank"] = rank
+    return payload
+
+
+def _dedupe_transfer_violations(
+    violations: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    deduped: dict[tuple[str, str], dict[str, Any]] = {}
+    for violation in violations:
+        row = dict(violation)
+        key = (
+            str(row.get("target_language") or ""),
+            str(row.get("source_language") or ""),
+        )
+        if not all(key):
+            continue
+        current = deduped.get(key)
+        if current is None or float(row.get("excess", 0.0)) > float(
+            current.get("excess", 0.0)
+        ):
+            deduped[key] = row
+    return sorted(
+        deduped.values(),
+        key=lambda row: (
+            -float(row.get("excess", 0.0)),
+            -float(row.get("leakage_rate", 0.0)),
+            str(row.get("target_language") or ""),
+            str(row.get("source_language") or ""),
+        ),
+    )
+
+
+def evaluate_federated_boundary_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+) -> GateCheck:
+    """Evaluate only the federated boundary leakage gate for a report."""
+    payload = _report_payload(report)
+    metrics = dict(_mapping(payload.get("metrics") or payload))
+    if "sandbox_violation_count" not in metrics and isinstance(
+        payload.get("sandbox_violations"),
+        Sequence,
+    ):
+        metrics["sandbox_violation_count"] = len(payload["sandbox_violations"])
+    metadata = _mapping(payload.get("metadata"))
+    check = _federated_boundary_check(metrics, metadata)
+    if check is not None:
+        return check
+    return GateCheck(
+        "federated_boundary",
+        False,
+        reason="federated boundary metrics are required",
+    )
+
+
+def _k_floor_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    source = _first_mapping(
+        metadata.get("kanon_enforcement"),
+        metrics.get("kanon_enforcement"),
+        metadata.get("k_anonymity_enforcement"),
+        metrics.get("k_anonymity_enforcement"),
+        metadata.get("k_floor"),
+        metrics.get("k_floor"),
+        metadata.get("kanon"),
+        metrics.get("kanon"),
+    )
+    target_k = _first_value(
+        source.get("target_k"),
+        metadata.get("target_k"),
+        metrics.get("target_k"),
+        _nested(metadata, "privacy_policy", "target_k"),
+        _nested(metrics, "privacy_policy", "target_k"),
+    )
+    kanon = _mapping(source.get("kanon"))
+    bounds = _mapping(source.get("bounds"))
+    return {
+        "target_k": target_k,
+        "measured_k": _first_value(
+            source.get("measured_k"),
+            source.get("realized_k"),
+            source.get("k"),
+            kanon.get("k"),
+            metadata.get("measured_k"),
+            metrics.get("measured_k"),
+        ),
+        "max_reidentification_upper_bound": _first_value(
+            source.get("max_reidentification_upper_bound"),
+            bounds.get("max_reidentification_upper_bound"),
+            metadata.get("max_reidentification_upper_bound"),
+            metrics.get("max_reidentification_upper_bound"),
+        ),
+        "numeric_self_check": _first_value(
+            source.get("numeric_self_check"),
+            bounds.get("numeric_self_check"),
+        ),
+    }
 
 
 def _report_payload(report: BenchmarkReport | Mapping[str, Any]) -> dict[str, Any]:
@@ -1537,6 +2473,8 @@ def _residual_leakage_rate(
     value = _first_value(
         metadata.get("residual_leakage_rate"),
         metrics.get("residual_leakage_rate"),
+        metrics.get("federated_boundary_leakage_rate"),
+        _nested(metrics, "boundary_leakage", "rate"),
         _nested(metrics, "leakage", "overall"),
     )
     parsed = _optional_float(value)
@@ -1725,6 +2663,16 @@ def _mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
+
+def _stability_summary_payload(value: Mapping[str, Any] | Any) -> dict[str, Any]:
+    if isinstance(value, Mapping):
+        return _plain(value)
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        payload = value.to_dict()
+        if isinstance(payload, Mapping):
+            return _plain(payload)
+    raise TypeError("stability_report must be a mapping or expose to_dict()")
 
 
 def _nested(value: Mapping[str, Any], *path: str) -> Any:
@@ -2119,6 +3067,7 @@ __all__ = [
     "G4_INT8_DELTA_LIMIT",
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
+    "FLAKINESS_GATE",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",
     "RELEASABLE",
@@ -2126,7 +3075,9 @@ __all__ = [
     "GateReport",
     "ModelStewardConfig",
     "ReleaseGate",
+    "apply_flakiness_quarantine",
     "build_arg_parser",
+    "evaluate_federated_boundary_gate",
     "format_preview",
     "main",
     "preview",
