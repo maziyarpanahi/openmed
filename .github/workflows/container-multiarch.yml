@@ -1,0 +1,167 @@
+name: Container Multi-Arch
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/container-multiarch.yml"
+      - "deploy/docker/Dockerfile"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "openmed/**"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  smoke:
+    name: Build and smoke (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            arch: amd64
+          - platform: linux/arm64
+            arch: arm64
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build smoke image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: ${{ matrix.platform }}
+          load: true
+          push: false
+          tags: openmed-smoke:${{ matrix.arch }}
+          cache-from: type=gha,scope=openmed-${{ matrix.arch }}
+          cache-to: type=gha,scope=openmed-${{ matrix.arch }},mode=max
+
+      - name: Run synthetic de-identification smoke
+        run: |
+          docker run --rm -i --platform "${{ matrix.platform }}" \
+            openmed-smoke:${{ matrix.arch }} python - <<'PY'
+          from datetime import datetime
+          from unittest.mock import patch
+
+          import openmed
+          from openmed.processing.outputs import EntityPrediction, PredictionResult
+
+          text = "Patient Casey Example called 555-0100."
+          prediction = PredictionResult(
+              text=text,
+              entities=[
+                  EntityPrediction(
+                      text="Casey Example",
+                      label="NAME",
+                      confidence=0.99,
+                      start=8,
+                      end=21,
+                  ),
+                  EntityPrediction(
+                      text="555-0100",
+                      label="PHONE",
+                      confidence=0.99,
+                      start=29,
+                      end=37,
+                  ),
+              ],
+              model_name="synthetic-container-smoke",
+              timestamp=datetime(2026, 1, 1, 0, 0, 0).isoformat(),
+          )
+
+          with patch("openmed.core.pii.extract_pii", return_value=prediction):
+              result = openmed.deidentify(text, method="mask", keep_mapping=True)
+
+          assert result.deidentified_text == "Patient [NAME] called [PHONE]."
+          assert len(result.pii_entities) == 2
+          print(f"OpenMed {openmed.__version__} synthetic de-identification passed")
+          PY
+
+  publish:
+    name: Publish manifest list
+    runs-on: ubuntu-latest
+    needs: smoke
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        shell: bash
+        run: |
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE_NAME}:sha-${GITHUB_SHA::12}"
+            if [ "${GITHUB_REF_TYPE}" = "branch" ] && [ "${GITHUB_REF_NAME}" = "master" ]; then
+              echo "${IMAGE_NAME}:latest"
+            fi
+            if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+              echo "${IMAGE_NAME}:${GITHUB_REF_NAME}"
+            fi
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              echo "${IMAGE_NAME}:manual-${GITHUB_RUN_NUMBER}"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Build and push manifest list
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: false
+          cache-from: |
+            type=gha,scope=openmed-amd64
+            type=gha,scope=openmed-arm64
+          cache-to: type=gha,scope=openmed-manifest,mode=max
+
+      - name: Verify manifest platforms
+        shell: bash
+        run: |
+          image="${IMAGE_NAME}:sha-${GITHUB_SHA::12}"
+          docker buildx imagetools inspect "$image" | tee manifest.txt
+          grep -Eq 'Platform:[[:space:]]+linux/amd64' manifest.txt
+          grep -Eq 'Platform:[[:space:]]+linux/arm64' manifest.txt
