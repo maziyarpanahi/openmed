@@ -55,6 +55,7 @@ GPL_BRIDGE_EXCEPTIONS = {
 
 REVIEWED_LICENSES = {
     "accelerate": "Apache-2.0",
+    "adlfs": "BSD-3-Clause",
     "auto-gptq": "MIT",
     "autoawq": "MIT",
     "click": "BSD-3-Clause",
@@ -64,6 +65,7 @@ REVIEWED_LICENSES = {
     "easyocr": "Apache-2.0",
     "faker": "MIT",
     "fastapi": "MIT",
+    "gcsfs": "BSD-3-Clause",
     "gliner": "Apache-2.0",
     "griffe": "ISC",
     "huggingface-hub": "Apache-2.0",
@@ -100,6 +102,7 @@ REVIEWED_LICENSES = {
     "pytesseract": "Apache-2.0",
     "python-docx": "MIT",
     "rich": "MIT",
+    "s3fs": "BSD-3-Clause",
     "safetensors": "Apache-2.0",
     "spacy": "MIT",
     "tiktoken": "MIT",
