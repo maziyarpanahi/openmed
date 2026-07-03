@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import inspect
 import json
+import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
 
+from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.quality_gates import validate_entity_spans
+from openmed.core.safety_sweep import hashed_span_surface
 from openmed.eval.cache import build_report_key, hash_fixture_set, load_or_compute
 from openmed.eval.calibrate import load_calibration_thresholds
 from openmed.eval.metrics import (
@@ -24,7 +31,12 @@ from openmed.eval.metrics import (
 )
 from openmed.eval.report import BenchmarkReport
 
+if TYPE_CHECKING:
+    from openmed.eval.attacks.reid import SideChannelProbeResult
+
 ModelRunner = Callable[["BenchmarkFixture", str, str], Iterable[Any]]
+_SIGNATURE_ALGORITHM = "HMAC-SHA256"
+_DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
 
 
 @dataclass(frozen=True)
@@ -69,6 +81,242 @@ class FixtureResult:
     fixture_id: str
     predicted_spans: tuple[EvalSpan, ...]
     latency_ms: float
+
+
+@dataclass(frozen=True)
+class FederatedDetectorSpec:
+    """Python subprocess detector entry point for federated evaluation."""
+
+    script_path: str | Path
+    python_executable: str | Path = sys.executable
+    timeout_s: float = 10.0
+    read_roots: tuple[str | Path, ...] = ()
+    env: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class BoundaryLeakageFinding:
+    """Raw-PHI egress evidence keyed by source offsets and hashes only."""
+
+    fixture_id: str
+    sink: str
+    artifact: str
+    start: int
+    end: int
+    label: str
+    length: int
+    text_hash: str
+    byte_offsets: tuple[int, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "fixture_id": self.fixture_id,
+            "sink": self.sink,
+            "artifact": self.artifact,
+            "start": int(self.start),
+            "end": int(self.end),
+            "label": self.label,
+            "length": int(self.length),
+            "text_hash": self.text_hash,
+            "byte_offsets": [int(offset) for offset in self.byte_offsets],
+        }
+
+
+@dataclass(frozen=True)
+class BoundaryLeakageResult:
+    """Boundary leakage rate for detector stdout/stderr/files."""
+
+    rate: float
+    leaked_bytes: int
+    total_phi_bytes: int
+    findings: tuple[BoundaryLeakageFinding, ...] = ()
+    emitted_bytes_by_sink: Mapping[str, int] = field(default_factory=dict)
+
+    def to_metric(self) -> dict[str, Any]:
+        return {
+            "rate": float(self.rate),
+            "leaked_bytes": int(self.leaked_bytes),
+            "total_phi_bytes": int(self.total_phi_bytes),
+            "findings": [finding.to_dict() for finding in self.findings],
+            "emitted_bytes_by_sink": {
+                str(key): int(value)
+                for key, value in sorted(self.emitted_bytes_by_sink.items())
+            },
+        }
+
+
+@dataclass(frozen=True)
+class SandboxViolation:
+    """Sandbox policy violation reported without raw host paths."""
+
+    fixture_id: str
+    kind: str
+    event: str
+    operation: str
+    path_hash: str | None = None
+    detail: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = {
+            "fixture_id": self.fixture_id,
+            "kind": self.kind,
+            "event": self.event,
+            "operation": self.operation,
+            "detail": self.detail,
+        }
+        if self.path_hash is not None:
+            payload["path_hash"] = self.path_hash
+        return payload
+
+
+@dataclass
+class FederatedEvalReport:
+    """Signed federated detector-boundary report."""
+
+    suite: str
+    detector_name: str
+    fixture_count: int
+    boundary_leakage: BoundaryLeakageResult
+    side_channel: SideChannelProbeResult
+    sandbox_violations: tuple[SandboxViolation, ...]
+    resource_accounting: Mapping[str, Any]
+    gate_passed: bool
+    generated_at: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    repro_hash: str = ""
+    signature: AuditSignature | None = None
+
+    def __post_init__(self) -> None:
+        self.sandbox_violations = tuple(self.sandbox_violations)
+        if not self.repro_hash:
+            self.repro_hash = self.recompute_repro_hash()
+
+    def _payload(
+        self,
+        *,
+        include_repro_hash: bool,
+        include_signature: bool,
+        include_resource_accounting: bool = True,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "suite": self.suite,
+            "detector_name": self.detector_name,
+            "fixture_count": int(self.fixture_count),
+            "boundary_leakage": self.boundary_leakage.to_metric(),
+            "side_channel": self.side_channel.to_metric(),
+            "sandbox_violations": [
+                violation.to_dict() for violation in self.sandbox_violations
+            ],
+            "gate_passed": bool(self.gate_passed),
+            "generated_at": self.generated_at,
+            "metadata": _plain(self.metadata),
+        }
+        if include_resource_accounting:
+            payload["resource_accounting"] = _plain(self.resource_accounting)
+        if include_repro_hash:
+            payload["repro_hash"] = self.repro_hash
+        if include_signature:
+            payload["signature"] = (
+                self.signature.to_dict() if self.signature is not None else None
+            )
+        return payload
+
+    def recompute_repro_hash(self) -> str:
+        """Hash deterministic leakage evidence, excluding volatile resources."""
+        return stable_hash(
+            self._payload(
+                include_repro_hash=False,
+                include_signature=False,
+                include_resource_accounting=False,
+            )
+        )
+
+    def sign(
+        self,
+        key: bytes | str,
+        *,
+        key_id: str = "federated-eval",
+    ) -> "FederatedEvalReport":
+        """Sign the complete report payload and return ``self``."""
+        self.repro_hash = self.recompute_repro_hash()
+        message = _canonical_json(
+            self._payload(include_repro_hash=True, include_signature=False)
+        ).encode("utf-8")
+        self.signature = AuditSignature(
+            key_id=key_id,
+            algorithm=_SIGNATURE_ALGORITHM,
+            value=hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest(),
+        )
+        return self
+
+    def verify(self, key: bytes | str) -> bool:
+        """Verify the report signature and deterministic evidence hash."""
+        if self.recompute_repro_hash() != self.repro_hash:
+            return False
+        if self.signature is None or self.signature.algorithm != _SIGNATURE_ALGORITHM:
+            return False
+        message = _canonical_json(
+            self._payload(include_repro_hash=True, include_signature=False)
+        ).encode("utf-8")
+        expected = hmac.new(_key_bytes(key), message, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, self.signature.value)
+
+    def to_dict(self) -> dict[str, Any]:
+        return self._payload(include_repro_hash=True, include_signature=True)
+
+    def to_json(self, *, indent: int = 2) -> str:
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=True,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return output_path
+
+    def to_benchmark_report(self) -> BenchmarkReport:
+        """Expose federated boundary metrics through the benchmark report shape."""
+        return BenchmarkReport(
+            suite=self.suite,
+            model_name=self.detector_name,
+            device="federated-subprocess",
+            fixture_count=self.fixture_count,
+            generated_at=self.generated_at,
+            metrics={
+                "boundary_leakage": self.boundary_leakage.to_metric(),
+                "federated_boundary_leakage_rate": self.boundary_leakage.rate,
+                "side_channel": self.side_channel.to_metric(),
+                "sandbox_violation_count": len(self.sandbox_violations),
+            },
+            metadata={
+                **dict(self.metadata),
+                "federated_eval": True,
+                "federated_gate_passed": self.gate_passed,
+                "federated_repro_hash": self.repro_hash,
+            },
+        )
+
+
+@dataclass(frozen=True)
+class _CapturedArtifact:
+    sink: str
+    artifact: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class _FederatedFixtureRun:
+    fixture_id: str
+    predicted_spans: tuple[EvalSpan, ...]
+    timing_records: tuple[dict[str, Any], ...]
+    artifacts: tuple[_CapturedArtifact, ...]
+    sandbox_violations: tuple[SandboxViolation, ...]
+    elapsed_ms: float
+    exit_code: int
 
 
 def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
@@ -347,6 +595,671 @@ def run_suite(
     return report
 
 
+def run_federated_leakage_eval(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    detector: FederatedDetectorSpec | str | Path,
+    suite: str = "federated",
+    detector_name: str | None = None,
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    max_boundary_leakage_rate: float = 0.0,
+    side_channel_threshold_bits: float = 0.30,
+    side_channel_min_samples: int = 4,
+    signing_key: bytes | str | None = None,
+    key_id: str = "federated-eval",
+    work_dir: str | Path | None = None,
+) -> FederatedEvalReport:
+    """Run an untrusted detector out-of-process and gate boundary leakage.
+
+    The detector protocol is intentionally narrow: the child receives a JSON
+    fixture path and output path through environment variables, writes
+    predictions to that output JSON, and any stdout/stderr/side files are
+    treated as monitored egress. Gold spans are never passed to the child.
+    """
+    from openmed.eval.attacks.reid import probe_span_timing_side_channel
+
+    _validate_unique_fixture_ids(fixtures)
+    spec = _coerce_federated_spec(detector)
+    script_path = Path(spec.script_path).expanduser().resolve()
+    if not script_path.exists():
+        raise FileNotFoundError(f"detector script does not exist: {script_path}")
+
+    temp_root = Path(
+        tempfile.mkdtemp(
+            prefix="openmed-federated-",
+            dir=str(work_dir) if work_dir is not None else None,
+        )
+    )
+    wrapper_path = temp_root / "federated_child.py"
+    wrapper_path.write_text(_FEDERATED_CHILD_WRAPPER, encoding="utf-8")
+
+    runs: list[_FederatedFixtureRun] = []
+    try:
+        for fixture in fixtures:
+            runs.append(
+                _run_federated_fixture(
+                    fixture,
+                    spec=spec,
+                    script_path=script_path,
+                    wrapper_path=wrapper_path,
+                    root=temp_root,
+                )
+            )
+    finally:
+        shutil.rmtree(temp_root, ignore_errors=True)
+
+    leakage = _scan_boundary_egress(fixtures, runs)
+    timing_records = [record for run in runs for record in run.timing_records]
+    side_channel = probe_span_timing_side_channel(
+        fixtures,
+        timing_records,
+        threshold_bits=side_channel_threshold_bits,
+        min_samples=side_channel_min_samples,
+    )
+    sandbox_violations = tuple(
+        violation for run in runs for violation in run.sandbox_violations
+    )
+    gate_passed = (
+        leakage.rate <= max_boundary_leakage_rate
+        and not side_channel.flagged
+        and not sandbox_violations
+    )
+    report = FederatedEvalReport(
+        suite=suite,
+        detector_name=detector_name or script_path.stem,
+        fixture_count=len(fixtures),
+        boundary_leakage=leakage,
+        side_channel=side_channel,
+        sandbox_violations=sandbox_violations,
+        resource_accounting=_resource_accounting(runs),
+        gate_passed=gate_passed,
+        generated_at=generated_at,
+        metadata={
+            **dict(metadata or {}),
+            "protocol": "openmed.federated-detector.v1",
+            "detector_path_hash": _path_hash(script_path),
+        },
+    )
+    key = signing_key or os.environ.get(
+        "OPENMED_FEDERATED_EVAL_KEY",
+        _DEFAULT_FEDERATED_SIGNING_KEY,
+    )
+    return report.sign(key, key_id=key_id)
+
+
+def _coerce_federated_spec(
+    detector: FederatedDetectorSpec | str | Path,
+) -> FederatedDetectorSpec:
+    if isinstance(detector, FederatedDetectorSpec):
+        return detector
+    return FederatedDetectorSpec(script_path=detector)
+
+
+def _run_federated_fixture(
+    fixture: BenchmarkFixture,
+    *,
+    spec: FederatedDetectorSpec,
+    script_path: Path,
+    wrapper_path: Path,
+    root: Path,
+) -> _FederatedFixtureRun:
+    run_dir = root / _slug_fixture_id(fixture.fixture_id)
+    output_dir = run_dir / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    input_path = run_dir / "input.json"
+    output_path = output_dir / "detector_output.json"
+    violation_log = run_dir / "sandbox_violations.jsonl"
+    input_path.write_text(
+        _canonical_json(
+            {
+                "fixture_id": fixture.fixture_id,
+                "language": fixture.language,
+                "metadata": _plain(fixture.metadata),
+                "text": fixture.text,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    command = [
+        str(spec.python_executable),
+        str(wrapper_path),
+        str(script_path),
+        str(input_path),
+        str(output_path),
+        str(output_dir),
+        str(violation_log),
+        _path_list([script_path.parent, *spec.read_roots]),
+    ]
+    started = time.perf_counter()
+    stdout = b""
+    stderr = b""
+    exit_code = 0
+    timeout_violation: SandboxViolation | None = None
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=output_dir,
+            env=_sandbox_env(spec, input_path, output_path, output_dir),
+            capture_output=True,
+            timeout=spec.timeout_s,
+            check=False,
+        )
+        stdout = _bytes_output(completed.stdout)
+        stderr = _bytes_output(completed.stderr)
+        exit_code = int(completed.returncode)
+    except subprocess.TimeoutExpired as exc:
+        stdout = _bytes_output(exc.stdout)
+        stderr = _bytes_output(exc.stderr)
+        exit_code = -9
+        timeout_violation = SandboxViolation(
+            fixture_id=fixture.fixture_id,
+            kind="timeout",
+            event="process.timeout",
+            operation="terminated",
+            detail=f"detector exceeded {spec.timeout_s:.3f}s timeout",
+        )
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+
+    artifacts = list(_collect_artifacts(output_dir, stdout=stdout, stderr=stderr))
+    payload = _read_detector_payload(output_path)
+    predicted_spans = tuple(
+        normalize_eval_spans(
+            _extract_detector_spans(payload),
+            default_language=fixture.language,
+            default_device="federated-subprocess",
+            source_text=fixture.text,
+        )
+    )
+    validate_entity_spans([span.to_entity() for span in predicted_spans], fixture.text)
+    timing_records = tuple(
+        _extract_timing_records(payload, fixture_id=fixture.fixture_id)
+    )
+    violations = list(_read_sandbox_violations(violation_log, fixture.fixture_id))
+    if timeout_violation is not None:
+        violations.append(timeout_violation)
+    if exit_code != 0 and not violations:
+        violations.append(
+            SandboxViolation(
+                fixture_id=fixture.fixture_id,
+                kind="process",
+                event="process.exit",
+                operation="nonzero_exit",
+                detail=f"detector exited with status {exit_code}",
+            )
+        )
+    return _FederatedFixtureRun(
+        fixture_id=fixture.fixture_id,
+        predicted_spans=predicted_spans,
+        timing_records=timing_records,
+        artifacts=tuple(artifacts),
+        sandbox_violations=tuple(violations),
+        elapsed_ms=elapsed_ms,
+        exit_code=exit_code,
+    )
+
+
+def _sandbox_env(
+    spec: FederatedDetectorSpec,
+    input_path: Path,
+    output_path: Path,
+    output_dir: Path,
+) -> dict[str, str]:
+    env = {
+        "PATH": os.environ.get("PATH", ""),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONHASHSEED": "0",
+        "OPENMED_DETECTOR_INPUT": str(input_path),
+        "OPENMED_DETECTOR_OUTPUT": str(output_path),
+        "OPENMED_DETECTOR_OUTPUT_DIR": str(output_dir),
+    }
+    env.update({str(key): str(value) for key, value in spec.env.items()})
+    return env
+
+
+def _collect_artifacts(
+    output_dir: Path,
+    *,
+    stdout: bytes,
+    stderr: bytes,
+) -> Iterable[_CapturedArtifact]:
+    yield _CapturedArtifact("stdout", "stdout", stdout)
+    yield _CapturedArtifact("stderr", "stderr", stderr)
+    for path in sorted(output_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(output_dir).as_posix()
+        artifact_id = f"file:{_hash_bytes(relative.encode('utf-8'))}"
+        yield _CapturedArtifact("file_path", artifact_id, relative.encode("utf-8"))
+        try:
+            content = path.read_bytes()
+        except OSError:
+            content = b""
+        yield _CapturedArtifact("file", artifact_id, content)
+
+
+def _read_detector_payload(output_path: Path) -> Any:
+    if not output_path.exists():
+        return {"spans": [], "timings": []}
+    try:
+        return json.loads(output_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"spans": [], "timings": []}
+
+
+def _extract_detector_spans(payload: Any) -> Sequence[Any]:
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, Mapping):
+        for key in ("spans", "predictions", "entities"):
+            value = payload.get(key)
+            if isinstance(value, Sequence) and not isinstance(
+                value,
+                (str, bytes, bytearray),
+            ):
+                return value
+    return ()
+
+
+def _extract_timing_records(
+    payload: Any,
+    *,
+    fixture_id: str,
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    if isinstance(payload, Mapping):
+        for key in ("timings", "timing_records", "span_timings"):
+            value = payload.get(key)
+            if isinstance(value, Sequence) and not isinstance(
+                value,
+                (str, bytes, bytearray),
+            ):
+                records.extend(_timing_record(item, fixture_id) for item in value)
+    for span in _extract_detector_spans(payload):
+        data = span if isinstance(span, Mapping) else vars(span)
+        metadata = data.get("metadata") if isinstance(data, Mapping) else None
+        if not isinstance(metadata, Mapping) or "duration_ms" not in metadata:
+            continue
+        records.append(
+            _timing_record(
+                {
+                    "start": data.get("start"),
+                    "end": data.get("end"),
+                    "duration_ms": metadata.get("duration_ms"),
+                },
+                fixture_id,
+            )
+        )
+    return [record for record in records if record]
+
+
+def _timing_record(value: Any, fixture_id: str) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    record = {
+        "fixture_id": fixture_id,
+        "start": value.get("start"),
+        "end": value.get("end"),
+        "duration_ms": value.get("duration_ms", value.get("elapsed_ms")),
+    }
+    if value.get("label") is not None:
+        record["label"] = str(value["label"])
+    return record
+
+
+def _read_sandbox_violations(
+    violation_log: Path,
+    fixture_id: str,
+) -> Iterable[SandboxViolation]:
+    if not violation_log.exists():
+        return ()
+    violations: list[SandboxViolation] = []
+    for line in violation_log.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, Mapping):
+            continue
+        violations.append(
+            SandboxViolation(
+                fixture_id=fixture_id,
+                kind=str(payload.get("kind") or "sandbox"),
+                event=str(payload.get("event") or ""),
+                operation=str(payload.get("operation") or "blocked"),
+                path_hash=(
+                    str(payload["path_hash"])
+                    if payload.get("path_hash") is not None
+                    else None
+                ),
+                detail=str(payload.get("detail") or ""),
+            )
+        )
+    return tuple(violations)
+
+
+def _scan_boundary_egress(
+    fixtures: Sequence[BenchmarkFixture],
+    runs: Sequence[_FederatedFixtureRun],
+) -> BoundaryLeakageResult:
+    surfaces = _gold_surfaces(fixtures)
+    total_phi_bytes = sum(len(surface["bytes"]) for surface in surfaces)
+    leaked_keys: set[tuple[str, int, int, str]] = set()
+    findings: list[BoundaryLeakageFinding] = []
+    emitted_by_sink: dict[str, int] = {}
+
+    for run in runs:
+        for artifact in run.artifacts:
+            emitted_by_sink[artifact.sink] = emitted_by_sink.get(
+                artifact.sink, 0
+            ) + len(artifact.content)
+            for surface in surfaces:
+                offsets = tuple(_find_all(artifact.content, surface["bytes"]))
+                if not offsets:
+                    continue
+                key = (
+                    str(surface["fixture_id"]),
+                    int(surface["start"]),
+                    int(surface["end"]),
+                    str(surface["label"]),
+                )
+                leaked_keys.add(key)
+                findings.append(
+                    BoundaryLeakageFinding(
+                        fixture_id=str(surface["fixture_id"]),
+                        sink=artifact.sink,
+                        artifact=artifact.artifact,
+                        start=int(surface["start"]),
+                        end=int(surface["end"]),
+                        label=str(surface["label"]),
+                        length=int(surface["length"]),
+                        text_hash=str(surface["text_hash"]),
+                        byte_offsets=offsets,
+                    )
+                )
+
+    leaked_bytes = sum(
+        len(surface["bytes"])
+        for surface in surfaces
+        if (
+            str(surface["fixture_id"]),
+            int(surface["start"]),
+            int(surface["end"]),
+            str(surface["label"]),
+        )
+        in leaked_keys
+    )
+    rate = leaked_bytes / total_phi_bytes if total_phi_bytes else 0.0
+    return BoundaryLeakageResult(
+        rate=rate,
+        leaked_bytes=leaked_bytes,
+        total_phi_bytes=total_phi_bytes,
+        findings=tuple(findings),
+        emitted_bytes_by_sink=emitted_by_sink,
+    )
+
+
+def _gold_surfaces(fixtures: Sequence[BenchmarkFixture]) -> list[dict[str, Any]]:
+    surfaces: list[dict[str, Any]] = []
+    seen: set[tuple[str, int, int, str]] = set()
+    for fixture in fixtures:
+        for span in fixture.gold_spans:
+            if not (0 <= span.start < span.end <= len(fixture.text)):
+                continue
+            surface = fixture.text[span.start : span.end]
+            if not surface:
+                continue
+            key = (fixture.fixture_id, span.start, span.end, span.label)
+            if key in seen:
+                continue
+            seen.add(key)
+            evidence = hashed_span_surface(
+                fixture.text,
+                span.start,
+                span.end,
+                label=span.label,
+            )
+            surfaces.append(
+                {
+                    "fixture_id": fixture.fixture_id,
+                    "label": span.label,
+                    "bytes": surface.encode("utf-8"),
+                    **evidence,
+                }
+            )
+    return surfaces
+
+
+def _find_all(content: bytes, needle: bytes) -> list[int]:
+    if not needle:
+        return []
+    offsets: list[int] = []
+    start = 0
+    while True:
+        index = content.find(needle, start)
+        if index < 0:
+            break
+        offsets.append(index)
+        start = index + max(len(needle), 1)
+    return offsets
+
+
+def _resource_accounting(runs: Sequence[_FederatedFixtureRun]) -> dict[str, Any]:
+    return {
+        "process_count": len(runs),
+        "total_elapsed_ms": sum(run.elapsed_ms for run in runs),
+        "max_fixture_elapsed_ms": max((run.elapsed_ms for run in runs), default=0.0),
+        "exit_codes": [run.exit_code for run in runs],
+        "stdout_bytes": sum(
+            len(artifact.content)
+            for run in runs
+            for artifact in run.artifacts
+            if artifact.sink == "stdout"
+        ),
+        "stderr_bytes": sum(
+            len(artifact.content)
+            for run in runs
+            for artifact in run.artifacts
+            if artifact.sink == "stderr"
+        ),
+        "file_bytes": sum(
+            len(artifact.content)
+            for run in runs
+            for artifact in run.artifacts
+            if artifact.sink == "file"
+        ),
+    }
+
+
+def _bytes_output(value: Any) -> bytes:
+    if value is None:
+        return b""
+    if isinstance(value, bytes):
+        return value
+    return str(value).encode("utf-8", errors="replace")
+
+
+def _path_list(paths: Iterable[str | Path]) -> str:
+    return os.pathsep.join(str(Path(path).expanduser().resolve()) for path in paths)
+
+
+def _path_hash(path: str | Path) -> str:
+    return _hash_bytes(str(Path(path).expanduser().resolve()).encode("utf-8"))
+
+
+def _hash_bytes(value: bytes) -> str:
+    return f"sha256:{hashlib.sha256(value).hexdigest()}"
+
+
+def _slug_fixture_id(value: str) -> str:
+    safe = "".join(char if char.isalnum() or char in "-_" else "_" for char in value)
+    return safe[:80] or "fixture"
+
+
+_FEDERATED_CHILD_WRAPPER = r"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import runpy
+import sys
+from pathlib import Path
+
+detector_path = str(Path(sys.argv[1]).resolve())
+input_path = str(Path(sys.argv[2]).resolve())
+output_path = str(Path(sys.argv[3]).resolve())
+output_dir = str(Path(sys.argv[4]).resolve())
+violation_log = str(Path(sys.argv[5]).resolve())
+extra_read_roots = [
+    str(Path(item).resolve())
+    for item in sys.argv[6].split(os.pathsep)
+    if item
+]
+violation_fd = os.open(
+    violation_log,
+    os.O_CREAT | os.O_WRONLY | os.O_APPEND,
+    0o600,
+)
+
+
+def _hash(value: str) -> str:
+    return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _record(
+    kind: str,
+    event: str,
+    operation: str,
+    path: object | None = None,
+    detail: str = "",
+) -> None:
+    payload = {
+        "kind": kind,
+        "event": event,
+        "operation": operation,
+        "detail": detail,
+    }
+    if path is not None:
+        payload["path_hash"] = _hash(str(Path(path).expanduser().resolve()))
+    os.write(
+        violation_fd,
+        (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode(
+            "utf-8"
+        ),
+    )
+
+
+def _roots(values: list[str]) -> list[str]:
+    roots: list[str] = []
+    for value in values:
+        if not value:
+            continue
+        try:
+            roots.append(str(Path(value).expanduser().resolve()))
+        except OSError:
+            continue
+    return roots
+
+
+READ_ROOTS = _roots(
+    [
+        detector_path,
+        str(Path(detector_path).parent),
+        input_path,
+        output_path,
+        output_dir,
+        sys.prefix,
+        sys.base_prefix,
+        sys.exec_prefix,
+        sys.base_exec_prefix,
+        *extra_read_roots,
+    ]
+)
+WRITE_ROOTS = _roots([output_dir])
+
+
+def _inside(path: object, roots: list[str]) -> bool:
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return True
+    try:
+        resolved = str(Path(path).expanduser().resolve())
+    except OSError:
+        resolved = os.path.abspath(os.fspath(path))
+    for root in roots:
+        try:
+            if os.path.commonpath([resolved, root]) == root:
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def _file_operation(mode: object, flags: object) -> str:
+    if isinstance(mode, str):
+        if any(marker in mode for marker in ("w", "a", "x", "+")):
+            return "write"
+        return "read"
+    if isinstance(flags, int):
+        write_mask = (
+            os.O_WRONLY
+            | os.O_RDWR
+            | os.O_CREAT
+            | os.O_TRUNC
+            | os.O_APPEND
+        )
+        if flags & write_mask:
+            return "write"
+    return "read"
+
+
+def _audit(event: str, args: tuple[object, ...]) -> None:
+    if event.startswith("socket"):
+        _record("network", event, "blocked")
+        raise PermissionError("OPENMED_SANDBOX_VIOLATION network")
+    if event in {
+        "subprocess.Popen",
+        "os.system",
+        "os.posix_spawn",
+        "os.spawn",
+        "os.fork",
+        "os.exec",
+    }:
+        _record("process", event, "blocked")
+        raise PermissionError("OPENMED_SANDBOX_VIOLATION process")
+    if event == "open" and args:
+        path = args[0]
+        operation = _file_operation(
+            args[1] if len(args) > 1 else None,
+            args[2] if len(args) > 2 else None,
+        )
+        roots = WRITE_ROOTS if operation == "write" else READ_ROOTS
+        if not _inside(path, roots):
+            _record("filesystem", event, operation, path)
+            raise PermissionError("OPENMED_SANDBOX_VIOLATION filesystem")
+    if event in {"os.remove", "os.unlink", "os.rmdir"} and args:
+        path = args[0]
+        if not _inside(path, WRITE_ROOTS):
+            _record("filesystem", event, "write", path)
+            raise PermissionError("OPENMED_SANDBOX_VIOLATION filesystem")
+    if event == "os.rename" and len(args) >= 2:
+        for path in args[:2]:
+            if not _inside(path, WRITE_ROOTS):
+                _record("filesystem", event, "write", path)
+                raise PermissionError("OPENMED_SANDBOX_VIOLATION filesystem")
+
+
+sys.addaudithook(_audit)
+os.environ["OPENMED_DETECTOR_INPUT"] = input_path
+os.environ["OPENMED_DETECTOR_OUTPUT"] = output_path
+os.environ["OPENMED_DETECTOR_OUTPUT_DIR"] = output_dir
+runpy.run_path(detector_path, run_name="__main__")
+""".lstrip()
+
+
 def _shared_default_model_runner() -> ModelRunner:
     shared_loader: Any | None = None
     accepts_loader = _runner_accepts_loader(default_model_runner)
@@ -574,12 +1487,48 @@ def _peak_rss_bytes() -> int | None:
     return rss * 1024
 
 
+def _plain(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _plain(value[key]) for key in sorted(value, key=str)}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
+
+
+def _canonical_json(data: Any) -> str:
+    return json.dumps(
+        data,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
+def _key_bytes(key: bytes | str) -> bytes:
+    if isinstance(key, bytes):
+        if not key:
+            raise ValueError("signing key must be non-empty")
+        return key
+    if isinstance(key, str):
+        if not key:
+            raise ValueError("signing key must be non-empty")
+        return key.encode("utf-8")
+    raise TypeError("signing key must be bytes or str")
+
+
 __all__ = [
     "ModelRunner",
     "BenchmarkFixture",
+    "BoundaryLeakageFinding",
+    "BoundaryLeakageResult",
+    "FederatedDetectorSpec",
+    "FederatedEvalReport",
     "FixtureResult",
+    "SandboxViolation",
     "load_fixtures",
     "default_model_runner",
+    "run_federated_leakage_eval",
     "run_benchmark",
     "run_suite",
 ]

@@ -49,7 +49,7 @@ def test_mcp_registers_all_tools_from_registry() -> None:
 
     expected = {spec.name for spec in TOOL_REGISTRY.latest_specs()}
     assert set(fake.tools) == expected
-    assert len(fake.tools) == 7
+    assert len(fake.tools) == len(expected)
 
     deidentify_signature = inspect.signature(fake.tools["openmed_deidentify"])
     assert list(deidentify_signature.parameters) == [

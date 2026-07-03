@@ -152,6 +152,47 @@ def test_preview_includes_abstention_advisory_details(tmp_path: Path) -> None:
     assert advisory.details["residual_risk"]["bootstrap"]["max"] == 0.0
 
 
+def test_preview_checks_adversarial_recall_under_attack(tmp_path: Path) -> None:
+    candidate = _candidate()
+    candidate["metrics"]["adversarial_robustness"] = {
+        "post_defense_leaked_chars_by_label": {"PERSON": 0, "ID_NUM": 0},
+        "post_defense_recall_under_attack_by_label": {
+            "PERSON": 0.995,
+            "ID_NUM": 0.995,
+        },
+        "recall_floor": 0.99,
+    }
+
+    report = release_gates.preview(
+        candidate,
+        baseline_path=tmp_path / "missing-baseline.json",
+    )
+
+    check = next(
+        item
+        for item in report.gate_results
+        if item.gate == "adversarial_recall_under_attack"
+    )
+    assert check.passed
+
+    candidate["metrics"]["adversarial_robustness"] = {
+        "post_defense_leaked_chars_by_label": {"PERSON": 1},
+        "post_defense_recall_under_attack_by_label": {"PERSON": 0.5},
+        "recall_floor": 0.99,
+    }
+    report = release_gates.preview(
+        candidate,
+        baseline_path=tmp_path / "missing-baseline.json",
+    )
+    check = next(
+        item
+        for item in report.gate_results
+        if item.gate == "adversarial_recall_under_attack"
+    )
+    assert not check.passed
+    assert check.details["direct_identifier_leaked_chars"] == {"PERSON": 1}
+
+
 def test_preview_lists_failing_gates_with_reasons(tmp_path: Path) -> None:
     report = release_gates.preview(
         _candidate(critical_leakage_count=1),
