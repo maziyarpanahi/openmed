@@ -20,8 +20,11 @@ export type PIILanguage =
   | "te"
   | "pt"
   | "ar"
+  | "he"
   | "ja"
-  | "tr";
+  | "tr"
+  | "id"
+  | "th";
 
 export type DeidentificationMethod =
   | "mask"
@@ -118,6 +121,30 @@ export interface ModelUnloadRequest {
   all?: boolean;
 }
 
+export interface SMARTBackendIngestionRequest {
+  fhir_base_url: string;
+  token_url: string;
+  client_id: string;
+  private_key_pem: string;
+  output_dir: string;
+  checkpoint_path?: string | null;
+  key_id?: string | null;
+  scope?: string;
+  export_path?: string;
+  max_inflight_downloads?: number;
+  poll_interval_seconds?: number;
+  request_timeout_seconds?: number;
+  policy?: string | null;
+  method?: DeidentificationMethod;
+  model_name?: string;
+  confidence_threshold?: number;
+  use_smart_merging?: boolean;
+  use_safety_sweep?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
 export interface EntityPrediction {
   text: string;
   label: string;
@@ -206,6 +233,43 @@ export interface ModelUnloadResponse {
   released?: Record<string, number>;
   active_requests?: number;
   [key: string]: unknown;
+}
+
+export interface SMARTBackendFileResult {
+  index: number;
+  resource_type: string;
+  output_file: string;
+  expected_count?: number | null;
+  lines_processed: number;
+  resources_deidentified: number;
+  blank_lines: number;
+  error_count: number;
+  output_sha256: string;
+  resumed: boolean;
+}
+
+export interface SMARTBackendIngestionSummary {
+  job_id: string;
+  status: string;
+  files_total: number;
+  files_completed: number;
+  resources_deidentified: number;
+  lines_processed: number;
+  error_count: number;
+  output_sha256: string;
+  max_inflight_downloads_observed: number;
+  started_at: number;
+  finished_at: number;
+  files: SMARTBackendFileResult[];
+}
+
+export interface SMARTBackendJobStatus {
+  job_id: string;
+  status: string;
+  created_at: number;
+  updated_at: number;
+  summary: SMARTBackendIngestionSummary | null;
+  error: string | null;
 }
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
@@ -360,6 +424,31 @@ export class OpenMedClient {
     return this.post("/models/unload", request);
   }
 
+  async startSmartBackendIngestion(
+    request: SMARTBackendIngestionRequest,
+  ): Promise<SMARTBackendJobStatus> {
+    return this.post("/fhir/smart-backend/ingestions", request);
+  }
+
+  async smartBackendIngestionStatus(
+    jobId: string,
+  ): Promise<SMARTBackendJobStatus> {
+    return this.get(
+      smartBackendJobPath("/fhir/smart-backend/ingestions/{job_id}", jobId),
+    );
+  }
+
+  async smartBackendIngestionSummary(
+    jobId: string,
+  ): Promise<SMARTBackendIngestionSummary> {
+    return this.get(
+      smartBackendJobPath(
+        "/fhir/smart-backend/ingestions/{job_id}/summary",
+        jobId,
+      ),
+    );
+  }
+
   async createJob(request: DeidentifyJobRequest): Promise<JobResponse> {
     return this.post("/jobs", request);
   }
@@ -424,6 +513,10 @@ function headersToRecord(headers?: HeadersInit): Record<string, string> {
   }
 
   return { ...(headers as Record<string, string>) };
+}
+
+function smartBackendJobPath(template: string, jobId: string): string {
+  return template.replace("{job_id}", encodeURIComponent(jobId));
 }
 
 async function readPayload(response: Response): Promise<unknown> {
