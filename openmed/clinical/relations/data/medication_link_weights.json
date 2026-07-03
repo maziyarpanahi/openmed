@@ -1,0 +1,76 @@
+{
+  "schema": "openmed.medication_relation_weights",
+  "version": 1,
+  "relations": {
+    "drug_to_dose": {
+      "threshold": 0.4,
+      "weights": {
+        "bias": 1.2,
+        "same_sentence": 0.8,
+        "cross_sentence": -4.0,
+        "attribute_after_head": 0.45,
+        "attribute_before_head": -0.8,
+        "token_distance": -0.09,
+        "intervening_span_count": -0.62,
+        "intervening_drug_count": -1.25,
+        "same_clause": 0.25,
+        "cross_clause": -0.5,
+        "known_same_section": 0.2,
+        "known_different_section": -2.0
+      }
+    },
+    "drug_to_route": {
+      "threshold": 0.35,
+      "weights": {
+        "bias": 1.1,
+        "same_sentence": 0.8,
+        "cross_sentence": -4.0,
+        "attribute_after_head": 0.4,
+        "attribute_before_head": -0.7,
+        "token_distance": -0.08,
+        "intervening_span_count": -0.58,
+        "intervening_drug_count": -1.2,
+        "same_clause": 0.25,
+        "cross_clause": -0.5,
+        "known_same_section": 0.2,
+        "known_different_section": -2.0
+      }
+    },
+    "drug_to_frequency": {
+      "threshold": 0.45,
+      "weights": {
+        "bias": 1.15,
+        "same_sentence": 0.8,
+        "cross_sentence": -4.0,
+        "attribute_after_head": 0.38,
+        "attribute_before_head": -0.85,
+        "token_distance": -0.075,
+        "intervening_span_count": -0.54,
+        "intervening_drug_count": -1.35,
+        "same_clause": 0.25,
+        "cross_clause": -0.55,
+        "known_same_section": 0.2,
+        "known_different_section": -2.0,
+        "recognized_normalization": 0.25
+      }
+    },
+    "drug_to_duration": {
+      "threshold": 0.5,
+      "weights": {
+        "bias": 0.95,
+        "same_sentence": 0.8,
+        "cross_sentence": -4.0,
+        "attribute_after_head": 0.35,
+        "attribute_before_head": -0.9,
+        "token_distance": -0.065,
+        "intervening_span_count": -0.5,
+        "intervening_drug_count": -1.4,
+        "same_clause": 0.2,
+        "cross_clause": -0.7,
+        "known_same_section": 0.2,
+        "known_different_section": -2.0,
+        "recognized_normalization": 0.3
+      }
+    }
+  }
+}
