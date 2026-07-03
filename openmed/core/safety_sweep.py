@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
@@ -48,13 +49,13 @@ def _overlaps(start: int, end: int, spans: Sequence[Any]) -> bool:
     return False
 
 
-def _patterns_for_language(lang: str) -> list[PIIPattern]:
-    if lang == "en":
+def _patterns_for_language(lang: str, locale: str | None = None) -> list[PIIPattern]:
+    if lang == "en" and locale is None:
         return list(PII_PATTERNS)
 
     from .pii_i18n import get_patterns_for_language
 
-    return list(get_patterns_for_language(lang))
+    return list(get_patterns_for_language(lang, locale=locale))
 
 
 def _validated(pattern: PIIPattern, text: str) -> bool:
@@ -149,6 +150,7 @@ def safety_sweep(
     spans: Sequence[Any],
     *,
     lang: str = "en",
+    locale: str | None = None,
     patterns: Sequence[PIIPattern] | None = None,
 ) -> list[Any]:
     """Add deterministic structured identifier spans not covered by ML spans.
@@ -162,7 +164,9 @@ def safety_sweep(
     selected: list[_Candidate] = []
     active_spans: list[Any] = list(existing)
     sweep_patterns = (
-        list(patterns) if patterns is not None else _patterns_for_language(lang)
+        list(patterns)
+        if patterns is not None
+        else _patterns_for_language(lang, locale=locale)
     )
 
     for candidate in _collect_candidates(text, sweep_patterns):
@@ -192,8 +196,35 @@ def safety_sweep(
     return resolve_overlapping_entities(ordered)
 
 
+def hashed_span_surface(
+    text: str,
+    start: int,
+    end: int,
+    *,
+    label: str | None = None,
+) -> dict[str, Any]:
+    """Return offset-keyed, raw-text-free evidence for a sensitive span."""
+    bounded_start = max(0, min(int(start), len(text)))
+    bounded_end = max(bounded_start, min(int(end), len(text)))
+    surface = text[bounded_start:bounded_end]
+    payload: dict[str, Any] = {
+        "start": bounded_start,
+        "end": bounded_end,
+        "length": len(surface),
+        "text_hash": _hash_surface(surface),
+    }
+    if label is not None:
+        payload["label"] = str(label)
+    return payload
+
+
+def _hash_surface(surface: str) -> str:
+    return f"sha256:{hashlib.sha256(surface.encode('utf-8')).hexdigest()}"
+
+
 __all__ = [
     "SAFETY_SWEEP_PATTERNS_VERSION",
     "SAFETY_SWEEP_SOURCE",
+    "hashed_span_surface",
     "safety_sweep",
 ]

@@ -10,9 +10,11 @@ import pytest
 from openmed.cli import main_module
 from openmed.core.audit import AuditReport
 from openmed.core.pii import deidentify
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.calibrate import (
     build_thresholds_payload,
     fit_calibration_thresholds,
+    fit_calibration_under_shift,
     load_calibration_thresholds,
     write_calibration_artifacts,
 )
@@ -50,6 +52,52 @@ def _samples() -> list[dict[str, object]]:
             "target": False,
         },
     ]
+
+
+def _shifted_critical_samples() -> tuple[
+    list[dict[str, object]], list[dict[str, object]]
+]:
+    calibration: list[dict[str, object]] = []
+    gate: list[dict[str, object]] = []
+    for language in sorted(SUPPORTED_LANGUAGES):
+        for index in range(12):
+            calibration.append(
+                {
+                    "model_id": "unit-model",
+                    "label": "SSN",
+                    "language": language,
+                    "score": 0.86 + 0.01 * (index % 4),
+                    "target": True,
+                }
+            )
+            calibration.append(
+                {
+                    "model_id": "unit-model",
+                    "label": "SSN",
+                    "language": language,
+                    "score": 0.10 + 0.01 * (index % 3),
+                    "target": False,
+                }
+            )
+            gate.append(
+                {
+                    "model_id": "unit-model",
+                    "label": "SSN",
+                    "language": language,
+                    "score": 0.66 + 0.01 * (index % 4),
+                    "target": True,
+                }
+            )
+            gate.append(
+                {
+                    "model_id": "unit-model",
+                    "label": "SSN",
+                    "language": language,
+                    "score": 0.08 + 0.01 * (index % 3),
+                    "target": False,
+                }
+            )
+    return calibration, gate
 
 
 def test_fit_thresholds_are_monotonic_and_target_leakage_first() -> None:
@@ -125,6 +173,8 @@ def test_threshold_artifact_round_trip_and_report_fields(tmp_path: Path) -> None
 
     assert paths.thresholds_path.exists()
     assert paths.report_path.exists()
+    assert paths.under_shift_report_path is not None
+    assert paths.under_shift_report_path.exists()
 
     thresholds = load_calibration_thresholds(paths.thresholds_path)
     assert thresholds.lookup("PERSON", "en", model_id="unit-model") == pytest.approx(
@@ -143,6 +193,93 @@ def test_threshold_artifact_round_trip_and_report_fields(tmp_path: Path) -> None
     }.issubset(group)
 
 
+def test_conformal_calibration_preserves_shifted_critical_coverage() -> None:
+    calibration, gate = _shifted_critical_samples()
+
+    report = fit_calibration_under_shift(
+        calibration,
+        gate_samples=gate,
+        model_id="unit-model",
+        suite="synthetic-shift",
+        alpha=0.10,
+        generated_at="2026-06-15T00:00:00+00:00",
+    )
+
+    assert report.temperature.post_scaling_ece <= report.temperature.pre_scaling_ece
+    assert set(report.language_coverage) == {
+        lang.lower() for lang in SUPPORTED_LANGUAGES
+    }
+    assert all(
+        group.positive_coverage + 0.01 >= group.target_coverage
+        for group in report.groups
+        if group.critical_label
+    )
+    assert all(row["coverage_gap"] <= 0.01 for row in report.language_coverage.values())
+
+
+def test_conformal_payload_is_byte_stable_and_loadable(tmp_path: Path) -> None:
+    calibration, gate = _shifted_critical_samples()
+    kwargs = {
+        "model_id": "unit-model",
+        "suite": "synthetic-shift",
+        "target_leakage": 0.0,
+        "min_recall": 1.0,
+        "conformal_alpha": 0.10,
+        "gate_samples": gate,
+        "generated_at": "2026-06-15T00:00:00+00:00",
+    }
+
+    first = build_thresholds_payload(fit_calibration_thresholds(calibration, **kwargs))
+    second = build_thresholds_payload(fit_calibration_thresholds(calibration, **kwargs))
+
+    assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+    assert "conformal_quantiles" in first
+    thresholds = load_calibration_thresholds(_write_threshold_payload(first, tmp_path))
+    band = thresholds.conformal_band("SSN", "en", model_id="unit-model")
+    assert band is not None
+    assert band["target_coverage"] == pytest.approx(0.90)
+
+
+def test_membership_defense_round_trips_in_calibration_artifact(
+    tmp_path: Path,
+) -> None:
+    paths = write_calibration_artifacts(
+        [
+            {
+                "model_id": "unit-model",
+                "label": "NAME",
+                "language": "en",
+                "score": 0.95,
+                "target": True,
+            }
+        ],
+        artifact_dir=tmp_path,
+        model_id="unit-model",
+        suite="golden",
+        target_leakage=0.0,
+        min_recall=1.0,
+        membership_defense={
+            "enabled": True,
+            "clip_min": 0.5,
+            "clip_max": 0.5,
+            "advantage_ceiling": 0.05,
+        },
+    )
+
+    thresholds = load_calibration_thresholds(paths.thresholds_path)
+    policy = thresholds.membership_defense_policy
+    payload = json.loads(paths.thresholds_path.read_text(encoding="utf-8"))
+    report_payload = json.loads(paths.report_path.read_text(encoding="utf-8"))
+
+    assert policy.enabled is True
+    assert policy.apply_score(0.99) == pytest.approx(0.5)
+    assert thresholds.lookup("PERSON", "en", model_id="unit-model") == pytest.approx(
+        0.5
+    )
+    assert payload["membership_defense"]["enabled"] is True
+    assert report_payload["groups"][0]["recall"] >= report_payload["min_recall"]
+
+
 def test_calibrate_cli_writes_default_golden_artifacts(tmp_path: Path) -> None:
     result = main_module.main(
         [
@@ -159,6 +296,13 @@ def test_calibrate_cli_writes_default_golden_artifacts(tmp_path: Path) -> None:
     assert result == 0
     assert (tmp_path / "thresholds.json").is_file()
     assert (tmp_path / "calibration_report.json").is_file()
+    assert (tmp_path / "calibration_under_shift_report.json").is_file()
+
+
+def _write_threshold_payload(payload: dict[str, object], tmp_path: Path) -> Path:
+    path = tmp_path / "thresholds.json"
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+    return path
 
 
 def test_inference_loads_thresholds_and_records_active_audit_threshold(
@@ -226,3 +370,76 @@ def test_inference_loads_thresholds_and_records_active_audit_threshold(
     assert report.thresholds["PERSON"] == pytest.approx(0.91)
     assert [span.label for span in report.spans] == ["NAME"]
     assert report.spans[0].threshold == pytest.approx(0.91)
+
+
+def test_membership_defense_applies_at_calibrated_inference_without_recall_drop(
+    tmp_path: Path,
+) -> None:
+    threshold_payload = build_thresholds_payload(
+        fit_calibration_thresholds(
+            [
+                {
+                    "model_id": "unit-model",
+                    "label": "NAME",
+                    "language": "en",
+                    "score": 0.95,
+                    "target": True,
+                }
+            ],
+            model_id="unit-model",
+            suite="golden",
+            target_leakage=0.0,
+            min_recall=1.0,
+            membership_defense={
+                "enabled": True,
+                "clip_min": 0.5,
+                "clip_max": 0.5,
+                "advantage_ceiling": 0.05,
+            },
+        )
+    )
+    threshold_path = tmp_path / "thresholds.json"
+    threshold_path.write_text(
+        json.dumps(threshold_payload, indent=2),
+        encoding="utf-8",
+    )
+
+    text = "Patient John Doe and Jane Roe."
+
+    def _prediction(*args: object, **kwargs: object) -> PredictionResult:
+        return PredictionResult(
+            text=text,
+            entities=[
+                EntityPrediction(
+                    text="John Doe",
+                    label="NAME",
+                    start=text.index("John Doe"),
+                    end=text.index("John Doe") + len("John Doe"),
+                    confidence=0.99,
+                ),
+                EntityPrediction(
+                    text="Jane Roe",
+                    label="NAME",
+                    start=text.index("Jane Roe"),
+                    end=text.index("Jane Roe") + len("Jane Roe"),
+                    confidence=0.80,
+                ),
+            ],
+            model_name="unit-model",
+            timestamp=datetime.now().isoformat(),
+        )
+
+    with patch("openmed.core.pii.extract_pii", side_effect=_prediction):
+        report = deidentify(
+            text,
+            model_name="unit-model",
+            confidence_threshold=0.1,
+            use_safety_sweep=False,
+            calibration_thresholds_path=threshold_path,
+            audit=True,
+        )
+
+    assert isinstance(report, AuditReport)
+    assert report.thresholds["PERSON"] == pytest.approx(0.5)
+    assert [span.label for span in report.spans] == ["NAME", "NAME"]
+    assert [span.confidence for span in report.spans] == pytest.approx([0.5, 0.5])

@@ -9,11 +9,16 @@ from typing import Literal, cast
 
 from .context import (
     AFFIRMED,
+    CERTAIN,
+    CERTAINTY_VALUES,
     HISTORICAL,
     HYPOTHETICAL,
     NEGATION_VALUES,
+    PATIENT_EXPERIENCER,
     RECENT,
     TEMPORALITY_VALUES,
+    Certainty,
+    ClinicalAssertion,
     Negation,
 )
 
@@ -35,7 +40,7 @@ PROBLEM_LIST_RECONCILIATION_ADVISORY = (
 
 _WHITESPACE_RE = re.compile(r"\s+")
 
-_IdentityKey = tuple[Literal["code", "text"], str, str]
+_IdentityKey = tuple[Literal["code", "coref", "text"], str, str]
 
 
 @dataclass(frozen=True)
@@ -44,6 +49,8 @@ class ProblemMention:
 
     The helper consumes existing mention text and optional coded identity. It
     does not ground concepts, assign codes, or emit FHIR Condition resources.
+    When ``coref_entity_id`` is supplied by a document-level coreference layer,
+    it becomes the preferred deduplication key for that mention.
     """
 
     text: str
@@ -52,6 +59,9 @@ class ProblemMention:
     offset: SpanOffset | None = None
     negation: Negation = AFFIRMED
     temporality: str = RECENT
+    coref_entity_id: str | None = None
+    certainty: Certainty = CERTAIN
+    experiencer: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,7 @@ class ReconciledProblem:
     clinical_status: ProblemClinicalStatus
     mention_count: int
     source_offsets: tuple[SpanOffset, ...]
+    coref_entity_id: str | None = None
 
 
 def _clean_text(value: object) -> str:
@@ -127,6 +138,14 @@ def _mapping_offset(mapping: Mapping[str, object]) -> SpanOffset | None:
     return _validate_offset((start, end))
 
 
+def _mapping_coref_entity_id(mapping: Mapping[str, object]) -> str | None:
+    for key in ("coref_entity_id", "entity_id", "cluster_id"):
+        value = mapping.get(key)
+        if value is not None:
+            return _clean_optional_text(value)
+    return None
+
+
 def _normalize_negation(value: object) -> Negation:
     if value is None:
         return AFFIRMED
@@ -154,6 +173,28 @@ def _normalize_temporality(value: object) -> str:
     return normalized
 
 
+def _normalize_certainty(value: object) -> Certainty:
+    if value is None:
+        return CERTAIN
+    if not isinstance(value, str):
+        raise TypeError("problem mention certainty must be a string")
+    normalized = value.strip().casefold()
+    if normalized not in CERTAINTY_VALUES:
+        raise ValueError(
+            f"problem mention certainty must be one of {', '.join(CERTAINTY_VALUES)}"
+        )
+    return cast(Certainty, normalized)
+
+
+def _normalize_experiencer(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError("problem mention experiencer must be a string")
+    normalized = _WHITESPACE_RE.sub(" ", value.strip()).casefold()
+    return normalized or None
+
+
 def _coerce_mention(
     mention: ProblemMention | Mapping[str, object],
 ) -> ProblemMention:
@@ -165,6 +206,9 @@ def _coerce_mention(
             offset=_validate_offset(mention.offset),
             negation=_normalize_negation(mention.negation),
             temporality=_normalize_temporality(mention.temporality),
+            coref_entity_id=_clean_optional_text(mention.coref_entity_id),
+            certainty=_normalize_certainty(mention.certainty),
+            experiencer=_normalize_experiencer(mention.experiencer),
         )
 
     if isinstance(mention, Mapping):
@@ -175,12 +219,17 @@ def _coerce_mention(
             offset=_mapping_offset(mention),
             negation=_normalize_negation(mention.get("negation")),
             temporality=_normalize_temporality(mention.get("temporality")),
+            coref_entity_id=_mapping_coref_entity_id(mention),
+            certainty=_normalize_certainty(mention.get("certainty")),
+            experiencer=_normalize_experiencer(mention.get("experiencer")),
         )
 
     raise TypeError("problem mentions must be ProblemMention instances or mappings")
 
 
 def _identity_key(mention: ProblemMention) -> _IdentityKey:
+    if mention.coref_entity_id:
+        return ("coref", mention.coref_entity_id, "")
     if mention.system and mention.code:
         return (
             "code",
@@ -190,15 +239,69 @@ def _identity_key(mention: ProblemMention) -> _IdentityKey:
     return ("text", _normalize_text(mention.text), "")
 
 
-def _reconcile_status(mentions: Iterable[ProblemMention]) -> ProblemClinicalStatus:
-    affirmed_mentions = [
-        mention for mention in mentions if mention.negation == AFFIRMED
-    ]
-    if any(mention.temporality == RECENT for mention in affirmed_mentions):
+def clinical_status_from_assertion(
+    assertion: ClinicalAssertion | Mapping[str, object],
+) -> ProblemClinicalStatus:
+    """Map a reconciled clinical assertion to advisory problem-list status.
+
+    Negation refutes patient assertions. Uncertainty, hypothetical temporality,
+    and non-patient experiencers produce ``"unconfirmed"`` because they are not
+    patient conditions asserted as present. Recent affirmed assertions map to
+    ``"active"`` and historical affirmed assertions map to ``"inactive"``.
+    """
+
+    if isinstance(assertion, ClinicalAssertion):
+        normalized = ClinicalAssertion(
+            temporality=_normalize_temporality(assertion.temporality),
+            certainty=_normalize_certainty(assertion.certainty),
+            negation=_normalize_negation(assertion.negation),
+            experiencer=_normalize_experiencer(assertion.experiencer),
+        )
+    elif isinstance(assertion, Mapping):
+        normalized = ClinicalAssertion(
+            temporality=_normalize_temporality(assertion.get("temporality")),
+            certainty=_normalize_certainty(assertion.get("certainty")),
+            negation=_normalize_negation(assertion.get("negation")),
+            experiencer=_normalize_experiencer(assertion.get("experiencer")),
+        )
+    else:
+        raise TypeError("assertion must be a ClinicalAssertion or mapping")
+
+    if (
+        normalized.experiencer is not None
+        and normalized.experiencer != PATIENT_EXPERIENCER
+    ):
+        return UNCONFIRMED
+    if normalized.negation != AFFIRMED:
+        return REFUTED
+    if normalized.certainty != CERTAIN:
+        return UNCONFIRMED
+    if normalized.temporality == RECENT:
         return ACTIVE
-    if any(mention.temporality == HISTORICAL for mention in affirmed_mentions):
+    if normalized.temporality == HISTORICAL:
         return INACTIVE
-    if any(mention.temporality == HYPOTHETICAL for mention in affirmed_mentions):
+    if normalized.temporality == HYPOTHETICAL:
+        return UNCONFIRMED
+    return UNCONFIRMED
+
+
+def _reconcile_status(mentions: Iterable[ProblemMention]) -> ProblemClinicalStatus:
+    statuses = [
+        clinical_status_from_assertion(
+            ClinicalAssertion(
+                temporality=mention.temporality,
+                certainty=mention.certainty,
+                negation=mention.negation,
+                experiencer=mention.experiencer,
+            )
+        )
+        for mention in mentions
+    ]
+    if ACTIVE in statuses:
+        return ACTIVE
+    if INACTIVE in statuses:
+        return INACTIVE
+    if UNCONFIRMED in statuses:
         return UNCONFIRMED
     return REFUTED
 
@@ -209,17 +312,17 @@ def deduplicate_problem_list(
     """Collapse candidate problem mentions into reconciled problem entries.
 
     Group identity is deterministic and intentionally conservative: mentions
-    with both ``system`` and ``code`` are grouped by that coded identity, while
-    mentions without a complete coded identity fall back to normalized text
-    with whitespace collapsed and casing folded. This does not infer that an
-    uncoded text mention is the same concept as a coded mention.
+    with a ``coref_entity_id`` are grouped by that document-level entity,
+    mentions with both ``system`` and ``code`` are grouped by coded identity,
+    and mentions without either signal fall back to normalized text with
+    whitespace collapsed and casing folded. This does not infer that an uncoded
+    text mention is the same concept as a coded mention.
 
     Clinical status reconciliation is an advisory heuristic with explicit
-    precedence. Negated mentions always contribute provenance and counts, but
-    only all-negated groups reconcile to ``"refuted"``. Otherwise, affirmed
-    ``"recent"`` mentions win as ``"active"``, followed by affirmed
-    ``"historical"`` as ``"inactive"``, then affirmed ``"hypothetical"`` as
-    ``"unconfirmed"``.
+    precedence. Mentions are first mapped through
+    ``clinical_status_from_assertion`` so reconciled negation, temporality,
+    certainty, and experiencer axes drive status. ``"active"`` wins over
+    ``"inactive"``, then ``"unconfirmed"``, then ``"refuted"``.
 
     Groups are emitted in first-seen input order, and source offsets are
     preserved in contributing mention order.
@@ -228,6 +331,10 @@ def deduplicate_problem_list(
         mentions: Candidate problem mentions as ``ProblemMention`` instances
             or mappings with text-like fields and optional ``system``, ``code``,
             ``offset`` or ``start``/``end``, ``negation``, and ``temporality``.
+            ``coref_entity_id``/``entity_id``/``cluster_id`` may be supplied to
+            deduplicate by document-level coreference.
+            ``certainty`` and ``experiencer`` may also be supplied when the
+            mention already carries reconciled assertion axes.
 
     Returns:
         A deterministic list of deduplicated problem entries with reconciled
@@ -250,6 +357,7 @@ def deduplicate_problem_list(
         group = groups[key]
         first = group[0]
         has_code_identity = key[0] == "code"
+        has_coref_identity = key[0] == "coref"
         reconciled.append(
             ReconciledProblem(
                 text=first.text,
@@ -261,6 +369,7 @@ def deduplicate_problem_list(
                 source_offsets=tuple(
                     mention.offset for mention in group if mention.offset is not None
                 ),
+                coref_entity_id=first.coref_entity_id if has_coref_identity else None,
             )
         )
 
@@ -278,5 +387,6 @@ __all__ = [
     "ReconciledProblem",
     "SpanOffset",
     "UNCONFIRMED",
+    "clinical_status_from_assertion",
     "deduplicate_problem_list",
 ]

@@ -64,11 +64,15 @@ from .core.streaming import (
     deidentify_stream,
 )
 from .core.surrogate_vault import (
+    ENCRYPTION_SCHEME,
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
     SurrogateEntry,
     SurrogateKey,
+    SurrogateSource,
     SurrogateVault,
+    VaultConsistencyReport,
+    VaultRotationResult,
 )
 from .mlx.lm import OpenMedMLXLanguageModel, generate_text
 from .processing import (
@@ -89,7 +93,14 @@ from .processing import (
     redact_dataset,
 )
 from .processing import sentences as sentence_utils
-from .processing.advanced_ner import AdvancedNERProcessor, create_advanced_processor
+from .processing.advanced_ner import (
+    AdvancedNERProcessor,
+    StreamingReplayResult,
+    StreamingTokenClassifier,
+    create_advanced_processor,
+    replay_token_classifier,
+    stream_token_classifier,
+)
 from .processing.outputs import PredictionResult
 from .utils import (
     Profiler,
@@ -634,6 +645,8 @@ __all__ = [
     "process_batch",
     "redact_dataset",
     "AdvancedNERProcessor",
+    "StreamingReplayResult",
+    "StreamingTokenClassifier",
     "create_advanced_processor",
     "AnalyzeResult",
     "PredictionResult",
@@ -679,6 +692,8 @@ __all__ = [
     "StreamingDeidentificationEvent",
     "StreamingDeidentifier",
     "deidentify_stream",
+    "replay_token_classifier",
+    "stream_token_classifier",
     "redaction_preview",
     "render_redaction_preview",
     # PII entity merging utilities
@@ -704,6 +719,10 @@ __all__ = [
     "SurrogateVault",
     "SurrogateKey",
     "SurrogateEntry",
+    "SurrogateSource",
+    "VaultConsistencyReport",
+    "VaultRotationResult",
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
+    "ENCRYPTION_SCHEME",
 ]

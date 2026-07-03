@@ -9,6 +9,11 @@ from importlib import import_module as _import_module
 from pathlib import Path
 from typing import Any
 
+from openmed.interop.function_tools import (
+    RuntimeProvider,
+    create_tool_callable,
+    registry_tool_specs,
+)
 from openmed.mcp.tool_registry import render_langchain_tool_definitions
 
 Deidentifier = Callable[..., Any]
@@ -222,6 +227,56 @@ def create_tool_definitions() -> tuple[dict[str, Any], ...]:
     return render_langchain_tool_definitions()
 
 
+def get_langchain_tools(
+    *,
+    runtime_provider: RuntimeProvider | None = None,
+) -> tuple[Any, ...]:
+    """Return LangChain ``StructuredTool`` objects for every registry tool."""
+
+    structured_tool = _load_structured_tool()
+    return tuple(
+        _structured_tool_from_spec(structured_tool, spec, runtime_provider)
+        for spec in registry_tool_specs()
+    )
+
+
+def _structured_tool_from_spec(
+    structured_tool: Any,
+    spec: Any,
+    runtime_provider: RuntimeProvider | None,
+) -> Any:
+    func = create_tool_callable(spec, runtime_provider=runtime_provider)
+    try:
+        return structured_tool.from_function(
+            func=func,
+            name=spec.name,
+            description=spec.description,
+        )
+    except TypeError:
+        return structured_tool.from_function(
+            func,
+            name=spec.name,
+            description=spec.description,
+        )
+
+
+def _load_structured_tool() -> Any:
+    try:
+        module = _import_module("langchain_core.tools")
+    except ImportError as exc:
+        raise ImportError(
+            "LangChain tools require the 'langchain' extra. "
+            "Install with `pip install openmed[langchain]`."
+        ) from exc
+
+    try:
+        return module.StructuredTool
+    except AttributeError as exc:
+        raise ImportError(
+            "LangChain tools require langchain-core with StructuredTool."
+        ) from exc
+
+
 def _load_runnable_lambda() -> Any:
     try:
         module = _import_module("langchain_core.runnables")
@@ -250,4 +305,5 @@ __all__ = [
     "create_tool_definitions",
     "create_redaction_runnable",
     "create_redaction_transform",
+    "get_langchain_tools",
 ]

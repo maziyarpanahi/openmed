@@ -25,6 +25,8 @@ class ModelCatalogTest {
                 paramCount = 33_000_000,
                 languages = listOf("en", "es"),
                 license = "apache-2.0",
+                reproducibilityHash =
+                    "sha256:1111111111111111111111111111111111111111111111111111111111111111",
             ),
             catalog.byRepoId("OpenMed/tiny-onnx"),
         )
@@ -82,9 +84,9 @@ class ModelCatalogTest {
 
     private companion object {
         private val SAMPLE_CATALOG = """
-            {"repo_id":"OpenMed/tiny-onnx","formats":["onnx","onnx-int8"],"tier":"tiny","param_count":33000000,"languages":["en","es"],"license":"apache-2.0"}
-            {"repo_id":"OpenMed/base-tflite","formats":["tflite-int8"],"tier":"base","param_count":125000000,"languages":["fr"],"license":"mit"}
-            {"repo_id":"OpenMed/untiered-onnx","formats":["onnx"],"tier":null,"param_count":null,"languages":[],"license":"bsd-3-clause"}
+            {"repo_id":"OpenMed/tiny-onnx","formats":["onnx","onnx-int8"],"tier":"tiny","param_count":33000000,"languages":["en","es"],"license":"apache-2.0","reproducibility_hash":"sha256:1111111111111111111111111111111111111111111111111111111111111111"}
+            {"repo_id":"OpenMed/base-tflite","formats":["tflite-int8"],"tier":"base","param_count":125000000,"languages":["fr"],"license":"mit","reproducibility_hash":"sha256:2222222222222222222222222222222222222222222222222222222222222222"}
+            {"repo_id":"OpenMed/untiered-onnx","formats":["onnx"],"tier":null,"param_count":null,"languages":[],"license":"bsd-3-clause","reproducibility_hash":"sha256:3333333333333333333333333333333333333333333333333333333333333333"}
         """.trimIndent()
     }
 }

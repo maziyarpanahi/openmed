@@ -130,6 +130,38 @@ def _gate() -> ReleaseGate:
     return ReleaseGate(signing_key=SIGNING_KEY)
 
 
+def _conformal_report(*, coverage: float = 0.95) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "artifact_type": "openmed.calibration.under_shift",
+        "alpha": 0.05,
+        "target_coverage": 0.95,
+        "coverage_tolerance": 0.01,
+        "groups": [
+            {
+                "model_id": "unit-model",
+                "label": "SSN",
+                "language": "en",
+                "target_coverage": 0.95,
+                "positive_coverage": coverage,
+                "realized_coverage": coverage,
+                "positive_gate_weight": 100.0,
+                "total_gate_weight": 100.0,
+            }
+        ],
+        "language_coverage": {
+            "en": {
+                "slice_key": "en",
+                "target_coverage": 0.95,
+                "realized_coverage": coverage,
+                "coverage_gap": max(0.95 - coverage, 0.0),
+                "covered_weight": coverage * 100.0,
+                "total_weight": 100.0,
+            }
+        },
+    }
+
+
 def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
@@ -268,6 +300,25 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
 
 
+def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "calibration_under_shift": _conformal_report(coverage=0.80)
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "conformal_coverage")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["violations"]["SSN:en"]["coverage"] == pytest.approx(0.80)
+
+
 def test_g4_blocks_only_the_offending_quantized_format(tmp_path: Path) -> None:
     int8 = _gate().evaluate(
         _report(
@@ -358,6 +409,140 @@ def test_g7_blocks_recall_regression_and_residual_leakage(tmp_path: Path) -> Non
     assert "residual_leakage_regression" in check.details["violations"]
 
 
+def test_zero_shot_language_gate_quarantines_transfer_floor_breach(
+    tmp_path: Path,
+) -> None:
+    transfer_matrix = {
+        "schema_version": 1,
+        "artifact_type": "openmed.cross_lingual_transfer_matrix",
+        "languages": ["en", "fr"],
+        "leakage_floors": {"en": 0.10, "fr": 0.10},
+        "matrix": {
+            "en": {
+                "en": {
+                    "source_language": "en",
+                    "target_language": "en",
+                    "leakage_rate": 0.0,
+                    "leaked_chars": 0,
+                    "total_chars": 100,
+                    "zero_shot": False,
+                },
+                "fr": {
+                    "source_language": "en",
+                    "target_language": "fr",
+                    "leakage_rate": 0.25,
+                    "leaked_chars": 25,
+                    "total_chars": 100,
+                    "zero_shot": True,
+                },
+            },
+            "fr": {
+                "en": {
+                    "source_language": "fr",
+                    "target_language": "en",
+                    "leakage_rate": 0.0,
+                    "leaked_chars": 0,
+                    "total_chars": 100,
+                    "zero_shot": True,
+                },
+                "fr": {
+                    "source_language": "fr",
+                    "target_language": "fr",
+                    "leakage_rate": 0.0,
+                    "leaked_chars": 0,
+                    "total_chars": 100,
+                    "zero_shot": False,
+                },
+            },
+        },
+    }
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"cross_lingual_transfer": transfer_matrix},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9_zero_shot_language_leakage")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["violations"] == [
+        {
+            "source_language": "en",
+            "target_language": "fr",
+            "leakage_rate": 0.25,
+            "leakage_floor": 0.10,
+            "excess": 0.15,
+            "leaked_chars": 25,
+            "total_chars": 100,
+        }
+    ]
+
+
+def test_membership_leakage_gate_blocks_leaky_configuration(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "membership_leakage": {
+                    "attacker_auc": 0.91,
+                    "attacker_advantage": 0.35,
+                    "advantage_ceiling": 0.05,
+                    "feature_hash": "sha256:features",
+                    "per_label": {
+                        "PERSON": {
+                            "attacker_advantage": 0.35,
+                            "feature_hash": "sha256:person",
+                        }
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "membership_leakage")
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert "overall_advantage" in check.details["violations"]
+    assert "PERSON" in check.details["violations"]["per_label_advantage"]
+
+
+def test_membership_leakage_gate_passes_defended_configuration(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "membership_leakage": {
+                    "attacker_auc": 0.5,
+                    "attacker_advantage": 0.0,
+                    "advantage_ceiling": 0.05,
+                    "feature_hash": "sha256:features",
+                    "defense": {"enabled": True, "clip_min": 0.5, "clip_max": 0.5},
+                    "per_label": {
+                        "PERSON": {
+                            "attacker_advantage": 0.0,
+                            "feature_hash": "sha256:person",
+                        }
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "membership_leakage")
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["defense"]["enabled"] is True
+
+
 def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> None:
     calls = {"strict": 0}
     original = release_gates.quality_gates.validate_entity_spans_strict
@@ -377,6 +562,58 @@ def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> 
     assert result.decision == RELEASABLE
     assert calls == {"strict": 1}
     assert _check(result, "G8").details["spans_checked"] == 3
+
+
+def test_k_floor_release_gate_passes_signed_enforcement_evidence(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "kanon_enforcement": {
+                    "target_k": 2,
+                    "kanon": {"k": 2},
+                    "bounds": {
+                        "max_reidentification_upper_bound": 0.5,
+                        "numeric_self_check": {"passed": True},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert _check(result, "k_floor").passed is True
+
+
+def test_k_floor_release_gate_fails_realized_k_below_target(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "kanon_enforcement": {
+                    "target_k": 3,
+                    "kanon": {"k": 2},
+                    "bounds": {
+                        "max_reidentification_upper_bound": 0.5,
+                        "numeric_self_check": {"passed": False},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "k_floor")
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["violations"]["measured_k"] == {"observed": 2, "target": 3}
 
 
 def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
@@ -404,6 +641,67 @@ def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
     assert check.passed is False
     assert check.details["offending_labels"]["PERSON"]["limit"] == 0.005
     assert result.blocked_formats == ("mlx-8bit",)
+
+
+def test_coreml_manifest_residency_and_parity_gate_passes(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "format": "coreml-fp16",
+                "coreml_conversion_manifest": _coreml_manifest(),
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert _check(result, "CoreML-ANE").passed is True
+    assert _check(result, "CoreML-parity").passed is True
+
+
+def test_coreml_manifest_blocks_cpu_fallback(tmp_path: Path) -> None:
+    manifest = _coreml_manifest()
+    manifest["variants"][0]["residency"]["cpu_fallback_layers"] = [
+        {"name": "classifier", "compute_unit": "CPU"}
+    ]
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "format": "coreml-fp16",
+                "coreml_conversion_manifest": manifest,
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "CoreML-ANE")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.blocking_format == "coreml-fp16"
+
+
+def test_coreml_manifest_requires_int4_rejection_report(tmp_path: Path) -> None:
+    manifest = _coreml_manifest()
+    manifest["variants"][2]["parity"] = {"passed": False}
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "format": "coreml-fp16",
+                "coreml_conversion_manifest": manifest,
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "CoreML-parity")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert "coreml-int4" in check.details["failures"]
 
 
 def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> None:
@@ -442,3 +740,46 @@ def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> No
     assert result.decision == QUARANTINED
     assert check.passed is False
     assert check.details["mismatches"]["readme"]["models"]["readme_floor"] == 2
+
+
+def _coreml_manifest() -> dict[str, object]:
+    parity_pass = {
+        "passed": True,
+        "max_recall_delta": 0.0,
+        "span_mismatches": [],
+    }
+    return {
+        "format": "openmed-coreml",
+        "variants": [
+            {
+                "name": "coreml-fp16",
+                "precision": "float16",
+                "quantization": "none",
+                "ane_residency_percentage": 0.95,
+                "cpu_fallback_layers": [],
+                "residency": {
+                    "ane_residency_percentage": 0.95,
+                    "cpu_fallback_layers": [],
+                },
+                "parity": dict(parity_pass),
+            },
+            {
+                "name": "coreml-int8",
+                "precision": "float16",
+                "quantization": "int8",
+                "parity": dict(parity_pass),
+            },
+            {
+                "name": "coreml-int4",
+                "precision": "float16",
+                "quantization": "int4",
+                "parity": {
+                    "passed": False,
+                    "max_recall_delta": 0.01,
+                    "span_mismatches": [{"fixture_id": "stub"}],
+                    "auto_rejected": True,
+                    "rejection_reason": "recall delta exceeds limit",
+                },
+            },
+        ],
+    }
