@@ -143,6 +143,10 @@ kafka = [
   "confluent-kafka>=2.3",
 ]
 
+spark = [
+  "pyspark>=3.5,<4",
+]
+
 hf = [
   "transformers>=4.50",
   "huggingface-hub>=0.30",
