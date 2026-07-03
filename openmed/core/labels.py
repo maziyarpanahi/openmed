@@ -115,6 +115,13 @@ NUTRITION_TARGET: Final = "NUTRITION_TARGET"
 FEEDING_ROUTE: Final = "FEEDING_ROUTE"
 NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
 
+# Endocrinology concepts (issue #895)
+GLYCEMIC_MEASURE: Final = "GLYCEMIC_MEASURE"
+THYROID_MEASURE: Final = "THYROID_MEASURE"
+HORMONE_LEVEL: Final = "HORMONE_LEVEL"
+INSULIN_REGIMEN: Final = "INSULIN_REGIMEN"
+
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -201,6 +208,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         NUTRITION_TARGET,
         FEEDING_ROUTE,
         NUTRITIONAL_STATUS,
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
         OTHER,
     }
 )
@@ -379,6 +390,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Endocrinology concepts (issue #895)
+    GLYCEMIC_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    THYROID_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HORMONE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    INSULIN_REGIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -462,6 +478,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
     FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Endocrinology concepts
+    GLYCEMIC_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    THYROID_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    HORMONE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    INSULIN_REGIMEN: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -688,6 +709,29 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nutritiontarget": NUTRITION_TARGET,
     "feedingroute": FEEDING_ROUTE,
     "nutritionalstatus": NUTRITIONAL_STATUS,
+    # Endocrinology concepts
+    # Common model-emitted aliases; keys are normalized before lookup.
+    "glycemic": GLYCEMIC_MEASURE,
+    "glycemicmeasure": GLYCEMIC_MEASURE,
+    "glucose": GLYCEMIC_MEASURE,
+    "hba1c": GLYCEMIC_MEASURE,
+    "a1c": GLYCEMIC_MEASURE,
+    "thyroid": THYROID_MEASURE,
+    "thyroidmeasure": THYROID_MEASURE,
+    "thyroidfunctionmeasure": THYROID_MEASURE,
+    "tsh": THYROID_MEASURE,
+    "hormone": HORMONE_LEVEL,
+    "hormones": HORMONE_LEVEL,
+    "hormonelevel": HORMONE_LEVEL,
+    "cortisol": HORMONE_LEVEL,
+    "insulin": INSULIN_REGIMEN,
+    "insulinregimen": INSULIN_REGIMEN,
+    "basalbolus": INSULIN_REGIMEN,
+    "insulinpump": INSULIN_REGIMEN,
+    "glargine": INSULIN_REGIMEN,
+    # Domain labels backed by existing canonical clinical concepts.
+    "metabolicfinding": CONDITION,
+    "endocrinegland": BODY_SITE,
 }
 
 
@@ -902,5 +946,9 @@ __all__ = [
     "NUTRITION_TARGET",
     "FEEDING_ROUTE",
     "NUTRITIONAL_STATUS",
+    "GLYCEMIC_MEASURE",
+    "THYROID_MEASURE",
+    "HORMONE_LEVEL",
+    "INSULIN_REGIMEN",
     "OTHER",
 ]

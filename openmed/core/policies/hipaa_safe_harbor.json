@@ -86,6 +86,10 @@
     "NUTRITION_TARGET": "mask",
     "FEEDING_ROUTE": "mask",
     "NUTRITIONAL_STATUS": "mask",
+    "GLYCEMIC_MEASURE": "mask",
+    "THYROID_MEASURE": "mask",
+    "HORMONE_LEVEL": "mask",
+    "INSULIN_REGIMEN": "mask",
     "OTHER": "mask"
   }
 }

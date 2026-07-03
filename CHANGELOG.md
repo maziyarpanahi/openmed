@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an endocrinology zero-shot domain for glycemic and thyroid-function
+  measures, hormone levels, insulin regimens, metabolic findings, and endocrine
+  glands, with canonical label normalization, keyword routing metadata, and
+  synthetic fixture coverage (#895).
+
 ## [1.7.0] - 2026-07-01
 
 This release summarizes 148 pull requests merged into
