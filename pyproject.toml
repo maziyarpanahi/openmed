@@ -86,6 +86,10 @@ polars = [
   "polars>=0.20",
 ]
 
+columnar = [
+  "pyarrow>=16",
+]
+
 dask = [
   "dask[dataframe]>=2024.8",
 ]
