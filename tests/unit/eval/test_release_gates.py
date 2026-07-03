@@ -409,6 +409,78 @@ def test_g7_blocks_recall_regression_and_residual_leakage(tmp_path: Path) -> Non
     assert "residual_leakage_regression" in check.details["violations"]
 
 
+def test_zero_shot_language_gate_quarantines_transfer_floor_breach(
+    tmp_path: Path,
+) -> None:
+    transfer_matrix = {
+        "schema_version": 1,
+        "artifact_type": "openmed.cross_lingual_transfer_matrix",
+        "languages": ["en", "fr"],
+        "leakage_floors": {"en": 0.10, "fr": 0.10},
+        "matrix": {
+            "en": {
+                "en": {
+                    "source_language": "en",
+                    "target_language": "en",
+                    "leakage_rate": 0.0,
+                    "leaked_chars": 0,
+                    "total_chars": 100,
+                    "zero_shot": False,
+                },
+                "fr": {
+                    "source_language": "en",
+                    "target_language": "fr",
+                    "leakage_rate": 0.25,
+                    "leaked_chars": 25,
+                    "total_chars": 100,
+                    "zero_shot": True,
+                },
+            },
+            "fr": {
+                "en": {
+                    "source_language": "fr",
+                    "target_language": "en",
+                    "leakage_rate": 0.0,
+                    "leaked_chars": 0,
+                    "total_chars": 100,
+                    "zero_shot": True,
+                },
+                "fr": {
+                    "source_language": "fr",
+                    "target_language": "fr",
+                    "leakage_rate": 0.0,
+                    "leaked_chars": 0,
+                    "total_chars": 100,
+                    "zero_shot": False,
+                },
+            },
+        },
+    }
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"cross_lingual_transfer": transfer_matrix},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9_zero_shot_language_leakage")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["violations"] == [
+        {
+            "source_language": "en",
+            "target_language": "fr",
+            "leakage_rate": 0.25,
+            "leakage_floor": 0.10,
+            "excess": 0.15,
+            "leaked_chars": 25,
+            "total_chars": 100,
+        }
+    ]
+
+
 def test_membership_leakage_gate_blocks_leaky_configuration(tmp_path: Path) -> None:
     result = _gate().evaluate(
         _report(
