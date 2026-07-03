@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from datetime import datetime
@@ -193,6 +194,51 @@ def test_grpc_generated_stubs_are_current():
     )
 
     assert result.returncode == 0, result.stderr
+
+
+def test_grpc_generated_check_ignores_protobuf_patch_version(tmp_path: Path):
+    repo_root = Path(__file__).resolve().parents[3]
+    spec = importlib.util.spec_from_file_location(
+        "generate_grpc_stubs",
+        repo_root / "scripts" / "generate_grpc_stubs.py",
+    )
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    expected = tmp_path / "expected_pb2.py"
+    actual = tmp_path / "actual_pb2.py"
+    expected.write_text(
+        """# Protobuf Python Version: 6.33.5
+_runtime_version.ValidateProtobufRuntimeVersion(
+    _runtime_version.Domain.PUBLIC,
+    6,
+    33,
+    5,
+    '',
+    'openmed.proto'
+)
+DESCRIPTOR = b'same-proto'
+""",
+        encoding="utf-8",
+    )
+    actual.write_text(
+        """# Protobuf Python Version: 6.33.6
+_runtime_version.ValidateProtobufRuntimeVersion(
+    _runtime_version.Domain.PUBLIC,
+    6,
+    33,
+    6,
+    '',
+    'openmed.proto'
+)
+DESCRIPTOR = b'same-proto'
+""",
+        encoding="utf-8",
+    )
+
+    assert module._generated_files_match(expected, actual, "openmed_pb2.py")
 
 
 def _pii_entity_to_rest(entity) -> dict[str, Any]:
