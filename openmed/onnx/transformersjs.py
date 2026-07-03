@@ -17,6 +17,7 @@ DEFAULT_QUANTIZED_ONNX_FILENAME = "model_quantized.onnx"
 OPENMED_ONNX_MANIFEST_FILENAME = "openmed-onnx.json"
 CONTRACT_FILENAME = "transformersjs-contract.json"
 QUANTIZE_CONFIG_FILENAME = "quantize_config.json"
+MINIMUM_TOKEN_CLASSIFICATION_OPSET = 18
 
 EXPECTED_INPUT_NAMES = ("input_ids", "attention_mask")
 OPTIONAL_INPUT_NAMES = ("token_type_ids",)
@@ -73,6 +74,7 @@ def export_transformersjs_bundle(
     onnx_filename: str = DEFAULT_ONNX_FILENAME,
     quantize: bool = True,
     update_manifest: bool = True,
+    minimum_opset: int = MINIMUM_TOKEN_CLASSIFICATION_OPSET,
 ) -> TransformersJsBundleResult:
     """Emit a Transformers.js-compatible token-classification directory.
 
@@ -127,11 +129,14 @@ def export_transformersjs_bundle(
     quantize_config_path = bundle_dir / QUANTIZE_CONFIG_FILENAME
     _write_quantize_config(quantize_config_path, quantized=quantize)
 
-    contract = validate_transformersjs_contract(model_path)
+    contract = validate_transformersjs_contract(
+        model_path,
+        minimum_opset=minimum_opset,
+    )
     contract_path = bundle_dir / CONTRACT_FILENAME
     _write_json(contract_path, contract)
 
-    validate_transformersjs_bundle(bundle_dir)
+    validate_transformersjs_bundle(bundle_dir, minimum_opset=minimum_opset)
     manifest_path = (
         _update_openmed_onnx_manifest(source_dir, bundle_dir, quantized=quantize)
         if update_manifest
@@ -152,7 +157,11 @@ def export_transformersjs_bundle(
     )
 
 
-def validate_transformersjs_bundle(bundle_dir: str | Path) -> Mapping[str, Any]:
+def validate_transformersjs_bundle(
+    bundle_dir: str | Path,
+    *,
+    minimum_opset: int = MINIMUM_TOKEN_CLASSIFICATION_OPSET,
+) -> Mapping[str, Any]:
     """Validate bundle files, label metadata, and ONNX pipeline contract."""
 
     bundle_path = Path(bundle_dir)
@@ -165,7 +174,8 @@ def validate_transformersjs_bundle(bundle_dir: str | Path) -> Mapping[str, Any]:
     config = _read_json(bundle_path / "config.json")
     _normalize_id2label(config.get("id2label"))
     return validate_transformersjs_contract(
-        bundle_path / "onnx" / DEFAULT_ONNX_FILENAME
+        bundle_path / "onnx" / DEFAULT_ONNX_FILENAME,
+        minimum_opset=minimum_opset,
     )
 
 
@@ -176,10 +186,20 @@ def find_missing_bundle_files(bundle_dir: str | Path) -> list[str]:
     return [name for name in REQUIRED_BUNDLE_FILES if not (root / name).exists()]
 
 
-def validate_transformersjs_contract(model_path: str | Path) -> dict[str, Any]:
+def validate_transformersjs_contract(
+    model_path: str | Path,
+    *,
+    minimum_opset: int = MINIMUM_TOKEN_CLASSIFICATION_OPSET,
+) -> dict[str, Any]:
     """Validate ONNX tensor names and dynamic axes for token classification."""
 
     model = _load_onnx_model(Path(model_path))
+    model_opset = _default_domain_opset(model)
+    if model_opset is not None and model_opset < minimum_opset:
+        raise ValueError(
+            "Transformers.js token-classification ONNX model requires opset "
+            f">= {minimum_opset}; got {model_opset}"
+        )
     graph = model.graph
     initializer_names = {getattr(item, "name", "") for item in graph.initializer}
     graph_inputs = [
@@ -225,6 +245,8 @@ def validate_transformersjs_contract(model_path: str | Path) -> dict[str, Any]:
     return {
         "task": "token-classification",
         "format": TRANSFORMERSJS_FORMAT,
+        "minimum_opset": minimum_opset,
+        "model_opset": model_opset,
         "inputs": [
             _value_info_contract(input_by_name[name], ("batch", "sequence"))
             for name in ordered_input_names
@@ -275,6 +297,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         action="store_true",
         help="Do not update openmed-onnx.json in the source export directory.",
     )
+    parser.add_argument(
+        "--minimum-opset",
+        type=int,
+        default=MINIMUM_TOKEN_CLASSIFICATION_OPSET,
+        help="Minimum ONNX opset required for the bundle contract.",
+    )
     args = parser.parse_args(argv)
 
     result = export_transformersjs_bundle(
@@ -284,6 +312,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         config_source=args.config,
         quantize=not args.no_quantize,
         update_manifest=not args.no_manifest_update,
+        minimum_opset=args.minimum_opset,
     )
     print(result.output_dir)
 
@@ -386,6 +415,15 @@ def _load_onnx_model(path: Path) -> Any:
             "Install with: pip install openmed[onnx]"
         ) from exc
     return onnx.load(str(path))
+
+
+def _default_domain_opset(model: Any) -> int | None:
+    for item in getattr(model, "opset_import", []) or []:
+        domain = getattr(item, "domain", "")
+        if domain in {"", "ai.onnx"}:
+            version = getattr(item, "version", None)
+            return int(version) if version is not None else None
+    return None
 
 
 def _validate_axes(value_info: Any, axes: Sequence[str]) -> None:
