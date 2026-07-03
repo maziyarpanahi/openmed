@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "synthetic": true,
+  "cases": [
+    {
+      "id": "timeline-surgery-postop",
+      "reference_date": "2026-06-15",
+      "text": "Surgery was performed on 2026-06-01. On post-op day 2, fever resolved.",
+      "expected_events": [
+        {
+          "timex_text": "2026-06-01",
+          "normalized_value": "2026-06-01/2026-06-01"
+        },
+        {
+          "timex_text": "post-op day 2",
+          "normalized_value": "2026-06-03/2026-06-03"
+        }
+      ],
+      "expected_relations": [
+        {
+          "source": "2026-06-01",
+          "target": "post-op day 2",
+          "relation": "before"
+        }
+      ]
+    },
+    {
+      "id": "timeline-admission-since",
+      "reference_date": "2026-06-15",
+      "text": "Last admission was 3 weeks ago. Since last admission, dyspnea improved.",
+      "expected_events": [
+        {
+          "timex_text": "3 weeks ago",
+          "normalized_value": "2026-05-25/2026-05-25"
+        },
+        {
+          "timex_text": "Since last admission",
+          "normalized_value": "2026-05-25/2026-06-15"
+        }
+      ],
+      "expected_relations": [
+        {
+          "source": "3 weeks ago",
+          "target": "Since last admission",
+          "relation": "overlap"
+        }
+      ]
+    },
+    {
+      "id": "timeline-visit-chain",
+      "reference_date": "2026-06-15",
+      "text": "Clinic visit on March 5, 2026. Two days later, rash started.",
+      "expected_events": [
+        {
+          "timex_text": "March 5, 2026",
+          "normalized_value": "2026-03-05/2026-03-05"
+        },
+        {
+          "timex_text": "Two days later",
+          "normalized_value": "2026-03-07/2026-03-07"
+        }
+      ],
+      "expected_relations": [
+        {
+          "source": "March 5, 2026",
+          "target": "Two days later",
+          "relation": "before"
+        }
+      ]
+    },
+    {
+      "id": "timeline-history-duration",
+      "reference_date": "2026-06-15",
+      "text": "He reported a 3 week history of cough.",
+      "expected_events": [
+        {
+          "timex_text": "3 week history",
+          "normalized_value": "2026-05-25/2026-06-15"
+        }
+      ],
+      "expected_relations": []
+    },
+    {
+      "id": "timeline-future-follow-up",
+      "reference_date": "2026-06-15",
+      "text": "History of follow-up in 2 days was entered for scheduling.",
+      "expected_events": [
+        {
+          "timex_text": "in 2 days",
+          "normalized_value": "2026-06-17/2026-06-17"
+        }
+      ],
+      "expected_relations": []
+    }
+  ]
+}

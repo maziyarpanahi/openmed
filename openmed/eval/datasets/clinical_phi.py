@@ -248,7 +248,10 @@ def load_clinical_phi_manifest() -> ClinicalPHIDatasetManifest:
                 labels=_unique_labels(_G1A_LABELS + _G3_LABELS),
                 source_url="openmed/eval/golden/fixtures",
                 synthetic=True,
-                notes="Synthetic-only fixtures; no real PHI and no DUA content.",
+                notes=(
+                    "Synthetic-only fixtures, including mined hard negatives; "
+                    "no real PHI and no DUA content."
+                ),
             ),
             _dua_source("i2b2_eval_only", "i2b2"),
             _dua_source("n2c2_eval_only", "n2c2"),
