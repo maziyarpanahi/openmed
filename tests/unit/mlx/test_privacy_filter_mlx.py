@@ -12,8 +12,11 @@ import pytest
 
 def _module_importable(module_name: str) -> bool:
     try:
+        code = f"import {module_name}"
+        if module_name == "mlx.core":
+            code = "import mlx.core as mx; mx.array([0]).tolist()"
         completed = subprocess.run(
-            [sys.executable, "-c", f"import {module_name}"],
+            [sys.executable, "-c", code],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             timeout=10,
