@@ -409,6 +409,68 @@ def test_g7_blocks_recall_regression_and_residual_leakage(tmp_path: Path) -> Non
     assert "residual_leakage_regression" in check.details["violations"]
 
 
+def test_membership_leakage_gate_blocks_leaky_configuration(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "membership_leakage": {
+                    "attacker_auc": 0.91,
+                    "attacker_advantage": 0.35,
+                    "advantage_ceiling": 0.05,
+                    "feature_hash": "sha256:features",
+                    "per_label": {
+                        "PERSON": {
+                            "attacker_advantage": 0.35,
+                            "feature_hash": "sha256:person",
+                        }
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "membership_leakage")
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert "overall_advantage" in check.details["violations"]
+    assert "PERSON" in check.details["violations"]["per_label_advantage"]
+
+
+def test_membership_leakage_gate_passes_defended_configuration(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "membership_leakage": {
+                    "attacker_auc": 0.5,
+                    "attacker_advantage": 0.0,
+                    "advantage_ceiling": 0.05,
+                    "feature_hash": "sha256:features",
+                    "defense": {"enabled": True, "clip_min": 0.5, "clip_max": 0.5},
+                    "per_label": {
+                        "PERSON": {
+                            "attacker_advantage": 0.0,
+                            "feature_hash": "sha256:person",
+                        }
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "membership_leakage")
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is True
+    assert check.details["defense"]["enabled"] is True
+
+
 def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> None:
     calls = {"strict": 0}
     original = release_gates.quality_gates.validate_entity_spans_strict
@@ -428,6 +490,58 @@ def test_g8_consumes_strict_quality_gate_output(tmp_path: Path, monkeypatch) -> 
     assert result.decision == RELEASABLE
     assert calls == {"strict": 1}
     assert _check(result, "G8").details["spans_checked"] == 3
+
+
+def test_k_floor_release_gate_passes_signed_enforcement_evidence(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "kanon_enforcement": {
+                    "target_k": 2,
+                    "kanon": {"k": 2},
+                    "bounds": {
+                        "max_reidentification_upper_bound": 0.5,
+                        "numeric_self_check": {"passed": True},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == RELEASABLE
+    assert result.verify(SIGNING_KEY)
+    assert _check(result, "k_floor").passed is True
+
+
+def test_k_floor_release_gate_fails_realized_k_below_target(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "kanon_enforcement": {
+                    "target_k": 3,
+                    "kanon": {"k": 2},
+                    "bounds": {
+                        "max_reidentification_upper_bound": 0.5,
+                        "numeric_self_check": {"passed": False},
+                    },
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "k_floor")
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["violations"]["measured_k"] == {"observed": 2, "target": 3}
 
 
 def test_g4_computes_quant_delta_from_fp_parent_recall(tmp_path: Path) -> None:
