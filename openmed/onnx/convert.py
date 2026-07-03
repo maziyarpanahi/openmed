@@ -36,6 +36,14 @@ from openmed.onnx.ort_mobile import (
     ORT_ANDROID_FORMAT,
     convert_android_onnx_to_ort,
 )
+from openmed.onnx.quantize_int8 import (
+    INT8_ONNX_FILENAME,
+    ONNX_INT8_FORMAT,
+    apply_int8_recall_certification,
+    int8_artifact_metadata,
+    quantize_dynamic_int8,
+    write_int8_recall_delta_report,
+)
 from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
@@ -317,6 +325,7 @@ def convert(
     *,
     include_webgpu: bool = True,
     include_transformersjs: bool = False,
+    include_int8: bool = True,
     max_seq_length: int = 512,
     opset: int | None = None,
     profile: str = DEFAULT_PROFILE_NAME,
@@ -326,6 +335,8 @@ def convert(
     validation_texts: Sequence[str] | None = None,
     validation_lengths: Sequence[int] | None = None,
     cache_dir: str | None = None,
+    eval_suite_path: str | Path | None = None,
+    recall_delta_report_path: str | Path | None = None,
     publish_to_hub: bool = False,
     publish_repo_id: str | None = None,
     publish_org: str = "OpenMed",
@@ -400,6 +411,8 @@ def convert(
         )
         operator_fallbacks = list(validation_manifest.get("operator_fallbacks") or [])
 
+    int8_path: Path | None = None
+    int8_validation_metadata: Mapping[str, Any] | None = None
     if profile == ANDROID_PROFILE_NAME:
         android_validation = validate_android_profile(onnx_path)
         android_fp16_path = export_android_fp16(
@@ -408,6 +421,13 @@ def convert(
             validate=False,
         )
         android_fp16_validation = validate_android_profile(android_fp16_path)
+        if include_int8:
+            int8_path = quantize_dynamic_int8(
+                onnx_path,
+                output_dir / INT8_ONNX_FILENAME,
+            )
+            int8_validation = validate_android_profile(int8_path)
+            int8_validation_metadata = int8_validation.to_metadata()
         artifacts = [
             ExportArtifact(
                 format=ANDROID_ONNX_FORMAT,
@@ -422,6 +442,17 @@ def convert(
                 metadata=android_fp16_validation.to_metadata(),
             ),
         ]
+        if int8_path is not None:
+            artifacts.append(
+                ExportArtifact(
+                    format=ONNX_INT8_FORMAT,
+                    path=int8_path,
+                    precision="int8",
+                    metadata=int8_artifact_metadata(
+                        validation_metadata=int8_validation_metadata,
+                    ),
+                )
+            )
         ort_result = convert_android_onnx_to_ort(
             onnx_path,
             output_dir=output_dir,
@@ -437,6 +468,8 @@ def convert(
                 )
             )
     else:
+        if eval_suite_path is not None:
+            raise ValueError("eval_suite_path requires profile='android'.")
         artifacts = [
             ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
         ]
@@ -466,6 +499,36 @@ def convert(
             )
         )
 
+    recall_report: dict[str, Any] | None = None
+    if eval_suite_path is not None:
+        if int8_path is None:
+            raise ValueError("eval_suite_path requires Android INT8 export.")
+        recall_report = write_int8_recall_delta_report(
+            source_model_id=model_id,
+            artifact_dir=output_dir,
+            eval_suite_path=eval_suite_path,
+            fp_model_path=onnx_path,
+            int8_model_path=int8_path,
+            output_path=recall_delta_report_path,
+            cache_dir=cache_dir,
+        )
+        artifacts = [
+            (
+                ExportArtifact(
+                    format=artifact.format,
+                    path=artifact.path,
+                    precision=artifact.precision,
+                    metadata=int8_artifact_metadata(
+                        validation_metadata=int8_validation_metadata,
+                        recall_report=recall_report,
+                    ),
+                )
+                if artifact.path == int8_path
+                else artifact
+            )
+            for artifact in artifacts
+        ]
+
     manifest_path = write_export_manifest(
         output_dir,
         source_model_id=model_id,
@@ -478,6 +541,12 @@ def convert(
         validation=validation_manifest,
         operator_fallbacks=operator_fallbacks,
     )
+    if recall_report is not None:
+        apply_int8_recall_certification(
+            output_dir,
+            recall_report,
+            report_relpath=str(recall_report["report_path"]),
+        )
     result = OnnxConversionResult(
         output_dir=output_dir,
         manifest_path=manifest_path,
@@ -1279,6 +1348,11 @@ def main() -> None:
         help="Also emit a Transformers.js bundle with model_quantized.onnx",
     )
     parser.add_argument(
+        "--no-int8",
+        action="store_true",
+        help="Do not emit model_int8.onnx for the android profile",
+    )
+    parser.add_argument(
         "--profile",
         choices=[DEFAULT_PROFILE_NAME, ANDROID_PROFILE_NAME],
         default=DEFAULT_PROFILE_NAME,
@@ -1353,6 +1427,16 @@ def main() -> None:
         "--cache-dir", default=None, help="Hugging Face cache directory"
     )
     parser.add_argument(
+        "--eval-suite",
+        default=None,
+        help="Benchmark fixture JSON/JSONL used to certify android INT8 recall",
+    )
+    parser.add_argument(
+        "--recall-delta-report",
+        default=None,
+        help="Output path for the INT8 recall_delta.json report",
+    )
+    parser.add_argument(
         "--publish-to-hub",
         action="store_true",
         help="Publish the converted artifact after a successful conversion",
@@ -1407,6 +1491,7 @@ def main() -> None:
         args.output,
         include_webgpu=not args.no_webgpu,
         include_transformersjs=args.include_transformersjs,
+        include_int8=not args.no_int8,
         max_seq_length=args.max_seq_length,
         opset=args.opset,
         profile=args.profile,
@@ -1416,6 +1501,8 @@ def main() -> None:
         validation_texts=args.validation_text,
         validation_lengths=_parse_int_tuple(args.validation_lengths),
         cache_dir=args.cache_dir,
+        eval_suite_path=args.eval_suite,
+        recall_delta_report_path=args.recall_delta_report,
         publish_to_hub=args.publish_to_hub,
         publish_repo_id=args.publish_repo_id,
         publish_org=args.publish_org,
