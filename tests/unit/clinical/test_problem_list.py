@@ -6,7 +6,9 @@ import pytest
 
 from openmed.clinical import (
     PROBLEM_LIST_RECONCILIATION_ADVISORY,
+    ClinicalAssertion,
     ProblemMention,
+    clinical_status_from_assertion,
     deduplicate_problem_list,
 )
 
@@ -161,12 +163,65 @@ def test_advisory_constant_documents_heuristic_scope():
 
 
 @pytest.mark.parametrize(
+    ("assertion", "expected_status"),
+    [
+        (
+            ClinicalAssertion(
+                negation="affirmed",
+                temporality="recent",
+                certainty="uncertain",
+            ),
+            "unconfirmed",
+        ),
+        (
+            ClinicalAssertion(
+                negation="affirmed",
+                temporality="historical",
+                certainty="certain",
+            ),
+            "inactive",
+        ),
+        (
+            {
+                "negation": "affirmed",
+                "temporality": "recent",
+                "certainty": "certain",
+                "experiencer": "family",
+            },
+            "unconfirmed",
+        ),
+    ],
+)
+def test_clinical_status_derives_from_reconciled_assertion_axes(
+    assertion,
+    expected_status,
+):
+    assert clinical_status_from_assertion(assertion) == expected_status
+
+
+def test_uncertain_problem_mentions_reconcile_to_unconfirmed():
+    deduplicated = deduplicate_problem_list(
+        [
+            ProblemMention(
+                text="sepsis",
+                negation="affirmed",
+                temporality="recent",
+                certainty="uncertain",
+            )
+        ]
+    )
+
+    assert deduplicated[0].clinical_status == "unconfirmed"
+
+
+@pytest.mark.parametrize(
     ("mention", "error"),
     [
         (ProblemMention(text=""), ValueError),
         (ProblemMention(text="sepsis", offset=(8, 4)), ValueError),
         (ProblemMention(text="sepsis", negation="unknown"), ValueError),
         (ProblemMention(text="sepsis", temporality="remote"), ValueError),
+        (ProblemMention(text="sepsis", certainty="maybe"), ValueError),
     ],
 )
 def test_invalid_mentions_raise_clear_errors(mention, error):
