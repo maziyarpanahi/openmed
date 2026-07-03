@@ -47,6 +47,18 @@ class LabValueAttributeMention(TypedDict, total=False):
     text_hash: str
 
 
+class LabValueEventMention(TypedDict, total=False):
+    """Lab mention projected into the clinical event role-filling vocabulary."""
+
+    id: str
+    label: str
+    start: int
+    end: int
+    score: float
+    text_hash: str
+    metadata: Mapping[str, object]
+
+
 LAB_FLAG_ADVISORY = (
     "Derived lab abnormal flags are heuristic and are not a substitute for the "
     "originating laboratory's own formal diagnostic flagging."
@@ -318,6 +330,41 @@ def link_lab_value_attributes(
     )
 
 
+def lab_value_event_mentions(graph: SpanGraph) -> list[LabValueEventMention]:
+    """Project lab name/value graph nodes into event-extraction mentions.
+
+    The event extractor consumes the generic labels ``analyte`` and
+    ``lab_value``. This adapter preserves safe span offsets, node ids, scores,
+    hashes, and graph provenance without adding raw source text to the output.
+    """
+
+    mentions: list[LabValueEventMention] = []
+    for node in graph.nodes:
+        if node.label == "lab_name":
+            event_label = "analyte"
+        elif node.label == "lab_value":
+            event_label = "lab_value"
+        else:
+            continue
+
+        mention: LabValueEventMention = {
+            "id": node.node_id,
+            "label": event_label,
+            "start": node.start,
+            "end": node.end,
+            "metadata": {
+                "source": "lab_value_attribute_graph",
+                "graph_node_label": node.label,
+            },
+        }
+        if node.score is not None:
+            mention["score"] = node.score
+        if node.text_hash is not None:
+            mention["text_hash"] = node.text_hash
+        mentions.append(mention)
+    return mentions
+
+
 def _coerce_lab_attribute_node(
     raw_mention: LabValueAttributeMention | Mapping[str, object],
     index: int,
@@ -416,10 +463,12 @@ def _lab_attribute_score(
 __all__ = [
     "AbnormalFlag",
     "LAB_FLAG_ADVISORY",
+    "LabValueEventMention",
     "LabValueAttributeMention",
     "LabValueAttributeRole",
     "ReferenceRange",
     "derive_abnormal_flag",
+    "lab_value_event_mentions",
     "link_lab_value_attributes",
     "parse_reference_range",
 ]
