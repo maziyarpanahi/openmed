@@ -45,12 +45,17 @@ dev = [
   "numpy>=1.26",
   "fastapi>=0.110",
   "httpx>=0.27",
+  "dask[dataframe]>=2024.8",
   "opentelemetry-api>=1.26,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
   "pandas>=2.0",
   "polars>=0.20",
   "python-dateutil>=2.8",
+  "fsspec>=2025.9.0",
+  "grpcio>=1.64",
+  "grpcio-tools>=1.64",
+  "protobuf>=5.26,<7",
   "ruff==0.15.20",
   "tomli>=2.0; python_version < '3.11'",
 ]
@@ -82,6 +87,14 @@ pandas = [
 
 polars = [
   "polars>=0.20",
+]
+
+columnar = [
+  "pyarrow>=16",
+]
+
+dask = [
+  "dask[dataframe]>=2024.8",
 ]
 
 spacy = [
@@ -125,6 +138,15 @@ langchain = [
   "langchain-core>=0.2,<2",
 ]
 
+llamaindex = [
+  "llama-index-core>=0.10,<1",
+]
+
+agents = [
+  "langchain-core>=0.2,<2",
+  "llama-index-core>=0.10,<1",
+]
+
 duckdb = [
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -132,6 +154,17 @@ duckdb = [
 
 kafka = [
   "confluent-kafka>=2.3",
+]
+
+cloud = [
+  "fsspec>=2025.9.0",
+  "s3fs>=2025.9.0",
+  "gcsfs>=2025.9.0",
+  "adlfs>=2025.8.0",
+]
+
+spark = [
+  "pyspark>=3.5,<4",
 ]
 
 hf = [
@@ -143,10 +176,12 @@ hf = [
 
 service = [
   "fastapi>=0.110",
+  "grpcio>=1.64",
   "httpx>=0.27",
   "opentelemetry-api>=1.26,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
+  "protobuf>=5.26,<7",
   "uvicorn[standard]>=0.29",
 ]
 
@@ -177,6 +212,13 @@ onnx = [
   "onnxruntime>=1.16",
   "onnxscript>=0.1.0",
   "torch>=2.0",
+  "transformers>=4.50",
+]
+
+openvino = [
+  "openvino>=2024.0",
+  "nncf>=2.10",
+  "onnxruntime>=1.16",
   "transformers>=4.50",
 ]
 
@@ -235,6 +277,7 @@ target-version = "py310"
 line-length = 88
 extend-exclude = [
   "examples/notebooks",
+  "openmed/service/proto/generated",
 ]
 
 [tool.ruff.lint]

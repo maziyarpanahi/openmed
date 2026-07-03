@@ -11,9 +11,14 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /analyze`
 - `POST /pii/extract`
 - `POST /pii/deidentify`
+- `POST /jobs`
+- `GET /jobs/{id}`
 - Optional `GET /metrics`
 
 This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, optional no-PHI OpenTelemetry tracing, and a unified non-2xx error envelope.
+
+For large de-identification batches that should not hold a client connection
+open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
 
 ## Run Locally
 
@@ -189,6 +194,22 @@ model computation keyed by endpoint, normalized text, and request options. The
 single result, or the leader error, is fanned out to all joined waiters. This is
 not a persistent response cache; entries are evicted shortly after completion.
 
+Optional model resilience controls:
+
+```bash
+OPENMED_SERVICE_RETRY_MAX_ATTEMPTS=3 \
+OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS=0.05 \
+OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 \
+OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS=30 \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+Model load and inference work is retried with bounded exponential backoff and
+jitter, then counted against an in-process circuit breaker keyed by resolved
+model/backend. While a breaker is open, model-backed endpoints return `503`
+with error code `circuit_breaker_open` and a `Retry-After` header. See
+[`Serving Resilience`](serving/resilience.md) for the full set of knobs.
+
 Optional graceful-shutdown drain timeout:
 
 ```bash
@@ -210,7 +231,8 @@ OPENMED_SERVICE_METRICS_ENABLED=true uvicorn openmed.service.app:app --host 127.
 `OPENMED_SERVICE_METRICS_ENABLED` is set to a truthy value such as `true` or
 `1` before the app starts. When enabled, the endpoint renders Prometheus 0.0.4
 text exposition for aggregate request counts, request duration histograms,
-in-flight request count, and warm-pool model load/eviction counters. Metrics
+in-flight request count, warm-pool model load/eviction counters, and aggregate
+circuit-breaker state gauges. Metrics
 are pull-only: OpenMed does not push them to any remote service. Scrape it from
 a locally scoped Prometheus or sidecar, and avoid exposing it directly to
 untrusted networks. Metric labels are limited to static route templates and
@@ -243,6 +265,8 @@ names, counts, labels, lengths, and durations. See
 - CORS remains disabled unless exact origins are listed, and Host headers are
   checked against the configured trusted-host allowlist.
 - Identical in-flight inference requests can be coalesced with `OPENMED_SERVICE_COALESCING_ENABLED=true`.
+- Model load and inference work uses bounded retry and an in-process circuit
+  breaker. Open breakers fail fast with `503` and `Retry-After`.
 - `/livez` reports process liveness, `/readyz` reports startup readiness, and `/health` remains the backward-compatible health alias.
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.

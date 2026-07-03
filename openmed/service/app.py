@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
@@ -19,8 +20,10 @@ import openmed
 from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
+from .auth import ServiceAuth, parse_service_auth_config
 from .batcher import BatchResult, DynamicBatcher
 from .coalesce import RequestCoalescer, coalescing_key
+from .jobs import DeidentifyJobQueue, job_response_payload
 from .logging import (
     CorrelationIdMiddleware,
     current_request_id,
@@ -32,12 +35,16 @@ from .metrics import (
     PrometheusMetricsRegistry,
     metrics_enabled_from_env,
 )
+from .resilience import CircuitBreakerOpenError, circuit_breaker_details
 from .runtime import ServiceRuntime
 from .schemas import (
     AnalyzeRequest,
+    DeidentifyJobRequest,
     ModelUnloadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
+    PIIExtractStreamRequest,
+    SMARTBackendIngestionRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -45,6 +52,7 @@ from .security_headers import (
     ErrorEnvelopeTrustedHostMiddleware,
     parse_service_security_config,
 )
+from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
 from .throttle import ServiceThrottle
 from .tracing import (
     OpenTelemetryMiddleware,
@@ -53,9 +61,20 @@ from .tracing import (
     set_current_span_attributes,
     trace_service_stage,
 )
+from .warm_pool import WarmPoolBackpressureError
 
 SERVICE_NAME = "openmed-rest"
-_MODEL_BACKED_PATHS = frozenset({"/analyze", "/pii/extract", "/pii/deidentify"})
+_SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
+_MODEL_BACKED_PATHS = frozenset(
+    {
+        "/analyze",
+        "/pii/extract",
+        "/pii/extract/stream",
+        "/pii/deidentify",
+        "/jobs",
+        _SMART_BACKEND_START_PATH,
+    }
+)
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
 _AnalyzeBatcher = DynamicBatcher["_AnalyzeBatchJob", _ServicePayload]
@@ -102,6 +121,7 @@ def _error_response(
     message: str,
     *,
     details: Optional[Any] = None,
+    headers: Optional[Mapping[str, str]] = None,
 ) -> JSONResponse:
     """Return a standardized API error response."""
     error = {
@@ -114,6 +134,7 @@ def _error_response(
         error["request_id"] = request_id
     return JSONResponse(
         status_code=status_code,
+        headers=headers,
         content={"error": error},
     )
 
@@ -157,6 +178,14 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
     app.state.request_coalescer = None
+    existing_job_queue = getattr(app.state, "job_queue", None)
+    if (
+        existing_job_queue is None
+        or getattr(existing_job_queue, "runtime", None) is not runtime
+    ):
+        if existing_job_queue is not None:
+            existing_job_queue.shutdown()
+        app.state.job_queue = DeidentifyJobQueue.from_env(runtime)
     if runtime.coalescing.enabled:
         app.state.request_coalescer = RequestCoalescer()
     if runtime.batching.enabled:
@@ -230,6 +259,23 @@ def _get_pii_extract_batcher(request: Request) -> _PIIExtractBatcher:
     return batcher
 
 
+def _get_smart_backend_manager(request: Request) -> SMARTBackendJobManager:
+    manager = getattr(request.app.state, "smart_backend_jobs", None)
+    if manager is None:
+        manager = SMARTBackendJobManager()
+        request.app.state.smart_backend_jobs = manager
+    return manager
+
+
+def _get_job_queue(request: Request) -> DeidentifyJobQueue:
+    queue = getattr(request.app.state, "job_queue", None)
+    if queue is None:
+        runtime = _get_service_runtime(request)
+        queue = DeidentifyJobQueue.from_env(runtime)
+        request.app.state.job_queue = queue
+    return queue
+
+
 async def _run_maybe_coalesced(
     request: Request,
     endpoint: str,
@@ -267,6 +313,8 @@ def create_app() -> FastAPI:
             metrics=getattr(fastapi_app.state, "metrics", None)
         )
         _attach_runtime(fastapi_app, runtime)
+        if getattr(fastapi_app.state, "smart_backend_jobs", None) is None:
+            fastapi_app.state.smart_backend_jobs = SMARTBackendJobManager()
         fastapi_app.state.ready = False
         fastapi_app.state.shutting_down = False
         fastapi_app.state.inflight = 0
@@ -292,6 +340,12 @@ def create_app() -> FastAPI:
             tracing = getattr(fastapi_app.state, "tracing", None)
             if tracing is not None:
                 tracing.shutdown()
+            manager = getattr(fastapi_app.state, "smart_backend_jobs", None)
+            if manager is not None:
+                await manager.cancel_all()
+            job_queue = getattr(fastapi_app.state, "job_queue", None)
+            if job_queue is not None:
+                job_queue.shutdown()
 
     app = FastAPI(
         title="OpenMed REST API",
@@ -312,6 +366,10 @@ def create_app() -> FastAPI:
         ErrorEnvelopeTrustedHostMiddleware,
         allowed_hosts=security_config.trusted_hosts,
         www_redirect=False,
+    )
+    app.state.auth = ServiceAuth(
+        parse_service_auth_config(),
+        error_response=_error_response,
     )
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
@@ -359,6 +417,10 @@ def create_app() -> FastAPI:
         @app.get("/metrics", include_in_schema=False)
         async def metrics(request: Request) -> Response:
             registry = request.app.state.metrics
+            runtime = _get_service_runtime(request)
+            registry.set_circuit_breaker_state_counts(
+                runtime.circuit_breaker_state_counts()
+            )
             return Response(
                 content=registry.render(),
                 media_type=PROMETHEUS_CONTENT_TYPE,
@@ -373,6 +435,13 @@ def create_app() -> FastAPI:
         if throttle is None:
             return await call_next(request)
         return await throttle.dispatch(request, call_next)
+
+    @app.middleware("http")
+    async def _auth_middleware(request: Request, call_next):
+        auth = getattr(request.app.state, "auth", None)
+        if auth is None:
+            return await call_next(request)
+        return await auth.dispatch(request, call_next)
 
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
@@ -393,6 +462,37 @@ def create_app() -> FastAPI:
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(CircuitBreakerOpenError)
+    async def _circuit_breaker_handler(
+        _: Request,
+        exc: CircuitBreakerOpenError,
+    ) -> JSONResponse:
+        retry_after = str(exc.retry_after_seconds)
+        return _error_response(
+            503,
+            "circuit_breaker_open",
+            "Model backend is temporarily unavailable",
+            details=circuit_breaker_details(exc),
+            headers={"Retry-After": retry_after},
+        )
+
+    @app.exception_handler(WarmPoolBackpressureError)
+    async def _warm_pool_backpressure_handler(
+        _: Request,
+        exc: WarmPoolBackpressureError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "model_name": exc.model_name,
+                "required_bytes": exc.required_bytes,
+                "budget_bytes": exc.budget_bytes,
+                "wait_seconds": exc.wait_seconds,
+            },
         )
 
     @app.exception_handler(ValueError)
@@ -544,6 +644,33 @@ def create_app() -> FastAPI:
             _operation,
         )
 
+    @app.post("/pii/extract/stream")
+    async def pii_extract_stream(
+        payload: PIIExtractStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
+        runtime = _get_service_runtime(request)
+
+        async def _events():
+            async for event in runtime.stream_pii_extract(
+                text=payload.text,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                use_smart_merging=payload.use_smart_merging,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                keep_alive=payload.keep_alive,
+                chunk_size=payload.chunk_size,
+                window_chars=payload.window_chars,
+                tokenizer_context_chars=payload.tokenizer_context_chars,
+                max_entity_chars=payload.max_entity_chars,
+            ):
+                event_payload = event.to_dict(include_text=payload.include_text)
+                event_payload["audit"] = event.to_audit_dict()
+                yield json.dumps(event_payload, sort_keys=True) + "\n"
+
+        return StreamingResponse(_events(), media_type="application/x-ndjson")
+
     @app.post("/pii/deidentify")
     async def pii_deidentify(
         payload: PIIDeidentifyRequest,
@@ -576,6 +703,66 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
+    @app.post(_SMART_BACKEND_START_PATH)
+    async def start_smart_backend_ingestion(
+        payload: SMARTBackendIngestionRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        runtime = _get_service_runtime(request)
+        manager = _get_smart_backend_manager(request)
+        config = _smart_backend_config_from_payload(payload)
+        deidentifier = _smart_backend_deidentifier(payload, runtime)
+        return manager.start(config, deidentifier=deidentifier).to_dict()
+
+    @app.get("/fhir/smart-backend/ingestions/{job_id}")
+    async def smart_backend_ingestion_status(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_smart_backend_manager(request).get(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+
+    @app.get("/fhir/smart-backend/ingestions/{job_id}/summary")
+    async def smart_backend_ingestion_summary(
+        job_id: str,
+        request: Request,
+    ) -> Dict[str, Any]:
+        try:
+            return _get_smart_backend_manager(request).summary(job_id).to_dict()
+        except KeyError as exc:
+            raise StarletteHTTPException(
+                status_code=404,
+                detail="ingestion job not found",
+            ) from exc
+        except ValueError as exc:
+            raise StarletteHTTPException(
+                status_code=409,
+                detail=str(exc),
+            ) from exc
+
+    @app.post("/jobs", status_code=202)
+    async def create_job(
+        payload: DeidentifyJobRequest,
+        request: Request,
+    ) -> Dict[str, Any]:
+        _get_service_runtime(request)
+        queue = _get_job_queue(request)
+        record = queue.submit(payload)
+        return job_response_payload(record, status_url=f"/jobs/{record['id']}")
+
+    @app.get("/jobs/{job_id}")
+    async def get_job(job_id: str, request: Request) -> Dict[str, Any]:
+        queue = _get_job_queue(request)
+        record = queue.get(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="job not found")
+        return job_response_payload(record, status_url=f"/jobs/{job_id}")
 
     if app.state.tracing.enabled:
         app.add_middleware(
@@ -759,7 +946,9 @@ def _finish_active_batch_requests(
 ) -> None:
     for index, model_key, keep_alive in active_jobs:
         try:
-            runtime.finish_model_request(model_key, keep_alive)
+            result = results[index]
+            error = result if isinstance(result, BaseException) else None
+            runtime.finish_model_request(model_key, keep_alive, error=error)
         except Exception as exc:
             if not isinstance(results[index], BaseException):
                 results[index] = exc
@@ -1022,6 +1211,61 @@ def _pii_deidentify_payload(
         if should_emit_mapping and getattr(result, "mapping", None):
             response["mapping"] = result.mapping
         return response
+
+
+def _smart_backend_config_from_payload(
+    payload: SMARTBackendIngestionRequest,
+) -> SMARTBackendConfig:
+    return SMARTBackendConfig(
+        fhir_base_url=payload.fhir_base_url,
+        token_url=payload.token_url,
+        client_id=payload.client_id,
+        private_key_pem=payload.private_key_pem,
+        output_dir=payload.output_dir,
+        checkpoint_path=payload.checkpoint_path,
+        key_id=payload.key_id,
+        scope=payload.scope,
+        export_path=payload.export_path,
+        max_inflight_downloads=payload.max_inflight_downloads,
+        poll_interval_seconds=payload.poll_interval_seconds,
+        request_timeout_seconds=payload.request_timeout_seconds,
+        policy=payload.policy or "hipaa_safe_harbor",
+        method=payload.method,
+    )
+
+
+def _smart_backend_deidentifier(
+    payload: SMARTBackendIngestionRequest,
+    runtime: ServiceRuntime,
+):
+    def _deidentifier(text: str, **kwargs: Any) -> Any:
+        method = str(kwargs.get("method", payload.method))
+        policy = kwargs.get("policy") or payload.policy
+        consistent = bool(kwargs.get("consistent", False))
+
+        def _operation() -> Any:
+            return openmed.deidentify(
+                text,
+                method=method,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                config=runtime.config,
+                use_smart_merging=payload.use_smart_merging,
+                use_safety_sweep=payload.use_safety_sweep,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                loader=runtime.get_loader(),
+                policy=policy,
+                consistent=consistent,
+            )
+
+        return runtime.run_model_request(
+            payload.model_name,
+            payload.keep_alive,
+            _operation,
+        )
+
+    return _deidentifier
 
 
 app = create_app()
