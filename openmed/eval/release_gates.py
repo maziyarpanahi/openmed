@@ -32,6 +32,7 @@ from openmed.core.thresholds import (
     profile_recall_floor,
     validate_threshold_matrix,
 )
+from openmed.eval.fairness import DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR
 from openmed.eval.metrics import normalize_eval_spans
 from openmed.eval.nano_cert import certify_measurements
 from openmed.eval.quant_delta import (
@@ -569,6 +570,7 @@ class ReleaseGate:
         ):
             checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
             checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
+        checks.append(_zero_shot_language_leakage_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
             checks.append(federated_check)
@@ -1875,6 +1877,43 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     )
 
 
+def _zero_shot_language_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _transfer_matrix_evidence(metrics, metadata)
+    if not evidence:
+        return GateCheck(
+            "G9_zero_shot_language_leakage",
+            True,
+            reason="not applicable",
+            details={"transfer_matrix_present": False},
+        )
+
+    languages = _transfer_languages(evidence)
+    violations = [
+        *_transfer_matrix_violations(evidence, metadata, languages),
+        *_transfer_deficiency_violations(evidence, metadata),
+    ]
+    violations = _dedupe_transfer_violations(violations)
+
+    return GateCheck(
+        "G9_zero_shot_language_leakage",
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "zero-shot language leakage exceeds per-language floor"
+        ),
+        details={
+            "transfer_matrix_present": True,
+            "language_count": len(languages),
+            "default_floor": DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR,
+            "violations": violations,
+        },
+    )
+
+
 def _federated_boundary_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -1985,6 +2024,192 @@ def _k_floor_check(
             "max_reidentification_upper_bound": max_bound,
             "violations": violations,
         },
+    )
+
+
+def _transfer_matrix_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    return _first_mapping(
+        metadata.get("cross_lingual_transfer"),
+        metadata.get("transfer_matrix_report"),
+        metadata.get("transfer_matrix"),
+        metrics.get("cross_lingual_transfer"),
+        metrics.get("transfer_matrix_report"),
+        metrics.get("transfer_matrix"),
+        _nested(metrics, "fairness", "cross_lingual_transfer"),
+    )
+
+
+def _transfer_languages(evidence: Mapping[str, Any]) -> list[str]:
+    languages = _string_set(evidence.get("languages"))
+    matrix = _mapping(evidence.get("matrix"))
+    for source_language, targets in matrix.items():
+        if str(source_language):
+            languages.add(str(source_language))
+        languages.update(_mapping(targets))
+    if not languages:
+        languages = set(SUPPORTED_LANGUAGES)
+    return sorted(languages)
+
+
+def _transfer_floor_map(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    languages: Sequence[str],
+) -> dict[str, float]:
+    floors = {language: DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR for language in languages}
+    floor_source = _first_mapping(
+        evidence.get("leakage_floors"),
+        evidence.get("per_language_leakage_floors"),
+        metadata.get("leakage_floors_by_language"),
+        metadata.get("per_language_leakage_floors"),
+    )
+    for language, floor in floor_source.items():
+        parsed = _optional_float(floor)
+        if parsed is not None:
+            floors[str(language)] = parsed
+    return floors
+
+
+def _transfer_matrix_violations(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    languages: Sequence[str],
+) -> list[dict[str, Any]]:
+    matrix = _mapping(evidence.get("matrix"))
+    floors = _transfer_floor_map(evidence, metadata, languages)
+    violations: list[dict[str, Any]] = []
+    for source_language, targets in sorted(matrix.items()):
+        source = str(source_language)
+        for target_language, raw_cell in sorted(_mapping(targets).items()):
+            target = str(target_language)
+            if source == target:
+                continue
+            cell = _mapping(raw_cell)
+            leakage_rate = _optional_float(
+                _first_value(
+                    cell.get("leakage_rate"),
+                    cell.get("rate"),
+                    cell.get("leakage"),
+                )
+            )
+            if leakage_rate is None:
+                continue
+            floor = floors.get(target, DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR)
+            if leakage_rate <= floor:
+                continue
+            violations.append(
+                _transfer_violation(
+                    source_language=source,
+                    target_language=target,
+                    leakage_rate=leakage_rate,
+                    leakage_floor=floor,
+                    leaked_chars=_optional_int(cell.get("leaked_chars")),
+                    total_chars=_optional_int(cell.get("total_chars")),
+                )
+            )
+    return violations
+
+
+def _transfer_deficiency_violations(
+    evidence: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    raw_rows = evidence.get("deficiencies") or []
+    if not isinstance(raw_rows, Sequence) or isinstance(raw_rows, (str, bytes)):
+        return []
+    floors = _transfer_floor_map(evidence, metadata, _transfer_languages(evidence))
+    violations: list[dict[str, Any]] = []
+    for raw_row in raw_rows:
+        row = _mapping(raw_row)
+        target = str(row.get("target_language") or row.get("language") or "")
+        source = str(row.get("source_language") or row.get("source") or "")
+        leakage_rate = _optional_float(
+            _first_value(
+                row.get("leakage_rate"),
+                row.get("rate"),
+                row.get("leakage"),
+            )
+        )
+        if not target or not source or leakage_rate is None:
+            continue
+        floor = _optional_float(
+            _first_value(row.get("leakage_floor"), row.get("floor"))
+        )
+        if floor is None:
+            floor = floors.get(target, DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR)
+        excess = _optional_float(row.get("excess"))
+        if excess is None:
+            excess = leakage_rate - floor
+        if excess <= 0.0 and leakage_rate <= floor:
+            continue
+        violations.append(
+            _transfer_violation(
+                source_language=source,
+                target_language=target,
+                leakage_rate=leakage_rate,
+                leakage_floor=floor,
+                leaked_chars=_optional_int(row.get("leaked_chars")),
+                total_chars=_optional_int(row.get("total_chars")),
+                rank=_optional_int(row.get("rank")),
+            )
+        )
+    return violations
+
+
+def _transfer_violation(
+    *,
+    source_language: str,
+    target_language: str,
+    leakage_rate: float,
+    leakage_floor: float,
+    leaked_chars: int | None,
+    total_chars: int | None,
+    rank: int | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "source_language": source_language,
+        "target_language": target_language,
+        "leakage_rate": leakage_rate,
+        "leakage_floor": leakage_floor,
+        "excess": leakage_rate - leakage_floor,
+    }
+    if leaked_chars is not None:
+        payload["leaked_chars"] = leaked_chars
+    if total_chars is not None:
+        payload["total_chars"] = total_chars
+    if rank is not None:
+        payload["rank"] = rank
+    return payload
+
+
+def _dedupe_transfer_violations(
+    violations: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    deduped: dict[tuple[str, str], dict[str, Any]] = {}
+    for violation in violations:
+        row = dict(violation)
+        key = (
+            str(row.get("target_language") or ""),
+            str(row.get("source_language") or ""),
+        )
+        if not all(key):
+            continue
+        current = deduped.get(key)
+        if current is None or float(row.get("excess", 0.0)) > float(
+            current.get("excess", 0.0)
+        ):
+            deduped[key] = row
+    return sorted(
+        deduped.values(),
+        key=lambda row: (
+            -float(row.get("excess", 0.0)),
+            -float(row.get("leakage_rate", 0.0)),
+            str(row.get("target_language") or ""),
+            str(row.get("source_language") or ""),
+        ),
     )
 
 
