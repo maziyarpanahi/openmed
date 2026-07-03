@@ -10,13 +10,17 @@ Mobile with the `android` ONNX profile:
   --profile android
 ```
 
-The profile writes three ONNX graphs:
+The profile writes fp32/fp16 ONNX graphs, an optional dynamic INT8 graph, and,
+when ONNX Runtime's ORT conversion tooling is installed, an ORT mobile artifact
+plus the minimal-build operator configuration:
 
 ```text
 dist/example-android-onnx/
   model.onnx
   model_fp16.onnx
   model_int8.onnx
+  model.ort
+  model.required_operators_and_types.config
   config.json
   id2label.json
   openmed-onnx.json
@@ -29,6 +33,13 @@ the MatMul/Gemm weights used by transformer token classifiers. This is the ARM
 CPU starting point for Android Runtime Mobile because it needs no calibration
 corpus and keeps the exported graph callable through the same inputs and
 `logits` output.
+`model.ort` is the ORT mobile-format model generated from `model.onnx`.
+`model.required_operators_and_types.config` is the required-operators/types
+file to pass into an ONNX Runtime Android minimal build.
+
+If the optional ONNX Runtime conversion tooling is not available, export still
+finishes with the `.onnx` artifacts and logs a dependency-only skip reason. The
+message does not include source model text or sample input content.
 
 ## Graph Contract
 
@@ -48,20 +59,40 @@ configuration need a predictable graph contract. The dynamic `batch` and
 `sequence` axes are retained so one exported artifact can serve variable
 request batches and note lengths on device.
 
+## ORT Mobile Minimal Build
+
+The ORT mobile step uses ONNX Runtime's Python conversion tool with the fixed
+optimization style, Android ARM target platform, and type reduction enabled.
+The resulting `model.required_operators_and_types.config` can be passed to the
+ONNX Runtime build as the include-ops config, for example:
+
+```bash
+./build.sh \
+  --android \
+  --minimal_build \
+  --include_ops_by_config dist/example-android-onnx/model.required_operators_and_types.config
+```
+
+Building the actual Android AAR is a separate Android-module task; this export
+only writes the model and operator/type configuration consumed by that build.
+
 ## Mobile Compatibility Metadata
 
 `openmed-onnx.json` records the Android artifacts with the format string
-`onnx-android` for fp32/fp16 and `onnx-int8` for the dynamic INT8 graph. Each
-artifact entry includes profile metadata with the opset, tensor contract,
+`onnx-android` for fp32/fp16 and `onnx-int8` for the dynamic INT8 graph. When
+ORT conversion succeeds, the manifest also records an `ort-android` artifact.
+Each artifact entry includes profile metadata with the opset, tensor contract,
 execution-provider hints (`NNAPI`, `XNNPACK`), graph operators, and any
 operators that are outside OpenMed's Android mobile safe set. The INT8 artifact
-metadata also records the dynamic quantization recipe and target
-`model_int8.onnx` path.
+metadata records the dynamic quantization recipe and target `model_int8.onnx`
+path. The ORT artifact metadata records the `model.ort` path, the
+required-operators/types config path, the fixed optimization style, Android ARM
+target platform, type-reduction status, opset, and graph operators.
 
 Unsupported operators are reported as warnings and recorded in artifact
 metadata. The converter does not delete, rewrite, or silently drop graph nodes;
-the warnings are used by the later `.ort` and Android runtime tasks to decide
-whether a model needs a fallback or exporter adjustment.
+the warnings are used by the `.ort` and Android runtime tasks to decide whether
+a model needs a fallback or exporter adjustment.
 
 ## INT8 Recall Certification
 
