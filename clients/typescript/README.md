@@ -50,6 +50,18 @@ const deidentified = await client.deidentify({
   keep_mapping: true,
 });
 
+const job = await client.createJob({
+  documents: [
+    { id: "note-1", text: "Paciente: Maria Garcia, DNI: 12345678Z" },
+  ],
+  method: "mask",
+  webhook: {
+    url: "https://pipeline.example.com/openmed/jobs",
+    secret: "replace-with-shared-secret",
+  },
+});
+const jobStatus = await client.getJob(job.id);
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
 ```

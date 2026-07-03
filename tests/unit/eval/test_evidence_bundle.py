@@ -6,7 +6,12 @@ from pathlib import Path
 from openmed.cli import main_module
 from openmed.core.audit import manifest_hash
 from openmed.eval.evidence_bundle import bundle_gate_evidence
-from openmed.eval.release_gates import RELEASABLE, GateCheck, GateReport
+from openmed.eval.release_gates import (
+    RELEASABLE,
+    GateCheck,
+    GateReport,
+    apply_flakiness_quarantine,
+)
 
 
 def _write(path: Path, payload: str) -> Path:
@@ -150,6 +155,26 @@ def test_manifest_is_deterministic_across_repeated_runs(tmp_path: Path) -> None:
     assert first.manifest_path.read_text(encoding="utf-8") == (
         second.manifest_path.read_text(encoding="utf-8")
     )
+
+
+def test_stability_summary_is_carried_into_evidence_bundle(tmp_path: Path) -> None:
+    report = apply_flakiness_quarantine(
+        _gate_report(_complete_artifacts(tmp_path)),
+        {
+            "quarantined_gates": ["G1a"],
+            "unstable_gates": ["G1a"],
+            "verdict": "quarantined",
+        },
+    )
+
+    result = bundle_gate_evidence(report, tmp_path / "bundle")
+
+    assert result.manifest["gate_report"]["stability_summary"]["verdict"] == (
+        "quarantined"
+    )
+    assert result.manifest["summary"]["stability_verdict"] == "quarantined"
+    assert result.manifest["summary"]["quarantined_stability_gates"] == ["G1a"]
+    assert "Stability: quarantined" in result.summary
 
 
 def test_gates_bundle_cli_is_strict_only_for_missing_required_evidence(
