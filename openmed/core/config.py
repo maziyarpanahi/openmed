@@ -5,6 +5,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+from .offline import (
+    OFFLINE_ENV_VAR,
+    configure_offline_mode,
+    env_flag_enabled,
+)
+
 # Environment variable used to override the config file location
 CONFIG_ENV_VAR = "OPENMED_CONFIG"
 
@@ -92,6 +98,9 @@ class OpenMedConfig:
     load_in_4bit: bool = False
     bnb_4bit_use_double_quant: bool = True
 
+    # Cache-only, no-egress mode for inference and de-identification
+    local_only: bool = False
+
     # Active profile name (if any)
     profile: Optional[str] = None
 
@@ -159,6 +168,12 @@ class OpenMedConfig:
                 "no",
             }
 
+        env_offline = os.getenv(OFFLINE_ENV_VAR)
+        if env_offline is not None:
+            self.local_only = self.local_only or env_flag_enabled(env_offline)
+
+        configure_offline_mode(self)
+
         # Check for profile environment variable
         env_profile = os.getenv(PROFILE_ENV_VAR)
         if env_profile and self.profile is None:
@@ -184,6 +199,7 @@ class OpenMedConfig:
             "torch_attention_backend",
             "load_in_4bit",
             "bnb_4bit_use_double_quant",
+            "local_only",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
@@ -244,6 +260,7 @@ class OpenMedConfig:
             "torch_attention_backend": self.torch_attention_backend,
             "load_in_4bit": self.load_in_4bit,
             "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
+            "local_only": self.local_only,
             "profile": self.profile,
         }
 
