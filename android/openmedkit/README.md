@@ -2,11 +2,11 @@
 
 `android/openmedkit/` is the Kotlin Android library module for OpenMedKit.
 It is a Gradle `com.android.library` module under the top-level `android/`
-build and uses the package namespace `com.openmed.openmedkit`.
+build and uses the Android namespace `org.openmed.openmedkit`.
 
 ## Layout
 
-- `src/main/kotlin/com/openmed/openmedkit/` contains the public Kotlin API.
+- `src/main/kotlin/com/openmed/openmedkit/` contains the current public Kotlin API.
 - `src/main/AndroidManifest.xml` is intentionally minimal for the library.
 - `src/test/kotlin/com/openmed/openmedkit/` contains local JVM unit tests
   running with JUnit and Robolectric.

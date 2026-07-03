@@ -35,11 +35,23 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="HL7 v2 segment-aware de-identification",
     ),
+    "duckdb": AdapterSpec(
+        name="duckdb",
+        module="openmed.interop.duckdb_udf",
+        extra="duckdb",
+        description="DuckDB scalar UDFs for in-query de-identification",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
         extra="langchain",
         description="LangChain redaction runnable adapter",
+    ),
+    "pandas": AdapterSpec(
+        name="pandas",
+        module="openmed.interop.pandas_accessor",
+        extra="pandas",
+        description="Pandas DataFrame de-identification accessor",
     ),
     "presidio": AdapterSpec(
         name="presidio",
@@ -52,6 +64,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         module="openmed.interop.philter",
         extra="philter",
         description="Philter PHI span adapter",
+    ),
+    "polars": AdapterSpec(
+        name="polars",
+        module="openmed.interop.polars_accessor",
+        extra="polars",
+        description="Polars DataFrame de-identification helpers",
     ),
     "pydeid": AdapterSpec(
         name="pydeid",
