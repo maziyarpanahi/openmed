@@ -11,7 +11,12 @@ from openmed.eval.history import (
     IMPROVEMENT,
     REGRESSION,
     UNCHANGED,
+    BenchmarkRunLedger,
+    BenchmarkRunLedgerEntry,
+    RunLedgerConflict,
+    append_run_to_ledger,
     diff_against_baseline,
+    load_run_ledger,
     metric_history,
 )
 from openmed.eval.report import BenchmarkReport
@@ -68,6 +73,28 @@ def _baseline_entry(
 
 def _baseline_store() -> dict[str, object]:
     return {"schema_version": 1, "entries": {"pii::small::mlx-fp": _baseline_entry()}}
+
+
+def _ledger_entry(
+    *,
+    seed: int = 7,
+    leakage: float = 0.01,
+    recall: float = 0.99,
+    generated_at: str = "2026-06-14T00:00:00+00:00",
+) -> BenchmarkRunLedgerEntry:
+    return BenchmarkRunLedgerEntry(
+        model_id="OpenMed/pii-small-mlx",
+        suite="golden",
+        manifest_hash="sha256:" + "b" * 64,
+        seed=seed,
+        generated_at=generated_at,
+        fixture_count=2,
+        metrics={
+            "leakage.overall": leakage,
+            "per_label_recall.PERSON": recall,
+        },
+        metadata={"device": "mlx-fp"},
+    )
 
 
 def test_degraded_current_report_flags_regressions_and_ranks_them(
@@ -154,3 +181,58 @@ def test_metric_history_returns_values_in_release_order() -> None:
         "2026-06-08",
         "2026-06-14",
     ]
+
+
+def test_run_ledger_append_is_idempotent_and_byte_stable(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "run-ledger.json"
+    entry = _ledger_entry()
+
+    first = append_run_to_ledger(ledger_path, entry)
+    first_bytes = ledger_path.read_bytes()
+    second = append_run_to_ledger(
+        ledger_path,
+        BenchmarkRunLedgerEntry.from_mapping(entry.to_dict()),
+    )
+
+    assert second.entries == first.entries == (entry,)
+    assert ledger_path.read_bytes() == first_bytes
+    assert load_run_ledger(ledger_path).entries == (entry,)
+
+
+def test_run_ledger_rejects_conflicting_duplicate_key(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "run-ledger.json"
+    append_run_to_ledger(ledger_path, _ledger_entry())
+    before = ledger_path.read_bytes()
+
+    with pytest.raises(RunLedgerConflict, match="already exists"):
+        append_run_to_ledger(ledger_path, _ledger_entry(leakage=0.02))
+
+    assert ledger_path.read_bytes() == before
+
+
+def test_run_ledger_preserves_prior_row_order() -> None:
+    first = _ledger_entry(seed=1, generated_at="2026-06-14T00:00:00+00:00")
+    second = _ledger_entry(seed=2, generated_at="2026-06-15T00:00:00+00:00")
+
+    ledger = BenchmarkRunLedger().append(first).append(second)
+    updated = ledger.append(first)
+
+    assert updated is ledger
+    assert [entry.key for entry in updated.entries] == [first.key, second.key]
+
+
+def test_run_ledger_entry_from_report_flattens_numeric_metrics() -> None:
+    entry = BenchmarkRunLedgerEntry.from_report(
+        _report(leakage=0.025, recall=0.981, p95_ms=160.0),
+        manifest_hash="sha256:" + "c" * 64,
+        seed=3,
+    )
+
+    assert entry.model_id == "OpenMed/pii-small-mlx"
+    assert entry.suite == "golden"
+    assert entry.metrics == {
+        "latency.p95_ms": 160.0,
+        "leakage.overall": 0.025,
+        "per_label_recall.PERSON": 0.981,
+    }
+    assert entry.metadata["device"] == "mlx-fp"
