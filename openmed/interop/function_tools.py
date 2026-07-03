@@ -107,6 +107,10 @@ def _tool_handler(
             **kwargs,
             runtime_provider=runtime_provider,
         ),
+        "openmed_run_workflow": lambda **kwargs: mcp_server.openmed_run_workflow(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
     }
     try:
         return handlers[name]
