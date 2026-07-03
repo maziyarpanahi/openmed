@@ -277,7 +277,11 @@ class TestNationalIdPatternReachability:
 
     @pytest.mark.parametrize(
         ("lang", "locale", "method"),
-        [("pl", "pl_PL", "pesel"), ("ko", "ko_KR", "korean_rrn")],
+        [
+            ("pl", "pl_PL", "pesel"),
+            ("ko", "ko_KR", "korean_rrn"),
+            ("lv", "lv_LV", "personas_kods"),
+        ],
     )
     def test_locale_coherence_report_includes_registered_provider(
         self, lang, locale, method

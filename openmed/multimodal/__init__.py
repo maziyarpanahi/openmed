@@ -13,6 +13,8 @@ from __future__ import annotations
 # stdlib-only, so the public multimodal import path remains free of heavy deps.
 from openmed.interop import cda as _cda
 
+from . import dicom as _dicom
+
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_markdown as _documents_markdown
@@ -32,9 +34,31 @@ from .chatlog_jsonl import (
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
 )
+from .dicom import (
+    DicomHeaderAction,
+    DicomHeaderDeidPolicy,
+    DicomHeaderDeidResult,
+    DicomPixelFinding,
+    DicomPixelRedactionPolicy,
+    DicomPixelRedactionResult,
+    DicomResidualTextReport,
+    deidentify_dicom_headers,
+    redact_dicom_pixels,
+)
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
 from .exceptions import MissingDependencyError, UnsupportedDocumentError
+from .image import (
+    ImageMetadataReport,
+    ImageRedactionVerificationError,
+    RedactedImage,
+    ResidualPhi,
+    ResidualPhiReport,
+    assert_no_residual_phi,
+    redact_image,
+    verify_image_metadata,
+    verify_image_redaction,
+)
 from .metadata_scrub import (
     MetadataFinding,
     MetadataScrubError,
@@ -45,17 +69,20 @@ from .metadata_scrub import (
     verify_metadata,
 )
 
-# Importing the OCR module registers image-format handlers with the dispatcher
-# so ``redact_document`` can route scans/images. It stays import-light: OCR
-# backends (and Pillow) are only imported when an engine actually runs. Only the
-# data types are re-exported here; the ``ocr()`` entry point is left in the
-# submodule (``openmed.multimodal.ocr``) to avoid shadowing it with a function.
+# Importing the OCR module registers remaining OCR-only image-format handlers
+# (BMP/GIF/WebP). PNG/JPEG/TIFF are registered by ``image`` above because they
+# support pixel redaction and metadata stripping. OCR backends (and Pillow) are
+# only imported when an engine actually runs. The ``ocr()`` entry point is left
+# in the submodule (``openmed.multimodal.ocr``) to avoid shadowing it.
 from .ocr import (
+    DocTrEngine,
     FakeOcrEngine,
     OcrEngine,
     OcrResult,
     OcrWord,
+    available_ocr_engines,
     register_ocr_engine,
+    run_doctr_ocr,
 )
 from .tabular_csv import (
     ColumnDecision,
@@ -81,6 +108,15 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "DicomHeaderAction",
+    "DicomHeaderDeidPolicy",
+    "DicomHeaderDeidResult",
+    "DicomPixelFinding",
+    "DicomPixelRedactionPolicy",
+    "DicomPixelRedactionResult",
+    "DicomResidualTextReport",
+    "deidentify_dicom_headers",
+    "redact_dicom_pixels",
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
@@ -91,11 +127,23 @@ __all__ = [
     "scrub_metadata",
     "verify_metadata",
     "assert_metadata_clean",
+    "ImageMetadataReport",
+    "ImageRedactionVerificationError",
+    "RedactedImage",
+    "ResidualPhi",
+    "ResidualPhiReport",
+    "assert_no_residual_phi",
+    "redact_image",
+    "verify_image_metadata",
+    "verify_image_redaction",
     "OcrResult",
     "OcrWord",
     "OcrEngine",
+    "DocTrEngine",
     "FakeOcrEngine",
     "register_ocr_engine",
+    "available_ocr_engines",
+    "run_doctr_ocr",
     "ColumnDecision",
     "TableView",
     "RedactedTable",
