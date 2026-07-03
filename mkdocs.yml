@@ -18,6 +18,7 @@ nav:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - gRPC Service: serving/grpc.md
+      - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
