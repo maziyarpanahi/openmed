@@ -1167,6 +1167,7 @@ def _calibration_check(metadata: Mapping[str, Any], profile: Any | None) -> Gate
         },
     )
 
+
 def _abstention_advisory_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
