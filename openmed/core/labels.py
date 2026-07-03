@@ -122,6 +122,12 @@ PROTEIN_CHANGE: Final = "PROTEIN_CHANGE"
 ZYGOSITY: Final = "ZYGOSITY"
 CLINICAL_SIGNIFICANCE: Final = "CLINICAL_SIGNIFICANCE"
 
+#: Endocrinology concepts (issue #895)
+GLYCEMIC_MEASURE: Final = "GLYCEMIC_MEASURE"
+THYROID_MEASURE: Final = "THYROID_MEASURE"
+HORMONE_LEVEL: Final = "HORMONE_LEVEL"
+INSULIN_REGIMEN: Final = "INSULIN_REGIMEN"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -213,6 +219,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         PROTEIN_CHANGE,
         ZYGOSITY,
         CLINICAL_SIGNIFICANCE,
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
         OTHER,
     }
 )
@@ -397,6 +407,11 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     PROTEIN_CHANGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     ZYGOSITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     CLINICAL_SIGNIFICANCE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    # Endocrinology concepts (issue #895)
+    GLYCEMIC_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    THYROID_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HORMONE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    INSULIN_REGIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -486,6 +501,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     PROTEIN_CHANGE: HIPAA_UNIQUE_IDENTIFIER,
     ZYGOSITY: HIPAA_UNIQUE_IDENTIFIER,
     CLINICAL_SIGNIFICANCE: HIPAA_UNIQUE_IDENTIFIER,
+    # Endocrinology concepts
+    GLYCEMIC_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    THYROID_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    HORMONE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    INSULIN_REGIMEN: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -727,6 +747,28 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "homozygous": ZYGOSITY,
     "clinicalsignificance": CLINICAL_SIGNIFICANCE,
     "pathogenicity": CLINICAL_SIGNIFICANCE,
+    # Endocrinology concepts
+    "glycemic": GLYCEMIC_MEASURE,
+    "glycemicmeasure": GLYCEMIC_MEASURE,
+    "glucose": GLYCEMIC_MEASURE,
+    "hba1c": GLYCEMIC_MEASURE,
+    "a1c": GLYCEMIC_MEASURE,
+    "thyroid": THYROID_MEASURE,
+    "thyroidmeasure": THYROID_MEASURE,
+    "thyroidfunctionmeasure": THYROID_MEASURE,
+    "tsh": THYROID_MEASURE,
+    "hormone": HORMONE_LEVEL,
+    "hormones": HORMONE_LEVEL,
+    "hormonelevel": HORMONE_LEVEL,
+    "cortisol": HORMONE_LEVEL,
+    "insulin": INSULIN_REGIMEN,
+    "insulinregimen": INSULIN_REGIMEN,
+    "basalbolus": INSULIN_REGIMEN,
+    "insulinpump": INSULIN_REGIMEN,
+    "glargine": INSULIN_REGIMEN,
+    # Domain labels backed by existing canonical clinical concepts.
+    "metabolicfinding": CONDITION,
+    "endocrinegland": BODY_SITE,
 }
 
 
@@ -946,5 +988,9 @@ __all__ = [
     "PROTEIN_CHANGE",
     "ZYGOSITY",
     "CLINICAL_SIGNIFICANCE",
+    "GLYCEMIC_MEASURE",
+    "THYROID_MEASURE",
+    "HORMONE_LEVEL",
+    "INSULIN_REGIMEN",
     "OTHER",
 ]
