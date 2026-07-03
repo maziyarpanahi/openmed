@@ -3353,6 +3353,9 @@ cli = [
     { name = "rich" },
     { name = "typer" },
 ]
+columnar = [
+    { name = "pyarrow" },
+]
 coreml = [
     { name = "coremltools" },
     { name = "huggingface-hub" },
@@ -3514,6 +3517,7 @@ requires-dist = [
     { name = "polars", marker = "extra == 'polars'", specifier = ">=0.20" },
     { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.354,<3" },
+    { name = "pyarrow", marker = "extra == 'columnar'", specifier = ">=16" },
     { name = "pydeid", marker = "extra == 'pydeid'", specifier = ">=0.0.1" },
     { name = "pydicom", marker = "extra == 'multimodal'", specifier = ">=3.0" },
     { name = "pymdown-extensions", marker = "extra == 'docs'", specifier = ">=10.8" },
@@ -3543,7 +3547,7 @@ requires-dist = [
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["awq", "cli", "coreml", "dev", "docs", "duckdb", "gliner", "gptq", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy"]
+provides-extras = ["awq", "cli", "columnar", "coreml", "dev", "docs", "duckdb", "gliner", "gptq", "hf", "kafka", "langchain", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy"]
 
 [[package]]
 name = "orjson"

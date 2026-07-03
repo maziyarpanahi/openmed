@@ -1632,6 +1632,7 @@ def _deidentify_batch(
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
     custom_recognizer: Any = None,
+    policy: Optional[str] = None,
     *,
     consistent: bool = False,
     seed: Optional[int] = None,
@@ -1699,7 +1700,7 @@ def _deidentify_batch(
             seed=seed,
             locale=locale,
             surrogate_vault=surrogate_vault,
-            policy="hipaa_safe_harbor",
+            policy=policy or "hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
     ]
