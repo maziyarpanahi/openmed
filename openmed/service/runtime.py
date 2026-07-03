@@ -461,6 +461,14 @@ class ServiceRuntime:
                     self._workflow_store = WorkflowStateStore()
         return self._workflow_store
 
+    def record_speculative_decode(self, metrics: Any) -> None:
+        """Forward aggregate speculative decode metrics to the metrics registry."""
+        if self.metrics is None:
+            return
+        recorder = getattr(self.metrics, "record_speculative_decode", None)
+        if callable(recorder):
+            recorder(metrics)
+
     def _resolve_keep_alive_seconds(self, keep_alive: Any) -> Optional[float]:
         if keep_alive is None:
             return self.default_keep_alive_seconds

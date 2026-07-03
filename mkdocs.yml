@@ -12,10 +12,12 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
@@ -37,7 +39,9 @@ nav:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
       - Smart Entity Merging: pii-smart-merging.md
+      - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - DuckDB De-identification UDFs: duckdb-deidentification.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
       - Compliance Posture: compliance.md
@@ -49,17 +53,24 @@ nav:
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
+      - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Android ONNX Export: export-onnx-android.md
+      - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
   - Project:
       - FAQ: faq.md
       - Onboarding: onboarding.md
       - Contributing & Releases: contributing.md
+      - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Container Image Signing: supply-chain/image-signing.md
       - Software Bill of Materials: security/sbom.md
       - Release Streams & Channels: release/semver-and-channels.md
+      - PyPI Trusted Publishing: release/trusted-publishing.md
+      - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md
 
