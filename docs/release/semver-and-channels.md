@@ -28,10 +28,10 @@ break every downstream install, so it follows SemVer and moves more slowly.
 |---|---|---|---|---|
 | Nightly / edge | `pip install openmed --pre` | Latest green code and gated model pins | every green merge or daily | early adopters and internal evaluation |
 | Stable | `pip install openmed` | Full golden-suite pass and canary-ready pins | patch daily-to-weekly, minor monthly | default users |
-| LTS | `pip install "openmed==1.6.*"` | Security and recall-backstop fixes only | as needed for 12 months | regulated deployments |
+| LTS | `pip install "openmed==1.7.*"` | Security and recall-backstop fixes only | as needed for 12 months | regulated deployments |
 
-Nightly builds use PEP 440 development releases such as `1.6.0.devN`.
-Release candidates such as `1.6.0rc1` are reserved for pre-stable cuts.
+Nightly builds use PEP 440 development releases such as `1.7.0.devN`.
+Release candidates such as `1.7.0rc1` are reserved for pre-stable cuts.
 
 ## SemVer Rules
 

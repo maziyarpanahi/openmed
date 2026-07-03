@@ -15,6 +15,12 @@ from openmed.core.pii_i18n import (
     LANGUAGE_NAMES,
     SUPPORTED_LANGUAGES,
 )
+from openmed.mcp.tool_registry import (
+    TOOL_REGISTRY,
+    render_mcp_tool,
+    render_tool_registry_document,
+    validate_registered_tool_output,
+)
 from openmed.service.runtime import ServiceRuntime
 from openmed.utils.validation import validate_model_name
 
@@ -135,12 +141,13 @@ def openmed_analyze_text(
         )
         return _result_to_dict(result)
 
-    return _run_model_request(
+    response = _run_model_request(
         runtime,
         payload.model_name,
         payload.keep_alive,
         operation,
     )
+    return validate_registered_tool_output("openmed_analyze_text", response)
 
 
 def openmed_extract_pii(
@@ -181,12 +188,13 @@ def openmed_extract_pii(
         )
         return _result_to_dict(result)
 
-    return _run_model_request(
+    response = _run_model_request(
         runtime,
         payload.model_name,
         payload.keep_alive,
         operation,
     )
+    return validate_registered_tool_output("openmed_extract_pii", response)
 
 
 def openmed_deidentify(
@@ -245,12 +253,13 @@ def openmed_deidentify(
             response["mapping"] = result.mapping
         return response
 
-    return _run_model_request(
+    response = _run_model_request(
         runtime,
         payload.model_name,
         payload.keep_alive,
         operation,
     )
+    return validate_registered_tool_output("openmed_deidentify", response)
 
 
 def openmed_list_models(
@@ -279,11 +288,12 @@ def openmed_list_models(
         models = {key: model for key, model in models.items() if key in allowed}
 
     limited_items = list(sorted(models.items()))[: max(limit, 0)]
-    return {
+    response = {
         "count": len(models),
         "returned": len(limited_items),
         "models": [_model_info_to_dict(key, model) for key, model in limited_items],
     }
+    return validate_registered_tool_output("openmed_list_models", response)
 
 
 def openmed_list_pii_languages() -> Dict[str, Any]:
@@ -298,7 +308,8 @@ def openmed_list_pii_languages() -> Dict[str, Any]:
                 "model_count": len(openmed.get_pii_models_by_language(code)),
             }
         )
-    return {"count": len(languages), "languages": languages}
+    response = {"count": len(languages), "languages": languages}
+    return validate_registered_tool_output("openmed_list_pii_languages", response)
 
 
 def openmed_loaded_models(
@@ -306,7 +317,8 @@ def openmed_loaded_models(
     runtime_provider: Optional[RuntimeProvider] = None,
 ) -> Dict[str, Any]:
     """Return currently loaded model resources for the MCP runtime."""
-    return _runtime(runtime_provider).loaded_models()
+    response = _runtime(runtime_provider).loaded_models()
+    return validate_registered_tool_output("openmed_loaded_models", response)
 
 
 def openmed_unload_model(
@@ -318,132 +330,47 @@ def openmed_unload_model(
     """Unload one inactive model or all inactive models from memory."""
     runtime = _runtime(runtime_provider)
     if all_models:
-        return runtime.unload_all_models()
+        response = runtime.unload_all_models()
+        return validate_registered_tool_output("openmed_unload_model", response)
     if model_name is None:
         raise ValueError("model_name is required unless all_models=true")
-    return runtime.unload_model(validate_model_name(model_name))
+    response = runtime.unload_model(validate_model_name(model_name))
+    return validate_registered_tool_output("openmed_unload_model", response)
 
 
 def _register_tools(
     server: Any,
     runtime_provider: Optional[RuntimeProvider],
 ) -> None:
-    @server.tool(name="openmed_analyze_text")
-    def _analyze_text_tool(
-        text: str,
-        model_name: str = "disease_detection_superclinical",
-        confidence_threshold: Optional[float] = 0.0,
-        group_entities: bool = False,
-        aggregation_strategy: Optional[str] = "simple",
-        sentence_detection: bool = True,
-        sentence_language: str = "en",
-        sentence_clean: bool = False,
-        use_fast_tokenizer: bool = True,
-        keep_alive: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Run OpenMed named-entity recognition on clinical text."""
-        return openmed_analyze_text(
-            text=text,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            group_entities=group_entities,
-            aggregation_strategy=aggregation_strategy,
-            sentence_detection=sentence_detection,
-            sentence_language=sentence_language,
-            sentence_clean=sentence_clean,
-            use_fast_tokenizer=use_fast_tokenizer,
-            keep_alive=keep_alive,
+    handlers: dict[str, Callable[..., Dict[str, Any]]] = {
+        "openmed_analyze_text": lambda **kwargs: openmed_analyze_text(
+            **kwargs,
             runtime_provider=runtime_provider,
-        )
-
-    @server.tool(name="openmed_extract_pii")
-    def _extract_pii_tool(
-        text: str,
-        model_name: str = DEFAULT_PII_MODELS["en"],
-        confidence_threshold: float = 0.5,
-        use_smart_merging: bool = True,
-        lang: str = "en",
-        normalize_accents: Optional[bool] = None,
-        keep_alive: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Extract PII/PHI entities from clinical text."""
-        return openmed_extract_pii(
-            text=text,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            use_smart_merging=use_smart_merging,
-            lang=lang,
-            normalize_accents=normalize_accents,
-            keep_alive=keep_alive,
+        ),
+        "openmed_extract_pii": lambda **kwargs: openmed_extract_pii(
+            **kwargs,
             runtime_provider=runtime_provider,
-        )
-
-    @server.tool(name="openmed_deidentify")
-    def _deidentify_tool(
-        text: str,
-        method: str = "mask",
-        model_name: str = DEFAULT_PII_MODELS["en"],
-        confidence_threshold: float = 0.7,
-        keep_year: bool = False,
-        shift_dates: Optional[bool] = None,
-        date_shift_days: Optional[int] = None,
-        keep_mapping: bool = False,
-        use_smart_merging: bool = True,
-        lang: str = "en",
-        normalize_accents: Optional[bool] = None,
-        keep_alive: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """De-identify text by masking, removing, replacing, hashing, or shifting."""
-        return openmed_deidentify(
-            text=text,
-            method=method,
-            model_name=model_name,
-            confidence_threshold=confidence_threshold,
-            keep_year=keep_year,
-            shift_dates=shift_dates,
-            date_shift_days=date_shift_days,
-            keep_mapping=keep_mapping,
-            use_smart_merging=use_smart_merging,
-            lang=lang,
-            normalize_accents=normalize_accents,
-            keep_alive=keep_alive,
+        ),
+        "openmed_deidentify": lambda **kwargs: openmed_deidentify(
+            **kwargs,
             runtime_provider=runtime_provider,
-        )
-
-    @server.tool(name="openmed_list_models")
-    def _list_models_tool(
-        category: Optional[str] = None,
-        pii_language: Optional[str] = None,
-        limit: int = 50,
-    ) -> Dict[str, Any]:
-        """List OpenMed model registry entries."""
-        return openmed_list_models(
-            category=category,
-            pii_language=pii_language,
-            limit=limit,
-        )
-
-    @server.tool(name="openmed_list_pii_languages")
-    def _list_pii_languages_tool() -> Dict[str, Any]:
-        """List supported PII languages and default models."""
-        return openmed_list_pii_languages()
-
-    @server.tool(name="openmed_loaded_models")
-    def _loaded_models_tool() -> Dict[str, Any]:
-        """Return currently loaded model resources."""
-        return openmed_loaded_models(runtime_provider=runtime_provider)
-
-    @server.tool(name="openmed_unload_model")
-    def _unload_model_tool(
-        model_name: Optional[str] = None,
-        all_models: bool = False,
-    ) -> Dict[str, Any]:
-        """Unload one inactive model, or all inactive models."""
-        return openmed_unload_model(
-            model_name=model_name,
-            all_models=all_models,
+        ),
+        "openmed_list_models": lambda **kwargs: openmed_list_models(**kwargs),
+        "openmed_list_pii_languages": (
+            lambda **kwargs: openmed_list_pii_languages(**kwargs)
+        ),
+        "openmed_loaded_models": lambda **kwargs: openmed_loaded_models(
+            **kwargs,
             runtime_provider=runtime_provider,
-        )
+        ),
+        "openmed_unload_model": lambda **kwargs: openmed_unload_model(
+            **kwargs,
+            runtime_provider=runtime_provider,
+        ),
+    }
+
+    for spec in TOOL_REGISTRY.latest_specs():
+        server.tool(name=spec.name)(render_mcp_tool(spec, handlers[spec.name]))
 
 
 def _register_resources(server: Any) -> None:
@@ -478,6 +405,14 @@ def _register_resources(server: Any) -> None:
                 ),
             }
         )
+
+    @server.resource(
+        "openmed://tool-registry",
+        name="OpenMed tool schema registry",
+        mime_type="application/json",
+    )
+    def _tool_registry_resource() -> str:
+        return _json_resource(render_tool_registry_document())
 
 
 def _register_prompts(server: Any) -> None:
