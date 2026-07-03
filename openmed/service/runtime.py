@@ -12,11 +12,24 @@ from openmed.core.models import ModelLoader
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
 from .keep_alive import parse_keep_alive
-from .warm_pool import WarmPool, parse_max_resident_models
+from .warm_pool import (
+    DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS,
+    DEFAULT_MODEL_FOOTPRINT_BYTES,
+    WarmPool,
+    parse_default_model_footprint_bytes,
+    parse_max_resident_models,
+    parse_memory_admission_wait_seconds,
+    parse_model_memory_budget_bytes,
+)
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
 SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
+SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR = "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"
+SERVICE_DEFAULT_MODEL_FOOTPRINT_ENV_VAR = (
+    "OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES"
+)
+SERVICE_MODEL_ADMISSION_WAIT_ENV_VAR = "OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS"
 SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
@@ -333,6 +346,9 @@ class ServiceRuntime:
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
     max_resident_models: Optional[int] = None
+    model_memory_budget_bytes: Optional[int] = None
+    default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
+    model_admission_wait_seconds: float = DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
     default_keep_alive_seconds: Optional[float] = None
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
@@ -354,6 +370,15 @@ class ServiceRuntime:
         max_resident_models = parse_max_resident_models(
             os.getenv(SERVICE_MAX_RESIDENT_ENV_VAR)
         )
+        memory_budget_bytes = parse_model_memory_budget_bytes(
+            os.getenv(SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR)
+        )
+        default_model_footprint_bytes = parse_default_model_footprint_bytes(
+            os.getenv(SERVICE_DEFAULT_MODEL_FOOTPRINT_ENV_VAR)
+        )
+        admission_wait_seconds = parse_memory_admission_wait_seconds(
+            os.getenv(SERVICE_MODEL_ADMISSION_WAIT_ENV_VAR)
+        )
         keep_alive = parse_keep_alive(os.getenv(SERVICE_KEEP_ALIVE_ENV_VAR))
         batching = parse_service_batching_config()
         coalescing = parse_service_coalescing_config()
@@ -363,6 +388,9 @@ class ServiceRuntime:
             config=config,
             preload_models=preload_models,
             max_resident_models=max_resident_models,
+            model_memory_budget_bytes=memory_budget_bytes,
+            default_model_footprint_bytes=default_model_footprint_bytes,
+            model_admission_wait_seconds=admission_wait_seconds,
             default_keep_alive_seconds=keep_alive,
             shutdown_drain_seconds=parse_shutdown_drain_seconds(
                 os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
@@ -392,6 +420,13 @@ class ServiceRuntime:
                         self.get_model_loader,
                         warm_models=self.preload_models,
                         max_resident_models=self.max_resident_models,
+                        memory_budget_bytes=self.model_memory_budget_bytes,
+                        default_model_footprint_bytes=(
+                            self.default_model_footprint_bytes
+                        ),
+                        memory_admission_wait_seconds=(
+                            self.model_admission_wait_seconds
+                        ),
                         default_keep_alive_seconds=self.default_keep_alive_seconds,
                         metrics=self.metrics,
                     )
@@ -495,6 +530,10 @@ class ServiceRuntime:
             return {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
+                "memory_budget_bytes": self.model_memory_budget_bytes,
+                "resident_memory_bytes": 0,
+                "pending_memory_bytes": 0,
+                "memory_admission_wait_seconds": (self.model_admission_wait_seconds),
                 "warm_models": list(self.preload_models),
                 "models": {},
             }
