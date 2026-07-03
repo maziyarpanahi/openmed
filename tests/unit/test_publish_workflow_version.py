@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PROVENANCE_WORKFLOW = ROOT / ".github" / "workflows" / "provenance.yml"
+IMAGE_SBOM_WORKFLOW = ROOT / ".github" / "workflows" / "sbom-image.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 
 
@@ -19,10 +20,12 @@ def test_publish_workflow_reads_version_without_importing_openmed_package():
     root imports runtime modules that depend on installed project dependencies.
     """
 
-    workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
+    publish_workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
 
-    assert "from openmed import __version__" not in workflow
-    assert "openmed/__about__.py" in workflow
+    assert "from openmed import __version__" not in publish_workflow
+    assert "from openmed import __version__" not in provenance_workflow
+    assert "openmed/__about__.py" in provenance_workflow
 
 
 def test_about_version_is_parseable_without_runtime_dependencies():
@@ -71,3 +74,32 @@ def test_publish_workflow_keeps_release_gates():
     assert "steps.release_metadata.outputs.next_version" in provenance_workflow
     assert "Verify version matches tag" in provenance_workflow
     assert "twine check dist/*" in provenance_workflow
+
+
+def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
+    workflow = IMAGE_SBOM_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "name: Image SBOM" in workflow
+    assert "docker/build-push-action" in workflow
+    assert "anchore/sbom-action" in workflow
+    assert "format: cyclonedx-json" in workflow
+    assert "Validate image SBOM" in workflow
+    assert 'bom.get("bomFormat") != "CycloneDX"' in workflow
+    assert "image SBOM is empty" in workflow
+    assert "image SBOM is malformed JSON" in workflow
+    assert "pkg:deb/" in workflow
+    assert "pkg:pypi/" in workflow
+    assert "if-no-files-found: error" in workflow
+
+
+def test_image_sbom_release_path_attaches_artifact_and_labels_image():
+    workflow = IMAGE_SBOM_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "gh release upload" in workflow
+    assert "image-sbom.cdx.json" in workflow
+    assert "image-sbom.cdx.json.sha256" in workflow
+    assert "docker/login-action" in workflow
+    assert "push: true" in workflow
+    assert (
+        "org.opencontainers.image.sbom.digest=${{ steps.sbom_digest.outputs.digest }}"
+    ) in workflow
