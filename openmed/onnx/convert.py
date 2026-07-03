@@ -36,6 +36,10 @@ from openmed.onnx.openvino_export import (
     export_openvino_ir,
     run_onnx_reference_logits,
 )
+from openmed.onnx.ort_mobile import (
+    ORT_ANDROID_FORMAT,
+    convert_android_onnx_to_ort,
+)
 from openmed.onnx.transformersjs import (
     DEFAULT_BUNDLE_DIRNAME,
     TRANSFORMERSJS_FORMAT,
@@ -279,6 +283,20 @@ def convert(
                 metadata=android_fp16_validation.to_metadata(),
             ),
         ]
+        ort_result = convert_android_onnx_to_ort(
+            onnx_path,
+            output_dir=output_dir,
+            validation=android_validation,
+        )
+        if not ort_result.skipped and ort_result.ort_path is not None:
+            artifacts.append(
+                ExportArtifact(
+                    format=ORT_ANDROID_FORMAT,
+                    path=ort_result.ort_path,
+                    precision="float32",
+                    metadata=ort_result.to_metadata(output_dir),
+                )
+            )
     elif profile == OPENVINO_PROFILE_NAME:
         config, tokenizer_files = save_source_assets(
             model_id,

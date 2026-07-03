@@ -1,8 +1,8 @@
 package com.openmed.openmedkit.ocr
 
 import android.graphics.Bitmap
-import com.google.mlkit.common.MlKit
 import com.google.mlkit.vision.common.InputImage
+import com.openmed.openmedkit.initializeMlKitForTests
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -100,7 +100,7 @@ class OcrOffsetMapTest {
     @Test
     fun fakeAdapterReturnsEmptyResultWithoutRunningRecognizer() = runBlocking {
         val adapter = FakeOcrAdapter()
-        MlKit.initialize(RuntimeEnvironment.getApplication())
+        initializeMlKitForTests(RuntimeEnvironment.getApplication())
         val image = InputImage.fromBitmap(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), 0)
 
         val result = adapter.recognize(image)
