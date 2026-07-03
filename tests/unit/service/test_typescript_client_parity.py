@@ -18,6 +18,8 @@ SDK_PACKAGE_PATH = SDK_ROOT / "package.json"
 CLIENT_METHOD_BY_PATH = {
     "/analyze": "analyze",
     "/health": "health",
+    "/jobs": "createJob",
+    "/jobs/{job_id}": "getJob",
     "/livez": "livez",
     "/models/loaded": "loadedModels",
     "/models/unload": "unloadModels",
