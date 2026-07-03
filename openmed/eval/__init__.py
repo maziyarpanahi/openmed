@@ -4,7 +4,12 @@ Intended contents include harness.py, metrics.py, suites/, golden/, report.py,
 calibrate.py, and release_gates.py.
 """
 
-from openmed.eval.attacks.linkage import LinkageAttackResult, linkage_attack
+from openmed.eval.attacks.linkage import (
+    LinkageAttackResult,
+    LongitudinalLinkageAttackResult,
+    linkage_attack,
+    longitudinal_linkage_attack,
+)
 from openmed.eval.attacks.reid import (
     ReidAttackResult,
     SideChannelProbeResult,
@@ -307,6 +312,7 @@ __all__ = [
     "HardNegativeMiningResult",
     "HardNegativeOverRedactionReport",
     "LinkageAttackResult",
+    "LongitudinalLinkageAttackResult",
     "GateCheck",
     "GateReport",
     "HeatmapCell",
@@ -413,6 +419,7 @@ __all__ = [
     "invalidate",
     "iter_synthetic_corpus_shard",
     "linkage_attack",
+    "longitudinal_linkage_attack",
     "load",
     "load_calibration_samples",
     "load_calibration_thresholds",
