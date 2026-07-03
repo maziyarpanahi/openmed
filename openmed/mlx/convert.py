@@ -467,11 +467,11 @@ def save_mlx_model(
     _cleanup_other_weight_files(weights_path)
     config_to_save["_mlx_weights_format"] = weights_format
 
-    with open(output_dir / "config.json", "w") as f:
+    with open(output_dir / "config.json", "w", encoding="utf-8") as f:
         json.dump(config_to_save, f, indent=2)
 
     if "id2label" in config_to_save:
-        with open(output_dir / "id2label.json", "w") as f:
+        with open(output_dir / "id2label.json", "w", encoding="utf-8") as f:
             json.dump(config_to_save["id2label"], f, indent=2)
 
     _finalize_artifact(
@@ -532,11 +532,11 @@ def save_numpy_model(
     _cleanup_other_weight_files(weights_path)
     config_to_save["_mlx_weights_format"] = weights_format
 
-    with open(output_dir / "config.json", "w") as f:
+    with open(output_dir / "config.json", "w", encoding="utf-8") as f:
         json.dump(config_to_save, f, indent=2)
 
     if "id2label" in config_to_save:
-        with open(output_dir / "id2label.json", "w") as f:
+        with open(output_dir / "id2label.json", "w", encoding="utf-8") as f:
             json.dump(config_to_save["id2label"], f, indent=2)
 
     _finalize_artifact(

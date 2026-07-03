@@ -18,7 +18,7 @@ let package = Package(
     dependencies: [
         // swift-transformers for HuggingFace-compatible tokenization
         .package(url: "https://github.com/huggingface/swift-transformers.git", from: "0.1.12"),
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.31.3"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.3"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.19"),
     ],
     targets: [
