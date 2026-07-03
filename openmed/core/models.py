@@ -45,6 +45,7 @@ from .model_registry import (
 from .model_registry import (
     ModelInfo as RegistryModelInfo,
 )
+from .offline import configure_offline_mode, is_local_only
 
 
 class ModelLoader:
@@ -63,6 +64,7 @@ class ModelLoader:
             )
 
         self.config = config or get_config()
+        configure_offline_mode(self.config)
         self._models = {}  # Cache for loaded models
         self._tokenizers = {}  # Cache for loaded tokenizers
         self._pipelines = {}  # Cache for created pipelines
@@ -82,6 +84,8 @@ class ModelLoader:
             List of model names available for loading.
         """
         models = []
+        if is_local_only(self.config):
+            include_remote = False
 
         if include_registry:
             registry_models = [info.model_id for info in get_all_models().values()]
@@ -116,7 +120,7 @@ class ModelLoader:
 
         # Check cache
         if not force_reload and full_model_name in self._models:
-            logger.info(f"Using cached model: {full_model_name}")
+            logger.info("Using cached model: %s", full_model_name)
             return {
                 "model": self._models[full_model_name],
                 "tokenizer": self._tokenizers[full_model_name],
@@ -124,7 +128,7 @@ class ModelLoader:
             }
 
         try:
-            logger.info(f"Loading model: {full_model_name}")
+            logger.info("Loading model: %s", full_model_name)
 
             auth_kwargs = self._hub_auth_kwargs()
             local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
@@ -159,7 +163,8 @@ class ModelLoader:
                     for arch in ["tokenclassification", "ner", "pos"]
                 ):
                     logger.warning(
-                        f"Model {full_model_name} may not be a TokenClassification model"
+                        "Model %s may not be a TokenClassification model",
+                        full_model_name,
                     )
 
             # Load tokenizer
@@ -194,7 +199,7 @@ class ModelLoader:
             self._models[full_model_name] = model
             self._tokenizers[full_model_name] = tokenizer
 
-            logger.info(f"Successfully loaded model: {full_model_name}")
+            logger.info("Successfully loaded model: %s", full_model_name)
 
             return {
                 "model": model,
@@ -203,8 +208,8 @@ class ModelLoader:
             }
 
         except Exception as e:
-            logger.error(f"Failed to load model {full_model_name}: {e}")
-            raise ValueError(f"Could not load model {full_model_name}: {e}")
+            logger.error("Failed to load model %s: %s", full_model_name, e)
+            raise ValueError(f"Could not load model {full_model_name}: {e}") from e
 
     def create_pipeline(
         self,
@@ -285,7 +290,7 @@ class ModelLoader:
         )
 
         if cache_key in self._pipelines:
-            logger.info(f"Using cached pipeline for {full_model_name}")
+            logger.info("Using cached pipeline for %s", full_model_name)
             return self._pipelines[cache_key]
 
         try:
@@ -321,11 +326,11 @@ class ModelLoader:
             ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
 
-            logger.info(f"Created pipeline for {full_model_name}")
+            logger.info("Created pipeline for %s", full_model_name)
             return ner_pipeline
 
         except Exception as e:
-            logger.error(f"Failed to create pipeline for {full_model_name}: {e}")
+            logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
             model_data = self.load_model(model_name)
 
@@ -572,6 +577,9 @@ class ModelLoader:
         kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Force local-only Hub loading for filesystem-backed model names."""
+        if is_local_only(self.config):
+            configure_offline_mode(self.config)
+            return {"local_files_only": True}
         if kwargs and "local_files_only" in kwargs:
             return {"local_files_only": kwargs["local_files_only"]}
         if self._as_existing_local_path(model_name) is not None:
