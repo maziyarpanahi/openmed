@@ -58,6 +58,7 @@ class TestLDiversity:
         for cls in report["equivalence_classes"]:
             assert cls["l_diversity"]["disease"]["distinct"] == 1
             assert cls["l_diversity"]["disease"]["entropy"] == 0.0
+        assert report["l"]["disease"] == 1
         assert report["l_diversity"]["disease"]["min_distinct"] == 1
 
     def test_distinct_counts_multiple_sensitive_values(self):
@@ -71,6 +72,20 @@ class TestLDiversity:
         cls = report["equivalence_classes"][0]
         assert cls["l_diversity"]["disease"]["distinct"] == 2
         assert cls["l_diversity"]["disease"]["entropy"] == pytest.approx(1.0)
+
+    def test_entropy_metric_selects_overall_entropy(self):
+        records = [
+            {"g": "A", "disease": "flu"},
+            {"g": "A", "disease": "cold"},
+        ]
+        report = kanon_report(
+            records,
+            quasi_identifiers=["g"],
+            sensitive_attributes=["disease"],
+            l_metric="entropy",
+        )
+        assert report["l"]["disease"] == pytest.approx(1.0)
+        assert report["l_diversity"]["disease"]["min_entropy"] == pytest.approx(1.0)
 
 
 class TestTCloseness:
@@ -127,6 +142,7 @@ class TestContract:
     def test_no_sensitive_attributes_reports_k_only(self):
         report = kanon_report(self.RECORDS, quasi_identifiers=["age", "zip"])
         assert report["k"] == 1
+        assert report["l"] == {}
         assert report["l_diversity"] == {}
         assert report["t_closeness"] == {}
 
@@ -139,3 +155,7 @@ class TestContract:
         report = kanon_report(records, sensitive_attributes=None)
         assert report["k"] >= 1
         assert json.loads(json.dumps(report)) == report
+
+    def test_unsupported_l_metric_is_rejected(self):
+        with pytest.raises(ValueError, match="Unsupported l_metric"):
+            kanon_report(self.RECORDS, quasi_identifiers=["age"], l_metric="ratio")
