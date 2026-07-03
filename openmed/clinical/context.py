@@ -259,6 +259,10 @@ _CONTEXT_CUE_CATEGORY_BY_TEXT = _cue_category_lookup()
 PATIENT_EXPERIENCER = "patient"
 FAMILY_EXPERIENCER = "family"
 
+# Experiencer labels shared by downstream grouping layers. Patient/family
+# disagreement is a hard safety boundary for coreference-style aggregation.
+EXPERIENCER_VALUES = (PATIENT_EXPERIENCER, FAMILY_EXPERIENCER)
+
 # Canonical names are lower_snake_case keys expected to compose with the
 # user-facing labels OM-086's detect_sections will emit. Aliases are normalized
 # with _normalize_section_label before lookup.
@@ -704,6 +708,19 @@ def _canonical_section_name(section: Any) -> str | None:
         return None
     normalized = _normalize_section_label(section_text)
     return SECTION_LABEL_ALIASES.get(normalized)
+
+
+def canonical_section_name(section: Any) -> str | None:
+    """Return the canonical section key used by clinical context priors.
+
+    The returned value is the lower_snake_case key from
+    ``SECTION_CONTEXT_PRIORS``/``SECTION_LABEL_ALIASES``. Unknown or missing
+    section labels return ``None``. This keeps section compatibility checks in
+    downstream deterministic grouping code aligned with the same OM-086 section
+    vocabulary used by ``apply_section_context``.
+    """
+
+    return _canonical_section_name(section)
 
 
 def canonical_section_label(section: Any) -> str | None:
@@ -1179,6 +1196,7 @@ __all__ = [
     "CANONICAL_SECTION_LABELS",
     "SECTION_LABEL_ALIASES",
     "SECTION_CONTEXT_PRIORS",
+    "canonical_section_name",
     "canonical_section_label",
     "apply_section_context",
     "resolve_span_context",

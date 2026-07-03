@@ -16,6 +16,7 @@ from openmed.core.quality_gates import (
     detect_overlapping_entities,
     validate_entity_spans,
 )
+from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import (
     BenchmarkFixture,
     ModelRunner,
@@ -292,6 +293,87 @@ class LabelingQueueArtifact:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
         return output_path
+
+
+@dataclass(frozen=True)
+class HardNegativeOverRedactionReport:
+    """Aggregate false-positive rate over synthetic hard-negative fixtures."""
+
+    suite: str
+    model_name: str
+    device: str
+    fixture_count: int
+    candidate_count: int
+    over_redacted_candidates: int
+    over_redaction_rate: float
+    by_label: Mapping[str, Mapping[str, int | float]]
+    generated_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready report dictionary."""
+        return {
+            "by_label": {
+                label: {
+                    "candidate_count": int(row.get("candidate_count", 0)),
+                    "over_redacted_candidates": int(
+                        row.get("over_redacted_candidates", 0)
+                    ),
+                    "over_redaction_rate": float(row.get("over_redaction_rate", 0.0)),
+                }
+                for label, row in sorted(self.by_label.items())
+            },
+            "candidate_count": self.candidate_count,
+            "device": self.device,
+            "fixture_count": self.fixture_count,
+            "generated_at": self.generated_at,
+            "model_name": self.model_name,
+            "over_redacted_candidates": self.over_redacted_candidates,
+            "over_redaction_rate": self.over_redaction_rate,
+            "suite": self.suite,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the report to deterministic JSON."""
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def to_markdown(self) -> str:
+        """Serialize the report to deterministic Markdown."""
+        lines = [
+            f"# Hard Negative Over-Redaction Report: {self.suite}",
+            "",
+            "| Field | Value |",
+            "|---|---:|",
+            f"| Fixtures | {self.fixture_count} |",
+            f"| Candidates | {self.candidate_count} |",
+            f"| Over-Redacted Candidates | {self.over_redacted_candidates} |",
+            f"| Over-Redaction Rate | {self.over_redaction_rate:.6f} |",
+        ]
+        if self.generated_at is not None:
+            lines.append(f"| Generated At | `{self.generated_at}` |")
+        lines.extend(
+            [
+                "",
+                "## Labels",
+                "",
+                "| Label | Candidates | Over-Redacted | Rate |",
+                "|---|---:|---:|---:|",
+            ]
+        )
+        if not self.by_label:
+            lines.append("| _None_ | 0 | 0 | 0.000000 |")
+        for label, row in sorted(self.by_label.items()):
+            lines.append(
+                f"| `{label}` | "
+                f"{int(row.get('candidate_count', 0))} | "
+                f"{int(row.get('over_redacted_candidates', 0))} | "
+                f"{float(row.get('over_redaction_rate', 0.0)):.6f} |"
+            )
+        return "\n".join(lines) + "\n"
 
 
 @dataclass(frozen=True)
@@ -928,6 +1010,79 @@ def error_report(
     )
 
 
+def hard_negative_over_redaction_report(
+    model: str | ModelRunner,
+    suite: str | Path | Sequence[BenchmarkFixture | Mapping[str, Any]],
+    *,
+    suite_name: str | None = None,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    generated_at: str | None = None,
+) -> HardNegativeOverRedactionReport:
+    """Measure false positives over synthetic hard-negative fixture candidates."""
+    fixtures = _coerce_fixtures(suite)
+    model_name, model_runner = _resolve_model_runner(model, runner)
+    report_suite = suite_name or _suite_name(suite)
+    by_label_counts: dict[str, dict[str, int]] = {}
+    candidate_count = 0
+    over_redacted = 0
+
+    for fixture in fixtures:
+        candidates = _hard_negative_candidate_rows(fixture)
+        if not candidates:
+            continue
+        raw_predictions = list(model_runner(fixture, model_name, device))
+        predicted_spans = normalize_eval_spans(
+            raw_predictions,
+            default_language=fixture.language,
+            default_device=device,
+            source_text=fixture.text,
+        )
+        validate_entity_spans(
+            [span.to_entity() for span in predicted_spans],
+            fixture.text,
+        )
+        for candidate in candidates:
+            label = str(candidate["label"])
+            start = int(candidate["start"])
+            end = int(candidate["end"])
+            candidate_count += 1
+            row = by_label_counts.setdefault(
+                label,
+                {"candidate_count": 0, "over_redacted_candidates": 0},
+            )
+            row["candidate_count"] += 1
+            if any(
+                _intervals_overlap(start, end, prediction.start, prediction.end)
+                for prediction in predicted_spans
+            ):
+                over_redacted += 1
+                row["over_redacted_candidates"] += 1
+
+    by_label = {
+        label: {
+            "candidate_count": row["candidate_count"],
+            "over_redacted_candidates": row["over_redacted_candidates"],
+            "over_redaction_rate": _rate(
+                row["over_redacted_candidates"],
+                row["candidate_count"],
+            ),
+        }
+        for label, row in by_label_counts.items()
+    }
+    return HardNegativeOverRedactionReport(
+        suite=report_suite,
+        model_name=model_name,
+        device=device,
+        fixture_count=len(fixtures),
+        candidate_count=candidate_count,
+        over_redacted_candidates=over_redacted,
+        over_redaction_rate=_rate(over_redacted, candidate_count),
+        by_label=by_label,
+        generated_at=generated_at,
+    )
+
+
 def _accumulate_fixture_errors(
     *,
     fixture: BenchmarkFixture,
@@ -1040,6 +1195,15 @@ def _spans_overlap(a: EvalSpan, b: EvalSpan) -> bool:
     return bool(detect_overlapping_entities([a.to_entity(), b.to_entity()]))
 
 
+def _intervals_overlap(
+    left_start: int,
+    left_end: int,
+    right_start: int,
+    right_end: int,
+) -> bool:
+    return left_start < right_end and right_start < left_end
+
+
 def _overlap_len(a: EvalSpan, b: EvalSpan) -> int:
     if not _spans_overlap(a, b):
         return 0
@@ -1102,6 +1266,27 @@ def _coerce_fixtures(
         else BenchmarkFixture.from_mapping(fixture)
         for fixture in suite
     ]
+
+
+def _hard_negative_candidate_rows(
+    fixture: BenchmarkFixture,
+) -> list[Mapping[str, Any]]:
+    if fixture.metadata.get("category") != HARD_NEGATIVE_CATEGORY:
+        return []
+    rows = fixture.metadata.get("hard_negative_candidates")
+    if not isinstance(rows, list):
+        return []
+    candidates: list[Mapping[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        if {"start", "end", "label"} <= set(row):
+            candidates.append(row)
+    return candidates
+
+
+def _rate(numerator: int, denominator: int) -> float:
+    return numerator / denominator if denominator else 0.0
 
 
 def _resolve_model_runner(
@@ -1242,8 +1427,10 @@ __all__ = [
     "SPURIOUS",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
+    "HardNegativeOverRedactionReport",
     "LabelingQueueArtifact",
     "LabelingQueueItem",
     "error_report",
+    "hard_negative_over_redaction_report",
     "mine_gate_failure_labeling_queue",
 ]
