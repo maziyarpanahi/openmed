@@ -356,6 +356,118 @@
         "title": "PIIExtractRequest",
         "type": "object"
       },
+      "PIIExtractStreamRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for /pii/extract/stream.",
+        "properties": {
+          "chunk_size": {
+            "default": 1024,
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Chunk Size",
+            "type": "integer"
+          },
+          "confidence_threshold": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "include_text": {
+            "default": true,
+            "title": "Include Text",
+            "type": "boolean"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "max_entity_chars": {
+            "default": 512,
+            "minimum": 1.0,
+            "title": "Max Entity Chars",
+            "type": "integer"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "tokenizer_context_chars": {
+            "default": 128,
+            "minimum": 0.0,
+            "title": "Tokenizer Context Chars",
+            "type": "integer"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          },
+          "window_chars": {
+            "default": 4096,
+            "minimum": 64.0,
+            "title": "Window Chars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PIIExtractStreamRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -627,6 +739,42 @@
           }
         },
         "summary": "Pii Extract"
+      }
+    },
+    "/pii/extract/stream": {
+      "post": {
+        "operationId": "pii_extract_stream_pii_extract_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PIIExtractStreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pii Extract Stream"
       }
     },
     "/readyz": {
