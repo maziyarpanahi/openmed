@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from faker import Faker
 
+from openmed.core.anonymizer.locales import FAKER_BACKEND_LOCALE
 from openmed.core.anonymizer.providers import registry_ids
 from openmed.core.anonymizer.providers.clinical_ids import register_clinical_providers
 from openmed.core.anonymizer.providers.registry_ids import (
@@ -28,9 +29,11 @@ EXPECTED_VALIDATOR_KEYS = (
     ("nl", "bsn"),
     ("in", "aadhaar"),
     ("id", "nik"),
+    ("ms", "mykad"),
     ("th", "thai_national_id"),
     ("he", "teudat_zehut"),
     ("pl", "pesel"),
+    ("lv", "personas_kods"),
     ("ko", "rrn"),
     ("pt", "cpf"),
     ("pt", "cnpj"),
@@ -48,9 +51,11 @@ ROUND_TRIP_CASES = (
     ("nl", "bsn", "nl_NL"),
     ("in", "aadhaar", "en_IN"),
     ("id", "nik", "id_ID"),
+    ("ms", "mykad", "ms_MY"),
     ("th", "thai_national_id", "th_TH"),
     ("he", "teudat_zehut", "he_IL"),
     ("pl", "pesel", "pl_PL"),
+    ("lv", "personas_kods", "lv_LV"),
     ("ko", "rrn", "ko_KR"),
     ("pt", "cpf", "pt_BR"),
     ("pt", "cnpj", "pt_BR"),
@@ -93,7 +98,7 @@ class TestNationalIdRegistry:
         spec = get_national_id(lang, id_type)
         assert spec is not None
 
-        faker = Faker(locale)
+        faker = Faker(FAKER_BACKEND_LOCALE.get(locale, locale))
         register_clinical_providers(faker)
         faker.seed_instance(42)
         surrogate = getattr(faker, spec.faker_method)()

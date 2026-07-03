@@ -7,7 +7,10 @@ from .batch import (
     BatchProcessor,
     BatchProgress,
     BatchResult,
+    DatasetRedactionResult,
+    DatasetRedactionSummary,
     process_batch,
+    redact_dataset,
 )
 from .distributed import (
     DocumentIdExtractor,
@@ -47,7 +50,10 @@ __all__ = [
     "BatchItemResult",
     "BatchProgress",
     "BatchResult",
+    "DatasetRedactionResult",
+    "DatasetRedactionSummary",
     "process_batch",
+    "redact_dataset",
     "DocumentIdExtractor",
     "DocumentShard",
     "ShardPlan",
