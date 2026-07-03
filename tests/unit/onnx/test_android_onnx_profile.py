@@ -181,6 +181,15 @@ def test_convert_android_profile_records_fp32_fp16_artifacts_and_metadata(
     monkeypatch.setattr(
         module, "validate_android_profile", fake_validate_android_profile
     )
+    monkeypatch.setattr(
+        module,
+        "convert_android_onnx_to_ort",
+        lambda *args, **kwargs: types.SimpleNamespace(
+            skipped=True,
+            ort_path=None,
+            skip_reason="tooling unavailable",
+        ),
+    )
     monkeypatch.setattr(module, "save_source_assets", fake_save_source_assets)
     monkeypatch.setattr(
         module,
