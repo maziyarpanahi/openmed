@@ -24,6 +24,7 @@ _MULTIMODAL_DEPENDENCIES: tuple[tuple[str, str], ...] = (
     ("markdown_it", "markdown-it-py"),
     ("piexif", "piexif"),
     ("pikepdf", "pikepdf"),
+    ("pydicom", "pydicom"),
 )
 
 _MULTIMODAL_INSTALL_HINT = 'Install with: pip install "openmed[multimodal]".'
