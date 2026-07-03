@@ -58,6 +58,14 @@ export interface PIIExtractRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface PIIExtractStreamRequest extends PIIExtractRequest {
+  chunk_size?: number;
+  window_chars?: number;
+  tokenizer_context_chars?: number;
+  max_entity_chars?: number;
+  include_text?: boolean;
+}
+
 export interface PIIDeidentifyRequest {
   text: string;
   method?: DeidentificationMethod;
@@ -125,6 +133,8 @@ export interface PIIDeidentifyResponse {
 export type AnalyzeResponse = PredictionResult;
 
 export type PIIExtractResponse = PredictionResult;
+
+export type PIIExtractStreamResponse = string;
 
 export interface HealthResponse {
   status: string;
@@ -227,6 +237,12 @@ export class OpenMedClient {
 
   async extractPii(request: PIIExtractRequest): Promise<PIIExtractResponse> {
     return this.post("/pii/extract", request);
+  }
+
+  async extractPiiStream(
+    request: PIIExtractStreamRequest,
+  ): Promise<PIIExtractStreamResponse> {
+    return this.post("/pii/extract/stream", request);
   }
 
   async deidentify(
