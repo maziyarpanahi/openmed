@@ -205,6 +205,14 @@ def _jwt_rs256(payload: dict[str, Any]) -> str:
     return f"{signing_input}.{_b64url(signature.to_bytes(key_size, 'big'))}"
 
 
+def _tamper_jwt_signature(token: str) -> str:
+    header, payload, signature_segment = token.split(".")
+    padding = "=" * (-len(signature_segment) % 4)
+    signature = bytearray(base64.urlsafe_b64decode(signature_segment + padding))
+    signature[0] ^= 0x01
+    return f"{header}.{payload}.{_b64url(bytes(signature))}"
+
+
 def test_auth_defaults_to_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_analyze(text: str, **_: Any) -> PredictionResult:
         return _prediction_result(text)
@@ -334,7 +342,7 @@ def test_jwt_hs_and_rs_signatures_and_expiry_are_validated(
             "/models/loaded",
             headers={"Authorization": f"Bearer {rs_token}"},
         )
-        tampered = rs_token[:-1] + ("A" if rs_token[-1] != "A" else "B")
+        tampered = _tamper_jwt_signature(rs_token)
         tampered_response = client.get(
             "/models/loaded",
             headers={"Authorization": f"Bearer {tampered}"},

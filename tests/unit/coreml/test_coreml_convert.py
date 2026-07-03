@@ -7,6 +7,7 @@ import json
 import sys
 import types
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -33,6 +34,9 @@ class TestCoreMLConvertModule:
         assert "compute_units" in params
         assert "quantize" in params
         assert "quantized_output_path" in params
+        assert "conversion_manifest_path" in params
+        assert "eval_suite_path" in params
+        assert "swift_parity_corpus_path" in params
 
     def test_main_exists(self):
         from openmed.coreml.convert import main
@@ -100,6 +104,7 @@ def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):
     assert float_metadata["quantization"] == "none"
     assert int8_metadata["compute_units"] == "cpuAndNeuralEngine"
     assert int8_metadata["quantization"] == "int8"
+    assert float_metadata["ane_optimization_profile"] == "static-rank2-fp16"
 
     assert json.loads((tmp_path / "privacy_id2label.json").read_text()) == {
         "0": "O",
@@ -112,6 +117,16 @@ def test_convert_emits_float16_and_int8_packages(monkeypatch, tmp_path):
     assert state.config_loads == 1
     assert state.tokenizer_loads == 1
     assert state.model_loads == 1
+
+    manifest = json.loads((tmp_path / "privacy_coreml_manifest.json").read_text())
+    assert manifest["format"] == "openmed-coreml"
+    assert [variant["name"] for variant in manifest["variants"]] == [
+        "coreml-fp16",
+        "coreml-int8",
+    ]
+    assert manifest["variants"][0]["precision"] == "float16"
+    assert manifest["variants"][0]["latency_ms"]["measured"] is False
+    assert manifest["variants"][0]["residency"]["source"] == "missing_compute_plan"
 
 
 def test_convert_uses_custom_quantized_output_path(monkeypatch, tmp_path):
@@ -139,6 +154,102 @@ def test_convert_uses_custom_quantized_output_path(monkeypatch, tmp_path):
         "0": "O",
         "1": "B-NAME",
     }
+
+
+def test_convert_emits_int8_and_int4_variants(monkeypatch, tmp_path):
+    from openmed.coreml.convert import convert
+
+    state = _install_conversion_stubs(
+        monkeypatch,
+        model_type="bert",
+        architectures=["BertForTokenClassification"],
+    )
+    output_path = tmp_path / "privacy.mlpackage"
+
+    convert(
+        "OpenMed/tiny-stub",
+        output_path,
+        max_seq_length=16,
+        quantize="all",
+    )
+
+    assert (tmp_path / "privacy_int8.mlpackage").is_dir()
+    assert (tmp_path / "privacy_int4.mlpackage").is_dir()
+    assert [config.nbits for config in state.palettizer_configs] == [8, 4]
+
+    manifest = json.loads((tmp_path / "privacy_coreml_manifest.json").read_text())
+    assert [variant["name"] for variant in manifest["variants"]] == [
+        "coreml-fp16",
+        "coreml-int8",
+        "coreml-int4",
+    ]
+    assert manifest["variants"][2]["quantization"] == "int4"
+
+
+def test_analyze_ane_residency_flags_cpu_fallback(tmp_path):
+    from openmed.coreml.convert import analyze_ane_residency
+
+    compiled = tmp_path / "compiled.mlmodelc"
+    compiled.mkdir()
+    (compiled / "compute_plan.json").write_text(
+        json.dumps(
+            {
+                "operations": [
+                    {"name": "attention/q", "compute_unit": "ANE", "flops": 45},
+                    {
+                        "name": "attention/k",
+                        "compute_unit": "NeuralEngine",
+                        "flops": 45,
+                    },
+                    {"name": "classifier", "compute_unit": "CPU", "flops": 10},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = analyze_ane_residency(compiled)
+
+    assert report.ane_residency_percentage == pytest.approx(0.90)
+    assert report.cpu_fallback_layers[0].name == "classifier"
+    assert report.passed is False
+
+
+def test_write_coreml_variant_parity_report_rejects_int4(tmp_path):
+    from openmed.coreml.convert import write_coreml_variant_parity_report
+
+    fixture_path = _write_fixture(tmp_path / "fixtures.json")
+    paths = {
+        "coreml-fp16": tmp_path / "fp16.mlpackage",
+        "coreml-int8": tmp_path / "int8.mlpackage",
+        "coreml-int4": tmp_path / "int4.mlpackage",
+    }
+    for path in paths.values():
+        path.mkdir()
+
+    report = write_coreml_variant_parity_report(
+        source_model_id="OpenMed/stub",
+        variant_paths=paths,
+        eval_suite_path=fixture_path,
+        output_path=tmp_path / "coreml_parity.json",
+        swift_corpus_path=tmp_path / "swift_parity.json",
+        parent_runner=_perfect_runner,
+        candidate_runners={
+            "coreml-fp16": _perfect_runner,
+            "coreml-int8": _perfect_runner,
+            "coreml-int4": _miss_runner,
+        },
+    )
+
+    by_format = {variant["format"]: variant for variant in report["variants"]}
+    assert by_format["coreml-fp16"]["passed"] is True
+    assert by_format["coreml-int8"]["passed"] is True
+    assert by_format["coreml-int4"]["passed"] is False
+    assert by_format["coreml-int4"]["auto_rejected"] is True
+
+    swift_payload = json.loads((tmp_path / "swift_parity.json").read_text())
+    assert "text" not in swift_payload["fixtures"][0]
+    assert swift_payload["fixtures"][0]["text_sha256"]
 
 
 def test_convert_rejects_unsupported_architecture(monkeypatch, tmp_path):
@@ -271,6 +382,7 @@ def _install_conversion_stubs(
         convert_kwargs=None,
         model_loads=0,
         palettizer_config=None,
+        palettizer_configs=[],
         tokenizer_loads=0,
     )
 
@@ -340,6 +452,50 @@ def _install_conversion_stubs(
     return state
 
 
+def _write_fixture(path: Path) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "fixtures": [
+                    {
+                        "id": "stub-note",
+                        "text": "Patient John Doe arrived today.",
+                        "gold_spans": [
+                            {
+                                "start": 8,
+                                "end": 16,
+                                "label": "PERSON",
+                                "text": "John Doe",
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _perfect_runner(fixture: Any, model_name: str, device: str) -> list[dict[str, Any]]:
+    del model_name, device
+    span = fixture.gold_spans[0]
+    return [
+        {
+            "entity_group": span.label,
+            "score": 0.99,
+            "start": span.start,
+            "end": span.end,
+            "word": fixture.text[span.start : span.end],
+        }
+    ]
+
+
+def _miss_runner(fixture: Any, model_name: str, device: str) -> list[dict[str, Any]]:
+    del fixture, model_name, device
+    return []
+
+
 def _fake_coremltools_module(state, *, include_optimizer: bool = True):
     coremltools_module = types.ModuleType("coremltools")
     coremltools_module.precision = types.SimpleNamespace(
@@ -362,6 +518,7 @@ def _fake_coremltools_module(state, *, include_optimizer: bool = True):
 
     def fake_palettize_weights(mlmodel, *, config):
         state.palettizer_config = config.global_config
+        state.palettizer_configs.append(config.global_config)
         return _FakeCoreMLModel(kind="int8", source=mlmodel)
 
     coremltools_module.convert = fake_convert
