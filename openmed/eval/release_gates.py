@@ -528,6 +528,7 @@ class ReleaseGate:
 
         checks.append(_manifest_coherence_check(identity, metadata))
         checks.append(_calibration_check(metadata, profile))
+        checks.append(_conformal_coverage_check(metrics, metadata))
         checks.append(
             self._g1a_check(
                 per_label_recall,
@@ -1164,6 +1165,154 @@ def _calibration_check(metadata: Mapping[str, Any], profile: Any | None) -> Gate
             "calibration_report_present": report_present,
         },
     )
+
+
+def _conformal_coverage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    report, error, explicit = _conformal_coverage_report(metrics, metadata)
+    required = bool(
+        _first_value(
+            metadata.get("require_conformal_coverage"),
+            metrics.get("require_conformal_coverage"),
+            False,
+        )
+    )
+    if error:
+        return GateCheck("conformal_coverage", False, reason=error)
+    if not report:
+        if required:
+            return GateCheck(
+                "conformal_coverage",
+                False,
+                reason="calibration-under-shift report is required",
+            )
+        return GateCheck(
+            "conformal_coverage",
+            True,
+            reason="not provided",
+            details={"required": False},
+        )
+
+    groups = report.get("groups")
+    if not isinstance(groups, Sequence) or isinstance(groups, (str, bytes)):
+        return GateCheck(
+            "conformal_coverage",
+            False,
+            reason="calibration-under-shift report requires groups",
+        )
+
+    default_alpha = _optional_float(report.get("alpha"))
+    default_target = _optional_float(report.get("target_coverage"))
+    if default_target is None and default_alpha is not None:
+        default_target = 1.0 - default_alpha
+    if default_target is None:
+        default_target = 1.0 - 0.05
+    tolerance = _optional_float(report.get("coverage_tolerance"))
+    if tolerance is None:
+        tolerance = 0.01
+
+    evaluated: list[str] = []
+    violations: dict[str, Any] = {}
+    for item in groups:
+        if not isinstance(item, Mapping):
+            continue
+        label = normalize_label(str(item.get("label") or ""))
+        if label not in _CRITICAL_LABELS:
+            continue
+        gate_weight = _optional_float(
+            _first_value(
+                item.get("positive_gate_weight"), item.get("total_gate_weight")
+            )
+        )
+        if gate_weight is not None and gate_weight <= 0.0:
+            continue
+        coverage = _optional_float(
+            _first_value(item.get("positive_coverage"), item.get("realized_coverage"))
+        )
+        if coverage is None:
+            coverage = 0.0
+        target = _optional_float(item.get("target_coverage"))
+        if target is None:
+            target = default_target
+        language = str(item.get("language") or "").lower()
+        key = f"{label}:{language or '*'}"
+        evaluated.append(key)
+        gap = max(float(target) - float(coverage), 0.0)
+        if float(coverage) + float(tolerance) < float(target):
+            violations[key] = {
+                "label": label,
+                "language": language,
+                "coverage": coverage,
+                "target_coverage": target,
+                "coverage_gap": gap,
+                "tolerance": tolerance,
+            }
+
+    if violations:
+        return GateCheck(
+            "conformal_coverage",
+            False,
+            reason="critical-label conformal coverage below target",
+            details={
+                "target_coverage": default_target,
+                "coverage_tolerance": tolerance,
+                "critical_labels_evaluated": sorted(evaluated),
+                "violations": violations,
+                "language_coverage": _mapping(report.get("language_coverage")),
+                "explicit": explicit,
+            },
+        )
+
+    return GateCheck(
+        "conformal_coverage",
+        True,
+        details={
+            "target_coverage": default_target,
+            "coverage_tolerance": tolerance,
+            "critical_labels_evaluated": sorted(evaluated),
+            "language_coverage": _mapping(report.get("language_coverage")),
+            "explicit": explicit,
+        },
+    )
+
+
+def _conformal_coverage_report(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, Any], str, bool]:
+    inline = _first_mapping(
+        metadata.get("calibration_under_shift"),
+        metadata.get("calibration_under_shift_report"),
+        metadata.get("conformal_coverage"),
+        metrics.get("calibration_under_shift"),
+        metrics.get("calibration_under_shift_report"),
+        metrics.get("conformal_coverage"),
+    )
+    if inline:
+        return inline, "", True
+
+    path_value = _first_value(
+        metadata.get("calibration_under_shift_report_path"),
+        metadata.get("under_shift_report_path"),
+        metadata.get("conformal_coverage_path"),
+        metrics.get("calibration_under_shift_report_path"),
+        metrics.get("under_shift_report_path"),
+        metrics.get("conformal_coverage_path"),
+    )
+    if path_value is None:
+        return {}, "", False
+    path = Path(str(path_value))
+    if not path.is_file():
+        return {}, f"calibration-under-shift report not found: {path}", True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"could not read calibration-under-shift report: {exc}", True
+    if not isinstance(payload, Mapping):
+        return {}, "calibration-under-shift report must be a JSON object", True
+    return dict(payload), "", True
 
 
 def _recall_floor_check(
