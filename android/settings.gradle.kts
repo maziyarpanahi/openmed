@@ -2,6 +2,7 @@ pluginManagement {
     repositories {
         google()
         mavenCentral()
+        gradlePluginPortal()
     }
     resolutionStrategy {
         eachPlugin {
@@ -26,3 +27,5 @@ dependencyResolutionManagement {
 rootProject.name = "openmed-android"
 
 include(":openmedkit")
+// Reserved for a future app/demo module; enable once android/sample exists.
+// include(":sample")

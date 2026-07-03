@@ -1,0 +1,199 @@
+name: Container Image Signing
+
+on:
+  workflow_run:
+    workflows:
+      - Container Multi-Arch
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      image_ref:
+        description: "Image tag or digest to sign, for example ghcr.io/maziyarpanahi/openmed:sha-<commit>"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+  OIDC_ISSUER: https://token.actions.githubusercontent.com
+  SIGNER_IDENTITY_RE: '^https://github.com/${{ github.repository }}/\.github/workflows/image-signing\.yml@refs/(heads/master|tags/v.*)$'
+
+jobs:
+  sign-and-verify:
+    name: Sign, attest, and verify image
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event != 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      )
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0.24.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve published image digest
+        id: image
+        shell: bash
+        env:
+          DISPATCH_IMAGE_REF: ${{ inputs.image_ref }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${DISPATCH_IMAGE_REF:-}" ]; then
+            image_ref="${DISPATCH_IMAGE_REF}"
+            source_sha="${GITHUB_SHA}"
+          else
+            source_sha="${WORKFLOW_RUN_SHA:-$GITHUB_SHA}"
+            image_ref="${IMAGE_NAME}:sha-${source_sha:0:12}"
+          fi
+
+          digest="$(docker buildx imagetools inspect "$image_ref" --format '{{ .Manifest.Digest }}')"
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error title=Image digest lookup failed::Could not resolve a sha256 digest for $image_ref"
+            exit 1
+          fi
+
+          {
+            echo "image_ref=$image_ref"
+            echo "image_digest_ref=${IMAGE_NAME}@${digest}"
+            echo "digest=$digest"
+            echo "source_sha=$source_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX image SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          syft "${{ steps.image.outputs.image_digest_ref }}" \
+            -o cyclonedx-json=sbom.cdx.json
+          jq -e '.bomFormat == "CycloneDX" and (.components | type == "array")' \
+            sbom.cdx.json > /dev/null
+
+      - name: Generate SLSA provenance predicate
+        shell: bash
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.image.outputs.image_digest_ref }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          SOURCE_SHA: ${{ steps.image.outputs.source_sha }}
+          SOURCE_REF: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+          PUBLISH_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          digest_hex="${IMAGE_DIGEST#sha256:}"
+          jq -n \
+            --arg build_type "https://github.com/Attestations/GitHubActionsWorkflow@v1" \
+            --arg image "$IMAGE_DIGEST_REF" \
+            --arg source_repo "https://github.com/${GITHUB_REPOSITORY}" \
+            --arg source_ref "$SOURCE_REF" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg publish_workflow ".github/workflows/container-multiarch.yml" \
+            --arg signing_workflow ".github/workflows/image-signing.yml" \
+            --arg signing_run "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg publish_run "${PUBLISH_RUN_ID:-manual}" \
+            --arg digest_hex "$digest_hex" \
+            '{
+              buildDefinition: {
+                buildType: $build_type,
+                externalParameters: {
+                  image: $image,
+                  sourceRepository: $source_repo,
+                  sourceRef: $source_ref,
+                  sourceSha: $source_sha,
+                  publishingWorkflow: $publish_workflow,
+                  signingWorkflow: $signing_workflow
+                },
+                internalParameters: {
+                  publishingWorkflowRunId: $publish_run,
+                  signingWorkflowRunId: env.GITHUB_RUN_ID
+                },
+                resolvedDependencies: [
+                  {
+                    uri: $source_repo,
+                    digest: {
+                      gitCommit: $source_sha
+                    }
+                  },
+                  {
+                    uri: $image,
+                    digest: {
+                      sha256: $digest_hex
+                    }
+                  }
+                ]
+              },
+              runDetails: {
+                builder: {
+                  id: ("https://github.com/" + env.GITHUB_REPOSITORY + "/" + $signing_workflow)
+                },
+                metadata: {
+                  invocationId: $signing_run
+                }
+              }
+            }' > provenance.json
+
+          jq -e --arg digest_hex "$digest_hex" '
+            .buildDefinition.externalParameters.image == env.IMAGE_DIGEST_REF and
+            .buildDefinition.resolvedDependencies[1].digest.sha256 == $digest_hex
+          ' provenance.json > /dev/null
+
+      - name: Sign image and attach attestations
+        shell: bash
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.image.outputs.image_digest_ref }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "$IMAGE_DIGEST_REF"
+          cosign attest --yes \
+            --predicate sbom.cdx.json \
+            --type https://cyclonedx.org/bom \
+            "$IMAGE_DIGEST_REF"
+          cosign attest --yes \
+            --predicate provenance.json \
+            --type https://slsa.dev/provenance/v1 \
+            "$IMAGE_DIGEST_REF"
+
+      - name: Verify signature and attestations
+        shell: bash
+        env:
+          IMAGE_DIGEST_REF: ${{ steps.image.outputs.image_digest_ref }}
+        run: |
+          set -euo pipefail
+          cosign verify "$IMAGE_DIGEST_REF" \
+            --certificate-identity-regexp "$SIGNER_IDENTITY_RE" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" > signature.json
+          cosign verify-attestation "$IMAGE_DIGEST_REF" \
+            --type https://cyclonedx.org/bom \
+            --certificate-identity-regexp "$SIGNER_IDENTITY_RE" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" > sbom-attestation.jsonl
+          cosign verify-attestation "$IMAGE_DIGEST_REF" \
+            --type https://slsa.dev/provenance/v1 \
+            --certificate-identity-regexp "$SIGNER_IDENTITY_RE" \
+            --certificate-oidc-issuer "$OIDC_ISSUER" > provenance-attestation.jsonl
+
+          test -s signature.json
+          test -s sbom-attestation.jsonl
+          test -s provenance-attestation.jsonl
