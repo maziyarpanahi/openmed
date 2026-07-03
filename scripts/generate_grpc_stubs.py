@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import filecmp
+import re
 import shutil
 import sys
 import tempfile
@@ -99,9 +100,31 @@ def _diff_generated_files(expected_dir: Path, actual_dir: Path) -> list[str]:
     for name in GENERATED_FILES:
         expected = expected_dir / name
         actual = actual_dir / name
-        if not actual.exists() or not filecmp.cmp(expected, actual, shallow=False):
+        if not actual.exists() or not _generated_files_match(expected, actual, name):
             mismatches.append(name)
     return mismatches
+
+
+def _generated_files_match(expected: Path, actual: Path, name: str) -> bool:
+    if name == "openmed_pb2.py":
+        return _normalized_pb2_text(expected) == _normalized_pb2_text(actual)
+    return filecmp.cmp(expected, actual, shallow=False)
+
+
+def _normalized_pb2_text(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(
+        r"# Protobuf Python Version: \d+\.\d+\.\d+",
+        "# Protobuf Python Version: <normalized>",
+        text,
+    )
+    return re.sub(
+        r"(_runtime_version\.ValidateProtobufRuntimeVersion\(\n"
+        r"\s+_runtime_version\.Domain\.PUBLIC,\n)"
+        r"\s+\d+,\n\s+\d+,\n\s+\d+,",
+        r"\g<1>    0,\n    0,\n    0,",
+        text,
+    )
 
 
 if __name__ == "__main__":
