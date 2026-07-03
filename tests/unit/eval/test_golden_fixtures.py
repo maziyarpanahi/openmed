@@ -15,6 +15,7 @@ from openmed.core.pii_i18n import (
     validate_czechoslovak_rodne_cislo,
     validate_israeli_teudat_zehut,
     validate_latvian_personas_kods,
+    validate_malaysian_mykad,
     validate_portuguese_cpf,
 )
 from openmed.eval import harness
@@ -197,6 +198,73 @@ def test_slovak_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "81101"
     assert gold_by_label["STREET_ADDRESS"] == "Hlavna ulica 12"
     assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
+
+
+def test_malay_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ms.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "ms"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "17/08/1985"
+    assert gold_by_label["PHONE"] == "+60 12-345 6789"
+    assert gold_by_label["STREET_ADDRESS"] == "Jalan Merdeka 10"
+    assert validate_malaysian_mykad(gold_by_label["ID_NUM"])
+
+
+def test_malay_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ms.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-02T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    for span in fixture.gold_spans:
+        assert span.text not in result.deidentified_text
 
 
 def test_nested_overlap_fixture_asserts_resolution_not_just_detection():
