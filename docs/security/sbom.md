@@ -5,6 +5,10 @@ materials so downstream healthcare integrators can inventory the dependency tree
 and answer a supply-chain audit. The SBOM names `openmed` as the root component
 and lists the dependencies resolved in the target environment.
 
+This page covers the Python package SBOM. Container image releases publish a
+separate [image SBOM](../supply-chain/sbom.md) generated from the built Docker
+image.
+
 ## Generate it locally
 
 ```bash

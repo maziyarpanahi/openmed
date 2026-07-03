@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.OpenMedDemo" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
