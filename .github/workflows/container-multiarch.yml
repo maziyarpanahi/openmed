@@ -19,6 +19,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
   packages: write
 
 env:
@@ -145,6 +147,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push manifest list
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -165,3 +168,59 @@ jobs:
           docker buildx imagetools inspect "$image" | tee manifest.txt
           grep -Eq 'Platform:[[:space:]]+linux/amd64' manifest.txt
           grep -Eq 'Platform:[[:space:]]+linux/arm64' manifest.txt
+
+      - name: Generate SLSA provenance for image
+        id: attest-image
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+          create-storage-record: false
+
+      - name: Preserve image attestation bundle
+        shell: bash
+        run: |
+          test -s "${{ steps.attest-image.outputs.bundle-path }}"
+          cp "${{ steps.attest-image.outputs.bundle-path }}" \
+            image-provenance.intoto.json
+
+      - name: Verify image provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          image_ref="${IMAGE_NAME}@${{ steps.push.outputs.digest }}"
+          gh attestation verify "oci://${image_ref}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://slsa.dev/provenance/v1 \
+            --signer-workflow "github.com/${GITHUB_REPOSITORY}/.github/workflows/container-multiarch.yml" \
+            --source-digest "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --format json > image-provenance-verification.json
+          python3 - image-provenance-verification.json <<'PY'
+          import json
+          import os
+          import sys
+
+          payload = json.loads(open(sys.argv[1], encoding="utf-8").read())
+          blob = json.dumps(payload, sort_keys=True)
+          required = [
+              "https://slsa.dev/provenance/v1",
+              os.environ["GITHUB_SHA"],
+              ".github/workflows/container-multiarch.yml",
+          ]
+          missing = [value for value in required if value not in blob]
+          if missing:
+              raise SystemExit(f"image provenance verification output missing: {missing}")
+          PY
+
+      - name: Upload image provenance evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: image-provenance
+          path: |
+            image-provenance.intoto.json
+            image-provenance-verification.json
+          if-no-files-found: error
+          retention-days: 90
