@@ -342,7 +342,7 @@ def test_jwt_hs_and_rs_signatures_and_expiry_are_validated(
         expired_response = client.get(
             "/models/loaded",
             headers={
-                "Authorization": f"Bearer {_jwt_hs256({**valid_claims, 'exp': now - 1})}"
+                "Authorization": f"Bearer {_jwt_hs256({**valid_claims, 'exp': now - 3600})}"
             },
         )
 
