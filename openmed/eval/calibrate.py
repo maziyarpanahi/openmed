@@ -734,6 +734,7 @@ def artifact_dir_for(model_id: str, suite: str) -> Path:
 
     return Path("artifacts") / "calibration" / _slug(model_id) / _slug(suite)
 
+
 def score_span_nonconformity(
     span: Mapping[str, Any] | Any,
     thresholds: Mapping[str, Any] | CalibrationThresholdSet,

@@ -146,6 +146,7 @@ def test_threshold_artifact_round_trip_and_report_fields(tmp_path: Path) -> None
         "language",
     }.issubset(group)
 
+
 def test_conformal_quantile_payload_scores_span_nonconformity() -> None:
     report = fit_calibration_thresholds(
         _samples(),
