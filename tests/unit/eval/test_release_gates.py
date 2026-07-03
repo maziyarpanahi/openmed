@@ -130,6 +130,38 @@ def _gate() -> ReleaseGate:
     return ReleaseGate(signing_key=SIGNING_KEY)
 
 
+def _conformal_report(*, coverage: float = 0.95) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "artifact_type": "openmed.calibration.under_shift",
+        "alpha": 0.05,
+        "target_coverage": 0.95,
+        "coverage_tolerance": 0.01,
+        "groups": [
+            {
+                "model_id": "unit-model",
+                "label": "SSN",
+                "language": "en",
+                "target_coverage": 0.95,
+                "positive_coverage": coverage,
+                "realized_coverage": coverage,
+                "positive_gate_weight": 100.0,
+                "total_gate_weight": 100.0,
+            }
+        ],
+        "language_coverage": {
+            "en": {
+                "slice_key": "en",
+                "target_coverage": 0.95,
+                "realized_coverage": coverage,
+                "coverage_gap": max(0.95 - coverage, 0.0),
+                "covered_weight": coverage * 100.0,
+                "total_weight": 100.0,
+            }
+        },
+    }
+
+
 def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
@@ -266,6 +298,25 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
 
     assert result.decision == QUARANTINED
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
+
+
+def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "calibration_under_shift": _conformal_report(coverage=0.80)
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "conformal_coverage")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["violations"]["SSN:en"]["coverage"] == pytest.approx(0.80)
 
 
 def test_g4_blocks_only_the_offending_quantized_format(tmp_path: Path) -> None:

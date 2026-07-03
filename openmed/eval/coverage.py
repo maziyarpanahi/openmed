@@ -11,6 +11,7 @@ from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.golden import (
     GOLDEN_CATEGORIES,
+    HARD_NEGATIVE_CATEGORY,
     GoldenFixture,
     load_golden_fixtures,
 )
@@ -30,12 +31,21 @@ class FixtureCoverageReport:
     covered_categories: tuple[str, ...]
     missing_categories: tuple[str, ...]
     category_counts: Mapping[str, int]
+    hard_negative_fixture_count: int
+    hard_negative_candidate_count: int
+    hard_negative_labels: tuple[str, ...]
+    hard_negative_languages: tuple[str, ...]
+    hard_negative_difficulty_buckets: Mapping[str, int]
 
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic JSON-ready mapping."""
         category_counts = {
             category: int(self.category_counts.get(category, 0))
             for category in GOLDEN_EDGE_CASE_CATEGORIES
+        }
+        difficulty_buckets = {
+            bucket: int(self.hard_negative_difficulty_buckets.get(bucket, 0))
+            for bucket in _HARD_NEGATIVE_DIFFICULTY_BUCKETS
         }
         return {
             "fixture_count": self.fixture_count,
@@ -52,6 +62,13 @@ class FixtureCoverageReport:
                 "missing": list(self.missing_categories),
             },
             "category_counts": category_counts,
+            "hard_negatives": {
+                "candidate_count": self.hard_negative_candidate_count,
+                "difficulty_buckets": difficulty_buckets,
+                "fixture_count": self.hard_negative_fixture_count,
+                "labels": list(self.hard_negative_labels),
+                "languages": list(self.hard_negative_languages),
+            },
         }
 
     def to_markdown(self) -> str:
@@ -122,6 +139,26 @@ class FixtureCoverageReport:
             count = int(self.category_counts.get(category, 0))
             lines.append(f"| `{category}` | {count} | {status} |")
 
+        lines.extend(
+            [
+                "",
+                "## Hard Negatives",
+                "",
+                "| Scope | Count |",
+                "|---|---:|",
+                f"| Fixtures | {self.hard_negative_fixture_count} |",
+                f"| Candidates | {self.hard_negative_candidate_count} |",
+                f"| Labels | {len(self.hard_negative_labels)} |",
+                f"| Languages | {len(self.hard_negative_languages)} |",
+                "",
+                "| Difficulty Bucket | Candidate Count |",
+                "|---|---:|",
+            ]
+        )
+        for bucket in _HARD_NEGATIVE_DIFFICULTY_BUCKETS:
+            count = int(self.hard_negative_difficulty_buckets.get(bucket, 0))
+            lines.append(f"| `{bucket}` | {count} |")
+
         return "\n".join(lines) + "\n"
 
     def write_markdown(self, path: str | Path) -> Path:
@@ -164,6 +201,8 @@ def fixture_coverage_report(
         category: int(category_counts.get(category, 0))
         for category in GOLDEN_EDGE_CASE_CATEGORIES
     }
+    hard_negative_candidates = _hard_negative_candidates(source)
+    hard_negative_difficulty_buckets = _difficulty_buckets(hard_negative_candidates)
 
     covered_labels = tuple(
         label for label in sorted(CANONICAL_LABELS) if label in observed_labels
@@ -201,6 +240,30 @@ def fixture_coverage_report(
         covered_categories=covered_categories,
         missing_categories=missing_categories,
         category_counts=ordered_category_counts,
+        hard_negative_fixture_count=ordered_category_counts.get(
+            HARD_NEGATIVE_CATEGORY,
+            0,
+        ),
+        hard_negative_candidate_count=len(hard_negative_candidates),
+        hard_negative_labels=tuple(
+            sorted(
+                {
+                    str(candidate.get("label"))
+                    for candidate in hard_negative_candidates
+                    if candidate.get("label")
+                }
+            )
+        ),
+        hard_negative_languages=tuple(
+            sorted(
+                {
+                    fixture.language
+                    for fixture in source
+                    if fixture.category == HARD_NEGATIVE_CATEGORY
+                }
+            )
+        ),
+        hard_negative_difficulty_buckets=hard_negative_difficulty_buckets,
     )
 
 
@@ -223,6 +286,50 @@ def _status_by_value(
         (value, "covered" if value in covered_values else "missing")
         for value in supported
     ]
+
+
+_HARD_NEGATIVE_DIFFICULTY_BUCKETS = (
+    "0.00-0.25",
+    "0.25-0.50",
+    "0.50-0.75",
+    "0.75-1.00",
+)
+
+
+def _hard_negative_candidates(
+    fixtures: Sequence[GoldenFixture],
+) -> list[Mapping[str, object]]:
+    rows: list[Mapping[str, object]] = []
+    for fixture in fixtures:
+        if fixture.category != HARD_NEGATIVE_CATEGORY:
+            continue
+        candidates = fixture.metadata.get("hard_negative_candidates")
+        if not isinstance(candidates, list):
+            continue
+        rows.extend(
+            candidate for candidate in candidates if isinstance(candidate, Mapping)
+        )
+    return rows
+
+
+def _difficulty_buckets(
+    candidates: Sequence[Mapping[str, object]],
+) -> dict[str, int]:
+    buckets = {bucket: 0 for bucket in _HARD_NEGATIVE_DIFFICULTY_BUCKETS}
+    for candidate in candidates:
+        try:
+            score = float(candidate.get("difficulty_score", 0.0))
+        except (TypeError, ValueError):
+            score = 0.0
+        if score < 0.25:
+            buckets["0.00-0.25"] += 1
+        elif score < 0.50:
+            buckets["0.25-0.50"] += 1
+        elif score < 0.75:
+            buckets["0.50-0.75"] += 1
+        else:
+            buckets["0.75-1.00"] += 1
+    return buckets
 
 
 __all__ = [
