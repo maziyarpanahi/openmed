@@ -154,6 +154,20 @@ from .summary_card import (
     ClinicalSummaryCard,
     build_summary_card,
 )
+from .units import (
+    MEASUREMENT_NORMALIZATION_ADVISORY,
+    ROUND_TRIP_ABS_TOLERANCE,
+    ROUND_TRIP_REL_TOLERANCE,
+    ConversionStatus,
+    MeasurementNormalization,
+    ParsedUnit,
+    UnitParseStatus,
+    UnitProvenance,
+    normalize_to,
+    parse_measurement,
+    parse_unit,
+    unit_provenance,
+)
 from .vital_signs import (
     VITAL_SIGNS_ADVISORY,
     VitalKind,
@@ -162,6 +176,7 @@ from .vital_signs import (
     VitalSignNumber,
     VitalSignResult,
     empty_vital_sign_result,
+    normalize_vital_measurement,
     structure_vital_sign,
 )
 
@@ -258,6 +273,18 @@ __all__ = [
     "ClinicalSummaryCard",
     "SUMMARY_CARD_NOTE",
     "build_summary_card",
+    "ConversionStatus",
+    "MeasurementNormalization",
+    "MEASUREMENT_NORMALIZATION_ADVISORY",
+    "ParsedUnit",
+    "ROUND_TRIP_ABS_TOLERANCE",
+    "ROUND_TRIP_REL_TOLERANCE",
+    "UnitParseStatus",
+    "UnitProvenance",
+    "normalize_to",
+    "parse_measurement",
+    "parse_unit",
+    "unit_provenance",
     "ACTIVE",
     "INACTIVE",
     "UNCONFIRMED",
@@ -303,5 +330,6 @@ __all__ = [
     "VitalSignResult",
     "VITAL_SIGNS_ADVISORY",
     "empty_vital_sign_result",
+    "normalize_vital_measurement",
     "structure_vital_sign",
 ]
