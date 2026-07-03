@@ -38,7 +38,12 @@ from .dicom import (
     DicomHeaderAction,
     DicomHeaderDeidPolicy,
     DicomHeaderDeidResult,
+    DicomPixelFinding,
+    DicomPixelRedactionPolicy,
+    DicomPixelRedactionResult,
+    DicomResidualTextReport,
     deidentify_dicom_headers,
+    redact_dicom_pixels,
 )
 from .documents_markdown import extract_asciidoc, extract_markdown, redact_source_text
 from .documents_pdf import ProjectedRectangle, extract_pdf, project_text_spans
@@ -95,7 +100,12 @@ __all__ = [
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
     "DicomHeaderDeidResult",
+    "DicomPixelFinding",
+    "DicomPixelRedactionPolicy",
+    "DicomPixelRedactionResult",
+    "DicomResidualTextReport",
     "deidentify_dicom_headers",
+    "redact_dicom_pixels",
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
