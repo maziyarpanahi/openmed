@@ -25,6 +25,9 @@ PIILanguage = Literal[
     "ar",
     "ja",
     "tr",
+    "he",
+    "id",
+    "th",
 ]
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -92,6 +95,22 @@ class PIIDeidentifyRequest:
 
 
 @dataclass(frozen=True)
+class PrivacyGatewayRequest:
+    """Typed request body for the ``POST /privacy-gateway/complete`` endpoint."""
+
+    text: str
+    model_name: str = _DEFAULT_PII_MODEL
+    confidence_threshold: float = 0.85
+    detector_confidence_floor: float = 0.0
+    policy: str = "strict"
+    disallowed_entity_categories: tuple[str, ...] = ()
+    use_smart_merging: bool = True
+    lang: PIILanguage = "en"
+    normalize_accents: Optional[bool] = None
+    keep_alive: Optional[KeepAliveValue] = None
+
+
+@dataclass(frozen=True)
 class ModelUnloadRequest:
     """Typed request body for the ``POST /models/unload`` endpoint."""
 
@@ -132,6 +151,11 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
         method="POST",
         path="/pii/deidentify",
         request_fields=_request_field_names(PIIDeidentifyRequest),
+    ),
+    "privacy_gateway": ClientEndpoint(
+        method="POST",
+        path="/privacy-gateway/complete",
+        request_fields=_request_field_names(PrivacyGatewayRequest),
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
     "unload_model": ClientEndpoint(
@@ -335,6 +359,39 @@ class OpenMedClient:
                 policy=policy,
                 use_smart_merging=use_smart_merging,
                 use_safety_sweep=use_safety_sweep,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                keep_alive=keep_alive,
+            ),
+            request_id=request_id,
+        )
+
+    def privacy_gateway(
+        self,
+        text: str,
+        *,
+        model_name: str = _DEFAULT_PII_MODEL,
+        confidence_threshold: float = 0.85,
+        detector_confidence_floor: float = 0.0,
+        policy: str = "strict",
+        disallowed_entity_categories: tuple[str, ...] = (),
+        use_smart_merging: bool = True,
+        lang: PIILanguage = "en",
+        normalize_accents: Optional[bool] = None,
+        keep_alive: Optional[KeepAliveValue] = None,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Complete a redacted external LLM round-trip."""
+        return self._post(
+            "/privacy-gateway/complete",
+            PrivacyGatewayRequest(
+                text=text,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                detector_confidence_floor=detector_confidence_floor,
+                policy=policy,
+                disallowed_entity_categories=disallowed_entity_categories,
+                use_smart_merging=use_smart_merging,
                 lang=lang,
                 normalize_accents=normalize_accents,
                 keep_alive=keep_alive,

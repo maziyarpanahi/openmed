@@ -13,6 +13,7 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /pii/deidentify`
 - `POST /jobs`
 - `GET /jobs/{id}`
+- `POST /privacy-gateway/complete`
 - Optional `GET /metrics`
 
 This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, optional no-PHI OpenTelemetry tracing, and a unified non-2xx error envelope.
@@ -57,6 +58,10 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
         "Paciente: Maria Garcia",
         method="mask",
         keep_mapping=True,
+    )
+    llm = client.privacy_gateway(
+        "Patient Maria Garcia called 555-0100.",
+        confidence_threshold=0.9,
     )
     loaded = client.loaded_models()
 ```
@@ -159,7 +164,22 @@ Optional request text cap:
 OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
-`OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`, `/pii/extract`, and `/pii/deidentify`. The default is `1,000,000` characters. Oversized requests return the standard `422` validation envelope; split larger documents client-side or route them through batch processing.
+`OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`, `/pii/extract`, `/pii/deidentify`, and `/privacy-gateway/complete`. The default is `1,000,000` characters. Oversized requests return the standard `422` validation envelope; split larger documents client-side or route them through batch processing.
+
+Optional privacy-gateway egress endpoint:
+
+```bash
+OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT=https://llm-proxy.example.com/complete \
+uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+```
+
+`POST /privacy-gateway/complete` refuses to call an external LLM unless
+`OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT` is configured by the operator or the
+FastAPI app is given an explicit `app.state.privacy_gateway_transport` callable.
+The request body never accepts an arbitrary URL. The gateway redacts locally,
+forwards only the redacted prompt, keeps the placeholder map in process memory
+for that request, runs an independent outbound tripwire scan, and records only
+PHI-free audit metadata.
 
 Optional dynamic request batching:
 
@@ -219,7 +239,8 @@ OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host
 `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
 During shutdown, readiness is flipped off, new model-backed work is rejected,
 and the service waits up to this timeout for in-flight `/analyze`,
-`/pii/extract`, and `/pii/deidentify` requests to finish. The default is `30`.
+`/pii/extract`, `/pii/deidentify`, and `/privacy-gateway/complete` requests to
+finish. The default is `30`.
 
 Optional pull-only Prometheus metrics endpoint:
 
@@ -259,6 +280,8 @@ names, counts, labels, lengths, and durations. See
 - Blocking inference is executed off the event loop and guarded by the active profile timeout (`prod=300s`, `test=60s`, etc.).
 - Text-bearing inference requests are capped before model execution to bound memory use.
 - Loaded model pipelines can be released manually with `POST /models/unload`.
+- `/privacy-gateway/complete` redacts PHI before the configured external LLM
+  egress and re-identifies only after validating returned placeholders.
 - `OPENMED_SERVICE_MAX_RESIDENT_MODELS` evicts the least-recently-used idle model when mixed-model traffic exceeds the configured resident limit.
 - Inference requests accept `keep_alive` to schedule model unloading after the model becomes idle.
 - Dynamic request batching can be enabled for compatible `/analyze` and `/pii/extract` traffic with `OPENMED_SERVICE_BATCHING_ENABLED=true`.
@@ -419,6 +442,47 @@ The deprecated `shift_dates: true` boolean is still accepted as an alias for `me
 
 Returns `deidentify(...).to_dict()`. When `keep_mapping=true` and mapping data exists, a `mapping` field is included.
 
+### `POST /privacy-gateway/complete`
+
+Request body:
+
+```json
+{
+  "text": "Patient Maria Garcia called 555-0100.",
+  "confidence_threshold": 0.9,
+  "detector_confidence_floor": 0.0,
+  "policy": "strict",
+  "disallowed_entity_categories": [],
+  "lang": "en",
+  "keep_alive": "10m"
+}
+```
+
+The service detects PHI locally, replaces spans with `OPENMED_PHI` placeholder
+tokens, runs an independent outbound tripwire scan, sends only the redacted
+prompt to the operator-configured transport, and substitutes known placeholders
+back into the external response. Unknown or mangled placeholders fail closed.
+
+Successful response shape:
+
+```json
+{
+  "request_id": "4e22b0c3-4b56-4d2f-9c0d-9f2c9d331c21",
+  "redacted_prompt": "Patient <<OPENMED_PHI_NAME_...>> called <<OPENMED_PHI_PHONE_...>>.",
+  "external_response": "Echo Patient <<OPENMED_PHI_NAME_...>> called <<OPENMED_PHI_PHONE_...>>.",
+  "reidentified_text": "Echo Patient Maria Garcia called 555-0100.",
+  "entity_counts": {
+    "NAME": 1,
+    "PHONE": 1
+  },
+  "placeholder_hashes": ["..."],
+  "audit": {
+    "record_hash": "...",
+    "verified": true
+  }
+}
+```
+
 ## Error Envelope
 
 All non-2xx responses use this shape:
@@ -426,7 +490,7 @@ All non-2xx responses use this shape:
 ```json
 {
   "error": {
-    "code": "validation_error|bad_request|timeout|not_ready|internal_error",
+    "code": "validation_error|bad_request|timeout|not_ready|privacy_gateway_blocked|privacy_gateway_transport_error|privacy_gateway_not_configured|internal_error",
     "message": "human-readable summary",
     "details": null
   }
