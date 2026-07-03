@@ -1178,6 +1178,15 @@ class ThaiNationalIdProvider(BaseProvider):
 # ---------------------------------------------------------------------------
 
 
+class MrzProvider(BaseProvider):
+    """Faker provider for ICAO 9303 passport/ID MRZ surrogates."""
+
+    def passport_mrz(self) -> str:
+        from openmed.core.pii_i18n import generate_mrz_td3
+
+        return generate_mrz_td3(self.generator.random)
+
+
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     from .registry_ids import national_id_faker_provider_classes
@@ -1186,6 +1195,7 @@ def register_clinical_providers(faker) -> None:
         faker.add_provider(provider)
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(FinancialIdentifierProvider)
+    faker.add_provider(MrzProvider)
 
 
 __all__ = [
@@ -1198,6 +1208,7 @@ __all__ = [
     "LatvianPersonasKodsProvider",
     "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
+    "MrzProvider",
     "NPIProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",

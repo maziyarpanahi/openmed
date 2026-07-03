@@ -183,7 +183,30 @@ _LOCALE_ID_METHODS = {
 }
 
 
+_MRZ_CHARSET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
+
+
+def _mrz_surrogate(faker, original):
+    """Return a valid MRZ surrogate when ``original`` looks like an MRZ block."""
+    if not original or "\n" not in original:
+        return None
+    lines = [line.strip() for line in original.strip().splitlines()]
+    if not lines or any(set(line) - _MRZ_CHARSET for line in lines):
+        return None
+    lengths = {len(line) for line in lines}
+    from openmed.core.pii_i18n import generate_mrz_td1, generate_mrz_td3
+
+    if len(lines) == 2 and lengths == {44}:
+        return generate_mrz_td3(faker.random)
+    if len(lines) == 3 and lengths == {30}:
+        return generate_mrz_td1(faker.random)
+    return None
+
+
 def _gen_id_num(faker, original, *, locale):
+    mrz = _mrz_surrogate(faker, original)
+    if mrz is not None:
+        return mrz
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         return getattr(faker, method)()
