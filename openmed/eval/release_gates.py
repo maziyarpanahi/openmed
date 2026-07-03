@@ -27,6 +27,7 @@ from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.labels import normalize_label
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.core.thresholds import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     load_thresholds,
     profile_recall_floor,
     validate_threshold_matrix,
@@ -410,7 +411,7 @@ class ReleaseGate:
     def __init__(
         self,
         *,
-        milestone: str = "v1.6",
+        milestone: str = "v1.7",
         policy: str = "hipaa_safe_harbor",
         baseline_path: str | Path = baseline_store.BASELINE_PATH,
         thresholds_matrix: Mapping[str, Any] | None = None,
@@ -563,7 +564,9 @@ class ReleaseGate:
                 target_leakage=target_leakage,
             )
         )
+        checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        checks.append(_k_floor_check(metrics, metadata))
 
         blocked_formats = tuple(
             sorted(
@@ -1416,6 +1419,96 @@ def _g7_check(
     )
 
 
+def _membership_leakage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    metric = _first_mapping(
+        metrics.get("membership_leakage"),
+        metrics.get("membership_inference"),
+        metadata.get("membership_leakage"),
+        metadata.get("membership_inference"),
+    )
+    required = bool(
+        metadata.get("membership_leakage_required")
+        or metadata.get("membership_inference_required")
+    )
+    if not metric:
+        return GateCheck(
+            "membership_leakage",
+            not required,
+            reason=(
+                "membership leakage evidence not provided"
+                if not required
+                else "membership leakage evidence is required"
+            ),
+            details={"required": required},
+        )
+
+    advantage = _optional_float(
+        _first_value(metric.get("attacker_advantage"), metric.get("advantage"))
+    )
+    attacker_auc = _optional_float(metric.get("attacker_auc"))
+    ceiling = _optional_float(
+        _first_value(
+            metric.get("advantage_ceiling"),
+            metadata.get("membership_advantage_ceiling"),
+            metadata.get("membership_inference_advantage_ceiling"),
+        )
+    )
+    if ceiling is None:
+        ceiling = DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING
+    if advantage is None:
+        return GateCheck(
+            "membership_leakage",
+            False,
+            reason="membership attacker advantage is required",
+            details={"advantage_ceiling": ceiling},
+        )
+
+    per_label = _mapping(metric.get("per_label"))
+    label_violations: dict[str, Any] = {}
+    for label, values in per_label.items():
+        if not isinstance(values, Mapping):
+            continue
+        label_advantage = _optional_float(
+            _first_value(
+                values.get("attacker_advantage"),
+                values.get("advantage"),
+            )
+        )
+        if label_advantage is not None and label_advantage > ceiling:
+            label_violations[str(label)] = {
+                "observed": label_advantage,
+                "limit": ceiling,
+            }
+
+    violations: dict[str, Any] = {}
+    if advantage > ceiling:
+        violations["overall_advantage"] = {
+            "observed": advantage,
+            "limit": ceiling,
+        }
+    if label_violations:
+        violations["per_label_advantage"] = label_violations
+
+    return GateCheck(
+        "membership_leakage",
+        not violations,
+        reason=(
+            "ok" if not violations else "membership-inference advantage exceeds ceiling"
+        ),
+        details={
+            "attacker_advantage": advantage,
+            "attacker_auc": attacker_auc,
+            "advantage_ceiling": ceiling,
+            "feature_hash": metric.get("feature_hash"),
+            "defense": _mapping(metric.get("defense")),
+            "violations": violations,
+        },
+    )
+
+
 def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     fixtures = _span_fixtures(metadata)
     if not fixtures:
@@ -1467,6 +1560,107 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
             "problems": problems,
         },
     )
+
+
+def _k_floor_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _k_floor_evidence(metrics, metadata)
+    target_k = _optional_int(evidence.get("target_k"))
+    if target_k is None:
+        return GateCheck("k_floor", True, reason="not applicable")
+    if target_k < 1:
+        return GateCheck(
+            "k_floor",
+            False,
+            reason="target_k must be >= 1",
+            details={"target_k": target_k},
+        )
+
+    measured_k = _optional_int(evidence.get("measured_k"))
+    max_bound = _optional_float(evidence.get("max_reidentification_upper_bound"))
+    self_check = evidence.get("numeric_self_check")
+    self_check_passed = None
+    if isinstance(self_check, Mapping) and "passed" in self_check:
+        self_check_passed = bool(self_check.get("passed"))
+
+    violations: dict[str, Any] = {}
+    if measured_k is None:
+        violations["measured_k"] = "missing"
+    elif measured_k < target_k:
+        violations["measured_k"] = {"observed": measured_k, "target": target_k}
+
+    target_bound = 1.0 / target_k
+    if max_bound is None:
+        violations["max_reidentification_upper_bound"] = "missing"
+    elif max_bound > target_bound + 1e-12:
+        violations["max_reidentification_upper_bound"] = {
+            "observed": max_bound,
+            "limit": target_bound,
+        }
+
+    if self_check_passed is False:
+        violations["numeric_self_check"] = self_check
+
+    return GateCheck(
+        "k_floor",
+        not violations,
+        reason="ok" if not violations else "realized k or bound violates policy",
+        details={
+            "target_k": target_k,
+            "measured_k": measured_k,
+            "target_bound": target_bound,
+            "max_reidentification_upper_bound": max_bound,
+            "violations": violations,
+        },
+    )
+
+
+def _k_floor_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    source = _first_mapping(
+        metadata.get("kanon_enforcement"),
+        metrics.get("kanon_enforcement"),
+        metadata.get("k_anonymity_enforcement"),
+        metrics.get("k_anonymity_enforcement"),
+        metadata.get("k_floor"),
+        metrics.get("k_floor"),
+        metadata.get("kanon"),
+        metrics.get("kanon"),
+    )
+    target_k = _first_value(
+        source.get("target_k"),
+        metadata.get("target_k"),
+        metrics.get("target_k"),
+        _nested(metadata, "privacy_policy", "target_k"),
+        _nested(metrics, "privacy_policy", "target_k"),
+    )
+    kanon = _mapping(source.get("kanon"))
+    bounds = _mapping(source.get("bounds"))
+    return {
+        "target_k": target_k,
+        "measured_k": _first_value(
+            source.get("measured_k"),
+            source.get("realized_k"),
+            source.get("k"),
+            kanon.get("k"),
+            metadata.get("measured_k"),
+            metrics.get("measured_k"),
+        ),
+        "max_reidentification_upper_bound": _first_value(
+            source.get("max_reidentification_upper_bound"),
+            bounds.get("max_reidentification_upper_bound"),
+            metadata.get("max_reidentification_upper_bound"),
+            metrics.get("max_reidentification_upper_bound"),
+        ),
+        "numeric_self_check": _first_value(
+            source.get("numeric_self_check"),
+            bounds.get("numeric_self_check"),
+        ),
+    }
 
 
 def _report_payload(report: BenchmarkReport | Mapping[str, Any]) -> dict[str, Any]:
@@ -1871,7 +2065,7 @@ def preview(
     report: BenchmarkReport | Mapping[str, Any],
     baseline: Mapping[str, Any] | None = None,
     *,
-    milestone: str = "v1.6",
+    milestone: str = "v1.7",
     policy: str = "hipaa_safe_harbor",
     baseline_path: str | Path = baseline_store.BASELINE_PATH,
     thresholds_matrix: Mapping[str, Any] | None = None,
@@ -1941,7 +2135,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--milestone",
-        default="v1.6",
+        default="v1.7",
         help="Milestone version used for release thresholds.",
     )
     parser.add_argument(
@@ -2088,7 +2282,9 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
             ],
             input=body,
             text=True,
+            encoding="utf-8",
             check=True,
+            timeout=60,
         )
         return existing
 
@@ -2106,8 +2302,10 @@ def _open_or_update_issue(*, repo: str, title: str, body: str) -> int | None:
         ],
         input=body,
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
+        timeout=60,
     )
     output = result.stdout.strip().rsplit("/", 1)[-1]
     return _optional_int(output.lstrip("#"))
@@ -2129,8 +2327,10 @@ def _find_open_issue(*, repo: str, title: str) -> int | None:
             "number,title",
         ],
         text=True,
+        encoding="utf-8",
         check=True,
         capture_output=True,
+        timeout=60,
     )
     try:
         issues = json.loads(result.stdout or "[]")

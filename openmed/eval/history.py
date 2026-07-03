@@ -46,6 +46,8 @@ _LOWER_IS_BETTER_MARKERS = (
 )
 
 ReportLike = BenchmarkReport | Mapping[str, Any] | str | Path
+LEDGER_SCHEMA_VERSION = 1
+RunLedgerKey = tuple[str, str, str, int]
 
 
 @dataclass(frozen=True)
@@ -297,6 +299,210 @@ class FlakinessLedger:
         }
 
 
+class RunLedgerConflict(ValueError):
+    """Raised when an append collides with a different run payload."""
+
+
+@dataclass(frozen=True)
+class BenchmarkRunLedgerEntry:
+    """One append-only benchmark run row.
+
+    Rows are keyed by model, suite, manifest hash, and seed. Metrics are stored
+    as flattened numeric values so future aggregation can operate without
+    retaining fixture text, predictions, or other PHI-bearing artifacts.
+    """
+
+    model_id: str
+    suite: str
+    manifest_hash: str
+    seed: int
+    metrics: Mapping[str, float]
+    generated_at: str | None = None
+    fixture_count: int | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "model_id", _required_str("model_id", self.model_id))
+        object.__setattr__(self, "suite", _required_str("suite", self.suite))
+        object.__setattr__(
+            self,
+            "manifest_hash",
+            _required_str("manifest_hash", self.manifest_hash),
+        )
+        object.__setattr__(self, "seed", _required_int("seed", self.seed))
+        object.__setattr__(self, "metrics", _flat_numeric_metric_payload(self.metrics))
+        object.__setattr__(
+            self,
+            "generated_at",
+            _optional_str(self.generated_at),
+        )
+        object.__setattr__(
+            self,
+            "fixture_count",
+            _optional_non_negative_int("fixture_count", self.fixture_count),
+        )
+        object.__setattr__(self, "metadata", _json_mapping(self.metadata))
+
+    @property
+    def key(self) -> RunLedgerKey:
+        """Return the stable run key used for idempotent appends."""
+
+        return (self.model_id, self.suite, self.manifest_hash, self.seed)
+
+    @classmethod
+    def from_mapping(
+        cls,
+        payload: Mapping[str, Any],
+    ) -> "BenchmarkRunLedgerEntry":
+        """Create a ledger entry from a JSON-compatible mapping."""
+
+        metrics = payload.get("metrics")
+        if not isinstance(metrics, Mapping):
+            raise ValueError("ledger entry metrics must be an object")
+        return cls(
+            model_id=payload.get("model_id"),
+            suite=payload.get("suite"),
+            manifest_hash=payload.get("manifest_hash"),
+            seed=payload.get("seed"),
+            metrics=metrics,
+            generated_at=_optional_str(payload.get("generated_at")),
+            fixture_count=payload.get("fixture_count"),
+            metadata=_mapping(payload.get("metadata")),
+        )
+
+    @classmethod
+    def from_report(
+        cls,
+        report: ReportLike,
+        *,
+        manifest_hash: str,
+        seed: int,
+        model_id: str | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> "BenchmarkRunLedgerEntry":
+        """Create a ledger entry from a benchmark report."""
+
+        payload = _payload(report)
+        report_metadata = _mapping(payload.get("metadata"))
+        entry_metadata = dict(report_metadata)
+        if metadata:
+            entry_metadata.update(_json_mapping(metadata))
+        if payload.get("device") is not None:
+            entry_metadata.setdefault("device", str(payload["device"]))
+
+        resolved_model_id = (
+            model_id
+            or payload.get("model_id")
+            or report_metadata.get("model_id")
+            or payload.get("model_name")
+        )
+        return cls(
+            model_id=resolved_model_id,
+            suite=payload.get("suite"),
+            manifest_hash=manifest_hash,
+            seed=seed,
+            metrics=_numeric_metrics(_metrics(payload)),
+            generated_at=_optional_str(payload.get("generated_at")),
+            fixture_count=payload.get("fixture_count"),
+            metadata=entry_metadata,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        payload: dict[str, Any] = {
+            "generated_at": self.generated_at,
+            "manifest_hash": self.manifest_hash,
+            "metadata": _json_mapping(self.metadata),
+            "metrics": {
+                metric: self.metrics[metric] for metric in sorted(self.metrics)
+            },
+            "model_id": self.model_id,
+            "seed": self.seed,
+            "suite": self.suite,
+        }
+        if self.fixture_count is not None:
+            payload["fixture_count"] = self.fixture_count
+        return payload
+
+
+@dataclass(frozen=True)
+class BenchmarkRunLedger:
+    """Append-only benchmark run ledger."""
+
+    entries: tuple[BenchmarkRunLedgerEntry, ...] = ()
+    schema_version: int = LEDGER_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        if self.schema_version != LEDGER_SCHEMA_VERSION:
+            raise ValueError(
+                f"unsupported benchmark run ledger schema: {self.schema_version}"
+            )
+
+        normalized: list[BenchmarkRunLedgerEntry] = []
+        seen: dict[RunLedgerKey, BenchmarkRunLedgerEntry] = {}
+        for entry in self.entries:
+            if not isinstance(entry, BenchmarkRunLedgerEntry):
+                entry = BenchmarkRunLedgerEntry.from_mapping(entry)
+            existing = seen.get(entry.key)
+            if existing is not None:
+                raise RunLedgerConflict(
+                    f"duplicate benchmark run ledger key: {_format_run_key(entry.key)}"
+                )
+            seen[entry.key] = entry
+            normalized.append(entry)
+        object.__setattr__(self, "entries", tuple(normalized))
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "BenchmarkRunLedger":
+        """Create a ledger from a JSON-compatible mapping."""
+
+        entries = payload.get("entries", [])
+        if not isinstance(entries, list):
+            raise ValueError("benchmark run ledger entries must be a list")
+        return cls(
+            entries=tuple(BenchmarkRunLedgerEntry.from_mapping(row) for row in entries),
+            schema_version=int(payload.get("schema_version", LEDGER_SCHEMA_VERSION)),
+        )
+
+    def append(self, entry: BenchmarkRunLedgerEntry) -> "BenchmarkRunLedger":
+        """Append *entry*, returning self when the row already exists."""
+
+        for existing in self.entries:
+            if existing.key != entry.key:
+                continue
+            if existing.to_dict() == entry.to_dict():
+                return self
+            raise RunLedgerConflict(
+                "benchmark run ledger key already exists with different payload: "
+                f"{_format_run_key(entry.key)}"
+            )
+        return BenchmarkRunLedger(entries=(*self.entries, entry))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "entries": [entry.to_dict() for entry in self.entries],
+            "schema_version": self.schema_version,
+        }
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the ledger to deterministic JSON."""
+
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write deterministic ledger JSON to *path*."""
+
+        return write_run_ledger(self, path, indent=indent)
+
+
 def diff_against_baseline(
     current_report: ReportLike,
     baseline_report: ReportLike | None = None,
@@ -385,6 +591,58 @@ def metric_history(
             )
         )
     return history
+
+
+def load_run_ledger(path: str | Path) -> BenchmarkRunLedger:
+    """Load a benchmark run ledger from JSON."""
+
+    ledger_path = Path(path)
+    with ledger_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    if not isinstance(payload, Mapping):
+        raise ValueError(f"benchmark run ledger must be an object: {ledger_path}")
+    return BenchmarkRunLedger.from_mapping(payload)
+
+
+def write_run_ledger(
+    ledger: BenchmarkRunLedger,
+    path: str | Path,
+    *,
+    indent: int = 2,
+) -> Path:
+    """Write *ledger* to *path* using byte-stable JSON."""
+
+    ledger_path = Path(path)
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
+    ledger_path.write_text(ledger.to_json(indent=indent) + "\n", encoding="utf-8")
+    return ledger_path
+
+
+def append_run_ledger_entry(
+    ledger: BenchmarkRunLedger,
+    entry: BenchmarkRunLedgerEntry,
+) -> BenchmarkRunLedger:
+    """Return *ledger* with *entry* appended idempotently."""
+
+    return ledger.append(entry)
+
+
+def append_run_to_ledger(
+    path: str | Path,
+    entry: BenchmarkRunLedgerEntry,
+    *,
+    indent: int = 2,
+) -> BenchmarkRunLedger:
+    """Append *entry* to a ledger JSON file without mutating prior rows."""
+
+    ledger_path = Path(path)
+    ledger = (
+        load_run_ledger(ledger_path) if ledger_path.exists() else BenchmarkRunLedger()
+    )
+    updated = ledger.append(entry)
+    if updated is not ledger or not ledger_path.exists():
+        write_run_ledger(updated, ledger_path, indent=indent)
+    return updated
 
 
 def _metric_delta(
@@ -564,18 +822,101 @@ def _optional_str(value: Any) -> str | None:
     return str(value)
 
 
+def _required_str(name: str, value: Any) -> str:
+    text = _optional_str(value)
+    if text is None:
+        raise ValueError(f"{name} is required")
+    return text
+
+
+def _required_int(name: str, value: Any) -> int:
+    if isinstance(value, bool) or value is None:
+        raise ValueError(f"{name} must be an integer")
+    try:
+        result = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be an integer") from exc
+    if result != value and str(result) != str(value):
+        raise ValueError(f"{name} must be an integer")
+    return result
+
+
+def _optional_non_negative_int(name: str, value: Any) -> int | None:
+    if value is None:
+        return None
+    result = _required_int(name, value)
+    if result < 0:
+        raise ValueError(f"{name} must be non-negative")
+    return result
+
+
+def _flat_numeric_metric_payload(value: Mapping[str, Any]) -> dict[str, float]:
+    if not isinstance(value, Mapping):
+        raise ValueError("ledger entry metrics must be an object")
+    metrics: dict[str, float] = {}
+    for metric, metric_value in sorted(value.items(), key=lambda item: str(item[0])):
+        name = _required_str("metric name", metric)
+        if not _is_number(metric_value):
+            raise ValueError(f"ledger metric must be finite numeric: {name}")
+        metrics[name] = float(metric_value)
+    return metrics
+
+
+def _json_mapping(value: Mapping[str, Any] | None) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError("metadata must be an object")
+    return {
+        str(key): _json_plain(value[key])
+        for key in sorted(value, key=lambda item: str(item))
+    }
+
+
+def _json_plain(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _json_mapping(value)
+    if isinstance(value, (list, tuple)):
+        return [_json_plain(item) for item in value]
+    if isinstance(value, bool) or value is None or isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError("metadata floats must be finite")
+        return value
+    raise TypeError(f"metadata value is not JSON-serializable: {type(value).__name__}")
+
+
+def _format_run_key(key: RunLedgerKey) -> str:
+    model_id, suite, manifest_hash, seed = key
+    return (
+        f"model_id={model_id}, suite={suite}, "
+        f"manifest_hash={manifest_hash}, seed={seed}"
+    )
+
+
 __all__ = [
     "BenchmarkHistoryDiff",
+    "BenchmarkRunLedger",
+    "BenchmarkRunLedgerEntry",
     "FLAKINESS_LEDGER_SCHEMA_VERSION",
     "FlakinessLedger",
     "FlakinessLedgerEntry",
     "HIGHER_IS_BETTER",
     "IMPROVEMENT",
+    "LEDGER_SCHEMA_VERSION",
     "LOWER_IS_BETTER",
     "MetricDelta",
     "MetricHistoryPoint",
     "REGRESSION",
+    "RunLedgerConflict",
     "UNCHANGED",
+    "append_run_ledger_entry",
+    "append_run_to_ledger",
     "diff_against_baseline",
+    "load_run_ledger",
     "metric_history",
+    "write_run_ledger",
 ]
