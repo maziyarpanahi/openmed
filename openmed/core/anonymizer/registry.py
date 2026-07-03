@@ -168,7 +168,7 @@ _LOCALE_ID_METHODS = {
     "hi_IN": "aadhaar",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
-    "en_GB": "ssn",
+    "en_GB": "nino",
     "tr_TR": "ssn",
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
