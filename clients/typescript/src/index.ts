@@ -61,8 +61,46 @@ export interface PIIExtractRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface PIIExtractStreamRequest extends PIIExtractRequest {
+  chunk_size?: number;
+  window_chars?: number;
+  tokenizer_context_chars?: number;
+  max_entity_chars?: number;
+  include_text?: boolean;
+}
+
 export interface PIIDeidentifyRequest {
   text: string;
+  method?: DeidentificationMethod;
+  model_name?: string;
+  confidence_threshold?: number;
+  keep_year?: boolean;
+  shift_dates?: boolean | null;
+  date_shift_days?: number | null;
+  keep_mapping?: boolean;
+  policy?: string | null;
+  use_smart_merging?: boolean;
+  use_safety_sweep?: boolean;
+  lang?: PIILanguage;
+  normalize_accents?: boolean | null;
+  keep_alive?: KeepAliveValue | null;
+}
+
+export interface DeidentifyJobDocument {
+  text: string;
+  id?: string | null;
+}
+
+export interface JobWebhookRequest {
+  url: string;
+  secret: string;
+  max_attempts?: number;
+  backoff_seconds?: number;
+}
+
+export interface DeidentifyJobRequest {
+  documents: DeidentifyJobDocument[];
+  webhook?: JobWebhookRequest | null;
   method?: DeidentificationMethod;
   model_name?: string;
   confidence_threshold?: number;
@@ -153,6 +191,8 @@ export type AnalyzeResponse = PredictionResult;
 
 export type PIIExtractResponse = PredictionResult;
 
+export type PIIExtractStreamResponse = string;
+
 export interface HealthResponse {
   status: string;
   service: string;
@@ -232,6 +272,63 @@ export interface SMARTBackendJobStatus {
   error: string | null;
 }
 
+export type JobStatus = "queued" | "running" | "done" | "failed";
+
+export interface JobDocumentMetadata {
+  id: string;
+  length: number;
+  text_hash: string;
+}
+
+export interface JobSpan {
+  document_id: string;
+  start: number;
+  end: number;
+  label: string;
+  text_hash: string;
+  confidence: number | null;
+}
+
+export interface JobWebhookMetadata {
+  configured: boolean;
+  url_hash: string;
+  max_attempts: number;
+  backoff_seconds: number;
+}
+
+export interface JobWebhookDelivery {
+  success: boolean;
+  attempts: number;
+  status_code: number | null;
+  error: string | null;
+}
+
+export interface JobErrorSummary {
+  type: string;
+  message: string;
+}
+
+export interface JobResponse {
+  id: string;
+  status: JobStatus;
+  progress_percent: number;
+  document_count: number;
+  processed_count: number;
+  failed_count: number;
+  label_histogram: Record<string, number>;
+  spans: JobSpan[];
+  documents: JobDocumentMetadata[];
+  error: JobErrorSummary | null;
+  webhook: JobWebhookMetadata | null;
+  webhook_delivery: JobWebhookDelivery | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  expires_at: string;
+  status_url?: string;
+}
+
 export interface OpenMedValidationDetail {
   field: string;
   message: string;
@@ -293,6 +390,12 @@ export class OpenMedClient {
     return this.post("/pii/extract", request);
   }
 
+  async extractPiiStream(
+    request: PIIExtractStreamRequest,
+  ): Promise<PIIExtractStreamResponse> {
+    return this.post("/pii/extract/stream", request);
+  }
+
   async deidentify(
     request: PIIDeidentifyRequest,
   ): Promise<PIIDeidentifyResponse> {
@@ -344,6 +447,15 @@ export class OpenMedClient {
         jobId,
       ),
     );
+  }
+
+  async createJob(request: DeidentifyJobRequest): Promise<JobResponse> {
+    return this.post("/jobs", request);
+  }
+
+  async getJob(jobId: string): Promise<JobResponse> {
+    const pathTemplate = "/jobs/{job_id}";
+    return this.get(pathTemplate.replace("{job_id}", encodeURIComponent(jobId)));
   }
 
   private async get<T>(path: string): Promise<T> {

@@ -21,11 +21,14 @@ CLIENT_METHOD_BY_PATH = {
     "/fhir/smart-backend/ingestions/{job_id}": "smartBackendIngestionStatus",
     "/fhir/smart-backend/ingestions/{job_id}/summary": ("smartBackendIngestionSummary"),
     "/health": "health",
+    "/jobs": "createJob",
+    "/jobs/{job_id}": "getJob",
     "/livez": "livez",
     "/models/loaded": "loadedModels",
     "/models/unload": "unloadModels",
     "/pii/deidentify": "deidentify",
     "/pii/extract": "extractPii",
+    "/pii/extract/stream": "extractPiiStream",
     "/readyz": "readyz",
 }
 

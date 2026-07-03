@@ -125,6 +125,13 @@ def validate_iban(iban_text: str) -> bool:
     return clinical_ids.validate_iban(iban_text)
 
 
+def validate_bic(bic_text: str) -> bool:
+    """Validate a SWIFT/BIC using the shared clinical identifier validator."""
+    from .anonymizer.providers import clinical_ids
+
+    return clinical_ids.validate_bic(bic_text)
+
+
 def validate_phone_us(phone_text: str) -> bool:
     """Validate US phone number format.
 
@@ -385,10 +392,32 @@ PII_PATTERNS = [
         r"\b[A-Z]{2}\d{2}(?:[\s-]?[A-Z0-9]){11,30}\b",
         "iban",
         priority=9,
+        flags=0,
         base_score=0.85,
         context_words=["iban", "bank account", "account", "routing", "wire"],
         context_boost=0.1,
         validator=validate_iban,
+    ),
+    # SWIFT/BIC codes have fixed 8/11-character structure but no checksum, so
+    # require context during deterministic safety sweeps.
+    PIIPattern(
+        r"\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
+        "bic",
+        priority=8,
+        flags=0,
+        base_score=0.25,
+        context_words=[
+            "bic",
+            "swift",
+            "swift/bic",
+            "swift code",
+            "bank identifier",
+            "wire",
+            "wire transfer",
+        ],
+        context_boost=0.65,
+        validator=validate_bic,
+        safety_sweep_requires_context=True,
     ),
     # Account numbers when explicitly labeled in context
     PIIPattern(

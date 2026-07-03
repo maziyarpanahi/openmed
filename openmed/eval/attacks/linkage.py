@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from openmed.risk.reid import _coerce_records, _normalize_qi_value, _profile_record
+from openmed.risk.reid import (
+    _coerce_records,
+    _normalize_qi_value,
+    _profile_record,
+    build_longitudinal_corpus,
+    longitudinal_attack_fingerprint,
+    longitudinal_risk_report,
+)
 
 
 @dataclass(frozen=True)
@@ -37,6 +44,32 @@ class LinkageAttackResult:
             "no_matches": int(self.no_matches),
             "denominator": int(self.record_count),
             "details": details,
+        }
+
+
+@dataclass(frozen=True)
+class LongitudinalLinkageAttackResult:
+    """Result of a same-patient cross-document linkage attack."""
+
+    realized_success_rate: float
+    reported_upper_bound: float
+    bound_violated: bool
+    successful_links: int
+    patient_count: int
+    details: tuple[dict[str, Any], ...]
+    risk: dict[str, Any]
+
+    def to_metric(self) -> dict[str, Any]:
+        """Return a JSON-serializable longitudinal linkage metric payload."""
+
+        return {
+            "longitudinal_linkage_success_rate": float(self.realized_success_rate),
+            "reported_upper_bound": float(self.reported_upper_bound),
+            "bound_violated": bool(self.bound_violated),
+            "successful_links": int(self.successful_links),
+            "denominator": int(self.patient_count),
+            "details": [dict(detail) for detail in self.details],
+            "risk": dict(self.risk),
         }
 
 
@@ -117,6 +150,66 @@ def linkage_attack(
     )
 
 
+def longitudinal_linkage_attack(
+    records: Any,
+    *,
+    hmac_key: bytes | str = "openmed-longitudinal-linkage-local-key",
+) -> LongitudinalLinkageAttackResult:
+    """Run a synthetic cross-document same-patient linkage attack.
+
+    The attack groups each patient by the hashed longitudinal fingerprint
+    reported by :func:`openmed.risk.longitudinal_risk_report`. A patient is
+    counted as linked only when its non-empty fingerprint is unique across the
+    corpus. The result is therefore an empirical success rate that should be at
+    or below the report's conservative upper bound.
+    """
+
+    corpus = build_longitudinal_corpus(records, hmac_key=hmac_key)
+    risk = longitudinal_risk_report(records, hmac_key=hmac_key)
+    fingerprints = {
+        patient.patient_pseudonym: longitudinal_attack_fingerprint(patient)
+        for patient in corpus.patients
+    }
+    fingerprint_counts = Counter(
+        fingerprint for fingerprint in fingerprints.values() if fingerprint
+    )
+
+    successful_links = 0
+    details: list[dict[str, Any]] = []
+    for patient in corpus.patients:
+        fingerprint = fingerprints[patient.patient_pseudonym]
+        candidate_count = fingerprint_counts[fingerprint] if fingerprint else 0
+        linked = bool(fingerprint and candidate_count == 1)
+        if linked:
+            successful_links += 1
+        details.append(
+            {
+                "patient_pseudonym": patient.patient_pseudonym,
+                "document_count": patient.document_count,
+                "fingerprint_size": len(fingerprint),
+                "candidate_count": candidate_count,
+                "outcome": "unique_link" if linked else "not_unique",
+                "attack_fingerprint": [
+                    {"category": category, "value_hash": value_hash}
+                    for category, value_hash in fingerprint
+                ],
+            }
+        )
+
+    patient_count = corpus.patient_count
+    success_rate = _rate(successful_links, patient_count)
+    reported_upper_bound = float(risk.get("linkage_success_upper_bound", 0.0))
+    return LongitudinalLinkageAttackResult(
+        realized_success_rate=success_rate,
+        reported_upper_bound=reported_upper_bound,
+        bound_violated=success_rate > reported_upper_bound + 1e-12,
+        successful_links=successful_links,
+        patient_count=patient_count,
+        details=tuple(details),
+        risk=risk,
+    )
+
+
 def _linkage_key(
     record: Any,
     quasi_identifiers: Sequence[str] | None,
@@ -139,4 +232,9 @@ def _rate(numerator: int, denominator: int) -> float:
     return float(numerator / denominator) if denominator else 0.0
 
 
-__all__ = ["LinkageAttackResult", "linkage_attack"]
+__all__ = [
+    "LinkageAttackResult",
+    "LongitudinalLinkageAttackResult",
+    "linkage_attack",
+    "longitudinal_linkage_attack",
+]
