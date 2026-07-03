@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 FrequencyPeriodUnit = Literal["h", "d", "wk"]
 DurationUnit = Literal["d", "wk"]
+MedicationSigAttributeType = Literal["frequency", "duration"]
 Number = int | float
 
 
@@ -300,6 +301,28 @@ def normalize_duration(text: object) -> DurationNormalization:
     return _empty_duration(text)
 
 
+def normalize_medication_attribute(
+    attribute_type: MedicationSigAttributeType | str,
+    text: object,
+) -> dict[str, Any] | None:
+    """Normalize a linkable medication frequency or duration attribute.
+
+    Args:
+        attribute_type: Attribute type from the medication relation schema.
+        text: Raw attribute text.
+
+    Returns:
+        A frequency or duration normalization mapping, or ``None`` for
+        attribute types without deterministic sig normalization.
+    """
+
+    if attribute_type == "frequency":
+        return normalize_frequency(text)
+    if attribute_type == "duration":
+        return normalize_duration(text)
+    return None
+
+
 def _empty_frequency(raw: object) -> FrequencyNormalization:
     return _frequency_result(raw, recognized=False, confidence=0.0)
 
@@ -424,6 +447,8 @@ __all__ = [
     "FrequencyNormalization",
     "FrequencyPeriodUnit",
     "MEDICATION_SIG_ADVISORY",
+    "MedicationSigAttributeType",
+    "normalize_medication_attribute",
     "normalize_duration",
     "normalize_frequency",
 ]

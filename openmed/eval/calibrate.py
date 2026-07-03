@@ -6,12 +6,13 @@ import json
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from openmed.core.labels import normalize_label
+from openmed.core.thresholds import MembershipDefensePolicy
 
 SCHEMA_VERSION = 1
 THRESHOLDS_ARTIFACT = "openmed.calibration.thresholds"
@@ -150,6 +151,7 @@ class CalibrationReport:
     target_leakage: float
     min_recall: float
     generated_at: str
+    membership_defense: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -161,6 +163,7 @@ class CalibrationReport:
             "target_leakage": self.target_leakage,
             "min_recall": self.min_recall,
             "generated_at": self.generated_at,
+            "membership_defense": dict(self.membership_defense),
             "objective": "target_leakage_first_over_redaction_second_recall_protected",
             "groups": [group.to_dict() for group in self.groups],
             "metadata": dict(self.metadata),
@@ -184,7 +187,12 @@ class CalibrationThresholdSet:
     thresholds: Mapping[tuple[str, str, str], float]
     model_id: str | None = None
     suite: str | None = None
+    membership_defense: Mapping[str, Any] = field(default_factory=dict)
     source_path: str | None = None
+
+    @property
+    def membership_defense_policy(self) -> MembershipDefensePolicy:
+        return MembershipDefensePolicy.from_mapping(self.membership_defense)
 
     def lookup(
         self,
@@ -248,6 +256,7 @@ def fit_calibration_thresholds(
     suite: str,
     target_leakage: float = 0.0,
     min_recall: float | None = None,
+    membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> CalibrationReport:
@@ -270,6 +279,14 @@ def fit_calibration_thresholds(
     ]
     if not normalized:
         raise ValueError("calibration requires at least one sample")
+    defense_policy = MembershipDefensePolicy.from_mapping(
+        membership_defense,
+        recall_floor=recall_floor,
+    )
+    normalized = _apply_membership_defense_to_samples(
+        normalized,
+        defense_policy,
+    )
 
     grouped: dict[tuple[str, str, str], list[CalibrationSample]] = defaultdict(list)
     for sample in normalized:
@@ -290,6 +307,7 @@ def fit_calibration_thresholds(
         target_leakage=target_leakage,
         min_recall=recall_floor,
         generated_at=generated_at or _utc_now(),
+        membership_defense=defense_policy.to_dict(),
         metadata=dict(metadata or {}),
     )
 
@@ -325,6 +343,7 @@ def build_thresholds_payload(report: CalibrationReport) -> dict[str, Any]:
         "generated_at": report.generated_at,
         "target_leakage": report.target_leakage,
         "min_recall": report.min_recall,
+        "membership_defense": dict(report.membership_defense),
         "thresholds": thresholds,
         "groups": groups,
     }
@@ -338,6 +357,7 @@ def write_calibration_artifacts(
     suite: str,
     target_leakage: float = 0.0,
     min_recall: float | None = None,
+    membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> CalibrationArtifactPaths:
@@ -349,6 +369,7 @@ def write_calibration_artifacts(
         suite=suite,
         target_leakage=target_leakage,
         min_recall=min_recall,
+        membership_defense=membership_defense,
         generated_at=generated_at,
         metadata=metadata,
     )
@@ -483,6 +504,7 @@ def coerce_calibration_thresholds(
             str(payload["model_id"]) if payload.get("model_id") is not None else None
         ),
         suite=str(payload["suite"]) if payload.get("suite") is not None else None,
+        membership_defense=dict(payload.get("membership_defense") or {}),
         source_path=source_path,
     )
 
@@ -491,6 +513,17 @@ def artifact_dir_for(model_id: str, suite: str) -> Path:
     """Return the default calibration artifact directory."""
 
     return Path("artifacts") / "calibration" / _slug(model_id) / _slug(suite)
+
+
+def _apply_membership_defense_to_samples(
+    samples: Sequence[CalibrationSample],
+    policy: MembershipDefensePolicy,
+) -> list[CalibrationSample]:
+    if not policy.enabled:
+        return list(samples)
+    return [
+        replace(sample, score=policy.apply_score(sample.score)) for sample in samples
+    ]
 
 
 def _fit_group(
