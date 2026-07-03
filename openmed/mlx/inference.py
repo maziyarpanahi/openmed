@@ -1102,6 +1102,7 @@ _MLX_MODEL_MAP: Dict[str, str] = {
 def _download_preconverted_mlx_model(
     repo_id: str,
     cache_dir: Optional[str] = None,
+    local_files_only: bool = False,
 ) -> str:
     """Download a pre-converted MLX model snapshot from the Hugging Face Hub."""
     try:
@@ -1115,6 +1116,7 @@ def _download_preconverted_mlx_model(
         repo_id=repo_id,
         repo_type="model",
         cache_dir=cache_dir,
+        local_files_only=local_files_only,
         allow_patterns=[
             MANIFEST_FILENAME,
             "config.json",
@@ -1146,12 +1148,15 @@ def _resolve_mlx_model(
     3. On-the-fly conversion from HuggingFace
     """
     from openmed.core.model_registry import OPENMED_MODELS
+    from openmed.core.offline import is_local_only, raise_offline_error
 
     # Resolve registry key to full model ID
     if model_name in OPENMED_MODELS:
         full_model_id = OPENMED_MODELS[model_name].model_id
     else:
         full_model_id = model_name
+
+    local_only = is_local_only(config)
 
     cache_dir = None
     if config is not None:
@@ -1161,9 +1166,14 @@ def _resolve_mlx_model(
     if full_model_id in _MLX_MODEL_MAP:
         repo_id = _MLX_MODEL_MAP[full_model_id]
         try:
-            mlx_path = _download_preconverted_mlx_model(repo_id, cache_dir=cache_dir)
+            download_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+            if local_only:
+                download_kwargs["local_files_only"] = True
+            mlx_path = _download_preconverted_mlx_model(repo_id, **download_kwargs)
             return mlx_path, full_model_id
         except Exception as exc:
+            if local_only:
+                raise_offline_error(f"MLX model snapshot lookup for {repo_id}")
             logger.warning(
                 "Unable to download pre-converted MLX model %s for %s; "
                 "falling back to local conversion: %s",
@@ -1205,11 +1215,33 @@ def _resolve_mlx_model(
         logger.info("Using cached MLX model at %s", output_dir)
         return str(output_dir), full_model_id
 
+    if local_only:
+        raise_offline_error(f"MLX conversion or download for {full_model_id}")
+
     logger.info("Converting %s to MLX format (one-time) ...", full_model_id)
     from openmed.mlx.convert import convert
 
     convert(full_model_id, output_dir, cache_dir=cache_dir)
     return str(output_dir), full_model_id
+
+
+def create_mlx_language_model(
+    model_name: str,
+    *,
+    config: Any = None,
+    draft_model_name: str | None = None,
+    metrics: Any = None,
+) -> Any:
+    """Create an MLX-LM language-model runner with optional draft decoding."""
+
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    return OpenMedMLXLanguageModel(
+        model_name=model_name,
+        config=config,
+        draft_model_name=draft_model_name,
+        metrics=metrics,
+    )
 
 
 def create_mlx_pipeline(

@@ -18,6 +18,25 @@ class EntitySpan:
     end: int
     score: float
 
+    @classmethod
+    def from_mapping(cls, data: Dict[str, Any]) -> "EntitySpan":
+        """Create an entity span from a mapping-like model output."""
+
+        return cls(
+            text=str(data.get("text", data.get("word", ""))),
+            label=str(data.get("label", data.get("entity", "")))
+            .replace("B-", "")
+            .replace("I-", ""),
+            start=int(data.get("start", 0)),
+            end=int(data.get("end", 0)),
+            score=float(data.get("score", 1.0)),
+        )
+
+    def offset_key(self) -> Tuple[int, int]:
+        """Return the source character-offset identity for this span."""
+
+        return self.start, self.end
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
         return {
