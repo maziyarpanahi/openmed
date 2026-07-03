@@ -53,6 +53,7 @@ nav:
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
+      - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android ONNX Export: export-onnx-android.md
       - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
