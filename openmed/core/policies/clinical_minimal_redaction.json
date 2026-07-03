@@ -10,7 +10,10 @@
   "safety_sweep_mandatory": false,
   "keep_mapping": false,
   "reversible_id": false,
-  "forced_cascade_tiers": ["R0", "R1"],
+  "forced_cascade_tiers": [
+    "R0",
+    "R1"
+  ],
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "mask",
     "QUASI_IDENTIFIER": "keep",
@@ -74,6 +77,14 @@
     "LAB_TEST": "keep",
     "PROCEDURE": "keep",
     "BODY_SITE": "keep",
+    "ANESTHESIA_TYPE": "keep",
+    "ANESTHETIC_AGENT": "keep",
+    "AIRWAY_MANAGEMENT": "keep",
+    "ASA_CLASS": "keep",
+    "DIET_TYPE": "keep",
+    "NUTRITION_TARGET": "keep",
+    "FEEDING_ROUTE": "keep",
+    "NUTRITIONAL_STATUS": "keep",
     "OTHER": "keep"
   }
 }
