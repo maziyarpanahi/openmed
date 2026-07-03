@@ -552,6 +552,7 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
     @app.post(_SMART_BACKEND_START_PATH)
     async def start_smart_backend_ingestion(
         payload: SMARTBackendIngestionRequest,
