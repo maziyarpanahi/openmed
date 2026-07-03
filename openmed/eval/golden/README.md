@@ -34,15 +34,20 @@ Required fields:
 
 - `text`: source fixture text.
 - `gold_spans`: canonical-label spans with character offsets into `text`.
+  Synthetic hard-negative fixtures use an empty list because the confusable
+  tokens are non-PHI and must remain unredacted.
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
   `multilingual`, `checksum_ids`, `date_arithmetic`, or
-  `policy_profile_actions`.
+  `policy_profile_actions`, or `hard_negatives`.
 - `metadata.expected_output`: expected post-action output, including `method`
   and resulting `text`.
 - `metadata.synthetic`: must be `true`.
+- `metadata.hard_negative_candidates`: required only for `hard_negatives`;
+  each candidate records canonical label, offsets, synthetic marker, and
+  aggregate difficulty scores.
 
 The package loader validates offsets, canonical labels, synthetic markers,
-expected output, and language coverage. The JSON and JSONL files are also
-compatible with `openmed.eval.harness.load_fixtures`; golden-specific expected
-output remains
+expected output, hard-negative candidate metadata, and language coverage. The
+JSON and JSONL files are also compatible with
+`openmed.eval.harness.load_fixtures`; golden-specific expected output remains
 available through each fixture's metadata.

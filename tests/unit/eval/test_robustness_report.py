@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.robustness import (
+    adversarial_robustness_report,
     case_flip_perturbation,
     character_typo_perturbation,
     identity_perturbation,
     ocr_noise_perturbation,
     perturb_fixture,
+    replay_adversarial_attack,
     robustness_report,
     whitespace_noise_perturbation,
 )
@@ -105,6 +109,57 @@ def test_robustness_report_scores_perturbation_deltas_against_clean_run():
     assert variant.deltas["f1"] < 0.0
     assert variant.to_dict()["deltas"] == dict(variant.deltas)
     assert report.to_dict()["variants"]["typo_all"]["seed"] == 5
+
+
+def test_adversarial_search_finds_misses_and_unicode_defense_recovers():
+    fixture = _fixture()
+
+    report = adversarial_robustness_report(
+        "exact",
+        [fixture],
+        seed=23,
+        distance_budget=2,
+        beam_width=3,
+        runner=_exact_gold_runner,
+        suite_name="synthetic",
+        generated_at="2026-06-24T00:00:00Z",
+    )
+    metrics = report.metrics["adversarial_robustness"]
+
+    assert metrics["pre_defense_miss_count"] >= 1
+    assert metrics["post_defense_miss_count"] == 0
+    assert metrics["post_defense_leaked_chars"] == 0
+    assert not metrics["violations"]
+    assert set(metrics["post_defense_recall_under_attack_by_label"]) == {
+        "ID_NUM",
+        "PERSON",
+    }
+    assert all(
+        recall >= metrics["recall_floor"]
+        for recall in metrics["post_defense_recall_under_attack_by_label"].values()
+    )
+
+    payload = json.dumps(report.to_dict(), sort_keys=True)
+    assert "John Doe" not in payload
+    assert "A1001" not in payload
+    assert report.artifacts
+    for artifact in report.artifacts:
+        assert artifact.distance <= artifact.distance_budget
+        assert artifact.perturbation_classes
+        first = replay_adversarial_attack(
+            fixture,
+            artifact,
+            "exact",
+            runner=_exact_gold_runner,
+        )
+        second = replay_adversarial_attack(
+            fixture,
+            artifact.to_dict(),
+            "exact",
+            runner=_exact_gold_runner,
+        )
+        assert first.text == second.text
+        assert first.text != fixture.text
 
 
 def _fixture() -> BenchmarkFixture:
