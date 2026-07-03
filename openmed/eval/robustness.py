@@ -8,17 +8,58 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+from openmed.core.labels import normalize_label
+from openmed.core.script_detect import normalize_for_pii_detection
 from openmed.eval.harness import (
     BenchmarkFixture,
     ModelRunner,
+    default_model_runner,
     load_fixtures,
     run_benchmark,
 )
-from openmed.eval.metrics import EvalSpan
+from openmed.eval.metrics import EvalSpan, normalize_eval_spans
 from openmed.eval.report import BenchmarkReport
 
 Edit = tuple[int, int, str]
 FixturePerturber = Callable[[BenchmarkFixture, random.Random], BenchmarkFixture]
+
+DIRECT_IDENTIFIER_LABELS = frozenset(
+    {
+        "ACCOUNT_NUMBER",
+        "AGE",
+        "API_KEY",
+        "BUILDING_NUMBER",
+        "CREDIT_CARD",
+        "DATE",
+        "DATE_OF_BIRTH",
+        "EMAIL",
+        "FIRST_NAME",
+        "GPS_COORDINATES",
+        "IBAN",
+        "ID_NUM",
+        "LAST_NAME",
+        "LOCATION",
+        "MIDDLE_NAME",
+        "PERSON",
+        "PHONE",
+        "SSN",
+        "STREET_ADDRESS",
+        "TIME",
+        "URL",
+        "USERNAME",
+        "ZIPCODE",
+    }
+)
+DEFAULT_ATTACK_CLASSES: tuple[str, ...] = (
+    "homoglyph",
+    "zero_width",
+    "combining_mark",
+    "segmentation",
+    "targeted_typo",
+)
+DEFAULT_ATTACK_DISTANCE_BUDGET = 2
+DEFAULT_ATTACK_BEAM_WIDTH = 4
+DEFAULT_ADVERSARIAL_RECALL_FLOOR = 0.99
 
 
 @dataclass(frozen=True)
@@ -80,6 +121,122 @@ class RobustnessReport:
             if variant.name == name:
                 return variant
         raise KeyError(name)
+
+
+@dataclass(frozen=True)
+class AdversarialAttackArtifact:
+    """PHI-free reproduction record for one worst-case span attack."""
+
+    fixture_id: str
+    span_index: int
+    label: str
+    original_start: int
+    original_end: int
+    attacked_start: int
+    attacked_end: int
+    perturbation_classes: tuple[str, ...]
+    distance: int
+    distance_budget: int
+    seed: int
+    beam_width: int
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-safe artifact without raw PHI surfaces."""
+        return {
+            "attacked_end": self.attacked_end,
+            "attacked_start": self.attacked_start,
+            "beam_width": self.beam_width,
+            "distance": self.distance,
+            "distance_budget": self.distance_budget,
+            "fixture_id": self.fixture_id,
+            "label": self.label,
+            "original_end": self.original_end,
+            "original_start": self.original_start,
+            "perturbation_classes": list(self.perturbation_classes),
+            "seed": self.seed,
+            "span_index": self.span_index,
+        }
+
+    @classmethod
+    def from_mapping(cls, value: Mapping[str, Any]) -> "AdversarialAttackArtifact":
+        """Build an artifact from its serialized representation."""
+        return cls(
+            fixture_id=str(value["fixture_id"]),
+            span_index=int(value["span_index"]),
+            label=normalize_label(str(value["label"])),
+            original_start=int(value["original_start"]),
+            original_end=int(value["original_end"]),
+            attacked_start=int(value["attacked_start"]),
+            attacked_end=int(value["attacked_end"]),
+            perturbation_classes=tuple(
+                str(item) for item in value.get("perturbation_classes", [])
+            ),
+            distance=int(value["distance"]),
+            distance_budget=int(value["distance_budget"]),
+            seed=int(value["seed"]),
+            beam_width=int(value.get("beam_width", DEFAULT_ATTACK_BEAM_WIDTH)),
+        )
+
+
+@dataclass(frozen=True)
+class AdversarialRobustnessReport:
+    """Worst-case adversarial de-identification robustness result."""
+
+    model_name: str
+    suite: str
+    device: str
+    seed: int
+    recall_floor: float
+    distance_budget: int
+    beam_width: int
+    artifacts: tuple[AdversarialAttackArtifact, ...]
+    metrics: Mapping[str, Any]
+    generated_at: str | None = None
+    metadata: Mapping[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-ready report with sanitized attack artifacts."""
+        return {
+            "artifacts": [artifact.to_dict() for artifact in self.artifacts],
+            "device": self.device,
+            "distance_budget": self.distance_budget,
+            "fixture_count": len(self.artifacts),
+            "generated_at": self.generated_at,
+            "metadata": dict(self.metadata or {}),
+            "metrics": dict(self.metrics),
+            "model_name": self.model_name,
+            "recall_floor": self.recall_floor,
+            "seed": self.seed,
+            "suite": self.suite,
+        }
+
+
+@dataclass(frozen=True)
+class _AttackOperation:
+    perturbation_class: str
+    start: int
+    end: int
+    replacement: str
+    cost: int = 1
+
+    @property
+    def edit(self) -> Edit:
+        return (self.start, self.end, self.replacement)
+
+
+@dataclass(frozen=True)
+class _AttackState:
+    fixture: BenchmarkFixture
+    distance: int
+    perturbation_classes: tuple[str, ...]
+    miss_score: float
+
+
+@dataclass(frozen=True)
+class _AdversarialCase:
+    artifact: AdversarialAttackArtifact
+    fixture: BenchmarkFixture
+    pre_defense_miss_score: float
 
 
 def identity_perturbation(name: str = "identity") -> Perturbation:
@@ -198,6 +355,172 @@ def perturb_fixture(
     return resolved(fixture, random.Random(seed))
 
 
+def unicode_defended_runner(runner: ModelRunner | None = None) -> ModelRunner:
+    """Wrap a runner with the Unicode defense used before PII detection."""
+    base_runner = runner or default_model_runner
+
+    def run(fixture: BenchmarkFixture, model_name: str, device: str) -> Iterable[Any]:
+        normalization = normalize_for_pii_detection(fixture.text)
+        if not normalization.changed and not normalization.mixed_script:
+            return base_runner(fixture, model_name, device)
+
+        normalized_fixture = replace(fixture, text=normalization.text)
+        raw_predictions = base_runner(normalized_fixture, model_name, device)
+        predictions = normalize_eval_spans(
+            raw_predictions,
+            default_language=fixture.language,
+            default_device=device,
+            source_text=normalization.text,
+        )
+        remapped = []
+        for prediction in predictions:
+            start, end = normalization.remap_span(prediction.start, prediction.end)
+            remapped.append(
+                replace(
+                    prediction,
+                    start=start,
+                    end=end,
+                    text=fixture.text[start:end],
+                    metadata={
+                        **dict(prediction.metadata),
+                        "unicode_defense": normalization.to_metadata(),
+                    },
+                )
+            )
+        return remapped
+
+    return run
+
+
+def adversarial_robustness_report(
+    model: str | ModelRunner,
+    suite: str | Path | Iterable[BenchmarkFixture],
+    *,
+    seed: int = 0,
+    distance_budget: int = DEFAULT_ATTACK_DISTANCE_BUDGET,
+    beam_width: int = DEFAULT_ATTACK_BEAM_WIDTH,
+    attack_classes: Sequence[str] = DEFAULT_ATTACK_CLASSES,
+    labels: Iterable[str] | None = DIRECT_IDENTIFIER_LABELS,
+    recall_floor: float = DEFAULT_ADVERSARIAL_RECALL_FLOOR,
+    suite_name: str | None = None,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    defended_runner: ModelRunner | None = None,
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> AdversarialRobustnessReport:
+    """Search for worst-case PHI misses and score recall under attack.
+
+    The serialized report stores only PHI-free attack artifacts: fixture ids,
+    offsets, labels, perturbation classes, distance, and seeds.
+    """
+    if distance_budget < 1:
+        raise ValueError("distance_budget must be at least 1")
+    if beam_width < 1:
+        raise ValueError("beam_width must be at least 1")
+
+    fixtures, resolved_suite_name = _resolve_suite(suite, suite_name=suite_name)
+    model_name, model_runner = _resolve_model_runner(model, runner)
+    base_runner = model_runner or default_model_runner
+    defense_runner = defended_runner or unicode_defended_runner(base_runner)
+    label_filter = (
+        None
+        if labels is None
+        else frozenset(normalize_label(str(label)) for label in labels)
+    )
+
+    best_by_label: dict[str, _AdversarialCase] = {}
+    for fixture_index, fixture in enumerate(fixtures):
+        for span_index, span in enumerate(fixture.gold_spans):
+            label = normalize_label(span.label, lang=span.language)
+            if label_filter is not None and label not in label_filter:
+                continue
+            span_seed = seed + (fixture_index * 1009) + (span_index * 9176)
+            state = _search_span_attack(
+                fixture,
+                span_index,
+                model_name=model_name,
+                device=device,
+                runner=base_runner,
+                seed=span_seed,
+                distance_budget=distance_budget,
+                beam_width=beam_width,
+                attack_classes=tuple(attack_classes),
+            )
+            if state.distance == 0:
+                continue
+            artifact = _artifact_for_state(
+                original=fixture,
+                state=state,
+                span_index=span_index,
+                seed=span_seed,
+                distance_budget=distance_budget,
+                beam_width=beam_width,
+            )
+            case = _AdversarialCase(
+                artifact=artifact,
+                fixture=state.fixture,
+                pre_defense_miss_score=state.miss_score,
+            )
+            current = best_by_label.get(artifact.label)
+            if current is None or _case_rank(case) > _case_rank(current):
+                best_by_label[artifact.label] = case
+
+    cases = tuple(best_by_label[label] for label in sorted(best_by_label))
+    metrics = _adversarial_metrics(
+        cases,
+        model_name=model_name,
+        device=device,
+        pre_defense_runner=base_runner,
+        post_defense_runner=defense_runner,
+        recall_floor=recall_floor,
+        distance_budget=distance_budget,
+    )
+    return AdversarialRobustnessReport(
+        model_name=model_name,
+        suite=resolved_suite_name,
+        device=device,
+        seed=seed,
+        recall_floor=recall_floor,
+        distance_budget=distance_budget,
+        beam_width=beam_width,
+        artifacts=tuple(case.artifact for case in cases),
+        metrics={"adversarial_robustness": metrics},
+        generated_at=generated_at,
+        metadata=metadata,
+    )
+
+
+def replay_adversarial_attack(
+    fixture: BenchmarkFixture,
+    artifact: AdversarialAttackArtifact | Mapping[str, Any],
+    model: str | ModelRunner,
+    *,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    attack_classes: Sequence[str] = DEFAULT_ATTACK_CLASSES,
+) -> BenchmarkFixture:
+    """Replay a sanitized attack artifact from its seed and source fixture."""
+    resolved_artifact = (
+        artifact
+        if isinstance(artifact, AdversarialAttackArtifact)
+        else AdversarialAttackArtifact.from_mapping(artifact)
+    )
+    model_name, model_runner = _resolve_model_runner(model, runner)
+    state = _search_span_attack(
+        fixture,
+        resolved_artifact.span_index,
+        model_name=model_name,
+        device=device,
+        runner=model_runner or default_model_runner,
+        seed=resolved_artifact.seed,
+        distance_budget=resolved_artifact.distance_budget,
+        beam_width=resolved_artifact.beam_width,
+        attack_classes=tuple(attack_classes),
+    )
+    return state.fixture
+
+
 def robustness_report(
     model: str | ModelRunner,
     suite: str | Path | Iterable[BenchmarkFixture],
@@ -300,6 +623,335 @@ def robustness_report(
         variants=tuple(variants),
         seed=seed,
     )
+
+
+_HOMOGLYPH_ATTACKS: Mapping[str, str] = {
+    "A": "\u0391",
+    "B": "\u0392",
+    "C": "\u0421",
+    "E": "\u0395",
+    "H": "\u0397",
+    "I": "\u0399",
+    "K": "\u039a",
+    "M": "\u039c",
+    "N": "\u039d",
+    "O": "\u039f",
+    "P": "\u03a1",
+    "T": "\u03a4",
+    "X": "\u03a7",
+    "a": "\u0430",
+    "c": "\u0441",
+    "e": "\u0435",
+    "i": "\u0456",
+    "o": "\u03bf",
+    "p": "\u0440",
+    "x": "\u0445",
+}
+
+
+def _search_span_attack(
+    fixture: BenchmarkFixture,
+    span_index: int,
+    *,
+    model_name: str,
+    device: str,
+    runner: ModelRunner,
+    seed: int,
+    distance_budget: int,
+    beam_width: int,
+    attack_classes: tuple[str, ...],
+) -> _AttackState:
+    base_score = _target_miss_score(fixture, span_index, runner, model_name, device)
+    best = _AttackState(
+        fixture=fixture,
+        distance=0,
+        perturbation_classes=(),
+        miss_score=base_score,
+    )
+    beam = (best,)
+
+    for depth in range(distance_budget):
+        expanded: list[_AttackState] = []
+        for state_index, state in enumerate(beam):
+            rng = random.Random(seed + depth * 104729 + state_index * 15485863)
+            operations = _candidate_attack_operations(
+                state.fixture,
+                span_index,
+                rng=rng,
+                attack_classes=attack_classes,
+            )
+            for operation in operations:
+                distance = state.distance + operation.cost
+                if distance > distance_budget:
+                    continue
+                attacked = _perturb_fixture(state.fixture, [operation.edit])
+                if attacked.text == state.fixture.text:
+                    continue
+                score = _target_miss_score(
+                    attacked,
+                    span_index,
+                    runner,
+                    model_name,
+                    device,
+                )
+                expanded.append(
+                    _AttackState(
+                        fixture=attacked,
+                        distance=distance,
+                        perturbation_classes=(
+                            *state.perturbation_classes,
+                            operation.perturbation_class,
+                        ),
+                        miss_score=score,
+                    )
+                )
+
+        if not expanded:
+            break
+        expanded.sort(key=_state_rank, reverse=True)
+        if _state_rank(expanded[0]) > _state_rank(best):
+            best = expanded[0]
+        beam = tuple(expanded[:beam_width])
+
+    return best
+
+
+def _candidate_attack_operations(
+    fixture: BenchmarkFixture,
+    span_index: int,
+    *,
+    rng: random.Random,
+    attack_classes: tuple[str, ...],
+) -> list[_AttackOperation]:
+    span = fixture.gold_spans[span_index]
+    text = fixture.text
+    operations: list[_AttackOperation] = []
+    enabled = set(attack_classes)
+    for index in range(span.start, span.end):
+        char = text[index]
+        if "homoglyph" in enabled and char in _HOMOGLYPH_ATTACKS:
+            operations.append(
+                _AttackOperation(
+                    "homoglyph", index, index + 1, _HOMOGLYPH_ATTACKS[char]
+                )
+            )
+        if "zero_width" in enabled and char.isalnum():
+            operations.append(
+                _AttackOperation("zero_width", index, index + 1, f"{char}\u200b")
+            )
+        if "combining_mark" in enabled and char.isalpha():
+            operations.append(
+                _AttackOperation("combining_mark", index, index + 1, f"{char}\u0301")
+            )
+        if (
+            "segmentation" in enabled
+            and char.isalnum()
+            and index + 1 < span.end
+            and text[index + 1].isalnum()
+        ):
+            operations.append(
+                _AttackOperation("segmentation", index, index + 1, f"{char}-")
+            )
+        if "targeted_typo" in enabled and char.isalnum():
+            operations.append(
+                _AttackOperation(
+                    "targeted_typo",
+                    index,
+                    index + 1,
+                    _typo_replacement(char, rng),
+                )
+            )
+
+    keyed = sorted(
+        enumerate(operations),
+        key=lambda item: (
+            _attack_class_priority(item[1].perturbation_class),
+            item[1].start,
+            item[0],
+        ),
+    )
+    grouped: list[_AttackOperation] = [operation for _, operation in keyed]
+    # Keep deterministic tie-breaking but vary same-class candidates by seed.
+    for start in range(0, len(grouped), 8):
+        block = grouped[start : start + 8]
+        rng.shuffle(block)
+        grouped[start : start + 8] = block
+    return grouped
+
+
+def _artifact_for_state(
+    *,
+    original: BenchmarkFixture,
+    state: _AttackState,
+    span_index: int,
+    seed: int,
+    distance_budget: int,
+    beam_width: int,
+) -> AdversarialAttackArtifact:
+    original_span = original.gold_spans[span_index]
+    attacked_span = state.fixture.gold_spans[span_index]
+    return AdversarialAttackArtifact(
+        fixture_id=original.fixture_id,
+        span_index=span_index,
+        label=normalize_label(original_span.label, lang=original_span.language),
+        original_start=original_span.start,
+        original_end=original_span.end,
+        attacked_start=attacked_span.start,
+        attacked_end=attacked_span.end,
+        perturbation_classes=tuple(state.perturbation_classes),
+        distance=state.distance,
+        distance_budget=distance_budget,
+        seed=seed,
+        beam_width=beam_width,
+    )
+
+
+def _adversarial_metrics(
+    cases: Sequence[_AdversarialCase],
+    *,
+    model_name: str,
+    device: str,
+    pre_defense_runner: ModelRunner,
+    post_defense_runner: ModelRunner,
+    recall_floor: float,
+    distance_budget: int,
+) -> dict[str, Any]:
+    pre = _score_cases(cases, model_name, device, pre_defense_runner)
+    post = _score_cases(cases, model_name, device, post_defense_runner)
+    post_violations = {
+        label: recall
+        for label, recall in post["recall_under_attack_by_label"].items()
+        if label in DIRECT_IDENTIFIER_LABELS and recall < recall_floor
+    }
+    return {
+        "artifact_count": len(cases),
+        "distance_budget": distance_budget,
+        "post_defense_leaked_chars": post["leaked_chars"],
+        "post_defense_leaked_chars_by_label": post["leaked_chars_by_label"],
+        "post_defense_miss_count": post["miss_count"],
+        "post_defense_recall_under_attack": post["recall_under_attack"],
+        "post_defense_recall_under_attack_by_label": post[
+            "recall_under_attack_by_label"
+        ],
+        "pre_defense_miss_count": pre["miss_count"],
+        "pre_defense_recall_under_attack": pre["recall_under_attack"],
+        "pre_defense_recall_under_attack_by_label": pre["recall_under_attack_by_label"],
+        "recall_floor": recall_floor,
+        "violations": post_violations,
+    }
+
+
+def _score_cases(
+    cases: Sequence[_AdversarialCase],
+    model_name: str,
+    device: str,
+    runner: ModelRunner,
+) -> dict[str, Any]:
+    covered_by_label: dict[str, int] = {}
+    total_by_label: dict[str, int] = {}
+    leaked_by_label: dict[str, int] = {}
+    miss_count = 0
+    for case in cases:
+        span = case.fixture.gold_spans[case.artifact.span_index]
+        predictions = _run_predictions(case.fixture, runner, model_name, device)
+        covered = _covered_char_count(span, predictions)
+        leaked = max(span.length - covered, 0)
+        label = normalize_label(span.label, lang=span.language)
+        covered_by_label[label] = covered_by_label.get(label, 0) + covered
+        total_by_label[label] = total_by_label.get(label, 0) + span.length
+        leaked_by_label[label] = leaked_by_label.get(label, 0) + leaked
+        if leaked > 0:
+            miss_count += 1
+
+    total = sum(total_by_label.values())
+    covered_total = sum(covered_by_label.values())
+    leaked_total = sum(leaked_by_label.values())
+    return {
+        "leaked_chars": leaked_total,
+        "leaked_chars_by_label": dict(sorted(leaked_by_label.items())),
+        "miss_count": miss_count,
+        "recall_under_attack": _safe_rate(covered_total, total, 1.0),
+        "recall_under_attack_by_label": {
+            label: _safe_rate(covered_by_label.get(label, 0), total_chars, 1.0)
+            for label, total_chars in sorted(total_by_label.items())
+        },
+        "total_chars": total,
+        "total_chars_by_label": dict(sorted(total_by_label.items())),
+    }
+
+
+def _target_miss_score(
+    fixture: BenchmarkFixture,
+    span_index: int,
+    runner: ModelRunner,
+    model_name: str,
+    device: str,
+) -> float:
+    span = fixture.gold_spans[span_index]
+    predictions = _run_predictions(fixture, runner, model_name, device)
+    covered = _covered_char_count(span, predictions)
+    return 1.0 - _safe_rate(covered, span.length, 1.0)
+
+
+def _run_predictions(
+    fixture: BenchmarkFixture,
+    runner: ModelRunner,
+    model_name: str,
+    device: str,
+) -> tuple[EvalSpan, ...]:
+    return tuple(
+        normalize_eval_spans(
+            runner(fixture, model_name, device),
+            default_language=fixture.language,
+            default_device=device,
+            source_text=fixture.text,
+        )
+    )
+
+
+def _covered_char_count(span: EvalSpan, predictions: Sequence[EvalSpan]) -> int:
+    covered: set[int] = set()
+    for prediction in predictions:
+        if normalize_label(
+            prediction.label, lang=prediction.language
+        ) != normalize_label(
+            span.label,
+            lang=span.language,
+        ):
+            continue
+        start = max(span.start, prediction.start)
+        end = min(span.end, prediction.end)
+        if end > start:
+            covered.update(range(start, end))
+    return len(covered)
+
+
+def _safe_rate(
+    numerator: int | float, denominator: int | float, default: float
+) -> float:
+    return default if denominator == 0 else float(numerator) / float(denominator)
+
+
+def _state_rank(state: _AttackState) -> tuple[float, int, int, tuple[int, ...]]:
+    return (
+        state.miss_score,
+        -state.distance,
+        -len(state.perturbation_classes),
+        tuple(-_attack_class_priority(item) for item in state.perturbation_classes),
+    )
+
+
+def _case_rank(case: _AdversarialCase) -> tuple[float, int, str]:
+    return (
+        case.pre_defense_miss_score,
+        -case.artifact.distance,
+        case.artifact.label,
+    )
+
+
+def _attack_class_priority(name: str) -> int:
+    priority = {attack: index for index, attack in enumerate(DEFAULT_ATTACK_CLASSES)}
+    return priority.get(name, len(priority))
 
 
 _OCR_CONFUSIONS: Mapping[str, str] = {
@@ -554,15 +1206,25 @@ def _metric_value(metrics: Mapping[str, Any], *path: str) -> float:
 
 
 __all__ = [
+    "DEFAULT_ADVERSARIAL_RECALL_FLOOR",
+    "DEFAULT_ATTACK_BEAM_WIDTH",
+    "DEFAULT_ATTACK_CLASSES",
+    "DEFAULT_ATTACK_DISTANCE_BUDGET",
     "DEFAULT_PERTURBATIONS",
+    "DIRECT_IDENTIFIER_LABELS",
+    "AdversarialAttackArtifact",
+    "AdversarialRobustnessReport",
     "Perturbation",
     "RobustnessReport",
     "RobustnessVariant",
+    "adversarial_robustness_report",
     "case_flip_perturbation",
     "character_typo_perturbation",
     "identity_perturbation",
     "ocr_noise_perturbation",
     "perturb_fixture",
+    "replay_adversarial_attack",
     "robustness_report",
+    "unicode_defended_runner",
     "whitespace_noise_perturbation",
 ]

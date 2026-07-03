@@ -13,6 +13,7 @@ EXPECTED_PATHS = {
     "/models/unload",
     "/analyze",
     "/pii/extract",
+    "/pii/extract/stream",
     "/pii/deidentify",
     "/jobs",
     "/jobs/{job_id}",
