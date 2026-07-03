@@ -205,6 +205,13 @@ onnx = [
   "transformers>=4.50",
 ]
 
+openvino = [
+  "openvino>=2024.0",
+  "nncf>=2.10",
+  "onnxruntime>=1.16",
+  "transformers>=4.50",
+]
+
 docs = [
   "mkdocs>=1.6",
   "mkdocs-material>=9.5",
