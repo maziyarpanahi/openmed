@@ -20,6 +20,11 @@ PAGED_KV_CACHE_CAPACITY_NAME = "openmed_service_mlx_paged_kv_cache_capacity_page
 PAGED_KV_CACHE_PEAK_NAME = "openmed_service_mlx_paged_kv_cache_peak_pages"
 PAGED_KV_CACHE_EVICTION_NAME = "openmed_service_mlx_paged_kv_cache_eviction_total"
 PAGED_KV_CACHE_BUDGET_BYTES_NAME = "openmed_service_mlx_paged_kv_cache_budget_bytes"
+MODEL_RESIDENT_NAME = "openmed_service_model_resident_total"
+MODEL_RESIDENT_BYTES_NAME = "openmed_service_model_resident_bytes"
+MODEL_PENDING_LOAD_BYTES_NAME = "openmed_service_model_pending_load_bytes"
+MODEL_LOAD_DURATION_NAME = "openmed_service_model_load_duration_seconds"
+MODEL_REJECTION_NAME = "openmed_service_model_rejection_total"
 SPECULATIVE_DECODE_NAME = "openmed_mlx_speculative_decode_total"
 SPECULATIVE_DRAFT_TOKEN_NAME = "openmed_mlx_speculative_draft_token_total"
 SPECULATIVE_ACCEPTED_TOKEN_NAME = "openmed_mlx_speculative_accepted_token_total"
@@ -96,6 +101,12 @@ class PrometheusMetricsRegistry:
         self._paged_kv_cache_peak_pages = 0
         self._paged_kv_cache_eviction_total = 0
         self._paged_kv_cache_budget_bytes = 0
+        self._model_resident_total = 0
+        self._model_resident_bytes = 0
+        self._model_pending_load_bytes = 0
+        self._model_load_duration_count = 0
+        self._model_load_duration_sum = 0.0
+        self._model_rejection_total = 0
         self._speculative_decode_total = 0
         self._speculative_draft_tokens = 0
         self._speculative_accepted_tokens = 0
@@ -180,6 +191,33 @@ class PrometheusMetricsRegistry:
             if evictions > 0:
                 self._paged_kv_cache_eviction_total += int(evictions)
 
+    def record_model_residency(
+        self,
+        *,
+        resident_count: int,
+        resident_bytes: int,
+        pending_bytes: int,
+    ) -> None:
+        """Record the current aggregate warm-pool residency state."""
+        with self._lock:
+            self._model_resident_total = max(int(resident_count), 0)
+            self._model_resident_bytes = max(int(resident_bytes), 0)
+            self._model_pending_load_bytes = max(int(pending_bytes), 0)
+
+    def record_model_load_latency(self, seconds: float) -> None:
+        """Record one cold model load duration in seconds."""
+        observed = max(float(seconds), 0.0)
+        with self._lock:
+            self._model_load_duration_count += 1
+            self._model_load_duration_sum += observed
+
+    def record_model_rejection(self, count: int = 1) -> None:
+        """Record model admission rejections from warm-pool backpressure."""
+        if count <= 0:
+            return
+        with self._lock:
+            self._model_rejection_total += int(count)
+
     def record_speculative_decode(self, metrics: Mapping[str, object] | object) -> None:
         """Record aggregate speculative decode counters.
 
@@ -223,6 +261,12 @@ class PrometheusMetricsRegistry:
             paged_kv_cache_peak_pages = self._paged_kv_cache_peak_pages
             paged_kv_cache_eviction_total = self._paged_kv_cache_eviction_total
             paged_kv_cache_budget_bytes = self._paged_kv_cache_budget_bytes
+            model_resident_total = self._model_resident_total
+            model_resident_bytes = self._model_resident_bytes
+            model_pending_load_bytes = self._model_pending_load_bytes
+            model_load_duration_count = self._model_load_duration_count
+            model_load_duration_sum = self._model_load_duration_sum
+            model_rejection_total = self._model_rejection_total
             speculative_decode_total = self._speculative_decode_total
             speculative_draft_tokens = self._speculative_draft_tokens
             speculative_accepted_tokens = self._speculative_accepted_tokens
@@ -290,6 +334,50 @@ class PrometheusMetricsRegistry:
             "counter",
         )
         lines.append(f"{MODEL_EVICTION_NAME} {model_eviction_total}")
+
+        _append_family_header(
+            lines,
+            MODEL_RESIDENT_NAME,
+            "Resident models currently held by the service warm-pool.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_RESIDENT_NAME} {model_resident_total}")
+
+        _append_family_header(
+            lines,
+            MODEL_RESIDENT_BYTES_NAME,
+            "Resident model memory currently accounted by the service warm-pool.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_RESIDENT_BYTES_NAME} {model_resident_bytes}")
+
+        _append_family_header(
+            lines,
+            MODEL_PENDING_LOAD_BYTES_NAME,
+            "Reserved model memory for in-progress warm-pool loads.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_PENDING_LOAD_BYTES_NAME} {model_pending_load_bytes}")
+
+        _append_family_header(
+            lines,
+            MODEL_LOAD_DURATION_NAME,
+            "Cold model load duration observed by the service warm-pool.",
+            "summary",
+        )
+        lines.append(f"{MODEL_LOAD_DURATION_NAME}_count {model_load_duration_count}")
+        lines.append(
+            f"{MODEL_LOAD_DURATION_NAME}_sum "
+            f"{_format_sample_value(model_load_duration_sum)}"
+        )
+
+        _append_family_header(
+            lines,
+            MODEL_REJECTION_NAME,
+            "Model admission rejections from warm-pool backpressure.",
+            "counter",
+        )
+        lines.append(f"{MODEL_REJECTION_NAME} {model_rejection_total}")
 
         _append_family_header(
             lines,

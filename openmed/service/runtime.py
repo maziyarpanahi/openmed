@@ -6,7 +6,7 @@ import os
 import re
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
@@ -14,11 +14,24 @@ from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
 from .keep_alive import parse_keep_alive
-from .warm_pool import WarmPool, parse_max_resident_models
+from .warm_pool import (
+    DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS,
+    DEFAULT_MODEL_FOOTPRINT_BYTES,
+    WarmPool,
+    parse_default_model_footprint_bytes,
+    parse_max_resident_models,
+    parse_memory_admission_wait_seconds,
+    parse_model_memory_budget_bytes,
+)
 
 SERVICE_PRELOAD_ENV_VAR = "OPENMED_SERVICE_PRELOAD_MODELS"
 SERVICE_KEEP_ALIVE_ENV_VAR = "OPENMED_SERVICE_KEEP_ALIVE"
 SERVICE_MAX_RESIDENT_ENV_VAR = "OPENMED_SERVICE_MAX_RESIDENT_MODELS"
+SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR = "OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES"
+SERVICE_DEFAULT_MODEL_FOOTPRINT_ENV_VAR = (
+    "OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES"
+)
+SERVICE_MODEL_ADMISSION_WAIT_ENV_VAR = "OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS"
 SERVICE_BATCHING_ENABLED_ENV_VAR = "OPENMED_SERVICE_BATCHING_ENABLED"
 SERVICE_BATCH_MAX_SIZE_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_SIZE"
 SERVICE_BATCH_MAX_WAIT_MS_ENV_VAR = "OPENMED_SERVICE_BATCH_MAX_WAIT_MS"
@@ -455,6 +468,9 @@ class ServiceRuntime:
     config: OpenMedConfig
     preload_models: Tuple[str, ...] = ()
     max_resident_models: Optional[int] = None
+    model_memory_budget_bytes: Optional[int] = None
+    default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
+    model_admission_wait_seconds: float = DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
     default_keep_alive_seconds: Optional[float] = None
     shutdown_drain_seconds: float = DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
@@ -465,6 +481,12 @@ class ServiceRuntime:
     _loader: Optional[ModelLoader] = None
     _warm_pool: Optional[WarmPool] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _workflow_store: Optional[Any] = field(default=None, init=False, repr=False)
+    _workflow_store_lock: threading.RLock = field(
+        default_factory=threading.RLock,
+        init=False,
+        repr=False,
+    )
 
     metrics: Optional[Any] = None
 
@@ -477,6 +499,15 @@ class ServiceRuntime:
         max_resident_models = parse_max_resident_models(
             os.getenv(SERVICE_MAX_RESIDENT_ENV_VAR)
         )
+        memory_budget_bytes = parse_model_memory_budget_bytes(
+            os.getenv(SERVICE_MODEL_MEMORY_BUDGET_ENV_VAR)
+        )
+        default_model_footprint_bytes = parse_default_model_footprint_bytes(
+            os.getenv(SERVICE_DEFAULT_MODEL_FOOTPRINT_ENV_VAR)
+        )
+        admission_wait_seconds = parse_memory_admission_wait_seconds(
+            os.getenv(SERVICE_MODEL_ADMISSION_WAIT_ENV_VAR)
+        )
         keep_alive = parse_keep_alive(os.getenv(SERVICE_KEEP_ALIVE_ENV_VAR))
         batching = parse_service_batching_config()
         coalescing = parse_service_coalescing_config()
@@ -487,6 +518,9 @@ class ServiceRuntime:
             config=config,
             preload_models=preload_models,
             max_resident_models=max_resident_models,
+            model_memory_budget_bytes=memory_budget_bytes,
+            default_model_footprint_bytes=default_model_footprint_bytes,
+            model_admission_wait_seconds=admission_wait_seconds,
             default_keep_alive_seconds=keep_alive,
             shutdown_drain_seconds=parse_shutdown_drain_seconds(
                 os.getenv(SERVICE_SHUTDOWN_DRAIN_ENV_VAR)
@@ -517,6 +551,13 @@ class ServiceRuntime:
                         self.get_model_loader,
                         warm_models=self.preload_models,
                         max_resident_models=self.max_resident_models,
+                        memory_budget_bytes=self.model_memory_budget_bytes,
+                        default_model_footprint_bytes=(
+                            self.default_model_footprint_bytes
+                        ),
+                        memory_admission_wait_seconds=(
+                            self.model_admission_wait_seconds
+                        ),
                         default_keep_alive_seconds=self.default_keep_alive_seconds,
                         metrics=self.metrics,
                     )
@@ -543,6 +584,61 @@ class ServiceRuntime:
         finally:
             pool.finish_request(model_key, keep_alive)
 
+    async def stream_pii_extract(
+        self,
+        *,
+        text: str,
+        model_name: str,
+        confidence_threshold: float,
+        use_smart_merging: bool,
+        lang: str,
+        normalize_accents: Optional[bool],
+        keep_alive: Any,
+        chunk_size: int,
+        window_chars: int,
+        tokenizer_context_chars: int,
+        max_entity_chars: int,
+    ) -> AsyncIterator[Any]:
+        """Yield incremental PII extraction events for a service request."""
+        import asyncio
+
+        import openmed
+        from openmed.processing.advanced_ner import StreamingTokenClassifier
+
+        model_key = self.begin_model_request(model_name)
+
+        def classify(window_text: str) -> Any:
+            return openmed.extract_pii(
+                window_text,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                config=self.config,
+                use_smart_merging=use_smart_merging,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                loader=self.get_loader(),
+            )
+
+        streamer = StreamingTokenClassifier(
+            classify,
+            window_chars=window_chars,
+            tokenizer_context_chars=tokenizer_context_chars,
+            max_entity_chars=max_entity_chars,
+            confidence_threshold=confidence_threshold,
+        )
+
+        try:
+            for chunk in _iter_text_chunks(text, chunk_size):
+                events = await asyncio.to_thread(streamer.append, chunk)
+                for event in events:
+                    yield event
+                await asyncio.sleep(0)
+            events = await asyncio.to_thread(streamer.finish)
+            for event in events:
+                yield event
+        finally:
+            self.finish_model_request(model_key, keep_alive)
+
     def begin_model_request(self, model_name: str) -> str:
         """Mark a resolved model as active and cancel pending idle unload."""
         return self.get_loader().begin_request(model_name)
@@ -565,10 +661,24 @@ class ServiceRuntime:
             return {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
+                "memory_budget_bytes": self.model_memory_budget_bytes,
+                "resident_memory_bytes": 0,
+                "pending_memory_bytes": 0,
+                "memory_admission_wait_seconds": (self.model_admission_wait_seconds),
                 "warm_models": list(self.preload_models),
                 "models": {},
             }
         return self.get_loader().loaded_models()
+
+    def get_workflow_store(self) -> Any:
+        """Return the in-process MCP workflow state store."""
+        if self._workflow_store is None:
+            with self._workflow_store_lock:
+                if self._workflow_store is None:
+                    from openmed.mcp.workflow import WorkflowStateStore
+
+                    self._workflow_store = WorkflowStateStore()
+        return self._workflow_store
 
     def record_speculative_decode(self, metrics: Any) -> None:
         """Forward aggregate speculative decode metrics to the metrics registry."""
@@ -590,3 +700,9 @@ class ServiceRuntime:
         if callable(resolver):
             return resolver(validated)
         return validated
+
+
+def _iter_text_chunks(text: str, chunk_size: int):
+    chunk_size = max(1, int(chunk_size))
+    for index in range(0, len(text), chunk_size):
+        yield text[index : index + chunk_size]

@@ -13,7 +13,12 @@ from openmed.service.app import create_app
 from openmed.service.metrics import (
     METRICS_ENABLED_ENV_VAR,
     MODEL_EVICTION_NAME,
+    MODEL_LOAD_DURATION_NAME,
     MODEL_LOAD_NAME,
+    MODEL_PENDING_LOAD_BYTES_NAME,
+    MODEL_REJECTION_NAME,
+    MODEL_RESIDENT_BYTES_NAME,
+    MODEL_RESIDENT_NAME,
     PAGED_KV_CACHE_BUDGET_BYTES_NAME,
     PAGED_KV_CACHE_CAPACITY_NAME,
     PAGED_KV_CACHE_EVICTION_NAME,
@@ -79,6 +84,9 @@ def _configure_service_env(monkeypatch, *, metrics_enabled: bool) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
@@ -139,6 +147,11 @@ def test_metrics_endpoint_renders_prometheus_text_when_enabled(monkeypatch) -> N
     assert f"{MODEL_EVICTION_NAME} 0" in response.text
     assert f"{PAGED_KV_CACHE_OCCUPANCY_NAME} 0" in response.text
     assert f"{PAGED_KV_CACHE_EVICTION_NAME} 0" in response.text
+    assert f"{MODEL_RESIDENT_NAME} 0" in response.text
+    assert f"{MODEL_RESIDENT_BYTES_NAME} 0" in response.text
+    assert f"{MODEL_PENDING_LOAD_BYTES_NAME} 0" in response.text
+    assert f"{MODEL_LOAD_DURATION_NAME}_count 0" in response.text
+    assert f"{MODEL_REJECTION_NAME} 0" in response.text
 
 
 def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
@@ -201,7 +214,11 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
 def test_warm_pool_model_counters_are_aggregate_only() -> None:
     registry = PrometheusMetricsRegistry()
     loader = WarmPoolLoader()
-    pool = WarmPool(lambda: loader, metrics=registry)
+    pool = WarmPool(
+        lambda: loader,
+        default_model_footprint_bytes=128,
+        metrics=registry,
+    )
 
     pool.create_pipeline("model-a", aggregation_strategy="simple")
     pool.unload_model("model-a")
@@ -209,6 +226,11 @@ def test_warm_pool_model_counters_are_aggregate_only() -> None:
     metrics_text = registry.render()
     assert f"{MODEL_LOAD_NAME} 1" in metrics_text
     assert f"{MODEL_EVICTION_NAME} 1" in metrics_text
+    assert f"{MODEL_RESIDENT_NAME} 0" in metrics_text
+    assert f"{MODEL_RESIDENT_BYTES_NAME} 0" in metrics_text
+    assert f"{MODEL_LOAD_DURATION_NAME}_count 1" in metrics_text
+    assert f"{MODEL_LOAD_DURATION_NAME}_sum " in metrics_text
+    assert f"{MODEL_REJECTION_NAME} 0" in metrics_text
     assert "model-a" not in metrics_text
 
 
