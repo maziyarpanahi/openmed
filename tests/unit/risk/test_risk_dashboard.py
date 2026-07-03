@@ -6,6 +6,7 @@ import re
 from html.parser import HTMLParser
 
 from openmed.risk import (
+    enforce_kanon,
     kanon_report,
     render_risk_dashboard,
     risk_report,
@@ -132,6 +133,27 @@ def test_render_risk_dashboard_includes_kanon_section_when_supplied():
     assert "Class Size Distribution" in html
     assert "Equivalence Classes" in html
     assert "l-diversity" in html
+
+
+def test_render_risk_dashboard_includes_enforcement_section_when_supplied():
+    records = [
+        {"age": 30, "zip": "10001", "visit_date": "2024-01-01", "disease": "flu"},
+        {"age": 31, "zip": "10002", "visit_date": "2024-01-02", "disease": "cold"},
+    ]
+    risk = risk_report(records)
+    enforced = enforce_kanon(
+        records,
+        quasi_identifiers=["age", "zip", "visit_date"],
+        sensitive_attributes=["disease"],
+        target_k=2,
+    )
+
+    html = render_risk_dashboard(risk, kanon=enforced)
+
+    assert "K-Anonymity Enforcement" in html
+    assert "Selected Generalization" in html
+    assert "Max re-id bound" in html
+    assert "Bound check" in html
 
 
 def test_write_risk_dashboard_writes_balanced_html_and_returns_path(tmp_path):
