@@ -27,6 +27,9 @@ deterministic:
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
+  - UK NHS Number, a patient health identifier validated with the NHS
+    Modulus 11 check
+  - UK National Insurance Number (NINO)
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -466,6 +469,107 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# UK NHS Number and National Insurance Number
+# ---------------------------------------------------------------------------
+
+_UK_NINO_DISALLOWED_PREFIX_CHARS = frozenset("DFIQUV")
+_UK_NINO_DISALLOWED_SECOND_CHARS = _UK_NINO_DISALLOWED_PREFIX_CHARS | {"O"}
+_UK_NINO_DISALLOWED_PREFIXES = frozenset({"BG", "GB", "KN", "NK", "NT", "TN", "ZZ"})
+
+
+def validate_uk_nhs_number(text: str) -> bool:
+    """Validate a 10-digit UK NHS Number with the Modulus 11 checksum."""
+
+    digits = _digits_only(text)
+    if len(digits) != 10:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(range(10, 1, -1), numbers[:9]))
+    check = 11 - (total % 11)
+    if check == 11:
+        check = 0
+    if check == 10:
+        return False
+
+    return numbers[9] == check
+
+
+def generate_uk_nhs_number(*, rng: random.Random | None = None) -> str:
+    """Generate a UK NHS Number accepted by :func:`validate_uk_nhs_number`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body_digits = [source.randint(0, 9) for _ in range(9)]
+        if all(digit == 0 for digit in body_digits):
+            continue
+
+        total = sum(
+            weight * value for weight, value in zip(range(10, 1, -1), body_digits)
+        )
+        check = 11 - (total % 11)
+        if check == 11:
+            check = 0
+        if check == 10:
+            continue
+
+        return "".join(str(digit) for digit in body_digits) + str(check)
+
+    return "9434765919"
+
+
+def validate_uk_nino(text: str) -> bool:
+    """Validate a UK National Insurance Number's current structure."""
+
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if not re.fullmatch(r"[A-Z]{2}\d{6}[A-D]", cleaned):
+        return False
+
+    prefix = cleaned[:2]
+    if prefix in _UK_NINO_DISALLOWED_PREFIXES:
+        return False
+    if prefix[0] in _UK_NINO_DISALLOWED_PREFIX_CHARS:
+        return False
+    if prefix[1] in _UK_NINO_DISALLOWED_SECOND_CHARS:
+        return False
+
+    return True
+
+
+class UKNHSNumberProvider(BaseProvider):
+    """Generates valid 10-digit UK NHS Numbers."""
+
+    def nhs_number(self) -> str:
+        return generate_uk_nhs_number(rng=self.generator.random)
+
+
+class UKNINOProvider(BaseProvider):
+    """Generates structurally valid UK National Insurance Numbers."""
+
+    _FIRST_LETTERS = tuple(
+        letter
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if letter not in _UK_NINO_DISALLOWED_PREFIX_CHARS
+    )
+    _SECOND_LETTERS = tuple(
+        letter
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if letter not in _UK_NINO_DISALLOWED_SECOND_CHARS
+    )
+
+    def nino(self) -> str:
+        rng = self.generator.random
+        while True:
+            prefix = rng.choice(self._FIRST_LETTERS) + rng.choice(self._SECOND_LETTERS)
+            if prefix not in _UK_NINO_DISALLOWED_PREFIXES:
+                break
+
+        digits = f"{rng.randint(0, 999999):06d}"
+        suffix = rng.choice("ABCD")
+        return f"{prefix} {digits[:2]} {digits[2:4]} {digits[4:]} {suffix}"
+
+
+# ---------------------------------------------------------------------------
 # Polish PESEL (11 digits, weighted checksum with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -814,6 +918,8 @@ __all__ = [
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
+    "UKNHSNumberProvider",
+    "UKNINOProvider",
     "generate_indonesian_nik",
     "generate_teudat_zehut",
     "generate_korean_rrn",
@@ -826,6 +932,7 @@ __all__ = [
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
+    "generate_uk_nhs_number",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",
@@ -833,4 +940,6 @@ __all__ = [
     "validate_npi",
     "validate_phone_us",
     "validate_ssn",
+    "validate_uk_nhs_number",
+    "validate_uk_nino",
 ]
