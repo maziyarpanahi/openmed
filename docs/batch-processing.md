@@ -134,6 +134,40 @@ processor = BatchProcessor(
 )
 ```
 
+## Dataset Redaction
+
+Use `redact_dataset()` when the source is a tabular or line-delimited dataset
+and only specific free-text columns should be de-identified. Supported formats
+are `.csv`, `.jsonl`/`.ndjson`, and `.parquet`; CSV and JSONL rows are streamed,
+and Parquet input is processed in row batches when `pyarrow` is installed.
+Columns are never inferred automatically: pass the free-text columns explicitly.
+
+```python
+from openmed import redact_dataset
+
+result = redact_dataset(
+    "notes.csv",
+    text_columns=["note", "comment"],
+    output_path="notes.redacted.csv",
+    policy="strict_no_leak",
+)
+
+print(result.summary.to_dict())
+```
+
+The console entry point exposes the same path:
+
+```bash
+openmed redact-dataset notes.csv \
+  --text-columns note,comment \
+  --policy strict_no_leak \
+  --output notes.redacted.csv
+```
+
+The audit summary contains aggregate counts only, including total spans,
+per-label counts, and a residual-leakage estimate. It does not include raw
+cell values or detected entity text.
+
 ## Progress Tracking
 
 Track progress with `on_progress`. The callback receives a frozen
