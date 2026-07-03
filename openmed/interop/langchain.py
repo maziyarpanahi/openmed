@@ -9,6 +9,8 @@ from importlib import import_module as _import_module
 from pathlib import Path
 from typing import Any
 
+from openmed.mcp.tool_registry import render_langchain_tool_definitions
+
 Deidentifier = Callable[..., Any]
 
 
@@ -214,6 +216,12 @@ def create_redaction_runnable(
     return transform.as_runnable(name=name)
 
 
+def create_tool_definitions() -> tuple[dict[str, Any], ...]:
+    """Return LangChain-facing OpenMed tool definitions from the registry."""
+
+    return render_langchain_tool_definitions()
+
+
 def _load_runnable_lambda() -> Any:
     try:
         module = _import_module("langchain_core.runnables")
@@ -239,6 +247,7 @@ __all__ = [
     "Deidentifier",
     "LangChainRedactionConfig",
     "OpenMedRedactionTransform",
+    "create_tool_definitions",
     "create_redaction_runnable",
     "create_redaction_transform",
 ]

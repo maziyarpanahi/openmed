@@ -15,6 +15,8 @@ from openmed.core.labels import normalize_label
 
 INT8_RECALL_DELTA_LIMIT = 0.005
 INT4_RECALL_DELTA_LIMIT = 0.010
+DEFAULT_SPECULATIVE_KL_LIMIT = 0.01
+DEFAULT_SPECULATIVE_SPEEDUP_LIMIT = 1.6
 
 G1_G2_LABELS = frozenset(
     {
@@ -80,6 +82,38 @@ class QuantRecallDeltaResult:
             "source": self.source,
         }
         return payload
+
+
+@dataclass(frozen=True)
+class SpeculativeRedactionParityResult:
+    """Structured evidence for speculative redaction decode parity."""
+
+    passed: bool
+    greedy_mismatch_count: int
+    sampling_kl: float | None
+    sampling_kl_limit: float
+    median_latency_speedup: float | None
+    latency_speedup_limit: float
+    max_recall_delta: float
+    new_leak_count: int
+    tokenizer_fallback_count: int = 0
+    tokenizer_fallback_correct: bool = True
+    greedy_mismatch_indices: tuple[int, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "greedy_mismatch_count": self.greedy_mismatch_count,
+            "greedy_mismatch_indices": list(self.greedy_mismatch_indices),
+            "sampling_kl": self.sampling_kl,
+            "sampling_kl_limit": self.sampling_kl_limit,
+            "median_latency_speedup": self.median_latency_speedup,
+            "latency_speedup_limit": self.latency_speedup_limit,
+            "max_recall_delta": self.max_recall_delta,
+            "new_leak_count": self.new_leak_count,
+            "tokenizer_fallback_count": self.tokenizer_fallback_count,
+            "tokenizer_fallback_correct": self.tokenizer_fallback_correct,
+        }
 
 
 def evaluate_quant_recall_delta(
@@ -150,6 +184,119 @@ def evaluate_quant_recall_delta(
         per_label_delta=per_label,
         source="computed_from_parent",
     )
+
+
+def evaluate_speculative_redaction_parity(
+    *,
+    reference_greedy_outputs: Sequence[str],
+    speculative_greedy_outputs: Sequence[str],
+    reference_sampling_counts: Mapping[str, int] | None = None,
+    speculative_sampling_counts: Mapping[str, int] | None = None,
+    reference_latency_ms: Sequence[float] | None = None,
+    speculative_latency_ms: Sequence[float] | None = None,
+    reference_recall: Mapping[str, Any] | None = None,
+    speculative_recall: Mapping[str, Any] | None = None,
+    reference_leak_count: int = 0,
+    speculative_leak_count: int = 0,
+    tokenizer_fallback_count: int = 0,
+    tokenizer_fallback_correct: bool = True,
+    sampling_kl_limit: float = DEFAULT_SPECULATIVE_KL_LIMIT,
+    latency_speedup_limit: float = DEFAULT_SPECULATIVE_SPEEDUP_LIMIT,
+) -> SpeculativeRedactionParityResult:
+    """Evaluate parity between plain and speculative generative PII decoding."""
+
+    mismatch_indices = tuple(
+        index
+        for index, (reference, candidate) in enumerate(
+            zip(reference_greedy_outputs, speculative_greedy_outputs)
+        )
+        if reference != candidate
+    )
+    length_mismatches = abs(
+        len(reference_greedy_outputs) - len(speculative_greedy_outputs)
+    )
+    if length_mismatches:
+        start = min(len(reference_greedy_outputs), len(speculative_greedy_outputs))
+        mismatch_indices = (*mismatch_indices, *range(start, start + length_mismatches))
+
+    sampling_kl = None
+    if (
+        reference_sampling_counts is not None
+        and speculative_sampling_counts is not None
+    ):
+        sampling_kl = token_frequency_kl(
+            reference_sampling_counts,
+            speculative_sampling_counts,
+        )
+
+    median_latency_speedup = None
+    reference_median = _median(reference_latency_ms)
+    speculative_median = _median(speculative_latency_ms)
+    if (
+        reference_median is not None
+        and speculative_median is not None
+        and speculative_median > 0.0
+    ):
+        median_latency_speedup = reference_median / speculative_median
+
+    max_recall_delta = _max_recall_delta(reference_recall, speculative_recall)
+    new_leak_count = max(int(speculative_leak_count) - int(reference_leak_count), 0)
+
+    passed = (
+        not mismatch_indices
+        and sampling_kl is not None
+        and sampling_kl <= sampling_kl_limit
+        and median_latency_speedup is not None
+        and median_latency_speedup >= latency_speedup_limit
+        and max_recall_delta == 0.0
+        and new_leak_count == 0
+        and tokenizer_fallback_correct
+    )
+
+    return SpeculativeRedactionParityResult(
+        passed=passed,
+        greedy_mismatch_count=len(mismatch_indices),
+        greedy_mismatch_indices=mismatch_indices,
+        sampling_kl=sampling_kl,
+        sampling_kl_limit=sampling_kl_limit,
+        median_latency_speedup=median_latency_speedup,
+        latency_speedup_limit=latency_speedup_limit,
+        max_recall_delta=max_recall_delta,
+        new_leak_count=new_leak_count,
+        tokenizer_fallback_count=max(int(tokenizer_fallback_count), 0),
+        tokenizer_fallback_correct=bool(tokenizer_fallback_correct),
+    )
+
+
+def token_frequency_kl(
+    reference_counts: Mapping[str, int],
+    candidate_counts: Mapping[str, int],
+    *,
+    smoothing: float = 1e-12,
+) -> float:
+    """Return KL(reference || candidate) over fixed-seed token frequencies."""
+
+    keys = set(reference_counts) | set(candidate_counts)
+    if not keys:
+        return 0.0
+    reference_total = sum(max(int(value), 0) for value in reference_counts.values())
+    candidate_total = sum(max(int(value), 0) for value in candidate_counts.values())
+    if reference_total <= 0 or candidate_total <= 0:
+        return math.inf
+
+    vocab_size = len(keys)
+    reference_denominator = reference_total + smoothing * vocab_size
+    candidate_denominator = candidate_total + smoothing * vocab_size
+    divergence = 0.0
+    for key in keys:
+        p = (max(int(reference_counts.get(key, 0)), 0) + smoothing) / (
+            reference_denominator
+        )
+        q = (max(int(candidate_counts.get(key, 0)), 0) + smoothing) / (
+            candidate_denominator
+        )
+        divergence += p * math.log(p / q)
+    return divergence
 
 
 def is_quantized_format(format_name: str) -> bool:
@@ -271,16 +418,51 @@ def _optional_float(value: Any) -> float | None:
     return result if math.isfinite(result) else None
 
 
+def _median(values: Sequence[float] | None) -> float | None:
+    if not values:
+        return None
+    parsed = sorted(float(value) for value in values)
+    midpoint = len(parsed) // 2
+    if len(parsed) % 2:
+        return parsed[midpoint]
+    return (parsed[midpoint - 1] + parsed[midpoint]) / 2.0
+
+
+def _max_recall_delta(
+    reference_recall: Mapping[str, Any] | None,
+    speculative_recall: Mapping[str, Any] | None,
+) -> float:
+    if reference_recall is None and speculative_recall is None:
+        return 0.0
+    if reference_recall is None or speculative_recall is None:
+        return math.inf
+
+    reference = _normalise_recall_map(reference_recall)
+    speculative = _normalise_recall_map(speculative_recall)
+    labels = set(reference) | set(speculative)
+    if not labels:
+        return 0.0
+    return max(
+        max(reference.get(label, 0.0) - speculative.get(label, 0.0), 0.0)
+        for label in labels
+    )
+
+
 def _normalise_dimension(value: str) -> str:
     return str(value).strip().lower().replace("_", "-")
 
 
 __all__ = [
+    "DEFAULT_SPECULATIVE_KL_LIMIT",
+    "DEFAULT_SPECULATIVE_SPEEDUP_LIMIT",
     "G1_G2_LABELS",
     "INT4_RECALL_DELTA_LIMIT",
     "INT8_RECALL_DELTA_LIMIT",
     "QuantRecallDeltaResult",
+    "SpeculativeRedactionParityResult",
     "evaluate_quant_recall_delta",
+    "evaluate_speculative_redaction_parity",
     "is_quantized_format",
     "limit_for_format",
+    "token_frequency_kl",
 ]
