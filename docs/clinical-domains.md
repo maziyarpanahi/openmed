@@ -1,166 +1,214 @@
-**Disclaimer:** Deterministic status vocabulary helpers for SDOH cue normalization. The helpers in this module normalize explicit status cues into compact canonical values for downstream SDOH extractors. Outputs are advisory labels for review and downstream processing, not clinical decisions. They deliberately do not infer a status from absence of mention; text with no configured cue returns 'unknown' unless an explicit context axis is supplied by the caller.
+# Clinical Domain Label Catalog
 
-### Biomedical
+**Disclaimer:** This catalog is generated from the packaged zero-shot domain label map and canonical label metadata. Labels, policy classes, risk levels, coding system hints, and fixture pointers are for offline evaluation and review workflow planning only; they are not clinical guidance and must not be used to infer diagnosis, treatment, coding, or coverage decisions.
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Disease | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| Drug | CLINICAL_CONCEPT | low | RxNorm, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| Gene | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Organism | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Biomedical
 
-### Clinical
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Disease | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | Not shipped |
+| Drug | MEDICATION | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
+| Gene | GENE_SYMBOL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Organism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Problem | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| Treatment | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Test | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| BodyPart | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/context_traps.jsonl |
+## Clinical
 
-### Genomic
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Problem | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | Not shipped |
+| Treatment | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Test | LAB_TEST | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| BodyPart | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Variant | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Gene | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Transcript | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Phenotype | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Genomic
 
-### Finance
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Variant | VARIANT_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Gene | GENE_SYMBOL | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Transcript | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Phenotype | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Company | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
-| Ticker | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Instrument | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Event | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Genomic Variant
 
-### Legal
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GeneSymbol | GENE_SYMBOL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/genomic_variant.jsonl |
+| VariantDescriptor | VARIANT_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/genomic_variant.jsonl |
+| ProteinChange | PROTEIN_CHANGE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/genomic_variant.jsonl |
+| Zygosity | ZYGOSITY | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/genomic_variant.jsonl |
+| AlleleFrequency | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/genomic_variant.jsonl |
+| ClinicalSignificance | CLINICAL_SIGNIFICANCE | CLINICAL_CONCEPT | low | SNOMED, HPO | tests/fixtures/clinical/genomic_variant.jsonl |
+| ReferenceTranscript | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/genomic_variant.jsonl |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Case | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Court | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Judge | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Statute | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Finance
 
-### News
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Company | ORGANIZATION | QUASI_IDENTIFIER | medium | None | Not shipped |
+| Ticker | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Instrument | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Event | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Person | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/context_traps.jsonl |
-| Organization | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
-| Location | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
-| Date | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
+## Legal
 
-### Ecommerce
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Case | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Court | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Judge | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Statute | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Product | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Brand | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Price | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Attribute | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## News
 
-### Cybersecurity
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Person | PERSON | DIRECT_IDENTIFIER | high | None | Not shipped |
+| Organization | ORGANIZATION | QUASI_IDENTIFIER | medium | None | Not shipped |
+| Location | LOCATION | QUASI_IDENTIFIER | medium | None | Not shipped |
+| Date | DATE | QUASI_IDENTIFIER | medium | None | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Vulnerability | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| CVE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Software | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Vendor | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Ecommerce
 
-### Chemistry
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Product | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Brand | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Price | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Attribute | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Compound | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Reaction | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Property | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Unit | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Cybersecurity
 
-### Organism
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Vulnerability | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| CVE | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Software | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Vendor | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Species | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Strain | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Taxon | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Habitat | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Chemistry
 
-### Education
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Compound | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Reaction | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Property | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Unit | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Course | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Topic | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Institution | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Degree | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Organism
 
-### Social
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Species | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Strain | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Taxon | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Habitat | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Person | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/context_traps.jsonl |
-| Handle | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Hashtag | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| URL | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/context_traps.jsonl |
+## Education
 
-### Public Health
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Course | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Topic | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Institution | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Degree | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Condition | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| Intervention | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| Outcome | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Population | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Social
 
-### Cardiology
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Person | PERSON | DIRECT_IDENTIFIER | high | None | Not shipped |
+| Handle | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Hashtag | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| URL | URL | DIRECT_IDENTIFIER | high | None | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| CardiacFinding | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| ECGFinding | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| EjectionFraction | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| CardiacProcedure | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| CardiacDevice | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Anatomy | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/context_traps.jsonl |
+## Public Health
 
-### Microbiology
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Condition | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | Not shipped |
+| Intervention | PROCEDURE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+| Outcome | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Population | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Microorganism | CLINICAL_CONCEPT | low | SNOMED, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Antibiotic | CLINICAL_CONCEPT | low | RxNorm, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| Susceptibility | CLINICAL_CONCEPT | low | LOINC, SNOMED | tests/fixtures/clinical/context_traps.jsonl |
-| SpecimenSource | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| CultureResult | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
+## Cardiology
 
-### Dermatology
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| CardiacFinding | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| ECGFinding | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| EjectionFraction | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| CardiacProcedure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| CardiacDevice | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| SkinLesion | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Morphology | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Distribution | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Anatomy | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/context_traps.jsonl |
+## Microbiology
 
-### Ophthalmology
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Microorganism | MICROORGANISM | CLINICAL_CONCEPT | low | SNOMED, LOINC | Not shipped |
+| Antibiotic | ANTIBIOTIC | CLINICAL_CONCEPT | low | RxNorm, SNOMED | Not shipped |
+| Susceptibility | SUSCEPTIBILITY | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
+| SpecimenSource | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| CultureResult | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| EyeFinding | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| VisualAcuity | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| IntraocularPressure | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/context_traps.jsonl |
-| Anatomy | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/context_traps.jsonl |
+## Dermatology
 
-### Generic
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| SkinLesion | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Morphology | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Distribution | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
 
-| Label | Category | Risk Level | System Hints | Fixture Path |
-|-------|----------|------------|--------------|--------------|
-| Person | DIRECT_IDENTIFIER | high | None | tests/fixtures/clinical/context_traps.jsonl |
-| Organization | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
-| Location | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
-| Date | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/context_traps.jsonl |
+## Ophthalmology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| EyeFinding | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| VisualAcuity | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| IntraocularPressure | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Anatomy | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
+
+## Generic
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| Person | PERSON | DIRECT_IDENTIFIER | high | None | Not shipped |
+| Organization | ORGANIZATION | QUASI_IDENTIFIER | medium | None | Not shipped |
+| Location | LOCATION | QUASI_IDENTIFIER | medium | None | Not shipped |
+| Date | DATE | QUASI_IDENTIFIER | medium | None | Not shipped |
+
+## Anesthesia
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| AnesthesiaType | ANESTHESIA_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/anesthesia.jsonl |
+| AnestheticAgent | ANESTHETIC_AGENT | CLINICAL_CONCEPT | low | RxNorm, SNOMED | tests/fixtures/clinical/anesthesia.jsonl |
+| AirwayManagement | AIRWAY_MANAGEMENT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/anesthesia.jsonl |
+| ASAClass | ASA_CLASS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/anesthesia.jsonl |
+| MonitoringModality | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/anesthesia.jsonl |
+| IntraoperativeEvent | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/anesthesia.jsonl |
+
+## Nutrition Diet
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| DietType | DIET_TYPE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nutrition_diet.jsonl |
+| NutritionTarget | NUTRITION_TARGET | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nutrition_diet.jsonl |
+| Supplement | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nutrition_diet.jsonl |
+| FeedingRoute | FEEDING_ROUTE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nutrition_diet.jsonl |
+| IntakeFinding | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nutrition_diet.jsonl |
+| NutritionalStatus | NUTRITIONAL_STATUS | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/nutrition_diet.jsonl |
+| FluidRestriction | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nutrition_diet.jsonl |
+
+## Endocrinology
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| GlycemicMeasure | GLYCEMIC_MEASURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/endocrinology.jsonl |
+| ThyroidFunctionMeasure | THYROID_MEASURE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/endocrinology.jsonl |
+| HormoneLevel | HORMONE_LEVEL | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/endocrinology.jsonl |
+| InsulinRegimen | INSULIN_REGIMEN | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/endocrinology.jsonl |
+| MetabolicFinding | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | tests/fixtures/clinical/endocrinology.jsonl |
+| EndocrineGland | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/endocrinology.jsonl |
