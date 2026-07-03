@@ -113,6 +113,10 @@ gptq = [
   "auto-gptq>=0.7.1",
 ]
 
+grounding = [
+  "rapidfuzz>=3.9,<4",
+]
+
 langchain = [
   "langchain-core>=0.2,<2",
 ]
