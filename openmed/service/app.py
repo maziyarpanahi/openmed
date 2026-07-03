@@ -21,6 +21,12 @@ from openmed.utils.validation import validate_model_name
 
 from .batcher import BatchResult, DynamicBatcher
 from .coalesce import RequestCoalescer, coalescing_key
+from .logging import (
+    CorrelationIdMiddleware,
+    current_request_id,
+    service_log_config_from_env,
+    set_access_log_model_name,
+)
 from .metrics import (
     PROMETHEUS_CONTENT_TYPE,
     PrometheusMetricsRegistry,
@@ -92,15 +98,17 @@ def _error_response(
     details: Optional[Any] = None,
 ) -> JSONResponse:
     """Return a standardized API error response."""
+    error = {
+        "code": code,
+        "message": message,
+        "details": details,
+    }
+    request_id = current_request_id()
+    if request_id is not None:
+        error["request_id"] = request_id
     return JSONResponse(
         status_code=status_code,
-        content={
-            "error": {
-                "code": code,
-                "message": message,
-                "details": details,
-            }
-        },
+        content={"error": error},
     )
 
 
@@ -454,13 +462,20 @@ def create_app() -> FastAPI:
         request: Request,
     ) -> Dict[str, Any]:
         runtime = _get_service_runtime(request)
+        set_access_log_model_name(request, payload.model_name)
         if payload.all:
             return runtime.unload_all_models()
-        assert payload.model_name is not None
+        if payload.model_name is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=400, detail="model_name is required when 'all' is not set"
+            )
         return runtime.unload_model(payload.model_name)
 
     @app.post("/analyze")
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
+        set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
 
         async def _operation() -> Dict[str, Any]:
@@ -485,6 +500,7 @@ def create_app() -> FastAPI:
     async def pii_extract(
         payload: PIIExtractRequest, request: Request
     ) -> Dict[str, Any]:
+        set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
 
         async def _operation() -> Dict[str, Any]:
@@ -517,6 +533,7 @@ def create_app() -> FastAPI:
         payload: PIIDeidentifyRequest,
         request: Request,
     ) -> Dict[str, Any]:
+        set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
 
         async def _operation() -> Dict[str, Any]:
@@ -536,6 +553,10 @@ def create_app() -> FastAPI:
             _operation,
         )
 
+    app.add_middleware(
+        CorrelationIdMiddleware,
+        log_config=service_log_config_from_env(),
+    )
     return app
 
 

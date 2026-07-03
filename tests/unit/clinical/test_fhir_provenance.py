@@ -79,7 +79,7 @@ def _signed_report() -> AuditReport:
                 "quasi_identifiers": ["PERSON", "PHONE"],
             },
         },
-        openmed_version="1.6.0",
+        openmed_version="1.7.0",
         manifest_hash="sha256:manifest",
         document_length=len(original),
         input_hash=hash_text(original),
@@ -111,7 +111,7 @@ def test_to_provenance_references_targets_and_repro_hash():
 
     agent = provenance["agent"][0]
     assert agent["who"]["identifier"]["value"] == "openmed"
-    assert agent["who"]["display"] == "openmed 1.6.0"
+    assert agent["who"]["display"] == "openmed 1.7.0"
 
     entity_identifier = provenance["entity"][0]["what"]["identifier"]
     assert entity_identifier["value"] == report.repro_hash
@@ -132,7 +132,7 @@ def test_to_audit_event_describes_deidentification_outcome_and_risk_details():
     assert audit_event["action"] == "E"
     assert audit_event["outcome"] == "0"
     assert audit_event["agent"][0]["who"]["identifier"]["value"] == "openmed"
-    assert audit_event["source"]["observer"]["display"] == "openmed 1.6.0"
+    assert audit_event["source"]["observer"]["display"] == "openmed 1.7.0"
 
     assert details["openmed.repro_hash"] == report.repro_hash
     assert details["openmed.span_labels"] == "PERSON,PHONE"
