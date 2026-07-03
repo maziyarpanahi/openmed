@@ -240,6 +240,25 @@ def explain(result: PipelineResult) -> ExplainReport:
     )
 
 
+def explain_span_graph(
+    graph: Any,
+    fmt: Literal["text", "dict"] = "dict",
+) -> str | dict[str, Any]:
+    """Render a span-relation graph explanation with the core explain contract.
+
+    ``SpanGraph`` explanations follow the same safe-report convention as the
+    pipeline trace: offsets, labels, scores, and constraint names are included,
+    but source surface text is not emitted.
+    """
+
+    if not hasattr(graph, "explain"):
+        raise TypeError("graph must provide an explain() method")
+    report = graph.explain()
+    if not hasattr(report, "render"):
+        raise TypeError("graph.explain() must return a renderable report")
+    return report.render(fmt=fmt)
+
+
 def render(
     report: ExplainReport,
     fmt: Literal["text", "dict"] = "text",

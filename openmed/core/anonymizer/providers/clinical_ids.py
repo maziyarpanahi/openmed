@@ -23,8 +23,13 @@ deterministic:
   - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
+  - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
-  - Polish PESEL and South Korean RRN
+  - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
+    cislo
+  - UK NHS Number, a patient health identifier validated with the NHS
+    Modulus 11 check
+  - UK National Insurance Number (NINO)
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
 """
@@ -464,6 +469,107 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# UK NHS Number and National Insurance Number
+# ---------------------------------------------------------------------------
+
+_UK_NINO_DISALLOWED_PREFIX_CHARS = frozenset("DFIQUV")
+_UK_NINO_DISALLOWED_SECOND_CHARS = _UK_NINO_DISALLOWED_PREFIX_CHARS | {"O"}
+_UK_NINO_DISALLOWED_PREFIXES = frozenset({"BG", "GB", "KN", "NK", "NT", "TN", "ZZ"})
+
+
+def validate_uk_nhs_number(text: str) -> bool:
+    """Validate a 10-digit UK NHS Number with the Modulus 11 checksum."""
+
+    digits = _digits_only(text)
+    if len(digits) != 10:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(range(10, 1, -1), numbers[:9]))
+    check = 11 - (total % 11)
+    if check == 11:
+        check = 0
+    if check == 10:
+        return False
+
+    return numbers[9] == check
+
+
+def generate_uk_nhs_number(*, rng: random.Random | None = None) -> str:
+    """Generate a UK NHS Number accepted by :func:`validate_uk_nhs_number`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body_digits = [source.randint(0, 9) for _ in range(9)]
+        if all(digit == 0 for digit in body_digits):
+            continue
+
+        total = sum(
+            weight * value for weight, value in zip(range(10, 1, -1), body_digits)
+        )
+        check = 11 - (total % 11)
+        if check == 11:
+            check = 0
+        if check == 10:
+            continue
+
+        return "".join(str(digit) for digit in body_digits) + str(check)
+
+    return "9434765919"
+
+
+def validate_uk_nino(text: str) -> bool:
+    """Validate a UK National Insurance Number's current structure."""
+
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if not re.fullmatch(r"[A-Z]{2}\d{6}[A-D]", cleaned):
+        return False
+
+    prefix = cleaned[:2]
+    if prefix in _UK_NINO_DISALLOWED_PREFIXES:
+        return False
+    if prefix[0] in _UK_NINO_DISALLOWED_PREFIX_CHARS:
+        return False
+    if prefix[1] in _UK_NINO_DISALLOWED_SECOND_CHARS:
+        return False
+
+    return True
+
+
+class UKNHSNumberProvider(BaseProvider):
+    """Generates valid 10-digit UK NHS Numbers."""
+
+    def nhs_number(self) -> str:
+        return generate_uk_nhs_number(rng=self.generator.random)
+
+
+class UKNINOProvider(BaseProvider):
+    """Generates structurally valid UK National Insurance Numbers."""
+
+    _FIRST_LETTERS = tuple(
+        letter
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if letter not in _UK_NINO_DISALLOWED_PREFIX_CHARS
+    )
+    _SECOND_LETTERS = tuple(
+        letter
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if letter not in _UK_NINO_DISALLOWED_SECOND_CHARS
+    )
+
+    def nino(self) -> str:
+        rng = self.generator.random
+        while True:
+            prefix = rng.choice(self._FIRST_LETTERS) + rng.choice(self._SECOND_LETTERS)
+            if prefix not in _UK_NINO_DISALLOWED_PREFIXES:
+                break
+
+        digits = f"{rng.randint(0, 999999):06d}"
+        suffix = rng.choice("ABCD")
+        return f"{prefix} {digits[:2]} {digits[2:4]} {digits[4:]} {suffix}"
+
+
+# ---------------------------------------------------------------------------
 # Polish PESEL (11 digits, weighted checksum with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -528,6 +634,61 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Latvian Personas Kods
+# ---------------------------------------------------------------------------
+
+
+def generate_latvian_personas_kods(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Latvian personas kods accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    if source.random() < 0.5:
+        # Legacy form: DDMMYY-CNNNQ.
+        year = source.randint(1900, 2029)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        century = (year - 1800) // 100
+
+        body = [
+            day // 10,
+            day % 10,
+            month // 10,
+            month % 10,
+            (year % 100) // 10,
+            year % 10,
+            century,
+        ]
+        body.extend(source.randint(0, 9) for _ in range(3))
+        check = _latvian_personas_kods_check_digit(body)
+
+        digits = "".join(str(digit) for digit in body) + str(check)
+        return f"{digits[:6]}-{digits[6:]}"
+
+    # New 32-prefixed format: 32 + 8 random digits + check digit.
+    body = [3, 2]
+    body.extend(source.randint(0, 9) for _ in range(8))
+    check = _latvian_personas_kods_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
+    weights = (1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+    return (
+        (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
+    )
+
+
+class LatvianPersonasKodsProvider(BaseProvider):
+    """Generate synthetic Latvian personas kods values."""
+
+    def personas_kods(self) -> str:
+        return generate_latvian_personas_kods(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -567,6 +728,39 @@ class IndonesianNIKProvider(BaseProvider):
 
     def indonesian_nik(self) -> str:
         return generate_indonesian_nik(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Malaysian MyKad / NRIC (YYMMDD-PB-XXXX with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_malaysian_mykad(*, rng: random.Random | None = None) -> str:
+    """Generate a Malaysian MyKad accepted by ``validate_malaysian_mykad``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1940, 2009)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    place_code = source.randint(1, 99)
+    serial = source.randint(1, 9999)
+
+    candidate = f"{year % 100:02d}{month:02d}{day:02d}-{place_code:02d}-{serial:04d}"
+
+    from openmed.core.pii_i18n import validate_malaysian_mykad
+
+    if validate_malaysian_mykad(candidate):
+        return candidate
+    return "850817-14-5678"
+
+
+class MalaysianMyKadProvider(BaseProvider):
+    """Generates valid Malaysian MyKad / NRIC numbers."""
+
+    def mykad(self) -> str:
+        return generate_malaysian_mykad(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -627,6 +821,51 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
+# ---------------------------------------------------------------------------
+
+
+def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
+    """Generate a Slovak rodne cislo accepted by its checksum validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    for _ in range(500):
+        year = source.randint(1954, 2029)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+
+        encoded_month = month
+        if source.choice((False, True)):
+            encoded_month += 50
+        elif year >= 2004 and source.randint(0, 9) == 0:
+            encoded_month += 20
+
+        yy = year % 100
+        serial = source.randint(0, 999)
+        first_nine = f"{yy:02d}{encoded_month:02d}{day:02d}{serial:03d}"
+        check = (-int(first_nine) * 10) % 11
+        if check == 10:
+            continue
+
+        candidate = f"{first_nine[:6]}/{first_nine[6:]}{check}"
+        from openmed.core.pii_i18n import validate_czechoslovak_rodne_cislo
+
+        if validate_czechoslovak_rodne_cislo(candidate):
+            return candidate
+
+    return "850505/1236"
+
+
+class RodneCisloProvider(BaseProvider):
+    """Generates valid Slovak rodne cislo birth numbers."""
+
+    def rodne_cislo(self) -> str:
+        return generate_rodne_cislo(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Thai national ID (13 digits, weighted mod-11 checksum)
 # ---------------------------------------------------------------------------
 
@@ -670,21 +909,30 @@ __all__ = [
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
+    "LatvianPersonasKodsProvider",
+    "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
     "PolishPeselProvider",
+    "RodneCisloProvider",
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
+    "UKNHSNumberProvider",
+    "UKNINOProvider",
     "generate_indonesian_nik",
     "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
+    "generate_latvian_personas_kods",
+    "generate_malaysian_mykad",
+    "generate_rodne_cislo",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
+    "generate_uk_nhs_number",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_iban",
@@ -692,4 +940,6 @@ __all__ = [
     "validate_npi",
     "validate_phone_us",
     "validate_ssn",
+    "validate_uk_nhs_number",
+    "validate_uk_nino",
 ]
