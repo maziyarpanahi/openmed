@@ -9,11 +9,24 @@ __all__ = [
     "ANDROID_ONNX_FORMAT",
     "ANDROID_ONNX_OPSET",
     "ANDROID_PROFILE_NAME",
+    "OPENVINO_FORMAT",
+    "OPENVINO_INT8_FORMAT",
+    "OPENVINO_PROFILE_NAME",
     "AndroidProfileValidation",
     "ExportArtifact",
     "INT8_ONNX_FILENAME",
     "ONNX_INT8_FORMAT",
     "OnnxConversionResult",
+    "OpenVinoBenchmarkRecord",
+    "OpenVinoDeviceSelection",
+    "OpenVinoExportResult",
+    "OpenVinoExportVerification",
+    "OpenVinoQuantizationRejected",
+    "OpenVinoQuantizationResult",
+    "OpenVinoTokenClassificationSession",
+    "OpenVinoVerificationError",
+    "build_openvino_benchmark_report",
+    "certify_openvino_reference",
     "apply_int8_recall_certification",
     "OnnxOptimizationConfig",
     "ORT_ANDROID_FORMAT",
@@ -23,8 +36,14 @@ __all__ = [
     "convert_android_onnx_to_ort",
     "export_android_fp16",
     "export_onnx",
+    "export_openvino_ir",
     "export_transformersjs_bundle",
     "export_webgpu",
+    "measure_openvino_latency",
+    "quantize_openvino_int8",
+    "resolve_openvino_device",
+    "run_onnx_reference_logits",
+    "token_spans_from_logits",
     "int8_artifact_metadata",
     "optimize_onnx_graph",
     "quantize_android_int8",
@@ -33,6 +52,7 @@ __all__ = [
     "validate_optimized_onnx_export",
     "validate_transformersjs_bundle",
     "validate_transformersjs_contract",
+    "write_openvino_benchmark_report",
     "write_int8_recall_delta_report",
     "write_export_manifest",
 ]
@@ -46,6 +66,25 @@ def __getattr__(name: str) -> Any:
             name == "validate_android_profile"
         ):
             module = import_module("openmed.onnx.android_profile")
+            return getattr(module, name)
+        if name in {
+            "OpenVinoDeviceSelection",
+            "OpenVinoTokenClassificationSession",
+            "resolve_openvino_device",
+        }:
+            module = import_module("openmed.onnx.openvino_session")
+            return getattr(module, name)
+        if name.startswith(("OPENVINO_", "OpenVino")) or name in {
+            "build_openvino_benchmark_report",
+            "certify_openvino_reference",
+            "export_openvino_ir",
+            "measure_openvino_latency",
+            "quantize_openvino_int8",
+            "run_onnx_reference_logits",
+            "token_spans_from_logits",
+            "write_openvino_benchmark_report",
+        }:
+            module = import_module("openmed.onnx.openvino_export")
             return getattr(module, name)
         if name.startswith(("export_transformersjs", "validate_transformersjs")):
             module = import_module("openmed.onnx.transformersjs")
