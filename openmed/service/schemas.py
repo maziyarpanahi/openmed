@@ -213,7 +213,8 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_confidence_threshold(cls, value: float) -> float:
             normalized = _normalize_confidence_threshold(value)
-            assert normalized is not None
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
             return normalized
 
         @field_validator("keep_alive", mode="before")
@@ -253,7 +254,8 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_confidence_threshold(cls, value: float) -> float:
             normalized = _normalize_confidence_threshold(value)
-            assert normalized is not None
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
             return normalized
 
         @field_validator("policy", mode="before")
@@ -396,7 +398,8 @@ else:
         @validator("confidence_threshold")
         def _validate_confidence_threshold(cls, value: float) -> float:
             normalized = _normalize_confidence_threshold(value)
-            assert normalized is not None
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
             return normalized
 
         @validator("keep_alive", pre=True)
@@ -432,7 +435,8 @@ else:
         @validator("confidence_threshold")
         def _validate_confidence_threshold(cls, value: float) -> float:
             normalized = _normalize_confidence_threshold(value)
-            assert normalized is not None
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
             return normalized
 
         @validator("policy", pre=True)

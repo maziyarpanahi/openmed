@@ -41,6 +41,33 @@ export OPENMED_DEVICE=cuda:1
 export OPENMED_CACHE_DIR=/mnt/cache/openmed
 ```
 
+## Local-only offline mode
+
+Set `OPENMED_OFFLINE=1` or instantiate `OpenMedConfig(local_only=True)` when
+model files are already present in the configured cache or passed as a local
+model path. Offline mode sets the standard cache-only loader flags
+(`HF_HUB_OFFLINE=1`, `TRANSFORMERS_OFFLINE=1`, and `HF_DATASETS_OFFLINE=1`) and
+passes `local_files_only=True` to Hub-backed model loaders.
+
+```bash
+export OPENMED_OFFLINE=1
+```
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(local_only=True, cache_dir="~/.cache/openmed")
+```
+
+Download or warm the model cache before enabling this mode. Once active,
+OpenMed blocks outbound socket connections during inference and
+de-identification. A disallowed connection raises `OfflineModeError` with this
+message prefix:
+
+```text
+OPENMED_OFFLINE/local_only=True blocks outbound network access after model loading.
+```
+
 ## Validation helpers
 
 ```python
