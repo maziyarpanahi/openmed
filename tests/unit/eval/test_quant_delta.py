@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from openmed.eval.quant_delta import evaluate_quant_recall_delta
+from openmed.eval.quant_delta import (
+    evaluate_quant_recall_delta,
+    evaluate_speculative_redaction_parity,
+    token_frequency_kl,
+)
 
 
 def test_int8_delta_below_half_point_passes() -> None:
@@ -57,3 +61,53 @@ def test_precomputed_per_format_delta_blocks_only_that_format() -> None:
     assert int8.blocking_format == "mlx-8bit"
     assert int4.passed is True
     assert int4.blocking_format is None
+
+
+def test_speculative_redaction_parity_passes_with_equivalent_evidence() -> None:
+    result = evaluate_speculative_redaction_parity(
+        reference_greedy_outputs=["Patient: [NAME]", "SSN: [SSN]"],
+        speculative_greedy_outputs=["Patient: [NAME]", "SSN: [SSN]"],
+        reference_sampling_counts={"NAME": 70, "SSN": 30},
+        speculative_sampling_counts={"NAME": 70, "SSN": 30},
+        reference_latency_ms=[10.0, 11.0, 12.0],
+        speculative_latency_ms=[5.0, 6.0, 7.0],
+        reference_recall={"PERSON": 1.0, "SSN": 1.0},
+        speculative_recall={"PERSON": 1.0, "SSN": 1.0},
+        reference_leak_count=0,
+        speculative_leak_count=0,
+        tokenizer_fallback_count=1,
+        tokenizer_fallback_correct=True,
+    )
+
+    assert result.passed is True
+    assert result.greedy_mismatch_count == 0
+    assert result.sampling_kl == pytest.approx(0.0)
+    assert result.median_latency_speedup == pytest.approx(11.0 / 6.0)
+    assert result.max_recall_delta == 0.0
+    assert result.new_leak_count == 0
+
+
+def test_speculative_redaction_parity_blocks_mismatches_and_new_leaks() -> None:
+    result = evaluate_speculative_redaction_parity(
+        reference_greedy_outputs=["Patient: [NAME]"],
+        speculative_greedy_outputs=["Patient: Alice"],
+        reference_sampling_counts={"NAME": 1},
+        speculative_sampling_counts={"NAME": 1},
+        reference_latency_ms=[10.0],
+        speculative_latency_ms=[5.0],
+        reference_recall={"PERSON": 1.0},
+        speculative_recall={"PERSON": 0.99},
+        reference_leak_count=0,
+        speculative_leak_count=1,
+    )
+
+    assert result.passed is False
+    assert result.greedy_mismatch_count == 1
+    assert result.greedy_mismatch_indices == (0,)
+    assert result.max_recall_delta == pytest.approx(0.01)
+    assert result.new_leak_count == 1
+
+
+def test_token_frequency_kl_detects_distribution_shift() -> None:
+    assert token_frequency_kl({"A": 5}, {"A": 5}) == pytest.approx(0.0)
+    assert token_frequency_kl({"A": 5}, {"B": 5}) > 20.0
