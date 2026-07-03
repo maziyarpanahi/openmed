@@ -24,6 +24,7 @@ LOWER_IS_BETTER = "lower_is_better"
 REGRESSION = "regression"
 IMPROVEMENT = "improvement"
 UNCHANGED = "unchanged"
+FLAKINESS_LEDGER_SCHEMA_VERSION = "openmed.flakiness_ledger.v1"
 
 _LOWER_IS_BETTER_MARKERS = (
     "critical_leakage_count",
@@ -131,6 +132,170 @@ class MetricHistoryPoint:
             "release": self.release,
             "suite": self.suite,
             "value": self.value,
+        }
+
+
+@dataclass(frozen=True)
+class FlakinessLedgerEntry:
+    """Persistent quarantine state for one release gate."""
+
+    gate: str
+    quarantined: bool
+    stable_runs: int = 0
+    unstable_runs: int = 0
+    reason: str = ""
+    last_flip_rate: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "gate": self.gate,
+            "last_flip_rate": self.last_flip_rate,
+            "quarantined": self.quarantined,
+            "reason": self.reason,
+            "stable_runs": self.stable_runs,
+            "unstable_runs": self.unstable_runs,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "FlakinessLedgerEntry":
+        """Create an entry from a persisted JSON object."""
+
+        return cls(
+            gate=str(data.get("gate", "")),
+            quarantined=bool(data.get("quarantined", False)),
+            stable_runs=max(0, int(data.get("stable_runs", 0))),
+            unstable_runs=max(0, int(data.get("unstable_runs", 0))),
+            reason=str(data.get("reason", "")),
+            last_flip_rate=_finite_float(data.get("last_flip_rate"), default=0.0),
+        )
+
+
+@dataclass(frozen=True)
+class FlakinessLedger:
+    """Persistent release-gate flakiness quarantine ledger."""
+
+    entries: Mapping[str, FlakinessLedgerEntry] = field(default_factory=dict)
+    schema_version: str = FLAKINESS_LEDGER_SCHEMA_VERSION
+
+    @classmethod
+    def load(cls, path: str | Path) -> "FlakinessLedger":
+        """Load a ledger from *path*, returning an empty ledger if absent."""
+
+        ledger_path = Path(path)
+        if not ledger_path.is_file():
+            return cls()
+        with ledger_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, Mapping):
+            raise ValueError(f"flakiness ledger payload must be an object: {path}")
+        return cls.from_dict(payload)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "FlakinessLedger":
+        """Create a ledger from a JSON-ready mapping."""
+
+        raw_entries = data.get("entries") or {}
+        entries: dict[str, FlakinessLedgerEntry] = {}
+        if isinstance(raw_entries, Mapping):
+            for gate, value in raw_entries.items():
+                if not isinstance(value, Mapping):
+                    continue
+                item = dict(value)
+                item.setdefault("gate", gate)
+                entry = FlakinessLedgerEntry.from_dict(item)
+                if entry.gate:
+                    entries[entry.gate] = entry
+        return cls(entries=entries)
+
+    @property
+    def quarantined_gates(self) -> tuple[str, ...]:
+        """Return gate names currently held in quarantine."""
+
+        return tuple(
+            sorted(gate for gate, entry in self.entries.items() if entry.quarantined)
+        )
+
+    def entry(self, gate: str) -> FlakinessLedgerEntry | None:
+        """Return the ledger entry for *gate*, if one exists."""
+
+        return self.entries.get(gate)
+
+    def record_gate(
+        self,
+        gate: str,
+        *,
+        unstable: bool,
+        reason: str,
+        flip_rate: float,
+        stability_window: int,
+    ) -> tuple["FlakinessLedger", FlakinessLedgerEntry]:
+        """Return an updated ledger and entry after one gate stability sweep."""
+
+        if stability_window < 1:
+            raise ValueError("stability_window must be at least 1")
+
+        previous = self.entries.get(gate)
+        if unstable:
+            entry = FlakinessLedgerEntry(
+                gate=gate,
+                quarantined=True,
+                stable_runs=0,
+                unstable_runs=(previous.unstable_runs if previous else 0) + 1,
+                reason=reason or "unstable gate verdict",
+                last_flip_rate=flip_rate,
+            )
+        elif previous is not None and previous.quarantined:
+            stable_runs = previous.stable_runs + 1
+            quarantined = stable_runs < stability_window
+            if quarantined:
+                policy_reason = (
+                    f"awaiting stability window {stable_runs}/{stability_window}"
+                )
+            else:
+                policy_reason = "stability window satisfied"
+            entry = FlakinessLedgerEntry(
+                gate=gate,
+                quarantined=quarantined,
+                stable_runs=stable_runs,
+                unstable_runs=previous.unstable_runs,
+                reason=policy_reason,
+                last_flip_rate=flip_rate,
+            )
+        else:
+            entry = FlakinessLedgerEntry(
+                gate=gate,
+                quarantined=False,
+                stable_runs=(previous.stable_runs if previous else 0) + 1,
+                unstable_runs=previous.unstable_runs if previous else 0,
+                reason=reason or "stable",
+                last_flip_rate=flip_rate,
+            )
+
+        entries = dict(self.entries)
+        entries[gate] = entry
+        return FlakinessLedger(entries=entries), entry
+
+    def save(self, path: str | Path) -> Path:
+        """Persist the ledger to *path* using deterministic JSON."""
+
+        ledger_path = Path(path)
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        ledger_path.write_text(
+            json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        return ledger_path
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready payload."""
+
+        return {
+            "entries": {
+                gate: self.entries[gate].to_dict() for gate in sorted(self.entries)
+            },
+            "schema_version": self.schema_version,
         }
 
 
@@ -639,6 +804,14 @@ def _is_number(value: Any) -> bool:
     )
 
 
+def _finite_float(value: Any, *, default: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if math.isfinite(parsed) else default
+
+
 def _mapping(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, Mapping) else {}
 
@@ -728,6 +901,9 @@ __all__ = [
     "BenchmarkHistoryDiff",
     "BenchmarkRunLedger",
     "BenchmarkRunLedgerEntry",
+    "FLAKINESS_LEDGER_SCHEMA_VERSION",
+    "FlakinessLedger",
+    "FlakinessLedgerEntry",
     "HIGHER_IS_BETTER",
     "IMPROVEMENT",
     "LEDGER_SCHEMA_VERSION",

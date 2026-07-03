@@ -28,6 +28,10 @@ except ImportError:  # pragma: no cover
 
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+_DEFAULT_STREAM_CHUNK_SIZE = 1024
+_DEFAULT_STREAM_WINDOW_CHARS = 4096
+_DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS = 128
+_DEFAULT_STREAM_MAX_ENTITY_CHARS = 512
 KeepAliveValue = Union[int, float, str]
 
 # Languages accepted by the PII endpoints. This MUST mirror
@@ -115,9 +119,58 @@ def _normalize_entity_categories(value: Any) -> list[str]:
     return sorted(categories)
 
 
+def _normalize_webhook_url(value: Any) -> str:
+    if value is None:
+        raise ValueError("Webhook URL is required")
+    normalized = str(value).strip()
+    if not normalized:
+        raise ValueError("Webhook URL must not be blank")
+    if not normalized.startswith(("http://", "https://")):
+        raise ValueError("Webhook URL must start with http:// or https://")
+    return normalized
+
+
+def _normalize_webhook_secret(value: Any) -> str:
+    if value is None:
+        raise ValueError("Webhook secret is required")
+    normalized = str(value)
+    if not normalized:
+        raise ValueError("Webhook secret must not be blank")
+    return normalized
+
+
+def _normalize_document_id(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def _validate_job_documents(value: list[Any]) -> list[Any]:
+    if not value:
+        raise ValueError("At least one document is required")
+    return value
+
+
 def _validate_keep_alive_value(value: Any) -> Any:
     parse_keep_alive(value)
     return value
+
+
+def _normalize_nonblank_string(value: Any, field_name: str) -> str:
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    if not isinstance(value, str):
+        value = str(value)
+    if not value.strip():
+        raise ValueError(f"{field_name} must not be blank")
+    return value
+
+
+def _normalize_optional_nonblank_string(value: Any, field_name: str) -> Optional[str]:
+    if value is None:
+        return None
+    return _normalize_nonblank_string(value, field_name)
 
 
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
@@ -221,6 +274,21 @@ if PYDANTIC_V2:
         @classmethod
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
+
+    class PIIExtractStreamRequest(PIIExtractRequest):
+        """Request schema for /pii/extract/stream."""
+
+        chunk_size: int = Field(default=_DEFAULT_STREAM_CHUNK_SIZE, ge=1, le=32768)
+        window_chars: int = Field(default=_DEFAULT_STREAM_WINDOW_CHARS, ge=64)
+        tokenizer_context_chars: int = Field(
+            default=_DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS,
+            ge=0,
+        )
+        max_entity_chars: int = Field(
+            default=_DEFAULT_STREAM_MAX_ENTITY_CHARS,
+            ge=1,
+        )
+        include_text: bool = True
 
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
@@ -340,6 +408,185 @@ if PYDANTIC_V2:
                 raise ValueError("model_name is required unless all=true")
             return self
 
+    class SMARTBackendIngestionRequest(_StrictModel):
+        """Request schema for starting SMART backend-services ingestion."""
+
+        fhir_base_url: str
+        token_url: str
+        client_id: str
+        private_key_pem: str
+        output_dir: str
+        checkpoint_path: Optional[str] = None
+        key_id: Optional[str] = None
+        scope: str = "system/*.read"
+        export_path: str = "$export"
+        max_inflight_downloads: int = Field(default=2, ge=1)
+        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        policy: Optional[str] = "hipaa_safe_harbor"
+        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+        use_smart_merging: bool = True
+        use_safety_sweep: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator(
+            "fhir_base_url",
+            "token_url",
+            "client_id",
+            "private_key_pem",
+            "output_dir",
+            "scope",
+            "export_path",
+            mode="before",
+        )
+        @classmethod
+        def _validate_required_text(cls, value: Any, info: Any) -> str:
+            return _normalize_nonblank_string(value, info.field_name)
+
+        @field_validator("checkpoint_path", "key_id", mode="before")
+        @classmethod
+        def _validate_optional_text(cls, value: Any, info: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, info.field_name)
+
+        @field_validator("policy", mode="before")
+        @classmethod
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @field_validator("confidence_threshold")
+        @classmethod
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
+            return normalized
+
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
+    class JobWebhookRequest(_StrictModel):
+        """Webhook callback configuration for async jobs."""
+
+        url: str
+        secret: str
+        max_attempts: int = Field(default=3, ge=1, le=10)
+        backoff_seconds: float = Field(default=0.5, ge=0.0, le=60.0)
+
+        @field_validator("url", mode="before")
+        @classmethod
+        def _validate_url(cls, value: Any) -> str:
+            return _normalize_webhook_url(value)
+
+        @field_validator("secret", mode="before")
+        @classmethod
+        def _validate_secret(cls, value: Any) -> str:
+            return _normalize_webhook_secret(value)
+
+    class DeidentifyJobDocument(_StrictModel):
+        """One document in an async de-identification job."""
+
+        text: str
+        id: Optional[str] = None
+
+        @field_validator("text", mode="before")
+        @classmethod
+        def _validate_text(cls, value: Any) -> str:
+            return _normalize_text(value)
+
+        @field_validator("id", mode="before")
+        @classmethod
+        def _validate_id(cls, value: Any) -> Optional[str]:
+            return _normalize_document_id(value)
+
+    class DeidentifyJobRequest(_StrictModel):
+        """Request schema for POST /jobs."""
+
+        documents: list[DeidentifyJobDocument]
+        webhook: Optional[JobWebhookRequest] = None
+        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+        keep_year: bool = False
+        shift_dates: Optional[bool] = None
+        date_shift_days: Optional[int] = None
+        keep_mapping: bool = False
+        policy: Optional[str] = None
+        use_smart_merging: bool = True
+        use_safety_sweep: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator("documents", mode="before")
+        @classmethod
+        def _validate_documents(cls, value: Any) -> list[DeidentifyJobDocument]:
+            if not isinstance(value, list):
+                raise ValueError("documents must be a list")
+            _validate_job_documents(value)
+            return [
+                item
+                if isinstance(item, DeidentifyJobDocument)
+                else DeidentifyJobDocument(**item)
+                for item in value
+            ]
+
+        @field_validator("webhook", mode="before")
+        @classmethod
+        def _validate_webhook(cls, value: Any) -> Optional[JobWebhookRequest]:
+            if value is None or isinstance(value, JobWebhookRequest):
+                return value
+            if isinstance(value, dict):
+                return JobWebhookRequest(**value)
+            raise ValueError("webhook must be an object")
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @field_validator("confidence_threshold")
+        @classmethod
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
+            return normalized
+
+        @field_validator("policy", mode="before")
+        @classmethod
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
+        @model_validator(mode="after")
+        def _validate_shift_dates(self) -> "DeidentifyJobRequest":
+            values = _normalize_shift_dates_payload(
+                {
+                    "method": self.method,
+                    "shift_dates": self.shift_dates,
+                    "date_shift_days": self.date_shift_days,
+                }
+            )
+            for field_name, value in values.items():
+                setattr(self, field_name, value)
+            return self
+
 else:
 
     class AnalyzeRequest(_StrictModel):
@@ -405,6 +652,21 @@ else:
         @validator("keep_alive", pre=True)
         def _validate_keep_alive(cls, value: Any) -> Any:
             return _validate_keep_alive_value(value)
+
+    class PIIExtractStreamRequest(PIIExtractRequest):
+        """Request schema for /pii/extract/stream."""
+
+        chunk_size: int = Field(default=_DEFAULT_STREAM_CHUNK_SIZE, ge=1, le=32768)
+        window_chars: int = Field(default=_DEFAULT_STREAM_WINDOW_CHARS, ge=64)
+        tokenizer_context_chars: int = Field(
+            default=_DEFAULT_STREAM_TOKENIZER_CONTEXT_CHARS,
+            ge=0,
+        )
+        max_entity_chars: int = Field(
+            default=_DEFAULT_STREAM_MAX_ENTITY_CHARS,
+            ge=1,
+        )
+        include_text: bool = True
 
     class PIIDeidentifyRequest(_StrictModel):
         """Request schema for /pii/deidentify."""
@@ -508,3 +770,157 @@ else:
             if not values.get("all") and values.get("model_name") is None:
                 raise ValueError("model_name is required unless all=true")
             return values
+
+    class SMARTBackendIngestionRequest(_StrictModel):
+        """Request schema for starting SMART backend-services ingestion."""
+
+        fhir_base_url: str
+        token_url: str
+        client_id: str
+        private_key_pem: str
+        output_dir: str
+        checkpoint_path: Optional[str] = None
+        key_id: Optional[str] = None
+        scope: str = "system/*.read"
+        export_path: str = "$export"
+        max_inflight_downloads: int = Field(default=2, ge=1)
+        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        policy: Optional[str] = "hipaa_safe_harbor"
+        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+        use_smart_merging: bool = True
+        use_safety_sweep: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @validator(
+            "fhir_base_url",
+            "token_url",
+            "client_id",
+            "private_key_pem",
+            "output_dir",
+            "scope",
+            "export_path",
+            pre=True,
+        )
+        def _validate_required_text(cls, value: Any, field: Any) -> str:
+            return _normalize_nonblank_string(value, field.name)
+
+        @validator("checkpoint_path", "key_id", pre=True)
+        def _validate_optional_text(cls, value: Any, field: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, field.name)
+
+        @validator("policy", pre=True)
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @validator("confidence_threshold")
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
+            return normalized
+
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
+    class JobWebhookRequest(_StrictModel):
+        """Webhook callback configuration for async jobs."""
+
+        url: str
+        secret: str
+        max_attempts: int = Field(default=3, ge=1, le=10)
+        backoff_seconds: float = Field(default=0.5, ge=0.0, le=60.0)
+
+        @validator("url", pre=True)
+        def _validate_url(cls, value: Any) -> str:
+            return _normalize_webhook_url(value)
+
+        @validator("secret", pre=True)
+        def _validate_secret(cls, value: Any) -> str:
+            return _normalize_webhook_secret(value)
+
+    class DeidentifyJobDocument(_StrictModel):
+        """One document in an async de-identification job."""
+
+        text: str
+        id: Optional[str] = None
+
+        @validator("text", pre=True)
+        def _validate_text(cls, value: Any) -> str:
+            return _normalize_text(value)
+
+        @validator("id", pre=True)
+        def _validate_id(cls, value: Any) -> Optional[str]:
+            return _normalize_document_id(value)
+
+    class DeidentifyJobRequest(_StrictModel):
+        """Request schema for POST /jobs."""
+
+        documents: list[DeidentifyJobDocument]
+        webhook: Optional[JobWebhookRequest] = None
+        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "mask"
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+        keep_year: bool = False
+        shift_dates: Optional[bool] = None
+        date_shift_days: Optional[int] = None
+        keep_mapping: bool = False
+        policy: Optional[str] = None
+        use_smart_merging: bool = True
+        use_safety_sweep: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @validator("documents", pre=True)
+        def _validate_documents(cls, value: Any) -> list[DeidentifyJobDocument]:
+            if not isinstance(value, list):
+                raise ValueError("documents must be a list")
+            _validate_job_documents(value)
+            return [
+                item
+                if isinstance(item, DeidentifyJobDocument)
+                else DeidentifyJobDocument(**item)
+                for item in value
+            ]
+
+        @validator("webhook", pre=True)
+        def _validate_webhook(cls, value: Any) -> Optional[JobWebhookRequest]:
+            if value is None or isinstance(value, JobWebhookRequest):
+                return value
+            if isinstance(value, dict):
+                return JobWebhookRequest(**value)
+            raise ValueError("webhook must be an object")
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @validator("confidence_threshold")
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
+            return normalized
+
+        @validator("policy", pre=True)
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
+
+        @root_validator
+        def _validate_shift_dates(cls, values: dict[str, Any]) -> dict[str, Any]:
+            return _normalize_shift_dates_payload(values)
