@@ -8,9 +8,11 @@ from openmed.core.cascade import R2_BASE, CascadeRouter
 from openmed.core.pipeline import Pipeline
 from openmed.core.schemas.span import ACTION_VALUES, OpenMedSpan, hmac_text_hash
 from openmed.core.thresholds import (
+    DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING,
     fit_thresholds,
     load_thresholds,
     lookup_threshold,
+    membership_defense_for_profile,
     recall_floor_guard,
     update_thresholds,
     validate_threshold_matrix,
@@ -115,6 +117,36 @@ def test_fit_and_update_thresholds_return_valid_versioned_matrix():
     assert (
         lookup_threshold("EMAIL", "en", "balanced", matrix=updated)["keep_floor"] == 0.4
     )
+
+
+def test_membership_defense_resolves_from_policy_profile():
+    matrix = load_thresholds()
+    matrix["profiles"]["balanced"]["membership_defense"] = {
+        "enabled": True,
+        "clip_min": 0.4,
+        "clip_max": 0.6,
+        "temperature": 2.0,
+        "smoothing": 0.5,
+    }
+
+    policy = membership_defense_for_profile("balanced", matrix=matrix)
+
+    assert policy.enabled is True
+    assert policy.recall_floor == matrix["profiles"]["balanced"]["recall_floor"]
+    assert policy.advantage_ceiling == DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING
+    assert 0.5 <= policy.apply_score(0.99) <= 0.6
+
+
+def test_threshold_matrix_rejects_malformed_membership_defense():
+    matrix = load_thresholds()
+    matrix["profiles"]["balanced"]["membership_defense"] = {
+        "enabled": True,
+        "clip_min": 0.8,
+        "clip_max": 0.2,
+    }
+
+    with pytest.raises(ValueError, match="clip_min"):
+        validate_threshold_matrix(matrix)
 
 
 def test_load_thresholds_rejects_malformed_json(tmp_path):
