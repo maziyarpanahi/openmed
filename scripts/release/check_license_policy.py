@@ -99,6 +99,7 @@ REVIEWED_LICENSES = {
     "pikepdf": "MPL-2.0",
     "polars": "MIT",
     "presidio-analyzer": "MIT",
+    "pyarrow": "Apache-2.0",
     "protobuf": "BSD-3-Clause",
     "pydicom": "MIT",
     "pydeid": "MIT",
