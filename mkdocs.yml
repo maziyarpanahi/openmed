@@ -72,6 +72,7 @@ nav:
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
+      - SLSA Build Provenance: supply-chain/provenance.md
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
