@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from openmed.eval.attacks import LinkageAttackResult, linkage_attack
+from openmed.eval.attacks import (
+    LinkageAttackResult,
+    LongitudinalLinkageAttackResult,
+    linkage_attack,
+    longitudinal_linkage_attack,
+)
 from openmed.eval.attacks.reid import run_reid_benchmark
 
 FIXTURE_PATH = (
@@ -82,3 +87,59 @@ def test_run_reid_benchmark_exposes_linkage_metric_for_linkage_mode() -> None:
     assert report.metrics["linkage_attack"]["unique_matches"] == 1
     assert report.metrics["linkage_attack"]["ambiguous_matches"] == 1
     assert report.metrics["linkage_attack"]["no_matches"] == 1
+
+
+def test_longitudinal_linkage_attack_stays_below_reported_bound() -> None:
+    records = [
+        {
+            "record_id": "alpha-note-1",
+            "patient_id": "patient-alpha",
+            "text": "Follow-up note: 70-year-old with [RARE_CONDITION].",
+            "age": 70,
+            "diagnosis": "rare alpha syndrome",
+            "audit_spans": [
+                {
+                    "canonical_label": "PERSON",
+                    "surrogate": "Jordan Vale",
+                    "text_hash": "sha256:alpha-person",
+                }
+            ],
+        },
+        {
+            "record_id": "alpha-note-2",
+            "patient_id": "patient-alpha",
+            "text": "Second note: 71-year-old returned for [RARE_CONDITION].",
+            "age": 71,
+            "diagnosis": "rare alpha syndrome",
+            "audit_spans": [
+                {
+                    "canonical_label": "PERSON",
+                    "surrogate": "Jordan Vale",
+                    "text_hash": "sha256:alpha-person",
+                }
+            ],
+        },
+        {
+            "record_id": "beta-note-1",
+            "patient_id": "patient-beta",
+            "text": "Routine visit: 71-year-old with hypertension.",
+            "age": 71,
+            "diagnosis": "hypertension",
+        },
+    ]
+
+    result = longitudinal_linkage_attack(
+        records,
+        hmac_key="unit-longitudinal-key",
+    )
+
+    assert isinstance(result, LongitudinalLinkageAttackResult)
+    assert result.patient_count == 2
+    assert result.successful_links == 1
+    assert result.realized_success_rate <= result.reported_upper_bound
+    assert result.bound_violated is False
+
+    payload = json.dumps(result.to_metric(), sort_keys=True)
+    assert "patient-alpha" not in payload
+    assert "Jordan Vale" not in payload
+    assert "rare alpha syndrome" not in payload

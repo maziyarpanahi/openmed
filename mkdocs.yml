@@ -18,6 +18,8 @@ nav:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
       - Hardened Service Image: deploy/hardened-image.md
+      - gRPC Service: serving/grpc.md
+      - REST Authentication: serving/authentication.md
       - Helm Deployment: deploy/helm.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
@@ -69,7 +71,9 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
+      - SLSA Build Provenance: supply-chain/provenance.md
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
