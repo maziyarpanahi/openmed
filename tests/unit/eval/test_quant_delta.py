@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from openmed.eval.quant_delta import (
+    evaluate_coreml_span_parity,
     evaluate_onnx_logit_parity,
     evaluate_quant_recall_delta,
     evaluate_speculative_redaction_parity,
@@ -62,6 +63,41 @@ def test_precomputed_per_format_delta_blocks_only_that_format() -> None:
     assert int8.blocking_format == "mlx-8bit"
     assert int4.passed is True
     assert int4.blocking_format is None
+
+
+def test_coreml_span_parity_passes_identical_spans_and_three_tenths_point() -> None:
+    result = evaluate_coreml_span_parity(
+        format_name="coreml-int8",
+        reference_spans={
+            "note": [{"label": "PERSON", "start": 8, "end": 16, "text": "John Doe"}]
+        },
+        candidate_spans={
+            "note": [{"label": "PERSON", "start": 8, "end": 16, "text": "John Doe"}]
+        },
+        reference_recall={"PERSON": 0.990},
+        candidate_recall={"PERSON": 0.987},
+    )
+
+    assert result.passed is True
+    assert result.max_recall_delta == pytest.approx(0.003)
+
+
+def test_coreml_int4_parity_auto_rejects_with_clear_reason() -> None:
+    result = evaluate_coreml_span_parity(
+        format_name="coreml-int4",
+        reference_spans={
+            "note": [{"label": "PERSON", "start": 8, "end": 16, "text": "John Doe"}]
+        },
+        candidate_spans={"note": []},
+        reference_recall={"PERSON": 1.0},
+        candidate_recall={"PERSON": 0.0},
+        rejectable=True,
+    )
+
+    assert result.passed is False
+    assert result.auto_rejected is True
+    assert "span parity mismatch" in (result.rejection_reason or "")
+    assert "recall delta exceeds limit" in (result.rejection_reason or "")
 
 
 def test_onnx_logit_parity_passes_when_logits_and_spans_match() -> None:
