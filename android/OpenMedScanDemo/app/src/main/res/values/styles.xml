@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.OpenMedScanDemo" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#0F766E</item>
+    </style>
+</resources>

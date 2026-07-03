@@ -78,6 +78,9 @@ android {
             assets.srcDir(generatedCatalogAssetsDir)
             resources.srcDir("src/main/assets")
         }
+        getByName("test") {
+            resources.srcDir(rootProject.file("../fixtures/parity"))
+        }
     }
 
     publishing {
@@ -215,5 +218,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation("org.json:json:20240303")
     testImplementation(libs.robolectric)
 }

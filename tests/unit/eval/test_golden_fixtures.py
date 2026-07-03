@@ -21,6 +21,7 @@ from openmed.core.pii_i18n import (
 from openmed.eval import harness
 from openmed.eval.golden import (
     GOLDEN_CATEGORIES,
+    HARD_NEGATIVE_CATEGORY,
     GoldenFixture,
     fixture_languages,
     fixtures_by_category,
@@ -117,7 +118,7 @@ def test_golden_fixtures_parse_offsets_expected_output_and_round_trip():
         seen_ids.add(fixture.fixture_id)
         assert fixture.expected_output["text"]
         assert fixture.expected_output["method"]
-        assert fixture.gold_spans
+        assert fixture.gold_spans or fixture.category == HARD_NEGATIVE_CATEGORY
 
         for span in fixture.gold_spans:
             assert span.label in CANONICAL_LABELS
@@ -131,12 +132,38 @@ def test_golden_json_files_are_harness_loadable():
     for fixture_path in list_fixture_paths():
         loaded = harness.load_fixtures(fixture_path)
         assert loaded
-        assert all(item.gold_spans for item in loaded)
+        assert all(
+            item.gold_spans or item.metadata["category"] == HARD_NEGATIVE_CATEGORY
+            for item in loaded
+        )
         assert all(item.metadata["expected_output"]["text"] for item in loaded)
 
     benchmark_fixtures = load_benchmark_fixtures()
     assert len(benchmark_fixtures) == len(load_golden_fixtures())
     assert all(item.metadata["category"] for item in benchmark_fixtures)
+
+
+def test_hard_negative_fixtures_are_synthetic_zero_span_non_phi():
+    fixtures = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.category == HARD_NEGATIVE_CATEGORY
+    ]
+
+    assert fixtures
+    for fixture in fixtures:
+        assert fixture.gold_spans == ()
+        assert fixture.expected_output["method"] == "none"
+        assert fixture.expected_output["text"] == fixture.text
+        assert fixture.metadata["synthetic"] is True
+        assert "dua" not in json.dumps(fixture.to_mapping()).lower()
+        for candidate in fixture.metadata["hard_negative_candidates"]:
+            assert candidate["synthetic"] is True
+            assert candidate["label"] in CANONICAL_LABELS
+            assert (
+                fixture.text[candidate["start"] : candidate["end"]]
+                == (candidate["text"])
+            )
 
 
 def test_hebrew_i18n_jsonl_fixture_offsets_and_checksum():
