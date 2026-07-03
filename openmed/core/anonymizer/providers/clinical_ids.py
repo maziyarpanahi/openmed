@@ -24,6 +24,7 @@ deterministic:
   - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
   - Malaysian MyKad / NRIC with a decodable embedded birth date
+  - Philippine PhilSys PSN and PhilHealth PIN structural formats
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
@@ -660,6 +661,55 @@ class MalaysianMyKadProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Philippine PhilSys PSN / PhilHealth PIN
+# ---------------------------------------------------------------------------
+
+
+def generate_philsys_psn(*, rng: random.Random | None = None) -> str:
+    """Generate a Philippine PhilSys PSN accepted by its structural validator."""
+    source = rng or random.Random()
+
+    for _ in range(100):
+        digits = "".join(str(source.randint(0, 9)) for _ in range(12))
+        candidate = f"{digits[:4]}-{digits[4:8]}-{digits[8:]}"
+
+        from openmed.core.pii_i18n import validate_philsys_psn
+
+        if validate_philsys_psn(candidate):
+            return candidate
+
+    return "1234-5678-9012"
+
+
+def generate_philhealth_pin(*, rng: random.Random | None = None) -> str:
+    """Generate a Philippine PhilHealth PIN accepted by its structural validator."""
+    source = rng or random.Random()
+
+    for _ in range(100):
+        prefix = source.randint(1, 99)
+        serial = source.randint(1, 999_999_999)
+        suffix = source.randint(0, 9)
+        candidate = f"{prefix:02d}-{serial:09d}-{suffix}"
+
+        from openmed.core.pii_i18n import validate_philhealth_pin
+
+        if validate_philhealth_pin(candidate):
+            return candidate
+
+    return "98-765432109-8"
+
+
+class PhilippinesIdProvider(BaseProvider):
+    """Generates structurally valid Philippine PhilSys and PhilHealth IDs."""
+
+    def philsys_psn(self) -> str:
+        return generate_philsys_psn(rng=self.generator.random)
+
+    def philhealth_pin(self) -> str:
+        return generate_philhealth_pin(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -809,6 +859,7 @@ __all__ = [
     "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
     "NPIProvider",
+    "PhilippinesIdProvider",
     "PolishPeselProvider",
     "RodneCisloProvider",
     "ThaiNationalIdProvider",
@@ -822,6 +873,8 @@ __all__ = [
     "generate_pesel",
     "generate_latvian_personas_kods",
     "generate_malaysian_mykad",
+    "generate_philhealth_pin",
+    "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_spanish_nie",
     "generate_ssn",
