@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -10,7 +11,7 @@ from typing import Any, Awaitable, Callable, Dict, Mapping, Optional, Sequence, 
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
@@ -19,6 +20,7 @@ import openmed
 from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
+from .auth import ServiceAuth, parse_service_auth_config
 from .batcher import BatchResult, DynamicBatcher
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
@@ -40,6 +42,7 @@ from .schemas import (
     ModelUnloadRequest,
     PIIDeidentifyRequest,
     PIIExtractRequest,
+    PIIExtractStreamRequest,
 )
 from .security_headers import (
     SERVICE_CORS_HEADERS,
@@ -48,10 +51,11 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .throttle import ServiceThrottle
+from .warm_pool import WarmPoolBackpressureError
 
 SERVICE_NAME = "openmed-rest"
 _MODEL_BACKED_PATHS = frozenset(
-    {"/analyze", "/pii/extract", "/pii/deidentify", "/jobs"}
+    {"/analyze", "/pii/extract", "/pii/extract/stream", "/pii/deidentify", "/jobs"}
 )
 _ServicePayload = Dict[str, Any]
 _ServiceOperation = Callable[[], Awaitable[_ServicePayload]]
@@ -320,6 +324,10 @@ def create_app() -> FastAPI:
         allowed_hosts=security_config.trusted_hosts,
         www_redirect=False,
     )
+    app.state.auth = ServiceAuth(
+        parse_service_auth_config(),
+        error_response=_error_response,
+    )
     app.state.metrics = (
         PrometheusMetricsRegistry() if metrics_enabled_from_env() else None
     )
@@ -380,6 +388,13 @@ def create_app() -> FastAPI:
             return await call_next(request)
         return await throttle.dispatch(request, call_next)
 
+    @app.middleware("http")
+    async def _auth_middleware(request: Request, call_next):
+        auth = getattr(request.app.state, "auth", None)
+        if auth is None:
+            return await call_next(request)
+        return await auth.dispatch(request, call_next)
+
     @app.exception_handler(RequestValidationError)
     async def _request_validation_handler(
         _: Request,
@@ -399,6 +414,23 @@ def create_app() -> FastAPI:
             "timeout",
             str(exc),
             details={"timeout_seconds": exc.timeout_seconds},
+        )
+
+    @app.exception_handler(WarmPoolBackpressureError)
+    async def _warm_pool_backpressure_handler(
+        _: Request,
+        exc: WarmPoolBackpressureError,
+    ) -> JSONResponse:
+        return _error_response(
+            503,
+            "service_busy",
+            str(exc),
+            details={
+                "model_name": exc.model_name,
+                "required_bytes": exc.required_bytes,
+                "budget_bytes": exc.budget_bytes,
+                "wait_seconds": exc.wait_seconds,
+            },
         )
 
     @app.exception_handler(ValueError)
@@ -533,6 +565,33 @@ def create_app() -> FastAPI:
             payload,
             _operation,
         )
+
+    @app.post("/pii/extract/stream")
+    async def pii_extract_stream(
+        payload: PIIExtractStreamRequest,
+        request: Request,
+    ) -> StreamingResponse:
+        runtime = _get_service_runtime(request)
+
+        async def _events():
+            async for event in runtime.stream_pii_extract(
+                text=payload.text,
+                model_name=payload.model_name,
+                confidence_threshold=payload.confidence_threshold,
+                use_smart_merging=payload.use_smart_merging,
+                lang=payload.lang,
+                normalize_accents=payload.normalize_accents,
+                keep_alive=payload.keep_alive,
+                chunk_size=payload.chunk_size,
+                window_chars=payload.window_chars,
+                tokenizer_context_chars=payload.tokenizer_context_chars,
+                max_entity_chars=payload.max_entity_chars,
+            ):
+                event_payload = event.to_dict(include_text=payload.include_text)
+                event_payload["audit"] = event.to_audit_dict()
+                yield json.dumps(event_payload, sort_keys=True) + "\n"
+
+        return StreamingResponse(_events(), media_type="application/x-ndjson")
 
     @app.post("/pii/deidentify")
     async def pii_deidentify(

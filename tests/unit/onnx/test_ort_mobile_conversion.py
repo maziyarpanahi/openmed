@@ -150,7 +150,10 @@ def test_convert_android_profile_records_ort_metadata(
     monkeypatch.setattr(ort_module, "_load_ort_tools", lambda: fake_tools)
 
     result = module.convert(
-        "OpenMed/test-model", tmp_path / "artifact", profile="android"
+        "OpenMed/test-model",
+        tmp_path / "artifact",
+        profile="android",
+        include_int8=False,
     )
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
@@ -232,6 +235,7 @@ def test_convert_android_profile_skips_ort_when_tooling_unavailable(
         "Patient John Doe",
         tmp_path / "artifact",
         profile="android",
+        include_int8=False,
     )
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
