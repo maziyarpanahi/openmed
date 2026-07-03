@@ -24,11 +24,15 @@ from .script_detect import (
     segment_by_script,
 )
 from .surrogate_vault import (
+    ENCRYPTION_SCHEME,
     InMemorySurrogateStore,
     JsonFileSurrogateStore,
     SurrogateEntry,
     SurrogateKey,
+    SurrogateSource,
     SurrogateVault,
+    VaultConsistencyReport,
+    VaultRotationResult,
 )
 
 __all__ = [
@@ -48,8 +52,12 @@ __all__ = [
     "SurrogateVault",
     "SurrogateKey",
     "SurrogateEntry",
+    "SurrogateSource",
+    "VaultConsistencyReport",
+    "VaultRotationResult",
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
+    "ENCRYPTION_SCHEME",
     "PROFILE_PRESETS",
     "list_profiles",
     "get_profile",
