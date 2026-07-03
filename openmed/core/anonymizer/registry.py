@@ -125,7 +125,9 @@ _DAY_FIRST_LOCALES = frozenset(
         "pt_BR",
         "he_IL",
         "id_ID",
+        "ms_MY",
         "th_TH",
+        "sk_SK",
     }
 )
 
@@ -166,13 +168,16 @@ _LOCALE_ID_METHODS = {
     "hi_IN": "aadhaar",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
-    "en_GB": "ssn",
+    "en_GB": "nino",
     "tr_TR": "ssn",
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
+    "ms_MY": "mykad",
     "pl_PL": "pesel",
+    "lv_LV": "personas_kods",
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
+    "sk_SK": "rodne_cislo",
 }
 
 
