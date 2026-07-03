@@ -1,6 +1,6 @@
-"""Locale national-ID checksum provider registry.
+"""Locale national-ID validator provider registry.
 
-Language packs add checksum-backed national IDs here by following these steps:
+Language packs add validator-backed national IDs here by following these steps:
 
 1. Implement or import a deterministic validator that accepts the generated
    surrogate shape and returns ``True`` only for valid identifiers.
@@ -30,6 +30,7 @@ from typing import Any, Callable
 from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_czechoslovak_rodne_cislo,
+    validate_danish_cpr,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
@@ -50,6 +51,7 @@ from openmed.core.pii_i18n import (
 
 from .clinical_ids import (
     AadhaarProvider,
+    DanishCPRProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
@@ -260,6 +262,13 @@ def _register_builtin_specs() -> None:
         validate=validate_malaysian_mykad,
         faker_method="mykad",
         faker_provider=MalaysianMyKadProvider,
+    )
+    _register_aliases(
+        ("da", "da_DK", "dk"),
+        id_type="cpr",
+        validate=validate_danish_cpr,
+        faker_method="danish_cpr",
+        faker_provider=DanishCPRProvider,
     )
     _register_aliases(
         ("th", "th_TH"),
