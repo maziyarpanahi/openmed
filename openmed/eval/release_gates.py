@@ -528,6 +528,7 @@ class ReleaseGate:
 
         checks.append(_manifest_coherence_check(identity, metadata))
         checks.append(_calibration_check(metadata, profile))
+        checks.append(_conformal_coverage_check(metrics, metadata))
         checks.append(
             self._g1a_check(
                 per_label_recall,
@@ -538,6 +539,7 @@ class ReleaseGate:
         )
         checks.append(self._g1b_check(per_label_recall, recall_denominators))
         checks.append(self._g2_check(per_label_recall, recall_denominators))
+        checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
@@ -560,6 +562,9 @@ class ReleaseGate:
         )
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        federated_check = _federated_boundary_check(metrics, metadata)
+        if federated_check is not None:
+            checks.append(federated_check)
         checks.append(_k_floor_check(metrics, metadata))
 
         blocked_formats = tuple(
@@ -1162,6 +1167,154 @@ def _calibration_check(metadata: Mapping[str, Any], profile: Any | None) -> Gate
     )
 
 
+def _conformal_coverage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    report, error, explicit = _conformal_coverage_report(metrics, metadata)
+    required = bool(
+        _first_value(
+            metadata.get("require_conformal_coverage"),
+            metrics.get("require_conformal_coverage"),
+            False,
+        )
+    )
+    if error:
+        return GateCheck("conformal_coverage", False, reason=error)
+    if not report:
+        if required:
+            return GateCheck(
+                "conformal_coverage",
+                False,
+                reason="calibration-under-shift report is required",
+            )
+        return GateCheck(
+            "conformal_coverage",
+            True,
+            reason="not provided",
+            details={"required": False},
+        )
+
+    groups = report.get("groups")
+    if not isinstance(groups, Sequence) or isinstance(groups, (str, bytes)):
+        return GateCheck(
+            "conformal_coverage",
+            False,
+            reason="calibration-under-shift report requires groups",
+        )
+
+    default_alpha = _optional_float(report.get("alpha"))
+    default_target = _optional_float(report.get("target_coverage"))
+    if default_target is None and default_alpha is not None:
+        default_target = 1.0 - default_alpha
+    if default_target is None:
+        default_target = 1.0 - 0.05
+    tolerance = _optional_float(report.get("coverage_tolerance"))
+    if tolerance is None:
+        tolerance = 0.01
+
+    evaluated: list[str] = []
+    violations: dict[str, Any] = {}
+    for item in groups:
+        if not isinstance(item, Mapping):
+            continue
+        label = normalize_label(str(item.get("label") or ""))
+        if label not in _CRITICAL_LABELS:
+            continue
+        gate_weight = _optional_float(
+            _first_value(
+                item.get("positive_gate_weight"), item.get("total_gate_weight")
+            )
+        )
+        if gate_weight is not None and gate_weight <= 0.0:
+            continue
+        coverage = _optional_float(
+            _first_value(item.get("positive_coverage"), item.get("realized_coverage"))
+        )
+        if coverage is None:
+            coverage = 0.0
+        target = _optional_float(item.get("target_coverage"))
+        if target is None:
+            target = default_target
+        language = str(item.get("language") or "").lower()
+        key = f"{label}:{language or '*'}"
+        evaluated.append(key)
+        gap = max(float(target) - float(coverage), 0.0)
+        if float(coverage) + float(tolerance) < float(target):
+            violations[key] = {
+                "label": label,
+                "language": language,
+                "coverage": coverage,
+                "target_coverage": target,
+                "coverage_gap": gap,
+                "tolerance": tolerance,
+            }
+
+    if violations:
+        return GateCheck(
+            "conformal_coverage",
+            False,
+            reason="critical-label conformal coverage below target",
+            details={
+                "target_coverage": default_target,
+                "coverage_tolerance": tolerance,
+                "critical_labels_evaluated": sorted(evaluated),
+                "violations": violations,
+                "language_coverage": _mapping(report.get("language_coverage")),
+                "explicit": explicit,
+            },
+        )
+
+    return GateCheck(
+        "conformal_coverage",
+        True,
+        details={
+            "target_coverage": default_target,
+            "coverage_tolerance": tolerance,
+            "critical_labels_evaluated": sorted(evaluated),
+            "language_coverage": _mapping(report.get("language_coverage")),
+            "explicit": explicit,
+        },
+    )
+
+
+def _conformal_coverage_report(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, Any], str, bool]:
+    inline = _first_mapping(
+        metadata.get("calibration_under_shift"),
+        metadata.get("calibration_under_shift_report"),
+        metadata.get("conformal_coverage"),
+        metrics.get("calibration_under_shift"),
+        metrics.get("calibration_under_shift_report"),
+        metrics.get("conformal_coverage"),
+    )
+    if inline:
+        return inline, "", True
+
+    path_value = _first_value(
+        metadata.get("calibration_under_shift_report_path"),
+        metadata.get("under_shift_report_path"),
+        metadata.get("conformal_coverage_path"),
+        metrics.get("calibration_under_shift_report_path"),
+        metrics.get("under_shift_report_path"),
+        metrics.get("conformal_coverage_path"),
+    )
+    if path_value is None:
+        return {}, "", False
+    path = Path(str(path_value))
+    if not path.is_file():
+        return {}, f"calibration-under-shift report not found: {path}", True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"could not read calibration-under-shift report: {exc}", True
+    if not isinstance(payload, Mapping):
+        return {}, "calibration-under-shift report must be a JSON object", True
+    return dict(payload), "", True
+
+
 def _recall_floor_check(
     gate: str,
     labels: frozenset[str],
@@ -1197,6 +1350,58 @@ def _g3_check(critical_leakage_count: int) -> GateCheck:
             else "critical leakage must be exactly zero"
         ),
         details={"critical_leakage_count": critical_leakage_count},
+    )
+
+
+def _adversarial_recall_under_attack_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    payload = _first_mapping(
+        metadata.get("adversarial_robustness"),
+        metrics.get("adversarial_robustness"),
+    )
+    if not payload:
+        return GateCheck(
+            "adversarial_recall_under_attack",
+            True,
+            reason="not applicable",
+        )
+
+    recall = _float_map(
+        payload.get("post_defense_recall_under_attack_by_label")
+        or payload.get("recall_under_attack_by_label")
+    )
+    leaked = _float_map(
+        payload.get("post_defense_leaked_chars_by_label")
+        or payload.get("leaked_chars_by_label")
+    )
+    floor = _optional_float(payload.get("recall_floor"))
+    if floor is None:
+        floor = _optional_float(metadata.get("adversarial_recall_floor"))
+    if floor is None:
+        floor = G2_V20_RECALL_FLOOR
+
+    applicable = sorted(_G1_G2_LABELS & set(recall))
+    recall_violations = {
+        label: recall[label] for label in applicable if recall[label] < floor
+    }
+    direct_leaked = {
+        label: int(value)
+        for label, value in leaked.items()
+        if label in _G1_G2_LABELS and int(value) > 0
+    }
+    passed = not recall_violations and not direct_leaked
+    return GateCheck(
+        "adversarial_recall_under_attack",
+        passed,
+        reason="ok" if passed else "adversarial recall or leakage gate failed",
+        details={
+            "applicable_labels": applicable,
+            "direct_identifier_leaked_chars": direct_leaked,
+            "floor": floor,
+            "recall_violations": recall_violations,
+        },
     )
 
 
@@ -1500,6 +1705,64 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     )
 
 
+def _federated_boundary_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck | None:
+    boundary = _mapping(metrics.get("boundary_leakage"))
+    side_channel = _mapping(metrics.get("side_channel"))
+    has_federated_signal = bool(
+        boundary
+        or side_channel
+        or metadata.get("federated_eval")
+        or metrics.get("federated_boundary_leakage_rate") is not None
+    )
+    if not has_federated_signal:
+        return None
+
+    leakage_rate = _optional_float(
+        _first_value(
+            boundary.get("rate"),
+            metrics.get("federated_boundary_leakage_rate"),
+            metadata.get("federated_boundary_leakage_rate"),
+        )
+    )
+    leakage_rate = 1.0 if leakage_rate is None else leakage_rate
+    leaked_bytes = _optional_int(boundary.get("leaked_bytes")) or 0
+    side_flagged = bool(side_channel.get("flagged", False))
+    side_estimate = _optional_float(side_channel.get("estimate_bits")) or 0.0
+    sandbox_count = _optional_int(metrics.get("sandbox_violation_count"))
+    if sandbox_count is None:
+        sandbox_count = len(metadata.get("sandbox_violations") or ())
+
+    violations: dict[str, Any] = {}
+    if leakage_rate > 0.0 or leaked_bytes > 0:
+        violations["boundary_leakage"] = {
+            "rate": leakage_rate,
+            "leaked_bytes": leaked_bytes,
+        }
+    if side_flagged:
+        violations["side_channel"] = {
+            "estimate_bits": side_estimate,
+            "threshold_bits": side_channel.get("threshold_bits"),
+        }
+    if sandbox_count:
+        violations["sandbox"] = {"violation_count": sandbox_count}
+
+    return GateCheck(
+        "federated_boundary",
+        not violations,
+        reason="ok" if not violations else "federated boundary leakage gate failed",
+        details={
+            "boundary_leakage_rate": leakage_rate,
+            "leaked_bytes": leaked_bytes,
+            "side_channel_estimate_bits": side_estimate,
+            "sandbox_violation_count": sandbox_count,
+            "violations": violations,
+        },
+    )
+
+
 def _k_floor_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -1552,6 +1815,28 @@ def _k_floor_check(
             "max_reidentification_upper_bound": max_bound,
             "violations": violations,
         },
+    )
+
+
+def evaluate_federated_boundary_gate(
+    report: BenchmarkReport | Mapping[str, Any],
+) -> GateCheck:
+    """Evaluate only the federated boundary leakage gate for a report."""
+    payload = _report_payload(report)
+    metrics = dict(_mapping(payload.get("metrics") or payload))
+    if "sandbox_violation_count" not in metrics and isinstance(
+        payload.get("sandbox_violations"),
+        Sequence,
+    ):
+        metrics["sandbox_violation_count"] = len(payload["sandbox_violations"])
+    metadata = _mapping(payload.get("metadata"))
+    check = _federated_boundary_check(metrics, metadata)
+    if check is not None:
+        return check
+    return GateCheck(
+        "federated_boundary",
+        False,
+        reason="federated boundary metrics are required",
     )
 
 
@@ -1731,6 +2016,8 @@ def _residual_leakage_rate(
     value = _first_value(
         metadata.get("residual_leakage_rate"),
         metrics.get("residual_leakage_rate"),
+        metrics.get("federated_boundary_leakage_rate"),
+        _nested(metrics, "boundary_leakage", "rate"),
         _nested(metrics, "leakage", "overall"),
     )
     parsed = _optional_float(value)
@@ -2321,6 +2608,7 @@ __all__ = [
     "ModelStewardConfig",
     "ReleaseGate",
     "build_arg_parser",
+    "evaluate_federated_boundary_gate",
     "format_preview",
     "main",
     "preview",
