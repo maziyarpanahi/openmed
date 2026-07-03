@@ -12,6 +12,7 @@ from openmed.core.models import ModelLoader
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
 from .keep_alive import parse_keep_alive
+from .resilience import ResilienceManager, ServiceResilienceConfig
 from .warm_pool import (
     DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS,
     DEFAULT_MODEL_FOOTPRINT_BYTES,
@@ -40,10 +41,29 @@ SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
 SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
 SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
 SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
+SERVICE_RESILIENCE_ENABLED_ENV_VAR = "OPENMED_SERVICE_RESILIENCE_ENABLED"
+SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR = "OPENMED_SERVICE_RETRY_MAX_ATTEMPTS"
+SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS"
+SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_MULTIPLIER"
+SERVICE_RETRY_BACKOFF_MAX_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_MAX_SECONDS"
+SERVICE_RETRY_BACKOFF_JITTER_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_JITTER_SECONDS"
+SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR = (
+    "OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD"
+)
+SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR = (
+    "OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS"
+)
 DEFAULT_SERVICE_BATCH_MAX_SIZE = 8
 DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
+DEFAULT_SERVICE_RETRY_MAX_ATTEMPTS = 3
+DEFAULT_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS = 0.05
+DEFAULT_SERVICE_RETRY_BACKOFF_MULTIPLIER = 2.0
+DEFAULT_SERVICE_RETRY_BACKOFF_MAX_SECONDS = 1.0
+DEFAULT_SERVICE_RETRY_BACKOFF_JITTER_SECONDS = 0.01
+DEFAULT_SERVICE_BREAKER_FAILURE_THRESHOLD = 3
+DEFAULT_SERVICE_BREAKER_RECOVERY_TIMEOUT_SECONDS = 30.0
 
 _BATCHING_ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BATCHING_DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
@@ -172,6 +192,24 @@ def parse_service_coalescing_enabled(raw_value: Optional[str]) -> bool:
     )
 
 
+def parse_service_resilience_enabled(raw_value: Optional[str]) -> bool:
+    """Parse the resilience feature flag."""
+    if raw_value is None:
+        return True
+
+    normalized = raw_value.strip().lower()
+    if not normalized:
+        return True
+    if normalized in _BATCHING_ENABLED_VALUES:
+        return True
+    if normalized in _BATCHING_DISABLED_VALUES:
+        return False
+    raise ValueError(
+        f"{SERVICE_RESILIENCE_ENABLED_ENV_VAR} must be a boolean value like "
+        "'true' or 'false'"
+    )
+
+
 def parse_service_batch_max_size(raw_value: Optional[str]) -> int:
     """Parse the configured dynamic-batching maximum size."""
     if raw_value is None or not raw_value.strip():
@@ -258,6 +296,62 @@ def parse_service_concurrency_wait_seconds(raw_value: Optional[str]) -> float:
     )
 
 
+def parse_service_retry_max_attempts(raw_value: Optional[str]) -> int:
+    """Parse the configured retry attempt cap."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_RETRY_MAX_ATTEMPTS
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"{SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR} must be greater than or equal to 1"
+        )
+    return parsed
+
+
+def parse_service_retry_backoff_multiplier(raw_value: Optional[str]) -> float:
+    """Parse the exponential backoff multiplier."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_RETRY_BACKOFF_MULTIPLIER
+
+    try:
+        parsed = float(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR} must be a number"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"{SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR} must be greater than "
+            "or equal to 1"
+        )
+    return parsed
+
+
+def parse_service_breaker_failure_threshold(raw_value: Optional[str]) -> int:
+    """Parse the circuit-breaker consecutive failure threshold."""
+    if raw_value is None or not raw_value.strip():
+        return DEFAULT_SERVICE_BREAKER_FAILURE_THRESHOLD
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"{SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR} must be a positive integer"
+        ) from exc
+    if parsed < 1:
+        raise ValueError(
+            f"{SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR} must be greater than "
+            "or equal to 1"
+        )
+    return parsed
+
+
 def parse_service_throttle_key(raw_value: Optional[str]) -> str:
     """Parse how throttle buckets are keyed."""
     if raw_value is None or not raw_value.strip():
@@ -316,6 +410,44 @@ def parse_service_coalescing_config() -> ServiceCoalescingConfig:
     )
 
 
+def parse_service_resilience_config() -> ServiceResilienceConfig:
+    """Read retry and circuit-breaker settings from the environment."""
+    return ServiceResilienceConfig(
+        enabled=parse_service_resilience_enabled(
+            os.getenv(SERVICE_RESILIENCE_ENABLED_ENV_VAR)
+        ),
+        max_attempts=parse_service_retry_max_attempts(
+            os.getenv(SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR)
+        ),
+        backoff_initial_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR),
+            env_var=SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR,
+            default=DEFAULT_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS,
+        ),
+        backoff_multiplier=parse_service_retry_backoff_multiplier(
+            os.getenv(SERVICE_RETRY_BACKOFF_MULTIPLIER_ENV_VAR)
+        ),
+        backoff_max_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_RETRY_BACKOFF_MAX_ENV_VAR),
+            env_var=SERVICE_RETRY_BACKOFF_MAX_ENV_VAR,
+            default=DEFAULT_SERVICE_RETRY_BACKOFF_MAX_SECONDS,
+        ),
+        backoff_jitter_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_RETRY_BACKOFF_JITTER_ENV_VAR),
+            env_var=SERVICE_RETRY_BACKOFF_JITTER_ENV_VAR,
+            default=DEFAULT_SERVICE_RETRY_BACKOFF_JITTER_SECONDS,
+        ),
+        failure_threshold=parse_service_breaker_failure_threshold(
+            os.getenv(SERVICE_BREAKER_FAILURE_THRESHOLD_ENV_VAR)
+        ),
+        recovery_timeout_seconds=_parse_non_negative_float(
+            os.getenv(SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR),
+            env_var=SERVICE_BREAKER_RECOVERY_TIMEOUT_ENV_VAR,
+            default=DEFAULT_SERVICE_BREAKER_RECOVERY_TIMEOUT_SECONDS,
+        ),
+    )
+
+
 def parse_preload_models(raw_value: Optional[str]) -> Tuple[str, ...]:
     """Parse and validate the preload-model environment variable."""
     if raw_value is None:
@@ -354,9 +486,13 @@ class ServiceRuntime:
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
     throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
+    resilience_config: ServiceResilienceConfig = field(
+        default_factory=ServiceResilienceConfig
+    )
     _loader_factory: Optional[Callable[[OpenMedConfig], ModelLoader]] = None
     _loader: Optional[ModelLoader] = None
     _warm_pool: Optional[WarmPool] = None
+    _resilience: Optional[ResilienceManager] = None
     _loader_lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _workflow_store: Optional[Any] = field(default=None, init=False, repr=False)
     _workflow_store_lock: threading.RLock = field(
@@ -389,6 +525,7 @@ class ServiceRuntime:
         batching = parse_service_batching_config()
         coalescing = parse_service_coalescing_config()
         throttle = parse_service_throttle_config()
+        resilience_config = parse_service_resilience_config()
         return cls(
             profile=profile,
             config=config,
@@ -404,6 +541,7 @@ class ServiceRuntime:
             batching=batching,
             coalescing=coalescing,
             throttle=throttle,
+            resilience_config=resilience_config,
             _loader_factory=ModelLoader,
             metrics=metrics,
         )
@@ -438,6 +576,14 @@ class ServiceRuntime:
                     )
         return self._warm_pool
 
+    def get_resilience(self) -> ResilienceManager:
+        """Return the shared retry and circuit-breaker manager."""
+        if self._resilience is None:
+            with self._loader_lock:
+                if self._resilience is None:
+                    self._resilience = ResilienceManager(self.resilience_config)
+        return self._resilience
+
     def preload(self) -> None:
         """Warm configured model pipelines during service startup."""
         if not self.preload_models:
@@ -451,13 +597,26 @@ class ServiceRuntime:
         keep_alive: Any,
         operation: Callable[[], Any],
     ) -> Any:
-        """Run one model-backed operation and update idle-unload bookkeeping."""
+        """Run one model-backed operation with retry and breaker protection."""
+        model_key = self._resolve_model_name(model_name)
+        return self.get_resilience().execute(
+            model_key,
+            lambda: self._run_model_request_once(model_key, keep_alive, operation),
+        )
+
+    def _run_model_request_once(
+        self,
+        model_key: str,
+        keep_alive: Any,
+        operation: Callable[[], Any],
+    ) -> Any:
+        """Run one model-backed attempt and update idle-unload bookkeeping."""
         pool = self.get_loader()
-        model_key = pool.begin_request(model_name)
+        active_model_key = pool.begin_request(model_key)
         try:
             return operation()
         finally:
-            pool.finish_request(model_key, keep_alive)
+            pool.finish_request(active_model_key, keep_alive)
 
     async def stream_pii_extract(
         self,
@@ -516,11 +675,39 @@ class ServiceRuntime:
 
     def begin_model_request(self, model_name: str) -> str:
         """Mark a resolved model as active and cancel pending idle unload."""
-        return self.get_loader().begin_request(model_name)
+        model_key = self._resolve_model_name(model_name)
+        resilience = self.get_resilience()
+        resilience.check_available(model_key)
+        try:
+            return self.get_loader().begin_request(model_key)
+        except Exception as exc:
+            resilience.record_error(model_key, exc)
+            raise
 
-    def finish_model_request(self, model_key: str, keep_alive: Any) -> None:
+    def finish_model_request(
+        self,
+        model_key: str,
+        keep_alive: Any,
+        error: Optional[BaseException] = None,
+    ) -> None:
         """Mark a model request as complete and schedule idle unloading."""
-        self.get_loader().finish_request(model_key, keep_alive)
+        finish_error: Optional[BaseException] = None
+        try:
+            self.get_loader().finish_request(model_key, keep_alive)
+        except Exception as exc:
+            finish_error = exc
+        if error is None and finish_error is None:
+            self.get_resilience().record_success(model_key)
+        elif finish_error is not None:
+            self.get_resilience().record_error(model_key, finish_error)
+        else:
+            self.get_resilience().record_error(model_key, error)
+        if finish_error is not None:
+            raise finish_error
+
+    def circuit_breaker_state_counts(self) -> dict[str, int]:
+        """Return aggregate circuit-breaker states without model/backend labels."""
+        return self.get_resilience().state_counts()
 
     def unload_model(self, model_name: str) -> Dict[str, Any]:
         """Unload one inactive model from the shared loader cache."""
