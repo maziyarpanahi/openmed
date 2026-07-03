@@ -624,11 +624,6 @@ def ocr(
 # --- redact_document bridge -------------------------------------------------
 
 _IMAGE_EXTENSIONS = (
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".tif",
-    ".tiff",
     ".bmp",
     ".gif",
     ".webp",
