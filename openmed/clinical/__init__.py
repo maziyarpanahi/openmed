@@ -111,6 +111,15 @@ from .medication_sig import (
     normalize_frequency,
     normalize_medication_attribute,
 )
+from .negation_scope import (
+    BACKWARD,
+    FORWARD,
+    NEGATION_SCOPE_ADVISORY,
+    Direction,
+    NegationScope,
+    detect_negation_scopes,
+    negated_spans,
+)
 from .problem_list import (
     ACTIVE,
     INACTIVE,
@@ -388,4 +397,11 @@ __all__ = [
     "SeverityScale",
     "ModifierAttachment",
     "extract_severity_laterality",
+    "NEGATION_SCOPE_ADVISORY",
+    "FORWARD",
+    "BACKWARD",
+    "Direction",
+    "NegationScope",
+    "detect_negation_scopes",
+    "negated_spans",
 ]
