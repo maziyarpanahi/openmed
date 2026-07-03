@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -19,6 +18,21 @@ from openmed.core.labels import (
 _RESOURCE_PACKAGE = "openmed.zero_shot.data.label_maps"
 _DEFAULT_RESOURCE = "defaults.json"
 _GENERIC_DOMAIN = "generic"
+_CLINICAL_DOMAINS_DOC = Path("docs/clinical-domains.md")
+_NO_FIXTURE = "Not shipped"
+_CLINICAL_DOMAINS_DISCLAIMER = (
+    "This catalog is generated from the packaged zero-shot domain label map "
+    "and canonical label metadata. Labels, policy classes, risk levels, coding "
+    "system hints, and fixture pointers are for offline evaluation and review "
+    "workflow planning only; they are not clinical guidance and must not be "
+    "used to infer diagnosis, treatment, coding, or coverage decisions."
+)
+_DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
+    "anesthesia": "tests/fixtures/clinical/anesthesia.jsonl",
+    "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
+    "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
+    "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
+}
 
 
 def load_default_label_map(
@@ -121,46 +135,59 @@ def reload_default_label_map() -> Dict[str, List[str]]:
 
 
 def generate_clinical_domains_markdown() -> str:
-    """Offline, generate the clinical domains markdown documentation string."""
-    disclaimer = (
-        "Deterministic status vocabulary helpers for SDOH cue normalization. "
-        "The helpers in this module normalize explicit status cues into compact "
-        "canonical values for downstream SDOH extractors. Outputs are advisory "
-        "labels for review and downstream processing, not clinical decisions. "
-        "They deliberately do not infer a status from absence of mention; text "
-        "with no configured cue returns 'unknown' unless an explicit context "
-        "axis is supplied by the caller."
-    )
+    """Generate the clinical domain catalog markdown fully offline."""
 
-    final_markdown = f"**Disclaimer:** {disclaimer}\n\n"
-
-    default_label_map = load_default_label_map()
-
-    # Create a markdown string for each domain and its labels
-    for domain, labels in default_label_map.items():
-        table_header = f"### {domain.replace('_', ' ').title()}\n\n"
-        table_header += (
-            "| Label | Category | Risk Level | System Hints | Fixture Path |\n"
+    sections = [
+        "# Clinical Domain Label Catalog",
+        "",
+        f"**Disclaimer:** {_CLINICAL_DOMAINS_DISCLAIMER}",
+        "",
+    ]
+    for domain, labels in load_default_label_map().items():
+        sections.extend(
+            [
+                f"## {_format_domain_name(domain)}",
+                "",
+                (
+                    "| Label | Canonical Label | Category | Risk Level | "
+                    "System Hints | Fixture Path |"
+                ),
+                "| --- | --- | --- | --- | --- | --- |",
+            ]
         )
-        table_header += (
-            "|-------|----------|------------|--------------|--------------|\n"
-        )
-
-        domain_markdown = table_header
-
+        fixture_path = _DOMAIN_FIXTURE_PATHS.get(domain, _NO_FIXTURE)
         for label in labels:
-            normalized_label = normalize_label(label)
-            category = policy_label_for(normalized_label)
-            risk_level = risk_level_for(normalized_label)
-            system_hints = system_hints_for(normalized_label)
-            system_hints_str = ", ".join(system_hints) if system_hints else "None"
-            fixture_path = "tests/fixtures/clinical/context_traps.jsonl"
+            canonical_label = normalize_label(label)
+            system_hints = system_hints_for(canonical_label)
+            sections.append(
+                "| "
+                f"{_markdown_cell(label)} | "
+                f"{_markdown_cell(canonical_label)} | "
+                f"{policy_label_for(canonical_label)} | "
+                f"{risk_level_for(canonical_label)} | "
+                f"{_markdown_cell(', '.join(system_hints) if system_hints else 'None')} | "
+                f"{_markdown_cell(fixture_path)} |"
+            )
+        sections.append("")
+    return "\n".join(sections)
 
-            domain_markdown += f"| {label} | {category} | {risk_level} | {system_hints_str} | {fixture_path} |\n"
 
-        final_markdown += domain_markdown + "\n"
+def write_clinical_domains_markdown(
+    output_path: Path | str = _CLINICAL_DOMAINS_DOC,
+) -> Path:
+    """Write the generated clinical domain catalog and return its path."""
 
-    return final_markdown
+    path = Path(output_path)
+    path.write_text(generate_clinical_domains_markdown(), encoding="utf-8")
+    return path
+
+
+def _format_domain_name(domain: str) -> str:
+    return domain.replace("_", " ").title()
+
+
+def _markdown_cell(value: str) -> str:
+    return value.replace("|", "\\|")
 
 
 __all__ = [
@@ -169,11 +196,8 @@ __all__ = [
     "get_default_labels",
     "available_domains",
     "generate_clinical_domains_markdown",
+    "write_clinical_domains_markdown",
 ]
 
 if __name__ == "__main__":
-    # Generate the clinical domains markdown and save to docs
-    markdown_output = generate_clinical_domains_markdown()
-    output_path = os.path.join("docs", "clinical-domains.md")
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(markdown_output)
+    write_clinical_domains_markdown()
