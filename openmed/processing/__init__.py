@@ -7,7 +7,10 @@ from .batch import (
     BatchProcessor,
     BatchProgress,
     BatchResult,
+    DatasetRedactionResult,
+    DatasetRedactionSummary,
     process_batch,
+    redact_dataset,
 )
 from .kafka_connector import (
     ConsumerProtocol,
@@ -36,7 +39,10 @@ __all__ = [
     "BatchItemResult",
     "BatchProgress",
     "BatchResult",
+    "DatasetRedactionResult",
+    "DatasetRedactionSummary",
     "process_batch",
+    "redact_dataset",
     "ConsumerProtocol",
     "ProducerProtocol",
     "KafkaClientPair",
