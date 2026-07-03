@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
-from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
 from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.metrics import EvalSpan, normalize_eval_spans
@@ -69,7 +69,8 @@ class GoldenFixture:
             raise ValueError("golden fixture expected_output.text is required")
 
         language = str(data.get("language") or data.get("lang") or "en")
-        if language not in SUPPORTED_LANGUAGES:
+        fixture_languages = SUPPORTED_LANGUAGES | NATIONAL_ID_ONLY_LANGUAGES
+        if language not in fixture_languages:
             raise ValueError(f"unsupported golden fixture language: {language!r}")
 
         text = str(data.get("text", ""))

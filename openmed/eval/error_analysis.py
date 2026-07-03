@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from openmed.core.labels import CANONICAL_LABELS
+from openmed.core.audit import stable_hash
+from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.quality_gates import (
     detect_overlapping_entities,
     validate_entity_spans,
@@ -31,6 +33,28 @@ LABELS: tuple[str, ...] = tuple(sorted(CANONICAL_LABELS))
 MATRIX_LABELS: tuple[str, ...] = LABELS + ERROR_BUCKETS
 DEFAULT_EXAMPLE_CAP = 5
 DEFAULT_CONTEXT_WINDOW = 24
+DEFAULT_DEDUPE_SIMILARITY = 0.92
+LABELING_QUEUE_SCHEMA_VERSION = "openmed.eval.labeling_queue.v1"
+
+_RAW_TEXT_KEYS = frozenset(
+    {
+        "context",
+        "raw_context",
+        "raw_source",
+        "raw_text",
+        "source_text",
+        "span_text",
+        "text",
+    }
+)
+_PLACEHOLDER_RE = re.compile(r"(<[A-Za-z][A-Za-z0-9_:-]*>)")
+_EMAIL_RE = re.compile(r"\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b")
+_DATE_RE = re.compile(r"\b\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\b")
+_ID_RE = re.compile(r"\b\d{3}[- ]?\d{2}[- ]?\d{4}\b")
+_PHONE_RE = re.compile(r"\b(?:\+?\d[\d .()/-]{6,}\d)\b")
+_NUMBER_RE = re.compile(r"\b\d+(?:[./:-]\d+)*\b")
+_WORD_RE = re.compile(r"(?u)\b[^\W\d_][\w'.-]*\b")
+_TOKEN_RE = re.compile(r"<[A-Z0-9_:-]+>|[A-Za-z0-9_:-]+")
 
 
 @dataclass(frozen=True)
@@ -173,6 +197,105 @@ class ErrorAnalysisReport:
 
 
 @dataclass(frozen=True)
+class LabelingQueueItem:
+    """One PHI-free gate-failure candidate for human labeling."""
+
+    span_hash: str
+    surrogate_context: str
+    label: str
+    language: str
+    priority: float
+    uncertainty: float
+    gate_impact: float
+    provenance: Mapping[str, Any]
+    _dedupe_context: str = field(default="", repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "span_hash", str(self.span_hash))
+        object.__setattr__(self, "surrogate_context", str(self.surrogate_context))
+        object.__setattr__(self, "label", normalize_label(str(self.label)))
+        object.__setattr__(self, "language", str(self.language or "unknown"))
+        object.__setattr__(self, "priority", float(self.priority))
+        object.__setattr__(self, "uncertainty", float(self.uncertainty))
+        object.__setattr__(self, "gate_impact", float(self.gate_impact))
+        object.__setattr__(self, "provenance", _plain(self.provenance))
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready PHI-free queue item."""
+        return {
+            "gate_impact": round(self.gate_impact, 6),
+            "label": self.label,
+            "language": self.language,
+            "priority": round(self.priority, 6),
+            "provenance": _plain(self.provenance),
+            "span_hash": self.span_hash,
+            "surrogate_context": self.surrogate_context,
+            "uncertainty": round(self.uncertainty, 6),
+        }
+
+
+@dataclass(frozen=True)
+class LabelingQueueArtifact:
+    """PHI-free labeling queue mined from gate-failure error examples."""
+
+    gate_run_hash: str
+    report_hash: str
+    items: Sequence[LabelingQueueItem]
+    raw_candidate_count: int
+    dropped_duplicate_count: int
+    schema_version: str = LABELING_QUEUE_SCHEMA_VERSION
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "gate_run_hash", str(self.gate_run_hash))
+        object.__setattr__(self, "report_hash", str(self.report_hash))
+        object.__setattr__(self, "items", tuple(self.items))
+        object.__setattr__(self, "raw_candidate_count", int(self.raw_candidate_count))
+        object.__setattr__(
+            self,
+            "dropped_duplicate_count",
+            int(self.dropped_duplicate_count),
+        )
+
+    @property
+    def duplicate_reduction_rate(self) -> float:
+        """Fraction of raw candidates removed by deduplication."""
+        if self.raw_candidate_count <= 0:
+            return 0.0
+        return self.dropped_duplicate_count / self.raw_candidate_count
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a deterministic JSON-ready artifact payload."""
+        payload: dict[str, Any] = {
+            "dropped_duplicate_count": self.dropped_duplicate_count,
+            "duplicate_reduction_rate": round(self.duplicate_reduction_rate, 6),
+            "gate_run_hash": self.gate_run_hash,
+            "item_count": len(self.items),
+            "items": [item.to_dict() for item in self.items],
+            "raw_candidate_count": self.raw_candidate_count,
+            "report_hash": self.report_hash,
+            "schema_version": self.schema_version,
+        }
+        payload["artifact_hash"] = stable_hash(payload)
+        return payload
+
+    def to_json(self, *, indent: int = 2) -> str:
+        """Serialize the artifact to deterministic JSON."""
+        return json.dumps(
+            self.to_dict(),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def write_json(self, path: str | Path, *, indent: int = 2) -> Path:
+        """Write deterministic JSON to *path*."""
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_json(indent=indent) + "\n", encoding="utf-8")
+        return output_path
+
+
+@dataclass(frozen=True)
 class HardNegativeOverRedactionReport:
     """Aggregate false-positive rate over synthetic hard-negative fixtures."""
 
@@ -251,6 +374,573 @@ class HardNegativeOverRedactionReport:
                 f"{float(row.get('over_redaction_rate', 0.0)):.6f} |"
             )
         return "\n".join(lines) + "\n"
+
+
+@dataclass(frozen=True)
+class _QueueCandidate:
+    item: LabelingQueueItem
+    kind: str
+    matched_label: str
+
+
+def mine_gate_failure_labeling_queue(
+    report: ErrorAnalysisReport | Mapping[str, Any] | Sequence[Mapping[str, Any]],
+    *,
+    gate_run_hash: str,
+    report_hash: str | None = None,
+    label_gate_impacts: Mapping[str, float] | None = None,
+    max_items: int | None = None,
+    dedupe_similarity: float = DEFAULT_DEDUPE_SIMILARITY,
+) -> LabelingQueueArtifact:
+    """Mine a PHI-free labeling queue from error-analysis examples.
+
+    ``report`` may be an :class:`ErrorAnalysisReport`, a serialized report
+    mapping, or a sequence of candidate mappings. Raw text-like fields are
+    ignored; queue items keep only span hashes, surrogate-normalized context,
+    label/language, score metadata, and audit provenance.
+    """
+
+    if not gate_run_hash:
+        raise ValueError("gate_run_hash must be non-empty")
+    if max_items is not None and max_items < 0:
+        raise ValueError("max_items must be non-negative")
+    if not 0.0 <= dedupe_similarity <= 1.0:
+        raise ValueError("dedupe_similarity must be between 0 and 1")
+
+    payload, raw_candidates = _coerce_queue_source(report)
+    source_report_hash = report_hash or _source_report_hash(payload, raw_candidates)
+    impacts = _label_gate_impacts(payload, label_gate_impacts)
+    candidates = [
+        _queue_candidate(
+            candidate,
+            gate_run_hash=gate_run_hash,
+            report_hash=source_report_hash,
+            label_gate_impacts=impacts,
+        )
+        for candidate in raw_candidates
+    ]
+    ranked = _rank_queue_candidates(candidates)
+    deduped = _dedupe_queue_candidates(ranked, similarity=dedupe_similarity)
+    dropped_duplicate_count = len(raw_candidates) - len(deduped)
+    if max_items is not None:
+        deduped = deduped[:max_items]
+
+    return LabelingQueueArtifact(
+        gate_run_hash=gate_run_hash,
+        report_hash=source_report_hash,
+        items=tuple(candidate.item for candidate in deduped),
+        raw_candidate_count=len(raw_candidates),
+        dropped_duplicate_count=dropped_duplicate_count,
+    )
+
+
+def _coerce_queue_source(
+    report: ErrorAnalysisReport | Mapping[str, Any] | Sequence[Mapping[str, Any]],
+) -> tuple[Mapping[str, Any] | None, list[dict[str, Any]]]:
+    if isinstance(report, ErrorAnalysisReport):
+        payload = report.to_dict()
+        return payload, list(_iter_report_queue_candidates(payload))
+
+    if isinstance(report, Mapping):
+        payload = _plain(report)
+        if _looks_like_error_report(payload):
+            return payload, list(_iter_report_queue_candidates(payload))
+        return None, [
+            _candidate_with_source(payload, source_bucket="candidates", index=0)
+        ]
+
+    if isinstance(report, Sequence) and not isinstance(report, (str, bytes)):
+        candidates: list[dict[str, Any]] = []
+        for index, candidate in enumerate(report):
+            if not isinstance(candidate, Mapping):
+                raise TypeError("candidate sequences must contain mappings")
+            candidates.append(
+                _candidate_with_source(
+                    _plain(candidate),
+                    source_bucket="candidates",
+                    index=index,
+                )
+            )
+        return None, candidates
+
+    raise TypeError(
+        "report must be an ErrorAnalysisReport, a mapping, or a sequence of mappings"
+    )
+
+
+def _looks_like_error_report(payload: Mapping[str, Any]) -> bool:
+    return any(key in payload for key in ("false_negatives", "false_positives"))
+
+
+def _iter_report_queue_candidates(
+    payload: Mapping[str, Any],
+) -> Iterable[dict[str, Any]]:
+    language = _report_language(payload)
+    suite = str(payload.get("suite", ""))
+    model_name = str(payload.get("model_name", ""))
+    index = 0
+    for source_bucket in ("false_negatives", "false_positives"):
+        by_label = payload.get(source_bucket) or {}
+        if not isinstance(by_label, Mapping):
+            continue
+        for label in sorted(by_label):
+            examples = by_label.get(label) or ()
+            if not isinstance(examples, Sequence) or isinstance(examples, (str, bytes)):
+                continue
+            for example in examples:
+                if not isinstance(example, Mapping):
+                    continue
+                candidate = _candidate_with_source(
+                    example,
+                    source_bucket=source_bucket,
+                    index=index,
+                    language=language,
+                    suite=suite,
+                    model_name=model_name,
+                )
+                candidate.setdefault("label", label)
+                yield candidate
+                index += 1
+
+
+def _candidate_with_source(
+    candidate: Mapping[str, Any],
+    *,
+    source_bucket: str,
+    index: int,
+    language: str = "unknown",
+    suite: str = "",
+    model_name: str = "",
+) -> dict[str, Any]:
+    payload = dict(candidate)
+    payload["_source_bucket"] = source_bucket
+    payload["_example_index"] = index
+    payload.setdefault("_language", language)
+    if suite:
+        payload["_suite"] = suite
+    if model_name:
+        payload["_model_name"] = model_name
+    return payload
+
+
+def _report_language(payload: Mapping[str, Any]) -> str:
+    metadata = payload.get("metadata") or {}
+    if isinstance(metadata, Mapping):
+        for key in ("language", "lang"):
+            value = metadata.get(key)
+            if isinstance(value, str) and value:
+                return value
+        languages = metadata.get("languages")
+        if isinstance(languages, Sequence) and not isinstance(languages, (str, bytes)):
+            values = [str(value) for value in languages if str(value)]
+            if len(values) == 1:
+                return values[0]
+    return "unknown"
+
+
+def _source_report_hash(
+    payload: Mapping[str, Any] | None,
+    candidates: Sequence[Mapping[str, Any]],
+) -> str:
+    if payload is not None:
+        return stable_hash(payload)
+    return stable_hash([_candidate_safe_payload(candidate) for candidate in candidates])
+
+
+def _label_gate_impacts(
+    payload: Mapping[str, Any] | None,
+    overrides: Mapping[str, float] | None,
+) -> dict[str, float]:
+    impacts: dict[str, float] = {}
+    if payload is not None:
+        matrix = payload.get("confusion_matrix") or {}
+        if isinstance(matrix, Mapping):
+            counts: dict[str, int] = {}
+            for label, row in matrix.items():
+                if label in ERROR_BUCKETS or not isinstance(row, Mapping):
+                    continue
+                normal_label = normalize_label(str(label))
+                errors = sum(
+                    int(count)
+                    for predicted, count in row.items()
+                    if predicted != normal_label
+                )
+                counts[normal_label] = counts.get(normal_label, 0) + errors
+            spurious_row = matrix.get(SPURIOUS) or {}
+            if isinstance(spurious_row, Mapping):
+                for label, count in spurious_row.items():
+                    normal_label = normalize_label(str(label))
+                    counts[normal_label] = counts.get(normal_label, 0) + int(count)
+            max_count = max(counts.values(), default=0)
+            if max_count:
+                impacts.update(
+                    {
+                        label: 1.0 + (count / max_count)
+                        for label, count in counts.items()
+                    }
+                )
+
+    for label, impact in (overrides or {}).items():
+        impacts[normalize_label(str(label))] = max(float(impact), 0.0)
+    return impacts
+
+
+def _queue_candidate(
+    data: Mapping[str, Any],
+    *,
+    gate_run_hash: str,
+    report_hash: str,
+    label_gate_impacts: Mapping[str, float],
+) -> _QueueCandidate:
+    label = normalize_label(str(data.get("label") or "OTHER"))
+    kind = str(data.get("kind") or data.get("failure_kind") or "failure")
+    matched_label = _normalised_optional_label(data.get("matched_label"))
+    language = str(data.get("language") or data.get("lang") or data.get("_language"))
+    span_hash = _candidate_span_hash(data, label=label, kind=kind)
+    uncertainty = _candidate_uncertainty(data, kind=kind)
+    gate_impact = _candidate_gate_impact(
+        data,
+        label=label,
+        label_gate_impacts=label_gate_impacts,
+    )
+    surrogate_context = _candidate_surrogate_context(
+        data,
+        label=label,
+        kind=kind,
+        matched_label=matched_label,
+    )
+    provenance = _candidate_provenance(
+        data,
+        gate_run_hash=gate_run_hash,
+        report_hash=report_hash,
+        span_hash=span_hash,
+        label=label,
+        kind=kind,
+        matched_label=matched_label,
+    )
+    item = LabelingQueueItem(
+        span_hash=span_hash,
+        surrogate_context=surrogate_context,
+        label=label,
+        language=language,
+        priority=uncertainty * gate_impact,
+        uncertainty=uncertainty,
+        gate_impact=gate_impact,
+        provenance=provenance,
+        _dedupe_context=_normalise_context_for_dedupe(surrogate_context),
+    )
+    return _QueueCandidate(item=item, kind=kind, matched_label=matched_label)
+
+
+def _normalised_optional_label(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    return normalize_label(text) if text else ""
+
+
+def _candidate_span_hash(
+    data: Mapping[str, Any],
+    *,
+    label: str,
+    kind: str,
+) -> str:
+    for key in ("span_hash", "text_hash"):
+        value = data.get(key)
+        if value:
+            return str(value)
+    return stable_hash(
+        {
+            "end": _optional_int(data.get("end")),
+            "kind": kind,
+            "label": label,
+            "start": _optional_int(data.get("start")),
+        }
+    )
+
+
+def _candidate_uncertainty(data: Mapping[str, Any], *, kind: str) -> float:
+    for key in ("uncertainty", "model_uncertainty"):
+        if key in data:
+            return _bounded_float(data.get(key), default=1.0, minimum=0.0)
+    if kind == MISSED:
+        return 1.0
+    if kind == "label_confusion":
+        return 0.85
+    if kind == SPURIOUS:
+        return 0.65
+    return 0.75
+
+
+def _candidate_gate_impact(
+    data: Mapping[str, Any],
+    *,
+    label: str,
+    label_gate_impacts: Mapping[str, float],
+) -> float:
+    if "gate_impact" in data:
+        return _bounded_float(data.get("gate_impact"), default=1.0, minimum=0.0)
+    return float(label_gate_impacts.get(label, 1.0))
+
+
+def _bounded_float(value: Any, *, default: float, minimum: float) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(number, minimum)
+
+
+def _candidate_surrogate_context(
+    data: Mapping[str, Any],
+    *,
+    label: str,
+    kind: str,
+    matched_label: str,
+) -> str:
+    for key in (
+        "surrogate_context",
+        "context_template",
+        "normalized_context",
+        "normalised_context",
+    ):
+        value = data.get(key)
+        if value:
+            return _safe_surrogate_context(str(value))
+    return _default_surrogate_context(
+        data,
+        label=label,
+        kind=kind,
+        matched_label=matched_label,
+    )
+
+
+def _safe_surrogate_context(value: str) -> str:
+    parts = _PLACEHOLDER_RE.split(value)
+    safe_parts: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if _PLACEHOLDER_RE.fullmatch(part):
+            safe_parts.append(_canonical_placeholder(part[1:-1]))
+        else:
+            safe_parts.append(_mask_context_text(part))
+    safe = " ".join(part.strip() for part in safe_parts if part.strip())
+    safe = re.sub(r"\s+", " ", safe).strip()
+    return safe or "<CONTEXT>"
+
+
+def _mask_context_text(value: str) -> str:
+    safe = _EMAIL_RE.sub("<EMAIL>", value)
+    safe = _ID_RE.sub("<ID_NUM>", safe)
+    safe = _DATE_RE.sub("<DATE>", safe)
+    safe = _PHONE_RE.sub("<PHONE>", safe)
+    safe = _NUMBER_RE.sub("<NUM>", safe)
+    safe = _mask_words_outside_placeholders(safe)
+    return re.sub(r"\s+", " ", safe)
+
+
+def _mask_words_outside_placeholders(value: str) -> str:
+    parts = _PLACEHOLDER_RE.split(value)
+    safe_parts: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if _PLACEHOLDER_RE.fullmatch(part):
+            safe_parts.append(_canonical_placeholder(part[1:-1]))
+        else:
+            safe_parts.append(_WORD_RE.sub("<WORD>", part))
+    return "".join(safe_parts)
+
+
+def _canonical_placeholder(value: str) -> str:
+    token = re.sub(r"[^A-Za-z0-9_:-]+", "_", value).strip("_").upper()
+    return f"<{token or 'TOKEN'}>"
+
+
+def _default_surrogate_context(
+    data: Mapping[str, Any],
+    *,
+    label: str,
+    kind: str,
+    matched_label: str,
+) -> str:
+    span_len = _span_length(data.get("start"), data.get("end"))
+    context_len = _span_length(data.get("context_start"), data.get("context_end"))
+    parts = [
+        _canonical_placeholder(label),
+        _canonical_placeholder(kind),
+        f"span_chars:{span_len}",
+        f"context_chars:{context_len}",
+    ]
+    if matched_label:
+        parts.append(_canonical_placeholder(f"matched_{matched_label}"))
+    return " ".join(parts)
+
+
+def _span_length(start: Any, end: Any) -> int:
+    start_int = _optional_int(start)
+    end_int = _optional_int(end)
+    if start_int is None or end_int is None:
+        return 0
+    return max(end_int - start_int, 0)
+
+
+def _candidate_provenance(
+    data: Mapping[str, Any],
+    *,
+    gate_run_hash: str,
+    report_hash: str,
+    span_hash: str,
+    label: str,
+    kind: str,
+    matched_label: str,
+) -> dict[str, Any]:
+    provenance: dict[str, Any] = {
+        "example_hash": stable_hash(_candidate_safe_payload(data)),
+        "example_index": int(data.get("_example_index", 0)),
+        "gate_run_hash": gate_run_hash,
+        "kind": kind,
+        "label": label,
+        "report_hash": report_hash,
+        "source": "error_analysis",
+        "source_bucket": str(data.get("_source_bucket") or "candidates"),
+        "span_hash": span_hash,
+    }
+    fixture_id = data.get("fixture_id")
+    if fixture_id:
+        provenance["fixture_hash"] = stable_hash({"fixture_id": str(fixture_id)})
+    for key in ("start", "end", "context_start", "context_end"):
+        value = _optional_int(data.get(key))
+        if value is not None:
+            provenance[key] = value
+    if matched_label:
+        provenance["matched_label"] = matched_label
+    for key in ("matched_start", "matched_end"):
+        value = _optional_int(data.get(key))
+        if value is not None:
+            provenance[key] = value
+    matched_hash = data.get("matched_text_hash")
+    if matched_hash:
+        provenance["matched_span_hash"] = str(matched_hash)
+    suite = data.get("_suite")
+    if suite:
+        provenance["suite_hash"] = stable_hash({"suite": str(suite)})
+    model_name = data.get("_model_name")
+    if model_name:
+        provenance["model_hash"] = stable_hash({"model_name": str(model_name)})
+    return provenance
+
+
+def _candidate_safe_payload(data: Mapping[str, Any]) -> dict[str, Any]:
+    allowed = (
+        "_example_index",
+        "_source_bucket",
+        "context_end",
+        "context_start",
+        "end",
+        "kind",
+        "label",
+        "matched_end",
+        "matched_label",
+        "matched_start",
+        "matched_text_hash",
+        "span_hash",
+        "start",
+        "text_hash",
+    )
+    return {
+        key: _plain(data[key])
+        for key in allowed
+        if key in data and key not in _RAW_TEXT_KEYS
+    }
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _rank_queue_candidates(
+    candidates: Sequence[_QueueCandidate],
+) -> list[_QueueCandidate]:
+    return sorted(
+        candidates,
+        key=lambda candidate: (
+            -candidate.item.priority,
+            candidate.item.label,
+            candidate.kind,
+            candidate.matched_label,
+            candidate.item.span_hash,
+            stable_hash(candidate.item.provenance),
+        ),
+    )
+
+
+def _dedupe_queue_candidates(
+    candidates: Sequence[_QueueCandidate],
+    *,
+    similarity: float,
+) -> list[_QueueCandidate]:
+    kept: list[_QueueCandidate] = []
+    for candidate in candidates:
+        if any(
+            _same_failure_mode(candidate, existing, similarity=similarity)
+            for existing in kept
+        ):
+            continue
+        kept.append(candidate)
+    return kept
+
+
+def _same_failure_mode(
+    candidate: _QueueCandidate,
+    existing: _QueueCandidate,
+    *,
+    similarity: float,
+) -> bool:
+    if candidate.item.span_hash == existing.item.span_hash:
+        return True
+    if (
+        candidate.item.label,
+        candidate.item.language,
+        candidate.kind,
+        candidate.matched_label,
+    ) != (
+        existing.item.label,
+        existing.item.language,
+        existing.kind,
+        existing.matched_label,
+    ):
+        return False
+    return (
+        _context_similarity(
+            candidate.item._dedupe_context, existing.item._dedupe_context
+        )
+        >= similarity
+    )
+
+
+def _normalise_context_for_dedupe(value: str) -> str:
+    return " ".join(_context_tokens(value))
+
+
+def _context_similarity(a: str, b: str) -> float:
+    left = set(_context_tokens(a))
+    right = set(_context_tokens(b))
+    if not left and not right:
+        return 1.0
+    if not left or not right:
+        return 0.0
+    return len(left & right) / len(left | right)
+
+
+def _context_tokens(value: str) -> tuple[str, ...]:
+    return tuple(_TOKEN_RE.findall(value.upper()))
 
 
 def error_report(
@@ -727,15 +1417,20 @@ def _flatten(
 
 __all__ = [
     "DEFAULT_CONTEXT_WINDOW",
+    "DEFAULT_DEDUPE_SIMILARITY",
     "DEFAULT_EXAMPLE_CAP",
     "ERROR_BUCKETS",
     "LABELS",
+    "LABELING_QUEUE_SCHEMA_VERSION",
     "MATRIX_LABELS",
     "MISSED",
     "SPURIOUS",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
     "HardNegativeOverRedactionReport",
+    "LabelingQueueArtifact",
+    "LabelingQueueItem",
     "error_report",
     "hard_negative_over_redaction_report",
+    "mine_gate_failure_labeling_queue",
 ]

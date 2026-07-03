@@ -41,7 +41,7 @@ from .format_preserve import (
     preserve_id_pattern,
     preserve_phone_format,
 )
-from .locales import resolve_locale
+from .locales import resolve_faker_backend_locale, resolve_locale
 from .providers import register_clinical_providers
 from .registry import LABEL_GENERATORS
 
@@ -115,11 +115,12 @@ class Anonymizer:
                 "Install with `pip install faker` (or upgrade openmed)."
             ) from exc
 
+        backend_locale = resolve_faker_backend_locale(locale)
         try:
-            faker = Faker(locale)
+            faker = Faker(backend_locale)
         except (AttributeError, KeyError):
             warnings.warn(
-                f"OpenMed: Faker locale {locale!r} is unavailable; "
+                f"OpenMed: Faker locale {backend_locale!r} is unavailable; "
                 "falling back to 'en_US'. Pass locale=... to override.",
                 UserWarning,
                 stacklevel=2,
