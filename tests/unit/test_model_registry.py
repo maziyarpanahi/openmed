@@ -52,3 +52,13 @@ def test_model_suggestions_various_texts():
     assert pharma_suggestions
     assert all(reason for _key, _info, reason in oncology_suggestions[:3])
     assert all(reason for _key, _info, reason in pharma_suggestions[:3])
+
+
+def test_resolve_draft_model_for_laneformer_uses_separate_permissive_artifact():
+    draft = model_registry.resolve_draft_model_for("laneformer-2b-it")
+
+    assert draft is not None
+    assert draft.target_model_id == "OpenMed/laneformer-2b-it-q4-mlx"
+    assert draft.draft_model_id == "OpenMed/laneformer-pii-draft-350m-q4-mlx"
+    assert draft.tokenizer == "shared"
+    assert draft.permissive_license is True
