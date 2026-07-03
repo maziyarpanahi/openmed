@@ -5,9 +5,13 @@ import pytest
 from openmed.core.labels import (
     ACCOUNT_NUMBER,
     AGE,
+    AIRWAY_MANAGEMENT,
     AMOUNT,
+    ANESTHESIA_TYPE,
+    ANESTHETIC_AGENT,
     ANTIBIOTIC,
     API_KEY,
+    ASA_CLASS,
     BIC,
     BITCOIN_ADDRESS,
     BODY_SITE,
@@ -438,6 +442,50 @@ class TestClinicalConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestAnesthesiaConceptLabels:
+    """Anesthesia-record canonical labels added for issue #952."""
+
+    NEW_LABELS = (
+        ANESTHESIA_TYPE,
+        ANESTHETIC_AGENT,
+        AIRWAY_MANAGEMENT,
+        ASA_CLASS,
+    )
+
+    def test_anesthesia_labels_in_canonical_set(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+
+    def test_anesthesia_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("anesthesia type", ANESTHESIA_TYPE),
+            ("anesthesia", ANESTHESIA_TYPE),
+            ("anesthetic agent", ANESTHETIC_AGENT),
+            ("anesthetic", ANESTHETIC_AGENT),
+            ("airway management", AIRWAY_MANAGEMENT),
+            ("airway", AIRWAY_MANAGEMENT),
+            ("ASA class", ASA_CLASS),
+            ("ASA physical status", ASA_CLASS),
+        ],
+    )
+    def test_anesthesia_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_anesthesia_labels_are_clinical_concepts(self):
+        for label in self.NEW_LABELS:
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+
+    def test_anesthesia_labels_have_hipaa_class(self):
+        for label in self.NEW_LABELS:
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -506,6 +554,10 @@ class TestClinicalLabelsAreAdditive:
             LAB_TEST,
             PROCEDURE,
             BODY_SITE,
+            ANESTHESIA_TYPE,
+            ANESTHETIC_AGENT,
+            AIRWAY_MANAGEMENT,
+            ASA_CLASS,
             DIET_TYPE,
             NUTRITION_TARGET,
             FEEDING_ROUTE,
