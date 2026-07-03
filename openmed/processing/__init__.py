@@ -1,6 +1,12 @@
 """Text processing utilities for OpenMed."""
 
 from . import sentences
+from .advanced_ner import (
+    StreamingReplayResult,
+    StreamingTokenClassifier,
+    replay_token_classifier,
+    stream_token_classifier,
+)
 from .batch import (
     BatchItem,
     BatchItemResult,
@@ -18,6 +24,12 @@ from .kafka_connector import (
     ProducerProtocol,
     create_confluent_kafka_clients,
     deidentify_stream,
+)
+from .object_storage import (
+    ObjectProgressCallback,
+    ObjectStorageBatchResult,
+    ObjectStorageItemResult,
+    deidentify_bucket,
 )
 from .outputs import OutputFormatter, format_predictions
 from .text import TextProcessor, postprocess_text, preprocess_text
@@ -43,6 +55,14 @@ __all__ = [
     "DatasetRedactionSummary",
     "process_batch",
     "redact_dataset",
+    "ObjectStorageBatchResult",
+    "ObjectStorageItemResult",
+    "ObjectProgressCallback",
+    "deidentify_bucket",
+    "StreamingReplayResult",
+    "StreamingTokenClassifier",
+    "replay_token_classifier",
+    "stream_token_classifier",
     "ConsumerProtocol",
     "ProducerProtocol",
     "KafkaClientPair",

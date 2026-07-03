@@ -1,0 +1,151 @@
+name: Vulnerability Scan
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/vuln-scan.yml"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "deploy/security/cve-allowlist.yaml"
+      - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/fixtures/security/trivy-high-vulnerability.json"
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/vuln-scan.yml"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "deploy/security/cve-allowlist.yaml"
+      - "scripts/security/vulnerability_scan_gate.py"
+      - "tests/fixtures/security/trivy-high-vulnerability.json"
+  workflow_dispatch:
+    inputs:
+      severity-threshold:
+        description: Minimum severity that fails the gate.
+        required: false
+        default: HIGH
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: openmed:ci
+  VULN_SCAN_SEVERITY_THRESHOLD: ${{ github.event.inputs.severity-threshold || 'HIGH' }}
+
+jobs:
+  vulnerability-scan:
+    name: Scan image and lockfile
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install runtime dependencies for gate
+        run: |
+          uv sync --frozen --python 3.11
+
+      - name: Set up Trivy
+        uses: aquasecurity/setup-trivy@v0.3.1
+
+      - name: Build service image
+        run: |
+          docker build --pull -t "$IMAGE_NAME" .
+
+      - name: Verify gate rejects seeded high severity finding
+        run: |
+          mkdir -p vulnerability-reports
+          set +e
+          uv run python scripts/security/vulnerability_scan_gate.py \
+            --report tests/fixtures/security/trivy-high-vulnerability.json \
+            --allowlist deploy/security/cve-allowlist.yaml \
+            --output vulnerability-reports/seeded-high-summary.json
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo "::error title=Seeded vulnerability did not fail::Expected the vulnerability gate to reject a HIGH finding above threshold."
+            exit 1
+          fi
+
+      - name: Verify active waiver suppresses seeded finding
+        run: |
+          cat > "$RUNNER_TEMP/cve-allowlist-seeded.yaml" <<'YAML'
+          version: 1
+          policy:
+            default_threshold: HIGH
+          allowlist:
+            - id: CVE-2026-99999
+              package: openssl
+              expires: 2099-12-31
+              reason: Synthetic waiver used only to prove active waivers suppress matching seeded findings.
+          YAML
+          uv run python scripts/security/vulnerability_scan_gate.py \
+            --report tests/fixtures/security/trivy-high-vulnerability.json \
+            --allowlist "$RUNNER_TEMP/cve-allowlist-seeded.yaml" \
+            --output vulnerability-reports/seeded-allowlisted-summary.json
+
+      - name: Scan service image
+        run: |
+          trivy image \
+            --scanners vuln \
+            --pkg-types os,library \
+            --format json \
+            --output vulnerability-reports/trivy-image.json \
+            "$IMAGE_NAME"
+
+      - name: Scan dependency lockfile
+        run: |
+          trivy fs \
+            --scanners vuln \
+            --pkg-types library \
+            --format json \
+            --output vulnerability-reports/trivy-lockfile.json \
+            uv.lock
+
+      - name: Enforce vulnerability gate
+        run: |
+          uv run python scripts/security/vulnerability_scan_gate.py \
+            --report vulnerability-reports/trivy-image.json \
+            --report vulnerability-reports/trivy-lockfile.json \
+            --allowlist deploy/security/cve-allowlist.yaml \
+            --output vulnerability-reports/vulnerability-scan-summary.json
+
+      - name: Generate SARIF reports
+        if: always()
+        run: |
+          trivy image \
+            --scanners vuln \
+            --pkg-types os,library \
+            --format sarif \
+            --output vulnerability-reports/trivy-image.sarif \
+            "$IMAGE_NAME" || true
+          trivy fs \
+            --scanners vuln \
+            --pkg-types library \
+            --format sarif \
+            --output vulnerability-reports/trivy-lockfile.sarif \
+            uv.lock || true
+
+      - name: Upload vulnerability findings
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: vulnerability-scan-reports
+          path: vulnerability-reports/

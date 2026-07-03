@@ -88,6 +88,19 @@ def test_validate_transformersjs_contract_rejects_static_sequence_axis(
         module.validate_transformersjs_contract(model_path)
 
 
+def test_validate_transformersjs_contract_rejects_old_opset(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _module()
+    model_path = tmp_path / "model.onnx"
+    model_path.write_bytes(b"onnx")
+    _install_fake_onnx_stack(monkeypatch, opset=17)
+
+    with pytest.raises(ValueError, match="requires opset >= 18"):
+        module.validate_transformersjs_contract(model_path)
+
+
 def test_convert_can_include_transformersjs_bundle(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -145,6 +158,7 @@ def test_convert_can_include_transformersjs_bundle(
         "OpenMed/test-model",
         tmp_path / "artifact",
         include_transformersjs=True,
+        optimize_onnx=False,
         publish_to_hub=True,
     )
 
@@ -243,9 +257,13 @@ def _install_fake_onnx_stack(
     monkeypatch: pytest.MonkeyPatch,
     *,
     sequence_dynamic: bool = True,
+    opset: int = 18,
 ) -> None:
     onnx_mod = types.ModuleType("onnx")
-    onnx_mod.load = lambda path: _fake_onnx_model(sequence_dynamic=sequence_dynamic)
+    onnx_mod.load = lambda path: _fake_onnx_model(
+        sequence_dynamic=sequence_dynamic,
+        opset=opset,
+    )
 
     runtime_mod = types.ModuleType("onnxruntime")
     quantization_mod = types.ModuleType("onnxruntime.quantization")
@@ -263,9 +281,10 @@ def _install_fake_onnx_stack(
     monkeypatch.setitem(sys.modules, "onnxruntime.quantization", quantization_mod)
 
 
-def _fake_onnx_model(*, sequence_dynamic: bool = True):
+def _fake_onnx_model(*, sequence_dynamic: bool = True, opset: int = 18):
     sequence_dim = _dim("sequence") if sequence_dynamic else _dim(value=512)
     return types.SimpleNamespace(
+        opset_import=[types.SimpleNamespace(domain="", version=opset)],
         graph=types.SimpleNamespace(
             initializer=[],
             input=[
@@ -278,7 +297,7 @@ def _fake_onnx_model(*, sequence_dynamic: bool = True):
                     [_dim("batch"), sequence_dim, _dim(value=3)],
                 )
             ],
-        )
+        ),
     )
 
 
