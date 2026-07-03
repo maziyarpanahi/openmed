@@ -41,6 +41,7 @@ from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
 )
+from .offline import network_blocked_if_offline
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
@@ -482,6 +483,7 @@ def _extract_pii_via_privacy_filter(
     original_text: str,
     do_normalize: bool,
     pipeline: Optional[Any] = None,
+    config: Optional[OpenMedConfig] = None,
 ):
     """Run privacy-filter inference via the MLX/Torch backend dispatcher.
 
@@ -492,9 +494,13 @@ def _extract_pii_via_privacy_filter(
     if pipeline is None:
         from .backends import create_privacy_filter_pipeline
 
-        pipeline = create_privacy_filter_pipeline(model_name)
+        if config is None:
+            pipeline = create_privacy_filter_pipeline(model_name)
+        else:
+            pipeline = create_privacy_filter_pipeline(model_name, config=config)
 
-    raw = pipeline(text)
+    with network_blocked_if_offline(config):
+        raw = pipeline(text)
     return _prediction_result_from_privacy_filter_raw(
         raw,
         text,
@@ -673,16 +679,20 @@ def _extract_pii_batch(
     if uses_privacy_filter:
         from .backends import create_privacy_filter_pipeline
 
-        pipeline = privacy_filter_pipeline or create_privacy_filter_pipeline(
-            effective_model
-        )
+        if privacy_filter_pipeline is not None:
+            pipeline = privacy_filter_pipeline
+        elif config is None:
+            pipeline = create_privacy_filter_pipeline(effective_model)
+        else:
+            pipeline = create_privacy_filter_pipeline(effective_model, config=config)
         inference_texts = [item[1] for item in prepared]
         privacy_call_kwargs = {
             key: pipeline_kwargs[key]
             for key in ("batch_size", "num_workers")
             if key in pipeline_kwargs and pipeline_kwargs[key] is not None
         }
-        raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
+        with network_blocked_if_offline(config):
+            raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
             _prediction_result_from_privacy_filter_raw(

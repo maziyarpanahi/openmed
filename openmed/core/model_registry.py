@@ -199,6 +199,16 @@ _CATEGORY_ENTITY_TYPES = {
         "INTRAOCULAR_PRESSURE",
         "ANATOMY",
     ],
+    # Forward metadata for future Anesthesia models; no such model is
+    # registered today (see issue #952).
+    "Anesthesia": [
+        "ANESTHESIA_TYPE",
+        "ANESTHETIC_AGENT",
+        "AIRWAY_MANAGEMENT",
+        "ASA_CLASS",
+        "MONITORING_MODALITY",
+        "INTRAOPERATIVE_EVENT",
+    ],
     # Nutrition- registered (see issue #951)
     "Nutrition": [
         "DIET_TYPE",
@@ -736,6 +746,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "visual acuity|intraocular pressure|retina|cornea|glaucoma|fundus|ophthalmolog": (
         "Ophthalmology",
         "Contains ophthalmology terms",
+    ),
+    "anesthesia|anesthetic|sevoflurane|endotracheal|airway management|asa\\s*(?:class|[ivx]+)|intraoperative|induction": (
+        "Anesthesia",
+        "Contains anesthesia-record terms",
     ),
     "heart|lung|brain|liver|kidney|organ": (
         "Anatomy",

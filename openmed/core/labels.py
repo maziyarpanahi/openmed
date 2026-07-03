@@ -103,6 +103,12 @@ LAB_TEST: Final = "LAB_TEST"
 PROCEDURE: Final = "PROCEDURE"
 BODY_SITE: Final = "BODY_SITE"
 
+#: Anesthesia-record concepts (issue #952)
+ANESTHESIA_TYPE: Final = "ANESTHESIA_TYPE"
+ANESTHETIC_AGENT: Final = "ANESTHETIC_AGENT"
+AIRWAY_MANAGEMENT: Final = "AIRWAY_MANAGEMENT"
+ASA_CLASS: Final = "ASA_CLASS"
+
 #: Nutrition and diet-order concepts (issue #951)
 DIET_TYPE: Final = "DIET_TYPE"
 NUTRITION_TARGET: Final = "NUTRITION_TARGET"
@@ -193,6 +199,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         LAB_TEST,
         PROCEDURE,
         BODY_SITE,
+        ANESTHESIA_TYPE,
+        ANESTHETIC_AGENT,
+        AIRWAY_MANAGEMENT,
+        ASA_CLASS,
         DIET_TYPE,
         NUTRITION_TARGET,
         FEEDING_ROUTE,
@@ -365,6 +375,15 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     LAB_TEST: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     PROCEDURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     BODY_SITE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Anesthesia-record concepts (issue #952)
+    ANESTHESIA_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ANESTHETIC_AGENT: _label_metadata(
+        CLINICAL_CONCEPT,
+        RISK_LOW,
+        (RXNORM, SNOMED),
+    ),
+    AIRWAY_MANAGEMENT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ASA_CLASS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Nutrition and diet-order concepts (issue #951)
     DIET_TYPE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -448,6 +467,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     LAB_TEST: HIPAA_UNIQUE_IDENTIFIER,
     PROCEDURE: HIPAA_UNIQUE_IDENTIFIER,
     BODY_SITE: HIPAA_UNIQUE_IDENTIFIER,
+    # Anesthesia-record concepts
+    ANESTHESIA_TYPE: HIPAA_UNIQUE_IDENTIFIER,
+    ANESTHETIC_AGENT: HIPAA_UNIQUE_IDENTIFIER,
+    AIRWAY_MANAGEMENT: HIPAA_UNIQUE_IDENTIFIER,
+    ASA_CLASS: HIPAA_UNIQUE_IDENTIFIER,
     # Nutritional and Diet concepts
     DIET_TYPE: HIPAA_UNIQUE_IDENTIFIER,
     NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
@@ -665,6 +689,19 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "anatomy": BODY_SITE,
     "anatomical": BODY_SITE,
     "organ": BODY_SITE,
+    # Anesthesia-record concepts
+    "anesthesiatype": ANESTHESIA_TYPE,
+    "anesthesia": ANESTHESIA_TYPE,
+    "anestheticagent": ANESTHETIC_AGENT,
+    "anesthetic": ANESTHETIC_AGENT,
+    "anestheticdrug": ANESTHETIC_AGENT,
+    "airwaymanagement": AIRWAY_MANAGEMENT,
+    "airway": AIRWAY_MANAGEMENT,
+    "asaclass": ASA_CLASS,
+    "asaphysicalstatus": ASA_CLASS,
+    "asa": ASA_CLASS,
+    "monitoringmodality": OTHER,
+    "intraoperativeevent": OTHER,
     # Nutrition and Diet concepts
     "diettype": DIET_TYPE,
     "diet": DIET_TYPE,
@@ -889,6 +926,10 @@ __all__ = [
     "LAB_TEST",
     "PROCEDURE",
     "BODY_SITE",
+    "ANESTHESIA_TYPE",
+    "ANESTHETIC_AGENT",
+    "AIRWAY_MANAGEMENT",
+    "ASA_CLASS",
     "DIET_TYPE",
     "NUTRITION_TARGET",
     "FEEDING_ROUTE",

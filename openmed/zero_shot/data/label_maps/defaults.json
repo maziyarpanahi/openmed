@@ -18,5 +18,6 @@
   "ophthalmology": ["EyeFinding", "VisualAcuity", "IntraocularPressure", "Anatomy"],
   "generic": ["Person", "Organization", "Location", "Date"],
   "nutrition_diet": ["DietType", "NutritionTarget", "Supplement", "FeedingRoute", "IntakeFinding", "NutritionalStatus", "FluidRestriction"],
-  "immunization" : ["VaccineName", "DoseNumber", "AdministrationRoute", "AdministrationSite", "VaccineLot", "AdministrationDate", "VaccineSeries" ]
+  "immunization" : ["VaccineName", "DoseNumber", "AdministrationRoute", "AdministrationSite", "VaccineLot", "AdministrationDate", "VaccineSeries"],
+  "anesthesia": ["AnesthesiaType", "AnestheticAgent", "AirwayManagement", "ASAClass", "MonitoringModality", "IntraoperativeEvent"]
 }
