@@ -225,6 +225,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     assert set(CLIENT_ENDPOINTS) == {
         "analyze",
         "extract_pii",
+        "extract_pii_stream",
         "deidentify",
         "loaded_models",
         "unload_model",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime
 from typing import Any
@@ -313,6 +314,58 @@ def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
     assert response.status_code == 200
     payload = response.json()
     assert payload["entities"][0]["label"] == "NAME"
+
+
+def test_pii_extract_stream_returns_ndjson_events_without_audit_phi(
+    client,
+    monkeypatch,
+    fake_loader_cls,
+):
+    def fake_extract(text, *args, **kwargs):
+        entities = []
+        marker = "jane.patient@example.com"
+        start = text.find(marker)
+        if start >= 0:
+            entities.append(
+                EntityPrediction(
+                    text=marker,
+                    label="EMAIL",
+                    confidence=0.99,
+                    start=start,
+                    end=start + len(marker),
+                )
+            )
+        return PredictionResult(
+            text=text,
+            entities=entities,
+            model_name="privacy-filter",
+            timestamp=datetime.now().isoformat(),
+        )
+
+    monkeypatch.setattr(openmed, "extract_pii", fake_extract)
+
+    with client.stream(
+        "POST",
+        "/pii/extract/stream",
+        json={
+            "text": "Contact jane.patient@example.com today.",
+            "chunk_size": 8,
+            "window_chars": 64,
+            "tokenizer_context_chars": 16,
+            "max_entity_chars": 32,
+            "include_text": False,
+        },
+    ) as response:
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    assert any(event["type"] == "emit" for event in events)
+    assert events[-1]["type"] == "final"
+    emit_event = next(event for event in events if event["type"] == "emit")
+    assert "text" not in emit_event["span"]
+    audit_payload = json.dumps([event["audit"] for event in events])
+    assert "jane.patient" not in audit_payload
+    assert fake_loader_cls.instances[0].loaded_models() == {}
 
 
 @pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
