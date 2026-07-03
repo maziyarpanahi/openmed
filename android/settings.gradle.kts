@@ -7,6 +7,8 @@ pluginManagement {
     resolutionStrategy {
         eachPlugin {
             when (requested.id.id) {
+                "com.android.application" ->
+                    useModule("com.android.tools.build:gradle:${requested.version}")
                 "com.android.library" ->
                     useModule("com.android.tools.build:gradle:${requested.version}")
                 "org.jetbrains.kotlin.android" ->
@@ -25,7 +27,8 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "openmed-android"
-
+include(":OpenMedScanDemo:app")
 include(":openmedkit")
+include(":OpenMedDemo:app")
 // Reserved for a future app/demo module; enable once android/sample exists.
 // include(":sample")
