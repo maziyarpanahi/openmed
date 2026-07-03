@@ -37,6 +37,7 @@ nav:
       - Examples & Copy/Paste Recipes: examples.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md

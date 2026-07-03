@@ -129,6 +129,22 @@ def _validate_keep_alive_value(value: Any) -> Any:
     return value
 
 
+def _normalize_nonblank_string(value: Any, field_name: str) -> str:
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    if not isinstance(value, str):
+        value = str(value)
+    if not value.strip():
+        raise ValueError(f"{field_name} must not be blank")
+    return value
+
+
+def _normalize_optional_nonblank_string(value: Any, field_name: str) -> Optional[str]:
+    if value is None:
+        return None
+    return _normalize_nonblank_string(value, field_name)
+
+
 def _normalize_shift_dates_payload(values: dict[str, Any]) -> dict[str, Any]:
     method = values.get("method", "mask")
     shift_dates = values.get("shift_dates")
@@ -317,6 +333,74 @@ if PYDANTIC_V2:
             if not self.all and self.model_name is None:
                 raise ValueError("model_name is required unless all=true")
             return self
+
+    class SMARTBackendIngestionRequest(_StrictModel):
+        """Request schema for starting SMART backend-services ingestion."""
+
+        fhir_base_url: str
+        token_url: str
+        client_id: str
+        private_key_pem: str
+        output_dir: str
+        checkpoint_path: Optional[str] = None
+        key_id: Optional[str] = None
+        scope: str = "system/*.read"
+        export_path: str = "$export"
+        max_inflight_downloads: int = Field(default=2, ge=1)
+        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        policy: Optional[str] = "hipaa_safe_harbor"
+        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+        use_smart_merging: bool = True
+        use_safety_sweep: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @field_validator(
+            "fhir_base_url",
+            "token_url",
+            "client_id",
+            "private_key_pem",
+            "output_dir",
+            "scope",
+            "export_path",
+            mode="before",
+        )
+        @classmethod
+        def _validate_required_text(cls, value: Any, info: Any) -> str:
+            return _normalize_nonblank_string(value, info.field_name)
+
+        @field_validator("checkpoint_path", "key_id", mode="before")
+        @classmethod
+        def _validate_optional_text(cls, value: Any, info: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, info.field_name)
+
+        @field_validator("policy", mode="before")
+        @classmethod
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
+        @field_validator("model_name")
+        @classmethod
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @field_validator("confidence_threshold")
+        @classmethod
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
+            return normalized
+
+        @field_validator("keep_alive", mode="before")
+        @classmethod
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
 
     class JobWebhookRequest(_StrictModel):
         """Webhook callback configuration for async jobs."""
@@ -572,6 +656,68 @@ else:
             if not values.get("all") and values.get("model_name") is None:
                 raise ValueError("model_name is required unless all=true")
             return values
+
+    class SMARTBackendIngestionRequest(_StrictModel):
+        """Request schema for starting SMART backend-services ingestion."""
+
+        fhir_base_url: str
+        token_url: str
+        client_id: str
+        private_key_pem: str
+        output_dir: str
+        checkpoint_path: Optional[str] = None
+        key_id: Optional[str] = None
+        scope: str = "system/*.read"
+        export_path: str = "$export"
+        max_inflight_downloads: int = Field(default=2, ge=1)
+        poll_interval_seconds: float = Field(default=1.0, ge=0.0)
+        request_timeout_seconds: float = Field(default=30.0, gt=0.0)
+        policy: Optional[str] = "hipaa_safe_harbor"
+        method: Literal["mask", "remove", "replace", "hash", "shift_dates"] = "replace"
+        model_name: str = _DEFAULT_PII_MODEL
+        confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+        use_smart_merging: bool = True
+        use_safety_sweep: bool = True
+        lang: PIILanguage = "en"
+        normalize_accents: Optional[bool] = None
+        keep_alive: Optional[KeepAliveValue] = None
+
+        @validator(
+            "fhir_base_url",
+            "token_url",
+            "client_id",
+            "private_key_pem",
+            "output_dir",
+            "scope",
+            "export_path",
+            pre=True,
+        )
+        def _validate_required_text(cls, value: Any, field: Any) -> str:
+            return _normalize_nonblank_string(value, field.name)
+
+        @validator("checkpoint_path", "key_id", pre=True)
+        def _validate_optional_text(cls, value: Any, field: Any) -> Optional[str]:
+            return _normalize_optional_nonblank_string(value, field.name)
+
+        @validator("policy", pre=True)
+        def _validate_policy(cls, value: Any) -> Optional[str]:
+            return _normalize_policy_name(value)
+
+        @validator("model_name")
+        def _validate_model_name(cls, value: str) -> str:
+            return _normalize_model_name(value)
+
+        @validator("confidence_threshold")
+        def _validate_confidence_threshold(cls, value: float) -> float:
+            normalized = _normalize_confidence_threshold(value)
+            if normalized is None:
+                raise ValueError("confidence_threshold must be a valid number")
+            return normalized
+
+        @validator("keep_alive", pre=True)
+        def _validate_keep_alive(cls, value: Any) -> Any:
+            return _validate_keep_alive_value(value)
 
     class JobWebhookRequest(_StrictModel):
         """Webhook callback configuration for async jobs."""
