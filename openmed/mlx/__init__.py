@@ -12,9 +12,12 @@ from openmed.mlx.inference import (
     GLiNERRelexMLXPipeline,
     MLXTokenClassificationPipeline,
     PrivacyFilterMLXPipeline,
+    create_mlx_language_model,
     create_mlx_pipeline,
 )
 from openmed.mlx.lm import (
+    DEFAULT_SPECULATIVE_TOKENS,
+    LANEFORMER_DRAFT_MLX_MODEL,
     LANEFORMER_MLX_MODEL,
     LANEFORMER_SOURCE_MODEL,
     OpenMedMLXLanguageModel,
@@ -22,12 +25,18 @@ from openmed.mlx.lm import (
     PagedKVCacheConfig,
     PagedKVCachePlan,
     PagedKVCacheStats,
+    SpeculativeDecodeMetrics,
+    SpeculativeDecodeResult,
     TokenRange,
     generate_text,
+    resolve_mlx_draft_language_model,
     resolve_mlx_language_model,
+    tokenizers_are_aligned,
 )
 
 __all__ = [
+    "DEFAULT_SPECULATIVE_TOKENS",
+    "LANEFORMER_DRAFT_MLX_MODEL",
     "LANEFORMER_MLX_MODEL",
     "LANEFORMER_SOURCE_MODEL",
     "MLXTokenClassificationPipeline",
@@ -40,8 +49,13 @@ __all__ = [
     "PagedKVCachePlan",
     "PagedKVCacheStats",
     "PrivacyFilterMLXPipeline",
+    "SpeculativeDecodeMetrics",
+    "SpeculativeDecodeResult",
     "TokenRange",
+    "create_mlx_language_model",
     "create_mlx_pipeline",
     "generate_text",
+    "resolve_mlx_draft_language_model",
     "resolve_mlx_language_model",
+    "tokenizers_are_aligned",
 ]

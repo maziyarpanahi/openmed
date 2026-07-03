@@ -11,6 +11,7 @@ import pytest
 
 from openmed.core.hf_publish import (
     HfPublishError,
+    _parse_json_object_arg,
     append_manifest_row,
     build_manifest_row,
     publish_artifact,
@@ -179,6 +180,32 @@ def test_manifest_append_replaces_existing_repo_row_and_merges_formats(tmp_path)
         json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
     ]
     assert rows == [{"repo_id": "OpenMed/model", "formats": ["mlx-fp", "coreml"]}]
+
+
+def test_manifest_append_skips_malformed_json_without_logging_row(tmp_path, caplog):
+    manifest = tmp_path / "models.jsonl"
+    secret = "patient-name-should-not-be-logged"
+    manifest.write_text(
+        f'{{"repo_id":"OpenMed/old","formats":["mlx-fp"]}}\n{secret}\n',
+        encoding="utf-8",
+    )
+
+    append_manifest_row(manifest, {"repo_id": "OpenMed/new", "formats": ["coreml"]})
+
+    rows = [
+        json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows == [
+        {"repo_id": "OpenMed/old", "formats": ["mlx-fp"]},
+        {"repo_id": "OpenMed/new", "formats": ["coreml"]},
+    ]
+    assert "Skipping malformed JSONL line 2" in caplog.text
+    assert secret not in caplog.text
+
+
+def test_parse_json_object_arg_rejects_invalid_json():
+    with pytest.raises(HfPublishError, match="not valid JSON"):
+        _parse_json_object_arg('{"micro_f1":')
 
 
 def test_conversion_modules_expose_publish_options():

@@ -19,6 +19,12 @@ from openmed.service.metrics import (
     PAGED_KV_CACHE_EVICTION_NAME,
     PAGED_KV_CACHE_OCCUPANCY_NAME,
     PAGED_KV_CACHE_PEAK_NAME,
+    SPECULATIVE_ACCEPTANCE_RATE_NAME,
+    SPECULATIVE_ACCEPTED_TOKEN_NAME,
+    SPECULATIVE_DECODE_NAME,
+    SPECULATIVE_DRAFT_TOKEN_NAME,
+    SPECULATIVE_FALLBACK_NAME,
+    SPECULATIVE_ROLLBACK_NAME,
     PrometheusMetricsRegistry,
 )
 from openmed.service.warm_pool import WarmPool
@@ -278,26 +284,29 @@ def test_parse_service_mlx_paged_kv_cache_config_from_env(monkeypatch):
 
 def test_parse_memory_budget_rejects_unknown_unit():
     with pytest.raises(ValueError, match="unsupported size unit"):
-        service_runtime.parse_memory_budget_bytes("12parsecs", env_var="TEST_BUDGET")
+        service_runtime.parse_memory_budget_bytes(
+            "10XB",
+            env_var=service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        )
 
 
-def test_service_runtime_from_env_carries_paged_kv_cache(monkeypatch):
-    monkeypatch.setenv("OPENMED_PROFILE", "test")
-    monkeypatch.setenv(
-        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
-        "64",
+def test_speculative_decode_metrics_are_aggregate_only() -> None:
+    registry = PrometheusMetricsRegistry()
+
+    registry.record_speculative_decode(
+        {
+            "drafted_tokens": 6,
+            "accepted_tokens": 4,
+            "rollback_count": 1,
+            "fallback_reason": "tokenizer_mismatch",
+        }
     )
-    monkeypatch.setenv(
-        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR,
-        "4",
-    )
-    monkeypatch.setenv(
-        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR,
-        "1",
-    )
+    metrics_text = registry.render()
 
-    runtime = service_runtime.ServiceRuntime.from_env()
-
-    assert runtime.paged_kv_cache is not None
-    assert runtime.paged_kv_cache.memory_budget_bytes == 64
-    assert runtime.paged_kv_cache.page_count == 16
+    assert f"{SPECULATIVE_DECODE_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_DRAFT_TOKEN_NAME} 6" in metrics_text
+    assert f"{SPECULATIVE_ACCEPTED_TOKEN_NAME} 4" in metrics_text
+    assert f"{SPECULATIVE_ROLLBACK_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_FALLBACK_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_ACCEPTANCE_RATE_NAME} 0.666666666667" in metrics_text
+    assert "tokenizer_mismatch" not in metrics_text

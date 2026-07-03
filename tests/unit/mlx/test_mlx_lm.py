@@ -9,6 +9,53 @@ from types import ModuleType, SimpleNamespace
 import pytest
 
 
+class FakeTokenizer:
+    def __init__(self, vocab=None):
+        self.vocab = vocab or {"<eos>": 0, "A": 1, "B": 2, "C": 3, "D": 4}
+        self.inverse_vocab = {token_id: token for token, token_id in self.vocab.items()}
+        self.eos_token_id = self.vocab["<eos>"]
+
+    def get_vocab(self):
+        return dict(self.vocab)
+
+    def encode(self, text, **_kwargs):
+        return [self.vocab[char] for char in text]
+
+    def decode(self, token_ids, **_kwargs):
+        return "".join(
+            self.inverse_vocab[int(token_id)]
+            for token_id in token_ids
+            if int(token_id) != self.eos_token_id
+        )
+
+
+class ScriptedCausalModel:
+    def __init__(self, next_by_prefix, *, vocab_size=5, default=0):
+        self.next_by_prefix = {
+            tuple(prefix): int(token_id) for prefix, token_id in next_by_prefix.items()
+        }
+        self.vocab_size = vocab_size
+        self.default = default
+
+    def __call__(self, input_ids):
+        token_ids = input_ids[0]
+        rows = []
+        for index in range(len(token_ids)):
+            prefix = tuple(int(token_id) for token_id in token_ids[: index + 1])
+            next_token = self.next_by_prefix.get(prefix, self.default)
+            logits = [-10.0] * self.vocab_size
+            logits[next_token] = 10.0
+            rows.append(logits)
+        return [rows]
+
+
+def _artifact(tmp_path: Path, name: str) -> Path:
+    artifact = tmp_path / name
+    artifact.mkdir()
+    (artifact / "config.json").write_text("{}")
+    return artifact
+
+
 def test_resolve_laneformer_source_downloads_openmed_mlx_repo(monkeypatch):
     from openmed.mlx.lm import resolve_mlx_language_model
 
@@ -72,6 +119,31 @@ def test_resolve_local_mlx_lm_artifact_does_not_download(tmp_path, monkeypatch):
     )
 
     assert resolve_mlx_language_model(str(artifact)) == str(artifact)
+
+
+def test_resolve_default_draft_model_downloads_separate_artifact(monkeypatch):
+    from openmed.mlx.lm import (
+        LANEFORMER_DRAFT_MLX_MODEL,
+        resolve_mlx_draft_language_model,
+    )
+
+    calls = []
+
+    def fake_snapshot_download(**kwargs):
+        calls.append(kwargs)
+        return "/tmp/laneformer-draft"
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(snapshot_download=fake_snapshot_download),
+    )
+
+    resolved = resolve_mlx_draft_language_model("laneformer-2b-it")
+
+    assert resolved == "/tmp/laneformer-draft"
+    assert calls[0]["repo_id"] == LANEFORMER_DRAFT_MLX_MODEL
+    assert calls[0]["repo_type"] == "model"
 
 
 def test_language_model_generate_uses_mlx_lm(monkeypatch, tmp_path):
@@ -152,6 +224,104 @@ def test_language_model_generate_uses_sampler_for_sampling(monkeypatch, tmp_path
     assert calls[1] == ("make_sampler", {"temp": 0.7, "top_p": 0.9})
     assert calls[2][0] == "generate"
     assert calls[2][3]["sampler"] is fake_sampler
+
+
+def test_language_model_speculative_greedy_matches_target_with_rollback(
+    monkeypatch,
+    tmp_path,
+):
+    from openmed.mlx.lm import OpenMedMLXLanguageModel, SpeculativeDecodeResult
+
+    target_artifact = _artifact(tmp_path, "target")
+    draft_artifact = _artifact(tmp_path, "draft")
+    tokenizer = FakeTokenizer()
+    target_model = ScriptedCausalModel(
+        {
+            (1,): 2,
+            (1, 2): 3,
+            (1, 2, 3): 0,
+        }
+    )
+    draft_model = ScriptedCausalModel(
+        {
+            (1,): 2,
+            (1, 2): 3,
+            (1, 2, 3): 4,
+        }
+    )
+
+    def fake_load(path):
+        if path == str(target_artifact):
+            return target_model, tokenizer
+        if path == str(draft_artifact):
+            return draft_model, tokenizer
+        raise AssertionError(f"unexpected load path: {path}")
+
+    monkeypatch.setitem(sys.modules, "mlx_lm", SimpleNamespace(load=fake_load))
+
+    runner = OpenMedMLXLanguageModel(
+        str(target_artifact),
+        draft_model_name=str(draft_artifact),
+    )
+    result = runner.generate(
+        "A",
+        max_tokens=4,
+        speculative=True,
+        max_speculative_tokens=3,
+        return_metrics=True,
+    )
+
+    assert isinstance(result, SpeculativeDecodeResult)
+    assert result.text == "BC"
+    assert result.metrics.enabled is True
+    assert result.metrics.drafted_tokens == 3
+    assert result.metrics.accepted_tokens == 2
+    assert result.metrics.rollback_count == 1
+    assert result.metrics.target_batches == 1
+    assert result.metrics.acceptance_rate == 2 / 3
+
+
+def test_language_model_speculative_tokenizer_mismatch_falls_back(
+    monkeypatch,
+    tmp_path,
+):
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    target_artifact = _artifact(tmp_path, "target")
+    draft_artifact = _artifact(tmp_path, "draft")
+    target_tokenizer = FakeTokenizer()
+    draft_tokenizer = FakeTokenizer({"<eos>": 0, "A": 1, "B": 3, "C": 2, "D": 4})
+    target_model = ScriptedCausalModel({(1,): 2})
+    draft_model = ScriptedCausalModel({(1,): 2})
+    calls = []
+
+    def fake_load(path):
+        if path == str(target_artifact):
+            return target_model, target_tokenizer
+        if path == str(draft_artifact):
+            return draft_model, draft_tokenizer
+        raise AssertionError(f"unexpected load path: {path}")
+
+    def fake_generate(*_args, **kwargs):
+        calls.append(kwargs)
+        return "plain"
+
+    monkeypatch.setitem(
+        sys.modules,
+        "mlx_lm",
+        SimpleNamespace(load=fake_load, generate=fake_generate),
+    )
+
+    runner = OpenMedMLXLanguageModel(
+        str(target_artifact),
+        draft_model_name=str(draft_artifact),
+    )
+    result = runner.generate("A", speculative=True, return_metrics=True)
+
+    assert result.text == "plain"
+    assert result.metrics.enabled is False
+    assert result.metrics.fallback_reason == "tokenizer_mismatch"
+    assert calls[0]["prompt"] == "A"
 
 
 def test_top_level_generate_text_is_exported(monkeypatch, tmp_path):
