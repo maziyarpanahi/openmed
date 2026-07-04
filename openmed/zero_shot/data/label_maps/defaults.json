@@ -2,6 +2,7 @@
   "biomedical": ["Disease", "Drug", "Gene", "Organism"],
   "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
   "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
+  "genomic_variant": ["GeneSymbol", "VariantDescriptor", "ProteinChange", "Zygosity", "AlleleFrequency", "ClinicalSignificance", "ReferenceTranscript"],
   "finance": ["Company", "Ticker", "Instrument", "Event"],
   "legal": ["Case", "Court", "Judge", "Statute"],
   "news": ["Person", "Organization", "Location", "Date"],
@@ -18,5 +19,6 @@
   "ophthalmology": ["EyeFinding", "VisualAcuity", "IntraocularPressure", "Anatomy"],
   "generic": ["Person", "Organization", "Location", "Date"],
   "anesthesia": ["AnesthesiaType", "AnestheticAgent", "AirwayManagement", "ASAClass", "MonitoringModality", "IntraoperativeEvent"],
-  "nutrition_diet": ["DietType", "NutritionTarget", "Supplement", "FeedingRoute", "IntakeFinding", "NutritionalStatus", "FluidRestriction"]
+  "nutrition_diet": ["DietType", "NutritionTarget", "Supplement", "FeedingRoute", "IntakeFinding", "NutritionalStatus", "FluidRestriction"],
+  "endocrinology": ["GlycemicMeasure", "ThyroidFunctionMeasure", "HormoneLevel", "InsulinRegimen", "MetabolicFinding", "EndocrineGland"]
 }

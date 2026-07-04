@@ -126,6 +126,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "he_IL",
         "id_ID",
         "ms_MY",
+        "fil_PH",
         "th_TH",
         "sk_SK",
     }
@@ -173,6 +174,7 @@ _LOCALE_ID_METHODS = {
     "he_IL": "teudat_zehut",
     "id_ID": "indonesian_nik",
     "ms_MY": "mykad",
+    "fil_PH": "philsys_psn",
     "pl_PL": "pesel",
     "lv_LV": "personas_kods",
     "ko_KR": "korean_rrn",
@@ -181,7 +183,30 @@ _LOCALE_ID_METHODS = {
 }
 
 
+_MRZ_CHARSET = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<")
+
+
+def _mrz_surrogate(faker, original):
+    """Return a valid MRZ surrogate when ``original`` looks like an MRZ block."""
+    if not original or "\n" not in original:
+        return None
+    lines = [line.strip() for line in original.strip().splitlines()]
+    if not lines or any(set(line) - _MRZ_CHARSET for line in lines):
+        return None
+    lengths = {len(line) for line in lines}
+    from openmed.core.pii_i18n import generate_mrz_td1, generate_mrz_td3
+
+    if len(lines) == 2 and lengths == {44}:
+        return generate_mrz_td3(faker.random)
+    if len(lines) == 3 and lengths == {30}:
+        return generate_mrz_td1(faker.random)
+    return None
+
+
 def _gen_id_num(faker, original, *, locale):
+    mrz = _mrz_surrogate(faker, original)
+    if mrz is not None:
+        return mrz
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         return getattr(faker, method)()
@@ -231,13 +256,28 @@ def _gen_cvv(faker, original, *, locale):
 
 
 def _gen_iban(faker, original, *, locale):
-    return faker.iban()
+    if hasattr(faker, "financial_iban"):
+        return faker.financial_iban()
+
+    from .providers import clinical_ids
+
+    value = faker.iban()
+    if clinical_ids.validate_iban(value):
+        return value
+    return clinical_ids.generate_iban(rng=faker.random)
 
 
 def _gen_bic(faker, original, *, locale):
-    return (
-        faker.swift11() if hasattr(faker, "swift11") else faker.bothify("########XXX")
-    )
+    if hasattr(faker, "financial_bic"):
+        return faker.financial_bic()
+
+    from .providers import clinical_ids
+
+    if hasattr(faker, "swift11"):
+        value = faker.swift11()
+        if clinical_ids.validate_bic(value):
+            return value
+    return clinical_ids.generate_bic(include_branch=True, rng=faker.random)
 
 
 def _gen_amount(faker, original, *, locale):

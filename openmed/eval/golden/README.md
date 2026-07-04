@@ -37,7 +37,7 @@ Required fields:
   Synthetic hard-negative fixtures use an empty list because the confusable
   tokens are non-PHI and must remain unredacted.
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
-  `multilingual`, `checksum_ids`, `date_arithmetic`, or
+  `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
   `policy_profile_actions`, or `hard_negatives`.
 - `metadata.expected_output`: expected post-action output, including `method`
   and resulting `text`.
