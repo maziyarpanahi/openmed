@@ -18,6 +18,17 @@ from .batch import (
     process_batch,
     redact_dataset,
 )
+from .distributed import (
+    DocumentIdExtractor,
+    DocumentShard,
+    DuplicateDocumentIDError,
+    MissingDocumentIDError,
+    ShardingError,
+    ShardPlan,
+    assign_document_shard,
+    plan_document_shards,
+    stable_document_hash,
+)
 from .kafka_connector import (
     ConsumerProtocol,
     KafkaClientPair,
@@ -55,6 +66,15 @@ __all__ = [
     "DatasetRedactionSummary",
     "process_batch",
     "redact_dataset",
+    "DocumentIdExtractor",
+    "DocumentShard",
+    "ShardPlan",
+    "ShardingError",
+    "MissingDocumentIDError",
+    "DuplicateDocumentIDError",
+    "stable_document_hash",
+    "assign_document_shard",
+    "plan_document_shards",
     "ObjectStorageBatchResult",
     "ObjectStorageItemResult",
     "ObjectProgressCallback",
