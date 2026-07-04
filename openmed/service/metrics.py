@@ -15,6 +15,11 @@ REQUEST_DURATION_NAME = "openmed_service_request_duration_seconds"
 INFLIGHT_NAME = "openmed_service_inflight_requests"
 MODEL_LOAD_NAME = "openmed_service_model_load_total"
 MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
+PAGED_KV_CACHE_OCCUPANCY_NAME = "openmed_service_mlx_paged_kv_cache_occupancy_pages"
+PAGED_KV_CACHE_CAPACITY_NAME = "openmed_service_mlx_paged_kv_cache_capacity_pages"
+PAGED_KV_CACHE_PEAK_NAME = "openmed_service_mlx_paged_kv_cache_peak_pages"
+PAGED_KV_CACHE_EVICTION_NAME = "openmed_service_mlx_paged_kv_cache_eviction_total"
+PAGED_KV_CACHE_BUDGET_BYTES_NAME = "openmed_service_mlx_paged_kv_cache_budget_bytes"
 BATCH_QUEUE_DEPTH_NAME = "openmed_service_batch_queue_depth"
 BATCH_QUEUE_WAIT_NAME = "openmed_service_batch_queue_wait_seconds"
 BATCH_SHED_NAME = "openmed_service_batch_shed_total"
@@ -97,6 +102,11 @@ class PrometheusMetricsRegistry:
         self._inflight_requests = 0
         self._model_load_total = 0
         self._model_eviction_total = 0
+        self._paged_kv_cache_occupancy_pages = 0
+        self._paged_kv_cache_capacity_pages = 0
+        self._paged_kv_cache_peak_pages = 0
+        self._paged_kv_cache_eviction_total = 0
+        self._paged_kv_cache_budget_bytes = 0
         self._batch_queue_depth: dict[str, int] = {}
         self._batch_wait_bucket_counts: dict[str, list[int]] = {}
         self._batch_wait_count: dict[str, int] = {}
@@ -171,6 +181,31 @@ class PrometheusMetricsRegistry:
             return
         with self._lock:
             self._model_eviction_total += int(count)
+
+    def record_mlx_paged_kv_cache(
+        self,
+        *,
+        total_pages: int,
+        resident_pages: int,
+        evictions: int = 0,
+        peak_pages: int | None = None,
+        memory_budget_bytes: int = 0,
+    ) -> None:
+        """Record aggregate MLX-LM paged KV-cache occupancy."""
+        capacity_pages = max(int(total_pages), 0)
+        occupancy_pages = min(max(int(resident_pages), 0), capacity_pages)
+        observed_peak = occupancy_pages if peak_pages is None else int(peak_pages)
+
+        with self._lock:
+            self._paged_kv_cache_capacity_pages = capacity_pages
+            self._paged_kv_cache_occupancy_pages = occupancy_pages
+            self._paged_kv_cache_peak_pages = max(
+                self._paged_kv_cache_peak_pages,
+                min(max(observed_peak, 0), capacity_pages),
+            )
+            self._paged_kv_cache_budget_bytes = max(int(memory_budget_bytes), 0)
+            if evictions > 0:
+                self._paged_kv_cache_eviction_total += int(evictions)
 
     def record_batch_queue_depth(self, *, priority: str, depth: int) -> None:
         """Set the current dynamic-batcher queue depth for one priority."""
@@ -289,6 +324,11 @@ class PrometheusMetricsRegistry:
             inflight_requests = self._inflight_requests
             model_load_total = self._model_load_total
             model_eviction_total = self._model_eviction_total
+            paged_kv_cache_occupancy_pages = self._paged_kv_cache_occupancy_pages
+            paged_kv_cache_capacity_pages = self._paged_kv_cache_capacity_pages
+            paged_kv_cache_peak_pages = self._paged_kv_cache_peak_pages
+            paged_kv_cache_eviction_total = self._paged_kv_cache_eviction_total
+            paged_kv_cache_budget_bytes = self._paged_kv_cache_budget_bytes
             batch_queue_depth = dict(self._batch_queue_depth)
             batch_wait_bucket_counts = {
                 priority: list(counts)
@@ -497,6 +537,50 @@ class PrometheusMetricsRegistry:
             "counter",
         )
         lines.append(f"{MODEL_REJECTION_NAME} {model_rejection_total}")
+
+        _append_family_header(
+            lines,
+            PAGED_KV_CACHE_OCCUPANCY_NAME,
+            "Current MLX-LM paged KV-cache resident pages.",
+            "gauge",
+        )
+        lines.append(
+            f"{PAGED_KV_CACHE_OCCUPANCY_NAME} {paged_kv_cache_occupancy_pages}"
+        )
+
+        _append_family_header(
+            lines,
+            PAGED_KV_CACHE_CAPACITY_NAME,
+            "Configured MLX-LM paged KV-cache page capacity.",
+            "gauge",
+        )
+        lines.append(f"{PAGED_KV_CACHE_CAPACITY_NAME} {paged_kv_cache_capacity_pages}")
+
+        _append_family_header(
+            lines,
+            PAGED_KV_CACHE_PEAK_NAME,
+            "Peak MLX-LM paged KV-cache resident pages observed in this process.",
+            "gauge",
+        )
+        lines.append(f"{PAGED_KV_CACHE_PEAK_NAME} {paged_kv_cache_peak_pages}")
+
+        _append_family_header(
+            lines,
+            PAGED_KV_CACHE_EVICTION_NAME,
+            "Total MLX-LM paged KV-cache page evictions in this process.",
+            "counter",
+        )
+        lines.append(f"{PAGED_KV_CACHE_EVICTION_NAME} {paged_kv_cache_eviction_total}")
+
+        _append_family_header(
+            lines,
+            PAGED_KV_CACHE_BUDGET_BYTES_NAME,
+            "Configured MLX-LM paged KV-cache memory budget in bytes.",
+            "gauge",
+        )
+        lines.append(
+            f"{PAGED_KV_CACHE_BUDGET_BYTES_NAME} {paged_kv_cache_budget_bytes}"
+        )
 
         _append_family_header(
             lines,

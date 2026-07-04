@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Callable, Dict, Optional, Tuple
 
 from openmed.core.config import PROFILE_ENV_VAR, OpenMedConfig
 from openmed.core.models import ModelLoader
+from openmed.mlx.lm import PagedKVCacheConfig
 from openmed.utils.validation import validate_batch_size, validate_model_name
 
 from .keep_alive import parse_keep_alive
@@ -42,6 +44,19 @@ SERVICE_RATE_LIMIT_BURST_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_BURST"
 SERVICE_MAX_CONCURRENCY_ENV_VAR = "OPENMED_SERVICE_RATE_LIMIT_MAX_CONCURRENCY"
 SERVICE_THROTTLE_KEY_ENV_VAR = "OPENMED_SERVICE_THROTTLE_KEY"
 SERVICE_CONCURRENCY_WAIT_ENV_VAR = "OPENMED_SERVICE_CONCURRENCY_WAIT_SECONDS"
+SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR = "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BUDGET"
+SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS"
+)
+SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS"
+)
+SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS"
+)
+SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR = (
+    "OPENMED_SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN"
+)
 SERVICE_RESILIENCE_ENABLED_ENV_VAR = "OPENMED_SERVICE_RESILIENCE_ENABLED"
 SERVICE_RETRY_MAX_ATTEMPTS_ENV_VAR = "OPENMED_SERVICE_RETRY_MAX_ATTEMPTS"
 SERVICE_RETRY_BACKOFF_INITIAL_ENV_VAR = "OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS"
@@ -59,6 +74,9 @@ DEFAULT_SERVICE_BATCH_MAX_WAIT_MS = 5.0
 DEFAULT_SERVICE_BATCH_MAX_QUEUE_SIZE = 256
 DEFAULT_SERVICE_SHUTDOWN_DRAIN_SECONDS = 30.0
 DEFAULT_SERVICE_CONCURRENCY_WAIT_SECONDS = 0.05
+DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS = 128
+DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS = 512
+DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN = 65_536
 DEFAULT_SERVICE_RETRY_MAX_ATTEMPTS = 3
 DEFAULT_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS = 0.05
 DEFAULT_SERVICE_RETRY_BACKOFF_MULTIPLIER = 2.0
@@ -69,6 +87,27 @@ DEFAULT_SERVICE_BREAKER_RECOVERY_TIMEOUT_SECONDS = 30.0
 
 _BATCHING_ENABLED_VALUES = {"1", "true", "yes", "on", "enabled"}
 _BATCHING_DISABLED_VALUES = {"0", "false", "no", "off", "disabled"}
+_MEMORY_BUDGET_PATTERN = re.compile(
+    r"^\s*(?P<value>\d+(?:\.\d+)?)\s*(?P<unit>[a-zA-Z]+)?\s*$"
+)
+_MEMORY_MULTIPLIERS = {
+    None: 1,
+    "b": 1,
+    "byte": 1,
+    "bytes": 1,
+    "k": 1_000,
+    "kb": 1_000,
+    "m": 1_000_000,
+    "mb": 1_000_000,
+    "g": 1_000_000_000,
+    "gb": 1_000_000_000,
+    "ki": 1024,
+    "kib": 1024,
+    "mi": 1024**2,
+    "mib": 1024**2,
+    "gi": 1024**3,
+    "gib": 1024**3,
+}
 _THROTTLE_KEY_ALIASES = {
     "global": "global",
     "process": "global",
@@ -154,6 +193,51 @@ def _parse_non_negative_int(
         parsed = int(raw_value)
     except ValueError as exc:
         raise ValueError(f"{env_var} must be a non-negative integer") from exc
+    if parsed < 0:
+        raise ValueError(f"{env_var} must be greater than or equal to 0")
+    return parsed
+
+
+def _parse_optional_positive_int(
+    raw_value: Optional[str],
+    *,
+    env_var: str,
+    default: int | None,
+) -> int | None:
+    if raw_value is None or not raw_value.strip():
+        return default
+
+    try:
+        parsed = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(f"{env_var} must be a positive integer") from exc
+    if parsed <= 0:
+        raise ValueError(f"{env_var} must be greater than 0")
+    return parsed
+
+
+def parse_memory_budget_bytes(raw_value: Optional[str], *, env_var: str) -> int:
+    """Parse a memory budget string into bytes.
+
+    Bare numbers are bytes. Decimal units (MB/GB) and binary units (MiB/GiB)
+    are accepted to keep deployment configuration explicit.
+    """
+    if raw_value is None or not raw_value.strip():
+        return 0
+
+    match = _MEMORY_BUDGET_PATTERN.match(raw_value)
+    if match is None:
+        raise ValueError(f"{env_var} must be a byte count or size like '512MiB'")
+
+    value = float(match.group("value"))
+    unit = match.group("unit")
+    normalized_unit = unit.lower() if unit is not None else None
+    try:
+        multiplier = _MEMORY_MULTIPLIERS[normalized_unit]
+    except KeyError as exc:
+        raise ValueError(f"{env_var} has unsupported size unit {unit!r}") from exc
+
+    parsed = int(value * multiplier)
     if parsed < 0:
         raise ValueError(f"{env_var} must be greater than or equal to 0")
     return parsed
@@ -434,6 +518,44 @@ def parse_service_coalescing_config() -> ServiceCoalescingConfig:
     )
 
 
+def parse_service_mlx_paged_kv_cache_config() -> PagedKVCacheConfig | None:
+    """Read optional MLX-LM paged KV-cache settings from the environment."""
+    budget_bytes = parse_memory_budget_bytes(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+    )
+    if budget_bytes <= 0:
+        return None
+
+    page_size_tokens = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR,
+        default=DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS,
+    )
+    chunk_size_tokens = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR,
+        default=DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS,
+    )
+    window_size_tokens = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR,
+        default=None,
+    )
+    bytes_per_token = _parse_optional_positive_int(
+        os.getenv(SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR),
+        env_var=SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR,
+        default=DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN,
+    )
+    return PagedKVCacheConfig(
+        memory_budget_bytes=budget_bytes,
+        page_size_tokens=page_size_tokens or DEFAULT_MLX_PAGED_KV_CACHE_PAGE_TOKENS,
+        chunk_size_tokens=chunk_size_tokens or DEFAULT_MLX_PAGED_KV_CACHE_CHUNK_TOKENS,
+        window_size_tokens=window_size_tokens,
+        bytes_per_token=bytes_per_token or DEFAULT_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN,
+    )
+
+
 def parse_service_resilience_config() -> ServiceResilienceConfig:
     """Read retry and circuit-breaker settings from the environment."""
     return ServiceResilienceConfig(
@@ -510,6 +632,7 @@ class ServiceRuntime:
     batching: ServiceBatchingConfig = field(default_factory=ServiceBatchingConfig)
     coalescing: ServiceCoalescingConfig = field(default_factory=ServiceCoalescingConfig)
     throttle: ServiceThrottleConfig = field(default_factory=ServiceThrottleConfig)
+    paged_kv_cache: PagedKVCacheConfig | None = None
     resilience_config: ServiceResilienceConfig = field(
         default_factory=ServiceResilienceConfig
     )
@@ -549,6 +672,7 @@ class ServiceRuntime:
         batching = parse_service_batching_config()
         coalescing = parse_service_coalescing_config()
         throttle = parse_service_throttle_config()
+        paged_kv_cache = parse_service_mlx_paged_kv_cache_config()
         resilience_config = parse_service_resilience_config()
         return cls(
             profile=profile,
@@ -565,6 +689,7 @@ class ServiceRuntime:
             batching=batching,
             coalescing=coalescing,
             throttle=throttle,
+            paged_kv_cache=paged_kv_cache,
             resilience_config=resilience_config,
             _loader_factory=ModelLoader,
             metrics=metrics,

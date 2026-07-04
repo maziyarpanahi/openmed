@@ -190,6 +190,7 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.config = runtime.config
     app.state.batching = runtime.batching
     app.state.coalescing = runtime.coalescing
+    app.state.paged_kv_cache = runtime.paged_kv_cache
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
     app.state.request_coalescer = None
