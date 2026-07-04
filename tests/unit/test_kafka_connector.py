@@ -580,7 +580,7 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
         digest = b""
         # Keep the synthetic pipeline cost high enough that CI timer noise does
         # not dominate the checkpoint bookkeeping overhead measurement.
-        for _ in range(1200):
+        for _ in range(800):
             digest = hashlib.sha256(payload + digest).digest()
         return SimpleNamespace(deidentified_text=text.replace("Jane Roe", "[NAME]"))
 
