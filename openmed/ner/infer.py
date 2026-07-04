@@ -9,7 +9,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from openmed.core.config import OpenMedConfig, get_config
 from openmed.core.models import ModelLoader
 
-from .exceptions import MissingDependencyError
 from .families import (
     ModelFamily,
     ensure_gliner2_available,

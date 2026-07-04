@@ -27,7 +27,6 @@ from .families.base import ModelFamily
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INDEX_PATH = PACKAGE_ROOT / "models" / "index.json"
 
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -153,7 +152,6 @@ def write_index(index: ModelIndex, path: Path, *, pretty: bool = True) -> None:
 # ---------------------------------------------------------------------------
 # Discovery heuristics
 # ---------------------------------------------------------------------------
-
 
 MODEL_CORE_FILES = {
     "config.json",
