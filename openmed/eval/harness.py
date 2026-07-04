@@ -20,6 +20,7 @@ from openmed.core.audit import AuditSignature, stable_hash
 from openmed.core.quality_gates import validate_entity_spans
 from openmed.core.safety_sweep import hashed_span_surface
 from openmed.eval.cache import build_report_key, hash_fixture_set, load_or_compute
+from openmed.eval.calibrate import load_calibration_thresholds
 from openmed.eval.metrics import (
     EvalSpan,
     compute_confidence_intervals,
@@ -384,6 +385,13 @@ def run_benchmark(
     ci_seed: int = 0,
     calibration: bool = False,
     calibration_bins: int = 10,
+    abstention_thresholds: Any | None = None,
+    abstention_thresholds_path: str | Path | None = None,
+    abstention_confidence_threshold: float = 0.0,
+    abstention_target_risk: float | None = None,
+    abstention_confidence_level: float | None = None,
+    abstention_bootstrap_resamples: int = 0,
+    abstention_seed: int = 0,
     cache_dir: str | Path | None = None,
     cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
@@ -397,12 +405,26 @@ def run_benchmark(
     by model, suite, device, fixture-set hash, and eval code hash.
     """
     _validate_unique_fixture_ids(fixtures)
+    active_abstention_thresholds = _resolve_abstention_thresholds(
+        abstention_thresholds,
+        abstention_thresholds_path,
+    )
     if cache_dir is not None:
+        effective_code_hash = _abstention_cache_hash(
+            cache_code_hash,
+            thresholds=active_abstention_thresholds,
+            thresholds_path=abstention_thresholds_path,
+            confidence_threshold=abstention_confidence_threshold,
+            target_risk=abstention_target_risk,
+            confidence_level=abstention_confidence_level,
+            bootstrap_resamples=abstention_bootstrap_resamples,
+            seed=abstention_seed,
+        )
         report_key = build_report_key(
             model_name=model_name,
             suite=suite,
             fixture_set_hash=hash_fixture_set(fixtures),
-            code_hash=cache_code_hash,
+            code_hash=effective_code_hash,
             device=device,
         )
         return load_or_compute(
@@ -421,6 +443,12 @@ def run_benchmark(
                 ci_seed=ci_seed,
                 calibration=calibration,
                 calibration_bins=calibration_bins,
+                abstention_thresholds=active_abstention_thresholds,
+                abstention_confidence_threshold=abstention_confidence_threshold,
+                abstention_target_risk=abstention_target_risk,
+                abstention_confidence_level=abstention_confidence_level,
+                abstention_bootstrap_resamples=abstention_bootstrap_resamples,
+                abstention_seed=abstention_seed,
             ),
             cache_dir=cache_dir,
         )
@@ -465,6 +493,13 @@ def run_benchmark(
         latencies_ms=[result.latency_ms for result in results[1:]],
         cold_start_ms=(results[0].latency_ms if results else None),
         peak_rss_bytes=peak_rss,
+        abstention_thresholds=active_abstention_thresholds,
+        abstention_confidence_threshold=abstention_confidence_threshold,
+        abstention_model_id=model_name,
+        abstention_target_risk=abstention_target_risk,
+        abstention_confidence_level=abstention_confidence_level,
+        abstention_bootstrap_resamples=abstention_bootstrap_resamples,
+        abstention_seed=abstention_seed,
         default_device=device,
         source_text=corpus_text,
     )
@@ -518,6 +553,13 @@ def run_suite(
     ci_seed: int = 0,
     calibration: bool = False,
     calibration_bins: int = 10,
+    abstention_thresholds: Any | None = None,
+    abstention_thresholds_path: str | Path | None = None,
+    abstention_confidence_threshold: float = 0.0,
+    abstention_target_risk: float | None = None,
+    abstention_confidence_level: float | None = None,
+    abstention_bootstrap_resamples: int = 0,
+    abstention_seed: int = 0,
     cache_dir: str | Path | None = None,
     cache_code_hash: str | None = None,
 ) -> BenchmarkReport:
@@ -536,6 +578,13 @@ def run_suite(
         ci_seed=ci_seed,
         calibration=calibration,
         calibration_bins=calibration_bins,
+        abstention_thresholds=abstention_thresholds,
+        abstention_thresholds_path=abstention_thresholds_path,
+        abstention_confidence_threshold=abstention_confidence_threshold,
+        abstention_target_risk=abstention_target_risk,
+        abstention_confidence_level=abstention_confidence_level,
+        abstention_bootstrap_resamples=abstention_bootstrap_resamples,
+        abstention_seed=abstention_seed,
         cache_dir=cache_dir,
         cache_code_hash=cache_code_hash,
     )
@@ -1375,6 +1424,58 @@ def _attach_calibration_metrics(
         "n_bins": n_bins,
     }
     return merged
+
+
+def _resolve_abstention_thresholds(
+    thresholds: Any | None,
+    thresholds_path: str | Path | None,
+) -> Any | None:
+    if thresholds is not None:
+        return thresholds
+    if thresholds_path is not None:
+        return load_calibration_thresholds(thresholds_path)
+    return None
+
+
+def _abstention_cache_hash(
+    base_hash: str | None,
+    *,
+    thresholds: Any | None,
+    thresholds_path: str | Path | None,
+    confidence_threshold: float,
+    target_risk: float | None,
+    confidence_level: float | None,
+    bootstrap_resamples: int,
+    seed: int,
+) -> str | None:
+    if thresholds is None and thresholds_path is None:
+        return base_hash
+    digest = hashlib.sha256()
+    digest.update(str(base_hash or "").encode("utf-8"))
+    digest.update(b"\0abstention\0")
+    payload = {
+        "confidence_level": confidence_level,
+        "confidence_threshold": confidence_threshold,
+        "seed": seed,
+        "target_risk": target_risk,
+        "bootstrap_resamples": bootstrap_resamples,
+        "thresholds": _jsonable_thresholds(thresholds),
+        "thresholds_path": str(thresholds_path) if thresholds_path else None,
+    }
+    digest.update(json.dumps(payload, sort_keys=True, default=str).encode("utf-8"))
+    return digest.hexdigest()
+
+
+def _jsonable_thresholds(thresholds: Any | None) -> Any:
+    if thresholds is None:
+        return None
+    if hasattr(thresholds, "source_path") and thresholds.source_path:
+        return {"source_path": thresholds.source_path}
+    if hasattr(thresholds, "thresholds"):
+        return {
+            ".".join(key): value for key, value in sorted(thresholds.thresholds.items())
+        }
+    return thresholds
 
 
 def _prediction_confidence_records(

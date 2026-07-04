@@ -115,6 +115,43 @@ def test_preview_helper_returns_unsigned_passing_preview(tmp_path: Path) -> None
     assert not baseline_store.exists()
 
 
+def test_preview_includes_abstention_advisory_details(tmp_path: Path) -> None:
+    candidate = _candidate()
+    candidate["metrics"]["abstention"] = {
+        "abstention_rate": {
+            "overall": 0.25,
+            "by_label": {"SSN": 0.25},
+            "by_language": {"en": 0.25},
+            "abstained": 1,
+            "total": 4,
+        },
+        "residual_risk": {
+            "overall": 0.0,
+            "critical": 0.0,
+            "by_label": {"SSN": 0.0},
+            "by_language": {"en": 0.0},
+            "bootstrap": {"max": 0.0, "n_resamples": 100, "seed": 7},
+        },
+        "route_counts": {"accept": 3, "redact": 1, "review": 0},
+        "target_risk": 0.10,
+        "confidence_level": 0.80,
+    }
+
+    report = release_gates.preview(
+        candidate,
+        baseline_path=tmp_path / "missing-baseline.json",
+    )
+    advisory = next(
+        check for check in report.gate_results if check.gate == "abstention_advisory"
+    )
+
+    assert advisory.passed is True
+    assert advisory.reason == "advisory"
+    assert advisory.details["abstention_rate"]["by_label"]["SSN"] == 0.25
+    assert advisory.details["abstention_rate"]["by_language"]["en"] == 0.25
+    assert advisory.details["residual_risk"]["bootstrap"]["max"] == 0.0
+
+
 def test_preview_checks_adversarial_recall_under_attack(tmp_path: Path) -> None:
     candidate = _candidate()
     candidate["metrics"]["adversarial_robustness"] = {

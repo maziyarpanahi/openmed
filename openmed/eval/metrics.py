@@ -15,6 +15,23 @@ from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+ABSTENTION_ROUTE_ACCEPT = "accept"
+ABSTENTION_ROUTE_REDACT = "redact"
+ABSTENTION_ROUTE_REVIEW = "review"
+CRITICAL_ABSTENTION_LABELS = frozenset(
+    {
+        "SSN",
+        "ID_NUM",
+        "API_KEY",
+        "ACCOUNT_NUMBER",
+        "PASSWORD",
+        "PIN",
+        "CREDIT_CARD",
+        "CVV",
+        "IBAN",
+        "BIC",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -122,6 +139,90 @@ class LeakageMetrics:
             "leaked_chars_by_device": self.leaked_chars_by_device,
             "total_chars_by_device": self.total_chars_by_device,
         }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class AbstentionDecision:
+    """One span-level abstention decision without retaining raw span text."""
+
+    label: str
+    language: str
+    confidence: float
+    threshold: float
+    nonconformity: float
+    accepted: bool
+    route: str
+    residual_error: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "language": self.language,
+            "confidence": self.confidence,
+            "threshold": self.threshold,
+            "nonconformity": self.nonconformity,
+            "accepted": self.accepted,
+            "route": self.route,
+            "residual_error": self.residual_error,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class AbstentionMetrics:
+    """Abstention-rate and residual-risk slices for span decisions."""
+
+    abstention_rate: float
+    abstained: int
+    total: int
+    abstention_rate_by_label: dict[str, float]
+    abstention_rate_by_language: dict[str, float]
+    residual_risk: float
+    critical_residual_risk: float
+    residual_risk_by_label: dict[str, float]
+    residual_risk_by_language: dict[str, float]
+    residual_errors: int
+    accepted: int
+    critical_residual_errors: int
+    accepted_critical: int
+    route_counts: dict[str, int]
+    bootstrap: Mapping[str, Any] = field(default_factory=dict)
+    target_risk: float | None = None
+    confidence_level: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "abstention_rate": {
+                "overall": self.abstention_rate,
+                "by_label": self.abstention_rate_by_label,
+                "by_language": self.abstention_rate_by_language,
+                "abstained": self.abstained,
+                "total": self.total,
+            },
+            "residual_risk": {
+                "overall": self.residual_risk,
+                "critical": self.critical_residual_risk,
+                "by_label": self.residual_risk_by_label,
+                "by_language": self.residual_risk_by_language,
+                "residual_errors": self.residual_errors,
+                "accepted": self.accepted,
+                "critical_residual_errors": self.critical_residual_errors,
+                "accepted_critical": self.accepted_critical,
+            },
+            "route_counts": self.route_counts,
+        }
+        if self.bootstrap:
+            payload["residual_risk"]["bootstrap"] = dict(self.bootstrap)
+        if self.target_risk is not None:
+            payload["target_risk"] = self.target_risk
+        if self.confidence_level is not None:
+            payload["confidence_level"] = self.confidence_level
+        return payload
 
     def __getitem__(self, key: str) -> Any:
         return self.to_dict()[key]
@@ -703,6 +804,242 @@ def compute_clinical_utility_loss(*args: Any, **kwargs: Any) -> RateMetric:
     return compute_over_redaction_loss(*args, **kwargs)
 
 
+def abstention_route(
+    label: str,
+    *,
+    accepted: bool,
+    language: str = "en",
+    critical_labels: frozenset[str] = CRITICAL_ABSTENTION_LABELS,
+) -> str:
+    """Route accepted spans, critical abstentions, and review abstentions."""
+
+    if accepted:
+        return ABSTENTION_ROUTE_ACCEPT
+    canonical = normalize_label(label, language)
+    if canonical in critical_labels:
+        return ABSTENTION_ROUTE_REDACT
+    return ABSTENTION_ROUTE_REVIEW
+
+
+def apply_abstention_policy(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    thresholds: Any | None = None,
+    confidence_threshold: float = 0.0,
+    model_id: str | None = None,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+    critical_labels: frozenset[str] = CRITICAL_ABSTENTION_LABELS,
+) -> list[AbstentionDecision]:
+    """Apply span abstention routing and return deterministic decisions."""
+
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    matched_gold: set[int] = set()
+    decisions: list[AbstentionDecision] = []
+    for span in predicted:
+        threshold = _threshold_for_span(
+            span,
+            thresholds,
+            default_threshold=confidence_threshold,
+            model_id=model_id,
+        )
+        confidence = _confidence_for_span(span)
+        accepted = confidence >= threshold
+        exact_match = False
+        for index, gold_span in enumerate(gold):
+            if index in matched_gold:
+                continue
+            if _exact_span_match(gold_span, span):
+                matched_gold.add(index)
+                exact_match = True
+                break
+        route = abstention_route(
+            span.label,
+            accepted=accepted,
+            language=span.language,
+            critical_labels=critical_labels,
+        )
+        decisions.append(
+            AbstentionDecision(
+                label=span.label,
+                language=span.language,
+                confidence=confidence,
+                threshold=threshold,
+                nonconformity=1.0 - confidence,
+                accepted=accepted,
+                route=route,
+                residual_error=not exact_match,
+            )
+        )
+    return decisions
+
+
+def compute_abstention_metrics(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    thresholds: Any | None = None,
+    confidence_threshold: float = 0.0,
+    model_id: str | None = None,
+    target_risk: float | None = None,
+    confidence_level: float | None = None,
+    bootstrap_resamples: int = 0,
+    seed: int = 0,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+    critical_labels: frozenset[str] = CRITICAL_ABSTENTION_LABELS,
+) -> AbstentionMetrics:
+    """Compute abstention-rate and residual-risk metrics per label/language."""
+
+    decisions = apply_abstention_policy(
+        gold_spans,
+        predicted_spans,
+        thresholds=thresholds,
+        confidence_threshold=confidence_threshold,
+        model_id=model_id,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+        critical_labels=critical_labels,
+    )
+    total = len(decisions)
+    abstained = sum(1 for decision in decisions if not decision.accepted)
+    accepted = sum(1 for decision in decisions if decision.accepted)
+    residual_errors = sum(
+        1 for decision in decisions if decision.accepted and decision.residual_error
+    )
+    accepted_critical = sum(
+        1
+        for decision in decisions
+        if decision.accepted and decision.label in critical_labels
+    )
+    critical_residual_errors = sum(
+        1
+        for decision in decisions
+        if decision.accepted
+        and decision.label in critical_labels
+        and decision.residual_error
+    )
+    route_counts = {
+        route: sum(1 for decision in decisions if decision.route == route)
+        for route in (
+            ABSTENTION_ROUTE_ACCEPT,
+            ABSTENTION_ROUTE_REDACT,
+            ABSTENTION_ROUTE_REVIEW,
+        )
+    }
+    label_keys = sorted({decision.label for decision in decisions})
+    language_keys = sorted({decision.language for decision in decisions})
+    bootstrap = (
+        bootstrap_abstention_residual_risk(
+            decisions,
+            n_resamples=bootstrap_resamples,
+            seed=seed,
+            critical_only=True,
+            critical_labels=critical_labels,
+        )
+        if bootstrap_resamples
+        else {}
+    )
+    return AbstentionMetrics(
+        abstention_rate=_safe_rate(abstained, total, zero_denominator=0.0),
+        abstained=abstained,
+        total=total,
+        abstention_rate_by_label=_abstention_rate_by(
+            decisions,
+            label_keys,
+            group_key="label",
+        ),
+        abstention_rate_by_language=_abstention_rate_by(
+            decisions,
+            language_keys,
+            group_key="language",
+        ),
+        residual_risk=_safe_rate(residual_errors, accepted, zero_denominator=0.0),
+        critical_residual_risk=_safe_rate(
+            critical_residual_errors,
+            accepted_critical,
+            zero_denominator=0.0,
+        ),
+        residual_risk_by_label=_residual_risk_by(
+            decisions,
+            label_keys,
+            group_key="label",
+        ),
+        residual_risk_by_language=_residual_risk_by(
+            decisions,
+            language_keys,
+            group_key="language",
+        ),
+        residual_errors=residual_errors,
+        accepted=accepted,
+        critical_residual_errors=critical_residual_errors,
+        accepted_critical=accepted_critical,
+        route_counts=route_counts,
+        bootstrap=bootstrap,
+        target_risk=target_risk,
+        confidence_level=confidence_level,
+    )
+
+
+def bootstrap_abstention_residual_risk(
+    decisions: Sequence[AbstentionDecision],
+    *,
+    n_resamples: int = 100,
+    seed: int = 0,
+    critical_only: bool = True,
+    critical_labels: frozenset[str] = CRITICAL_ABSTENTION_LABELS,
+) -> dict[str, Any]:
+    """Bootstrap realized residual risk for accepted abstention decisions."""
+
+    if n_resamples < 1:
+        raise ValueError("n_resamples must be at least 1")
+    values = list(decisions)
+    if critical_only:
+        values = [decision for decision in values if decision.label in critical_labels]
+    point = _decision_residual_risk(values)
+    if len(values) < 2:
+        return {
+            "point": point,
+            "max": point,
+            "n_resamples": n_resamples,
+            "seed": seed,
+            "critical_only": critical_only,
+            "degenerate": True,
+        }
+
+    rng = random.Random(seed)
+    size = len(values)
+    samples: list[float] = []
+    for _ in range(n_resamples):
+        resample = [values[rng.randrange(size)] for _ in range(size)]
+        samples.append(_decision_residual_risk(resample))
+    return {
+        "point": point,
+        "max": max(samples, default=point),
+        "min": min(samples, default=point),
+        "mean": sum(samples) / len(samples),
+        "n_resamples": n_resamples,
+        "seed": seed,
+        "critical_only": critical_only,
+        "degenerate": False,
+    }
+
+
 def compute_date_shift_consistency(
     original_dates: Sequence[str],
     shifted_dates: Sequence[str],
@@ -944,6 +1281,13 @@ def compute_metrics_bundle(
     cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
     model_size_bytes: int | None = None,
+    abstention_thresholds: Any | None = None,
+    abstention_confidence_threshold: float = 0.0,
+    abstention_model_id: str | None = None,
+    abstention_target_risk: float | None = None,
+    abstention_confidence_level: float | None = None,
+    abstention_bootstrap_resamples: int = 0,
+    abstention_seed: int = 0,
     default_language: str = "en",
     default_device: str = "cpu",
     source_text: str | None = None,
@@ -956,7 +1300,7 @@ def compute_metrics_bundle(
     and is excluded from the steady-state ``p50``/``p95``/``count`` sample.
     """
     text_length = len(source_text) if source_text is not None else None
-    return {
+    metrics = {
         "leakage": compute_leakage_rate(
             gold_spans,
             predicted_spans,
@@ -1009,6 +1353,22 @@ def compute_metrics_bundle(
             model_size_bytes=model_size_bytes,
         ).to_dict(),
     }
+    if abstention_thresholds is not None:
+        metrics["abstention"] = compute_abstention_metrics(
+            gold_spans,
+            predicted_spans,
+            thresholds=abstention_thresholds,
+            confidence_threshold=abstention_confidence_threshold,
+            model_id=abstention_model_id,
+            target_risk=abstention_target_risk,
+            confidence_level=abstention_confidence_level,
+            bootstrap_resamples=abstention_bootstrap_resamples,
+            seed=abstention_seed,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict()
+    return metrics
 
 
 def bootstrap_ci(
@@ -1310,6 +1670,133 @@ def _confidence_correctness(record: Any) -> tuple[float, bool]:
     return _coerce_confidence(confidence_value), _coerce_bool(correctness_value)
 
 
+def _confidence_for_span(span: EvalSpan) -> float:
+    value = span.metadata.get("confidence")
+    if value is None:
+        value = span.metadata.get("score", span.metadata.get("probability", 1.0))
+    return _coerce_confidence(value)
+
+
+def _threshold_for_span(
+    span: EvalSpan,
+    thresholds: Any | None,
+    *,
+    default_threshold: float,
+    model_id: str | None,
+) -> float:
+    if thresholds is None:
+        return _coerce_confidence(default_threshold)
+    lookup = getattr(thresholds, "lookup", None)
+    if callable(lookup):
+        return _coerce_confidence(
+            lookup(
+                span.label,
+                span.language,
+                model_id=model_id,
+                default=default_threshold,
+            )
+        )
+    if isinstance(thresholds, Mapping):
+        return _threshold_from_mapping(
+            thresholds,
+            span.label,
+            span.language,
+            model_id=model_id,
+            default_threshold=default_threshold,
+        )
+    return _coerce_confidence(default_threshold)
+
+
+def _threshold_from_mapping(
+    thresholds: Mapping[str, Any],
+    label: str,
+    language: str,
+    *,
+    model_id: str | None,
+    default_threshold: float,
+) -> float:
+    candidates: list[Mapping[str, Any]] = []
+    if model_id and isinstance(thresholds.get(model_id), Mapping):
+        candidates.append(thresholds[model_id])
+    candidates.append(thresholds)
+    for candidate in candidates:
+        value = _mapping_lookup(candidate, label)
+        if isinstance(value, Mapping):
+            if language in value:
+                return _coerce_confidence(value[language])
+            if "*" in value:
+                return _coerce_confidence(value["*"])
+        elif value is not None:
+            return _coerce_confidence(value)
+    return _coerce_confidence(default_threshold)
+
+
+def _mapping_lookup(payload: Mapping[str, Any], label: str) -> Any:
+    if label in payload:
+        return payload[label]
+    canonical = normalize_label(label)
+    if canonical in payload:
+        return payload[canonical]
+    return None
+
+
+def _exact_span_match(gold_span: EvalSpan, predicted_span: EvalSpan) -> bool:
+    return (
+        gold_span.label == predicted_span.label
+        and gold_span.start == predicted_span.start
+        and gold_span.end == predicted_span.end
+    )
+
+
+def _abstention_rate_by(
+    decisions: Sequence[AbstentionDecision],
+    keys: Sequence[str],
+    *,
+    group_key: str,
+) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for key in keys:
+        group = [
+            decision for decision in decisions if getattr(decision, group_key) == key
+        ]
+        result[key] = _safe_rate(
+            sum(1 for decision in group if not decision.accepted),
+            len(group),
+            zero_denominator=0.0,
+        )
+    return result
+
+
+def _residual_risk_by(
+    decisions: Sequence[AbstentionDecision],
+    keys: Sequence[str],
+    *,
+    group_key: str,
+) -> dict[str, float]:
+    result: dict[str, float] = {}
+    for key in keys:
+        group = [
+            decision
+            for decision in decisions
+            if getattr(decision, group_key) == key and decision.accepted
+        ]
+        result[key] = _safe_rate(
+            sum(1 for decision in group if decision.residual_error),
+            len(group),
+            zero_denominator=0.0,
+        )
+    return result
+
+
+def _decision_residual_risk(decisions: Sequence[AbstentionDecision]) -> float:
+    accepted = [decision for decision in decisions if decision.accepted]
+    return _safe_rate(
+        sum(1 for decision in accepted if decision.residual_error),
+        len(accepted),
+        zero_denominator=0.0,
+    )
+
+
 def _coerce_confidence(value: Any) -> float:
     try:
         confidence = float(value)
@@ -1471,7 +1958,13 @@ def _percentile(values: Sequence[float], percentile: int | float) -> float:
 
 
 __all__ = [
+    "ABSTENTION_ROUTE_ACCEPT",
+    "ABSTENTION_ROUTE_REDACT",
+    "ABSTENTION_ROUTE_REVIEW",
+    "CRITICAL_ABSTENTION_LABELS",
     "DEVICE_TIERS",
+    "AbstentionDecision",
+    "AbstentionMetrics",
     "EvalSpan",
     "RateMetric",
     "F1Metrics",
@@ -1493,6 +1986,7 @@ __all__ = [
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
+    "compute_abstention_metrics",
     "compute_date_shift_consistency",
     "compute_surrogate_consistency",
     "compute_latency_summary",
@@ -1505,4 +1999,7 @@ __all__ = [
     "bootstrap_ci",
     "paired_significance",
     "compute_confidence_intervals",
+    "abstention_route",
+    "apply_abstention_policy",
+    "bootstrap_abstention_residual_risk",
 ]
