@@ -87,6 +87,15 @@
     "NUTRITION_TARGET": "mask",
     "FEEDING_ROUTE": "mask",
     "NUTRITIONAL_STATUS": "mask",
+    "GENE_SYMBOL": "mask",
+    "VARIANT_DESCRIPTOR": "mask",
+    "PROTEIN_CHANGE": "mask",
+    "ZYGOSITY": "mask",
+    "CLINICAL_SIGNIFICANCE": "mask",
+    "GLYCEMIC_MEASURE": "mask",
+    "THYROID_MEASURE": "mask",
+    "HORMONE_LEVEL": "mask",
+    "INSULIN_REGIMEN": "mask",
     "OTHER": "mask"
   }
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass, fields
 from typing import Any, Literal, Mapping, Optional
 
@@ -24,6 +25,9 @@ PIILanguage = Literal[
     "ar",
     "ja",
     "tr",
+    "he",
+    "id",
+    "th",
 ]
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
@@ -60,6 +64,17 @@ class PIIExtractRequest:
 
 
 @dataclass(frozen=True)
+class PIIExtractStreamRequest(PIIExtractRequest):
+    """Typed request body for the ``POST /pii/extract/stream`` endpoint."""
+
+    chunk_size: int = 1024
+    window_chars: int = 4096
+    tokenizer_context_chars: int = 128
+    max_entity_chars: int = 512
+    include_text: bool = True
+
+
+@dataclass(frozen=True)
 class PIIDeidentifyRequest:
     """Typed request body for the ``POST /pii/deidentify`` endpoint."""
 
@@ -74,6 +89,22 @@ class PIIDeidentifyRequest:
     policy: Optional[str] = None
     use_smart_merging: bool = True
     use_safety_sweep: bool = True
+    lang: PIILanguage = "en"
+    normalize_accents: Optional[bool] = None
+    keep_alive: Optional[KeepAliveValue] = None
+
+
+@dataclass(frozen=True)
+class PrivacyGatewayRequest:
+    """Typed request body for the ``POST /privacy-gateway/complete`` endpoint."""
+
+    text: str
+    model_name: str = _DEFAULT_PII_MODEL
+    confidence_threshold: float = 0.85
+    detector_confidence_floor: float = 0.0
+    policy: str = "strict"
+    disallowed_entity_categories: tuple[str, ...] = ()
+    use_smart_merging: bool = True
     lang: PIILanguage = "en"
     normalize_accents: Optional[bool] = None
     keep_alive: Optional[KeepAliveValue] = None
@@ -111,10 +142,20 @@ CLIENT_ENDPOINTS: Mapping[str, ClientEndpoint] = {
         path="/pii/extract",
         request_fields=_request_field_names(PIIExtractRequest),
     ),
+    "extract_pii_stream": ClientEndpoint(
+        method="POST",
+        path="/pii/extract/stream",
+        request_fields=_request_field_names(PIIExtractStreamRequest),
+    ),
     "deidentify": ClientEndpoint(
         method="POST",
         path="/pii/deidentify",
         request_fields=_request_field_names(PIIDeidentifyRequest),
+    ),
+    "privacy_gateway": ClientEndpoint(
+        method="POST",
+        path="/privacy-gateway/complete",
+        request_fields=_request_field_names(PrivacyGatewayRequest),
     ),
     "loaded_models": ClientEndpoint(method="GET", path="/models/loaded"),
     "unload_model": ClientEndpoint(
@@ -247,6 +288,43 @@ class OpenMedClient:
             request_id=request_id,
         )
 
+    def extract_pii_stream(
+        self,
+        text: str,
+        *,
+        model_name: str = _DEFAULT_PII_MODEL,
+        confidence_threshold: float = 0.5,
+        use_smart_merging: bool = True,
+        lang: PIILanguage = "en",
+        normalize_accents: Optional[bool] = None,
+        keep_alive: Optional[KeepAliveValue] = None,
+        chunk_size: int = 1024,
+        window_chars: int = 4096,
+        tokenizer_context_chars: int = 128,
+        max_entity_chars: int = 512,
+        include_text: bool = True,
+        request_id: Optional[str] = None,
+    ):
+        """Stream PII extraction events with ``POST /pii/extract/stream``."""
+        yield from self._post_lines(
+            "/pii/extract/stream",
+            PIIExtractStreamRequest(
+                text=text,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                use_smart_merging=use_smart_merging,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                keep_alive=keep_alive,
+                chunk_size=chunk_size,
+                window_chars=window_chars,
+                tokenizer_context_chars=tokenizer_context_chars,
+                max_entity_chars=max_entity_chars,
+                include_text=include_text,
+            ),
+            request_id=request_id,
+        )
+
     def deidentify(
         self,
         text: str,
@@ -281,6 +359,39 @@ class OpenMedClient:
                 policy=policy,
                 use_smart_merging=use_smart_merging,
                 use_safety_sweep=use_safety_sweep,
+                lang=lang,
+                normalize_accents=normalize_accents,
+                keep_alive=keep_alive,
+            ),
+            request_id=request_id,
+        )
+
+    def privacy_gateway(
+        self,
+        text: str,
+        *,
+        model_name: str = _DEFAULT_PII_MODEL,
+        confidence_threshold: float = 0.85,
+        detector_confidence_floor: float = 0.0,
+        policy: str = "strict",
+        disallowed_entity_categories: tuple[str, ...] = (),
+        use_smart_merging: bool = True,
+        lang: PIILanguage = "en",
+        normalize_accents: Optional[bool] = None,
+        keep_alive: Optional[KeepAliveValue] = None,
+        request_id: Optional[str] = None,
+    ) -> JsonDict:
+        """Complete a redacted external LLM round-trip."""
+        return self._post(
+            "/privacy-gateway/complete",
+            PrivacyGatewayRequest(
+                text=text,
+                model_name=model_name,
+                confidence_threshold=confidence_threshold,
+                detector_confidence_floor=detector_confidence_floor,
+                policy=policy,
+                disallowed_entity_categories=disallowed_entity_categories,
+                use_smart_merging=use_smart_merging,
                 lang=lang,
                 normalize_accents=normalize_accents,
                 keep_alive=keep_alive,
@@ -326,6 +437,30 @@ class OpenMedClient:
             json=asdict(payload),
             request_id=request_id,
         )
+
+    def _post_lines(
+        self,
+        path: str,
+        payload: object,
+        *,
+        request_id: Optional[str] = None,
+    ):
+        active_request_id = request_id or self._request_id
+        headers = {"Accept": "application/x-ndjson"}
+        if active_request_id:
+            headers[_REQUEST_ID_HEADER] = active_request_id
+        with self._client.stream(
+            "POST",
+            path,
+            json=asdict(payload),
+            headers=headers,
+        ) as response:
+            if response.is_error:
+                response.read()
+                self._raise_api_error(response, request_id=active_request_id)
+            for line in response.iter_lines():
+                if line:
+                    yield json.loads(line)
 
     def _request(
         self,
@@ -392,4 +527,5 @@ __all__ = [
     "OpenMedClient",
     "PIIDeidentifyRequest",
     "PIIExtractRequest",
+    "PIIExtractStreamRequest",
 ]

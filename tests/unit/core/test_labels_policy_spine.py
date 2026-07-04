@@ -26,7 +26,7 @@ ALLOWED_SYSTEM_HINTS = {"RxNorm", "LOINC", "ICD-10-CM", "HPO", "SNOMED"}
 
 
 def test_metadata_tables_cover_canonical_labels_exactly():
-    assert len(CANONICAL_LABELS) == 66
+    assert len(CANONICAL_LABELS) == 75
     assert set(LABEL_METADATA) == CANONICAL_LABELS
     assert set(LABEL_TO_HIPAA) == CANONICAL_LABELS
 

@@ -41,10 +41,12 @@ from openmed.ner import available_domains, get_default_labels
 
 print(available_domains())
 print(get_default_labels("biomedical"))
+print(get_default_labels("endocrinology"))
 ```
 
-The defaults are packaged in `openmed/zero_shot/data/label_maps/defaults.json` and can be overridden in
-tests or deployments by supplying a custom path to the high-level APIs.
+The defaults are packaged in
+`openmed/zero_shot/data/label_maps/defaults.json` and can be overridden in tests
+or deployments by supplying a custom path to the high-level APIs.
 
 ## Inference API
 

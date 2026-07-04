@@ -87,6 +87,15 @@
     "NUTRITION_TARGET": "keep",
     "FEEDING_ROUTE": "keep",
     "NUTRITIONAL_STATUS": "keep",
+    "GENE_SYMBOL": "keep",
+    "VARIANT_DESCRIPTOR": "keep",
+    "PROTEIN_CHANGE": "keep",
+    "ZYGOSITY": "keep",
+    "CLINICAL_SIGNIFICANCE": "keep",
+    "GLYCEMIC_MEASURE": "keep",
+    "THYROID_MEASURE": "keep",
+    "HORMONE_LEVEL": "keep",
+    "INSULIN_REGIMEN": "keep",
     "OTHER": "keep"
   }
 }
