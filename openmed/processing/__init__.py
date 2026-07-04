@@ -18,6 +18,17 @@ from .batch import (
     process_batch,
     redact_dataset,
 )
+from .checkpoint import (
+    DEDUPE_HEADER,
+    CheckpointRecord,
+    InMemoryCheckpointStore,
+    LocalFileCheckpointStore,
+    OutputPosition,
+    SourcePosition,
+    StreamFingerprint,
+    build_stream_fingerprint,
+    dedupe_key_for_source,
+)
 from .distributed import (
     DocumentIdExtractor,
     DocumentShard,
@@ -30,11 +41,13 @@ from .distributed import (
     stable_document_hash,
 )
 from .kafka_connector import (
+    CheckpointFingerprintError,
     ConsumerProtocol,
     KafkaClientPair,
     ProducerProtocol,
     create_confluent_kafka_clients,
     deidentify_stream,
+    replay,
 )
 from .object_storage import (
     ObjectProgressCallback,
@@ -43,6 +56,7 @@ from .object_storage import (
     deidentify_bucket,
 )
 from .outputs import OutputFormatter, format_predictions
+from .pulsar_connector import PulsarClientPair, create_pulsar_clients
 from .text import TextProcessor, postprocess_text, preprocess_text
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
@@ -66,6 +80,16 @@ __all__ = [
     "DatasetRedactionSummary",
     "process_batch",
     "redact_dataset",
+    "DEDUPE_HEADER",
+    "CheckpointRecord",
+    "InMemoryCheckpointStore",
+    "LocalFileCheckpointStore",
+    "OutputPosition",
+    "SourcePosition",
+    "StreamFingerprint",
+    "build_stream_fingerprint",
+    "dedupe_key_for_source",
+    "CheckpointFingerprintError",
     "DocumentIdExtractor",
     "DocumentShard",
     "ShardPlan",
@@ -87,6 +111,9 @@ __all__ = [
     "ProducerProtocol",
     "KafkaClientPair",
     "create_confluent_kafka_clients",
+    "PulsarClientPair",
+    "create_pulsar_clients",
     "deidentify_stream",
+    "replay",
     "sentences",
 ]
