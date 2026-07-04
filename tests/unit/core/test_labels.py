@@ -28,12 +28,15 @@ from openmed.core.labels import (
     DATE_OF_BIRTH,
     DIET_TYPE,
     EMAIL,
+    ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
     EYE_COLOR,
     FEEDING_ROUTE,
     FIRST_NAME,
     GENDER,
     GENE_SYMBOL,
+    GI_SCORE,
+    GI_SYMPTOM,
     GLYCEMIC_MEASURE,
     GPS_COORDINATES,
     HEIGHT,
@@ -69,6 +72,7 @@ from openmed.core.labels import (
     PERSON,
     PHONE,
     PIN,
+    POLYP_DESCRIPTOR,
     PREFIX,
     PROCEDURE,
     PROTEIN_CHANGE,
@@ -538,6 +542,51 @@ class TestEndocrinologyConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestGastroenterologyConceptLabels:
+    """Gastroenterology canonical labels and aliases for issue #894."""
+
+    NEW_LABELS = (
+        ENDOSCOPIC_FINDING,
+        GI_SYMPTOM,
+        GI_SCORE,
+        POLYP_DESCRIPTOR,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("endoscopic finding", ENDOSCOPIC_FINDING),
+            ("endoscopy finding", ENDOSCOPIC_FINDING),
+            ("colonoscopy", ENDOSCOPIC_FINDING),
+            ("GI symptom", GI_SYMPTOM),
+            ("abdominal pain", GI_SYMPTOM),
+            ("cramping", GI_SYMPTOM),
+            ("GI score", GI_SCORE),
+            ("bowel prep quality", GI_SCORE),
+            ("Boston bowel prep", GI_SCORE),
+            ("Bristol stool", GI_SCORE),
+            ("Mayo score", GI_SCORE),
+            ("polyp descriptor", POLYP_DESCRIPTOR),
+            ("lesion morphology", POLYP_DESCRIPTOR),
+            ("sessile polyp", POLYP_DESCRIPTOR),
+            ("biopsy site", BODY_SITE),
+        ],
+    )
+    def test_gastroenterology_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_gastroenterology_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_gastroenterology_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -623,6 +672,10 @@ class TestClinicalLabelsAreAdditive:
             THYROID_MEASURE,
             HORMONE_LEVEL,
             INSULIN_REGIMEN,
+            ENDOSCOPIC_FINDING,
+            GI_SYMPTOM,
+            GI_SCORE,
+            POLYP_DESCRIPTOR,
         }
     )
 

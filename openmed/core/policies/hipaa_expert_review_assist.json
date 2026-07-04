@@ -96,6 +96,10 @@
     "THYROID_MEASURE": "keep",
     "HORMONE_LEVEL": "keep",
     "INSULIN_REGIMEN": "keep",
+    "ENDOSCOPIC_FINDING": "keep",
+    "GI_SYMPTOM": "keep",
+    "GI_SCORE": "keep",
+    "POLYP_DESCRIPTOR": "keep",
     "OTHER": "keep"
   }
 }
