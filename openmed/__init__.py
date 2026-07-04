@@ -74,7 +74,15 @@ from .core.surrogate_vault import (
     VaultConsistencyReport,
     VaultRotationResult,
 )
-from .mlx.lm import OpenMedMLXLanguageModel, generate_text
+from .mlx.lm import (
+    OpenMedMLXLanguageModel,
+    OpenMedPagedKVCache,
+    PagedKVCacheConfig,
+    PagedKVCachePlan,
+    PagedKVCacheStats,
+    TokenRange,
+    generate_text,
+)
 from .processing import (
     BatchItem,
     BatchItemResult,
@@ -672,6 +680,11 @@ __all__ = [
     "ExplainReport",
     "generate_text",
     "OpenMedMLXLanguageModel",
+    "OpenMedPagedKVCache",
+    "PagedKVCacheConfig",
+    "PagedKVCachePlan",
+    "PagedKVCacheStats",
+    "TokenRange",
     # Profiling utilities
     "Profiler",
     "ProfileReport",

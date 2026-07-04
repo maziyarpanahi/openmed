@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 import openmed
@@ -21,6 +22,11 @@ from openmed.service.metrics import (
     MODEL_REJECTION_NAME,
     MODEL_RESIDENT_BYTES_NAME,
     MODEL_RESIDENT_NAME,
+    PAGED_KV_CACHE_BUDGET_BYTES_NAME,
+    PAGED_KV_CACHE_CAPACITY_NAME,
+    PAGED_KV_CACHE_EVICTION_NAME,
+    PAGED_KV_CACHE_OCCUPANCY_NAME,
+    PAGED_KV_CACHE_PEAK_NAME,
     SPECULATIVE_ACCEPTANCE_RATE_NAME,
     SPECULATIVE_ACCEPTED_TOKEN_NAME,
     SPECULATIVE_DECODE_NAME,
@@ -143,6 +149,8 @@ def test_metrics_endpoint_renders_prometheus_text_when_enabled(monkeypatch) -> N
     assert "openmed_service_inflight_requests" in response.text
     assert f"{MODEL_LOAD_NAME} 0" in response.text
     assert f"{MODEL_EVICTION_NAME} 0" in response.text
+    assert f"{PAGED_KV_CACHE_OCCUPANCY_NAME} 0" in response.text
+    assert f"{PAGED_KV_CACHE_EVICTION_NAME} 0" in response.text
     assert f"{MODEL_RESIDENT_NAME} 0" in response.text
     assert f"{MODEL_RESIDENT_BYTES_NAME} 0" in response.text
     assert f"{MODEL_PENDING_LOAD_BYTES_NAME} 0" in response.text
@@ -233,6 +241,84 @@ def test_warm_pool_model_counters_are_aggregate_only() -> None:
     assert f"{MODEL_LOAD_DURATION_NAME}_sum " in metrics_text
     assert f"{MODEL_REJECTION_NAME} 0" in metrics_text
     assert "model-a" not in metrics_text
+
+
+def test_paged_kv_cache_metrics_are_aggregate_only() -> None:
+    registry = PrometheusMetricsRegistry()
+
+    registry.record_mlx_paged_kv_cache(
+        total_pages=4,
+        resident_pages=3,
+        evictions=2,
+        peak_pages=3,
+        memory_budget_bytes=1024,
+    )
+
+    metrics_text = registry.render()
+    assert f"{PAGED_KV_CACHE_OCCUPANCY_NAME} 3" in metrics_text
+    assert f"{PAGED_KV_CACHE_CAPACITY_NAME} 4" in metrics_text
+    assert f"{PAGED_KV_CACHE_PEAK_NAME} 3" in metrics_text
+    assert f"{PAGED_KV_CACHE_EVICTION_NAME} 2" in metrics_text
+    assert f"{PAGED_KV_CACHE_BUDGET_BYTES_NAME} 1024" in metrics_text
+
+    paged_metric_lines = [
+        line
+        for line in metrics_text.splitlines()
+        if line.startswith("openmed_service_mlx_paged_kv_cache_")
+    ]
+    assert paged_metric_lines
+    assert all("{" not in line for line in paged_metric_lines)
+
+
+def test_parse_service_mlx_paged_kv_cache_config_disabled_by_default(monkeypatch):
+    monkeypatch.delenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        raising=False,
+    )
+
+    assert service_runtime.parse_service_mlx_paged_kv_cache_config() is None
+
+
+def test_parse_service_mlx_paged_kv_cache_config_from_env(monkeypatch):
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        "1MiB",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR,
+        "4",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR,
+        "8",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR,
+        "16",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR,
+        "1024",
+    )
+
+    config = service_runtime.parse_service_mlx_paged_kv_cache_config()
+
+    assert config is not None
+    assert config.memory_budget_bytes == 1024**2
+    assert config.page_size_tokens == 4
+    assert config.chunk_size_tokens == 8
+    assert config.window_size_tokens == 16
+    assert config.bytes_per_token == 1024
+    assert config.page_count == 256
+    assert config.exact_context_tokens == 16
+
+
+def test_parse_memory_budget_rejects_unknown_unit():
+    with pytest.raises(ValueError, match="unsupported size unit"):
+        service_runtime.parse_memory_budget_bytes(
+            "10XB",
+            env_var=service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        )
 
 
 def test_batch_queue_metrics_are_exported_per_priority() -> None:
