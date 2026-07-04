@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an endocrinology zero-shot domain for glycemic and thyroid-function
+  measures, hormone levels, insulin regimens, metabolic findings, and endocrine
+  glands, with canonical label normalization, keyword routing metadata, and
+  synthetic fixture coverage (#895).
+- Added `examples/gradio_deid_app.py`, an interactive Gradio demo that runs
+  `deidentify` over synthetic text with a `mask`/`replace`/`hash` method
+  selector and shows the redacted output alongside the detected PII entities.
+  `gradio` stays an optional, example-local dependency with a graceful install
+  hint, and the example is covered by import-safe smoke tests (#484).
+- Added an `OPENMED_MLX_MMAP` toggle to `openmed.mlx.models.load_model`:
+  safetensors weights load through MLX's memory-mapped, lazy path by default
+  (keeping cold-start peak RSS low on the phone/laptop tiers), with
+  `OPENMED_MLX_MMAP=0` forcing eager materialization as a documented fallback
+  for debugging (#296).
+
 ## [1.7.0] - 2026-07-01
 
 This release summarizes 148 pull requests merged into

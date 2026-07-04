@@ -115,6 +115,19 @@ NUTRITION_TARGET: Final = "NUTRITION_TARGET"
 FEEDING_ROUTE: Final = "FEEDING_ROUTE"
 NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
 
+#: Clinical-genomics variant-mention concepts (issue #906)
+GENE_SYMBOL: Final = "GENE_SYMBOL"
+VARIANT_DESCRIPTOR: Final = "VARIANT_DESCRIPTOR"
+PROTEIN_CHANGE: Final = "PROTEIN_CHANGE"
+ZYGOSITY: Final = "ZYGOSITY"
+CLINICAL_SIGNIFICANCE: Final = "CLINICAL_SIGNIFICANCE"
+
+#: Endocrinology concepts (issue #895)
+GLYCEMIC_MEASURE: Final = "GLYCEMIC_MEASURE"
+THYROID_MEASURE: Final = "THYROID_MEASURE"
+HORMONE_LEVEL: Final = "HORMONE_LEVEL"
+INSULIN_REGIMEN: Final = "INSULIN_REGIMEN"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -124,12 +137,15 @@ ID_SUBTYPE_MRN: Final = "mrn"
 ID_SUBTYPE_NPI: Final = "npi"
 ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
 ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
+#: ICAO 9303 passport/ID machine-readable zone; still normalizes to ID_NUM.
+ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
 ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
     {
         ID_SUBTYPE_MRN,
         ID_SUBTYPE_NPI,
         ID_SUBTYPE_NATIONAL_ID,
         ID_SUBTYPE_SSN_ADJACENT,
+        ID_SUBTYPE_PASSPORT_MRZ,
     }
 )
 
@@ -201,6 +217,15 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         NUTRITION_TARGET,
         FEEDING_ROUTE,
         NUTRITIONAL_STATUS,
+        GENE_SYMBOL,
+        VARIANT_DESCRIPTOR,
+        PROTEIN_CHANGE,
+        ZYGOSITY,
+        CLINICAL_SIGNIFICANCE,
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
         OTHER,
     }
 )
@@ -379,6 +404,17 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Clinical genomics
+    GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    PROTEIN_CHANGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ZYGOSITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    CLINICAL_SIGNIFICANCE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED, HPO)),
+    # Endocrinology concepts (issue #895)
+    GLYCEMIC_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    THYROID_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    HORMONE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    INSULIN_REGIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Catch-all
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
@@ -462,6 +498,17 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
     FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Clinical genomics
+    GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
+    VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    PROTEIN_CHANGE: HIPAA_UNIQUE_IDENTIFIER,
+    ZYGOSITY: HIPAA_UNIQUE_IDENTIFIER,
+    CLINICAL_SIGNIFICANCE: HIPAA_UNIQUE_IDENTIFIER,
+    # Endocrinology concepts
+    GLYCEMIC_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    THYROID_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    HORMONE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
+    INSULIN_REGIMEN: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -568,6 +615,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "idnum": ID_NUM,
     "id": ID_NUM,
     "identifier": ID_NUM,
+    "passportmrz": ID_NUM,
     "medicalrecordnumber": ID_NUM,
     "mrn": ID_NUM,
     "nhsnumber": ID_NUM,
@@ -688,12 +736,50 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nutritiontarget": NUTRITION_TARGET,
     "feedingroute": FEEDING_ROUTE,
     "nutritionalstatus": NUTRITIONAL_STATUS,
+    # Clinical genomics
+    "gene": GENE_SYMBOL,
+    "genesymbol": GENE_SYMBOL,
+    "genename": GENE_SYMBOL,
+    "variantdescriptor": VARIANT_DESCRIPTOR,
+    "hgvs": VARIANT_DESCRIPTOR,
+    "variant": VARIANT_DESCRIPTOR,
+    "variantnotation": VARIANT_DESCRIPTOR,
+    "proteinchange": PROTEIN_CHANGE,
+    "aminoacidchange": PROTEIN_CHANGE,
+    "zygosity": ZYGOSITY,
+    "heterozygous": ZYGOSITY,
+    "homozygous": ZYGOSITY,
+    "clinicalsignificance": CLINICAL_SIGNIFICANCE,
+    "pathogenicity": CLINICAL_SIGNIFICANCE,
+    # Endocrinology concepts
+    "glycemic": GLYCEMIC_MEASURE,
+    "glycemicmeasure": GLYCEMIC_MEASURE,
+    "glucose": GLYCEMIC_MEASURE,
+    "hba1c": GLYCEMIC_MEASURE,
+    "a1c": GLYCEMIC_MEASURE,
+    "thyroid": THYROID_MEASURE,
+    "thyroidmeasure": THYROID_MEASURE,
+    "thyroidfunctionmeasure": THYROID_MEASURE,
+    "tsh": THYROID_MEASURE,
+    "hormone": HORMONE_LEVEL,
+    "hormones": HORMONE_LEVEL,
+    "hormonelevel": HORMONE_LEVEL,
+    "cortisol": HORMONE_LEVEL,
+    "insulin": INSULIN_REGIMEN,
+    "insulinregimen": INSULIN_REGIMEN,
+    "basalbolus": INSULIN_REGIMEN,
+    "insulinpump": INSULIN_REGIMEN,
+    "glargine": INSULIN_REGIMEN,
+    # Domain labels backed by existing canonical clinical concepts.
+    "metabolicfinding": CONDITION,
+    "endocrinegland": BODY_SITE,
 }
 
 
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
+    "passportmrz": ID_SUBTYPE_PASSPORT_MRZ,
     "npi": ID_SUBTYPE_NPI,
     "nhsnumber": ID_SUBTYPE_NATIONAL_ID,
     "nhs": ID_SUBTYPE_NATIONAL_ID,
@@ -902,5 +988,14 @@ __all__ = [
     "NUTRITION_TARGET",
     "FEEDING_ROUTE",
     "NUTRITIONAL_STATUS",
+    "GENE_SYMBOL",
+    "VARIANT_DESCRIPTOR",
+    "PROTEIN_CHANGE",
+    "ZYGOSITY",
+    "CLINICAL_SIGNIFICANCE",
+    "GLYCEMIC_MEASURE",
+    "THYROID_MEASURE",
+    "HORMONE_LEVEL",
+    "INSULIN_REGIMEN",
     "OTHER",
 ]
