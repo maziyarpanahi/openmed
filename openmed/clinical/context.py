@@ -41,6 +41,12 @@ from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any, Literal
 
+from openmed.clinical.lexicons import (
+    ClinicalCueLexicon,
+    clinical_context_lexicon_stats,
+    get_clinical_cue_lexicon,
+)
+
 Negation = Literal["affirmed", "negated"]
 
 AFFIRMED: Negation = "affirmed"
@@ -67,132 +73,131 @@ CERTAINTY_VALUES = (CERTAIN, UNCERTAIN)
 ContextCueCategory = Literal["historical", "hypothetical", "uncertainty", "negation"]
 ContextCueDirection = Literal["forward", "backward"]
 
+_ENGLISH_CONTEXT_LEXICON = get_clinical_cue_lexicon("en")
+
 # Ported ConText temporal lexicon. Cues are matched case-insensitively and on
 # token boundaries so abbreviations such as ``h/o`` and ``s/p`` match cleanly
 # without firing inside unrelated words.
-HISTORICAL_CUES = (
-    "history of",
-    "hx of",
-    "h/o",
-    "status post",
-    "s/p",
-    "previous",
-    "previously",
-    "prior",
-    "in the past",
-    "past medical history",
-    "pmh",
-    "resolved",
-)
-
-HYPOTHETICAL_CUES = (
-    "if",
-    "should",
-    "in case of",
-    "in case",
-    "in the event of",
-    "unless",
-)
-
-RECENT_TEMPORALITY_CUES = (
-    "active",
-    "acute",
-    "current",
-    "currently",
-    "new",
-    "new onset",
-    "ongoing",
-)
+HISTORICAL_CUES = _ENGLISH_CONTEXT_LEXICON.historical
+HYPOTHETICAL_CUES = _ENGLISH_CONTEXT_LEXICON.hypothetical
+RECENT_TEMPORALITY_CUES = _ENGLISH_CONTEXT_LEXICON.recent
 
 # ConText hypothetical/uncertainty trigger lexicon. It intentionally overlaps
 # with HYPOTHETICAL_CUES because a conditional span is both temporally
 # hypothetical and not clinically asserted as certain.
-UNCERTAINTY_CUES = (
-    "cannot exclude",
-    "can't exclude",
-    "concern for",
-    "concerning for",
-    "suspicious for",
-    "suspicion for",
-    "worrisome for",
-    "question of",
-    "to rule out",
-    "rule out",
-    "not ruled out",
-    "not yet ruled out",
-    "not completely ruled out",
-    "not been ruled out",
-    "cannot be excluded",
-    "can't be excluded",
-    "in the event of",
-    "in case of",
-    "in case",
-    "versus",
-    "probable",
-    "probably",
-    "possible",
-    "possibly",
-    "suspected",
-    "suspect",
-    "unlikely",
-    "likely",
-    "unless",
-    "should",
-    "might",
-    "could",
-    "may",
-    "r/o",
-    "vs",
-    "if",
-)
+UNCERTAINTY_CUES = _ENGLISH_CONTEXT_LEXICON.uncertainty
 
 # ConText/NegEx-style negation cues. Phrases are matched before shorter cues,
 # so "no evidence of" is counted as one negation cue rather than "no" plus a
 # second incidental phrase.
-NEGATION_CUES = (
-    "no evidence of",
-    "no evidence",
-    "no sign of",
-    "no signs of",
-    "negative for",
-    "absence of",
-    "free of",
-    "ruled out",
-    "not present",
-    "denies",
-    "denied",
-    "deny",
-    "without",
-    "absent",
-    "never",
-    "none",
-    "not",
-    "no",
-)
+NEGATION_CUES = _ENGLISH_CONTEXT_LEXICON.negation
 
 # Pseudo-negation cues contain negation words but do not refute the target
 # concept. They are masked before true negation cues are counted.
-PSEUDO_NEGATION_CUES = (
-    "no increase",
-    "no interval increase",
-    "no significant increase",
-    "not ruled out",
-    "not yet ruled out",
-    "not completely ruled out",
-    "not been ruled out",
-    "cannot be excluded",
-    "can't be excluded",
-    "cannot exclude",
-    "can't exclude",
-)
+PSEUDO_NEGATION_CUES = _ENGLISH_CONTEXT_LEXICON.pseudo_negation
 
 
-def _cue_pattern(cues: Iterable[str]) -> re.Pattern[str]:
-    alternation = "|".join(
+def _cue_pattern(
+    cues: Iterable[str],
+    *,
+    token_boundaries: bool = True,
+) -> re.Pattern[str]:
+    alternation = _cue_alternation(cues)
+    if not alternation:
+        return re.compile(r"(?!x)x")
+    if token_boundaries:
+        pattern = rf"(?<!\w)(?:{alternation})(?!\w)"
+    else:
+        pattern = rf"(?:{alternation})"
+    return re.compile(pattern, re.IGNORECASE)
+
+
+def _cue_alternation(cues: Iterable[str]) -> str:
+    return "|".join(
         r"\s+".join(re.escape(part) for part in cue.split())
-        for cue in sorted(cues, key=len, reverse=True)
+        for cue in sorted(set(cues), key=len, reverse=True)
     )
-    return re.compile(rf"(?<!\w)(?:{alternation})(?!\w)", re.IGNORECASE)
+
+
+def _terminator_pattern(
+    cues: Iterable[str],
+    *,
+    token_boundaries: bool = True,
+) -> re.Pattern[str]:
+    alternation = _cue_alternation(cues)
+    punctuation = r"[.!?;。！？；]"
+    if not alternation:
+        return re.compile(punctuation, re.IGNORECASE)
+    if token_boundaries:
+        cue_pattern = rf"(?<!\w)(?:{alternation})(?!\w)"
+    else:
+        cue_pattern = rf"(?:{alternation})"
+    return re.compile(rf"(?:{punctuation}|{cue_pattern})", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class _CompiledContextLexicon:
+    language: str
+    lexicon: ClinicalCueLexicon
+    historical_re: re.Pattern[str]
+    hypothetical_re: re.Pattern[str]
+    recent_re: re.Pattern[str]
+    uncertainty_re: re.Pattern[str]
+    negation_re: re.Pattern[str]
+    pseudo_negation_re: re.Pattern[str]
+    scope_terminator_re: re.Pattern[str]
+    conjunction_terminator_re: re.Pattern[str]
+    context_cue_re: re.Pattern[str]
+    category_by_text: Mapping[str, ContextCueCategory]
+    backward_context_cues: frozenset[str]
+
+
+def _compiled_context_lexicon(language: str | None = None) -> _CompiledContextLexicon:
+    lexicon = get_clinical_cue_lexicon(language)
+    token_boundaries = lexicon.token_boundaries
+    return _CompiledContextLexicon(
+        language=lexicon.language,
+        lexicon=lexicon,
+        historical_re=_cue_pattern(
+            lexicon.historical,
+            token_boundaries=token_boundaries,
+        ),
+        hypothetical_re=_cue_pattern(
+            lexicon.hypothetical,
+            token_boundaries=token_boundaries,
+        ),
+        recent_re=_cue_pattern(lexicon.recent, token_boundaries=token_boundaries),
+        uncertainty_re=_cue_pattern(
+            lexicon.uncertainty,
+            token_boundaries=token_boundaries,
+        ),
+        negation_re=_cue_pattern(lexicon.negation, token_boundaries=token_boundaries),
+        pseudo_negation_re=_cue_pattern(
+            lexicon.pseudo_negation,
+            token_boundaries=token_boundaries,
+        ),
+        scope_terminator_re=_terminator_pattern(
+            lexicon.scope_terminators,
+            token_boundaries=token_boundaries,
+        ),
+        conjunction_terminator_re=_cue_pattern(
+            lexicon.conjunction_terminators,
+            token_boundaries=token_boundaries,
+        ),
+        context_cue_re=_cue_pattern(
+            (
+                *lexicon.historical,
+                *lexicon.hypothetical,
+                *lexicon.uncertainty,
+                *lexicon.negation,
+            ),
+            token_boundaries=token_boundaries,
+        ),
+        category_by_text=_cue_category_lookup(lexicon),
+        backward_context_cues=frozenset(
+            _normalize_cue_text(cue) for cue in lexicon.backward
+        ),
+    )
 
 
 _HISTORICAL_RE = _cue_pattern(HISTORICAL_CUES)
@@ -225,16 +230,7 @@ _START_KEYS = ("start", "start_char", "start_offset", "begin", "offset")
 _END_KEYS = ("end", "end_char", "end_offset", "stop")
 _OCCURRENCE_KEYS = ("occurrence", "text_occurrence", "occurrence_index")
 _BACKWARD_CONTEXT_CUES = {
-    "absent",
-    "can't be excluded",
-    "cannot be excluded",
-    "not been ruled out",
-    "not completely ruled out",
-    "not present",
-    "not ruled out",
-    "not yet ruled out",
-    "resolved",
-    "ruled out",
+    *_ENGLISH_CONTEXT_LEXICON.backward,
 }
 
 
@@ -242,13 +238,16 @@ def _normalize_cue_text(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
-def _cue_category_lookup() -> dict[str, ContextCueCategory]:
+def _cue_category_lookup(
+    lexicon: ClinicalCueLexicon | None = None,
+) -> dict[str, ContextCueCategory]:
+    active_lexicon = lexicon or _ENGLISH_CONTEXT_LEXICON
     category_by_cue: dict[str, ContextCueCategory] = {}
     for category, cues in (
-        ("historical", HISTORICAL_CUES),
-        ("hypothetical", HYPOTHETICAL_CUES),
-        ("uncertainty", UNCERTAINTY_CUES),
-        ("negation", NEGATION_CUES),
+        ("historical", active_lexicon.historical),
+        ("hypothetical", active_lexicon.hypothetical),
+        ("uncertainty", active_lexicon.uncertainty),
+        ("negation", active_lexicon.negation),
     ):
         for cue in cues:
             category_by_cue.setdefault(_normalize_cue_text(cue), category)
@@ -587,13 +586,16 @@ def _scope_bounds(
     context: str,
     target_start: int,
     target_end: int,
+    *,
+    language: str | None = None,
 ) -> tuple[int, int]:
+    compiled = _compiled_context_lexicon(language)
     scope_start = 0
-    for match in _SCOPE_TERMINATOR_RE.finditer(context, 0, target_start):
+    for match in compiled.scope_terminator_re.finditer(context, 0, target_start):
         scope_start = match.end()
 
     scope_end = len(context)
-    for match in _SCOPE_TERMINATOR_RE.finditer(context, target_end):
+    for match in compiled.scope_terminator_re.finditer(context, target_end):
         scope_end = match.start()
         break
 
@@ -606,23 +608,26 @@ def _cue_reaches_target(
     cue_end: int,
     target_start: int,
     target_end: int,
+    *,
+    language: str | None = None,
 ) -> bool:
+    compiled = _compiled_context_lexicon(language)
     if cue_end <= target_start:
         between = context[cue_end:target_start]
     elif target_end <= cue_start:
         between = context[target_end:cue_start]
     else:
         between = ""
-    return _SCOPE_TERMINATOR_RE.search(between) is None
+    return compiled.scope_terminator_re.search(between) is None
 
 
-def _scoped_span_text(span: Any) -> str:
+def _scoped_span_text(span: Any, *, language: str | None = None) -> str:
     context = _context_text_of(span)
     target_offsets = _target_offsets_in_context(span, context)
     if target_offsets is None:
         return _text_of(span)
 
-    scope_start, scope_end = _scope_bounds(context, *target_offsets)
+    scope_start, scope_end = _scope_bounds(context, *target_offsets, language=language)
     return context[scope_start:scope_end]
 
 
@@ -643,7 +648,12 @@ def _iter_modifier_hits(modifier_hits: Any) -> Iterable[Any]:
     return (modifier_hits,)
 
 
-def _scoped_modifier_texts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
+def _scoped_modifier_texts(
+    span: Any,
+    modifier_hits: Any,
+    *,
+    language: str | None = None,
+) -> tuple[str, ...]:
     context = _context_text_of(span)
     target_offsets = _target_offsets_in_context(span, context)
     parts: list[str] = []
@@ -660,6 +670,7 @@ def _scoped_modifier_texts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
                 context,
                 *hit_offsets,
                 *target_offsets,
+                language=language,
             ):
                 continue
         parts.append(text)
@@ -667,11 +678,20 @@ def _scoped_modifier_texts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
     return tuple(parts)
 
 
-def _text_parts(span: Any, modifier_hits: Any) -> tuple[str, ...]:
-    span_text = _scoped_span_text(span)
+def _text_parts(
+    span: Any,
+    modifier_hits: Any,
+    *,
+    language: str | None = None,
+) -> tuple[str, ...]:
+    span_text = _scoped_span_text(span, language=language)
     parts = [span_text]
     span_text_casefold = span_text.casefold()
-    for modifier_text in _scoped_modifier_texts(span, modifier_hits):
+    for modifier_text in _scoped_modifier_texts(
+        span,
+        modifier_hits,
+        language=language,
+    ):
         if span_text_casefold and modifier_text.casefold() in span_text_casefold:
             continue
         parts.append(modifier_text)
@@ -735,12 +755,17 @@ def canonical_section_label(section: Any) -> str | None:
     return _canonical_section_name(section)
 
 
-def _has_explicit_temporality_cue(span: Any) -> bool:
+def _has_explicit_temporality_cue(
+    span: Any,
+    *,
+    language: str | None = None,
+) -> bool:
+    compiled = _compiled_context_lexicon(language)
     return any(
-        _HYPOTHETICAL_RE.search(part)
-        or _HISTORICAL_RE.search(part)
-        or _RECENT_TEMPORALITY_RE.search(part)
-        for part in _text_parts(span, None)
+        compiled.hypothetical_re.search(part)
+        or compiled.historical_re.search(part)
+        or compiled.recent_re.search(part)
+        for part in _text_parts(span, None, language=language)
     )
 
 
@@ -748,6 +773,7 @@ def scan_context_cues(
     text: str,
     spans: Iterable[Any],
     sentences: Iterable[Any] | None = None,
+    language: str | None = None,
 ) -> dict[Any, tuple[ModifierHit, ...]]:
     """Return scoped ConText cue hits for each target span.
 
@@ -765,6 +791,8 @@ def scan_context_cues(
             ``end`` like the target spans, or may be sentence strings located
             sequentially in ``text``. When omitted, pySBD sentence segmentation
             is used if available, with a regex fallback.
+        language: Optional BCP-47-ish language code for the cue lexicon. Unknown
+            codes fall back to English so existing callers retain behavior.
 
     Returns:
         A dictionary keyed by the original span objects. Values are tuples of
@@ -772,7 +800,8 @@ def scan_context_cues(
     """
 
     sentence_windows = _sentence_windows(text, sentences)
-    cue_hits = tuple(_iter_context_cue_hits(text))
+    compiled = _compiled_context_lexicon(language)
+    cue_hits = tuple(_iter_context_cue_hits(text, language=language))
     scoped_hits = _ContextCueResults()
 
     for span in spans:
@@ -792,6 +821,7 @@ def scan_context_cues(
                 cue=hit,
                 target_start=target_start,
                 target_end=target_end,
+                compiled=compiled,
             )
         ]
         scoped_hits.add(
@@ -804,13 +834,20 @@ def scan_context_cues(
     return scoped_hits
 
 
-def _iter_context_cue_hits(text: str) -> Iterable[ModifierHit]:
-    for match in _CONTEXT_CUE_RE.finditer(text):
+def _iter_context_cue_hits(
+    text: str,
+    *,
+    language: str | None = None,
+) -> Iterable[ModifierHit]:
+    compiled = _compiled_context_lexicon(language)
+    for match in compiled.context_cue_re.finditer(text):
         cue = match.group(0)
         normalized_cue = _normalize_cue_text(cue)
-        category = _CONTEXT_CUE_CATEGORY_BY_TEXT[normalized_cue]
+        category = compiled.category_by_text[normalized_cue]
         direction: ContextCueDirection = (
-            "backward" if normalized_cue in _BACKWARD_CONTEXT_CUES else "forward"
+            "backward"
+            if normalized_cue in compiled.backward_context_cues
+            else "forward"
         )
         yield ModifierHit(
             cue=cue,
@@ -992,6 +1029,7 @@ def _cue_reaches_span(
     cue: ModifierHit,
     target_start: int,
     target_end: int,
+    compiled: _CompiledContextLexicon | None = None,
 ) -> bool:
     if cue_sentence is None or cue_sentence != target_sentence:
         return False
@@ -1005,10 +1043,19 @@ def _cue_reaches_span(
             return False
         between = text[target_end : cue.start]
 
-    return _CONJUNCTION_TERMINATOR_RE.search(between) is None
+    terminator_re = (
+        compiled.conjunction_terminator_re
+        if compiled is not None
+        else _CONJUNCTION_TERMINATOR_RE
+    )
+    return terminator_re.search(between) is None
 
 
-def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
+def resolve_temporality(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> str:
     """Classify the ConText temporality of ``span``.
 
     ``span`` is the target clinical span -- a string, a span mapping with a
@@ -1020,6 +1067,8 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     shared engine matched in the span's window (cue strings, or mappings/objects
     exposing a ``text``-like field).  The span surface itself is also scanned so
     the layer is usable standalone when no separate modifier hits are supplied.
+    ``language`` selects the registered cue lexicon. Unknown codes fall back to
+    English for compatibility.
 
     Returns one of ``"recent"``, ``"historical"`` or ``"hypothetical"``.
     ``"recent"`` is the default when no temporal cue is found.  When both a
@@ -1028,11 +1077,12 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     occurred, which takes precedence over where in time it would sit.
     """
 
-    parts = _text_parts(span, modifier_hits)
+    compiled = _compiled_context_lexicon(language)
+    parts = _text_parts(span, modifier_hits, language=language)
 
-    if any(_HYPOTHETICAL_RE.search(part) for part in parts):
+    if any(compiled.hypothetical_re.search(part) for part in parts):
         return HYPOTHETICAL
-    if any(_HISTORICAL_RE.search(part) for part in parts):
+    if any(compiled.historical_re.search(part) for part in parts):
         return HISTORICAL
     return RECENT
 
@@ -1065,7 +1115,11 @@ def reconcile_temporality_with_interval(
     return temporality
 
 
-def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
+def resolve_uncertainty(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> Certainty:
     """Classify a clinical span as certain or uncertain/hypothetical.
 
     ``span`` is the target clinical span -- a string, a span mapping with a
@@ -1076,23 +1130,34 @@ def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
     ``modifier_hits`` is the optional collection of ConText uncertainty cues
     matched in the span's window. Each part is scanned independently so cues
     are never created by concatenating unrelated fragments.
+    ``language`` selects the registered cue lexicon. Unknown codes fall back to
+    English for compatibility.
 
     Returns ``"uncertain"`` for hedged, hypothetical, or conditional concepts
     and ``"certain"`` otherwise. Uncertain spans are flagged for grounding
     consumers; this helper does not filter or drop spans.
     """
 
-    parts = _text_parts(span, modifier_hits)
-    if any(_UNCERTAINTY_RE.search(part) for part in parts):
+    compiled = _compiled_context_lexicon(language)
+    parts = _text_parts(span, modifier_hits, language=language)
+    if any(compiled.uncertainty_re.search(part) for part in parts):
         return UNCERTAIN
     return CERTAIN
 
 
-def _mask_pseudo_negation(text: str) -> str:
-    return _PSEUDO_NEGATION_RE.sub(lambda match: " " * len(match.group(0)), text)
+def _mask_pseudo_negation(text: str, *, language: str | None = None) -> str:
+    compiled = _compiled_context_lexicon(language)
+    return compiled.pseudo_negation_re.sub(
+        lambda match: " " * len(match.group(0)),
+        text,
+    )
 
 
-def resolve_negation(span: Any, modifier_hits: Any = None) -> Negation:
+def resolve_negation(
+    span: Any,
+    modifier_hits: Any = None,
+    language: str | None = None,
+) -> Negation:
     """Classify a clinical span as affirmed or negated.
 
     ``span`` is the target clinical span -- a string, a span mapping with a
@@ -1103,6 +1168,8 @@ def resolve_negation(span: Any, modifier_hits: Any = None) -> Negation:
     ``modifier_hits`` is the optional collection of ConText negation cues
     matched in the span's window. Each part is scanned independently so cues
     are never created by concatenating unrelated fragments.
+    ``language`` selects the registered cue lexicon. Unknown codes fall back to
+    English for compatibility.
 
     Pseudo-negation cues such as ``"no increase"``, ``"not ruled out"``, and
     ``"cannot be excluded"`` are masked before true negation cues are counted.
@@ -1111,22 +1178,24 @@ def resolve_negation(span: Any, modifier_hits: Any = None) -> Negation:
     """
 
     negation_cue_count = 0
-    for part in _text_parts(span, modifier_hits):
-        masked = _mask_pseudo_negation(part)
-        negation_cue_count += sum(1 for _ in _NEGATION_RE.finditer(masked))
+    compiled = _compiled_context_lexicon(language)
+    for part in _text_parts(span, modifier_hits, language=language):
+        masked = _mask_pseudo_negation(part, language=language)
+        negation_cue_count += sum(1 for _ in compiled.negation_re.finditer(masked))
     return NEGATED if negation_cue_count % 2 else AFFIRMED
 
 
 def resolve_span_context(
     span: Any,
     modifier_hits: Any = None,
+    language: str | None = None,
 ) -> ClinicalContextResult:
     """Return all currently implemented ConText decision axes for ``span``."""
 
     return ClinicalContextResult(
-        temporality=resolve_temporality(span, modifier_hits),
-        certainty=resolve_uncertainty(span, modifier_hits),
-        negation=resolve_negation(span, modifier_hits),
+        temporality=resolve_temporality(span, modifier_hits, language=language),
+        certainty=resolve_uncertainty(span, modifier_hits, language=language),
+        negation=resolve_negation(span, modifier_hits, language=language),
     )
 
 
@@ -1134,13 +1203,14 @@ def assert_context_axes(
     span: Any,
     modifier_hits: Any = None,
     section: Any = None,
+    language: str | None = None,
 ) -> ClinicalAssertion:
     """Return the composed clinical assertion axes for ``span``."""
 
     assertion = ClinicalAssertion(
-        temporality=resolve_temporality(span, modifier_hits),
-        certainty=resolve_uncertainty(span, modifier_hits),
-        negation=resolve_negation(span, modifier_hits),
+        temporality=resolve_temporality(span, modifier_hits, language=language),
+        certainty=resolve_uncertainty(span, modifier_hits, language=language),
+        negation=resolve_negation(span, modifier_hits, language=language),
     )
     return apply_section_context(span, section, assertion)
 
@@ -1204,6 +1274,7 @@ __all__ = [
     "ContextCueCategory",
     "ContextCueDirection",
     "ModifierHit",
+    "clinical_context_lexicon_stats",
     "scan_context_cues",
     "RECENT",
     "HISTORICAL",
