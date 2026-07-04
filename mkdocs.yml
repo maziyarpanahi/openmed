@@ -37,6 +37,7 @@ nav:
       - Performance Profiling: profiling.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
+      - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
       - OpenVINO Runtime: runtimes/openvino.md
