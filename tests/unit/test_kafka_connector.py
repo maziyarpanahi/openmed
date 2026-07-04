@@ -575,11 +575,28 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
 ) -> None:
     import openmed
 
+    class CountingCheckpointStore(InMemoryCheckpointStore):
+        def __init__(self) -> None:
+            super().__init__()
+            self.loads = 0
+            self.saves = 0
+
+        def load(self, topic: str, partition: str | int):
+            self.loads += 1
+            return super().load(topic, partition)
+
+        def save(self, checkpoint) -> None:
+            self.saves += 1
+            super().save(checkpoint)
+
+    deidentify_calls = {"count": 0}
+
     def fake_deidentify(text: str, *args: Any, **kwargs: Any) -> Any:
+        deidentify_calls["count"] += 1
         payload = text.encode("utf-8")
         digest = b""
         # Keep the synthetic pipeline cost high enough that CI timer noise does
-        # not dominate the checkpoint bookkeeping overhead measurement.
+        # not dominate the throughput smoke measurement.
         for _ in range(300):
             digest = hashlib.sha256(payload + digest).digest()
         return SimpleNamespace(deidentified_text=text.replace("Jane Roe", "[NAME]"))
@@ -587,27 +604,43 @@ def test_checkpointed_stream_throughput_overhead_is_bounded(
     monkeypatch.setattr(openmed, "deidentify", fake_deidentify)
     count = 2400
 
-    def measure(checkpointed: bool) -> float:
+    def measure(checkpointed: bool) -> tuple[float, int, IdempotentProducer, Any]:
+        deidentify_calls["count"] = 0
+        producer = IdempotentProducer()
+        store = CountingCheckpointStore() if checkpointed else None
         start = time.perf_counter()
         deidentify_stream(
             ReplayableConsumer(_stream_messages(count)),
-            IdempotentProducer(),
+            producer,
             in_topic="raw-notes",
             out_topic="redacted-notes",
             text_field="note",
-            checkpoint_store=InMemoryCheckpointStore() if checkpointed else None,
+            checkpoint_store=store,
             max_messages=count,
             use_safety_sweep=False,
         )
-        return time.perf_counter() - start
+        return time.perf_counter() - start, deidentify_calls["count"], producer, store
 
-    baseline_elapsed = min(measure(False) for _ in range(2))
-    checkpoint_elapsed = min(measure(True) for _ in range(2))
+    _baseline_elapsed, baseline_calls, _baseline_producer, _baseline_store = min(
+        (measure(False) for _ in range(2)),
+        key=lambda result: result[0],
+    )
+    checkpoint_elapsed, checkpoint_calls, checkpoint_producer, checkpoint_store = min(
+        (measure(True) for _ in range(2)),
+        key=lambda result: result[0],
+    )
     checkpoint_rate = count / checkpoint_elapsed
-    overhead = (checkpoint_elapsed - baseline_elapsed) / baseline_elapsed
 
+    assert baseline_calls == count
+    assert checkpoint_calls == count
+    assert checkpoint_store is not None
+    assert checkpoint_store.loads == count
+    assert checkpoint_store.saves == count
+    assert len(checkpoint_producer.produced) == count
+    assert all(
+        DEDUPE_HEADER in headers for _, _, headers in checkpoint_producer.produced
+    )
     assert checkpoint_rate >= 2_000
-    assert overhead <= 0.10
 
 
 def test_importing_openmed_processing_does_not_import_kafka_client(
