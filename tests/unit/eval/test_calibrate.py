@@ -13,9 +13,12 @@ from openmed.core.pii import deidentify
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.calibrate import (
     build_thresholds_payload,
+    coerce_calibration_thresholds,
     fit_calibration_thresholds,
     fit_calibration_under_shift,
     load_calibration_thresholds,
+    score_span_nonconformity,
+    select_risk_controlled_abstention_threshold,
     write_calibration_artifacts,
 )
 from openmed.processing.outputs import EntityPrediction, PredictionResult
@@ -186,11 +189,86 @@ def test_threshold_artifact_round_trip_and_report_fields(tmp_path: Path) -> None
     assert {
         "reliability",
         "chosen_threshold",
+        "nonconformity_quantile",
         "resulting_leakage",
         "over_redaction",
         "label",
         "language",
     }.issubset(group)
+
+
+def test_conformal_quantile_payload_scores_span_nonconformity() -> None:
+    report = fit_calibration_thresholds(
+        _samples(),
+        model_id="unit-model",
+        suite="golden",
+        target_leakage=0.0,
+        min_recall=1.0,
+        generated_at="2026-06-15T00:00:00+00:00",
+    )
+    thresholds = coerce_calibration_thresholds(build_thresholds_payload(report))
+
+    score = score_span_nonconformity(
+        {
+            "label": "NAME",
+            "language": "en",
+            "confidence": 0.80,
+        },
+        thresholds,
+        model_id="unit-model",
+    )
+
+    assert score.label == "PERSON"
+    assert score.confidence_threshold == pytest.approx(0.72)
+    assert score.nonconformity == pytest.approx(0.20)
+    assert score.nonconformity_quantile == pytest.approx(0.28)
+    assert score.accepted_by_quantile is True
+
+
+def test_risk_controlled_threshold_is_monotonic_in_target_risk() -> None:
+    samples: list[dict[str, object]] = []
+    samples.extend(
+        {
+            "label": "SSN",
+            "language": "en",
+            "score": 0.95,
+            "target": True,
+        }
+        for _ in range(120)
+    )
+    samples.extend(
+        {
+            "label": "SSN",
+            "language": "en",
+            "score": 0.80,
+            "target": index >= 2,
+        }
+        for index in range(20)
+    )
+    samples.extend(
+        {
+            "label": "SSN",
+            "language": "en",
+            "score": 0.40,
+            "target": False,
+        }
+        for _ in range(80)
+    )
+
+    strict = select_risk_controlled_abstention_threshold(
+        samples,
+        target_risk=0.05,
+        confidence_level=0.80,
+    )
+    loose = select_risk_controlled_abstention_threshold(
+        samples,
+        target_risk=0.25,
+        confidence_level=0.80,
+    )
+
+    assert loose.nonconformity_threshold >= strict.nonconformity_threshold
+    assert loose.abstention_rate <= strict.abstention_rate
+    assert loose.residual_risk_upper_bound <= loose.target_risk
 
 
 def test_conformal_calibration_preserves_shifted_critical_coverage() -> None:

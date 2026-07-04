@@ -19,6 +19,8 @@ from .hard_negatives import (
 from .loader import (
     GOLDEN_CATEGORIES,
     GoldenFixture,
+    benchmark_fixture_languages,
+    benchmark_fixtures_by_language,
     fixture_languages,
     fixtures_by_category,
     fixtures_by_language,
@@ -32,6 +34,8 @@ __all__ = [
     "HARD_NEGATIVE_CATEGORY",
     "HARD_NEGATIVE_PACK_VERSION",
     "GoldenFixture",
+    "benchmark_fixture_languages",
+    "benchmark_fixtures_by_language",
     "HardNegativeCandidate",
     "HardNegativeDifficultyReport",
     "HardNegativeMiningConfig",

@@ -105,6 +105,7 @@ def rest_client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
@@ -230,6 +231,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
         "extract_pii",
         "extract_pii_stream",
         "deidentify",
+        "privacy_gateway",
         "loaded_models",
         "unload_model",
         "unload_all_models",

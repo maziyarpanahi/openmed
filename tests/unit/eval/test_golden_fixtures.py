@@ -16,6 +16,8 @@ from openmed.core.pii_i18n import (
     validate_israeli_teudat_zehut,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_philhealth_pin,
+    validate_philsys_psn,
     validate_portuguese_cpf,
 )
 from openmed.eval import harness
@@ -267,6 +269,86 @@ def test_malay_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
         entities=[],
         model_name="offline-safety-sweep",
         timestamp="2026-07-02T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    for span in fixture.gold_spans:
+        assert span.text not in result.deidentified_text
+
+
+def test_tagalog_i18n_jsonl_fixture_offsets_and_ids():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/tl.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "tl"
+
+    spans = {
+        (span.label, span.start, span.end, span.text) for span in fixture.gold_spans
+    }
+    assert spans == {
+        ("DATE", 34, 44, "17/08/1985"),
+        ("PHONE", 55, 71, "+63 917 123 4567"),
+        ("ID_NUM", 77, 91, "1234-5678-9012"),
+        ("ID_NUM", 104, 118, "98-765432109-8"),
+        ("STREET_ADDRESS", 128, 145, "Barangay Maligaya"),
+    }
+
+    ids_by_type = {
+        span.metadata["identifier_type"]: span.text
+        for span in fixture.gold_spans
+        if span.label == "ID_NUM"
+    }
+    assert validate_philsys_psn(ids_by_type["philsys_psn"])
+    assert validate_philhealth_pin(ids_by_type["philhealth_pin"])
+
+
+def test_tagalog_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/tl.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-03T00:00:00Z",
         metadata={},
     )
 

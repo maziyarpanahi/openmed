@@ -11,6 +11,9 @@ import openmed
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.metrics import (
+    BATCH_QUEUE_DEPTH_NAME,
+    BATCH_QUEUE_WAIT_NAME,
+    BATCH_SHED_NAME,
     METRICS_ENABLED_ENV_VAR,
     MODEL_EVICTION_NAME,
     MODEL_LOAD_DURATION_NAME,
@@ -91,6 +94,7 @@ def _configure_service_env(monkeypatch, *, metrics_enabled: bool) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     if metrics_enabled:
@@ -208,7 +212,12 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
     ]
     assert metric_lines
     for line in metric_lines:
-        assert _metric_label_names(line) <= {"route", "status_code", "le"}
+        assert _metric_label_names(line) <= {
+            "route",
+            "status_code",
+            "le",
+            "priority",
+        }
 
 
 def test_warm_pool_model_counters_are_aggregate_only() -> None:
@@ -310,6 +319,22 @@ def test_parse_memory_budget_rejects_unknown_unit():
             "10XB",
             env_var=service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
         )
+
+
+def test_batch_queue_metrics_are_exported_per_priority() -> None:
+    registry = PrometheusMetricsRegistry(duration_buckets=(0.01, 0.1))
+
+    registry.record_batch_queue_depth(priority="interactive", depth=2)
+    registry.record_batch_queue_depth(priority="bulk", depth=1)
+    registry.record_batch_queue_wait(priority="interactive", wait_seconds=0.02)
+    registry.record_batch_shed(priority="bulk")
+
+    metrics_text = registry.render()
+
+    assert f'{BATCH_QUEUE_DEPTH_NAME}{{priority="interactive"}} 2' in metrics_text
+    assert f'{BATCH_QUEUE_DEPTH_NAME}{{priority="bulk"}} 1' in metrics_text
+    assert f'{BATCH_QUEUE_WAIT_NAME}_count{{priority="interactive"}} 1' in metrics_text
+    assert f'{BATCH_SHED_NAME}{{priority="bulk"}} 1' in metrics_text
 
 
 def test_speculative_decode_metrics_are_aggregate_only() -> None:

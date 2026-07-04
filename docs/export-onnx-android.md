@@ -10,14 +10,15 @@ Mobile with the `android` ONNX profile:
   --profile android
 ```
 
-The profile writes two ONNX graphs and, when ONNX Runtime's ORT conversion
-tooling is installed, an ORT mobile artifact plus the minimal-build operator
-configuration:
+The profile writes fp32/fp16 ONNX graphs, an optional dynamic INT8 graph, and,
+when ONNX Runtime's ORT conversion tooling is installed, an ORT mobile artifact
+plus the minimal-build operator configuration:
 
 ```text
 dist/example-android-onnx/
   model.onnx
   model_fp16.onnx
+  model_int8.onnx
   model.ort
   model.required_operators_and_types.config
   config.json
@@ -27,6 +28,11 @@ dist/example-android-onnx/
 
 `model.onnx` is the fp32 graph. `model_fp16.onnx` stores fp16 weights while
 keeping public input and output tensor types stable for Android callers.
+`model_int8.onnx` is produced with ONNX Runtime dynamic QInt8 quantization over
+the MatMul/Gemm weights used by transformer token classifiers. This is the ARM
+CPU starting point for Android Runtime Mobile because it needs no calibration
+corpus and keeps the exported graph callable through the same inputs and
+`logits` output.
 `model.ort` is the ORT mobile-format model generated from `model.onnx`.
 `model.required_operators_and_types.config` is the required-operators/types
 file to pass into an ONNX Runtime Android minimal build.
@@ -73,12 +79,53 @@ only writes the model and operator/type configuration consumed by that build.
 ## Mobile Compatibility Metadata
 
 `openmed-onnx.json` records the Android artifacts with the format string
-`onnx-android`. When ORT conversion succeeds, the manifest also records an
-`ort-android` artifact. Its metadata includes the `model.ort` path, the
+`onnx-android` for fp32/fp16 and `onnx-int8` for the dynamic INT8 graph. When
+ORT conversion succeeds, the manifest also records an `ort-android` artifact.
+Each artifact entry includes profile metadata with the opset, tensor contract,
+execution-provider hints (`NNAPI`, `XNNPACK`), graph operators, and any
+operators that are outside OpenMed's Android mobile safe set. The INT8 artifact
+metadata records the dynamic quantization recipe and target `model_int8.onnx`
+path. The ORT artifact metadata records the `model.ort` path, the
 required-operators/types config path, the fixed optimization style, Android ARM
 target platform, type-reduction status, opset, and graph operators.
 
 Unsupported operators are reported as warnings and recorded in artifact
 metadata. The converter does not delete, rewrite, or silently drop graph nodes;
-the warnings are used by the Android runtime tasks to decide whether a model
-needs a fallback or exporter adjustment.
+the warnings are used by the `.ort` and Android runtime tasks to decide whether
+a model needs a fallback or exporter adjustment.
+
+## INT8 Recall Certification
+
+When an eval suite is available, pass it to the Android export:
+
+```bash
+.venv/bin/python -m openmed.onnx.convert \
+  --model OpenMed/example-token-classifier \
+  --output dist/example-android-onnx \
+  --profile android \
+  --eval-suite openmed/eval/golden/fixtures/checksum_ids.json
+```
+
+The converter writes `recall_delta.json` next to the ONNX artifacts. The report
+compares the Hugging Face full-precision parent with `model_int8.onnx` on the
+same fixtures and records:
+
+- `format`: `onnx-int8`
+- `quantization`: dynamic QInt8 metadata for the ARM CPU artifact
+- `fp_parent_per_label_recall`
+- `candidate_per_label_recall`
+- `per_label`, with fp32 recall, INT8 recall, recall delta, and aggregate gold
+  span/character counts
+- `quant_recall_delta`, the single max recall-loss figure consumed by G4
+- `limit`, currently `0.005` for INT8
+- `certified`, true only when the measured delta is below the INT8 limit
+
+The report is aggregate-only. It does not serialize fixture text, record IDs,
+span text, offsets, gold spans, or predicted spans. Use synthetic or approved
+eval fixtures and keep any DUA-governed corpus outside committed artifacts.
+
+The artifact `config.json` and `openmed-onnx.json` mirror the certification
+fields under `quant_recall_delta`, `certified`, `recall_delta_path`, and
+`quantization`. An over-budget INT8 export still writes `model_int8.onnx` and
+the report, but records `certified: false` so release gates can block the
+format.

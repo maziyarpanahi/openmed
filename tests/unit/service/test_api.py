@@ -156,6 +156,7 @@ def client(monkeypatch, fake_loader_cls):
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
@@ -225,6 +226,7 @@ def test_analyze_blank_text_returns_validation_error(client):
         ("/analyze", {}),
         ("/pii/extract", {}),
         ("/pii/deidentify", {"method": "mask"}),
+        ("/privacy-gateway/complete", {}),
     ],
 )
 def test_oversized_text_returns_validation_error(

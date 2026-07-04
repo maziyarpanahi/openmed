@@ -148,23 +148,57 @@ def test_clinical_command_parses_documented_flags(
 
 
 def test_mobile_command_parses_documented_flags(
+    tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     result = main_module.main(
         [
             "benchmark",
             "mobile",
-            "--models",
-            "OpenMed/mobile-model",
             "--device",
-            "mlx",
+            "cpu",
             "--tier",
-            "phone",
+            "base",
+            "--output-dir",
+            str(tmp_path),
         ]
     )
 
-    assert result == 1
+    assert result == 0
     captured = capsys.readouterr()
-    assert "not implemented yet" in captured.err
-    assert "phone" in captured.err
-    assert "OpenMed/mobile-model" in captured.err
+    assert "Mobile benchmark reports written" in captured.out
+    assert captured.err == ""
+    report_path = (
+        tmp_path / "mobile" / "perf" / "synthetic-one-page-note-runner-cpu.json"
+    )
+    assert report_path.is_file()
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    assert payload["device"] == "cpu"
+    assert payload["tier"] == "base"
+    assert payload["document_count"] == 2
+    assert "docs_per_second" in payload
+
+
+def test_mobile_command_default_workload_writes_report_to_stdout(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = main_module.main(
+        [
+            "benchmark",
+            "mobile",
+            "--device",
+            "cpu",
+            "--tier",
+            "base",
+        ]
+    )
+
+    assert result == 0
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    payload = json.loads(captured.out)
+    assert payload["model_name"] == "synthetic-one-page-note-runner"
+    assert payload["device"] == "cpu"
+    assert payload["tier"] == "base"
+    assert payload["canonical_tier"] == "Base"
+    assert payload["slo_results"]["p95_latency_ms"]["passed"] is True
