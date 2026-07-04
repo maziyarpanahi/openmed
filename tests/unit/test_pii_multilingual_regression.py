@@ -16,6 +16,11 @@ import pytest
 from openmed.core.pii import extract_pii
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
+try:
+    from openmed.core.script_detect import normalize_for_pii_detection
+except ImportError:  # pragma: no cover - compatibility with stale PR branches
+    normalize_for_pii_detection = None
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -41,9 +46,26 @@ def _ent(text, label, start, end, confidence=0.92):
     )
 
 
+def _detection_text(text):
+    if normalize_for_pii_detection is None:
+        return text
+    return normalize_for_pii_detection(text).text
+
+
 def _ent_in(full_text, text, label, confidence=0.92):
-    start = full_text.index(text)
-    return _ent(text, label, start, start + len(text), confidence)
+    detection_text = _detection_text(full_text)
+    entity_text = _detection_text(text)
+    start = detection_text.index(entity_text)
+    return _ent(entity_text, label, start, start + len(entity_text), confidence)
+
+
+def _assert_entity_text(result, expected_text, *label_fragments):
+    matches = [
+        e
+        for e in result.entities
+        if any(fragment in e.label.lower() for fragment in label_fragments)
+    ]
+    assert any(e.text == expected_text for e in matches)
 
 
 # ---------------------------------------------------------------------------
@@ -165,19 +187,25 @@ class TestFrenchRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("01 23 45 67 89", "phone_number", 49, 63, 0.87),
+                _ent_in(self.CLINICAL_NOTE, "01 23 45 67 89", "phone_number", 0.87),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="fr")
         phones = [e for e in result.entities if "phone" in e.label.lower()]
         assert len(phones) >= 1
+        _assert_entity_text(result, "01 23 45 67 89", "phone")
 
     @patch("openmed.analyze_text")
     def test_fr_national_id_detection(self, mock_analyze):
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("1 90 05 75 108 042 36", "national_id", 69, 90, 0.85),
+                _ent_in(
+                    self.CLINICAL_NOTE,
+                    "1 90 05 75 108 042 36",
+                    "national_id",
+                    0.85,
+                ),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="fr")
@@ -187,6 +215,7 @@ class TestFrenchRegression:
             if "national_id" in e.label.lower() or "nir" in e.label.lower()
         ]
         assert len(ids) >= 1
+        _assert_entity_text(result, "1 90 05 75 108 042 36", "national_id", "nir")
 
 
 # ---------------------------------------------------------------------------
@@ -264,13 +293,14 @@ class TestItalianRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("Marco Rossi", "first_name", 9, 20, 0.90),
+                _ent_in(self.CLINICAL_NOTE, "Marco Rossi", "first_name", 0.90),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="it")
         names = [e for e in result.entities if "name" in e.label.lower()]
         assert len(names) >= 1
         assert "Marco" in names[0].text
+        _assert_entity_text(result, "Marco Rossi", "name")
 
     @patch("openmed.analyze_text")
     def test_it_date_detection(self, mock_analyze):
@@ -289,12 +319,13 @@ class TestItalianRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("06 1234567", "phone_number", 47, 57, 0.87),
+                _ent_in(self.CLINICAL_NOTE, "06 1234567", "phone_number", 0.87),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="it")
         phones = [e for e in result.entities if "phone" in e.label.lower()]
         assert len(phones) >= 1
+        _assert_entity_text(result, "06 1234567", "phone")
 
 
 # ---------------------------------------------------------------------------
@@ -310,12 +341,13 @@ class TestSpanishRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("María García", "first_name", 9, 21, 0.90),
+                _ent_in(self.CLINICAL_NOTE, "María García", "first_name", 0.90),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="es")
         names = [e for e in result.entities if "name" in e.label.lower()]
         assert len(names) >= 1
+        _assert_entity_text(result, "María García", "name")
 
     @patch("openmed.analyze_text")
     def test_es_date_detection(self, mock_analyze):
@@ -347,7 +379,7 @@ class TestSpanishRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("Carlos López", "first_name", 9, 21, 0.85),
+                _ent_in(text, "Carlos López", "first_name", 0.85),
             ],
         )
         result = extract_pii(
@@ -355,6 +387,7 @@ class TestSpanishRegression:
         )
         assert len(result.entities) >= 1
         assert all(e.confidence >= 0.5 for e in result.entities)
+        _assert_entity_text(result, "Carlos López", "name")
 
 
 # ---------------------------------------------------------------------------
@@ -709,13 +742,14 @@ class TestDutchRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("Jan de Vries", "first_name", 8, 20, 0.89),
+                _ent_in(self.CLINICAL_NOTE, "Jan de Vries", "first_name", 0.89),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="nl")
         names = [e for e in result.entities if "name" in e.label.lower()]
         assert len(names) >= 1
         assert "Jan" in names[0].text
+        _assert_entity_text(result, "Jan de Vries", "name")
 
     @patch("openmed.analyze_text")
     def test_nl_date_detection(self, mock_analyze):
@@ -757,36 +791,39 @@ class TestHindiRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("राज कुमार", "first_name", 5, 14, 0.88),
+                _ent_in(self.CLINICAL_NOTE, "राज कुमार", "first_name", 0.88),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="hi")
         names = [e for e in result.entities if "name" in e.label.lower()]
         assert len(names) >= 1
+        _assert_entity_text(result, "राज कुमार", "name")
 
     @patch("openmed.analyze_text")
     def test_hi_date_detection(self, mock_analyze):
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("15/05/1990", "date_of_birth", 21, 31, 0.86),
+                _ent_in(self.CLINICAL_NOTE, "15/05/1990", "date_of_birth", 0.86),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="hi")
         dates = [e for e in result.entities if "date" in e.label.lower()]
         assert len(dates) >= 1
+        _assert_entity_text(result, "15/05/1990", "date")
 
     @patch("openmed.analyze_text")
     def test_hi_phone_detection(self, mock_analyze):
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("9876543210", "phone_number", 37, 47, 0.85),
+                _ent_in(self.CLINICAL_NOTE, "9876543210", "phone_number", 0.85),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="hi")
         phones = [e for e in result.entities if "phone" in e.label.lower()]
         assert len(phones) >= 1
+        _assert_entity_text(result, "9876543210", "phone")
 
     @patch("openmed.analyze_text")
     def test_hi_smart_merging_boundaries(self, mock_analyze):
@@ -794,8 +831,8 @@ class TestHindiRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("राज", "first_name", 5, 8, 0.87),
-                _ent("कुमार", "last_name", 9, 14, 0.85),
+                _ent_in(text, "राज", "first_name", 0.87),
+                _ent_in(text, "कुमार", "last_name", 0.85),
             ],
         )
         result = extract_pii(text, use_smart_merging=True, lang="hi")
@@ -810,12 +847,13 @@ class TestHindiRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("2345 6789 0123", "national_id", 13, 27, 0.85),
+                _ent_in(text, "2345 6789 0123", "national_id", 0.85),
             ],
         )
         result = extract_pii(text, use_smart_merging=False, lang="hi")
         ids = [e for e in result.entities if "national_id" in e.label.lower()]
         assert len(ids) >= 1
+        _assert_entity_text(result, "2345 6789 0123", "national_id")
 
 
 # ---------------------------------------------------------------------------
@@ -831,7 +869,7 @@ class TestTeluguRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("రాజు కుమార్", "first_name", 5, 16, 0.86),
+                _ent_in(self.CLINICAL_NOTE, "రాజు కుమార్", "first_name", 0.86),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="te")
@@ -843,24 +881,26 @@ class TestTeluguRegression:
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("15/05/1990", "date_of_birth", 31, 41, 0.84),
+                _ent_in(self.CLINICAL_NOTE, "15/05/1990", "date_of_birth", 0.84),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="te")
         dates = [e for e in result.entities if "date" in e.label.lower()]
         assert len(dates) >= 1
+        _assert_entity_text(result, "15/05/1990", "date")
 
     @patch("openmed.analyze_text")
     def test_te_phone_detection(self, mock_analyze):
         mock_analyze.return_value = _make_result(
             self.CLINICAL_NOTE,
             [
-                _ent("9876543210", "phone_number", 48, 58, 0.83),
+                _ent_in(self.CLINICAL_NOTE, "9876543210", "phone_number", 0.83),
             ],
         )
         result = extract_pii(self.CLINICAL_NOTE, use_smart_merging=False, lang="te")
         phones = [e for e in result.entities if "phone" in e.label.lower()]
         assert len(phones) >= 1
+        _assert_entity_text(result, "9876543210", "phone")
 
     @patch("openmed.analyze_text")
     def test_te_confidence_above_threshold(self, mock_analyze):
@@ -868,7 +908,7 @@ class TestTeluguRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("రాజు", "first_name", 5, 9, 0.80),
+                _ent_in(text, "రాజు", "first_name", 0.80),
             ],
         )
         result = extract_pii(
@@ -876,6 +916,7 @@ class TestTeluguRegression:
         )
         assert len(result.entities) >= 1
         assert all(e.confidence >= 0.5 for e in result.entities)
+        _assert_entity_text(result, "రాజు", "name")
 
     @patch("openmed.analyze_text")
     def test_te_aadhaar_detection(self, mock_analyze):
@@ -883,9 +924,10 @@ class TestTeluguRegression:
         mock_analyze.return_value = _make_result(
             text,
             [
-                _ent("2345 6789 0123", "national_id", 11, 25, 0.83),
+                _ent_in(text, "2345 6789 0123", "national_id", 0.83),
             ],
         )
         result = extract_pii(text, use_smart_merging=False, lang="te")
         ids = [e for e in result.entities if "national_id" in e.label.lower()]
         assert len(ids) >= 1
+        _assert_entity_text(result, "2345 6789 0123", "national_id")
