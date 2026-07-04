@@ -36,6 +36,7 @@ from ..core.policy import CANONICAL_POLICY_NAMES, canonical_policy_name
 from .active_learning import add_active_learning_command
 from .calibrate import add_calibrate_command
 from .gates import add_gates_command
+from .verify_pdf import add_verify_pdf_command
 
 _ANALYZE_TEXT = None
 _GET_MODEL_MAX_LENGTH = None
@@ -186,6 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_doctor_command(subparsers)
     add_calibrate_command(subparsers)
     add_gates_command(subparsers)
+    add_verify_pdf_command(subparsers)
     return parser
 
 
