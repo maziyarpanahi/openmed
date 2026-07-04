@@ -108,6 +108,81 @@ class F1Metrics:
 
 
 @dataclass(frozen=True)
+class RelationArgument:
+    """One relation argument represented by source-text offsets."""
+
+    start: int
+    end: int
+    label: str = ""
+    text: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def overlaps(self, other: "RelationArgument") -> bool:
+        """Return True when this argument overlaps *other* by at least one char."""
+        return min(self.end, other.end) > max(self.start, other.start)
+
+    def overlap_length(self, other: "RelationArgument") -> int:
+        """Return the character overlap length with *other*."""
+        return max(min(self.end, other.end) - max(self.start, other.start), 0)
+
+    def shifted(self, offset: int) -> "RelationArgument":
+        """Return the argument shifted by *offset* source characters."""
+        if offset == 0:
+            return self
+        return RelationArgument(
+            start=self.start + offset,
+            end=self.end + offset,
+            label=self.label,
+            text=self.text,
+            metadata=self.metadata,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "end": self.end,
+            "label": self.label,
+            "metadata": dict(self.metadata),
+            "start": self.start,
+            "text": self.text,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class RelationTriple:
+    """Typed relation triple used by relation-extraction metrics."""
+
+    relation_type: str
+    arg1: RelationArgument
+    arg2: RelationArgument
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def shifted(self, offset: int) -> "RelationTriple":
+        """Return this triple shifted by *offset* source characters."""
+        if offset == 0:
+            return self
+        return RelationTriple(
+            relation_type=self.relation_type,
+            arg1=self.arg1.shifted(offset),
+            arg2=self.arg2.shifted(offset),
+            metadata=self.metadata,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "arg1": self.arg1.to_dict(),
+            "arg2": self.arg2.to_dict(),
+            "metadata": dict(self.metadata),
+            "relation_type": self.relation_type,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class LeakageMetrics:
     """Character-weighted PHI leakage rate and required slices."""
 
@@ -761,6 +836,144 @@ def compute_relaxed_span_f1(
         matched_predictions.add(best_index)
         true_positives += 1
     return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def normalize_relation_triple(relation: Any) -> RelationTriple:
+    """Normalize a DrugProt-style or mapping relation into a typed triple."""
+    if isinstance(relation, RelationTriple):
+        return relation
+
+    if isinstance(relation, Mapping):
+        return _relation_from_mapping(relation)
+
+    if isinstance(relation, Sequence) and not isinstance(relation, str | bytes):
+        return _relation_from_sequence(relation)
+
+    relation_type = _read_attr(relation, "relation_type", "type", "label")
+    if relation_type is None:
+        raise ValueError(f"relation is missing relation_type: {relation!r}")
+    arg1 = _read_attr(relation, "arg1", "head", "source", "subject")
+    arg2 = _read_attr(relation, "arg2", "tail", "target", "object", "attribute")
+    if arg1 is None or arg2 is None:
+        raise ValueError(f"relation is missing arg1/arg2 spans: {relation!r}")
+    metadata = _read_attr(relation, "metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {"value": metadata}
+    return RelationTriple(
+        relation_type=str(relation_type).strip(),
+        arg1=_normalize_relation_argument(arg1),
+        arg2=_normalize_relation_argument(arg2),
+        metadata=dict(metadata),
+    )
+
+
+def normalize_relation_triples(relations: Iterable[Any]) -> tuple[RelationTriple, ...]:
+    """Normalize relation records into immutable typed triples."""
+    return tuple(normalize_relation_triple(relation) for relation in relations)
+
+
+def compute_strict_relation_f1(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+) -> F1Metrics:
+    """Compute exact typed relation F1 over relation triples.
+
+    A strict true positive requires an exact match on relation type plus both
+    argument spans.
+    """
+    gold = normalize_relation_triples(gold_relations)
+    predicted = normalize_relation_triples(predicted_relations)
+    return _relation_f1(gold, predicted, relaxed=False)
+
+
+def compute_relaxed_relation_f1(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+) -> F1Metrics:
+    """Compute typed relation F1 with any-overlap argument span matching."""
+    gold = normalize_relation_triples(gold_relations)
+    predicted = normalize_relation_triples(predicted_relations)
+    return _relation_f1(gold, predicted, relaxed=True)
+
+
+def compute_relation_metrics_bundle(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+) -> dict[str, Any]:
+    """Compute strict, relaxed, and per-type relation-extraction metrics."""
+    gold = normalize_relation_triples(gold_relations)
+    predicted = normalize_relation_triples(predicted_relations)
+    relation_types = sorted(
+        {relation.relation_type for relation in (*gold, *predicted)}
+    )
+    per_type: dict[str, Any] = {}
+    for relation_type in relation_types:
+        gold_for_type = tuple(
+            relation for relation in gold if relation.relation_type == relation_type
+        )
+        predicted_for_type = tuple(
+            relation
+            for relation in predicted
+            if relation.relation_type == relation_type
+        )
+        per_type[relation_type] = {
+            "strict": _relation_f1(
+                gold_for_type,
+                predicted_for_type,
+                relaxed=False,
+            ).to_dict(),
+            "relaxed": _relation_f1(
+                gold_for_type,
+                predicted_for_type,
+                relaxed=True,
+            ).to_dict(),
+        }
+
+    return {
+        "gold_relation_count": len(gold),
+        "per_relation_type": per_type,
+        "predicted_relation_count": len(predicted),
+        "relaxed": _relation_f1(gold, predicted, relaxed=True).to_dict(),
+        "strict": _relation_f1(gold, predicted, relaxed=False).to_dict(),
+    }
+
+
+def compute_relation_confidence_intervals(
+    per_document_relations: Sequence[tuple[Iterable[Any], Iterable[Any]]],
+    *,
+    n_resamples: int = 1000,
+    alpha: float = 0.05,
+    seed: int = 0,
+) -> dict[str, dict[str, Any]]:
+    """Bootstrap document-level confidence intervals for strict/relaxed RE-F1."""
+    strict_docs: list[tuple[int, int, int]] = []
+    relaxed_docs: list[tuple[int, int, int]] = []
+    for gold_relations, predicted_relations in per_document_relations:
+        strict = compute_strict_relation_f1(gold_relations, predicted_relations)
+        relaxed = compute_relaxed_relation_f1(gold_relations, predicted_relations)
+        strict_docs.append(
+            (strict.true_positives, strict.false_positives, strict.false_negatives)
+        )
+        relaxed_docs.append(
+            (relaxed.true_positives, relaxed.false_positives, relaxed.false_negatives)
+        )
+
+    return {
+        "relaxed": bootstrap_ci(
+            relaxed_docs,
+            _f1_over_docs,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+        "strict": bootstrap_ci(
+            strict_docs,
+            _f1_over_docs,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+    }
 
 
 def compute_over_redaction_loss(
@@ -1670,6 +1883,212 @@ def _confidence_correctness(record: Any) -> tuple[float, bool]:
     return _coerce_confidence(confidence_value), _coerce_bool(correctness_value)
 
 
+def _relation_f1(
+    gold: Sequence[RelationTriple],
+    predicted: Sequence[RelationTriple],
+    *,
+    relaxed: bool,
+) -> F1Metrics:
+    matched_predictions: set[int] = set()
+    true_positives = 0
+    for gold_relation in gold:
+        candidates = [
+            (index, predicted_relation)
+            for index, predicted_relation in enumerate(predicted)
+            if index not in matched_predictions
+            and _relation_match(gold_relation, predicted_relation, relaxed=relaxed)
+        ]
+        if not candidates:
+            continue
+        if relaxed:
+            best_index, _ = max(
+                candidates,
+                key=lambda item: _relation_overlap_score(gold_relation, item[1]),
+            )
+        else:
+            best_index = candidates[0][0]
+        matched_predictions.add(best_index)
+        true_positives += 1
+    return _f1_from_counts(true_positives, len(predicted), len(gold))
+
+
+def _relation_match(
+    gold: RelationTriple,
+    predicted: RelationTriple,
+    *,
+    relaxed: bool,
+) -> bool:
+    if gold.relation_type != predicted.relation_type:
+        return False
+    if relaxed:
+        return gold.arg1.overlaps(predicted.arg1) and gold.arg2.overlaps(predicted.arg2)
+    return (
+        gold.arg1.start == predicted.arg1.start
+        and gold.arg1.end == predicted.arg1.end
+        and gold.arg2.start == predicted.arg2.start
+        and gold.arg2.end == predicted.arg2.end
+    )
+
+
+def _relation_overlap_score(gold: RelationTriple, predicted: RelationTriple) -> int:
+    return gold.arg1.overlap_length(predicted.arg1) + gold.arg2.overlap_length(
+        predicted.arg2
+    )
+
+
+def _relation_from_mapping(data: Mapping[str, Any]) -> RelationTriple:
+    relation_type = _relation_first_value(
+        data,
+        ("relation_type", "type", "label", "predicate"),
+    )
+    if relation_type is None:
+        raise ValueError(f"relation is missing relation_type: {data!r}")
+    metadata = data.get("metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {"value": metadata}
+    return RelationTriple(
+        relation_type=str(relation_type).strip(),
+        arg1=_relation_argument_from_mapping(
+            data,
+            nested_keys=("arg1", "head", "source", "subject"),
+            flat_prefixes=("arg1", "head", "source", "subject"),
+        ),
+        arg2=_relation_argument_from_mapping(
+            data,
+            nested_keys=("arg2", "tail", "target", "object", "attribute"),
+            flat_prefixes=("arg2", "tail", "target", "object", "attribute"),
+        ),
+        metadata=dict(metadata),
+    )
+
+
+def _relation_from_sequence(data: Sequence[Any]) -> RelationTriple:
+    if len(data) == 3:
+        relation_type, arg1, arg2 = data
+        return RelationTriple(
+            relation_type=str(relation_type).strip(),
+            arg1=_normalize_relation_argument(arg1),
+            arg2=_normalize_relation_argument(arg2),
+        )
+    if len(data) == 5:
+        relation_type, arg1_start, arg1_end, arg2_start, arg2_end = data
+        return RelationTriple(
+            relation_type=str(relation_type).strip(),
+            arg1=RelationArgument(start=int(arg1_start), end=int(arg1_end)),
+            arg2=RelationArgument(start=int(arg2_start), end=int(arg2_end)),
+        )
+    if len(data) == 6:
+        _, relation_type, arg1_start, arg1_end, arg2_start, arg2_end = data
+        return RelationTriple(
+            relation_type=str(relation_type).strip(),
+            arg1=RelationArgument(start=int(arg1_start), end=int(arg1_end)),
+            arg2=RelationArgument(start=int(arg2_start), end=int(arg2_end)),
+        )
+    raise ValueError(
+        "relation tuple must be (type, arg1, arg2), "
+        "(type, arg1_start, arg1_end, arg2_start, arg2_end), or "
+        "(id, type, arg1_start, arg1_end, arg2_start, arg2_end)"
+    )
+
+
+def _relation_argument_from_mapping(
+    data: Mapping[str, Any],
+    *,
+    nested_keys: Sequence[str],
+    flat_prefixes: Sequence[str],
+) -> RelationArgument:
+    for key in nested_keys:
+        if key in data:
+            return _normalize_relation_argument(data[key])
+    for prefix in flat_prefixes:
+        start = _relation_first_value(data, (f"{prefix}_start", f"{prefix}Start"))
+        end = _relation_first_value(data, (f"{prefix}_end", f"{prefix}End"))
+        if start is not None and end is not None:
+            label = _relation_first_value(
+                data,
+                (f"{prefix}_label", f"{prefix}Label", f"{prefix}_type"),
+            )
+            text = _relation_first_value(data, (f"{prefix}_text", f"{prefix}Text"))
+            return RelationArgument(
+                start=int(start),
+                end=int(end),
+                label="" if label is None else str(label),
+                text="" if text is None else str(text),
+            )
+    raise ValueError(f"relation is missing argument offsets: {data!r}")
+
+
+def _normalize_relation_argument(value: Any) -> RelationArgument:
+    if isinstance(value, RelationArgument):
+        return value
+    if isinstance(value, Mapping):
+        nested = value.get("span")
+        if nested is not None:
+            return _normalize_relation_argument(nested)
+        start = _relation_first_value(value, ("start", "begin", "offset_start"))
+        end = _relation_first_value(value, ("end", "stop", "offset_end"))
+        if start is None or end is None:
+            raise ValueError(f"relation argument is missing start/end: {value!r}")
+        metadata = value.get("metadata") or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {"value": metadata}
+        label = _relation_first_value(value, ("label", "type", "source_label"))
+        text = value.get("text", "")
+        return RelationArgument(
+            start=int(start),
+            end=int(end),
+            label="" if label is None else str(label),
+            text="" if text is None else str(text),
+            metadata=dict(metadata),
+        )
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+        if len(value) < 2:
+            raise ValueError(
+                f"relation argument tuple must have at least start/end: {value!r}"
+            )
+        label = value[2] if len(value) > 2 else ""
+        text = value[3] if len(value) > 3 else ""
+        return RelationArgument(
+            start=int(value[0]),
+            end=int(value[1]),
+            label=str(label),
+            text=str(text),
+        )
+    start = _read_attr(value, "start", "begin", "offset_start")
+    end = _read_attr(value, "end", "stop", "offset_end")
+    if start is None or end is None:
+        raise ValueError(f"relation argument is missing start/end: {value!r}")
+    label = _read_attr(value, "label", "type", "source_label") or ""
+    text = _read_attr(value, "text") or ""
+    metadata = _read_attr(value, "metadata") or {}
+    if not isinstance(metadata, Mapping):
+        metadata = {"value": metadata}
+    return RelationArgument(
+        start=int(start),
+        end=int(end),
+        label=str(label),
+        text=str(text),
+        metadata=dict(metadata),
+    )
+
+
+def _relation_first_value(data: Mapping[str, Any], keys: Sequence[str]) -> Any:
+    for key in keys:
+        value = data.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _read_attr(value: Any, *names: str) -> Any:
+    for name in names:
+        if hasattr(value, name):
+            result = getattr(value, name)
+            if result is not None:
+                return result
+    return None
+
+
 def _confidence_for_span(span: EvalSpan) -> float:
     value = span.metadata.get("confidence")
     if value is None:
@@ -1968,6 +2387,8 @@ __all__ = [
     "EvalSpan",
     "RateMetric",
     "F1Metrics",
+    "RelationArgument",
+    "RelationTriple",
     "LeakageMetrics",
     "RecallSlices",
     "ConsistencyMetric",
@@ -1979,11 +2400,17 @@ __all__ = [
     "CoverageGap",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "normalize_relation_triple",
+    "normalize_relation_triples",
     "compute_leakage_rate",
     "compute_character_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_relaxed_span_f1",
+    "compute_strict_relation_f1",
+    "compute_relaxed_relation_f1",
+    "compute_relation_metrics_bundle",
+    "compute_relation_confidence_intervals",
     "compute_over_redaction_loss",
     "compute_clinical_utility_loss",
     "compute_abstention_metrics",
