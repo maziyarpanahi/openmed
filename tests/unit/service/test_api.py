@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime
 from typing import Any
@@ -148,10 +149,14 @@ def client(monkeypatch, fake_loader_cls):
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_COALESCING_ENABLED", raising=False)
@@ -221,6 +226,7 @@ def test_analyze_blank_text_returns_validation_error(client):
         ("/analyze", {}),
         ("/pii/extract", {}),
         ("/pii/deidentify", {"method": "mask"}),
+        ("/privacy-gateway/complete", {}),
     ],
 )
 def test_oversized_text_returns_validation_error(
@@ -295,6 +301,46 @@ def test_analyze_value_error_returns_bad_request(client, monkeypatch):
     assert payload["error"]["details"] == {"reason": "Invalid model"}
 
 
+def test_model_memory_backpressure_returns_service_busy(
+    monkeypatch,
+    fake_loader_cls,
+):
+    monkeypatch.setenv("OPENMED_PROFILE", "test")
+    monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.setenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", "1")
+    monkeypatch.setenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", "2")
+    monkeypatch.setenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", "0")
+
+    def fake_analyze(*args, **kwargs):
+        kwargs["loader"].create_pipeline(
+            kwargs["model_name"],
+            task="token-classification",
+            aggregation_strategy=kwargs["aggregation_strategy"],
+            use_fast_tokenizer=kwargs["use_fast_tokenizer"],
+        )
+        return _sample_prediction_result()
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+
+    with TestClient(
+        create_app(),
+        base_url=LOOPBACK_BASE_URL,
+        raise_server_exceptions=False,
+    ) as test_client:
+        response = test_client.post(
+            "/analyze",
+            json={
+                "text": "sample",
+                "model_name": "disease_detection_superclinical",
+            },
+        )
+
+    payload = _assert_error_payload(response, 503, "service_busy")
+    assert payload["error"]["details"]["required_bytes"] == 2
+    assert payload["error"]["details"]["budget_bytes"] == 1
+
+
 def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
     result = _sample_prediction_result()
 
@@ -313,6 +359,58 @@ def test_pii_extract_success_with_lang_es(client, monkeypatch, fake_loader_cls):
     assert response.status_code == 200
     payload = response.json()
     assert payload["entities"][0]["label"] == "NAME"
+
+
+def test_pii_extract_stream_returns_ndjson_events_without_audit_phi(
+    client,
+    monkeypatch,
+    fake_loader_cls,
+):
+    def fake_extract(text, *args, **kwargs):
+        entities = []
+        marker = "jane.patient@example.com"
+        start = text.find(marker)
+        if start >= 0:
+            entities.append(
+                EntityPrediction(
+                    text=marker,
+                    label="EMAIL",
+                    confidence=0.99,
+                    start=start,
+                    end=start + len(marker),
+                )
+            )
+        return PredictionResult(
+            text=text,
+            entities=entities,
+            model_name="privacy-filter",
+            timestamp=datetime.now().isoformat(),
+        )
+
+    monkeypatch.setattr(openmed, "extract_pii", fake_extract)
+
+    with client.stream(
+        "POST",
+        "/pii/extract/stream",
+        json={
+            "text": "Contact jane.patient@example.com today.",
+            "chunk_size": 8,
+            "window_chars": 64,
+            "tokenizer_context_chars": 16,
+            "max_entity_chars": 32,
+            "include_text": False,
+        },
+    ) as response:
+        assert response.status_code == 200
+        events = [json.loads(line) for line in response.iter_lines() if line]
+
+    assert any(event["type"] == "emit" for event in events)
+    assert events[-1]["type"] == "final"
+    emit_event = next(event for event in events if event["type"] == "emit")
+    assert "text" not in emit_event["span"]
+    audit_payload = json.dumps([event["audit"] for event in events])
+    assert "jane.patient" not in audit_payload
+    assert fake_loader_cls.instances[0].loaded_models() == {}
 
 
 @pytest.mark.parametrize("lang", ["nl", "hi", "te", "ar", "ja", "tr"])
@@ -534,6 +632,9 @@ def test_app_uses_profile_config_from_env(monkeypatch, fake_loader_cls):
     monkeypatch.setenv("OPENMED_PROFILE", "dev")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", raising=False)
     app = create_app()
 
     with TestClient(app, base_url=LOOPBACK_BASE_URL) as test_client:
@@ -547,6 +648,9 @@ def test_app_defaults_to_prod_profile_when_env_missing(monkeypatch, fake_loader_
     monkeypatch.delenv("OPENMED_PROFILE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", raising=False)
     app = create_app()
 
     with TestClient(app, base_url=LOOPBACK_BASE_URL) as test_client:
@@ -733,6 +837,9 @@ def test_default_keep_alive_env_unloads_pipeline_after_request(
     monkeypatch.setenv("OPENMED_PROFILE", "test")
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", raising=False)
     monkeypatch.setenv("OPENMED_SERVICE_KEEP_ALIVE", "0")
 
     def fake_analyze(*args, **kwargs):

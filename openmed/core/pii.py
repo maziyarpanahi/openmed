@@ -42,6 +42,7 @@ from .date_shift import (
     stable_offset_for,
 )
 from .offline import network_blocked_if_offline
+from .script_detect import DetectionNormalization, normalize_for_pii_detection
 
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
@@ -550,12 +551,20 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     return model_name
 
 
+@dataclass(frozen=True)
+class _PreparedPIIText:
+    original_text: str
+    inference_text: str
+    do_normalize: bool
+    detection_normalization: DetectionNormalization
+
+
 def _prepare_pii_text(
     text: str,
     *,
     lang: str,
     normalize_accents: Optional[bool],
-) -> tuple[str, str, bool]:
+) -> _PreparedPIIText:
     """Return original stripped text, inference text, and normalization flag."""
     do_normalize = (
         normalize_accents
@@ -564,8 +573,18 @@ def _prepare_pii_text(
     )
 
     original_text = text.strip()
-    inference_text = _strip_accents(original_text) if do_normalize else original_text
-    return original_text, inference_text, do_normalize
+    detection_normalization = normalize_for_pii_detection(original_text)
+    inference_text = detection_normalization.text
+    if do_normalize:
+        inference_text = _strip_accents(inference_text)
+    return _PreparedPIIText(
+        original_text=original_text,
+        inference_text=inference_text,
+        do_normalize=bool(do_normalize)
+        or detection_normalization.changed
+        or detection_normalization.mixed_script,
+        detection_normalization=detection_normalization,
+    )
 
 
 def _replace_analysis_result(result: Any, **updates: Any) -> Any:
@@ -598,13 +617,57 @@ def _mutable_prediction_result(result: Any) -> Any:
     )
 
 
-def _apply_pii_smart_merging(result: Any, effective_model: str, lang: str) -> Any:
+def _remap_prepared_pii_result(result: Any, prepared: _PreparedPIIText) -> Any:
+    """Map normalized inference spans back to the original input text."""
+    normalization = prepared.detection_normalization
+    if (
+        result.text == prepared.original_text
+        and not normalization.changed
+        and not normalization.mixed_script
+    ):
+        return result
+
+    entities: list[EntityPrediction] = []
+    for entity in result.entities:
+        start = int(entity.start or 0)
+        end = int(entity.end or start)
+        original_start, original_end = normalization.remap_span(start, end)
+        metadata = dict(entity.metadata or {})
+        metadata.setdefault("unicode_defense", normalization.to_metadata())
+        entities.append(
+            EntityPrediction(
+                text=prepared.original_text[original_start:original_end],
+                label=entity.label,
+                start=original_start,
+                end=original_end,
+                confidence=entity.confidence,
+                metadata=metadata,
+            )
+        )
+
+    metadata = dict(getattr(result, "metadata", None) or {})
+    metadata["unicode_defense"] = normalization.to_metadata()
+    return _replace_analysis_result(
+        result,
+        text=prepared.original_text,
+        entities=entities,
+        metadata=metadata,
+    )
+
+
+def _apply_pii_smart_merging(
+    result: Any,
+    effective_model: str,
+    lang: str,
+    *,
+    locale: Optional[str] = None,
+) -> Any:
     """Apply semantic-unit PII merging to a prediction result."""
     from ..processing.outputs import EntityPrediction
     from .pii_entity_merger import merge_entities_with_semantic_units
     from .pii_i18n import get_patterns_for_language
 
-    lang_patterns = get_patterns_for_language(lang)
+    lang_patterns = get_patterns_for_language(lang, locale=locale)
     entity_dicts = [
         {
             "entity_type": e.label,
@@ -654,6 +717,7 @@ def _extract_pii_batch(
     normalize_accents: Optional[bool] = None,
     custom_recognizer: Any = None,
     *,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
     **pipeline_kwargs: Any,
@@ -685,7 +749,7 @@ def _extract_pii_batch(
             pipeline = create_privacy_filter_pipeline(effective_model)
         else:
             pipeline = create_privacy_filter_pipeline(effective_model, config=config)
-        inference_texts = [item[1] for item in prepared]
+        inference_texts = [item.inference_text for item in prepared]
         privacy_call_kwargs = {
             key: pipeline_kwargs[key]
             for key in ("batch_size", "num_workers")
@@ -695,17 +759,18 @@ def _extract_pii_batch(
             raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
         results = [
-            _prediction_result_from_privacy_filter_raw(
-                raw,
-                inference_text,
-                model_name=effective_model,
-                confidence_threshold=confidence_threshold,
-                original_text=original_text,
-                do_normalize=do_normalize,
+            _remap_prepared_pii_result(
+                _prediction_result_from_privacy_filter_raw(
+                    raw,
+                    item.inference_text,
+                    model_name=effective_model,
+                    confidence_threshold=confidence_threshold,
+                    original_text=item.inference_text,
+                    do_normalize=False,
+                ),
+                item,
             )
-            for raw, (original_text, inference_text, do_normalize) in zip(
-                batched_raw, prepared
-            )
+            for raw, item in zip(batched_raw, prepared)
         ]
     else:
         from .. import analyze_text
@@ -715,9 +780,9 @@ def _extract_pii_batch(
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
-        for original_text, inference_text, do_normalize in prepared:
+        for item in prepared:
             result = analyze_text(
-                inference_text,
+                item.inference_text,
                 model_name=effective_model,
                 confidence_threshold=confidence_threshold,
                 config=config,
@@ -726,29 +791,11 @@ def _extract_pii_batch(
                 **pipeline_kwargs,
             )
             result = _mutable_prediction_result(result)
-
-            if do_normalize and original_text != inference_text:
-                normalized_entities = [
-                    EntityPrediction(
-                        text=original_text[e.start : e.end],
-                        label=e.label,
-                        start=e.start,
-                        end=e.end,
-                        confidence=e.confidence,
-                    )
-                    for e in result.entities
-                ]
-                result = _replace_analysis_result(
-                    result,
-                    text=original_text,
-                    entities=normalized_entities,
-                )
-
-            results.append(result)
+            results.append(_remap_prepared_pii_result(result, item))
 
     if use_smart_merging and not uses_privacy_filter:
         results = [
-            _apply_pii_smart_merging(result, effective_model, lang)
+            _apply_pii_smart_merging(result, effective_model, lang, locale=locale)
             for result in results
         ]
 
@@ -784,6 +831,7 @@ def extract_pii(
     max_cache_entries: int = 128,
     normalize_accents: Optional[bool] = None,
     *,
+    locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     custom_recognizer: Any = None,
 ) -> PredictionResult:
@@ -867,6 +915,7 @@ def extract_pii(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        locale=locale,
         loader=loader,
         custom_recognizer=custom_recognizer,
     )[0]
@@ -920,6 +969,7 @@ def _apply_safety_sweep_to_result(
     pii_result: Any,
     *,
     lang: str,
+    locale: Optional[str] = None,
 ) -> tuple[Any, int]:
     """Run the deterministic sweep and record its net span contribution."""
     from .quality_gates import validate_entity_spans
@@ -930,7 +980,7 @@ def _apply_safety_sweep_to_result(
     )
 
     before_count = len(pii_result.entities)
-    entities = safety_sweep(text, pii_result.entities, lang=lang)
+    entities = safety_sweep(text, pii_result.entities, lang=lang, locale=locale)
     added_count = len(entities) - before_count
 
     metadata = dict(getattr(pii_result, "metadata", None) or {})
@@ -1632,6 +1682,7 @@ def _deidentify_batch(
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
     custom_recognizer: Any = None,
+    policy: Optional[str] = None,
     *,
     consistent: bool = False,
     seed: Optional[int] = None,
@@ -1660,6 +1711,7 @@ def _deidentify_batch(
         use_smart_merging=use_smart_merging,
         lang=lang,
         normalize_accents=normalize_accents,
+        locale=locale,
         custom_recognizer=recognizer,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
@@ -1673,6 +1725,7 @@ def _deidentify_batch(
                 stripped_text,
                 pii_result,
                 lang=lang,
+                locale=locale,
             )
             _suppress_custom_allowed_entities(stripped_text, pii_result, recognizer)
             swept_results.append(pii_result)
@@ -1699,7 +1752,7 @@ def _deidentify_batch(
             seed=seed,
             locale=locale,
             surrogate_vault=surrogate_vault,
-            policy="hipaa_safe_harbor",
+            policy=policy or "hipaa_safe_harbor",
         )
         for text, pii_result in zip(stripped_texts, pii_results)
     ]
@@ -2607,7 +2660,7 @@ def _format_date_like_original(
 
 def reidentify(
     deidentified_text: str,
-    mapping: dict[str, str],
+    mapping: Mapping[str, str],
 ) -> str:
     """Re-identify text using stored mapping.
 

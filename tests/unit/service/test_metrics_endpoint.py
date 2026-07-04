@@ -4,15 +4,35 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 import openmed
 from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.metrics import (
+    BATCH_QUEUE_DEPTH_NAME,
+    BATCH_QUEUE_WAIT_NAME,
+    BATCH_SHED_NAME,
     METRICS_ENABLED_ENV_VAR,
     MODEL_EVICTION_NAME,
+    MODEL_LOAD_DURATION_NAME,
     MODEL_LOAD_NAME,
+    MODEL_PENDING_LOAD_BYTES_NAME,
+    MODEL_REJECTION_NAME,
+    MODEL_RESIDENT_BYTES_NAME,
+    MODEL_RESIDENT_NAME,
+    PAGED_KV_CACHE_BUDGET_BYTES_NAME,
+    PAGED_KV_CACHE_CAPACITY_NAME,
+    PAGED_KV_CACHE_EVICTION_NAME,
+    PAGED_KV_CACHE_OCCUPANCY_NAME,
+    PAGED_KV_CACHE_PEAK_NAME,
+    SPECULATIVE_ACCEPTANCE_RATE_NAME,
+    SPECULATIVE_ACCEPTED_TOKEN_NAME,
+    SPECULATIVE_DECODE_NAME,
+    SPECULATIVE_DRAFT_TOKEN_NAME,
+    SPECULATIVE_FALLBACK_NAME,
+    SPECULATIVE_ROLLBACK_NAME,
     PrometheusMetricsRegistry,
 )
 from openmed.service.warm_pool import WarmPool
@@ -67,10 +87,14 @@ def _configure_service_env(monkeypatch, *, metrics_enabled: bool) -> None:
     monkeypatch.delenv("OPENMED_SERVICE_PRELOAD_MODELS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_KEEP_ALIVE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_RESIDENT_MODELS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_DEFAULT_MODEL_FOOTPRINT_BYTES", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_MODEL_ADMISSION_WAIT_SECONDS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_MAX_TEXT_LENGTH", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCHING_ENABLED", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", raising=False)
+    monkeypatch.delenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_CORS_ORIGINS", raising=False)
     monkeypatch.delenv("OPENMED_SERVICE_TRUSTED_HOSTS", raising=False)
     if metrics_enabled:
@@ -125,6 +149,13 @@ def test_metrics_endpoint_renders_prometheus_text_when_enabled(monkeypatch) -> N
     assert "openmed_service_inflight_requests" in response.text
     assert f"{MODEL_LOAD_NAME} 0" in response.text
     assert f"{MODEL_EVICTION_NAME} 0" in response.text
+    assert f"{PAGED_KV_CACHE_OCCUPANCY_NAME} 0" in response.text
+    assert f"{PAGED_KV_CACHE_EVICTION_NAME} 0" in response.text
+    assert f"{MODEL_RESIDENT_NAME} 0" in response.text
+    assert f"{MODEL_RESIDENT_BYTES_NAME} 0" in response.text
+    assert f"{MODEL_PENDING_LOAD_BYTES_NAME} 0" in response.text
+    assert f"{MODEL_LOAD_DURATION_NAME}_count 0" in response.text
+    assert f"{MODEL_REJECTION_NAME} 0" in response.text
 
 
 def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
@@ -181,13 +212,22 @@ def test_served_request_updates_metrics_without_phi_labels(monkeypatch) -> None:
     ]
     assert metric_lines
     for line in metric_lines:
-        assert _metric_label_names(line) <= {"route", "status_code", "le"}
+        assert _metric_label_names(line) <= {
+            "route",
+            "status_code",
+            "le",
+            "priority",
+        }
 
 
 def test_warm_pool_model_counters_are_aggregate_only() -> None:
     registry = PrometheusMetricsRegistry()
     loader = WarmPoolLoader()
-    pool = WarmPool(lambda: loader, metrics=registry)
+    pool = WarmPool(
+        lambda: loader,
+        default_model_footprint_bytes=128,
+        metrics=registry,
+    )
 
     pool.create_pipeline("model-a", aggregation_strategy="simple")
     pool.unload_model("model-a")
@@ -195,4 +235,125 @@ def test_warm_pool_model_counters_are_aggregate_only() -> None:
     metrics_text = registry.render()
     assert f"{MODEL_LOAD_NAME} 1" in metrics_text
     assert f"{MODEL_EVICTION_NAME} 1" in metrics_text
+    assert f"{MODEL_RESIDENT_NAME} 0" in metrics_text
+    assert f"{MODEL_RESIDENT_BYTES_NAME} 0" in metrics_text
+    assert f"{MODEL_LOAD_DURATION_NAME}_count 1" in metrics_text
+    assert f"{MODEL_LOAD_DURATION_NAME}_sum " in metrics_text
+    assert f"{MODEL_REJECTION_NAME} 0" in metrics_text
     assert "model-a" not in metrics_text
+
+
+def test_paged_kv_cache_metrics_are_aggregate_only() -> None:
+    registry = PrometheusMetricsRegistry()
+
+    registry.record_mlx_paged_kv_cache(
+        total_pages=4,
+        resident_pages=3,
+        evictions=2,
+        peak_pages=3,
+        memory_budget_bytes=1024,
+    )
+
+    metrics_text = registry.render()
+    assert f"{PAGED_KV_CACHE_OCCUPANCY_NAME} 3" in metrics_text
+    assert f"{PAGED_KV_CACHE_CAPACITY_NAME} 4" in metrics_text
+    assert f"{PAGED_KV_CACHE_PEAK_NAME} 3" in metrics_text
+    assert f"{PAGED_KV_CACHE_EVICTION_NAME} 2" in metrics_text
+    assert f"{PAGED_KV_CACHE_BUDGET_BYTES_NAME} 1024" in metrics_text
+
+    paged_metric_lines = [
+        line
+        for line in metrics_text.splitlines()
+        if line.startswith("openmed_service_mlx_paged_kv_cache_")
+    ]
+    assert paged_metric_lines
+    assert all("{" not in line for line in paged_metric_lines)
+
+
+def test_parse_service_mlx_paged_kv_cache_config_disabled_by_default(monkeypatch):
+    monkeypatch.delenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        raising=False,
+    )
+
+    assert service_runtime.parse_service_mlx_paged_kv_cache_config() is None
+
+
+def test_parse_service_mlx_paged_kv_cache_config_from_env(monkeypatch):
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        "1MiB",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_PAGE_TOKENS_ENV_VAR,
+        "4",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_CHUNK_TOKENS_ENV_VAR,
+        "8",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_WINDOW_TOKENS_ENV_VAR,
+        "16",
+    )
+    monkeypatch.setenv(
+        service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BYTES_PER_TOKEN_ENV_VAR,
+        "1024",
+    )
+
+    config = service_runtime.parse_service_mlx_paged_kv_cache_config()
+
+    assert config is not None
+    assert config.memory_budget_bytes == 1024**2
+    assert config.page_size_tokens == 4
+    assert config.chunk_size_tokens == 8
+    assert config.window_size_tokens == 16
+    assert config.bytes_per_token == 1024
+    assert config.page_count == 256
+    assert config.exact_context_tokens == 16
+
+
+def test_parse_memory_budget_rejects_unknown_unit():
+    with pytest.raises(ValueError, match="unsupported size unit"):
+        service_runtime.parse_memory_budget_bytes(
+            "10XB",
+            env_var=service_runtime.SERVICE_MLX_PAGED_KV_CACHE_BUDGET_ENV_VAR,
+        )
+
+
+def test_batch_queue_metrics_are_exported_per_priority() -> None:
+    registry = PrometheusMetricsRegistry(duration_buckets=(0.01, 0.1))
+
+    registry.record_batch_queue_depth(priority="interactive", depth=2)
+    registry.record_batch_queue_depth(priority="bulk", depth=1)
+    registry.record_batch_queue_wait(priority="interactive", wait_seconds=0.02)
+    registry.record_batch_shed(priority="bulk")
+
+    metrics_text = registry.render()
+
+    assert f'{BATCH_QUEUE_DEPTH_NAME}{{priority="interactive"}} 2' in metrics_text
+    assert f'{BATCH_QUEUE_DEPTH_NAME}{{priority="bulk"}} 1' in metrics_text
+    assert f'{BATCH_QUEUE_WAIT_NAME}_count{{priority="interactive"}} 1' in metrics_text
+    assert f'{BATCH_SHED_NAME}{{priority="bulk"}} 1' in metrics_text
+
+
+def test_speculative_decode_metrics_are_aggregate_only() -> None:
+    registry = PrometheusMetricsRegistry()
+
+    registry.record_speculative_decode(
+        {
+            "drafted_tokens": 6,
+            "accepted_tokens": 4,
+            "rollback_count": 1,
+            "fallback_reason": "tokenizer_mismatch",
+        }
+    )
+    metrics_text = registry.render()
+
+    assert f"{SPECULATIVE_DECODE_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_DRAFT_TOKEN_NAME} 6" in metrics_text
+    assert f"{SPECULATIVE_ACCEPTED_TOKEN_NAME} 4" in metrics_text
+    assert f"{SPECULATIVE_ROLLBACK_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_FALLBACK_NAME} 1" in metrics_text
+    assert f"{SPECULATIVE_ACCEPTANCE_RATE_NAME} 0.666666666667" in metrics_text
+    assert "tokenizer_mismatch" not in metrics_text

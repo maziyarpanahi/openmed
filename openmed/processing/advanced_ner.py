@@ -1,9 +1,20 @@
 """Advanced NER processing with proven filtering techniques from OpenMed Gradio app."""
 
+from __future__ import annotations
+
 import logging
 import re
+import time
+from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
+from openmed.core.decoding import (
+    TokenClassificationSpan,
+    TokenClassificationStreamEvent,
+    coerce_token_classification_spans,
+    reconcile_stream_spans,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +29,25 @@ class EntitySpan:
     end: int
     score: float
 
+    @classmethod
+    def from_mapping(cls, data: Dict[str, Any]) -> "EntitySpan":
+        """Create an entity span from a mapping-like model output."""
+
+        return cls(
+            text=str(data.get("text", data.get("word", ""))),
+            label=str(data.get("label", data.get("entity", "")))
+            .replace("B-", "")
+            .replace("I-", ""),
+            start=int(data.get("start", 0)),
+            end=int(data.get("end", 0)),
+            score=float(data.get("score", 1.0)),
+        )
+
+    def offset_key(self) -> tuple[int, int]:
+        """Return the source character-offset identity for this span."""
+
+        return self.start, self.end
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format."""
         return {
@@ -27,6 +57,319 @@ class EntitySpan:
             "end": self.end,
             "score": self.score,
         }
+
+
+TokenClassifier = Callable[[str], Sequence[object] | Any]
+
+
+@dataclass(frozen=True)
+class StreamingReplayResult:
+    """Deterministic replay comparison for streaming token classification."""
+
+    final_spans: tuple[TokenClassificationSpan, ...]
+    batch_spans: tuple[TokenClassificationSpan, ...]
+    events: tuple[TokenClassificationStreamEvent, ...]
+    audit_log: tuple[dict[str, object], ...]
+    latency: dict[str, float]
+
+    @property
+    def span_diff(self) -> list[tuple[str, TokenClassificationSpan]]:
+        """Return spans present on only one side of replay comparison."""
+        streamed = {_span_signature(span): span for span in self.final_spans}
+        batch = {_span_signature(span): span for span in self.batch_spans}
+        diff: list[tuple[str, TokenClassificationSpan]] = []
+        for signature, span in sorted(batch.items()):
+            if signature not in streamed:
+                diff.append(("missing", span))
+        for signature, span in sorted(streamed.items()):
+            if signature not in batch:
+                diff.append(("extra", span))
+        return diff
+
+
+class StreamingTokenClassifier:
+    """Incrementally classify appended text with a bounded recomputation tail."""
+
+    def __init__(
+        self,
+        classifier: TokenClassifier,
+        *,
+        window_chars: int = 4096,
+        tokenizer_context_chars: int = 128,
+        max_entity_chars: int = 512,
+        confidence_threshold: float = 0.0,
+    ) -> None:
+        if window_chars < 1:
+            raise ValueError("window_chars must be positive")
+        if tokenizer_context_chars < 0:
+            raise ValueError("tokenizer_context_chars must be non-negative")
+        if max_entity_chars < 1:
+            raise ValueError("max_entity_chars must be positive")
+
+        self.classifier = classifier
+        self.window_chars = int(window_chars)
+        self.tokenizer_context_chars = int(tokenizer_context_chars)
+        self.max_entity_chars = int(max_entity_chars)
+        self.confidence_threshold = float(confidence_threshold)
+        self.recomputation_tail_chars = max(
+            1,
+            min(
+                self.window_chars,
+                self.tokenizer_context_chars + self.max_entity_chars,
+            ),
+        )
+
+        self._tail_text = ""
+        self._tail_start = 0
+        self._tail_byte_start = 0
+        self._document_length = 0
+        self._document_byte_length = 0
+        self._active_spans: dict[str, TokenClassificationSpan] = {}
+        self._final_spans: list[TokenClassificationSpan] = []
+        self._final_span_ids: set[str] = set()
+        self._audit_log: list[dict[str, object]] = []
+        self._append_latencies: list[float] = []
+        self._window_lengths: list[int] = []
+        self._closed = False
+
+    @property
+    def final_spans(self) -> tuple[TokenClassificationSpan, ...]:
+        """Return committed final spans."""
+        return tuple(self._final_spans)
+
+    @property
+    def audit_log(self) -> tuple[dict[str, object], ...]:
+        """Return PHI-safe audit events for the stream."""
+        return tuple(self._audit_log)
+
+    @property
+    def max_observed_window_chars(self) -> int:
+        """Return the largest model input window used so far."""
+        return max(self._window_lengths, default=0)
+
+    def append(self, chunk: str) -> tuple[TokenClassificationStreamEvent, ...]:
+        """Append text and emit span changes for the affected tail window."""
+        if self._closed:
+            raise RuntimeError("cannot append after finish")
+        if not isinstance(chunk, str):
+            raise TypeError("chunk must be a string")
+        if not chunk:
+            return ()
+
+        events: list[TokenClassificationStreamEvent] = []
+        step = max(1, self.window_chars - self.recomputation_tail_chars)
+        for offset in range(0, len(chunk), step):
+            part = chunk[offset : offset + step]
+            self._tail_text += part
+            self._document_length += len(part)
+            self._document_byte_length += len(part.encode("utf-8"))
+            events.extend(self._recompute(final=False))
+        return tuple(events)
+
+    def finish(self) -> tuple[TokenClassificationStreamEvent, ...]:
+        """Flush the remaining tail and emit a final reconciliation event."""
+        if self._closed:
+            return ()
+        self._closed = True
+        events = list(self._recompute(final=True))
+        final_event = TokenClassificationStreamEvent(
+            type="final",
+            final_spans=tuple(self._final_spans),
+            latency_ms=self.latency_summary()["p99_append_latency_ms"],
+            window_chars=self.max_observed_window_chars,
+        )
+        events.append(final_event)
+        self._audit_log.append(final_event.to_audit_dict())
+        return tuple(events)
+
+    def latency_summary(self) -> dict[str, float]:
+        """Return deterministic latency/window metrics for acceptance tests."""
+        return {
+            "append_count": float(len(self._append_latencies)),
+            "p99_append_latency_ms": _percentile(self._append_latencies, 99) * 1000.0,
+            "max_append_latency_ms": (
+                max(self._append_latencies, default=0.0) * 1000.0
+            ),
+            "p99_window_chars": _percentile(
+                [float(value) for value in self._window_lengths],
+                99,
+            ),
+            "max_window_chars": float(self.max_observed_window_chars),
+            "single_window_chars": float(self.window_chars),
+        }
+
+    def _recompute(
+        self,
+        *,
+        final: bool,
+    ) -> tuple[TokenClassificationStreamEvent, ...]:
+        if not self._tail_text:
+            return ()
+
+        window_text = self._tail_text[-self.window_chars :]
+        trim_chars = len(self._tail_text) - len(window_text)
+        window_start = self._tail_start + trim_chars
+        window_byte_start = self._tail_byte_start + len(
+            self._tail_text[:trim_chars].encode("utf-8")
+        )
+
+        start_time = time.perf_counter()
+        predictions = _normalize_classifier_output(self.classifier(window_text))
+        spans = coerce_token_classification_spans(
+            list(predictions),
+            window_text,
+            base_offset=window_start,
+            base_byte_offset=window_byte_start,
+            confidence_threshold=self.confidence_threshold,
+        )
+        latency = time.perf_counter() - start_time
+        self._append_latencies.append(latency)
+        self._window_lengths.append(len(window_text))
+
+        tracked_spans = [span for span in spans if span.end > self._tail_start]
+        events, next_active = reconcile_stream_spans(
+            self._active_spans,
+            tracked_spans,
+        )
+        self._active_spans = next_active
+
+        commit_cutoff = self._commit_cutoff(spans, final=final)
+        self._commit_prefix(commit_cutoff)
+
+        for event in events:
+            self._audit_log.append(event.to_audit_dict())
+        return tuple(events)
+
+    def _commit_cutoff(
+        self,
+        spans: Sequence[TokenClassificationSpan],
+        *,
+        final: bool,
+    ) -> int:
+        if final:
+            cutoff = self._document_length
+        else:
+            cutoff = max(
+                self._tail_start,
+                self._document_length - self.recomputation_tail_chars,
+            )
+        for span in spans:
+            if span.start < cutoff < span.end:
+                cutoff = span.start
+        return max(self._tail_start, min(cutoff, self._document_length))
+
+    def _commit_prefix(self, cutoff: int) -> None:
+        if cutoff <= self._tail_start:
+            return
+
+        for span in sorted(
+            self._active_spans.values(), key=lambda item: (item.start, item.end)
+        ):
+            if span.end <= cutoff and span.id not in self._final_span_ids:
+                self._final_spans.append(span)
+                self._final_span_ids.add(span.id)
+
+        self._active_spans = {
+            entity_id: span
+            for entity_id, span in self._active_spans.items()
+            if span.end > cutoff
+        }
+
+        drop_chars = cutoff - self._tail_start
+        dropped = self._tail_text[:drop_chars]
+        self._tail_text = self._tail_text[drop_chars:]
+        self._tail_start = cutoff
+        self._tail_byte_start += len(dropped.encode("utf-8"))
+
+
+async def stream_token_classifier(
+    classifier: TokenClassifier,
+    chunks: Iterable[str] | AsyncIterable[str],
+    **kwargs: Any,
+):
+    """Yield streaming token-classification events for sync or async chunks."""
+    streamer = StreamingTokenClassifier(classifier, **kwargs)
+    async for chunk in _aiter_chunks(chunks):
+        for event in streamer.append(chunk):
+            yield event
+    for event in streamer.finish():
+        yield event
+
+
+def replay_token_classifier(
+    classifier: TokenClassifier,
+    text: str,
+    chunks: Iterable[str],
+    **kwargs: Any,
+) -> StreamingReplayResult:
+    """Replay chunks through the streaming classifier and compare to batch."""
+    batch_spans = tuple(
+        coerce_token_classification_spans(
+            list(_normalize_classifier_output(classifier(text))),
+            text,
+            confidence_threshold=float(kwargs.get("confidence_threshold", 0.0)),
+        )
+    )
+    streamer = StreamingTokenClassifier(classifier, **kwargs)
+    events: list[TokenClassificationStreamEvent] = []
+    for chunk in chunks:
+        events.extend(streamer.append(chunk))
+    events.extend(streamer.finish())
+    return StreamingReplayResult(
+        final_spans=streamer.final_spans,
+        batch_spans=batch_spans,
+        events=tuple(events),
+        audit_log=streamer.audit_log,
+        latency=streamer.latency_summary(),
+    )
+
+
+async def _aiter_chunks(chunks: Iterable[str] | AsyncIterable[str]):
+    if hasattr(chunks, "__aiter__"):
+        async for chunk in chunks:  # type: ignore[union-attr]
+            yield chunk
+        return
+    for chunk in chunks:  # type: ignore[union-attr]
+        yield chunk
+
+
+def _normalize_classifier_output(result: Any) -> Sequence[object]:
+    if isinstance(result, Awaitable):
+        raise TypeError("StreamingTokenClassifier requires a synchronous classifier")
+    if result is None:
+        return ()
+    entities = getattr(result, "entities", None)
+    if entities is not None:
+        return tuple(entities)
+    if isinstance(result, dict):
+        return (result,)
+    return tuple(result)
+
+
+def _span_signature(
+    span: TokenClassificationSpan,
+) -> tuple[str, int, int, str, int | None, int | None]:
+    return (
+        span.label,
+        span.start,
+        span.end,
+        span.text,
+        span.byte_start,
+        span.byte_end,
+    )
+
+
+def _percentile(values: Sequence[float], percentile: int) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return ordered[0]
+    rank = (len(ordered) - 1) * (percentile / 100.0)
+    lower = int(rank)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = rank - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
 
 class AdvancedNERProcessor:

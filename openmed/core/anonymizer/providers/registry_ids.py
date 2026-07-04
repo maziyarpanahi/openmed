@@ -40,6 +40,8 @@ from openmed.core.pii_i18n import (
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_philhealth_pin,
+    validate_philsys_psn,
     validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
@@ -47,6 +49,8 @@ from openmed.core.pii_i18n import (
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_uk_nhs_number,
+    validate_uk_nino,
 )
 
 from .clinical_ids import (
@@ -59,11 +63,14 @@ from .clinical_ids import (
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
     NPIProvider,
+    PhilippinesIdProvider,
     PolishPeselProvider,
     RodneCisloProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
+    UKNHSNumberProvider,
+    UKNINOProvider,
     validate_npi,
 )
 
@@ -264,6 +271,20 @@ def _register_builtin_specs() -> None:
         faker_provider=MalaysianMyKadProvider,
     )
     _register_aliases(
+        ("tl", "fil_PH", "tl_PH", "ph"),
+        id_type="philsys_psn",
+        validate=validate_philsys_psn,
+        faker_method="philsys_psn",
+        faker_provider=PhilippinesIdProvider,
+    )
+    _register_aliases(
+        ("tl", "fil_PH", "tl_PH", "ph"),
+        id_type="philhealth_pin",
+        validate=validate_philhealth_pin,
+        faker_method="philhealth_pin",
+        faker_provider=PhilippinesIdProvider,
+    )
+    _register_aliases(
         ("da", "da_DK", "dk"),
         id_type="cpr",
         validate=validate_danish_cpr,
@@ -343,6 +364,20 @@ def _register_builtin_specs() -> None:
         validate=validate_npi,
         faker_method="npi",
         faker_provider=NPIProvider,
+    )
+    _register_aliases(
+        ("en", "en_GB", "gb", "uk"),
+        id_type="nhs_number",
+        validate=validate_uk_nhs_number,
+        faker_method="nhs_number",
+        faker_provider=UKNHSNumberProvider,
+    )
+    _register_aliases(
+        ("en", "en_GB", "gb", "uk"),
+        id_type="nino",
+        validate=validate_uk_nino,
+        faker_method="nino",
+        faker_provider=UKNINOProvider,
     )
 
 

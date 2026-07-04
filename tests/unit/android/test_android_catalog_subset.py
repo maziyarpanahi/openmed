@@ -22,6 +22,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 1,
             "languages": ["en"],
             "license": "apache-2.0",
+            "reproducibility_hash": "sha256:" + "0" * 64,
         },
         {
             "repo_id": "OpenMed/onnx",
@@ -30,6 +31,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 33_000_000,
             "languages": ["en", "es"],
             "license": "apache-2.0",
+            "reproducibility_hash": "sha256:" + "1" * 64,
         },
         {
             "repo_id": "OpenMed/tflite",
@@ -38,6 +40,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 125_000_000,
             "languages": ["fr"],
             "license": "MIT",
+            "reproducibility_hash": "sha256:" + "2" * 64,
         },
         {
             "repo_id": "OpenMed/restricted",
@@ -46,6 +49,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 125_000_000,
             "languages": ["en"],
             "license": "gpl-3.0",
+            "reproducibility_hash": "sha256:" + "3" * 64,
         },
         {
             "repo_id": "OpenMed/mlx-quantized",
@@ -54,6 +58,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 125_000_000,
             "languages": ["en"],
             "license": "apache-2.0",
+            "reproducibility_hash": "sha256:" + "4" * 64,
         },
     ]
 
@@ -67,6 +72,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 33_000_000,
             "languages": ["en", "es"],
             "license": "apache-2.0",
+            "reproducibility_hash": "sha256:" + "1" * 64,
         },
         {
             "repo_id": "OpenMed/tflite",
@@ -75,6 +81,7 @@ def test_build_catalog_rows_filters_to_permissive_android_formats() -> None:
             "param_count": 125_000_000,
             "languages": ["fr"],
             "license": "MIT",
+            "reproducibility_hash": "sha256:" + "2" * 64,
         },
     ]
 
@@ -88,6 +95,7 @@ def test_write_catalog_emits_compact_jsonl(tmp_path: Path) -> None:
         "param_count": None,
         "languages": ["en"],
         "license": "apache-2.0",
+        "reproducibility_hash": "sha256:" + "1" * 64,
         "ignored": "not written",
     }
 
@@ -108,6 +116,7 @@ def test_committed_manifest_derives_only_safe_android_rows() -> None:
     for row in catalog_rows:
         assert is_permissive_license(row["license"])
         assert row["repo_id"]
+        assert row["reproducibility_hash"].startswith("sha256:")
         assert set(row) == set(ANDROID_CATALOG_FIELDS)
         assert row["formats"]
         assert all(

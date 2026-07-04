@@ -70,6 +70,52 @@ runner = OpenMedMLXLanguageModel("OpenMed/laneformer-2b-it-q4-mlx")
 print(runner.generate("Define delayed tensor parallelism.", max_tokens=128))
 ```
 
+### Paged KV Cache for Long Notes
+
+Long clinical-note prompts can opt into OpenMed's paged KV-cache planning for
+MLX-LM generation. The plan uses a fixed page pool, chunked prompt prefill, and
+a sliding in-memory window when a prompt exceeds the configured budget:
+
+```python
+from openmed.mlx import OpenMedMLXLanguageModel, PagedKVCacheConfig
+
+runner = OpenMedMLXLanguageModel("OpenMed/laneformer-2b-it-q4-mlx")
+cache = PagedKVCacheConfig(
+    memory_budget_bytes=512 * 1024 * 1024,
+    page_size_tokens=128,
+    chunk_size_tokens=512,
+    # Set this from the loaded model's KV footprint when known.
+    bytes_per_token=65_536,
+)
+
+response = runner.generate(
+    long_note_prompt,
+    max_tokens=256,
+    paged_kv_cache=cache,
+)
+print(runner.last_paged_kv_cache_plan.to_dict())
+```
+
+The exact dense-cache context supported by a budget is:
+
+```text
+floor(memory_budget_bytes / (page_size_tokens * bytes_per_token)) * page_size_tokens
+```
+
+For example, with 128-token pages:
+
+| Budget | Bytes per cached token | Exact context before eviction |
+|---:|---:|---:|
+| 256 MiB | 65,536 | 4,096 tokens |
+| 512 MiB | 65,536 | 8,192 tokens |
+| 1 GiB | 65,536 | 16,384 tokens |
+
+Prompts at or below that exact context keep byte-identical generation inputs to
+the dense-cache path while using chunked prefill. Longer prompts degrade
+gracefully by bounding resident KV pages to the configured window and recording
+the older tokens that require recompute/eviction accounting; tokens inside the
+resident window remain exact.
+
 To force a specific backend:
 
 ```python

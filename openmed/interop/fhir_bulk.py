@@ -9,11 +9,12 @@ loading a whole export file into memory.
 
 from __future__ import annotations
 
+import hashlib
 import json
-from collections.abc import Iterator
+from collections.abc import AsyncIterable, Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from .fhir_operations import Deidentifier, de_identify_resource
 
@@ -23,7 +24,9 @@ __all__ = [
     "NDJSONFileSummary",
     "NDJSONLineError",
     "deidentify_export",
+    "deidentify_ndjson_async",
     "deidentify_ndjson",
+    "deidentify_ndjson_stream",
     "iter_ndjson",
 ]
 
@@ -73,6 +76,7 @@ class NDJSONFileSummary:
     resources_deidentified: int = 0
     blank_lines: int = 0
     errors: tuple[NDJSONLineError, ...] = ()
+    output_sha256: str = ""
 
     @property
     def error_count(self) -> int:
@@ -170,58 +174,165 @@ def deidentify_ndjson(
     destination = Path(out_path)
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    lines_processed = 0
-    resources_deidentified = 0
-    blank_lines = 0
-    errors: list[NDJSONLineError] = []
-
     with (
         source.open("r", encoding="utf-8") as input_stream,
         destination.open("w", encoding="utf-8") as output_stream,
     ):
-        for line_number, line in enumerate(input_stream, start=1):
-            lines_processed += 1
-            if not line.strip():
-                blank_lines += 1
-                continue
+        return deidentify_ndjson_stream(
+            input_stream,
+            output_stream,
+            source=source,
+            destination=destination,
+            policy=policy,
+            method=method,
+            deidentifier=deidentifier,
+        )
 
-            try:
-                resource = _parse_resource_line(source, line, line_number)
-                transformed = de_identify_resource(
-                    resource,
-                    policy=policy,
-                    method=method,
-                    deidentifier=deidentifier,
-                )
-            except FHIRNDJSONLineError as exc:
-                errors.append(exc.to_summary_error())
-                continue
-            except (TypeError, ValueError) as exc:
-                errors.append(
-                    NDJSONLineError(
-                        line_number=line_number,
-                        message=_sanitize_error_message(exc),
-                    )
-                )
-                continue
 
-            json.dump(
-                transformed,
-                output_stream,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            )
-            output_stream.write("\n")
-            resources_deidentified += 1
+def deidentify_ndjson_stream(
+    lines: Iterable[str],
+    output_stream: TextIO,
+    *,
+    source: str | Path = "<stream>",
+    destination: str | Path = "<stream>",
+    policy: str = _DEFAULT_POLICY,
+    method: str = _DEFAULT_METHOD,
+    deidentifier: Deidentifier | None = None,
+) -> NDJSONFileSummary:
+    """Stream NDJSON text lines through FHIR resource de-identification.
 
-    return NDJSONFileSummary(
-        source=str(source),
-        destination=str(destination),
-        lines_processed=lines_processed,
-        resources_deidentified=resources_deidentified,
-        blank_lines=blank_lines,
-        errors=tuple(errors),
+    This is the file-like equivalent of :func:`deidentify_ndjson`. It is used
+    by network ingestion paths that must avoid persisting raw pre-deidentified
+    resources to disk.
+
+    Args:
+        lines: Iterable yielding one NDJSON line at a time.
+        output_stream: Text stream that receives de-identified NDJSON.
+        source: PHI-safe source label used only in summaries and errors.
+        destination: PHI-safe destination label used only in summaries.
+        policy: Privacy policy profile passed to the FHIR operation wrapper.
+        method: De-identification method passed to the FHIR operation wrapper.
+        deidentifier: Optional privacy pipeline override, mainly for tests.
+
+    Returns:
+        A file summary with counts, sanitized errors, and the SHA-256 digest of
+        the de-identified NDJSON bytes that were written.
+    """
+
+    processor = _NDJSONStreamProcessor(
+        source=source,
+        destination=destination,
+        output_stream=output_stream,
+        policy=policy,
+        method=method,
+        deidentifier=deidentifier,
     )
+    for line_number, line in enumerate(lines, start=1):
+        processor.process_line(line, line_number)
+    return processor.summary()
+
+
+async def deidentify_ndjson_async(
+    lines: AsyncIterable[str],
+    out_path: str | Path,
+    *,
+    source: str | Path = "<stream>",
+    destination: str | Path | None = None,
+    policy: str = _DEFAULT_POLICY,
+    method: str = _DEFAULT_METHOD,
+    deidentifier: Deidentifier | None = None,
+) -> NDJSONFileSummary:
+    """Stream async NDJSON lines to a de-identified NDJSON file.
+
+    The input is consumed one line at a time and is never materialized as a
+    complete export file. ``destination`` lets callers report a final atomic
+    target path even when ``out_path`` is a temporary partial file.
+    """
+
+    output_path = Path(out_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_destination = output_path if destination is None else destination
+    with output_path.open("w", encoding="utf-8") as output_stream:
+        processor = _NDJSONStreamProcessor(
+            source=source,
+            destination=summary_destination,
+            output_stream=output_stream,
+            policy=policy,
+            method=method,
+            deidentifier=deidentifier,
+        )
+        line_number = 0
+        async for line in lines:
+            line_number += 1
+            processor.process_line(line, line_number)
+        return processor.summary()
+
+
+@dataclass
+class _NDJSONStreamProcessor:
+    source: str | Path
+    destination: str | Path
+    output_stream: TextIO
+    policy: str
+    method: str
+    deidentifier: Deidentifier | None
+    lines_processed: int = 0
+    resources_deidentified: int = 0
+    blank_lines: int = 0
+    errors: list[NDJSONLineError] = field(default_factory=list)
+    _digest: Any = field(default_factory=hashlib.sha256)
+
+    def process_line(self, line: str, line_number: int) -> None:
+        """Process one physical NDJSON line."""
+
+        self.lines_processed += 1
+        if not line.strip():
+            self.blank_lines += 1
+            return
+
+        try:
+            resource = _parse_resource_line(Path(str(self.source)), line, line_number)
+            transformed = de_identify_resource(
+                resource,
+                policy=self.policy,
+                method=self.method,
+                deidentifier=self.deidentifier,
+            )
+        except FHIRNDJSONLineError as exc:
+            self.errors.append(exc.to_summary_error())
+            return
+        except (TypeError, ValueError) as exc:
+            self.errors.append(
+                NDJSONLineError(
+                    line_number=line_number,
+                    message=_sanitize_error_message(exc),
+                )
+            )
+            return
+
+        encoded = json.dumps(
+            transformed,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        self.output_stream.write(encoded.decode("utf-8"))
+        self.output_stream.write("\n")
+        self._digest.update(encoded)
+        self._digest.update(b"\n")
+        self.resources_deidentified += 1
+
+    def summary(self) -> NDJSONFileSummary:
+        """Return the PHI-safe summary for all processed lines."""
+
+        return NDJSONFileSummary(
+            source=str(self.source),
+            destination=str(self.destination),
+            lines_processed=self.lines_processed,
+            resources_deidentified=self.resources_deidentified,
+            blank_lines=self.blank_lines,
+            errors=tuple(self.errors),
+            output_sha256=self._digest.hexdigest(),
+        )
 
 
 def deidentify_export(
