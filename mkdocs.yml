@@ -50,6 +50,7 @@ nav:
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
       - Columnar Redactor: integrations/columnar-redactor.md
+      - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
       - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - spaCy Pipeline Component: spacy-component.md
