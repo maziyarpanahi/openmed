@@ -6,7 +6,9 @@ import json
 
 import pytest
 
+from openmed.eval.golden import non_latin_golden_fixtures
 from openmed.eval.harness import BenchmarkFixture, load_fixtures, run_benchmark
+from openmed.eval.leakage_heatmap import compute_extraction_reemission_heatmap
 from openmed.eval.metrics import (
     ABSTENTION_ROUTE_REDACT,
     EvalSpan,
@@ -14,7 +16,9 @@ from openmed.eval.metrics import (
     compute_abstention_metrics,
     compute_character_recall,
     compute_exact_span_f1,
+    compute_extraction_reemission_leakage,
     compute_leakage_rate,
+    compute_metrics_bundle,
     compute_recall_slices,
     compute_relaxed_span_f1,
 )
@@ -61,6 +65,88 @@ def test_leakage_rate_is_char_weighted_and_sliced():
     assert result.by_device["cpu"] == pytest.approx(11 / 15)
     assert result.leaked_chars_by_label["SSN"] == 11
     assert result.total_chars_by_label["PERSON"] == 4
+
+
+def test_extraction_reemission_leakage_counts_surfaces_and_offsets():
+    text = "Patient Alice has SSN 123-45-6789."
+    name_start = text.index("Alice")
+    ssn_start = text.index("123-45-6789")
+    gold = [
+        {"start": name_start, "end": name_start + 5, "label": "PERSON"},
+        {"start": ssn_start, "end": ssn_start + 11, "label": "SSN"},
+    ]
+    extraction = {
+        "facts": [
+            {"value": "Alice", "concept": {"label": "masked condition"}},
+            {
+                "value": "redacted",
+                "evidence": {"start": ssn_start, "end": ssn_start + 11},
+            },
+        ],
+        "fhir": {"resourceType": "Observation", "valueString": "123-45-6789"},
+    }
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        extraction,
+        source_text=text,
+    )
+    heatmap = compute_extraction_reemission_heatmap(
+        gold,
+        extraction,
+        source_text=text,
+    )
+
+    assert result.overall == pytest.approx(1.0)
+    assert result.leaked_chars_by_label["PERSON"] == 5
+    assert result.leaked_chars_by_label["SSN"] == 11
+    assert heatmap.cells["PERSON"]["en"].leaked_chars == 5
+    assert heatmap.cells["SSN"]["en"].leaked_chars == 11
+
+
+def test_clean_extraction_output_has_zero_reemission_leakage():
+    text = "Patient Alice has SSN 123-45-6789."
+    name_start = text.index("Alice")
+    ssn_start = text.index("123-45-6789")
+    gold = [
+        {"start": name_start, "end": name_start + 5, "label": "PERSON"},
+        {"start": ssn_start, "end": ssn_start + 11, "label": "SSN"},
+    ]
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        {"facts": [{"value": "stable", "evidence": {"start": 0, "end": 7}}]},
+        source_text=text,
+    )
+    metrics = compute_metrics_bundle(
+        gold,
+        gold,
+        extraction_outputs={"facts": [{"value": "stable"}]},
+        source_text=text,
+    )
+
+    assert result.overall == 0.0
+    assert result.leaked_chars == 0
+    assert metrics["leakage"]["overall"] == 0.0
+    assert metrics["extraction_reemission_leakage"]["overall"] == 0.0
+
+
+def test_extraction_reemission_detects_non_latin_golden_fixture():
+    fixture = non_latin_golden_fixtures()[0]
+    span = next(
+        span
+        for span in fixture.gold_spans
+        if any(ord(char) > 127 and char.isalpha() for char in span.text)
+    )
+
+    result = compute_extraction_reemission_leakage(
+        fixture.gold_spans,
+        {"grounding": {"concept_label": f"echoed {span.text}"}},
+        default_language=fixture.language,
+    )
+
+    assert result.leaked_chars_by_language[fixture.language] >= span.length
+    assert result.by_language[fixture.language] > 0.0
 
 
 def test_zero_gold_spans_do_not_report_leakage_and_have_full_recall():

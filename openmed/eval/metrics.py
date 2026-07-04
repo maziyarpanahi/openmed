@@ -549,6 +549,65 @@ def compute_leakage_rate(
         source_text=source_text,
     )
 
+    leaked_lengths: list[int] = []
+    for span in gold:
+        covered = _covered_char_count(span, predicted)
+        leaked_lengths.append(max(span.length - covered, 0))
+
+    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+
+
+def compute_extraction_reemission_leakage(
+    gold_spans: Iterable[Any],
+    extraction_outputs: Any,
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> LeakageMetrics:
+    """Compute PHI re-emission leakage from extraction or grounding output.
+
+    The scanner walks arbitrary nested extraction payloads, including fact
+    values, concept text, evidence spans, and FHIR-style resources. A gold PHI
+    span is counted as leaked when its surface form is re-emitted in an output
+    field or when an explicit output offset overlaps that gold span. Counts use
+    the same character-weighted numerator and denominator as
+    :func:`compute_leakage_rate`.
+    """
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    leaked_intervals: defaultdict[int, list[tuple[int, int]]] = defaultdict(list)
+    surface_index = _surface_index(gold)
+
+    for text in _iter_extraction_text_values(extraction_outputs):
+        folded = text.casefold()
+        for span_index, surface in surface_index:
+            if _contains_surface(folded, surface):
+                span = gold[span_index]
+                leaked_intervals[span_index].append((span.start, span.end))
+
+    for start, end in _iter_extraction_offsets(extraction_outputs):
+        for span_index, span in enumerate(gold):
+            overlap_start = max(start, span.start)
+            overlap_end = min(end, span.end)
+            if overlap_start < overlap_end:
+                leaked_intervals[span_index].append((overlap_start, overlap_end))
+
+    leaked_lengths = [
+        _merged_interval_length(leaked_intervals.get(index, ()))
+        for index, _span in enumerate(gold)
+    ]
+    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+
+
+def _leakage_metrics_from_lengths(
+    gold: Sequence[EvalSpan],
+    leaked_lengths: Sequence[int],
+) -> LeakageMetrics:
     leaked_by_label: defaultdict[str, int] = defaultdict(int)
     total_by_label: defaultdict[str, int] = defaultdict(int)
     leaked_by_language: defaultdict[str, int] = defaultdict(int)
@@ -558,9 +617,8 @@ def compute_leakage_rate(
 
     total_chars = 0
     leaked_chars = 0
-    for span in gold:
-        covered = _covered_char_count(span, predicted)
-        leaked = max(span.length - covered, 0)
+    for span, raw_leaked in zip(gold, leaked_lengths):
+        leaked = min(max(int(raw_leaked), 0), span.length)
         total_chars += span.length
         leaked_chars += leaked
         total_by_label[span.label] += span.length
@@ -1277,6 +1335,7 @@ def compute_metrics_bundle(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
     *,
+    extraction_outputs: Any | None = None,
     latencies_ms: Sequence[int | float] = (),
     cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
@@ -1353,6 +1412,16 @@ def compute_metrics_bundle(
             model_size_bytes=model_size_bytes,
         ).to_dict(),
     }
+    if extraction_outputs is not None:
+        metrics["extraction_reemission_leakage"] = (
+            compute_extraction_reemission_leakage(
+                gold_spans,
+                extraction_outputs,
+                default_language=default_language,
+                default_device=default_device,
+                source_text=source_text,
+            ).to_dict()
+        )
     if abstention_thresholds is not None:
         metrics["abstention"] = compute_abstention_metrics(
             gold_spans,
@@ -1886,6 +1955,158 @@ def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> i
     return _merged_interval_length(intervals)
 
 
+_OFFSET_START_KEYS = (
+    "start",
+    "span_start",
+    "offset_start",
+    "start_offset",
+    "char_start",
+    "text_start",
+    "source_start",
+    "begin",
+)
+_OFFSET_END_KEYS = (
+    "end",
+    "span_end",
+    "offset_end",
+    "end_offset",
+    "char_end",
+    "text_end",
+    "source_end",
+    "stop",
+)
+_OFFSET_PAIR_KEYS = (
+    "offset",
+    "offsets",
+    "span",
+    "source_span",
+    "evidence_span",
+    "char_offsets",
+    "text_offsets",
+)
+
+
+def _surface_index(gold: Sequence[EvalSpan]) -> list[tuple[int, str]]:
+    surfaces: list[tuple[int, str]] = []
+    for index, span in enumerate(gold):
+        surface = span.text.strip().casefold()
+        if surface:
+            surfaces.append((index, surface))
+    return surfaces
+
+
+def _iter_extraction_text_values(value: Any) -> Iterable[str]:
+    if value is None or isinstance(value, bool):
+        return
+    if isinstance(value, str):
+        yield value
+        return
+    if isinstance(value, int):
+        yield str(value)
+        return
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if isinstance(key, str):
+                yield key
+            yield from _iter_extraction_text_values(nested)
+        return
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, str),
+    ):
+        for nested in value:
+            yield from _iter_extraction_text_values(nested)
+
+
+def _iter_extraction_offsets(value: Any) -> Iterable[tuple[int, int]]:
+    if isinstance(value, Mapping):
+        pair = _span_pair_from_mapping(value)
+        if pair is not None:
+            yield pair
+        for key in _OFFSET_PAIR_KEYS:
+            nested_pair = _span_pair_from_value(value.get(key))
+            if nested_pair is not None:
+                yield nested_pair
+        for nested in value.values():
+            yield from _iter_extraction_offsets(nested)
+        return
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, str),
+    ):
+        for nested in value:
+            yield from _iter_extraction_offsets(nested)
+
+
+def _span_pair_from_mapping(value: Mapping[str, Any]) -> tuple[int, int] | None:
+    start = _first_int_for_keys(value, _OFFSET_START_KEYS)
+    end = _first_int_for_keys(value, _OFFSET_END_KEYS)
+    if start is None or end is None or end <= start:
+        return None
+    return start, end
+
+
+def _span_pair_from_value(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, Mapping):
+        return _span_pair_from_mapping(value)
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, str),
+    ):
+        if len(value) < 2:
+            return None
+        start = _coerce_int(value[0])
+        end = _coerce_int(value[1])
+        if start is not None and end is not None and end > start:
+            return start, end
+    return None
+
+
+def _first_int_for_keys(
+    value: Mapping[str, Any],
+    keys: Sequence[str],
+) -> int | None:
+    for key in keys:
+        parsed = _coerce_int(value.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _contains_surface(text: str, surface: str) -> bool:
+    if not surface:
+        return False
+    start = text.find(surface)
+    while start != -1:
+        end = start + len(surface)
+        if _surface_boundaries_match(text, start, end, surface):
+            return True
+        start = text.find(surface, start + 1)
+    return False
+
+
+def _surface_boundaries_match(
+    text: str,
+    start: int,
+    end: int,
+    surface: str,
+) -> bool:
+    if surface[0].isalnum() and start > 0 and text[start - 1].isalnum():
+        return False
+    if surface[-1].isalnum() and end < len(text) and text[end].isalnum():
+        return False
+    return True
+
+
 def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
     if not intervals:
         return 0
@@ -1979,6 +2200,7 @@ __all__ = [
     "CoverageGap",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
     "compute_character_recall",
     "compute_recall_slices",
