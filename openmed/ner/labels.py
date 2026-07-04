@@ -30,6 +30,7 @@ _CLINICAL_DOMAINS_DISCLAIMER = (
 _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "anesthesia": "tests/fixtures/clinical/anesthesia.jsonl",
     "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
+    "gastroenterology": "tests/fixtures/clinical/gastroenterology.jsonl",
     "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
 }
