@@ -279,14 +279,19 @@ class LocalFileCheckpointStore:
 def dedupe_key_for_source(source: SourcePosition) -> str:
     """Return a stable dedupe key derived only from source position metadata."""
 
-    material = {
-        "schema": "openmed.stream.dedupe.v1",
-        "topic": source.topic,
-        "partition": source.partition,
-        "offset": source.offset,
-    }
-    digest = _sha256_json(material)
-    return f"sha256:{digest}"
+    digest = hashlib.sha256()
+    for value in (
+        "openmed.stream.dedupe.v1",
+        source.topic,
+        source.partition,
+        source.offset,
+    ):
+        encoded = str(value).encode("utf-8")
+        digest.update(str(len(encoded)).encode("ascii"))
+        digest.update(b":")
+        digest.update(encoded)
+        digest.update(b"\0")
+    return f"sha256:{digest.hexdigest()}"
 
 
 def build_stream_fingerprint(

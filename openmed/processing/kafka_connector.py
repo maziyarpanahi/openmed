@@ -555,15 +555,16 @@ def _commit_if_checkpointed(
     if checkpoint.source.offset < source_position.offset:
         return False
     consumer.commit(message)
-    logger.info(
-        "stream_checkpoint_recovered",
-        extra={
-            "source_topic": source_position.topic,
-            "source_partition": source_position.partition,
-            "source_offset": source_position.offset,
-            "checkpoint_offset": checkpoint.source.offset,
-        },
-    )
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(
+            "stream_checkpoint_recovered",
+            extra={
+                "source_topic": source_position.topic,
+                "source_partition": source_position.partition,
+                "source_offset": source_position.offset,
+                "checkpoint_offset": checkpoint.source.offset,
+            },
+        )
     return True
 
 
@@ -674,19 +675,20 @@ def _seek_if_supported(consumer: ConsumerProtocol, position: SourcePosition) -> 
 
 
 def _log_checkpoint_saved(checkpoint: CheckpointRecord) -> None:
-    logger.info(
-        "stream_checkpoint_saved",
-        extra={
-            "source_topic": checkpoint.source.topic,
-            "source_partition": checkpoint.source.partition,
-            "source_offset": checkpoint.source.offset,
-            "output_topic": checkpoint.redacted_output.topic,
-            "output_partition": checkpoint.redacted_output.partition,
-            "output_offset": checkpoint.redacted_output.offset,
-            "policy_fingerprint": checkpoint.policy_fingerprint,
-            "model_fingerprint": checkpoint.model_fingerprint,
-        },
-    )
+    if logger.isEnabledFor(logging.INFO):
+        logger.info(
+            "stream_checkpoint_saved",
+            extra={
+                "source_topic": checkpoint.source.topic,
+                "source_partition": checkpoint.source.partition,
+                "source_offset": checkpoint.source.offset,
+                "output_topic": checkpoint.redacted_output.topic,
+                "output_partition": checkpoint.redacted_output.partition,
+                "output_offset": checkpoint.redacted_output.offset,
+                "policy_fingerprint": checkpoint.policy_fingerprint,
+                "model_fingerprint": checkpoint.model_fingerprint,
+            },
+        )
 
 
 def _raise_for_message_error(message: Any) -> None:
