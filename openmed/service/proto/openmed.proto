@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package openmed.service.v1;
+
+import "google/protobuf/struct.proto";
+
+service OpenMedService {
+  rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse);
+  rpc Extract(ExtractRequest) returns (ExtractResponse);
+  rpc Deidentify(DeidentifyRequest) returns (DeidentifyResponse);
+  rpc StreamDeidentify(DeidentifyStreamRequest)
+      returns (stream DeidentifyStreamResponse);
+}
+
+message EntityPrediction {
+  string text = 1;
+  string label = 2;
+  double confidence = 3;
+  optional int64 start = 4;
+  optional int64 end = 5;
+  google.protobuf.Struct metadata = 6;
+}
+
+message PIIEntity {
+  string text = 1;
+  string label = 2;
+  string entity_type = 3;
+  optional int64 start = 4;
+  optional int64 end = 5;
+  double confidence = 6;
+  optional string redacted_text = 7;
+  optional string canonical_label = 8;
+  repeated string sources = 9;
+  google.protobuf.Struct evidence = 10;
+  optional double threshold = 11;
+  optional string action = 12;
+  optional string surrogate = 13;
+  optional string reversible_id = 14;
+  google.protobuf.Struct metadata = 15;
+}
+
+message OpenMedSpan {
+  int32 schema_version = 1;
+  string doc_id = 2;
+  int64 start = 3;
+  int64 end = 4;
+  string text_hash = 5;
+  string entity_type = 6;
+  string canonical_label = 7;
+  optional string policy_label = 8;
+  repeated string regulatory_tags = 9;
+  optional double score = 10;
+  optional string detector = 11;
+  google.protobuf.Struct evidence = 12;
+  string action = 13;
+  optional string replacement = 14;
+  optional string reversible_id = 15;
+  optional string section = 16;
+  google.protobuf.Struct metadata = 17;
+}
+
+message AnalyzeRequest {
+  string text = 1;
+  optional string model_name = 2;
+  optional double confidence_threshold = 3;
+  optional bool group_entities = 4;
+  optional string aggregation_strategy = 5;
+  optional bool sentence_detection = 6;
+  optional string sentence_language = 7;
+  optional bool sentence_clean = 8;
+  optional bool use_fast_tokenizer = 9;
+  optional string keep_alive = 10;
+}
+
+message AnalyzeResponse {
+  string text = 1;
+  repeated EntityPrediction entities = 2;
+  string model_name = 3;
+  string timestamp = 4;
+  optional double processing_time = 5;
+  google.protobuf.Struct metadata = 6;
+  repeated OpenMedSpan spans = 7;
+}
+
+message ExtractRequest {
+  string text = 1;
+  optional string model_name = 2;
+  optional double confidence_threshold = 3;
+  optional bool use_smart_merging = 4;
+  optional string lang = 5;
+  optional bool normalize_accents = 6;
+  optional string keep_alive = 7;
+}
+
+message ExtractResponse {
+  string text = 1;
+  repeated EntityPrediction entities = 2;
+  string model_name = 3;
+  string timestamp = 4;
+  optional double processing_time = 5;
+  google.protobuf.Struct metadata = 6;
+  repeated OpenMedSpan spans = 7;
+}
+
+message DeidentifyRequest {
+  string text = 1;
+  optional string method = 2;
+  optional string model_name = 3;
+  optional double confidence_threshold = 4;
+  optional bool keep_year = 5;
+  optional bool shift_dates = 6;
+  optional int32 date_shift_days = 7;
+  optional bool keep_mapping = 8;
+  optional string policy = 9;
+  optional bool use_smart_merging = 10;
+  optional bool use_safety_sweep = 11;
+  optional string lang = 12;
+  optional bool normalize_accents = 13;
+  optional string keep_alive = 14;
+}
+
+message DeidentifyResponse {
+  string original_text = 1;
+  string deidentified_text = 2;
+  repeated PIIEntity pii_entities = 3;
+  string method = 4;
+  string timestamp = 5;
+  int32 num_entities_redacted = 6;
+  google.protobuf.Struct metadata = 7;
+  repeated OpenMedSpan spans = 8;
+  google.protobuf.Struct mapping = 9;
+}
+
+message DeidentifyStreamRequest {
+  DeidentifyRequest request = 1;
+  repeated string chunks = 2;
+  int32 chunk_size = 3;
+  int32 max_buffer = 4;
+}
+
+message DeidentifyStreamResponse {
+  string redacted_text = 1;
+  bool final = 2;
+  repeated OpenMedSpan spans = 3;
+  google.protobuf.Struct audit_record = 4;
+}

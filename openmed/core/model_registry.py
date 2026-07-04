@@ -263,6 +263,16 @@ _CATEGORY_ENTITY_TYPES = {
         "FEEDING_ROUTE",
         "NUTRITIONAL_STATUS",
     ],
+    # Forward metadata for future Endocrinology models; no such model is
+    # registered today (see issue #895).
+    "Endocrinology": [
+        "GLYCEMIC_MEASURE",
+        "THYROID_MEASURE",
+        "HORMONE_LEVEL",
+        "INSULIN_REGIMEN",
+        "CONDITION",
+        "BODY_SITE",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -842,6 +852,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "kcal|calorie|enteral|parenteral|\\bpeg\\b|tube\\s*feed|diabetic\\s*diet|protein\\s*target|nutrition": (
         "Nutrition",
         "Contains nutrition/diet-order terms",
+    ),
+    "hba1c|hemoglobin\\s*a1c|blood\\s*glucose|glycemic|thyroid\\s*function|\\btsh\\b|hormone\\s*level|cortisol|insulin\\s*regimen|glargine|endocrinolog": (
+        "Endocrinology",
+        "Contains endocrinology terms",
     ),
 }
 

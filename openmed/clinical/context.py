@@ -38,6 +38,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import date
 from typing import Any, Literal
 
 Negation = Literal["affirmed", "negated"]
@@ -1036,6 +1037,34 @@ def resolve_temporality(span: Any, modifier_hits: Any = None) -> str:
     return RECENT
 
 
+def reconcile_temporality_with_interval(
+    *,
+    temporality: str,
+    interval_start: date | None,
+    interval_end: date | None,
+    reference_date: date | None,
+) -> str:
+    """Reconcile ConText temporality with a resolved timeline interval.
+
+    This helper keeps the ConText axis advisory while preventing impossible
+    combinations after absolute timeline resolution.  In particular, a span
+    resolved after the document reference date cannot remain historical.
+    """
+
+    if (
+        temporality == HYPOTHETICAL
+        or interval_start is None
+        or interval_end is None
+        or reference_date is None
+    ):
+        return temporality
+    if temporality == HISTORICAL and interval_start > reference_date:
+        return RECENT
+    if temporality == RECENT and interval_end < reference_date:
+        return HISTORICAL
+    return temporality
+
+
 def resolve_uncertainty(span: Any, modifier_hits: Any = None) -> Certainty:
     """Classify a clinical span as certain or uncertain/hypothetical.
 
@@ -1184,6 +1213,7 @@ __all__ = [
     "HYPOTHETICAL_CUES",
     "RECENT_TEMPORALITY_CUES",
     "resolve_temporality",
+    "reconcile_temporality_with_interval",
     "Certainty",
     "CERTAIN",
     "UNCERTAIN",

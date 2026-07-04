@@ -32,6 +32,14 @@ from openmed.onnx.android_profile import (
     export_android_fp16,
     validate_android_profile,
 )
+from openmed.onnx.openvino_export import (
+    OPENVINO_FORMAT,
+    OPENVINO_IR_DIRNAME,
+    OPENVINO_PROFILE_NAME,
+    build_synthetic_token_inputs,
+    export_openvino_ir,
+    run_onnx_reference_logits,
+)
 from openmed.onnx.ort_mobile import (
     ORT_ANDROID_FORMAT,
     convert_android_onnx_to_ort,
@@ -335,6 +343,7 @@ def convert(
     validation_texts: Sequence[str] | None = None,
     validation_lengths: Sequence[int] | None = None,
     cache_dir: str | None = None,
+    sample_text: str = DEFAULT_SAMPLE_TEXT,
     eval_suite_path: str | Path | None = None,
     recall_delta_report_path: str | Path | None = None,
     publish_to_hub: bool = False,
@@ -353,7 +362,10 @@ def convert(
     profile = _normalize_profile(profile)
     shape_bucket_config = shape_bucket_config or ShapeBucketConfig()
     optimization_config = _normalise_optimization_config(optimization_config)
-    should_optimize_onnx = optimize_onnx and profile != ANDROID_PROFILE_NAME
+    should_optimize_onnx = optimize_onnx and profile not in {
+        ANDROID_PROFILE_NAME,
+        OPENVINO_PROFILE_NAME,
+    }
 
     optimization_manifest: dict[str, Any]
     validation_manifest: dict[str, Any] | None = None
@@ -388,7 +400,7 @@ def convert(
         output_dir,
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
-        require_id2label=profile == ANDROID_PROFILE_NAME,
+        require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
     )
     if should_optimize_onnx and unoptimized_path is not None:
         optimization_manifest = optimize_onnx_graph(
@@ -467,6 +479,41 @@ def convert(
                     metadata=ort_result.to_metadata(output_dir),
                 )
             )
+    elif profile == OPENVINO_PROFILE_NAME:
+        config, tokenizer_files = save_source_assets(
+            model_id,
+            output_dir,
+            cache_dir=cache_dir,
+            max_seq_length=max_seq_length,
+            require_id2label=True,
+        )
+        tokenizer = get_tokenizer_with_loader(
+            model_id,
+            _transformers_tokenizer_loader(cache_dir=cache_dir),
+            cache_dir=cache_dir,
+        )
+        synthetic_inputs = build_synthetic_token_inputs(
+            tokenizer,
+            text=sample_text,
+            max_seq_length=max_seq_length,
+        )
+        reference_logits = run_onnx_reference_logits(onnx_path, synthetic_inputs)
+        openvino_result = export_openvino_ir(
+            onnx_path,
+            output_dir / OPENVINO_IR_DIRNAME,
+            sample_inputs=synthetic_inputs,
+            reference_logits=reference_logits,
+            id2label=config["id2label"],
+            sample_text=sample_text,
+        )
+        artifacts = [
+            ExportArtifact(
+                format=OPENVINO_FORMAT,
+                path=openvino_result.model_xml_path,
+                precision="float32",
+                metadata=openvino_result.to_metadata(output_dir),
+            )
+        ]
     else:
         if eval_suite_path is not None:
             raise ValueError("eval_suite_path requires profile='android'.")
@@ -474,7 +521,7 @@ def convert(
             ExportArtifact(format="onnx", path=onnx_path, precision="float32"),
         ]
 
-    if profile != ANDROID_PROFILE_NAME and include_webgpu:
+    if profile not in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME} and include_webgpu:
         webgpu_path = export_webgpu(
             onnx_path,
             output_dir / DEFAULT_WEBGPU_FILENAME,
@@ -1254,8 +1301,11 @@ def _normalize_profile(profile: str) -> str:
         return DEFAULT_PROFILE_NAME
     if normalized == ANDROID_PROFILE_NAME:
         return ANDROID_PROFILE_NAME
+    if normalized == OPENVINO_PROFILE_NAME:
+        return OPENVINO_PROFILE_NAME
     raise ValueError(
-        f"unsupported ONNX export profile {profile!r}; expected default or android"
+        "unsupported ONNX export profile "
+        f"{profile!r}; expected default, android, or openvino"
     )
 
 
@@ -1268,6 +1318,24 @@ def _resolve_opset(*, profile: str, opset: int | None) -> int:
             )
         return ANDROID_ONNX_OPSET
     return DEFAULT_ONNX_OPSET if opset is None else opset
+
+
+def _transformers_tokenizer_loader(*, cache_dir: str | None) -> Any:
+    try:
+        from transformers import AutoTokenizer
+    except ImportError as exc:
+        raise ImportError(
+            "transformers is required for OpenVINO export verification. "
+            "Install with: pip install openmed[openvino]"
+        ) from exc
+
+    def load_tokenizer(model_id: str, **kwargs: Any) -> Any:
+        options = dict(kwargs)
+        if cache_dir is not None:
+            options.setdefault("cache_dir", cache_dir)
+        return AutoTokenizer.from_pretrained(model_id, **options)
+
+    return load_tokenizer
 
 
 def _ensure_id2label(config: Mapping[str, Any]) -> dict[str, str]:
@@ -1354,9 +1422,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--profile",
-        choices=[DEFAULT_PROFILE_NAME, ANDROID_PROFILE_NAME],
+        choices=[DEFAULT_PROFILE_NAME, ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME],
         default=DEFAULT_PROFILE_NAME,
-        help="Export profile. Use android for ONNX Runtime Mobile artifacts.",
+        help=(
+            "Export profile. Use android for ONNX Runtime Mobile artifacts "
+            "or openvino for Intel edge runtimes."
+        ),
     )
     parser.add_argument(
         "--max-seq-length",
@@ -1425,6 +1496,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--cache-dir", default=None, help="Hugging Face cache directory"
+    )
+    parser.add_argument(
+        "--sample-text",
+        default=DEFAULT_SAMPLE_TEXT,
+        help="Synthetic note used for export and runtime verification",
     )
     parser.add_argument(
         "--eval-suite",
@@ -1501,6 +1577,7 @@ def main() -> None:
         validation_texts=args.validation_text,
         validation_lengths=_parse_int_tuple(args.validation_lengths),
         cache_dir=args.cache_dir,
+        sample_text=args.sample_text,
         eval_suite_path=args.eval_suite,
         recall_delta_report_path=args.recall_delta_report,
         publish_to_hub=args.publish_to_hub,
