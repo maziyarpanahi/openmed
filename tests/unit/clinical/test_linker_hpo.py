@@ -8,9 +8,11 @@ import pytest
 
 from openmed.clinical.grounding import (
     Candidate,
+    VocabLoader,
+    VocabSource,
+    VocabularyIndex,
     available_linkers,
     get_linker,
-    load_vocab,
 )
 from openmed.clinical.grounding.linkers.hpo import HpoLinker
 
@@ -25,7 +27,12 @@ FIXTURE = (
 
 @pytest.fixture
 def linker() -> HpoLinker:
-    return HpoLinker(load_vocab(FIXTURE))
+    return HpoLinker(_load_fixture_index())
+
+
+def _load_fixture_index() -> VocabularyIndex:
+    loader = VocabLoader(registry={"hpo": VocabSource(system="hpo", path=FIXTURE)})
+    return loader.get_index("hpo")
 
 
 class TestHpoLinker:
