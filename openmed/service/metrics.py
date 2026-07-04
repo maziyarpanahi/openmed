@@ -15,6 +15,9 @@ REQUEST_DURATION_NAME = "openmed_service_request_duration_seconds"
 INFLIGHT_NAME = "openmed_service_inflight_requests"
 MODEL_LOAD_NAME = "openmed_service_model_load_total"
 MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
+BATCH_QUEUE_DEPTH_NAME = "openmed_service_batch_queue_depth"
+BATCH_QUEUE_WAIT_NAME = "openmed_service_batch_queue_wait_seconds"
+BATCH_SHED_NAME = "openmed_service_batch_shed_total"
 CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
 CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
 CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
@@ -94,6 +97,11 @@ class PrometheusMetricsRegistry:
         self._inflight_requests = 0
         self._model_load_total = 0
         self._model_eviction_total = 0
+        self._batch_queue_depth: dict[str, int] = {}
+        self._batch_wait_bucket_counts: dict[str, list[int]] = {}
+        self._batch_wait_count: dict[str, int] = {}
+        self._batch_wait_sum: dict[str, float] = {}
+        self._batch_shed_total: dict[str, int] = {}
         self._circuit_breaker_state_counts = {
             "closed": 0,
             "open": 0,
@@ -163,6 +171,49 @@ class PrometheusMetricsRegistry:
             return
         with self._lock:
             self._model_eviction_total += int(count)
+
+    def record_batch_queue_depth(self, *, priority: str, depth: int) -> None:
+        """Set the current dynamic-batcher queue depth for one priority."""
+        priority_label = str(priority)
+        with self._lock:
+            self._batch_queue_depth[priority_label] = max(int(depth), 0)
+
+    def record_batch_queue_wait(
+        self,
+        *,
+        priority: str,
+        wait_seconds: float,
+    ) -> None:
+        """Record time spent queued before a dynamic-batcher dispatch."""
+        priority_label = str(priority)
+        observed_wait = max(float(wait_seconds), 0.0)
+
+        with self._lock:
+            bucket_counts = self._batch_wait_bucket_counts.get(priority_label)
+            if bucket_counts is None:
+                bucket_counts = [0] * (len(self._duration_buckets) + 1)
+                self._batch_wait_bucket_counts[priority_label] = bucket_counts
+
+            for index, bucket in enumerate(self._duration_buckets):
+                if observed_wait <= bucket:
+                    bucket_counts[index] += 1
+            bucket_counts[-1] += 1
+            self._batch_wait_count[priority_label] = (
+                self._batch_wait_count.get(priority_label, 0) + 1
+            )
+            self._batch_wait_sum[priority_label] = (
+                self._batch_wait_sum.get(priority_label, 0.0) + observed_wait
+            )
+
+    def record_batch_shed(self, *, priority: str, count: int = 1) -> None:
+        """Record requests rejected because a priority queue was saturated."""
+        if count <= 0:
+            return
+        priority_label = str(priority)
+        with self._lock:
+            self._batch_shed_total[priority_label] = self._batch_shed_total.get(
+                priority_label, 0
+            ) + int(count)
 
     def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
         """Replace aggregate circuit-breaker state gauges."""
@@ -238,6 +289,14 @@ class PrometheusMetricsRegistry:
             inflight_requests = self._inflight_requests
             model_load_total = self._model_load_total
             model_eviction_total = self._model_eviction_total
+            batch_queue_depth = dict(self._batch_queue_depth)
+            batch_wait_bucket_counts = {
+                priority: list(counts)
+                for priority, counts in self._batch_wait_bucket_counts.items()
+            }
+            batch_wait_count = dict(self._batch_wait_count)
+            batch_wait_sum = dict(self._batch_wait_sum)
+            batch_shed_total = dict(self._batch_shed_total)
             circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
             model_resident_total = self._model_resident_total
             model_resident_bytes = self._model_resident_bytes
@@ -312,6 +371,56 @@ class PrometheusMetricsRegistry:
             "counter",
         )
         lines.append(f"{MODEL_EVICTION_NAME} {model_eviction_total}")
+
+        _append_family_header(
+            lines,
+            BATCH_QUEUE_DEPTH_NAME,
+            "Dynamic-batcher queued jobs by priority class.",
+            "gauge",
+        )
+        for priority, value in sorted(batch_queue_depth.items()):
+            labels = _label_suffix({"priority": priority})
+            lines.append(f"{BATCH_QUEUE_DEPTH_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            BATCH_QUEUE_WAIT_NAME,
+            "Dynamic-batcher queue wait in seconds by priority class.",
+            "histogram",
+        )
+        for priority in sorted(batch_wait_bucket_counts):
+            cumulative_counts = batch_wait_bucket_counts[priority]
+            for bucket, value in zip(self._duration_buckets, cumulative_counts):
+                labels = _label_suffix(
+                    {
+                        "priority": priority,
+                        "le": _format_bucket_label(bucket),
+                    }
+                )
+                lines.append(f"{BATCH_QUEUE_WAIT_NAME}_bucket{labels} {value}")
+            labels = _label_suffix({"priority": priority, "le": "+Inf"})
+            lines.append(
+                f"{BATCH_QUEUE_WAIT_NAME}_bucket{labels} {cumulative_counts[-1]}"
+            )
+            count_labels = _label_suffix({"priority": priority})
+            lines.append(
+                f"{BATCH_QUEUE_WAIT_NAME}_count{count_labels} "
+                f"{batch_wait_count.get(priority, 0)}"
+            )
+            lines.append(
+                f"{BATCH_QUEUE_WAIT_NAME}_sum{count_labels} "
+                f"{_format_sample_value(batch_wait_sum.get(priority, 0.0))}"
+            )
+
+        _append_family_header(
+            lines,
+            BATCH_SHED_NAME,
+            "Dynamic-batcher requests shed by saturated priority queue.",
+            "counter",
+        )
+        for priority, value in sorted(batch_shed_total.items()):
+            labels = _label_suffix({"priority": priority})
+            lines.append(f"{BATCH_SHED_NAME}{labels} {value}")
 
         _append_family_header(
             lines,
