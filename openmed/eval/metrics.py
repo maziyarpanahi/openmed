@@ -32,6 +32,33 @@ CRITICAL_ABSTENTION_LABELS = frozenset(
         "BIC",
     }
 )
+CRITICAL_FINDING_CATEGORY_DIAGNOSIS = "critical_diagnosis"
+CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY = "drug_allergy"
+CRITICAL_FINDING_CATEGORY_RESULT = "critical_result"
+CRITICAL_FINDING_CATEGORIES: tuple[str, ...] = (
+    CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    CRITICAL_FINDING_CATEGORY_RESULT,
+)
+_CRITICAL_FINDING_CATEGORY_ALIASES = {
+    "diagnosis": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "critical_diagnosis": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "condition": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "critical_condition": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "allergy": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    "drug_allergy": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    "medication_allergy": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    "result": CRITICAL_FINDING_CATEGORY_RESULT,
+    "critical_result": CRITICAL_FINDING_CATEGORY_RESULT,
+    "lab_result": CRITICAL_FINDING_CATEGORY_RESULT,
+    "critical_lab": CRITICAL_FINDING_CATEGORY_RESULT,
+}
+_CRITICAL_FINDING_CATEGORY_KEYS = (
+    "critical_finding_category",
+    "critical_category",
+    "critical_finding_type",
+)
+_CRITICAL_FINDING_MARKER_KEYS = ("critical_finding", "critical", "must_not_miss")
 
 
 @dataclass(frozen=True)
@@ -247,6 +274,56 @@ class RecallSlices:
             "by_device": self.by_device,
             "covered_chars": self.covered_chars,
             "total_chars": self.total_chars,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class CriticalFindingMiss:
+    """PHI-free detail for one missed critical clinical finding."""
+
+    category: str
+    fixture_id: str
+    start: int
+    end: int
+    label: str
+
+    def to_dict(self) -> dict[str, int | str]:
+        return {
+            "category": self.category,
+            "fixture_id": self.fixture_id,
+            "start": int(self.start),
+            "end": int(self.end),
+            "label": self.label,
+        }
+
+    def __getitem__(self, key: str) -> int | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class CriticalFindingRecallMetrics:
+    """Span recall over gold spans marked as critical clinical findings."""
+
+    overall: float
+    by_category: dict[str, float]
+    covered: int
+    total: int
+    covered_by_category: dict[str, int]
+    total_by_category: dict[str, int]
+    missed_findings: tuple[CriticalFindingMiss, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall": self.overall,
+            "by_category": self.by_category,
+            "covered": int(self.covered),
+            "total": int(self.total),
+            "covered_by_category": self.covered_by_category,
+            "total_by_category": self.total_by_category,
+            "missed_findings": [finding.to_dict() for finding in self.missed_findings],
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -681,6 +758,122 @@ def compute_recall_slices(
         by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
         covered_chars=covered_chars,
         total_chars=total_chars,
+    )
+
+
+def normalize_critical_finding_category(value: Any) -> str:
+    """Return a stable critical-finding category identifier."""
+    normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    return _CRITICAL_FINDING_CATEGORY_ALIASES.get(normalized, normalized)
+
+
+def critical_finding_category(span: Any) -> str | None:
+    """Return the critical-finding category for *span*, if it is marked critical."""
+    if isinstance(span, EvalSpan):
+        data: Mapping[str, Any] = {}
+        metadata = span.metadata
+    elif isinstance(span, Mapping):
+        data = span
+        metadata = _read_mapping(data, "metadata") or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {}
+    else:
+        data = vars(span)
+        metadata = _read_mapping(data, "metadata") or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {}
+
+    raw_category = _first_present_value(
+        *(metadata.get(key) for key in _CRITICAL_FINDING_CATEGORY_KEYS),
+        *(data.get(key) for key in _CRITICAL_FINDING_CATEGORY_KEYS),
+    )
+    marked = any(
+        _truthy(_first_present_value(metadata.get(key), data.get(key)))
+        for key in _CRITICAL_FINDING_MARKER_KEYS
+    )
+    if raw_category is None:
+        return None
+    category = normalize_critical_finding_category(raw_category)
+    if category in CRITICAL_FINDING_CATEGORIES and (
+        marked or bool(str(raw_category).strip())
+    ):
+        return category
+    return None
+
+
+def compute_critical_finding_recall(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> CriticalFindingRecallMetrics:
+    """Compute span recall over gold spans marked as critical findings.
+
+    The metric keeps the output PHI-free by reporting only the missed finding's
+    category, fixture id, canonical label, and offsets.
+    """
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+
+    covered_by_category: defaultdict[str, int] = defaultdict(int)
+    total_by_category: defaultdict[str, int] = defaultdict(int)
+    missed: list[CriticalFindingMiss] = []
+    covered = 0
+    total = 0
+
+    for span in gold:
+        category = critical_finding_category(span)
+        if category is None:
+            continue
+        total += 1
+        total_by_category[category] += 1
+        found = any(
+            _label_aware_overlap(span, predicted_span) for predicted_span in predicted
+        )
+        if found:
+            covered += 1
+            covered_by_category[category] += 1
+            continue
+        missed.append(
+            CriticalFindingMiss(
+                category=category,
+                fixture_id=_fixture_id_for_span(span),
+                start=span.start,
+                end=span.end,
+                label=span.label,
+            )
+        )
+
+    category_keys = _slice_keys(
+        CRITICAL_FINDING_CATEGORIES,
+        total_by_category,
+        covered_by_category,
+    )
+    return CriticalFindingRecallMetrics(
+        overall=_safe_rate(covered, total, zero_denominator=1.0),
+        by_category=_rate_map(
+            category_keys,
+            covered_by_category,
+            total_by_category,
+            1.0,
+        ),
+        covered=covered,
+        total=total,
+        covered_by_category=_count_map(category_keys, covered_by_category),
+        total_by_category=_count_map(category_keys, total_by_category),
+        missed_findings=tuple(missed),
     )
 
 
@@ -1322,6 +1515,13 @@ def compute_metrics_bundle(
             default_device=default_device,
             source_text=source_text,
         ).to_dict(),
+        "critical_finding_recall": compute_critical_finding_recall(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
         "exact_span_f1": compute_exact_span_f1(
             gold_spans,
             predicted_spans,
@@ -1868,6 +2068,31 @@ def _label_aware_overlap(gold_span: EvalSpan, pred_span: EvalSpan) -> bool:
     return bool(overlaps)
 
 
+def _first_present_value(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _fixture_id_for_span(span: EvalSpan) -> str:
+    for key in ("fixture_id", "fixture", "source_fixture_id", "id"):
+        value = span.metadata.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return "unknown"
+
+
 def _overlap_len(a: EvalSpan, b: EvalSpan) -> int:
     if not _label_aware_overlap(a, b):
         return 0
@@ -1962,9 +2187,15 @@ __all__ = [
     "ABSTENTION_ROUTE_REDACT",
     "ABSTENTION_ROUTE_REVIEW",
     "CRITICAL_ABSTENTION_LABELS",
+    "CRITICAL_FINDING_CATEGORIES",
+    "CRITICAL_FINDING_CATEGORY_DIAGNOSIS",
+    "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
+    "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
     "AbstentionDecision",
     "AbstentionMetrics",
+    "CriticalFindingMiss",
+    "CriticalFindingRecallMetrics",
     "EvalSpan",
     "RateMetric",
     "F1Metrics",
@@ -1981,6 +2212,7 @@ __all__ = [
     "normalize_eval_spans",
     "compute_leakage_rate",
     "compute_character_recall",
+    "compute_critical_finding_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_relaxed_span_f1",
@@ -1999,6 +2231,8 @@ __all__ = [
     "bootstrap_ci",
     "paired_significance",
     "compute_confidence_intervals",
+    "critical_finding_category",
+    "normalize_critical_finding_category",
     "abstention_route",
     "apply_abstention_policy",
     "bootstrap_abstention_residual_risk",

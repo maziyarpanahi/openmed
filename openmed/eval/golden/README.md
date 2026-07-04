@@ -38,16 +38,19 @@ Required fields:
   tokens are non-PHI and must remain unredacted.
 - `metadata.category`: one of `nested_overlapping`, `chunk_boundary`,
   `multilingual`, `checksum_ids`, `financial_ids`, `date_arithmetic`,
-  `policy_profile_actions`, or `hard_negatives`.
+  `policy_profile_actions`, `hard_negatives`, or `critical_findings`.
 - `metadata.expected_output`: expected post-action output, including `method`
   and resulting `text`.
 - `metadata.synthetic`: must be `true`.
 - `metadata.hard_negative_candidates`: required only for `hard_negatives`;
   each candidate records canonical label, offsets, synthetic marker, and
   aggregate difficulty scores.
+- `metadata.medical_device_disclaimer`: required only for `critical_findings`;
+  it must note that the synthetic set is an assistive safety probe, not
+  clinical ground truth.
 
 The package loader validates offsets, canonical labels, synthetic markers,
-expected output, hard-negative candidate metadata, and language coverage. The
-JSON and JSONL files are also compatible with
+expected output, hard-negative candidate metadata, critical-finding disclaimers,
+and language coverage. The JSON and JSONL files are also compatible with
 `openmed.eval.harness.load_fixtures`; golden-specific expected output remains
 available through each fixture's metadata.
