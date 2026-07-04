@@ -8,6 +8,7 @@ import pytest
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
+from openmed.core.anonymizer.providers.clinical_ids import generate_philhealth_pin
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -16,19 +17,24 @@ from openmed.core.pii_i18n import (
     LANGUAGE_MONTH_NAMES,
     LANGUAGE_NAMES,
     LANGUAGE_PII_PATTERNS,
+    MRZ_PII_PATTERNS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     get_patterns_for_language,
+    validate_bic,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_iban,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
+    validate_philhealth_pin,
+    validate_philsys_psn,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_spanish_dni,
@@ -65,7 +71,7 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms", "da"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms", "tl", "da"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -113,6 +119,153 @@ class TestConstants:
         for lang in SUPPORTED_LANGUAGES:
             assert lang in LANGUAGE_MONTH_NAMES
             assert len(LANGUAGE_MONTH_NAMES[lang]) == 12
+
+
+# ---------------------------------------------------------------------------
+# Financial Identifier Validator Tests
+# ---------------------------------------------------------------------------
+
+
+class TestFinancialIdentifierValidators:
+    """Tests for IBAN and SWIFT/BIC financial identifiers."""
+
+    @pytest.mark.parametrize(
+        "iban",
+        [
+            "GB82 WEST 1234 5698 7654 32",
+            "DE89 3704 0044 0532 0130 00",
+            "ES91 2100 0418 4502 0005 1332",
+            "FR14 2004 1010 0505 0001 3M02 606",
+            "NL91 ABNA 0417 1643 00",
+        ],
+    )
+    def test_validate_iban_accepts_known_valid_synthetic_values(self, iban):
+        assert validate_iban(iban) is True
+
+    @pytest.mark.parametrize(
+        "iban",
+        [
+            "GB83 WEST 1234 5698 7654 32",
+            "DE89 3704 0044 0532 0130",
+            "ZZ12 1234 5678 9012",
+            "GB82 WEST 1234 5698 7654 3!",
+        ],
+    )
+    def test_validate_iban_rejects_bad_checksum_length_or_shape(self, iban):
+        assert validate_iban(iban) is False
+
+    @pytest.mark.parametrize(
+        "bic",
+        [
+            "DEUTDEFF",
+            "AGRIFRPPXXX",
+            "CAIXESBBXXX",
+            "deutdeff500",
+        ],
+    )
+    def test_validate_bic_accepts_eight_or_eleven_character_codes(self, bic):
+        assert validate_bic(bic) is True
+
+    @pytest.mark.parametrize(
+        "bic",
+        [
+            "DEUTDEFF1",
+            "DEU1DEFF",
+            "DEUTD3FF",
+            "DEUTDEFF-XX",
+        ],
+    )
+    def test_validate_bic_rejects_wrong_length_or_structure(self, bic):
+        assert validate_bic(bic) is False
+
+
+class TestFinancialIdentifierDetection:
+    """Financial ID patterns are inherited by every language."""
+
+    @pytest.mark.parametrize(
+        ("lang", "text", "expected"),
+        [
+            (
+                "en",
+                "Billing note: IBAN GB82 WEST 1234 5698 7654 32 and BIC DEUTDEFF.",
+                {
+                    ("iban", 19, 46, "GB82 WEST 1234 5698 7654 32"),
+                    ("bic", 55, 63, "DEUTDEFF"),
+                },
+            ),
+            (
+                "es",
+                "Informe: IBAN ES91 2100 0418 4502 0005 1332 y SWIFT CAIXESBBXXX.",
+                {
+                    ("iban", 14, 43, "ES91 2100 0418 4502 0005 1332"),
+                    ("bic", 52, 63, "CAIXESBBXXX"),
+                },
+            ),
+            (
+                "fr",
+                "Note: IBAN FR14 2004 1010 0505 0001 3M02 606 et BIC AGRIFRPPXXX.",
+                {
+                    ("iban", 11, 44, "FR14 2004 1010 0505 0001 3M02 606"),
+                    ("bic", 52, 63, "AGRIFRPPXXX"),
+                },
+            ),
+        ],
+    )
+    def test_iban_and_bic_detect_with_offsets(self, lang, text, expected):
+        units = find_semantic_units(text, get_patterns_for_language(lang))
+        actual = {
+            (entity_type, start, end, text[start:end])
+            for start, end, entity_type, _score, _pattern, validated in units
+            if entity_type in {"iban", "bic"} and validated
+        }
+
+        assert actual == expected
+
+    @pytest.mark.parametrize("seed", list(range(10)))
+    def test_surrogate_iban_and_bic_round_trip_validators(self, seed):
+        anonymizer = Anonymizer(lang="en", consistent=True, seed=seed)
+
+        iban = anonymizer.surrogate("GB82 WEST 1234 5698 7654 32", "IBAN")
+        bic = anonymizer.surrogate("DEUTDEFF", "BIC")
+
+        assert validate_iban(iban), f"Invalid IBAN surrogate: {iban!r}"
+        assert validate_bic(bic), f"Invalid BIC surrogate: {bic!r}"
+
+    def test_financial_id_golden_fixture_deidentifies_without_leakage(self):
+        from datetime import datetime
+        from unittest.mock import patch
+
+        from openmed.core.pii import deidentify
+        from openmed.eval.golden import GoldenFixture
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("openmed/eval/golden/financial_ids.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert {row["language"] for row in rows} == {"en", "es", "fr"}
+        for row in rows:
+            fixture = GoldenFixture.from_mapping(row)
+            with patch("openmed.core.pii.extract_pii") as mock_extract:
+                mock_extract.return_value = PredictionResult(
+                    text=fixture.text,
+                    entities=[],
+                    model_name="stub",
+                    timestamp=datetime.now().isoformat(),
+                )
+                result = deidentify(
+                    fixture.text,
+                    method="mask",
+                    lang=fixture.language,
+                )
+
+            assert result.metadata["safety_sweep"]["spans_added"] == 2
+            for span in fixture.gold_spans:
+                assert fixture.text[span.start : span.end] == span.text
+                assert span.text not in result.deidentified_text
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +619,53 @@ class TestValidateMalaysianMyKad:
         assert validate_malaysian_mykad(surrogate) is True
 
 
+class TestValidatePhilippineIds:
+    """Tests for Philippine PhilSys and PhilHealth validators."""
+
+    def test_valid_philsys_psn_with_dashes(self):
+        assert validate_philsys_psn("1234-5678-9012") is True
+
+    def test_valid_philsys_psn_without_dashes(self):
+        assert validate_philsys_psn("123456789012") is True
+
+    def test_invalid_philsys_psn_wrong_grouping(self):
+        assert validate_philsys_psn("98-765432109-8") is False
+
+    def test_invalid_philsys_psn_trivial_digits(self):
+        assert validate_philsys_psn("0000-0000-0000") is False
+
+    def test_invalid_philsys_psn_wrong_length(self):
+        assert validate_philsys_psn("1234-5678-901") is False
+
+    def test_valid_philhealth_pin_with_dashes(self):
+        assert validate_philhealth_pin("98-765432109-8") is True
+
+    def test_valid_philhealth_pin_without_dashes(self):
+        assert validate_philhealth_pin("987654321098") is True
+
+    def test_invalid_philhealth_pin_wrong_grouping(self):
+        assert validate_philhealth_pin("1234-5678-9012") is False
+
+    def test_invalid_philhealth_pin_zero_groups(self):
+        assert validate_philhealth_pin("00-000000000-0") is False
+
+    def test_invalid_philhealth_pin_wrong_length(self):
+        assert validate_philhealth_pin("98-765432109") is False
+
+    def test_generated_tl_surrogate_passes_philsys_validator(self):
+        assert LANG_TO_LOCALE["tl"] == "fil_PH"
+
+        anonymizer = Anonymizer(lang="tl", consistent=True, seed=42)
+        surrogate = anonymizer.surrogate("1234-5678-9012", "national_id")
+
+        assert validate_philsys_psn(surrogate) is True
+
+    def test_generated_philhealth_provider_passes_validator(self):
+        surrogate = generate_philhealth_pin()
+
+        assert validate_philhealth_pin(surrogate) is True
+
+
 class TestValidateDanishCPR:
     """Tests for validate_danish_cpr()."""
 
@@ -600,6 +800,10 @@ class TestLanguagePIIPatterns:
     def test_malay_patterns_exist(self):
         assert "ms" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["ms"]) > 0
+
+    def test_tagalog_patterns_exist(self):
+        assert "tl" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["tl"]) > 0
 
     def test_danish_patterns_exist(self):
         assert "da" in LANGUAGE_PII_PATTERNS
@@ -1103,6 +1307,45 @@ class TestLanguagePIIPatterns:
             matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
             assert matched, f"Malay address pattern should match '{text}'"
 
+    def test_tagalog_date_month_name(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "date"]
+        text = "17 Agosto 1985"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Tagalog date pattern should match '{text}'"
+
+    def test_tagalog_phone(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "phone_number"
+        ]
+        texts = ["+63 917 123 4567", "0917-987-6543"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Tagalog phone pattern should match '{text}'"
+
+    def test_tagalog_philippine_id_patterns(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "national_id"
+        ]
+        examples = {
+            "1234-5678-9012": validate_philsys_psn,
+            "98-765432109-8": validate_philhealth_pin,
+        }
+        for text, validator in examples.items():
+            matched = any(
+                re.search(p.pattern, text, p.flags) and validator(text)
+                for p in patterns
+            )
+            assert matched, f"Tagalog national ID pattern should match '{text}'"
+
+    def test_tagalog_address_pattern(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["tl"] if p.entity_type == "street_address"
+        ]
+        texts = ["Barangay Maligaya", "Kalye Rizal 12", "Purok Sampaguita"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Tagalog address pattern should match '{text}'"
+
     def test_danish_date_month_name(self):
         patterns = [p for p in LANGUAGE_PII_PATTERNS["da"] if p.entity_type == "date"]
         text = "17 august 1985"
@@ -1182,6 +1425,29 @@ class TestLanguagePIIPatterns:
         }
         observed = set()
         for pattern in get_patterns_for_language("ms"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_tagalog_clinical_sample_expected_spans(self):
+        text = (
+            "Pasyente Maria Santos ipinanganak 17/08/1985. Telepono "
+            "+63 917 123 4567. PSN 1234-5678-9012. PhilHealth "
+            "98-765432109-8. Tirahan Barangay Maligaya."
+        )
+        expected = {
+            ("date", 34, 44, "17/08/1985"),
+            ("phone_number", 55, 71, "+63 917 123 4567"),
+            ("national_id", 77, 91, "1234-5678-9012"),
+            ("national_id", 104, 118, "98-765432109-8"),
+            ("street_address", 128, 145, "Barangay Maligaya"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("tl"):
             for match in re.finditer(pattern.pattern, text, pattern.flags):
                 value = match.group(0)
                 if pattern.validator is not None and not pattern.validator(value):
@@ -1360,107 +1626,113 @@ class TestGetPatternsForLanguage:
 
     def test_english_returns_base_patterns(self):
         patterns = get_patterns_for_language("en")
-        assert len(patterns) == len(PII_PATTERNS)
+        assert len(patterns) == (len(PII_PATTERNS) + len(MRZ_PII_PATTERNS))
 
     def test_french_includes_base_and_language(self):
         fr_patterns = get_patterns_for_language("fr")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["fr"])
         assert len(fr_patterns) == base_count + lang_count
 
     def test_german_includes_base_and_language(self):
         de_patterns = get_patterns_for_language("de")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["de"])
         assert len(de_patterns) == base_count + lang_count
 
     def test_italian_includes_base_and_language(self):
         it_patterns = get_patterns_for_language("it")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["it"])
         assert len(it_patterns) == base_count + lang_count
 
     def test_spanish_includes_base_and_language(self):
         es_patterns = get_patterns_for_language("es")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["es"])
         assert len(es_patterns) == base_count + lang_count
 
     def test_portuguese_includes_base_and_language(self):
         pt_patterns = get_patterns_for_language("pt")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["pt"])
         assert len(pt_patterns) == base_count + lang_count
 
     def test_dutch_includes_base_and_language(self):
         nl_patterns = get_patterns_for_language("nl")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["nl"])
         assert len(nl_patterns) == base_count + lang_count
 
     def test_hindi_includes_base_and_language(self):
         hi_patterns = get_patterns_for_language("hi")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["hi"])
         assert len(hi_patterns) == base_count + lang_count
 
     def test_telugu_includes_base_and_language(self):
         te_patterns = get_patterns_for_language("te")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["te"])
         assert len(te_patterns) == base_count + lang_count
 
     def test_arabic_includes_base_and_language(self):
         ar_patterns = get_patterns_for_language("ar")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["ar"])
         assert len(ar_patterns) == base_count + lang_count
 
     def test_hebrew_includes_base_and_language(self):
         he_patterns = get_patterns_for_language("he")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["he"])
         assert len(he_patterns) == base_count + lang_count
 
     def test_japanese_includes_base_and_language(self):
         ja_patterns = get_patterns_for_language("ja")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["ja"])
         assert len(ja_patterns) == base_count + lang_count
 
     def test_turkish_includes_base_and_language(self):
         tr_patterns = get_patterns_for_language("tr")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["tr"])
         assert len(tr_patterns) == base_count + lang_count
 
     def test_thai_includes_base_and_language(self):
         th_patterns = get_patterns_for_language("th")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["th"])
         assert len(th_patterns) == base_count + lang_count
 
     def test_indonesian_includes_base_and_language(self):
         id_patterns = get_patterns_for_language("id")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["id"])
         assert len(id_patterns) == base_count + lang_count
 
     def test_slovak_includes_base_and_language(self):
         sk_patterns = get_patterns_for_language("sk")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["sk"])
         assert len(sk_patterns) == base_count + lang_count
 
     def test_malay_includes_base_and_language(self):
         ms_patterns = get_patterns_for_language("ms")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["ms"])
         assert len(ms_patterns) == base_count + lang_count
 
+    def test_tagalog_includes_base_and_language(self):
+        tl_patterns = get_patterns_for_language("tl")
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["tl"])
+        assert len(tl_patterns) == base_count + lang_count
+
     def test_danish_includes_base_and_language(self):
         da_patterns = get_patterns_for_language("da")
-        base_count = len(PII_PATTERNS)
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["da"])
         assert len(da_patterns) == base_count + lang_count
 
@@ -1622,6 +1894,10 @@ class TestLanguageFakeData:
         phones = LANGUAGE_FAKE_DATA["ms"]["PHONE"]
         assert any("+60" in p or p.startswith("0") for p in phones)
 
+    def test_tagalog_phones_have_country_code(self):
+        phones = LANGUAGE_FAKE_DATA["tl"]["PHONE"]
+        assert any("+63" in p or p.startswith("0") for p in phones)
+
     def test_danish_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["da"]["PHONE"]
         assert any("+45" in p or len(re.sub(r"[^0-9]", "", p)) == 8 for p in phones)
@@ -1700,6 +1976,48 @@ class TestMalayLocaleAndFixture:
             ("PHONE", 45, 60, "+60 12-345 6789"),
             ("ID_NUM", 68, 82, "850817-14-5678"),
             ("STREET_ADDRESS", 91, 107, "Jalan Merdeka 10"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+
+class TestTagalogLocaleAndFixture:
+    """Tests for Tagalog/Filipino locale and golden fixture wiring."""
+
+    def test_locale_and_surrogate_philsys_round_trip(self):
+        assert LANG_TO_LOCALE["tl"] == "fil_PH"
+        anon = Anonymizer(lang="tl", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("1234-5678-9012", "national_id")
+
+        assert validate_philsys_psn(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/tl.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "tl"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            ("DATE", 34, 44, "17/08/1985"),
+            ("PHONE", 55, 71, "+63 917 123 4567"),
+            ("ID_NUM", 77, 91, "1234-5678-9012"),
+            ("ID_NUM", 104, 118, "98-765432109-8"),
+            ("STREET_ADDRESS", 128, 145, "Barangay Maligaya"),
         }
         actual = {
             (span["label"], span["start"], span["end"], span["text"])

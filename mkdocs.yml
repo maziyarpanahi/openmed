@@ -17,6 +17,13 @@ nav:
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - REST Tracing: serving/tracing.md
+      - Serving Resilience: serving/resilience.md
+      - Hardened Service Image: deploy/hardened-image.md
+      - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - gRPC Service: serving/grpc.md
+      - REST Authentication: serving/authentication.md
+      - Helm Deployment: deploy/helm.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
@@ -30,8 +37,10 @@ nav:
       - Performance Profiling: profiling.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
+      - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
@@ -41,6 +50,9 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - Columnar Redactor: integrations/columnar-redactor.md
+      - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
+      - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
@@ -53,9 +65,12 @@ nav:
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
+      - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
+      - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
       - Onboarding: onboarding.md
@@ -64,7 +79,11 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
+      - SLSA Build Provenance: supply-chain/provenance.md
+      - Container Image SBOM: supply-chain/sbom.md
+      - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
       - PyPI Trusted Publishing: release/trusted-publishing.md
       - OpenMed 1.7.0 Release Notes: release/v1.7.0.md

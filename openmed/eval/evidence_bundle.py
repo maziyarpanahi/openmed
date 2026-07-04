@@ -534,6 +534,7 @@ def _build_manifest(
     artifacts: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     gate_summary = _gate_summary(payload, artifacts)
+    stability_summary = _stability_summary(payload)
     missing_required = [
         entry
         for entry in artifacts
@@ -554,6 +555,7 @@ def _build_manifest(
             "format": payload.get("format"),
             "decision": payload.get("decision"),
             "repro_hash": payload.get("repro_hash"),
+            "stability_summary": stability_summary,
         },
         "summary": {
             "covered_gates": _sort_gates(covered_gates),
@@ -565,6 +567,10 @@ def _build_manifest(
             "missing_artifacts": len(
                 [entry for entry in artifacts if entry["status"] == "missing"]
             ),
+            "quarantined_stability_gates": list(
+                stability_summary.get("quarantined_gates", [])
+            ),
+            "stability_verdict": stability_summary.get("verdict"),
             "total_artifacts": len(artifacts),
         },
         "gates": gate_summary,
@@ -617,6 +623,7 @@ def _render_summary(manifest: Mapping[str, Any]) -> str:
     lines = [
         "OpenMed gate evidence bundle",
         f"Decision: {manifest['gate_report'].get('decision')}",
+        f"Stability: {manifest['summary'].get('stability_verdict') or 'not_recorded'}",
         f"Present artifacts: {manifest['summary']['present_artifacts']}",
         f"Missing required artifacts: {manifest['summary']['required_missing']}",
         "Gate coverage:",
@@ -639,6 +646,11 @@ def _gate_checks(payload: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     if not isinstance(checks, Sequence) or isinstance(checks, (str, bytes, bytearray)):
         return []
     return [check for check in checks if isinstance(check, Mapping)]
+
+
+def _stability_summary(payload: Mapping[str, Any]) -> dict[str, Any]:
+    value = payload.get("stability_summary")
+    return dict(value) if isinstance(value, Mapping) else {}
 
 
 def _gate_names(payload: Mapping[str, Any]) -> tuple[str, ...]:
