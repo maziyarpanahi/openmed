@@ -5,7 +5,7 @@ A regression guard that keeps language packs honest as the count climbs from
 
   (a) every ``SUPPORTED_LANGUAGES`` code maps to a real Faker locale (or a
       documented approximation),
-  (b) generated national-ID surrogates pass the language's registered checksum
+  (b) generated national-ID surrogates pass the language's registered
       validator (round-trip surrogate fidelity),
   (c) only documented approximations emit the locale ``UserWarning`` — so a new
       pack mis-wired to a wrong locale fails loudly, and

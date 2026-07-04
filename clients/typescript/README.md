@@ -50,8 +50,36 @@ const deidentified = await client.deidentify({
   keep_mapping: true,
 });
 
+const job = await client.createJob({
+  documents: [
+    { id: "note-1", text: "Paciente: Maria Garcia, DNI: 12345678Z" },
+  ],
+  method: "mask",
+  webhook: {
+    url: "https://pipeline.example.com/openmed/jobs",
+    secret: "replace-with-shared-secret",
+  },
+});
+const jobStatus = await client.getJob(job.id);
+
 await client.unloadModels({ model_name: "disease_detection_superclinical" });
 await client.unloadModels({ all: true });
+```
+
+Start and inspect a SMART backend-services bulk ingestion job:
+
+```ts
+const job = await client.startSmartBackendIngestion({
+  fhir_base_url: "https://fhir.example.org",
+  token_url: "https://auth.example.org/token",
+  client_id: "openmed-backend-client",
+  private_key_pem: process.env.SMART_PRIVATE_KEY_PEM ?? "",
+  output_dir: "/secure/openmed/deidentified",
+  max_inflight_downloads: 2,
+});
+
+const status = await client.smartBackendIngestionStatus(job.job_id);
+const summary = await client.smartBackendIngestionSummary(job.job_id);
 ```
 
 Use `loadedModels()` to inspect cached model resources:
