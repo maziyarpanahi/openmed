@@ -7,15 +7,20 @@ import hashlib
 import inspect
 import json
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Dict, TypeVar, Union
+from typing import Any, Awaitable, Callable, Dict, Optional, TypeVar, Union
+
+from .batcher import PRIORITY_INTERACTIVE, normalize_priority, priority_is_higher
 
 T = TypeVar("T")
 AsyncOperation = Callable[[], Union[T, Awaitable[T]]]
+PriorityUpgradeCallback = Callable[[str], Any]
 
 
-@dataclass(frozen=True)
+@dataclass
 class _CoalescedRequest:
     task: asyncio.Task[Any]
+    priority: str
+    on_priority_upgrade: Optional[PriorityUpgradeCallback]
 
 
 class RequestCoalescer:
@@ -31,13 +36,27 @@ class RequestCoalescer:
         self._entries: Dict[str, _CoalescedRequest] = {}
         self._lock = asyncio.Lock()
 
-    async def run(self, key: str, operation: AsyncOperation[T]) -> T:
+    async def run(
+        self,
+        key: str,
+        operation: AsyncOperation[T],
+        *,
+        priority: object = PRIORITY_INTERACTIVE,
+        on_priority_upgrade: Optional[PriorityUpgradeCallback] = None,
+    ) -> T:
         """Run or join the operation associated with ``key``."""
+        requested_priority = normalize_priority(priority)
+        priority_upgrade: Optional[PriorityUpgradeCallback] = None
+
         async with self._lock:
             entry = self._entries.get(key)
             if entry is None:
                 task = asyncio.create_task(self._run_operation(operation))
-                entry = _CoalescedRequest(task=task)
+                entry = _CoalescedRequest(
+                    task=task,
+                    priority=requested_priority,
+                    on_priority_upgrade=on_priority_upgrade,
+                )
                 self._entries[key] = entry
                 task.add_done_callback(
                     lambda completed_task: self._schedule_eviction(
@@ -45,7 +64,14 @@ class RequestCoalescer:
                         completed_task,
                     )
                 )
+            elif priority_is_higher(requested_priority, entry.priority):
+                entry.priority = requested_priority
+                priority_upgrade = entry.on_priority_upgrade
 
+        if priority_upgrade is not None:
+            result = priority_upgrade(requested_priority)
+            if inspect.isawaitable(result):
+                await result
         return await asyncio.shield(entry.task)
 
     async def _run_operation(self, operation: AsyncOperation[T]) -> T:

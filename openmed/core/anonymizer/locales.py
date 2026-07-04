@@ -15,7 +15,7 @@ Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
   :data:`LANG_TO_LOCALE` entry whose locale exists in Faker (or is a
   documented approximation in :data:`_APPROXIMATE_LOCALES`).
-- Every language with a checksum-validated national ID must appear in
+- Every language with a validator-backed national ID must appear in
   :data:`NATIONAL_ID_PROVIDERS`, and its generated surrogates must round-trip
   that language's registered validator in :mod:`openmed.core.pii_i18n`.
   Some entries are national-ID-only and intentionally not full model-backed
@@ -55,6 +55,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "ko": "ko_KR",
     "sk": "sk_SK",
     "ms": "ms_MY",
+    "tl": "fil_PH",
 }
 
 
@@ -73,7 +74,7 @@ FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
 
 # Per-language national-ID surrogate providers — the single source of truth for
 # the OM-135 round-trip fidelity suite. Maps each language that has a
-# checksum-validated national ID to the ``(faker_locale, faker_method)`` whose
+# validator-backed national ID to the ``(faker_locale, faker_method)`` whose
 # generated surrogates pass that language's registered validator(s) in
 # :mod:`openmed.core.pii_i18n`. The locale here can differ from the language's
 # default display locale when the registered validators target another country's
@@ -101,6 +102,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "ko": ("ko_KR", "korean_rrn"),  # RRN
     "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
     "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
+    "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
 }
 
 _warned: set[str] = set()

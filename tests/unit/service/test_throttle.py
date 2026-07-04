@@ -31,6 +31,7 @@ _SERVICE_ENV_VARS = (
     "OPENMED_SERVICE_BATCHING_ENABLED",
     "OPENMED_SERVICE_BATCH_MAX_SIZE",
     "OPENMED_SERVICE_BATCH_MAX_WAIT_MS",
+    "OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE",
     "OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS",
     "OPENMED_SERVICE_RATE_LIMIT_RPS",
     "OPENMED_SERVICE_RATE_LIMIT_BURST",
@@ -184,6 +185,58 @@ def test_concurrency_limit_returns_503_after_bounded_wait(
 
     assert first.status_code == 200
     _assert_error_payload(busy, 503, "service_busy")
+    assert calls == ["held"]
+
+
+def test_batch_backpressure_returns_retry_after_before_model_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENMED_SERVICE_BATCHING_ENABLED", "true")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_SIZE", "8")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_WAIT_MS", "100")
+    monkeypatch.setenv("OPENMED_SERVICE_BATCH_MAX_QUEUE_SIZE", "1")
+    calls: list[str] = []
+    calls_lock = threading.Lock()
+
+    def fake_analyze(text: str, **_: Any) -> PredictionResult:
+        with calls_lock:
+            calls.append(text)
+        return _prediction_result(text)
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze)
+    app = create_app()
+
+    async def scenario():
+        async with app.router.lifespan_context(app):
+            transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url=LOOPBACK_BASE_URL,
+            ) as client:
+                first_task = asyncio.create_task(
+                    client.post(
+                        "/analyze",
+                        json={"text": "held"},
+                        headers={"x-openmed-priority": "bulk"},
+                    )
+                )
+                await asyncio.sleep(0.02)
+                shed = await client.post(
+                    "/analyze",
+                    json={"text": "shed"},
+                    headers={"x-openmed-priority": "bulk"},
+                )
+                first = await first_task
+                return first, shed
+
+    first, shed = asyncio.run(scenario())
+
+    assert first.status_code == 200
+    payload = _assert_error_payload(shed, 503, "backpressure")
+    assert int(shed.headers["Retry-After"]) >= 1
+    assert payload["error"]["details"]["priority"] == "bulk"
+    assert payload["error"]["details"]["queue_depth"] == 1
+    assert payload["error"]["details"]["queue_capacity"] == 1
     assert calls == ["held"]
 
 
