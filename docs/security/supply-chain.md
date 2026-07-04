@@ -47,3 +47,13 @@ The signing workflow also attaches signed CycloneDX SBOM and SLSA provenance
 attestations, then verifies the signature and both attestations before the run
 can pass. See [Container Image Signing](../supply-chain/image-signing.md) for
 verification commands and the cluster admission policy.
+
+## SLSA build provenance
+
+Tagged releases generate SLSA provenance for the wheel, source distribution, and
+GHCR image digest before publishing can complete. The release workflow verifies
+the distribution attestations before the PyPI upload job runs, using the same
+builder workflow that produced the wheel and source distribution. The container
+workflow verifies the pushed manifest-list attestation before the image job can
+pass. See [SLSA Build Provenance](../supply-chain/provenance.md) for consumer
+verification commands.

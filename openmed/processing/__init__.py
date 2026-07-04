@@ -29,6 +29,17 @@ from .checkpoint import (
     build_stream_fingerprint,
     dedupe_key_for_source,
 )
+from .distributed import (
+    DocumentIdExtractor,
+    DocumentShard,
+    DuplicateDocumentIDError,
+    MissingDocumentIDError,
+    ShardingError,
+    ShardPlan,
+    assign_document_shard,
+    plan_document_shards,
+    stable_document_hash,
+)
 from .kafka_connector import (
     CheckpointFingerprintError,
     ConsumerProtocol,
@@ -37,6 +48,12 @@ from .kafka_connector import (
     create_confluent_kafka_clients,
     deidentify_stream,
     replay,
+)
+from .object_storage import (
+    ObjectProgressCallback,
+    ObjectStorageBatchResult,
+    ObjectStorageItemResult,
+    deidentify_bucket,
 )
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
@@ -73,6 +90,19 @@ __all__ = [
     "build_stream_fingerprint",
     "dedupe_key_for_source",
     "CheckpointFingerprintError",
+    "DocumentIdExtractor",
+    "DocumentShard",
+    "ShardPlan",
+    "ShardingError",
+    "MissingDocumentIDError",
+    "DuplicateDocumentIDError",
+    "stable_document_hash",
+    "assign_document_shard",
+    "plan_document_shards",
+    "ObjectStorageBatchResult",
+    "ObjectStorageItemResult",
+    "ObjectProgressCallback",
+    "deidentify_bucket",
     "StreamingReplayResult",
     "StreamingTokenClassifier",
     "replay_token_classifier",
