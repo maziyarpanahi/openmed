@@ -91,6 +91,13 @@ from .events import (
     extract_medication_change_events,
     score_event_frame_corpus,
 )
+from .experiencer import (
+    EXPERIENCER_REFINED_VALUES,
+    EXPERIENCER_REFINEMENT_ADVISORY,
+    OTHER_EXPERIENCER,
+    ExperiencerAssignment,
+    refine_experiencer,
+)
 from .lab_values import (
     LAB_FLAG_ADVISORY,
     AbnormalFlag,
@@ -413,6 +420,11 @@ __all__ = [
     "NegationScope",
     "detect_negation_scopes",
     "negated_spans",
+    "OTHER_EXPERIENCER",
+    "EXPERIENCER_REFINED_VALUES",
+    "EXPERIENCER_REFINEMENT_ADVISORY",
+    "ExperiencerAssignment",
+    "refine_experiencer",
     "SIG_PARSER_ADVISORY",
     "Sig",
     "SpanSig",
