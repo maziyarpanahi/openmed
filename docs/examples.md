@@ -21,6 +21,7 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 | `examples/pii_model_comparison.py` | Compares multiple PII models across shared sample text and summarizes extraction quality. |
 | `examples/pii_batch_processing.py` | Runs batch PII extraction and de-identification with `BatchProcessor(operation=...)`. |
 | `examples/pii_multilingual_new_languages.py` | Exercises Dutch, Hindi, Telugu, Portuguese, Arabic, Japanese, and Turkish registry entries, locale-specific regex matches, and optional live extraction with the new public checkpoints. |
+| `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
 | `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
 | `examples/v17_multimodal_browser_interop.py` | Demonstrates v1.7 multimodal and interop surfaces: AsciiDoc offset projection, OCR contracts, chat JSONL, CSV manifests, FHIR, HL7 v2, and Transformers.js browser bundle checks. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |

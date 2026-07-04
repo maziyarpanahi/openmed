@@ -436,6 +436,113 @@ class TestAnesthesiaRouting:
         assert all(info.category != "Anesthesia" for _k, info, _r in suggestions)
 
 
+# ---------------------------------------------------------------------------
+# Endocrinology domain (issue #895)
+# ---------------------------------------------------------------------------
+
+
+class TestEndocrinologyDomain:
+    """Endocrinology domain labels, canonical mappings, and fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "GlycemicMeasure",
+        "ThyroidFunctionMeasure",
+        "HormoneLevel",
+        "InsulinRegimen",
+        "MetabolicFinding",
+        "EndocrineGland",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "GlycemicMeasure": "GLYCEMIC_MEASURE",
+        "ThyroidFunctionMeasure": "THYROID_MEASURE",
+        "HormoneLevel": "HORMONE_LEVEL",
+        "InsulinRegimen": "INSULIN_REGIMEN",
+        "MetabolicFinding": "CONDITION",
+        "EndocrineGland": "BODY_SITE",
+    }
+    EXPECTED_ENTITIES = [
+        ("GlycemicMeasure", 0, 10, "HbA1c 8.2%"),
+        ("GlycemicMeasure", 15, 32, "glucose 186 mg/dL"),
+        ("ThyroidFunctionMeasure", 50, 63, "TSH 6.1 mIU/L"),
+        ("HormoneLevel", 68, 87, "cortisol 4.8 mcg/dL"),
+        ("InsulinRegimen", 127, 148, "glargine 24 units qHS"),
+        ("MetabolicFinding", 150, 168, "Metabolic syndrome"),
+        ("EndocrineGland", 173, 180, "thyroid"),
+    ]
+
+    def test_endocrinology_domain_has_expected_labels(self):
+        assert "endocrinology" in available_domains()
+        assert get_default_labels("endocrinology") == self.EXPECTED_LABELS
+
+    def test_endocrinology_labels_have_no_duplicates(self):
+        labels = get_default_labels("endocrinology")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_endocrinology_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_endocrinology_fixture_has_expected_output(self):
+        path = CLINICAL_FIXTURES_PATH / "endocrinology.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not infer insulin dosing or glycemic-control targets" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Endocrinology routing in model_registry (issue #895)
+# ---------------------------------------------------------------------------
+
+
+class TestEndocrinologyRouting:
+    ENDOCRINOLOGY_TEXT = "HbA1c 8.2%, TSH 6.1, on glargine 24 units qHS"
+
+    def test_match_categories_routes_endocrinology(self):
+        categories = [c for c, _ in _match_categories(self.ENDOCRINOLOGY_TEXT)]
+        assert "Endocrinology" in categories
+
+    def test_endocrinology_is_registry_metadata_not_a_live_category(self):
+        assert "Endocrinology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Endocrinology" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_endocrinology(self):
+        suggestions = get_model_suggestions(self.ENDOCRINOLOGY_TEXT)
+        assert suggestions
+        assert all(info.category != "Endocrinology" for _k, info, _r in suggestions)
+
+
 class TestNormalizeLabelIdempotency:
     @pytest.mark.parametrize(
         "label",

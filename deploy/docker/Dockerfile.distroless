@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1.7
+
+FROM python:3.11-slim-bookworm AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /build
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . /build
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install \
+        --target /opt/openmed/python \
+        --index-url https://download.pytorch.org/whl/cpu \
+        torch \
+    && python -m pip install \
+        --target /opt/openmed/python \
+        ".[hf,service]" \
+    && python -m compileall -q /opt/openmed/python \
+    && mkdir -p \
+        /runtime/cache/huggingface \
+        /runtime/cache/openmed \
+        /runtime/home/nonroot
+
+FROM gcr.io/distroless/python3-debian12:nonroot
+
+LABEL org.opencontainers.image.title="OpenMed REST service distroless image" \
+      org.opencontainers.image.description="Hardened distroless runtime for the OpenMed REST service" \
+      org.opencontainers.image.source="https://github.com/maziyarpanahi/openmed" \
+      org.opencontainers.image.security.capabilities="drop=ALL" \
+      org.opencontainers.image.security.readonly-rootfs="true"
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/opt/openmed/python \
+    HOME=/home/nonroot \
+    TMPDIR=/tmp \
+    HF_HOME=/cache/huggingface \
+    TRANSFORMERS_CACHE=/cache/huggingface/transformers \
+    OPENMED_CACHE_DIR=/cache/openmed \
+    OPENMED_PROFILE=prod \
+    OPENMED_SERVICE_KEEP_ALIVE=10m
+
+WORKDIR /app
+
+COPY --from=builder /usr/bin/tini /usr/bin/tini
+COPY --from=builder /opt/openmed/python /opt/openmed/python
+COPY --from=builder --chown=65532:65532 /runtime/cache /cache
+COPY --from=builder --chown=65532:65532 /runtime/home/nonroot /home/nonroot
+
+USER 65532:65532
+VOLUME ["/cache"]
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["/usr/bin/python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/readyz', timeout=3).read()"]
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "-m", "uvicorn"]
+CMD ["openmed.service.app:app", "--host", "0.0.0.0", "--port", "8080"]

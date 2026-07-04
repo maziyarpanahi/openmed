@@ -36,6 +36,12 @@ from .kafka_connector import (
     create_confluent_kafka_clients,
     deidentify_stream,
 )
+from .object_storage import (
+    ObjectProgressCallback,
+    ObjectStorageBatchResult,
+    ObjectStorageItemResult,
+    deidentify_bucket,
+)
 from .outputs import OutputFormatter, format_predictions
 from .text import TextProcessor, postprocess_text, preprocess_text
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
@@ -69,6 +75,10 @@ __all__ = [
     "stable_document_hash",
     "assign_document_shard",
     "plan_document_shards",
+    "ObjectStorageBatchResult",
+    "ObjectStorageItemResult",
+    "ObjectProgressCallback",
+    "deidentify_bucket",
     "StreamingReplayResult",
     "StreamingTokenClassifier",
     "replay_token_classifier",
