@@ -21,7 +21,7 @@ coverage, see
 | --- | --- | --- |
 | Multimodal document contract | `ExtractedDocument`, `SourceSpan`, lazy handler registration, source-offset mapping, and dispatcher-based redaction. | `openmed/multimodal/base.py`, `examples/v17_multimodal_browser_interop.py` |
 | OCR and scanned documents | Shared OCR result contract, fake test engine, Tesseract, PaddleOCR, EasyOCR, docTR, OCR language selection, and available-engine discovery. | `openmed/multimodal/ocr.py`, `tests/unit/multimodal/test_ocr_engines.py`, `examples/v17_multimodal_browser_interop.py` |
-| Markup and metadata | Markdown/AsciiDoc extraction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_markdown.py`, `openmed/multimodal/metadata_scrub.py`, `examples/v17_multimodal_browser_interop.py` |
+| Markup and metadata | Markdown/AsciiDoc and EPUB extraction, source text redaction, image/PDF/DOCX metadata scrubbing, and residual metadata verification. | `openmed/multimodal/documents_markdown.py`, `openmed/multimodal/epub.py`, `openmed/multimodal/metadata_scrub.py`, `examples/v17_multimodal_browser_interop.py` |
 | Chat logs and tabular data | JSONL chat-log redaction with speaker pseudonymization, CSV/TSV PHI column classification, column actions, and PHI-safe manifests. | `openmed/multimodal/chatlog_jsonl.py`, `openmed/multimodal/tabular_csv.py`, `examples/v17_multimodal_browser_interop.py` |
 
 ## Health-data Interop
