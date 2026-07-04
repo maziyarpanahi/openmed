@@ -226,6 +226,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         THYROID_MEASURE,
         HORMONE_LEVEL,
         INSULIN_REGIMEN,
+        "ENDOSCOPIC_FINDING",
+        "GI_SYMPTOM",
+        "GI_SCORE",
+        "POLYP_DESCRIPTOR",
         OTHER,
     }
 )
@@ -415,7 +419,14 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     THYROID_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     HORMONE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     INSULIN_REGIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
-    # Catch-all
+    "ENDOSCOPIC_FINDING": _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    "GI_SYMPTOM": _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    "GI_SCORE": _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    "POLYP_DESCRIPTOR": _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -509,6 +520,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     THYROID_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
     HORMONE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
     INSULIN_REGIMEN: HIPAA_UNIQUE_IDENTIFIER,
+    "ENDOSCOPIC_FINDING": HIPAA_UNIQUE_IDENTIFIER,
+    "GI_SYMPTOM": HIPAA_UNIQUE_IDENTIFIER,
+    "GI_SCORE": HIPAA_UNIQUE_IDENTIFIER,
+    "POLYP_DESCRIPTOR": HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -773,8 +788,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
-}
-
+}  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
@@ -796,7 +810,6 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
     "tz": ID_SUBTYPE_NATIONAL_ID,
 }
-
 
 _BIOES_PREFIX_RE: Final = re.compile(r"^[BIES]-")
 
@@ -894,7 +907,6 @@ def hipaa_class_for(label: str, lang: str = "en") -> str:
 
 
 _validate_label_metadata()
-
 
 __all__ = [
     "CANONICAL_LABELS",
