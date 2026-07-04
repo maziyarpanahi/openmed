@@ -1,0 +1,4 @@
+patient_id,notes,reason_for_visit
+1,"John Doe reports chest pain; MRN 12345","Follow-up with Dr. Smith"
+2,"Jane Roe seen on 2024-03-02; phone 617-555-0134","Medication review"
+3,"A. Nonymous, SSN 000-00-0000, DOB 1980-01-01","Annual physical"
