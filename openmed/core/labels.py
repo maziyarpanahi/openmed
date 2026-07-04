@@ -128,6 +128,12 @@ THYROID_MEASURE: Final = "THYROID_MEASURE"
 HORMONE_LEVEL: Final = "HORMONE_LEVEL"
 INSULIN_REGIMEN: Final = "INSULIN_REGIMEN"
 
+#: Gastroenterology and endoscopy concepts (issue #894)
+ENDOSCOPIC_FINDING: Final = "ENDOSCOPIC_FINDING"
+GI_SYMPTOM: Final = "GI_SYMPTOM"
+GI_SCORE: Final = "GI_SCORE"
+POLYP_DESCRIPTOR: Final = "POLYP_DESCRIPTOR"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -226,10 +232,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         THYROID_MEASURE,
         HORMONE_LEVEL,
         INSULIN_REGIMEN,
-        "ENDOSCOPIC_FINDING",
-        "GI_SYMPTOM",
-        "GI_SCORE",
-        "POLYP_DESCRIPTOR",
+        ENDOSCOPIC_FINDING,
+        GI_SYMPTOM,
+        GI_SCORE,
+        POLYP_DESCRIPTOR,
         OTHER,
     }
 )
@@ -419,12 +425,13 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     THYROID_MEASURE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     HORMONE_LEVEL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     INSULIN_REGIMEN: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
-    "ENDOSCOPIC_FINDING": _label_metadata(
+    # Gastroenterology and endoscopy concepts (issue #894)
+    ENDOSCOPIC_FINDING: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
-    "GI_SYMPTOM": _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
-    "GI_SCORE": _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
-    "POLYP_DESCRIPTOR": _label_metadata(
+    GI_SYMPTOM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    GI_SCORE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    POLYP_DESCRIPTOR: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
@@ -520,10 +527,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     THYROID_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
     HORMONE_LEVEL: HIPAA_UNIQUE_IDENTIFIER,
     INSULIN_REGIMEN: HIPAA_UNIQUE_IDENTIFIER,
-    "ENDOSCOPIC_FINDING": HIPAA_UNIQUE_IDENTIFIER,
-    "GI_SYMPTOM": HIPAA_UNIQUE_IDENTIFIER,
-    "GI_SCORE": HIPAA_UNIQUE_IDENTIFIER,
-    "POLYP_DESCRIPTOR": HIPAA_UNIQUE_IDENTIFIER,
+    # Gastroenterology and endoscopy concepts
+    ENDOSCOPIC_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    GI_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
+    GI_SCORE: HIPAA_UNIQUE_IDENTIFIER,
+    POLYP_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -785,6 +793,27 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "basalbolus": INSULIN_REGIMEN,
     "insulinpump": INSULIN_REGIMEN,
     "glargine": INSULIN_REGIMEN,
+    # Gastroenterology and endoscopy concepts
+    "endoscopicfinding": ENDOSCOPIC_FINDING,
+    "endoscopyfinding": ENDOSCOPIC_FINDING,
+    "endoscopy": ENDOSCOPIC_FINDING,
+    "colonoscopy": ENDOSCOPIC_FINDING,
+    "erosion": ENDOSCOPIC_FINDING,
+    "varices": ENDOSCOPIC_FINDING,
+    "gisymptom": GI_SYMPTOM,
+    "gastrointestinalsymptom": GI_SYMPTOM,
+    "abdominalpain": GI_SYMPTOM,
+    "cramping": GI_SYMPTOM,
+    "giscore": GI_SCORE,
+    "bowelprepquality": GI_SCORE,
+    "bostonbowelprep": GI_SCORE,
+    "bristolstool": GI_SCORE,
+    "mayoscore": GI_SCORE,
+    "polypdescriptor": POLYP_DESCRIPTOR,
+    "lesionmorphology": POLYP_DESCRIPTOR,
+    "sessilepolyp": POLYP_DESCRIPTOR,
+    "pedunculatedpolyp": POLYP_DESCRIPTOR,
+    "biopsysite": BODY_SITE,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -1009,5 +1038,9 @@ __all__ = [
     "THYROID_MEASURE",
     "HORMONE_LEVEL",
     "INSULIN_REGIMEN",
+    "ENDOSCOPIC_FINDING",
+    "GI_SYMPTOM",
+    "GI_SCORE",
+    "POLYP_DESCRIPTOR",
     "OTHER",
 ]

@@ -95,6 +95,10 @@
     "THYROID_MEASURE": "mask",
     "HORMONE_LEVEL": "mask",
     "INSULIN_REGIMEN": "mask",
+    "ENDOSCOPIC_FINDING": "mask",
+    "GI_SYMPTOM": "mask",
+    "GI_SCORE": "mask",
+    "POLYP_DESCRIPTOR": "mask",
     "OTHER": "mask"
   }
 }

@@ -24,7 +24,10 @@
   "gastroenterology": [
     "EndoscopicFinding",
     "GISymptom",
+    "BowelPrepQuality",
+    "BiopsySite",
     "GIScore",
+    "LesionMorphology",
     "PolypDescriptor"
   ]
 }

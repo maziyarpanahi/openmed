@@ -543,6 +543,118 @@ class TestEndocrinologyRouting:
         assert all(info.category != "Endocrinology" for _k, info, _r in suggestions)
 
 
+# ---------------------------------------------------------------------------
+# Gastroenterology domain (issue #894)
+# ---------------------------------------------------------------------------
+
+
+class TestGastroenterologyDomain:
+    """Gastroenterology domain labels, canonical mappings, and fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "EndoscopicFinding",
+        "GISymptom",
+        "BowelPrepQuality",
+        "BiopsySite",
+        "GIScore",
+        "LesionMorphology",
+        "PolypDescriptor",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "EndoscopicFinding": "ENDOSCOPIC_FINDING",
+        "GISymptom": "GI_SYMPTOM",
+        "BowelPrepQuality": "GI_SCORE",
+        "BiopsySite": "BODY_SITE",
+        "GIScore": "GI_SCORE",
+        "LesionMorphology": "POLYP_DESCRIPTOR",
+        "PolypDescriptor": "POLYP_DESCRIPTOR",
+    }
+    EXPECTED_ENTITIES = [
+        ("EndoscopicFinding", 0, 11, "Colonoscopy"),
+        ("PolypDescriptor", 18, 41, "two 5 mm sessile polyps"),
+        ("BiopsySite", 49, 62, "sigmoid colon"),
+        ("LesionMorphology", 68, 81, "mild erythema"),
+        ("BowelPrepQuality", 83, 112, "Boston bowel prep score was 8"),
+        ("GIScore", 114, 134, "Bristol stool type 4"),
+        ("GISymptom", 171, 179, "cramping"),
+    ]
+
+    def test_gastroenterology_domain_has_expected_labels(self):
+        assert "gastroenterology" in available_domains()
+        assert get_default_labels("gastroenterology") == self.EXPECTED_LABELS
+
+    def test_gastroenterology_labels_have_no_duplicates(self):
+        labels = get_default_labels("gastroenterology")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_gastroenterology_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_gastroenterology_fixture_has_expected_output(self):
+        path = CLINICAL_FIXTURES_PATH / "gastroenterology.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not infer diagnosis" in disclaimer
+        assert "polyp-risk stratification" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
+# Gastroenterology routing in model_registry (issue #894)
+# ---------------------------------------------------------------------------
+
+
+class TestGastroenterologyRouting:
+    GASTROENTEROLOGY_TEXT = (
+        "Colonoscopy found sessile polyps with Boston bowel prep score 8"
+    )
+
+    def test_match_categories_routes_gastroenterology(self):
+        categories = [c for c, _ in _match_categories(self.GASTROENTEROLOGY_TEXT)]
+        assert "Gastroenterology" in categories
+
+    def test_gastroenterology_is_registry_metadata_not_a_live_category(self):
+        assert "Gastroenterology" in _CATEGORY_ENTITY_TYPES
+        from openmed.core.model_registry import CATEGORIES
+
+        assert "Gastroenterology" not in CATEGORIES
+
+    def test_get_model_suggestions_behavior_unchanged_for_gastroenterology(self):
+        suggestions = get_model_suggestions(self.GASTROENTEROLOGY_TEXT)
+        assert suggestions
+        assert all(info.category != "Gastroenterology" for _k, info, _r in suggestions)
+
+
 class TestNormalizeLabelIdempotency:
     @pytest.mark.parametrize(
         "label",
