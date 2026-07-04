@@ -36,14 +36,13 @@ if TYPE_CHECKING:
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
 from .model_registry import (
-    OPENMED_MODELS,
+    ModelInfo as RegistryModelInfo,
+)
+from .model_registry import (
     get_all_models,
     get_model_info,
     get_model_suggestions,
     get_models_by_category,
-)
-from .model_registry import (
-    ModelInfo as RegistryModelInfo,
 )
 from .offline import configure_offline_mode, is_local_only
 

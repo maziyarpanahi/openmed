@@ -15,7 +15,7 @@ from .families import (
     ensure_gliner_available,
     load_gliner2_handle,
 )
-from .families.gliner import GLiNERHandle, load_gliner_handle
+from .families.gliner import load_gliner_handle
 from .indexing import DEFAULT_INDEX_PATH, ModelIndex, ModelRecord, load_index
 from .labels import get_default_labels
 
