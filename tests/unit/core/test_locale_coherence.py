@@ -45,7 +45,7 @@ from openmed.core.pii_i18n import (
 # consciously updates this set.
 DOCUMENTED_APPROXIMATE = {"te", "ms"}
 
-# Languages that register a national-ID checksum validator but have no Faker
+# Languages that register a national-ID validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.
 KNOWN_PROVIDERLESS_VALIDATORS = set()
 

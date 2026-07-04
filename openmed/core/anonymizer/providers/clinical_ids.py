@@ -25,6 +25,7 @@ deterministic:
   - Indonesian NIK with a decodable embedded birth date
   - Malaysian MyKad / NRIC with a decodable embedded birth date
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
+  - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
@@ -1048,6 +1049,47 @@ class PhilippinesIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Danish CPR / personnummer (DDMMYY-SSSS with century digit)
+# ---------------------------------------------------------------------------
+
+
+def generate_danish_cpr(*, rng: random.Random | None = None) -> str:
+    """Generate a Danish CPR accepted by ``validate_danish_cpr``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    for _ in range(200):
+        year = source.randint(1940, 2009)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+
+        if year >= 2000:
+            century_digit = source.choice((4, 5, 6, 7, 8, 9))
+        else:
+            century_digit = source.choice((0, 1, 2, 3))
+        serial_tail = source.randint(1, 999)
+
+        candidate = (
+            f"{day:02d}{month:02d}{year % 100:02d}-{century_digit}{serial_tail:03d}"
+        )
+
+        from openmed.core.pii_i18n import validate_danish_cpr
+
+        if validate_danish_cpr(candidate):
+            return candidate
+
+    return "170885-1234"
+
+
+class DanishCPRProvider(BaseProvider):
+    """Generates structurally valid Danish CPR / personnummer values."""
+
+    def danish_cpr(self) -> str:
+        return generate_danish_cpr(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -1200,6 +1242,7 @@ def register_clinical_providers(faker) -> None:
 
 __all__ = [
     "AadhaarProvider",
+    "DanishCPRProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
     "IndonesianNIKProvider",
@@ -1219,6 +1262,7 @@ __all__ = [
     "UKNHSNumberProvider",
     "UKNINOProvider",
     "generate_bic",
+    "generate_danish_cpr",
     "generate_iban",
     "generate_indonesian_nik",
     "generate_teudat_zehut",

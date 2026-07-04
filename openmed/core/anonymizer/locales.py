@@ -56,6 +56,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "sk": "sk_SK",
     "ms": "ms_MY",
     "tl": "fil_PH",
+    "da": "da_DK",
 }
 
 
@@ -103,6 +104,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
     "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
+    "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
 }
 
 _warned: set[str] = set()
