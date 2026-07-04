@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from bisect import bisect_left, bisect_right
 from pathlib import Path
@@ -18,14 +17,12 @@ from typing import Any, Dict, List, Optional, Sequence
 from openmed.core.decoding import (
     SpanEdge,
     SpanNode,
-    TokenLabelInfo,
     build_label_info,
     decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
     trim_span_whitespace,
     viterbi_decode,
-    zero_viterbi_biases,
 )
 from openmed.mlx.artifact import (
     MANIFEST_FILENAME,

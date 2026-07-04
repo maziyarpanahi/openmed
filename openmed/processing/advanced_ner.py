@@ -7,7 +7,7 @@ import re
 import time
 from collections.abc import AsyncIterable, Awaitable, Callable, Iterable, Sequence
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from openmed.core.decoding import (
     TokenClassificationSpan,

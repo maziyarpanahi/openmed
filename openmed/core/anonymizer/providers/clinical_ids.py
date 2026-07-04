@@ -815,8 +815,6 @@ def generate_pesel(*, rng: random.Random | None = None) -> str:
 
     Constructs a PESEL for a random birth date between 1920 and 2029.
     """
-    from datetime import date
-
     source = rng or random.Random()
 
     # Random date between 1920-01-01 and 2029-12-31.

@@ -30,8 +30,6 @@ from typing import (
     Union,
 )
 
-from .outputs import PredictionResult
-
 logger = logging.getLogger(__name__)
 
 BatchOperation = Literal["analyze_text", "extract_pii", "deidentify"]
@@ -152,8 +150,8 @@ class BatchResult:
     def summary(self) -> str:
         """Generate a human-readable summary of the batch results."""
         lines = [
-            f"Batch Processing Summary",
-            f"========================",
+            "Batch Processing Summary",
+            "========================",
             f"Model: {self.model_name}",
             f"Total items: {self.total_items}",
             f"Successful: {self.successful_items}",

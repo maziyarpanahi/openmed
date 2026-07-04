@@ -11,7 +11,6 @@ import re
 from openmed.core.labels import CONDITION
 
 from ..registry import register_linker
-from ..types import Candidate
 from .base import VocabLinker
 
 
