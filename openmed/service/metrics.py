@@ -18,6 +18,14 @@ MODEL_EVICTION_NAME = "openmed_service_model_eviction_total"
 BATCH_QUEUE_DEPTH_NAME = "openmed_service_batch_queue_depth"
 BATCH_QUEUE_WAIT_NAME = "openmed_service_batch_queue_wait_seconds"
 BATCH_SHED_NAME = "openmed_service_batch_shed_total"
+CIRCUIT_BREAKER_CLOSED_NAME = "openmed_service_circuit_breaker_closed"
+CIRCUIT_BREAKER_OPEN_NAME = "openmed_service_circuit_breaker_open"
+CIRCUIT_BREAKER_HALF_OPEN_NAME = "openmed_service_circuit_breaker_half_open"
+MODEL_RESIDENT_NAME = "openmed_service_model_resident_total"
+MODEL_RESIDENT_BYTES_NAME = "openmed_service_model_resident_bytes"
+MODEL_PENDING_LOAD_BYTES_NAME = "openmed_service_model_pending_load_bytes"
+MODEL_LOAD_DURATION_NAME = "openmed_service_model_load_duration_seconds"
+MODEL_REJECTION_NAME = "openmed_service_model_rejection_total"
 SPECULATIVE_DECODE_NAME = "openmed_mlx_speculative_decode_total"
 SPECULATIVE_DRAFT_TOKEN_NAME = "openmed_mlx_speculative_draft_token_total"
 SPECULATIVE_ACCEPTED_TOKEN_NAME = "openmed_mlx_speculative_accepted_token_total"
@@ -94,6 +102,17 @@ class PrometheusMetricsRegistry:
         self._batch_wait_count: dict[str, int] = {}
         self._batch_wait_sum: dict[str, float] = {}
         self._batch_shed_total: dict[str, int] = {}
+        self._circuit_breaker_state_counts = {
+            "closed": 0,
+            "open": 0,
+            "half_open": 0,
+        }
+        self._model_resident_total = 0
+        self._model_resident_bytes = 0
+        self._model_pending_load_bytes = 0
+        self._model_load_duration_count = 0
+        self._model_load_duration_sum = 0.0
+        self._model_rejection_total = 0
         self._speculative_decode_total = 0
         self._speculative_draft_tokens = 0
         self._speculative_accepted_tokens = 0
@@ -196,6 +215,42 @@ class PrometheusMetricsRegistry:
                 priority_label, 0
             ) + int(count)
 
+    def set_circuit_breaker_state_counts(self, counts: Mapping[str, int]) -> None:
+        """Replace aggregate circuit-breaker state gauges."""
+        with self._lock:
+            self._circuit_breaker_state_counts = {
+                "closed": int(counts.get("closed", 0)),
+                "open": int(counts.get("open", 0)),
+                "half_open": int(counts.get("half_open", 0)),
+            }
+
+    def record_model_residency(
+        self,
+        *,
+        resident_count: int,
+        resident_bytes: int,
+        pending_bytes: int,
+    ) -> None:
+        """Record the current aggregate warm-pool residency state."""
+        with self._lock:
+            self._model_resident_total = max(int(resident_count), 0)
+            self._model_resident_bytes = max(int(resident_bytes), 0)
+            self._model_pending_load_bytes = max(int(pending_bytes), 0)
+
+    def record_model_load_latency(self, seconds: float) -> None:
+        """Record one cold model load duration in seconds."""
+        observed = max(float(seconds), 0.0)
+        with self._lock:
+            self._model_load_duration_count += 1
+            self._model_load_duration_sum += observed
+
+    def record_model_rejection(self, count: int = 1) -> None:
+        """Record model admission rejections from warm-pool backpressure."""
+        if count <= 0:
+            return
+        with self._lock:
+            self._model_rejection_total += int(count)
+
     def record_speculative_decode(self, metrics: Mapping[str, object] | object) -> None:
         """Record aggregate speculative decode counters.
 
@@ -242,6 +297,13 @@ class PrometheusMetricsRegistry:
             batch_wait_count = dict(self._batch_wait_count)
             batch_wait_sum = dict(self._batch_wait_sum)
             batch_shed_total = dict(self._batch_shed_total)
+            circuit_breaker_state_counts = dict(self._circuit_breaker_state_counts)
+            model_resident_total = self._model_resident_total
+            model_resident_bytes = self._model_resident_bytes
+            model_pending_load_bytes = self._model_pending_load_bytes
+            model_load_duration_count = self._model_load_duration_count
+            model_load_duration_sum = self._model_load_duration_sum
+            model_rejection_total = self._model_rejection_total
             speculative_decode_total = self._speculative_decode_total
             speculative_draft_tokens = self._speculative_draft_tokens
             speculative_accepted_tokens = self._speculative_accepted_tokens
@@ -359,6 +421,82 @@ class PrometheusMetricsRegistry:
         for priority, value in sorted(batch_shed_total.items()):
             labels = _label_suffix({"priority": priority})
             lines.append(f"{BATCH_SHED_NAME}{labels} {value}")
+
+        _append_family_header(
+            lines,
+            CIRCUIT_BREAKER_CLOSED_NAME,
+            "Model/backend circuit breakers currently in the closed state.",
+            "gauge",
+        )
+        lines.append(
+            f"{CIRCUIT_BREAKER_CLOSED_NAME} "
+            f"{circuit_breaker_state_counts.get('closed', 0)}"
+        )
+
+        _append_family_header(
+            lines,
+            MODEL_RESIDENT_NAME,
+            "Resident models currently held by the service warm-pool.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_RESIDENT_NAME} {model_resident_total}")
+
+        _append_family_header(
+            lines,
+            MODEL_RESIDENT_BYTES_NAME,
+            "Resident model memory currently accounted by the service warm-pool.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_RESIDENT_BYTES_NAME} {model_resident_bytes}")
+
+        _append_family_header(
+            lines,
+            MODEL_PENDING_LOAD_BYTES_NAME,
+            "Reserved model memory for in-progress warm-pool loads.",
+            "gauge",
+        )
+        lines.append(f"{MODEL_PENDING_LOAD_BYTES_NAME} {model_pending_load_bytes}")
+
+        _append_family_header(
+            lines,
+            MODEL_LOAD_DURATION_NAME,
+            "Cold model load duration observed by the service warm-pool.",
+            "summary",
+        )
+        lines.append(f"{MODEL_LOAD_DURATION_NAME}_count {model_load_duration_count}")
+        lines.append(
+            f"{MODEL_LOAD_DURATION_NAME}_sum "
+            f"{_format_sample_value(model_load_duration_sum)}"
+        )
+
+        _append_family_header(
+            lines,
+            CIRCUIT_BREAKER_OPEN_NAME,
+            "Model/backend circuit breakers currently in the open state.",
+            "gauge",
+        )
+        lines.append(
+            f"{CIRCUIT_BREAKER_OPEN_NAME} {circuit_breaker_state_counts.get('open', 0)}"
+        )
+
+        _append_family_header(
+            lines,
+            CIRCUIT_BREAKER_HALF_OPEN_NAME,
+            "Model/backend circuit breakers currently in the half-open state.",
+            "gauge",
+        )
+        lines.append(
+            f"{CIRCUIT_BREAKER_HALF_OPEN_NAME} "
+            f"{circuit_breaker_state_counts.get('half_open', 0)}"
+        )
+
+        _append_family_header(
+            lines,
+            MODEL_REJECTION_NAME,
+            "Model admission rejections from warm-pool backpressure.",
+            "counter",
+        )
+        lines.append(f"{MODEL_REJECTION_NAME} {model_rejection_total}")
 
         _append_family_header(
             lines,
