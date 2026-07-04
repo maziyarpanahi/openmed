@@ -116,6 +116,21 @@ _FHIR_BUNDLE_TYPES = frozenset({"transaction", "batch"})
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
 _DEID_METHODS = ("mask", "remove", "replace", "hash", "shift_dates")
+_MOBILE_BENCHMARK_DEVICES = ("cpu", "mlx", "coreml")
+_MOBILE_BENCHMARK_TIERS = (
+    "nano",
+    "tiny",
+    "phone",
+    "mobile",
+    "base",
+    "laptop",
+    "large",
+    "workstation",
+    "accurate",
+    "accurate-xlarge",
+    "xlarge",
+    "server",
+)
 
 
 def _non_negative_int(value: str) -> int:
@@ -1098,19 +1113,22 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     mobile_parser.add_argument(
         "--models",
         nargs="+",
-        required=True,
         metavar="MODEL",
-        help="Model id(s), comma-separated ids, or @manifest.",
+        default=None,
+        help=(
+            "Model id(s), comma-separated ids, or @manifest. When omitted, "
+            "the committed synthetic mobile workload runner is used."
+        ),
     )
     mobile_parser.add_argument(
         "--device",
-        choices=["mlx", "coreml"],
+        choices=_MOBILE_BENCHMARK_DEVICES,
         required=True,
         help="Mobile runtime device.",
     )
     mobile_parser.add_argument(
         "--tier",
-        choices=["phone", "laptop", "workstation", "server"],
+        choices=_MOBILE_BENCHMARK_TIERS,
         required=True,
         help="Device tier to benchmark.",
     )
@@ -1809,16 +1827,59 @@ def _handle_benchmark_clinical(args: argparse.Namespace) -> int:
 
 
 def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
+    from openmed.eval import perf as perf_module
+
     try:
         models = _parse_model_args(args.models or [])
     except ValueError as exc:
         sys.stderr.write(f"{exc}\n")
         return 1
-    sys.stderr.write(
-        "Mobile benchmark execution is not implemented yet for "
-        f"models={', '.join(models)}, device={args.device}, tier={args.tier}.\n"
-    )
-    return 1
+    if not models:
+        models = [perf_module.SYNTHETIC_PERF_MODEL_NAME]
+
+    reports = []
+    try:
+        for model in models:
+            runner = (
+                perf_module.synthetic_perf_runner
+                if model == perf_module.SYNTHETIC_PERF_MODEL_NAME
+                else None
+            )
+            reports.append(
+                perf_module.run_perf_benchmark(
+                    model,
+                    device=str(args.device),
+                    tier=str(args.tier),
+                    runner=runner,
+                    metadata={"benchmark_domain": "mobile", "source_suite": "perf"},
+                )
+            )
+    except (OSError, RuntimeError, ValueError) as exc:
+        sys.stderr.write(f"Mobile benchmark failed: {exc}\n")
+        return 1
+
+    if args.output_dir:
+        try:
+            paths = _write_perf_report_files(
+                reports,
+                output_dir=args.output_dir,
+                suite="perf",
+            )
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write benchmark output: {exc}\n")
+            return 1
+        sys.stdout.write("Mobile benchmark reports written:\n")
+        for json_path, markdown_path in paths:
+            sys.stdout.write(f"  JSON: {json_path}\n")
+            sys.stdout.write(f"  Markdown: {markdown_path}\n")
+        return 0
+
+    if len(reports) == 1:
+        sys.stdout.write(reports[0].to_json() + "\n")
+    else:
+        payload = {"reports": [report.to_dict() for report in reports]}
+        sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return 0
 
 
 def _write_json_payload(payload: Any, output_path: Path | None) -> int:
@@ -1852,6 +1913,27 @@ def _write_benchmark_report_files(
             device=device,
         )
         json_path.parent.mkdir(parents=True, exist_ok=True)
+        report.write_json(json_path)
+        report.write_markdown(markdown_path)
+        paths.append((json_path, markdown_path))
+    return paths
+
+
+def _write_perf_report_files(
+    reports: Sequence[Any],
+    *,
+    output_dir: Path,
+    suite: str,
+) -> list[tuple[Path, Path]]:
+    paths: list[tuple[Path, Path]] = []
+    for report in reports:
+        json_path, markdown_path = _benchmark_report_paths(
+            output_dir=output_dir,
+            domain="mobile",
+            suite=suite,
+            model_name=str(report.model_name),
+            device=str(report.device),
+        )
         report.write_json(json_path)
         report.write_markdown(markdown_path)
         paths.append((json_path, markdown_path))
