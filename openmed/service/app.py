@@ -21,7 +21,13 @@ from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
 from .auth import ServiceAuth, parse_service_auth_config
-from .batcher import BatchResult, DynamicBatcher
+from .batcher import (
+    BackpressureError,
+    BatchPriorityHandle,
+    BatchResult,
+    DynamicBatcher,
+    normalize_priority,
+)
 from .coalesce import RequestCoalescer, coalescing_key
 from .jobs import DeidentifyJobQueue, job_response_payload
 from .logging import (
@@ -64,7 +70,7 @@ from .security_headers import (
     parse_service_security_config,
 )
 from .smart_backend import SMARTBackendConfig, SMARTBackendJobManager
-from .throttle import ServiceThrottle
+from .throttle import ServiceThrottle, format_retry_after
 from .tracing import (
     OpenTelemetryMiddleware,
     result_summary_attributes,
@@ -75,6 +81,7 @@ from .tracing import (
 from .warm_pool import WarmPoolBackpressureError
 
 SERVICE_NAME = "openmed-rest"
+REQUEST_PRIORITY_HEADER = "x-openmed-priority"
 _PRIVACY_GATEWAY_PATH = "/privacy-gateway/complete"
 _SMART_BACKEND_START_PATH = "/fhir/smart-backend/ingestions"
 _MODEL_BACKED_PATHS = frozenset(
@@ -183,11 +190,6 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
     app.state.config = runtime.config
     app.state.batching = runtime.batching
     app.state.coalescing = runtime.coalescing
-    app.state.throttle = ServiceThrottle(
-        runtime.throttle,
-        error_response=_error_response,
-        limited_paths=_MODEL_BACKED_PATHS,
-    )
     app.state.analyze_batcher = None
     app.state.pii_extract_batcher = None
     app.state.request_coalescer = None
@@ -206,12 +208,24 @@ def _attach_runtime(app: FastAPI, runtime: ServiceRuntime) -> None:
             lambda jobs: _dispatch_analyze_batch(runtime, jobs),
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
+            max_queue_size_per_priority=runtime.batching.max_queue_size,
+            metrics=runtime.metrics,
         )
         app.state.pii_extract_batcher = DynamicBatcher(
             lambda jobs: _dispatch_pii_extract_batch(runtime, jobs),
             max_batch_size=runtime.batching.max_batch_size,
             max_wait_ms=runtime.batching.max_wait_ms,
+            max_queue_size_per_priority=runtime.batching.max_queue_size,
+            metrics=runtime.metrics,
         )
+    app.state.throttle = ServiceThrottle(
+        runtime.throttle,
+        error_response=_error_response,
+        backpressure_check=(
+            _batch_backpressure_check if runtime.batching.enabled else None
+        ),
+        limited_paths=_MODEL_BACKED_PATHS,
+    )
 
 
 def _get_service_runtime(request: Request) -> ServiceRuntime:
@@ -294,6 +308,9 @@ async def _run_maybe_coalesced(
     endpoint: str,
     payload: Any,
     operation: _ServiceOperation,
+    *,
+    priority: str,
+    on_priority_upgrade: Optional[Callable[[str], Any]] = None,
 ) -> _ServicePayload:
     coalescer = getattr(request.app.state, "request_coalescer", None)
     if coalescer is None:
@@ -306,7 +323,41 @@ async def _run_maybe_coalesced(
             "openmed.coalescing.enabled": True,
         },
     ):
-        return await coalescer.run(coalescing_key(endpoint, payload), operation)
+        return await coalescer.run(
+            coalescing_key(endpoint, payload),
+            operation,
+            priority=priority,
+            on_priority_upgrade=on_priority_upgrade,
+        )
+
+
+def _request_priority(request: Request) -> str:
+    return normalize_priority(request.headers.get(REQUEST_PRIORITY_HEADER))
+
+
+def _backpressure_response(exc: BackpressureError) -> JSONResponse:
+    response = _error_response(
+        503,
+        "backpressure",
+        str(exc),
+        details=exc.to_details(),
+    )
+    response.headers["Retry-After"] = format_retry_after(exc.retry_after_seconds)
+    return response
+
+
+async def _batch_backpressure_check(request: Request) -> Optional[BackpressureError]:
+    batcher: Any
+    if request.url.path == "/analyze":
+        batcher = getattr(request.app.state, "analyze_batcher", None)
+    elif request.url.path == "/pii/extract":
+        batcher = getattr(request.app.state, "pii_extract_batcher", None)
+    else:
+        return None
+
+    if batcher is None:
+        return None
+    return await batcher.admission_error(_request_priority(request))
 
 
 def _metrics_route_label(request: Request) -> str:
@@ -477,6 +528,13 @@ def create_app() -> FastAPI:
             details={"timeout_seconds": exc.timeout_seconds},
         )
 
+    @app.exception_handler(BackpressureError)
+    async def _backpressure_handler(
+        _: Request,
+        exc: BackpressureError,
+    ) -> JSONResponse:
+        return _backpressure_response(exc)
+
     @app.exception_handler(PrivacyGatewayConfigurationError)
     async def _privacy_gateway_config_handler(
         _: Request,
@@ -626,12 +684,18 @@ def create_app() -> FastAPI:
     async def analyze(payload: AnalyzeRequest, request: Request) -> Dict[str, Any]:
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
+        priority = _request_priority(request)
+        priority_handle = BatchPriorityHandle(priority)
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
                 return await _await_with_timeout(
                     runtime,
-                    _get_analyze_batcher(request).submit(_AnalyzeBatchJob(payload)),
+                    _get_analyze_batcher(request).submit(
+                        _AnalyzeBatchJob(payload),
+                        priority=priority,
+                        priority_handle=priority_handle,
+                    ),
                 )
 
             def _model_operation() -> Dict[str, Any]:
@@ -651,7 +715,14 @@ def create_app() -> FastAPI:
             ):
                 return await _run_with_timeout(runtime, _model_operation)
 
-        return await _run_maybe_coalesced(request, "/analyze", payload, _operation)
+        return await _run_maybe_coalesced(
+            request,
+            "/analyze",
+            payload,
+            _operation,
+            priority=priority,
+            on_priority_upgrade=priority_handle.promote,
+        )
 
     @app.post("/pii/extract")
     async def pii_extract(
@@ -659,13 +730,17 @@ def create_app() -> FastAPI:
     ) -> Dict[str, Any]:
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
+        priority = _request_priority(request)
+        priority_handle = BatchPriorityHandle(priority)
 
         async def _operation() -> Dict[str, Any]:
             if runtime.batching.enabled:
                 return await _await_with_timeout(
                     runtime,
                     _get_pii_extract_batcher(request).submit(
-                        _PIIExtractBatchJob(payload)
+                        _PIIExtractBatchJob(payload),
+                        priority=priority,
+                        priority_handle=priority_handle,
                     ),
                 )
 
@@ -691,6 +766,8 @@ def create_app() -> FastAPI:
             "/pii/extract",
             payload,
             _operation,
+            priority=priority,
+            on_priority_upgrade=priority_handle.promote,
         )
 
     @app.post("/pii/extract/stream")
@@ -727,6 +804,7 @@ def create_app() -> FastAPI:
     ) -> Dict[str, Any]:
         set_access_log_model_name(request, payload.model_name)
         runtime = _get_service_runtime(request)
+        priority = _request_priority(request)
 
         async def _operation() -> Dict[str, Any]:
             def _model_operation() -> Dict[str, Any]:
@@ -751,6 +829,7 @@ def create_app() -> FastAPI:
             "/pii/deidentify",
             payload,
             _operation,
+            priority=priority,
         )
 
     @app.post(_PRIVACY_GATEWAY_PATH)
