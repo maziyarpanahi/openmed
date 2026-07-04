@@ -4,6 +4,9 @@ The zero-shot NER toolkit extends OpenMed with GLiNER-powered models, domain-awa
 label defaults, and inference helpers that complement the existing
 token-classification stack.
 
+For a short task-oriented walkthrough, see
+[Zero-shot NER How-to](./zero-shot-howto.md).
+
 ## Installation
 
 Install the GLiNER optional dependencies:
