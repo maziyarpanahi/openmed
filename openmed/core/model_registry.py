@@ -273,6 +273,15 @@ _CATEGORY_ENTITY_TYPES = {
         "CONDITION",
         "BODY_SITE",
     ],
+    # Forward metadata for future Gastroenterology models; no such model is
+    # registered today (see issue #894).
+    "Gastroenterology": [
+        "ENDOSCOPIC_FINDING",
+        "GI_SYMPTOM",
+        "GI_SCORE",
+        "POLYP_DESCRIPTOR",
+        "BODY_SITE",
+    ],
     "Privacy": _PII_ENTITY_TYPES,
 }
 
@@ -856,6 +865,10 @@ _CATEGORY_KEYWORDS: Dict[str, Tuple[str, str]] = {
     "hba1c|hemoglobin\\s*a1c|blood\\s*glucose|glycemic|thyroid\\s*function|\\btsh\\b|hormone\\s*level|cortisol|insulin\\s*regimen|glargine|endocrinolog": (
         "Endocrinology",
         "Contains endocrinology terms",
+    ),
+    "gastroenterolog|endoscopy|endoscopic|colonoscopy|polyp|varices|bowel\\s*prep|bristol\\s*stool|mayo\\s*score|abdominal\\s*pain|cramping": (
+        "Gastroenterology",
+        "Contains gastroenterology/endoscopy terms",
     ),
 }
 
