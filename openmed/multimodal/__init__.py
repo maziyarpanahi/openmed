@@ -101,6 +101,12 @@ from .tabular_csv import (
     read_table,
     redact_table,
 )
+from .verify_pdf import (
+    PdfFidelityReport,
+    RedactionFidelityError,
+    RegionFidelity,
+    verify_redacted_pdf,
+)
 
 __all__ = [
     "ExtractedDocument",
@@ -168,4 +174,8 @@ __all__ = [
     "extract_markdown",
     "extract_asciidoc",
     "redact_source_text",
+    "PdfFidelityReport",
+    "RegionFidelity",
+    "RedactionFidelityError",
+    "verify_redacted_pdf",
 ]
