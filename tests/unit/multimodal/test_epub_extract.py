@@ -29,6 +29,7 @@ CHAPTER_TWO = (
     '<html xmlns="http://www.w3.org/1999/xhtml">'
     "<body>"
     "<p>MRN <span>A123</span></p>"
+    "<p><span>Alice</span> <span>Smith</span></p>"
     "<p>Discharged &amp; stable</p>"
     "</body>"
     "</html>"
@@ -102,7 +103,7 @@ def test_extract_epub_reads_spine_order_and_preserves_sections(tmp_path: Path):
     doc = extract_epub(path)
 
     expected_first = "First\nPatient Jane Roe"
-    expected_second = "MRN A123\nDischarged & stable"
+    expected_second = "MRN A123\nAlice Smith\nDischarged & stable"
     assert doc.text == f"{expected_first}\n{expected_second}"
     assert "<strong>" not in doc.text
     assert "Ignore Jane Roe" not in doc.text
@@ -159,6 +160,22 @@ def test_epub_character_references_keep_source_ranges(tmp_path: Path):
     assert ampersand is not None
     assert doc.text_for(ampersand) == "&"
     assert _raw_for_span(doc, doc.text.index("&")) == "&amp;"
+
+
+def test_epub_inline_whitespace_keeps_mapped_separator(tmp_path: Path):
+    path = _write_synthetic_epub(tmp_path / "synthetic_phi.epub")
+    doc = extract_epub(path)
+
+    name_start = doc.text.index("Alice Smith")
+    space_offset = name_start + len("Alice")
+    space = doc.location_at(space_offset)
+
+    assert "AliceSmith" not in doc.text
+    assert doc.text[space_offset] == " "
+    assert space is not None
+    assert doc.text_for(space) == " "
+    assert space.metadata["section_index"] == 1
+    assert _raw_for_span(doc, space_offset) == " "
 
 
 def test_redact_document_dispatches_epub(tmp_path: Path):

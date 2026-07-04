@@ -312,9 +312,12 @@ class _XhtmlTextParser(HTMLParser):
             self._append_break()
 
     def handle_data(self, data: str) -> None:
-        if self._ignore_depth or not data or not data.strip():
+        if self._ignore_depth or not data:
             return
         source_start = self._source_offset()
+        if not data.strip():
+            self._append_whitespace(source_start, source_start + len(data))
+            return
         self._append_mapped(data, source_start, source_start + len(data))
 
     def handle_entityref(self, name: str) -> None:
@@ -354,6 +357,11 @@ class _XhtmlTextParser(HTMLParser):
             return
         self._parts.append("\n")
         self._cursor += 1
+
+    def _append_whitespace(self, source_start: int, source_end: int) -> None:
+        if not self._parts or self._parts[-1].endswith((" ", "\n")):
+            return
+        self._append_mapped(" ", source_start, source_end)
 
     def _append_mapped(self, text: str, source_start: int, source_end: int) -> None:
         if not text:
