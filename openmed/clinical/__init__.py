@@ -70,6 +70,17 @@ from .coref import (
     link_mentions,
     score_mention_pair,
 )
+from .decision_support import (
+    CLINICAL_DECISION_SUPPORT_DISCLAIMER,
+    CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION,
+    CLINICIAN_REVIEW_REQUIRED_NOTE,
+    GuardedSuggestion,
+    GuardrailValidationError,
+    SourceSpan,
+    build_guarded_suggestion,
+    guarded_suggestion,
+    validate_guarded_suggestion,
+)
 from .events import (
     ASSISTIVE_EVENT_DISCLAIMER,
     CLINICAL_EVENT_LEXICON_VERSION,
@@ -288,6 +299,15 @@ __all__ = [
     "canonicalize_text",
     "link_mentions",
     "score_mention_pair",
+    "CLINICAL_DECISION_SUPPORT_DISCLAIMER",
+    "CLINICAL_DECISION_SUPPORT_SCHEMA_VERSION",
+    "CLINICIAN_REVIEW_REQUIRED_NOTE",
+    "GuardedSuggestion",
+    "GuardrailValidationError",
+    "SourceSpan",
+    "build_guarded_suggestion",
+    "guarded_suggestion",
+    "validate_guarded_suggestion",
     "LabValueEventMention",
     "lab_value_event_mentions",
     "link_lab_value_attributes",
