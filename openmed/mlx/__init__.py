@@ -6,6 +6,8 @@ via Apple's MLX framework.
 Install with: ``pip install openmed[mlx]``
 """
 
+from openmed.core.capabilities import is_backend_available as _is_backend_available
+from openmed.core.capabilities import require_backend as _require_backend
 from openmed.mlx.inference import (
     GLiClassMLXPipeline,
     GLiNERMLXPipeline,
@@ -34,7 +36,22 @@ from openmed.mlx.lm import (
     tokenizers_are_aligned,
 )
 
+
+def is_mlx_available() -> bool:
+    """Return True when the ``mlx`` extra is importable, without importing it."""
+
+    return _is_backend_available("mlx")
+
+
+def ensure_mlx_available() -> None:
+    """Raise an actionable error when the ``mlx`` extra is not installed."""
+
+    _require_backend("mlx", feature="MLX inference")
+
+
 __all__ = [
+    "ensure_mlx_available",
+    "is_mlx_available",
     "DEFAULT_SPECULATIVE_TOKENS",
     "LANEFORMER_DRAFT_MLX_MODEL",
     "LANEFORMER_MLX_MODEL",

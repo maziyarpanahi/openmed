@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.quant_delta import evaluate_onnx_logit_parity
 from openmed.mlx.artifact import find_tokenizer_files
@@ -215,10 +216,7 @@ def export_onnx(
         import torch
         from transformers import AutoModelForTokenClassification, AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "torch and transformers are required for ONNX export. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="ONNX export", cause=exc)
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,10 +309,7 @@ def export_webgpu(
         import onnx
         from onnxruntime.transformers.float16 import convert_float_to_float16
     except ImportError as exc:
-        raise ImportError(
-            "onnx and onnxruntime are required for WebGPU export. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="WebGPU export", cause=exc)
 
     onnx_path = Path(onnx_path)
     output_path = Path(output_path)
@@ -635,10 +630,7 @@ def save_source_assets(
     try:
         from transformers import AutoConfig, AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "transformers is required for ONNX export metadata. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="ONNX export metadata", cause=exc)
 
     output_dir = Path(output_dir)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir).to_dict()
@@ -798,10 +790,7 @@ def validate_optimized_onnx_export(
         import onnxruntime as ort
         from transformers import AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "numpy, onnxruntime, and transformers are required for optimized "
-            "ONNX validation. Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend("onnx", feature="Optimized ONNX validation", cause=exc)
 
     shape_bucket_config = shape_bucket_config or ShapeBucketConfig()
     optimization_config = _normalise_optimization_config(optimization_config)
@@ -1020,10 +1009,9 @@ def _optimize_with_ort_session(
     try:
         import onnxruntime as ort
     except ImportError as exc:
-        raise ImportError(
-            "onnxruntime is required for post-export graph optimization. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend(
+            "onnx", feature="Post-export graph optimization", cause=exc
+        )
 
     session_options = ort.SessionOptions()
     session_options.graph_optimization_level = _graph_optimization_level(ort, config)
@@ -1270,10 +1258,9 @@ def _check_onnx_model(path: Path) -> None:
     try:
         import onnx
     except ImportError as exc:
-        raise ImportError(
-            "onnx is required to validate exported artifacts. "
-            "Install with: pip install openmed[onnx]"
-        ) from exc
+        raise_missing_backend(
+            "onnx", feature="Validating exported ONNX artifacts", cause=exc
+        )
     model = onnx.load(str(path))
     onnx.checker.check_model(model)
 
@@ -1324,10 +1311,9 @@ def _transformers_tokenizer_loader(*, cache_dir: str | None) -> Any:
     try:
         from transformers import AutoTokenizer
     except ImportError as exc:
-        raise ImportError(
-            "transformers is required for OpenVINO export verification. "
-            "Install with: pip install openmed[openvino]"
-        ) from exc
+        raise_missing_backend(
+            "openvino", feature="OpenVINO export verification", cause=exc
+        )
 
     def load_tokenizer(model_id: str, **kwargs: Any) -> Any:
         options = dict(kwargs)

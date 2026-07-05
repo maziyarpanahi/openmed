@@ -92,14 +92,14 @@ class MLXBackend:
         self._config = config
 
     def is_available(self) -> bool:
+        # MLX only runs on Apple Silicon; gate on the platform first, then defer
+        # the import check to the shared capability probe so every seam answers
+        # "is mlx installed?" the same importless way.
         if platform.system() != "Darwin":
             return False
-        try:
-            import mlx.core  # noqa: F401
+        from .capabilities import is_backend_available
 
-            return True
-        except ImportError:
-            return False
+        return is_backend_available("mlx")
 
     def create_pipeline(
         self,

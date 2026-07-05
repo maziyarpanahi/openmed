@@ -17,6 +17,15 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.capabilities import (
+    BackendSpec,
+    BackendStatus,
+    MissingOptionalDependencyError,
+    available_backends,
+    backend_status,
+    is_backend_available,
+    require_backend,
+)
 from .core.custom_recognizer import CustomRecognizer
 from .core.explain import ExplainReport, explain
 from .core.labels import CANONICAL_LABELS, normalize_label
@@ -637,6 +646,13 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "BackendSpec",
+    "BackendStatus",
+    "MissingOptionalDependencyError",
+    "available_backends",
+    "backend_status",
+    "is_backend_available",
+    "require_backend",
     "TextProcessor",
     "preprocess_text",
     "postprocess_text",

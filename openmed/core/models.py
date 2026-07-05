@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from .config import OpenMedConfig
 
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
+from .capabilities import require_backend
 from .config import get_config
 from .model_registry import (
     ModelInfo as RegistryModelInfo,
@@ -45,6 +46,23 @@ from .model_registry import (
     get_models_by_category,
 )
 from .offline import configure_offline_mode, is_local_only
+
+
+def is_hf_available() -> bool:
+    """Return True when HuggingFace Transformers is importable.
+
+    Mirrors the module-level ``HF_AVAILABLE`` flag so callers can branch on the
+    ``hf`` backend using the same convention as the other optional seams.
+    """
+
+    return bool(HF_AVAILABLE)
+
+
+def ensure_hf_available() -> None:
+    """Raise an actionable error when the ``hf`` extra is not installed."""
+
+    if not HF_AVAILABLE:
+        require_backend("hf", feature="HuggingFace Transformers inference")
 
 
 class ModelLoader:
