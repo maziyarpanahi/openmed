@@ -18,12 +18,14 @@ MANIFEST_FILENAME = "manifest.json"
 SUMMARY_FILENAME = "summary.txt"
 
 G1_G8 = ("G1a", "G1b", "G2", "G3", "G4", "G5", "G6", "G7", "G8")
+G10 = ("G10",)
 _GATE_ORDER = (
     "policy_profile",
     "thresholds_matrix",
     "manifest_coherence",
     "calibration_present",
     *G1_G8,
+    *G10,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +43,7 @@ _DEFAULT_GATES_BY_ARTIFACT: dict[str, tuple[str, ...]] = {
     "calibration_thresholds": ("calibration_present", "G1a", "G1b", "G2"),
     "calibration_report": ("calibration_present",),
     "eval_set": ("G1a", "G1b", "G2", "G7"),
+    "faithfulness_report": G10,
     "leakage_fixtures": ("G3", "G7"),
     "quant_recall_delta": ("G4",),
     "performance_report": ("G5", "G6"),
@@ -65,6 +68,8 @@ _PATH_ALIASES: dict[str, str] = {
     "eval_set_path": "eval_set",
     "fixture_path": "span_fixtures",
     "fixtures_path": "span_fixtures",
+    "faithfulness_path": "faithfulness_report",
+    "faithfulness_report_path": "faithfulness_report",
     "g8_fixture_path": "span_fixtures",
     "g8_span_fixture_path": "span_fixtures",
     "last_green_baseline_path": "baseline_store",

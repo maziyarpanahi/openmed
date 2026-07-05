@@ -145,6 +145,24 @@ def test_missing_required_artifact_is_manifested_with_affected_gate(
     assert result.manifest["gates"]["G8"]["missing_artifacts"] == ["span_fixtures"]
 
 
+def test_faithfulness_report_artifact_covers_g10(tmp_path: Path) -> None:
+    faithfulness_path = _write(
+        tmp_path / "faithfulness.json",
+        '{"ungrounded_fact_rate": 0.0}\n',
+    )
+    artifact = _artifact(faithfulness_path, "faithfulness_report", ["G10"])
+    report = _gate_report([*_complete_artifacts(tmp_path), artifact])
+    report.gate_results = (
+        *report.gate_results,
+        GateCheck("G10", True, details={"evidence": [artifact]}),
+    )
+
+    result = bundle_gate_evidence(report, tmp_path / "bundle")
+
+    assert result.manifest["gates"]["G10"]["status"] == "covered"
+    assert result.manifest["gates"]["G10"]["artifacts"] == ["faithfulness_report"]
+
+
 def test_manifest_is_deterministic_across_repeated_runs(tmp_path: Path) -> None:
     report = _gate_report(_complete_artifacts(tmp_path))
 
