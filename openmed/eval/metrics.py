@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import random
+import re
+import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -15,6 +18,7 @@ from openmed.core.quality_gates import detect_overlapping_entities
 from openmed.processing.outputs import EntityPrediction
 
 DEVICE_TIERS: tuple[str, ...] = ("cpu", "mlx-fp", "mlx-8bit", "coreml")
+FAITHFULNESS_SCHEMA_VERSION = "openmed.eval.span_grounded_faithfulness.v1"
 ABSTENTION_ROUTE_ACCEPT = "accept"
 ABSTENTION_ROUTE_REDACT = "redact"
 ABSTENTION_ROUTE_REVIEW = "review"
@@ -428,6 +432,93 @@ class CoverageGap:
         return self.to_dict()[key]
 
 
+@dataclass(frozen=True)
+class FaithfulnessFinding:
+    """One extracted fact that is not grounded in its declared source span."""
+
+    fact_id: str
+    fact_type: str
+    reason: str
+    fixture_id: str = ""
+    start: int | None = None
+    end: int | None = None
+    support_text: str = ""
+    value_hash: str = ""
+    value_length: int = 0
+    support_text_hash: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_dict(self, *, include_span_text: bool = False) -> dict[str, Any]:
+        """Return a deterministic JSON-ready finding payload."""
+
+        payload: dict[str, Any] = {
+            "fact_id": self.fact_id,
+            "fact_type": self.fact_type,
+            "reason": self.reason,
+            "value_hash": self.value_hash,
+            "value_length": int(self.value_length),
+        }
+        if self.fixture_id:
+            payload["fixture_id"] = self.fixture_id
+        if self.start is not None:
+            payload["start"] = int(self.start)
+        if self.end is not None:
+            payload["end"] = int(self.end)
+        if self.support_text_hash:
+            payload["support_text_hash"] = self.support_text_hash
+        if include_span_text and self.support_text:
+            payload["span_text"] = self.support_text
+        if self.metadata:
+            payload["metadata"] = _plain(self.metadata)
+        return payload
+
+
+@dataclass(frozen=True)
+class FaithfulnessMetrics:
+    """Ungrounded-fact rate and per-type breakdown for extracted facts."""
+
+    ungrounded_fact_rate: float
+    ungrounded_facts: int
+    total_facts: int
+    by_fact_type: Mapping[str, Mapping[str, int | float]]
+    findings: tuple[FaithfulnessFinding, ...] = ()
+    schema_version: str = FAITHFULNESS_SCHEMA_VERSION
+
+    def to_dict(
+        self,
+        *,
+        include_findings: bool = True,
+        include_span_text: bool = False,
+    ) -> dict[str, Any]:
+        """Return a deterministic JSON-ready metric payload."""
+
+        payload: dict[str, Any] = {
+            "by_fact_type": {
+                str(fact_type): {
+                    "rate": float(values.get("rate", 0.0)),
+                    "total": int(values.get("total", 0)),
+                    "ungrounded": int(values.get("ungrounded", 0)),
+                }
+                for fact_type, values in sorted(
+                    self.by_fact_type.items(), key=lambda item: str(item[0])
+                )
+            },
+            "schema_version": self.schema_version,
+            "total_facts": int(self.total_facts),
+            "ungrounded_fact_rate": float(self.ungrounded_fact_rate),
+            "ungrounded_facts": int(self.ungrounded_facts),
+        }
+        if include_findings:
+            payload["ungrounded_fact_examples"] = [
+                finding.to_dict(include_span_text=include_span_text)
+                for finding in self.findings
+            ]
+        return payload
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
 def normalize_eval_span(
     span: Any,
     *,
@@ -519,6 +610,103 @@ def normalize_eval_spans(
         )
         for span in spans
     ]
+
+
+def compute_span_grounded_faithfulness(
+    facts: Iterable[Any],
+    *,
+    source_text: str,
+    fixture_id: str = "",
+) -> FaithfulnessMetrics:
+    """Score whether extracted facts are anchored to source text spans.
+
+    A fact is grounded only when it has at least one non-empty in-bounds
+    supporting span, any declared span text exactly matches the source
+    characters at those offsets, and the asserted surface form can be
+    reconstructed from the span under conservative text normalization.
+    """
+
+    text = str(source_text)
+    totals: defaultdict[str, int] = defaultdict(int)
+    ungrounded: defaultdict[str, int] = defaultdict(int)
+    findings: list[FaithfulnessFinding] = []
+
+    for index, fact in enumerate(facts):
+        data = _fact_mapping(fact)
+        fact_id = _fact_id(data, index)
+        fact_type = _fact_type(data)
+        totals[fact_type] += 1
+
+        finding = _faithfulness_finding_for_fact(
+            data,
+            source_text=text,
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=str(data.get("fixture_id") or fixture_id or ""),
+        )
+        if finding is not None:
+            ungrounded[fact_type] += 1
+            findings.append(finding)
+
+    total_facts = sum(totals.values())
+    ungrounded_facts = len(findings)
+    keys = sorted(set(totals) | set(ungrounded))
+    by_fact_type = {
+        key: {
+            "rate": _safe_rate(ungrounded[key], totals[key], 0.0),
+            "total": totals[key],
+            "ungrounded": ungrounded[key],
+        }
+        for key in keys
+    }
+    return FaithfulnessMetrics(
+        ungrounded_fact_rate=_safe_rate(ungrounded_facts, total_facts, 0.0),
+        ungrounded_facts=ungrounded_facts,
+        total_facts=total_facts,
+        by_fact_type=by_fact_type,
+        findings=tuple(findings),
+    )
+
+
+def merge_faithfulness_metrics(
+    metrics: Iterable[FaithfulnessMetrics | Mapping[str, Any]],
+) -> FaithfulnessMetrics:
+    """Merge per-document faithfulness metrics into one corpus payload."""
+
+    totals: defaultdict[str, int] = defaultdict(int)
+    ungrounded: defaultdict[str, int] = defaultdict(int)
+    findings: list[FaithfulnessFinding] = []
+
+    for item in metrics:
+        metric = item if isinstance(item, FaithfulnessMetrics) else None
+        payload = metric.to_dict() if metric is not None else _mapping_from_any(item)
+        for fact_type, values in (
+            _read_mapping(payload, "by_fact_type") or {}
+        ).items():
+            if not isinstance(values, Mapping):
+                continue
+            totals[str(fact_type)] += int(values.get("total") or 0)
+            ungrounded[str(fact_type)] += int(values.get("ungrounded") or 0)
+        if metric is not None:
+            findings.extend(metric.findings)
+
+    total_facts = sum(totals.values())
+    ungrounded_facts = sum(ungrounded.values())
+    keys = sorted(set(totals) | set(ungrounded))
+    return FaithfulnessMetrics(
+        ungrounded_fact_rate=_safe_rate(ungrounded_facts, total_facts, 0.0),
+        ungrounded_facts=ungrounded_facts,
+        total_facts=total_facts,
+        by_fact_type={
+            key: {
+                "rate": _safe_rate(ungrounded[key], totals[key], 0.0),
+                "total": totals[key],
+                "ungrounded": ungrounded[key],
+            }
+            for key in keys
+        },
+        findings=tuple(findings),
+    )
 
 
 def compute_leakage_rate(
@@ -1288,6 +1476,7 @@ def compute_metrics_bundle(
     abstention_confidence_level: float | None = None,
     abstention_bootstrap_resamples: int = 0,
     abstention_seed: int = 0,
+    extracted_facts: Iterable[Any] | None = None,
     default_language: str = "en",
     default_device: str = "cpu",
     source_text: str | None = None,
@@ -1353,6 +1542,13 @@ def compute_metrics_bundle(
             model_size_bytes=model_size_bytes,
         ).to_dict(),
     }
+    if extracted_facts is not None:
+        if source_text is None:
+            raise ValueError("source_text is required when extracted_facts is provided")
+        metrics["faithfulness"] = compute_span_grounded_faithfulness(
+            extracted_facts,
+            source_text=source_text,
+        ).to_dict()
     if abstention_thresholds is not None:
         metrics["abstention"] = compute_abstention_metrics(
             gold_spans,
@@ -1906,6 +2102,308 @@ def _positions_for_spans(spans: Sequence[EvalSpan]) -> set[int]:
     return positions
 
 
+def _faithfulness_finding_for_fact(
+    data: Mapping[str, Any],
+    *,
+    source_text: str,
+    fact_id: str,
+    fact_type: str,
+    fixture_id: str,
+) -> FaithfulnessFinding | None:
+    value = _fact_value(data)
+    value_hash = _hash_text(value)
+    value_length = len(value)
+    metadata = _fact_provenance(data)
+
+    if not value.strip():
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            reason="missing_fact_value",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    supports = _support_span_candidates(data)
+    if not supports:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            reason="missing_supporting_span",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    first_failure: FaithfulnessFinding | None = None
+    for support in supports:
+        finding = _support_failure(
+            support,
+            source_text=source_text,
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            value=value,
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+        if finding is None:
+            return None
+        if first_failure is None:
+            first_failure = finding
+    return first_failure
+
+
+def _support_failure(
+    support: Mapping[str, Any],
+    *,
+    source_text: str,
+    fact_id: str,
+    fact_type: str,
+    fixture_id: str,
+    value: str,
+    value_hash: str,
+    value_length: int,
+    metadata: Mapping[str, Any],
+) -> FaithfulnessFinding | None:
+    start = _read_int(support, "start")
+    end = _read_int(support, "end")
+    if start is None or end is None:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            reason="missing_supporting_span_offsets",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+    if start < 0 or end > len(source_text) or start >= end:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            start=start,
+            end=end,
+            reason="supporting_span_out_of_bounds",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    source_span = source_text[start:end]
+    declared_text = _support_declared_text(support)
+    if declared_text is not None and declared_text != source_span:
+        return FaithfulnessFinding(
+            fact_id=fact_id,
+            fact_type=fact_type,
+            fixture_id=fixture_id,
+            start=start,
+            end=end,
+            support_text=source_span,
+            support_text_hash=_hash_text(source_span),
+            reason="supporting_span_text_mismatch",
+            value_hash=value_hash,
+            value_length=value_length,
+            metadata=metadata,
+        )
+
+    if _span_reconstructs_value(value, source_span):
+        return None
+
+    reason = (
+        "supporting_span_does_not_cover_value"
+        if _span_reconstructs_value(value, source_text)
+        else "fabricated_or_paraphrase_only_value"
+    )
+    return FaithfulnessFinding(
+        fact_id=fact_id,
+        fact_type=fact_type,
+        fixture_id=fixture_id,
+        start=start,
+        end=end,
+        support_text=source_span,
+        support_text_hash=_hash_text(source_span),
+        reason=reason,
+        value_hash=value_hash,
+        value_length=value_length,
+        metadata=metadata,
+    )
+
+
+def _support_span_candidates(data: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    candidates: list[Mapping[str, Any]] = []
+    if _read_int(data, "start") is not None or _read_int(data, "end") is not None:
+        candidates.append(data)
+
+    for key in (
+        "supporting_span",
+        "support_span",
+        "source_span",
+        "evidence_span",
+        "span",
+        "source",
+        "support",
+    ):
+        candidates.extend(_coerce_support_spans(data.get(key)))
+    for key in (
+        "supporting_spans",
+        "support_spans",
+        "source_spans",
+        "evidence_spans",
+        "evidence",
+        "provenance",
+    ):
+        candidates.extend(_coerce_support_spans(data.get(key)))
+    return candidates
+
+
+def _coerce_support_spans(value: Any) -> list[Mapping[str, Any]]:
+    if isinstance(value, Mapping):
+        if _read_int(value, "start") is not None or _read_int(value, "end") is not None:
+            return [value]
+        spans: list[Mapping[str, Any]] = []
+        for key in ("span", "source_span", "supporting_span", "spans"):
+            spans.extend(_coerce_support_spans(value.get(key)))
+        return spans
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        spans = []
+        for item in value:
+            spans.extend(_coerce_support_spans(item))
+        return spans
+    return []
+
+
+def _support_declared_text(support: Mapping[str, Any]) -> str | None:
+    for key in (
+        "span_text",
+        "support_text",
+        "source_text",
+        "evidence_text",
+        "surface",
+        "text",
+    ):
+        value = support.get(key)
+        if value is not None:
+            return str(value)
+    return None
+
+
+def _span_reconstructs_value(value: str, span_text: str) -> bool:
+    normalized_value = _normalize_fact_surface(value)
+    normalized_span = _normalize_fact_surface(span_text)
+    if not normalized_value:
+        return False
+    if normalized_value in normalized_span:
+        return True
+
+    compact_value = _compact_fact_surface(value)
+    compact_span = _compact_fact_surface(span_text)
+    return bool(compact_value and compact_value in compact_span)
+
+
+def _fact_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    try:
+        return vars(value)
+    except TypeError:
+        return {"value": value}
+
+
+def _mapping_from_any(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        payload = value.to_dict()
+        return payload if isinstance(payload, Mapping) else {}
+    try:
+        return vars(value)
+    except TypeError:
+        return {}
+
+
+def _fact_id(data: Mapping[str, Any], index: int) -> str:
+    for key in ("fact_id", "id", "uid", "name"):
+        value = data.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return f"fact-{index}"
+
+
+def _fact_type(data: Mapping[str, Any]) -> str:
+    for key in (
+        "fact_type",
+        "type",
+        "kind",
+        "category",
+        "label",
+        "entity_type",
+        "relation_type",
+        "concept_type",
+    ):
+        value = data.get(key)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return "fact"
+
+
+def _fact_value(data: Mapping[str, Any]) -> str:
+    for key in (
+        "value",
+        "surface_form",
+        "surface",
+        "text",
+        "display",
+        "name",
+        "normalized_value",
+        "code",
+    ):
+        value = data.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return ""
+
+
+def _fact_provenance(data: Mapping[str, Any]) -> dict[str, Any]:
+    metadata = data.get("metadata")
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    result: dict[str, Any] = {}
+    for key in ("source", "stage", "model", "system"):
+        value = data.get(key) or metadata.get(key)
+        if value is not None and str(value).strip():
+            result[key] = str(value)
+    return result
+
+
+def _normalize_fact_surface(value: str) -> str:
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    text = re.sub(r"[^\w]+", " ", text, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _compact_fact_surface(value: str) -> str:
+    text = unicodedata.normalize("NFKC", str(value)).casefold()
+    return re.sub(r"[^\w]+", "", text, flags=re.UNICODE)
+
+
+def _hash_text(value: str) -> str:
+    return hashlib.sha256(str(value).encode("utf-8")).hexdigest()
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {str(key): _plain(value[key]) for key in sorted(value, key=str)}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    return value
+
+
 def _slice_keys(
     required: Iterable[str],
     *maps: Mapping[str, Any],
@@ -1977,8 +2475,13 @@ __all__ = [
     "ReliabilityBin",
     "PairedSignificance",
     "CoverageGap",
+    "FAITHFULNESS_SCHEMA_VERSION",
+    "FaithfulnessFinding",
+    "FaithfulnessMetrics",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "compute_span_grounded_faithfulness",
+    "merge_faithfulness_metrics",
     "compute_leakage_rate",
     "compute_character_recall",
     "compute_recall_slices",

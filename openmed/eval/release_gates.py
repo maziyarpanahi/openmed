@@ -57,6 +57,7 @@ G4_INT8_DELTA_LIMIT = INT8_RECALL_DELTA_LIMIT
 G4_INT4_DELTA_LIMIT = INT4_RECALL_DELTA_LIMIT
 G7_RECALL_DROP_LIMIT = 0.002
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
+G10_UNGROUNDED_FACT_CEILING = 0.0
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_SIGNING_KEY = "openmed-release-gate-local-key"
@@ -578,6 +579,7 @@ class ReleaseGate:
             checks.append(_coreml_ane_residency_check(coreml_manifest, metadata))
             checks.append(_coreml_variant_parity_check(coreml_manifest, metadata))
         checks.append(_zero_shot_language_leakage_check(metrics, metadata))
+        checks.append(_g10_faithfulness_check(metrics, metadata))
         federated_check = _federated_boundary_check(metrics, metadata)
         if federated_check is not None:
             checks.append(federated_check)
@@ -2029,6 +2031,67 @@ def _zero_shot_language_leakage_check(
     )
 
 
+def _g10_faithfulness_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _faithfulness_evidence(metrics, metadata)
+    if not evidence:
+        return GateCheck(
+            "G10",
+            True,
+            reason="not applicable",
+            details={
+                "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+                "faithfulness_metric_present": False,
+            },
+        )
+
+    rate = _optional_float(
+        _first_value(
+            evidence.get("ungrounded_fact_rate"),
+            evidence.get("rate"),
+            evidence.get("overall"),
+        )
+    )
+    if rate is None:
+        return GateCheck(
+            "G10",
+            False,
+            reason="ungrounded-fact rate is required",
+            details={
+                "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+                "faithfulness_metric_present": True,
+            },
+        )
+
+    violations: dict[str, Any] = {}
+    if rate > G10_UNGROUNDED_FACT_CEILING:
+        violations["ungrounded_fact_rate"] = {
+            "observed": rate,
+            "limit": G10_UNGROUNDED_FACT_CEILING,
+        }
+
+    return GateCheck(
+        "G10",
+        not violations,
+        reason=(
+            "ok"
+            if not violations
+            else "ungrounded-fact rate exceeds hard ceiling"
+        ),
+        details={
+            "by_fact_type": _mapping(evidence.get("by_fact_type")),
+            "faithfulness_metric_present": True,
+            "total_facts": _optional_int(evidence.get("total_facts")),
+            "ungrounded_fact_ceiling": G10_UNGROUNDED_FACT_CEILING,
+            "ungrounded_fact_rate": rate,
+            "ungrounded_facts": _optional_int(evidence.get("ungrounded_facts")),
+            "violations": violations,
+        },
+    )
+
+
 def _federated_boundary_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -2612,6 +2675,45 @@ def _span_fixtures(metadata: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return []
 
 
+def _faithfulness_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    direct = _first_mapping(
+        metrics.get("faithfulness"),
+        metrics.get("span_grounded_faithfulness"),
+        metrics.get("grounding_faithfulness"),
+        metadata.get("faithfulness"),
+        metadata.get("span_grounded_faithfulness"),
+    )
+    if direct:
+        return direct
+
+    rate = _first_value(
+        metrics.get("ungrounded_fact_rate"),
+        metadata.get("ungrounded_fact_rate"),
+    )
+    if rate is None:
+        return {}
+
+    return {
+        "by_fact_type": _first_mapping(
+            metrics.get("ungrounded_fact_rate_by_type"),
+            metrics.get("faithfulness_by_fact_type"),
+            metadata.get("faithfulness_by_fact_type"),
+        ),
+        "total_facts": _first_value(
+            metrics.get("total_facts"),
+            metadata.get("total_facts"),
+        ),
+        "ungrounded_fact_rate": rate,
+        "ungrounded_facts": _first_value(
+            metrics.get("ungrounded_facts"),
+            metadata.get("ungrounded_facts"),
+        ),
+    }
+
+
 def _baseline_label_recall(metrics: Mapping[str, Any]) -> dict[str, float]:
     return _float_map(
         _first_mapping(
@@ -3129,6 +3231,7 @@ __all__ = [
     "G4_INT8_DELTA_LIMIT",
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
+    "G10_UNGROUNDED_FACT_CEILING",
     "FLAKINESS_GATE",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",

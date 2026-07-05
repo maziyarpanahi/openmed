@@ -23,12 +23,22 @@ from openmed.eval.harness import (
     default_model_runner,
     load_fixtures,
 )
-from openmed.eval.metrics import EvalSpan, normalize_eval_spans
+from openmed.eval.metrics import (
+    EvalSpan,
+    FaithfulnessFinding,
+    FaithfulnessMetrics,
+    compute_span_grounded_faithfulness,
+    normalize_eval_spans,
+)
 from openmed.eval.report import _format_value, _plain
 
 MISSED = "missed"
 SPURIOUS = "spurious"
 ERROR_BUCKETS: tuple[str, str] = (MISSED, SPURIOUS)
+FAITHFULNESS_DISCLAIMER = (
+    "This span-grounded faithfulness check is an assistive safeguard, "
+    "not a clinical decision."
+)
 LABELS: tuple[str, ...] = tuple(sorted(CANONICAL_LABELS))
 MATRIX_LABELS: tuple[str, ...] = LABELS + ERROR_BUCKETS
 DEFAULT_EXAMPLE_CAP = 5
@@ -190,6 +200,132 @@ class ErrorAnalysisReport:
 
     def write_markdown(self, path: str | Path) -> Path:
         """Write deterministic Markdown to *path*."""
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(self.to_markdown(), encoding="utf-8")
+        return output_path
+
+
+@dataclass(frozen=True)
+class FaithfulnessErrorAnalysisReport:
+    """Serializable ungrounded-fact triage report."""
+
+    suite: str
+    model_name: str
+    fixture_count: int
+    faithfulness: FaithfulnessMetrics
+    disclaimer: str = FAITHFULNESS_DISCLAIMER
+    generated_at: str | None = None
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def ungrounded_facts(self) -> tuple[FaithfulnessFinding, ...]:
+        return self.faithfulness.findings
+
+    def to_dict(self, *, include_span_text: bool = True) -> dict[str, Any]:
+        """Return a JSON-ready report dictionary with stable keys."""
+
+        return {
+            "disclaimer": self.disclaimer,
+            "faithfulness": self.faithfulness.to_dict(include_findings=False),
+            "fixture_count": int(self.fixture_count),
+            "generated_at": self.generated_at,
+            "metadata": _plain(self.metadata),
+            "model_name": self.model_name,
+            "suite": self.suite,
+            "ungrounded_facts": [
+                finding.to_dict(include_span_text=include_span_text)
+                for finding in self.ungrounded_facts
+            ],
+        }
+
+    def to_json(self, *, indent: int = 2, include_span_text: bool = True) -> str:
+        """Serialize the report to deterministic JSON."""
+
+        return json.dumps(
+            self.to_dict(include_span_text=include_span_text),
+            ensure_ascii=False,
+            indent=indent,
+            sort_keys=True,
+        )
+
+    def write_json(
+        self,
+        path: str | Path,
+        *,
+        indent: int = 2,
+        include_span_text: bool = True,
+    ) -> Path:
+        """Write deterministic JSON to *path*."""
+
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            self.to_json(indent=indent, include_span_text=include_span_text) + "\n",
+            encoding="utf-8",
+        )
+        return output_path
+
+    def to_markdown(self) -> str:
+        """Serialize the report to deterministic Markdown."""
+
+        lines = [
+            f"# Faithfulness Error Analysis Report: {self.suite}",
+            "",
+            self.disclaimer,
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            f"| Suite | `{self.suite}` |",
+            f"| Model | `{self.model_name}` |",
+            f"| Fixtures | {self.fixture_count} |",
+            (
+                "| Ungrounded Fact Rate | "
+                f"{self.faithfulness.ungrounded_fact_rate:.6f} |"
+            ),
+            f"| Ungrounded Facts | {self.faithfulness.ungrounded_facts} |",
+            f"| Total Facts | {self.faithfulness.total_facts} |",
+        ]
+        if self.generated_at is not None:
+            lines.append(f"| Generated At | `{self.generated_at}` |")
+
+        lines.extend(
+            [
+                "",
+                "## Ungrounded Facts",
+                "",
+                "| Type | Fixture | Fact | Reason | Span | Span Text | Value Hash |",
+                "|---|---|---|---|---|---|---|",
+            ]
+        )
+        if not self.ungrounded_facts:
+            lines.append("| _None_ |  |  |  |  |  |  |")
+        for finding in self.ungrounded_facts:
+            span = ""
+            if finding.start is not None and finding.end is not None:
+                span = f"{finding.start}:{finding.end}"
+            span_text = finding.support_text.replace("|", "\\|")
+            lines.append(
+                "| "
+                f"`{finding.fact_type}` | "
+                f"`{finding.fixture_id}` | "
+                f"`{finding.fact_id}` | "
+                f"`{finding.reason}` | "
+                f"{span} | "
+                f"{span_text} | "
+                f"`{finding.value_hash}` |"
+            )
+
+        if self.metadata:
+            lines.extend(["", "## Metadata", "", "| Key | Value |", "|---|---|"])
+            for key, value in _flatten(_plain(self.metadata)):
+                lines.append(f"| `{key}` | {_format_value(value)} |")
+
+        return "\n".join(lines) + "\n"
+
+    def write_markdown(self, path: str | Path) -> Path:
+        """Write deterministic Markdown to *path*."""
+
         output_path = Path(path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(self.to_markdown(), encoding="utf-8")
@@ -1010,6 +1146,33 @@ def error_report(
     )
 
 
+def faithfulness_report(
+    facts: Iterable[Any],
+    *,
+    source_text: str,
+    suite: str = "faithfulness",
+    model_name: str = "extraction-output",
+    fixture_id: str = "fixture",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+) -> FaithfulnessErrorAnalysisReport:
+    """Build an ungrounded-fact triage report for one source document."""
+
+    faithfulness = compute_span_grounded_faithfulness(
+        facts,
+        source_text=source_text,
+        fixture_id=fixture_id,
+    )
+    return FaithfulnessErrorAnalysisReport(
+        suite=suite,
+        model_name=model_name,
+        fixture_count=1,
+        faithfulness=faithfulness,
+        generated_at=generated_at,
+        metadata=dict(metadata or {}),
+    )
+
+
 def hard_negative_over_redaction_report(
     model: str | ModelRunner,
     suite: str | Path | Sequence[BenchmarkFixture | Mapping[str, Any]],
@@ -1420,6 +1583,7 @@ __all__ = [
     "DEFAULT_DEDUPE_SIMILARITY",
     "DEFAULT_EXAMPLE_CAP",
     "ERROR_BUCKETS",
+    "FAITHFULNESS_DISCLAIMER",
     "LABELS",
     "LABELING_QUEUE_SCHEMA_VERSION",
     "MATRIX_LABELS",
@@ -1427,10 +1591,12 @@ __all__ = [
     "SPURIOUS",
     "ErrorAnalysisReport",
     "ErrorSpanExample",
+    "FaithfulnessErrorAnalysisReport",
     "HardNegativeOverRedactionReport",
     "LabelingQueueArtifact",
     "LabelingQueueItem",
     "error_report",
+    "faithfulness_report",
     "hard_negative_over_redaction_report",
     "mine_gate_failure_labeling_queue",
 ]
