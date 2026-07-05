@@ -40,6 +40,7 @@ dev = [
   "pre-commit>=4.0",
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "hypothesis>=6.100",
   "jsonschema>=4.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
@@ -262,6 +263,7 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 markers = [
   "integration: marks end-to-end or external integration tests",
   "slow: marks tests that are expected to run slowly",
+  "contract: marks property-based stage-boundary contract tests",
   "doctest_examples: runs doctest examples for targeted public modules"
 ]
 python_files = [
