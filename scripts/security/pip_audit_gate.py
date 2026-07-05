@@ -60,7 +60,7 @@ def load_ignores(path: Path, today: dt.date) -> set[str]:
     if not path.exists():
         raise FileNotFoundError(f"ignore file not found: {path}")
 
-    data = tomllib.loads(path.read_text())
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
     entries = data.get("ignore", [])
     if not isinstance(entries, list):
         raise ValueError("'ignore' must be a TOML array")
@@ -132,7 +132,7 @@ def run_pip_audit(report_path: Path) -> dict[str, Any]:
         raise RuntimeError(f"pip-audit exited with status {result.returncode}")
 
     try:
-        return json.loads(report_path.read_text())
+        return json.loads(report_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"pip-audit wrote invalid JSON: {exc}") from exc
 
