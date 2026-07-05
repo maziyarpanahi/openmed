@@ -39,6 +39,24 @@ make format-swift
 make lint-swift
 ```
 
+## Public API docstrings
+
+Every name exported from `openmed.__all__` must carry a Google-style docstring.
+The API reference on the docs site is generated from these docstrings by
+mkdocstrings, so an undocumented public export silently ships an empty reference
+entry. A dedicated gate enforces this on the public surface only (it does not
+touch private or internal modules):
+
+```bash
+python scripts/check_public_api_docstrings.py            # prints coverage + offenders
+pytest tests/unit/test_public_api_docstrings.py -q       # CI gate
+```
+
+The checker is stdlib-only (`ast` parsing, no runtime import), so it runs in CI
+without the heavy optional dependencies. The coverage floor is pinned to the
+current value and is meant to ratchet upward: when you add a public export, give
+it a docstring in the same pull request.
+
 ## Release outline
 
 1. Bump the version via `make bump-patch` (or `bump-minor` / `bump-major`). These commands update `openmed/__about__.py`.
