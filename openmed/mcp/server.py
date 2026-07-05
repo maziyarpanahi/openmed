@@ -9,6 +9,12 @@ from dataclasses import asdict
 from typing import Any, Callable, Dict, Optional
 
 import openmed
+from openmed.core.errors import (
+    InputError,
+    InternalError,
+    MissingExtraError,
+    OpenMedError,
+)
 from openmed.core.model_registry import ModelInfo
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -41,9 +47,12 @@ def _load_fastmcp() -> Any:
     try:
         from mcp.server.fastmcp import FastMCP
     except ImportError as exc:  # pragma: no cover - exercised by packaging users
-        raise RuntimeError(
+        raise MissingExtraError(
             "The MCP SDK is not installed. Install OpenMed with the MCP extra: "
-            'pip install "openmed[mcp]"'
+            'pip install "openmed[mcp]".',
+            package="mcp",
+            extra="mcp",
+            feature="MCP server",
         ) from exc
     return FastMCP
 
@@ -66,12 +75,20 @@ def _result_to_dict(result: Any) -> Dict[str, Any]:
         payload = result.to_dict()
         if isinstance(payload, dict):
             return dict(payload)
-        raise TypeError("Result to_dict() must return a dictionary.")
+        raise InternalError(
+            "Result to_dict() returned a "
+            f"{type(payload).__name__}, expected a dict. This is an internal "
+            "invariant violation; report it."
+        )
 
     if isinstance(result, dict):
         return dict(result)
 
-    raise TypeError("Unsupported OpenMed result type.")
+    raise InternalError(
+        f"Cannot serialize result of type {type(result).__name__}. Expected an "
+        "OpenMed result with a to_dict() method or a dict; this is an internal "
+        "invariant violation, report it."
+    )
 
 
 def _run_model_request(
@@ -92,6 +109,47 @@ def _model_info_to_dict(key: str, model: ModelInfo) -> Dict[str, Any]:
 
 def _json_resource(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True)
+
+
+#: Stable, documented MCP error codes for each taxonomy class. The service layer
+#: (:mod:`openmed.service.app`) maps the same classes to matching HTTP codes, so
+#: an ``input_error`` here corresponds to a ``400`` there. These strings are part
+#: of the public MCP contract and must stay stable across releases.
+MCP_ERROR_CODES: Dict[str, str] = {
+    "OpenMedError": "openmed_error",
+    "InputError": "input_error",
+    "ConfigurationError": "configuration_error",
+    "CapabilityError": "capability_error",
+    "MissingExtraError": "missing_extra",
+    "ModelLoadError": "model_load_error",
+    "PolicyError": "policy_error",
+    "BudgetExceededError": "budget_exceeded",
+    "InternalError": "internal_error",
+    "InferenceError": "inference_error",
+}
+
+
+def mcp_error_payload(exc: OpenMedError) -> Dict[str, Any]:
+    """Map an :class:`OpenMedError` to a stable, PHI-free MCP error payload.
+
+    Args:
+        exc: A taxonomy exception raised by an OpenMed tool.
+
+    Returns:
+        A dict with a stable ``code`` (from :data:`MCP_ERROR_CODES`, falling
+        back to the exception's own ``code``), the actionable ``message``, and
+        the PHI-free ``details`` mapping. Suitable for returning as an MCP tool
+        error result.
+    """
+
+    code = MCP_ERROR_CODES.get(type(exc).__name__, exc.code)
+    return {
+        "error": {
+            "code": code,
+            "message": exc.message,
+            "details": dict(exc.details),
+        }
+    }
 
 
 def openmed_analyze_text(
@@ -281,9 +339,11 @@ def openmed_list_models(
 
     if pii_language:
         if pii_language not in SUPPORTED_LANGUAGES:
-            raise ValueError(
-                f"Unsupported language '{pii_language}'. "
-                f"Supported: {sorted(SUPPORTED_LANGUAGES)}"
+            supported = sorted(SUPPORTED_LANGUAGES)
+            raise InputError(
+                f"Unsupported language '{pii_language}'. Pass one of the "
+                f"supported ISO 639-1 codes: {supported}.",
+                details={"lang": pii_language, "supported": supported},
             )
         allowed = openmed.get_pii_models_by_language(pii_language)
         models = {key: model for key, model in models.items() if key in allowed}
@@ -334,7 +394,10 @@ def openmed_unload_model(
         response = runtime.unload_all_models()
         return validate_registered_tool_output("openmed_unload_model", response)
     if model_name is None:
-        raise ValueError("model_name is required unless all_models=true")
+        raise InputError(
+            "model_name is required unless all_models=true. Pass a model_name to "
+            "unload one model, or set all_models=true to unload all inactive models."
+        )
     response = runtime.unload_model(validate_model_name(model_name))
     return validate_registered_tool_output("openmed_unload_model", response)
 
