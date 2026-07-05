@@ -15,7 +15,7 @@
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
 | --- | --- | --- | --- | --- | --- |
-| Problem | CONDITION | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | Not shipped |
+| Problem | PROBLEM | CLINICAL_CONCEPT | low | ICD-10-CM, SNOMED | Not shipped |
 | Treatment | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Test | LAB_TEST | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 | BodyPart | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | Not shipped |
@@ -93,7 +93,7 @@
 | Compound | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Reaction | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
 | Property | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
-| Unit | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | Not shipped |
+| Unit | UNIT | CLINICAL_CONCEPT | low | LOINC, SNOMED | Not shipped |
 
 ## Organism
 

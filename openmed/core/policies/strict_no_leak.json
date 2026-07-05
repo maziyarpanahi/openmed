@@ -100,6 +100,20 @@
     "GI_SYMPTOM": "mask",
     "GI_SCORE": "mask",
     "POLYP_DESCRIPTOR": "mask",
+    "PROBLEM": "mask",
+    "SEVERITY": "mask",
+    "STATUS": "mask",
+    "DOSAGE": "mask",
+    "ROUTE": "mask",
+    "FREQUENCY": "mask",
+    "DURATION": "mask",
+    "FORM": "mask",
+    "STRENGTH": "mask",
+    "INDICATION": "mask",
+    "LAB_VALUE": "mask",
+    "UNIT": "mask",
+    "REFERENCE_RANGE": "mask",
+    "ABNORMAL_FLAG": "mask",
     "OTHER": "mask"
   }
 }
