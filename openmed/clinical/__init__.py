@@ -163,6 +163,13 @@ from .severity_laterality import (
     SeverityScale,
     extract_severity_laterality,
 )
+from .sig_parser import (
+    SIG_PARSER_ADVISORY,
+    Sig,
+    SpanSig,
+    parse_sig,
+    parse_sigs,
+)
 from .status_vocab import (
     CURRENT,
     FORMER,
@@ -406,4 +413,9 @@ __all__ = [
     "NegationScope",
     "detect_negation_scopes",
     "negated_spans",
+    "SIG_PARSER_ADVISORY",
+    "Sig",
+    "SpanSig",
+    "parse_sig",
+    "parse_sigs",
 ]
