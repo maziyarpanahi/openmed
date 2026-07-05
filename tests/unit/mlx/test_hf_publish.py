@@ -17,6 +17,8 @@ from openmed.core.hf_publish import (
     publish_artifact,
     target_repo_id,
 )
+from openmed.core.repro_hash import build_training_provenance, write_training_provenance
+from openmed.eval.release_gates import RELEASABLE, GateCheck, GateReport
 
 
 class RepositoryNotFoundError(Exception):
@@ -155,6 +157,29 @@ def test_publish_artifact_skips_existing_repo_without_upload(tmp_path, monkeypat
     assert result.repo_id == "OpenMed/test-model-v1-coreml"
 
 
+def test_publish_artifact_blocks_stale_gate_card_before_hf_write(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    (artifact / "README.md").write_text("# stale card\n", encoding="utf-8")
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    with pytest.raises(HfPublishError, match="stale model card"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+            format_name="mlx-fp",
+            api=fake_api,
+            gate_report_path=_write_json(tmp_path / "gate-report.json", _gate_report()),
+            training_provenance_path=_write_training_provenance(tmp_path),
+        )
+
+    assert fake_api.created == []
+    assert fake_api.uploaded == []
+
+
 def test_publish_artifact_errors_when_token_is_missing(tmp_path, monkeypatch):
     artifact = _write_mlx_artifact(tmp_path)
     monkeypatch.delenv("HF_WRITE_TOKEN", raising=False)
@@ -214,3 +239,59 @@ def test_conversion_modules_expose_publish_options():
 
     assert "publish_to_hub" in inspect.signature(convert_mlx).parameters
     assert "publish_to_hub" in inspect.signature(convert_coreml).parameters
+
+
+def _gate_report() -> dict[str, object]:
+    report = GateReport(
+        repo_id="OpenMed/OpenMed-PII-Tiny-44M-v1-mlx",
+        family="PII",
+        tier="Tiny",
+        param_count=44_000_000,
+        format="mlx-fp",
+        per_label_recall={"PERSON": 0.995, "DATE": 0.992},
+        per_label_precision={"PERSON": 0.994, "DATE": 0.991},
+        critical_leakage_count=0,
+        residual_leakage_rate=0.0,
+        quant_recall_delta=0.0,
+        p50_ms=32.0,
+        p95_ms=81.0,
+        ram_mb=128.0,
+        eval_set_hash="sha256:eval",
+        leakage_fixture_hash="sha256:leakage",
+        decision=RELEASABLE,
+        gate_results=(
+            GateCheck(
+                "G5",
+                True,
+                reason="ok",
+                details={
+                    "tier": "tiny",
+                    "budget": {"ram_mb": 350.0, "p50_ms": 60.0, "p95_ms": 150.0},
+                    "violations": {},
+                },
+            ),
+        ),
+        policy="hipaa_safe_harbor",
+        threshold_profile="strict",
+        target_leakage_rate=0.005,
+    ).sign("unit-publish-key")
+    return report.to_dict()
+
+
+def _write_training_provenance(tmp_path: Path) -> Path:
+    provenance = build_training_provenance(
+        rng_seeds={"python": 123},
+        data_manifest_hash="sha256:" + "2" * 64,
+        recipe_config_hash="sha256:" + "3" * 64,
+        env_lock_digest="sha256:" + "4" * 64,
+        base_model="OpenMed/OpenMed-PII-Tiny-44M",
+        base_model_revision="main",
+        git_sha="abc123",
+        repo_id="OpenMed/OpenMed-PII-Tiny-44M-v1-mlx",
+    )
+    return write_training_provenance(tmp_path, provenance)
+
+
+def _write_json(path: Path, payload: object) -> Path:
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return path
