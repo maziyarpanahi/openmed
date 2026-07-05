@@ -139,7 +139,11 @@ def get_adapter(name: str) -> ModuleType:
     """Import and return an adapter module by name."""
 
     spec = adapter_spec(name)
-    return import_module(spec.module)
+    module = import_module(spec.module)
+    ensure_registered = getattr(module, "ensure_registered", None)
+    if ensure_registered is not None:
+        ensure_registered()
+    return module
 
 
 def adapter_tool_definitions(name: str) -> tuple[dict[str, Any], ...]:
