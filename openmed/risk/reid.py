@@ -332,6 +332,28 @@ def risk_report(
     }
 
 
+def quasi_identifier_key(
+    record: Any,
+    *,
+    fields: Sequence[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return the ``risk_report`` quasi-identifier key for one row or record.
+
+    ``fields`` narrows table-like mappings to a candidate quasi-identifier set
+    before the standard record profiler runs. The serialized key shape is the
+    same shape emitted in ``risk_report()["singleton_records"][*]
+    ["quasi_identifier_key"]`` so callers can compare keys without duplicating
+    the normalization rules.
+    """
+
+    records = _coerce_records(_record_subset(record, fields), source="deidentified")
+    if not records:
+        return []
+    if len(records) != 1:
+        raise ValueError("quasi_identifier_key expects exactly one record")
+    return _serialized_profile_key(_profile_record(records[0]).key)
+
+
 def build_longitudinal_corpus(
     records: Any,
     *,
@@ -1148,11 +1170,20 @@ def _singleton_record(profile: _Profile, effective_k: int) -> dict[str, Any]:
         "record_index": profile.record.index,
         "record_id": profile.record.record_id,
         "effective_k": effective_k,
-        "quasi_identifier_key": [
-            {"category": category, "values": list(values)}
-            for category, values in profile.key
-        ],
+        "quasi_identifier_key": _serialized_profile_key(profile.key),
     }
+
+
+def _serialized_profile_key(
+    key: tuple[tuple[str, tuple[str, ...]], ...],
+) -> list[dict[str, Any]]:
+    return [{"category": category, "values": list(values)} for category, values in key]
+
+
+def _record_subset(record: Any, fields: Sequence[str] | None) -> Any:
+    if fields is None or not isinstance(record, Mapping):
+        return record
+    return {field: record.get(field) for field in fields if field in record}
 
 
 def _reid_rate(
@@ -1303,5 +1334,6 @@ __all__ = [
     "build_longitudinal_corpus",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "quasi_identifier_key",
     "risk_report",
 ]
