@@ -122,6 +122,10 @@ jobs:
       run: |
         uv run pytest tests/unit/test_no_raw_text_logging.py -q
 
+    - name: Enforce public API backwards-compatibility policy
+      run: |
+        uv run python scripts/release/check_public_api.py
+
     - name: Test with pytest
       run: |
         uv run pytest --cov=openmed --cov-report=xml --cov-report=term-missing
