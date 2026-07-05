@@ -19,6 +19,7 @@ from openmed.mcp.workflow import (
     WorkflowRunner,
     WorkflowStateStore,
     builtin_workflow_step_executors,
+    plan_clinical_pipeline,
 )
 
 PHI_NOTE = "Patient Jane Doe called 555-1212 about diabetes."
@@ -396,3 +397,53 @@ def test_workflow_tool_is_registered_and_schema_validated():
     _register_tools(fake_server, runtime_provider=None)
 
     assert "openmed_run_workflow" in fake_server.tools
+
+
+def test_clinical_pipeline_rejects_illegal_order_without_running_callbacks():
+    counters: Counter[str] = Counter()
+
+    result = plan_clinical_pipeline(
+        ["ground", "detect"],
+        stage_callbacks={
+            "ground": lambda: counters.update(["ground"]),
+            "detect": lambda: counters.update(["detect"]),
+        },
+    )
+
+    assert result["status"] == "rejected"
+    assert result["error"]["code"] == "invalid_stage_order"
+    assert result["error"]["stage"] == "detect"
+    assert counters == {}
+    assert (
+        validate_registered_tool_output("openmed_clinical_pipeline", result) == result
+    )
+
+
+def test_clinical_pipeline_accepts_ordered_stage_subsequence():
+    counters: Counter[str] = Counter()
+
+    def _stage(name: str) -> dict[str, str]:
+        counters.update([name])
+        return {"stage": name}
+
+    result = plan_clinical_pipeline(
+        ["detect", "ground", "risk"],
+        stage_callbacks={
+            "detect": lambda: _stage("detect"),
+            "ground": lambda: _stage("ground"),
+            "risk": lambda: _stage("risk"),
+        },
+    )
+
+    assert result["status"] == "completed"
+    assert result["stages"] == ["detect", "ground", "risk"]
+    assert result["final_output"] == {"stage": "risk"}
+    assert [item["stage"] for item in result["trace"]] == [
+        "detect",
+        "ground",
+        "risk",
+    ]
+    assert counters == {"detect": 1, "ground": 1, "risk": 1}
+    assert (
+        validate_registered_tool_output("openmed_clinical_pipeline", result) == result
+    )

@@ -111,6 +111,14 @@ def _tool_handler(
             **kwargs,
             runtime_provider=runtime_provider,
         ),
+        "openmed_ground": lambda **kwargs: mcp_server.openmed_ground(**kwargs),
+        "openmed_export_fhir": lambda **kwargs: mcp_server.openmed_export_fhir(
+            **kwargs
+        ),
+        "openmed_risk_score": lambda **kwargs: mcp_server.openmed_risk_score(**kwargs),
+        "openmed_clinical_pipeline": (
+            lambda **kwargs: mcp_server.openmed_clinical_pipeline(**kwargs)
+        ),
     }
     try:
         return handlers[name]

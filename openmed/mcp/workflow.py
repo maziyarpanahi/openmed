@@ -8,7 +8,7 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping, MutableMapping, Optional
+from typing import Any, Callable, Mapping, MutableMapping, Optional, Sequence
 
 from openmed.clinical.exporters.codeable_concept_simple import (
     codeable_concept,
@@ -30,6 +30,166 @@ class WorkflowValidationError(WorkflowError):
 
 class TransientWorkflowError(WorkflowError):
     """Raised by step adapters to signal a retryable transient failure."""
+
+
+CLINICAL_PIPELINE_SCHEMA_VERSION = "openmed.clinical_pipeline.v1"
+CLINICAL_STAGE_ORDER = (
+    "detect",
+    "context",
+    "sections",
+    "relations",
+    "ground",
+    "export",
+    "risk",
+)
+_CLINICAL_STAGE_INDEX = {
+    stage: index for index, stage in enumerate(CLINICAL_STAGE_ORDER)
+}
+
+
+class ClinicalStageOrderError(WorkflowValidationError):
+    """Raised when a declared clinical workflow violates stage ordering."""
+
+    def __init__(
+        self,
+        *,
+        code: str,
+        message: str,
+        stages: Sequence[Any],
+        stage: str | None = None,
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        merged_details: dict[str, Any] = {
+            "stages": [str(item) for item in stages],
+            "allowed_order": list(CLINICAL_STAGE_ORDER),
+        }
+        if details:
+            merged_details.update(dict(details))
+        self.error = {
+            "code": code,
+            "message": message,
+            "stage": stage,
+            "details": merged_details,
+        }
+
+
+def validate_clinical_stage_order(stages: Sequence[Any]) -> tuple[str, ...]:
+    """Return normalized clinical stages, or raise for unsafe order."""
+    if isinstance(stages, (str, bytes, bytearray)) or not isinstance(stages, Sequence):
+        raise ClinicalStageOrderError(
+            code="invalid_stage_list",
+            message="Clinical pipeline stages must be a non-empty list.",
+            stages=(),
+        )
+    if not stages:
+        raise ClinicalStageOrderError(
+            code="invalid_stage_list",
+            message="Clinical pipeline stages must be a non-empty list.",
+            stages=stages,
+        )
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    previous_stage: str | None = None
+    previous_index = -1
+    for raw_stage in stages:
+        stage = str(raw_stage).strip().lower()
+        if stage not in _CLINICAL_STAGE_INDEX:
+            raise ClinicalStageOrderError(
+                code="unknown_stage",
+                message=f"Unknown clinical pipeline stage: {raw_stage!r}.",
+                stages=stages,
+                stage=stage or None,
+            )
+        if stage in seen:
+            raise ClinicalStageOrderError(
+                code="duplicate_stage",
+                message=f"Duplicate clinical pipeline stage: {stage}.",
+                stages=stages,
+                stage=stage,
+            )
+
+        stage_index = _CLINICAL_STAGE_INDEX[stage]
+        if stage_index < previous_index:
+            raise ClinicalStageOrderError(
+                code="invalid_stage_order",
+                message=(
+                    f"Clinical pipeline stage {stage!r} cannot run after "
+                    f"{previous_stage!r}."
+                ),
+                stages=stages,
+                stage=stage,
+                details={"previous_stage": previous_stage},
+            )
+
+        normalized.append(stage)
+        seen.add(stage)
+        previous_stage = stage
+        previous_index = stage_index
+
+    return tuple(normalized)
+
+
+def plan_clinical_pipeline(
+    stages: Sequence[Any],
+    *,
+    stage_callbacks: Mapping[str, Callable[[], Any]] | None = None,
+) -> dict[str, Any]:
+    """Validate and optionally dry-run a clinical pipeline stage declaration."""
+    try:
+        normalized_stages = validate_clinical_stage_order(stages)
+    except ClinicalStageOrderError as exc:
+        response_stages: Sequence[Any]
+        if isinstance(stages, (str, bytes, bytearray)) or not isinstance(
+            stages, Sequence
+        ):
+            response_stages = ()
+        else:
+            response_stages = stages
+        return _clinical_pipeline_payload(
+            status="rejected",
+            stages=response_stages,
+            error=exc.error,
+        )
+
+    callbacks = dict(stage_callbacks or {})
+    artifacts: dict[str, Any] = {}
+    trace: list[dict[str, Any]] = []
+    for stage in normalized_stages:
+        callback = callbacks.get(stage)
+        if callback is None:
+            continue
+        artifacts[stage] = callback()
+        trace.append({"stage": stage, "status": "completed"})
+
+    return _clinical_pipeline_payload(
+        status="completed" if trace else "planned",
+        stages=normalized_stages,
+        artifacts=artifacts,
+        final_output=artifacts.get(normalized_stages[-1]) if artifacts else None,
+        trace=trace,
+    )
+
+
+def _clinical_pipeline_payload(
+    *,
+    status: str,
+    stages: Sequence[Any],
+    artifacts: Mapping[str, Any] | None = None,
+    final_output: Any = None,
+    error: Mapping[str, Any] | None = None,
+    trace: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    return {
+        "schema_version": CLINICAL_PIPELINE_SCHEMA_VERSION,
+        "status": status,
+        "stages": [str(stage).strip().lower() for stage in stages],
+        "artifacts": dict(artifacts or {}),
+        "final_output": copy.deepcopy(final_output),
+        "error": dict(error) if error is not None else None,
+        "trace": [dict(item) for item in trace],
+    }
 
 
 @dataclass

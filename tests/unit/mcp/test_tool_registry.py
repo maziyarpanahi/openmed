@@ -84,6 +84,52 @@ def test_tool_registry_resource_is_generated_from_specs() -> None:
     assert all(tool["stability"] for tool in payload["tools"])
 
 
+def test_clinical_tool_contracts_are_registered_and_versioned() -> None:
+    expected = {
+        "openmed_ground",
+        "openmed_export_fhir",
+        "openmed_risk_score",
+        "openmed_clinical_pipeline",
+    }
+
+    for name in expected:
+        spec = TOOL_REGISTRY.get(name)
+        assert spec.version == "1.0.0"
+        assert spec.input_schema["type"] == "object"
+        assert spec.output_schema["type"] == "object"
+        assert "schema_version" in spec.output_schema["required"]
+
+    pipeline = TOOL_REGISTRY.get("openmed_clinical_pipeline")
+    assert pipeline.input_schema["required"] == ["stages"]
+    stages = pipeline.input_schema["properties"]["stages"]["items"]
+    assert list(stages["enum"]) == [
+        "detect",
+        "context",
+        "sections",
+        "relations",
+        "ground",
+        "export",
+        "risk",
+    ]
+
+
+def test_clinical_contract_handler_outputs_validate() -> None:
+    span = _sample_openmed_span()
+
+    assert mcp_server.openmed_ground([span])["status"] == "unimplemented"
+    assert mcp_server.openmed_export_fhir([span])["status"] == "unimplemented"
+    assert mcp_server.openmed_risk_score([span])["status"] == "unimplemented"
+    assert mcp_server.openmed_clinical_pipeline(["detect", "ground"]) == {
+        "schema_version": "openmed.clinical_pipeline.v1",
+        "status": "planned",
+        "stages": ["detect", "ground"],
+        "artifacts": {},
+        "final_output": None,
+        "error": None,
+        "trace": [],
+    }
+
+
 def test_adapter_tool_definitions_match_registry_schemas() -> None:
     langchain_defs = langchain.create_tool_definitions()
     presidio_defs = presidio.create_tool_definitions()
@@ -127,6 +173,23 @@ def test_breaking_schema_change_with_major_bump_passes() -> None:
     check_tool_registry_compatibility(previous, current)
 
 
+def test_breaking_new_clinical_tool_schema_change_is_caught() -> None:
+    previous = TOOL_REGISTRY.latest_specs()
+    target = TOOL_REGISTRY.get("openmed_clinical_pipeline")
+    output_schema = deepcopy(dict(target.output_schema))
+    output_schema["properties"] = deepcopy(dict(output_schema["properties"]))
+    output_schema["properties"]["status"] = {
+        "type": "string",
+        "enum": ["completed"],
+    }
+    broken = _replace_spec(target, output_schema=output_schema)
+
+    current = [broken if spec.name == broken.name else spec for spec in previous]
+
+    with pytest.raises(ToolCompatibilityError, match="openmed_clinical_pipeline"):
+        check_tool_registry_compatibility(previous, current)
+
+
 def test_registry_supports_multiple_versions_side_by_side() -> None:
     original = TOOL_REGISTRY.get("openmed_analyze_text")
     bumped = _replace_spec(original, version="2.0.0")
@@ -168,3 +231,29 @@ def _schema_projection(definitions: tuple[dict[str, Any], ...]) -> list[dict[str
         }
         for definition in definitions
     ]
+
+
+def _sample_openmed_span() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "doc_id": "fixture-note",
+        "start": 0,
+        "end": 8,
+        "text_hash": (
+            "hmac-sha256:"
+            "0123456789abcdef0123456789abcdef"
+            "0123456789abcdef0123456789abcdef"
+        ),
+        "entity_type": "clinical_problem",
+        "canonical_label": "OTHER",
+        "policy_label": "CLINICAL_CONCEPT",
+        "regulatory_tags": [],
+        "score": 0.99,
+        "detector": "fixture",
+        "evidence": {},
+        "action": "keep",
+        "replacement": None,
+        "reversible_id": None,
+        "section": None,
+        "metadata": {},
+    }
