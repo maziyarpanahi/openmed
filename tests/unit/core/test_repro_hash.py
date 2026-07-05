@@ -10,10 +10,13 @@ from pathlib import Path
 import pytest
 
 from openmed.core.repro_hash import (
+    SPAN_SET_HASH_SCHEMA_VERSION,
     ReproducibilityVerificationError,
     build_training_provenance,
+    canonicalize_span_records,
     compute_environment_lock_digest,
     compute_reproducibility_hash,
+    compute_span_set_hash,
     load_training_provenance,
     verify_reproducibility,
     write_training_provenance,
@@ -115,3 +118,58 @@ def test_environment_lock_digest_matches_uv_lock_sha256(tmp_path: Path) -> None:
     expected = hashlib.sha256(lock.read_bytes()).hexdigest()
 
     assert compute_environment_lock_digest(lock) == f"sha256:{expected}"
+
+
+def test_canonicalize_span_records_is_order_independent_and_phi_free() -> None:
+    forward = [
+        {"start": 30, "end": 43, "label": "EMAIL", "confidence": 0.8},
+        {"start": 7, "end": 16, "label": "NAME", "confidence": 0.9},
+    ]
+    reverse = list(reversed(forward))
+
+    assert canonicalize_span_records(forward) == canonicalize_span_records(reverse)
+    # No raw text field leaks into the canonical record.
+    for record in canonicalize_span_records(forward):
+        assert set(record) == {
+            "start",
+            "end",
+            "label",
+            "confidence",
+            "action",
+            "replacement_digest",
+        }
+
+
+def test_compute_span_set_hash_is_stable_and_order_independent() -> None:
+    spans = [
+        {"start": 30, "end": 43, "label": "EMAIL", "confidence": 0.8},
+        {"start": 7, "end": 16, "label": "NAME", "confidence": 0.9},
+    ]
+    digest = compute_span_set_hash(spans, text_length=64, method="mask")
+
+    assert digest.startswith("sha256:")
+    assert digest == compute_span_set_hash(
+        list(reversed(spans)), text_length=64, method="mask"
+    )
+
+
+def test_compute_span_set_hash_reflects_applied_replacement() -> None:
+    base = [{"start": 0, "end": 5, "label": "NAME", "surrogate": "Alpha"}]
+    changed = [{"start": 0, "end": 5, "label": "NAME", "surrogate": "Bravo"}]
+
+    assert compute_span_set_hash(base) != compute_span_set_hash(changed)
+
+
+def test_compute_span_set_hash_binds_method_and_text_length() -> None:
+    spans = [{"start": 0, "end": 5, "label": "NAME", "confidence": 0.5}]
+
+    assert compute_span_set_hash(spans, method="mask") != compute_span_set_hash(
+        spans, method="replace"
+    )
+    assert compute_span_set_hash(spans, text_length=10) != compute_span_set_hash(
+        spans, text_length=11
+    )
+
+
+def test_span_set_hash_schema_version_is_pinned() -> None:
+    assert SPAN_SET_HASH_SCHEMA_VERSION == "openmed.span_set.v1"
