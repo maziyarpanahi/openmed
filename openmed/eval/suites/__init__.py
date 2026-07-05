@@ -31,6 +31,13 @@ from openmed.eval.datasets.i2b2 import (
 )
 from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture
+from openmed.eval.suites.multimodal_dicom import (
+    MULTIMODAL_DICOM,
+    generate_synthetic_dicom_corpus,
+    load_multimodal_dicom_fixtures,
+    multimodal_dicom_metadata,
+    run_multimodal_dicom,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,
@@ -53,6 +60,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     DRUGPROT,
     POLICY_COMPLIANCE,
     BIOMEDICAL_NER,
+    MULTIMODAL_DICOM,
 )
 
 
@@ -84,6 +92,8 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_policy_compliance_fixtures(**kwargs)
     if suite == BIOMEDICAL_NER:
         return load_biomedical_ner_fixtures(**kwargs)
+    if suite == MULTIMODAL_DICOM:
+        return load_multimodal_dicom_fixtures(**kwargs)
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -103,6 +113,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return policy_compliance_metadata(**kwargs)
     if suite == BIOMEDICAL_NER:
         return biomedical_ner_suite_metadata(**kwargs)
+    if suite == MULTIMODAL_DICOM:
+        return multimodal_dicom_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -114,6 +126,7 @@ __all__ = [
     "DRUGPROT",
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
+    "MULTIMODAL_DICOM",
     "ComparatorAdapter",
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
@@ -135,4 +148,8 @@ __all__ = [
     "load_policy_compliance_fixtures",
     "policy_compliance_metadata",
     "run_biomedical_ner_benchmark",
+    "load_multimodal_dicom_fixtures",
+    "multimodal_dicom_metadata",
+    "run_multimodal_dicom",
+    "generate_synthetic_dicom_corpus",
 ]
