@@ -68,6 +68,7 @@ class TestConstants:
             "tr",
             "id",
             "th",
+            "ro",
         }
 
     def test_national_id_only_languages(self):
@@ -92,6 +93,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["tr"] == "Turkish-"
         assert LANGUAGE_MODEL_PREFIX["id"] == "Indonesian-"
         assert LANGUAGE_MODEL_PREFIX["th"] == "Thai-"
+        assert LANGUAGE_MODEL_PREFIX["ro"] == "Romanian-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
@@ -111,6 +113,7 @@ class TestConstants:
         assert "Turkish" in DEFAULT_PII_MODELS["tr"]
         assert DEFAULT_PII_MODELS["id"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["th"] == "OpenMed/privacy-filter-multilingual"
+        assert DEFAULT_PII_MODELS["ro"] == "OpenMed/privacy-filter-multilingual"
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -1614,6 +1617,55 @@ class TestLanguagePIIPatterns:
                 observed.add((pattern.entity_type, match.start(), match.end(), value))
 
         assert expected <= observed
+
+    def test_romanian_clinical_sample_expected_spans(self):
+        text = (
+            "Pacient: Ana Popescu, nascuta 12 martie 1985. "
+            "Telefon +40 721 234 567. CNP 1800101400181. "
+            "Adresa Str. Mihai Eminescu 12, cod postal 010011 Bucuresti."
+        )
+        expected = {
+            ("date", 30, 44, "12 martie 1985"),
+            ("phone_number", 54, 69, "+40 721 234 567"),
+            ("national_id", 75, 88, "1800101400181"),
+            ("street_address", 97, 119, "Str. Mihai Eminescu 12"),
+            ("postcode", 132, 138, "010011"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("ro"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_romanian_diacritic_address_matches(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ro"] if p.entity_type == "street_address"
+        ]
+        samples = [
+            "Șoseaua Ștefan cel Mare 15",
+            "Str. Gheorghe Doja 7",
+            "Bulevardul Dacia 100",
+            "Calea Moșilor 24",
+        ]
+        for sample in samples:
+            matched = any(re.search(p.pattern, sample, p.flags) for p in patterns)
+            assert matched, f"Romanian address pattern should match '{sample}'"
+
+    def test_romanian_cnp_pattern_rejects_bad_checksum(self):
+        # The 13-digit pattern only survives the validator gate for valid CNPs.
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ro"] if p.entity_type == "national_id"
+        ]
+        assert patterns, "Romanian pack must expose a national_id pattern"
+        corrupted = "1800101400182"  # last digit off by one from a valid CNP
+        for pattern in patterns:
+            for match in re.finditer(pattern.pattern, corrupted, pattern.flags):
+                assert pattern.validator is not None
+                assert not pattern.validator(match.group(0))
 
 
 # ---------------------------------------------------------------------------
