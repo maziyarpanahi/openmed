@@ -57,6 +57,15 @@ from .core.result_cache import (
     make_cache_key,
 )
 from .core.results import AnalyzeResult
+from .core.review_workflow import (
+    ReviewFeedback,
+    ReviewItem,
+    ReviewQueue,
+    append_feedback,
+    build_review_queue,
+    critical_labels,
+    record_review_decision,
+)
 from .core.streaming import (
     StreamingBufferError,
     StreamingDeidentificationEvent,
@@ -709,6 +718,14 @@ __all__ = [
     "stream_token_classifier",
     "redaction_preview",
     "render_redaction_preview",
+    # Human-in-the-loop review workflow
+    "ReviewQueue",
+    "ReviewItem",
+    "ReviewFeedback",
+    "build_review_queue",
+    "record_review_decision",
+    "append_feedback",
+    "critical_labels",
     # PII entity merging utilities
     "merge_entities_with_semantic_units",
     "find_semantic_units",
