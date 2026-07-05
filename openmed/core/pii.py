@@ -41,6 +41,7 @@ from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
 )
+from .errors import InferenceError, InputError, MissingExtraError
 from .offline import network_blocked_if_offline
 from .script_detect import DetectionNormalization, normalize_for_pii_detection
 
@@ -74,8 +75,14 @@ DeidentificationMethod = Literal[
 ]
 
 
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
+class MissingOptionalDependencyError(MissingExtraError):
+    """Raised when a requested optional capability needs an unavailable package.
+
+    Part of the structured error taxonomy: subclasses
+    :class:`openmed.core.errors.MissingExtraError` (and thus ``OpenMedError``
+    and ``ImportError``) so ``except OpenMedError`` and legacy ``except
+    ImportError`` handlers both catch it.
+    """
 
     def __init__(
         self,
@@ -86,11 +93,11 @@ class MissingOptionalDependencyError(ImportError):
     ) -> None:
         instruction = _optional_dependency_install_instruction(package, extra)
         super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
+            f"{feature} requires optional dependency '{package}'. {instruction}",
+            package=package,
+            feature=feature,
+            extra=extra,
         )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
 
 
 def _optional_dependency_install_instruction(
@@ -140,6 +147,31 @@ def _raise_missing_optional_dependency(
         feature=feature,
         extra=extra,
     ) from cause
+
+
+def _validate_text_input(text: Any, *, argument: str = "text") -> str:
+    """Validate a public text argument without echoing its content.
+
+    Args:
+        text: The value supplied by the caller.
+        argument: Parameter name to reference in the error message.
+
+    Returns:
+        The validated string, unchanged.
+
+    Raises:
+        InputError: If ``text`` is not a ``str``. The raised message never
+            includes the value itself, only its type, so no raw text or PHI is
+            leaked.
+    """
+
+    if not isinstance(text, str):
+        raise InputError(
+            f"'{argument}' must be a string, got {type(text).__name__}. Pass the "
+            "text to process as a str.",
+            details={"argument": argument, "type": type(text).__name__},
+        )
+    return text
 
 
 @dataclass
@@ -470,9 +502,14 @@ def _coerce_batched_raw_outputs(
                 normalized.append(list(item) if item else [])
         return normalized
 
-    raise ValueError(
-        "Privacy-filter batch output length did not match input length "
-        f"({expected_count})"
+    actual_count = len(raw_outputs) if isinstance(raw_outputs, list) else 1
+    raise InferenceError(
+        "Privacy-filter backend returned a batch whose length "
+        f"({actual_count}) did not match the number of input texts "
+        f"({expected_count}). This indicates a backend or model bug, not bad "
+        "input; retry with use_smart_merging left at its default or file a "
+        "report with the model identifier.",
+        details={"expected_count": expected_count, "actual_count": actual_count},
     )
 
 
@@ -542,8 +579,11 @@ def _resolve_effective_pii_model(model_name: str, lang: str) -> str:
     from .pii_i18n import DEFAULT_PII_MODELS, SUPPORTED_LANGUAGES
 
     if lang not in SUPPORTED_LANGUAGES:
-        raise ValueError(
-            f"Unsupported language '{lang}'. Supported: {sorted(SUPPORTED_LANGUAGES)}"
+        supported = sorted(SUPPORTED_LANGUAGES)
+        raise InputError(
+            f"Unsupported language '{lang}'. Pass one of the supported ISO 639-1 "
+            f"codes: {supported}.",
+            details={"lang": lang, "supported": supported},
         )
 
     if model_name == _DEFAULT_EN_MODEL and lang != "en":
@@ -900,6 +940,7 @@ def extract_pii(
         >>> next((entity.text, entity.label) for entity in result.entities)
         ('Casey Example', 'NAME')
     """
+    _validate_text_input(text)
     if cache_results:
         params = dict(locals())
         cache_key = make_cache_key("extract_pii", params)
@@ -938,22 +979,50 @@ def _resolve_deidentification_method(
     if shift_dates is True and method != "shift_dates":
         effective_method = "shift_dates"
     elif shift_dates is False and method == "shift_dates":
-        raise ValueError("shift_dates=false conflicts with method='shift_dates'")
+        raise InputError(
+            "shift_dates=false conflicts with method='shift_dates'. Drop the "
+            "shift_dates argument, or set method to a non-date method."
+        )
 
     if date_shift_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_days requires method='shift_dates'")
+        raise InputError(
+            "date_shift_days requires method='shift_dates'. Set "
+            "method='shift_dates' (or shift_dates=True), or remove date_shift_days."
+        )
     if patient_key is not None and effective_method != "shift_dates":
-        raise ValueError("patient_key requires method='shift_dates'")
+        raise InputError(
+            "patient_key requires method='shift_dates'. Set method='shift_dates' "
+            "(or shift_dates=True), or remove patient_key."
+        )
     if date_shift_max_days is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_max_days requires method='shift_dates'")
+        raise InputError(
+            "date_shift_max_days requires method='shift_dates'. Set "
+            "method='shift_dates' (or shift_dates=True), or remove "
+            "date_shift_max_days."
+        )
     if date_shift_secret is not None and effective_method != "shift_dates":
-        raise ValueError("date_shift_secret requires method='shift_dates'")
+        raise InputError(
+            "date_shift_secret requires method='shift_dates'. Set "
+            "method='shift_dates' (or shift_dates=True), or remove "
+            "date_shift_secret."
+        )
     if date_shift_secret is not None and patient_key is None:
-        raise ValueError("date_shift_secret requires patient_key")
+        raise InputError(
+            "date_shift_secret requires patient_key. Supply patient_key to derive "
+            "a deterministic offset, or remove date_shift_secret for a random one."
+        )
     if patient_key is not None and date_shift_secret is None:
-        raise ValueError("patient_key requires date_shift_secret")
+        raise InputError(
+            "patient_key requires date_shift_secret. Supply date_shift_secret as "
+            "the HMAC key material, or remove patient_key for a random offset."
+        )
     if effective_method not in DEIDENTIFICATION_METHODS:
-        raise ValueError(f"method must be one of {DEIDENTIFICATION_METHODS!r}")
+        supported = list(DEIDENTIFICATION_METHODS)
+        raise InputError(
+            f"Unsupported de-identification method '{effective_method}'. Pass one "
+            f"of: {supported}.",
+            details={"method": effective_method, "supported": supported},
+        )
 
     return effective_method
 
@@ -1908,6 +1977,7 @@ def deidentify(
         {'[NAME]': 'Casey Example'}
     """
 
+    _validate_text_input(text)
     if cache_results:
         params = dict(locals())
         cache_key = make_cache_key("deidentify", params)
@@ -2686,6 +2756,14 @@ def reidentify(
         Only works if keep_mapping=True was used during de-identification.
         Requires proper authorization and audit logging in production.
     """
+    _validate_text_input(deidentified_text, argument="deidentified_text")
+    if not isinstance(mapping, Mapping):
+        raise InputError(
+            f"'mapping' must be a mapping of redacted->original strings, got "
+            f"{type(mapping).__name__}. Pass the mapping returned by deidentify"
+            "(..., keep_mapping=True).",
+            details={"type": type(mapping).__name__},
+        )
     result = deidentified_text
 
     for redacted, original in mapping.items():

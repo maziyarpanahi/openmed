@@ -8,6 +8,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from ..core.errors import InputError, InternalError
+
 logger = logging.getLogger(__name__)
 
 
@@ -376,7 +378,10 @@ class OutputFormatter:
             Merged entity.
         """
         if not entities:
-            raise ValueError("Cannot merge empty entity list")
+            raise InternalError(
+                "Cannot merge an empty entity list. This is an internal grouping "
+                "invariant violation; report it with the model identifier."
+            )
 
         start = entities[0].start
         end = entities[-1].end
@@ -600,4 +605,8 @@ def format_predictions(
     elif output_format == "csv":
         return formatter.to_csv_rows(result)
     else:
-        raise ValueError(f"Unsupported output format: {output_format}")
+        supported = ["dict", "json", "html", "csv"]
+        raise InputError(
+            f"Unsupported output format '{output_format}'. Pass one of: {supported}.",
+            details={"output_format": output_format, "supported": supported},
+        )

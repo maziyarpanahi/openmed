@@ -17,6 +17,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.cors import CORSMiddleware
 
 import openmed
+from openmed.core.errors import (
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InputError,
+    InternalError,
+    OpenMedError,
+    PolicyError,
+)
 from openmed.processing import format_predictions
 from openmed.utils.validation import validate_model_name
 
@@ -157,6 +166,43 @@ def _error_response(
         headers=headers,
         content={"error": error},
     )
+
+
+#: Stable HTTP status mapped to each taxonomy class. Subclasses inherit their
+#: nearest mapped ancestor's status (resolved via MRO). These bindings are part
+#: of the public API contract; the ``error.code`` in the body comes from the
+#: exception's own ``code`` and matches the MCP layer's error codes.
+_TAXONOMY_HTTP_STATUS: Dict[type, int] = {
+    InputError: 400,
+    ConfigurationError: 400,
+    PolicyError: 400,
+    CapabilityError: 503,
+    BudgetExceededError: 503,
+    InternalError: 500,
+    OpenMedError: 500,
+}
+
+
+def _taxonomy_http_status(exc: OpenMedError) -> int:
+    """Resolve the HTTP status for a taxonomy exception via its MRO."""
+    for klass in type(exc).__mro__:
+        status = _TAXONOMY_HTTP_STATUS.get(klass)
+        if status is not None:
+            return status
+    return 500
+
+
+def _openmed_error_response(exc: OpenMedError) -> JSONResponse:
+    """Map an :class:`OpenMedError` to a standardized HTTP error response.
+
+    The response uses the exception's stable ``code`` and its actionable,
+    PHI-free ``message``. Server-side faults (5xx) omit ``details`` so no
+    internal context leaks to clients; client faults (4xx) include the
+    PHI-free ``details`` mapping to aid remediation.
+    """
+    status = _taxonomy_http_status(exc)
+    details = dict(exc.details) if status < 500 else None
+    return _error_response(status, exc.code, exc.message, details=details)
 
 
 def _format_error_field(location: Any) -> str:
@@ -602,6 +648,10 @@ def create_app() -> FastAPI:
                 "wait_seconds": exc.wait_seconds,
             },
         )
+
+    @app.exception_handler(OpenMedError)
+    async def _openmed_error_handler(_: Request, exc: OpenMedError) -> JSONResponse:
+        return _openmed_error_response(exc)
 
     @app.exception_handler(ValueError)
     async def _value_error_handler(_: Request, exc: ValueError) -> JSONResponse:
@@ -1188,9 +1238,12 @@ def _analyze_payload_batch(
     )
     tokenizer = getattr(pipeline, "tokenizer", None)
     if tokenizer is not None and effective_max_length is not None:
+        # Best-effort: a tokenizer may reject or lack ``model_max_length``.
+        # Setting it is a non-critical optimisation, so tolerate the narrow set
+        # of errors that assignment/int() can raise without failing the request.
         try:
             tokenizer.model_max_length = int(effective_max_length)
-        except Exception:
+        except (TypeError, ValueError, AttributeError, OverflowError):
             pass
 
     import time

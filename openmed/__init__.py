@@ -16,6 +16,19 @@ from .core.anonymizer import (
     register_clinical_provider,
     register_label_generator,
 )
+from .core.errors import (
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    ModelLoadError,
+    OpenMedError,
+    PolicyError,
+    redact_detail,
+)
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 from .core.custom_recognizer import CustomRecognizer
 from .core.explain import ExplainReport, explain
@@ -738,4 +751,16 @@ __all__ = [
     "InMemorySurrogateStore",
     "JsonFileSurrogateStore",
     "ENCRYPTION_SCHEME",
+    # Structured error taxonomy
+    "OpenMedError",
+    "InputError",
+    "ConfigurationError",
+    "CapabilityError",
+    "MissingExtraError",
+    "ModelLoadError",
+    "PolicyError",
+    "BudgetExceededError",
+    "InternalError",
+    "InferenceError",
+    "redact_detail",
 ]

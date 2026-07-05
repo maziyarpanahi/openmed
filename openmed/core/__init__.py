@@ -11,6 +11,19 @@ from .config import (
     save_profile,
 )
 from .custom_recognizer import CustomRecognizer
+from .errors import (
+    BudgetExceededError,
+    CapabilityError,
+    ConfigurationError,
+    InferenceError,
+    InputError,
+    InternalError,
+    MissingExtraError,
+    ModelLoadError,
+    OpenMedError,
+    PolicyError,
+    redact_detail,
+)
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
@@ -77,4 +90,16 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    # Structured error taxonomy
+    "OpenMedError",
+    "InputError",
+    "ConfigurationError",
+    "CapabilityError",
+    "MissingExtraError",
+    "ModelLoadError",
+    "PolicyError",
+    "BudgetExceededError",
+    "InternalError",
+    "InferenceError",
+    "redact_detail",
 ]
