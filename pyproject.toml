@@ -185,6 +185,15 @@ service = [
   "uvicorn[standard]>=0.29",
 ]
 
+# Opt-in, no-PHI observability for the core de-identification pipeline
+# (openmed.core.telemetry). Local-first: no network exporter is installed here.
+# The OTLP exporter lives in the heavier ``service`` extra for users who want to
+# ship spans off-box.
+otel = [
+  "opentelemetry-api>=1.26,<2",
+  "opentelemetry-sdk>=1.26,<2",
+]
+
 gliner = [
   "gliner[tokenizers]>=0.2.0",
   "torch>=2.0"

@@ -37,6 +37,12 @@ from .surrogate_vault import (
     VaultConsistencyReport,
     VaultRotationResult,
 )
+from .telemetry import (
+    PipelineTelemetry,
+    StageMetrics,
+    otel_available,
+    telemetry_enabled_from_env,
+)
 
 __all__ = [
     "ModelLoader",
@@ -77,4 +83,8 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "PipelineTelemetry",
+    "StageMetrics",
+    "otel_available",
+    "telemetry_enabled_from_env",
 ]

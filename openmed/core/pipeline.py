@@ -200,6 +200,7 @@ class Pipeline:
         section_detector: Callable[..., Mapping[str, Any]] | None = None,
         custom_recognizer: Any = None,
         hmac_secret: str | bytes = DEFAULT_HASH_SECRET,
+        telemetry: Any = None,
     ) -> None:
         from . import pii
         from .policy import load_policy
@@ -242,6 +243,14 @@ class Pipeline:
         self.section_detector = section_detector
         self.custom_recognizer = coerce_custom_recognizer(custom_recognizer)
         self.hmac_secret = hmac_secret
+        # Optional, no-PHI observability. Off by default and opt-in via the
+        # ``OPENMED_TELEMETRY_ENABLED`` env var (or by passing a telemetry
+        # instance). When OpenTelemetry is not installed this is a no-op.
+        if telemetry is None:
+            from .telemetry import PipelineTelemetry
+
+            telemetry = PipelineTelemetry.from_env()
+        self.telemetry = telemetry
         from .clinical_protect import protection_options_from_config
 
         self.clinical_protect_options = protection_options_from_config(config)
@@ -277,13 +286,23 @@ class Pipeline:
             date_shift_secret=date_shift_secret,
         )
         original_text = text.strip()
-        normalized = self.stage1_normalize(original_text)
-        route = self.stage2_language_script(normalized.normalized_text)
+        telemetry = self.telemetry
+        telemetry.start_pipeline()
+        with telemetry.stage_span(1, STAGE_NAMES[0]) as _stage1:
+            normalized = self.stage1_normalize(original_text)
+            _stage1.set_input_length(len(normalized.normalized_text))
+        with telemetry.stage_span(2, STAGE_NAMES[1]):
+            route = self.stage2_language_script(normalized.normalized_text)
+        telemetry.set_run_context(language=route.lang, script=route.script)
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
         )
-        section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
+        telemetry.set_run_context(
+            doc_id_hash=hmac_text_hash(resolved_doc_id, self.hmac_secret)
+        )
+        with telemetry.stage_span(3, STAGE_NAMES[2]):
+            section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
@@ -318,52 +337,54 @@ class Pipeline:
 
         cascade_driven = self.cascade_router is not None
         if cascade_driven:
-            cascade_result = self.cascade_router.run(
-                normalized.normalized_text,
-                context=context,
-                strict_no_leak=self.strict_no_leak,
-                language=route.lang,
-                policy_profile=self.policy_profile,
-            )
-            deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
-            model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
-            clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
-            deterministic_spans = (
-                *deterministic_spans,
-                *self._registered_detector_spans(
+            with telemetry.stage_span(4, STAGE_NAMES[3]) as _stage4:
+                cascade_result = self.cascade_router.run(
                     normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[3],
-                ),
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
-            clinical_spans = (
-                *clinical_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[5],
-                ),
-            )
-            deterministic_spans = _stamp_span_sections(
-                deterministic_spans,
-                context.section_metadata,
-            )
-            model_spans = _stamp_span_sections(
-                model_spans,
-                context.section_metadata,
-            )
-            clinical_spans = _stamp_span_sections(
-                clinical_spans,
-                context.section_metadata,
-            )
+                    context=context,
+                    strict_no_leak=self.strict_no_leak,
+                    language=route.lang,
+                    policy_profile=self.policy_profile,
+                )
+                deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
+                model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
+                clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+                deterministic_spans = (
+                    *deterministic_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[3],
+                    ),
+                )
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+                clinical_spans = (
+                    *clinical_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[5],
+                    ),
+                )
+                deterministic_spans = _stamp_span_sections(
+                    deterministic_spans,
+                    context.section_metadata,
+                )
+                model_spans = _stamp_span_sections(
+                    model_spans,
+                    context.section_metadata,
+                )
+                clinical_spans = _stamp_span_sections(
+                    clinical_spans,
+                    context.section_metadata,
+                )
+                _stage4.set_span_count(len(deterministic_spans))
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
@@ -389,91 +410,113 @@ class Pipeline:
                     metadata=cascade_metadata,
                 )
             )
+            with telemetry.stage_span(5, STAGE_NAMES[4]) as _stage5:
+                _stage5.set_span_count(len(model_spans))
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
+            with telemetry.stage_span(6, STAGE_NAMES[5]) as _stage6:
+                _stage6.set_span_count(len(clinical_spans))
             stage_results.append(
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
         else:
-            deterministic_spans = self.stage4_deterministic_detectors(
-                normalized.normalized_text,
-                context,
-            )
-            deterministic_spans = _stamp_span_sections(
-                deterministic_spans,
-                context.section_metadata,
-            )
+            with telemetry.stage_span(4, STAGE_NAMES[3]) as _stage4:
+                deterministic_spans = self.stage4_deterministic_detectors(
+                    normalized.normalized_text,
+                    context,
+                )
+                deterministic_spans = _stamp_span_sections(
+                    deterministic_spans,
+                    context.section_metadata,
+                )
+                _stage4.set_span_count(len(deterministic_spans))
             stage_results.append(
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
-            pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
-            self._apply_calibration_thresholds(pii_result, route)
-            model_spans = self._entities_to_spans(
-                getattr(pii_result, "entities", ()),
-                normalized.normalized_text,
-                context,
-                default_detector=(
-                    f"model:{getattr(pii_result, 'model_name', route.model_name)}"
-                ),
-                stage=STAGE_NAMES[4],
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
+            with telemetry.stage_span(5, STAGE_NAMES[4]) as _stage5:
+                pii_result = self.stage5_fast_pii_model(
+                    normalized.normalized_text, route
+                )
+                self._apply_calibration_thresholds(pii_result, route)
+                model_spans = self._entities_to_spans(
+                    getattr(pii_result, "entities", ()),
                     normalized.normalized_text,
                     context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
-            model_spans = _stamp_span_sections(model_spans, context.section_metadata)
+                    default_detector=(
+                        f"model:{getattr(pii_result, 'model_name', route.model_name)}"
+                    ),
+                    stage=STAGE_NAMES[4],
+                )
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+                model_spans = _stamp_span_sections(
+                    model_spans, context.section_metadata
+                )
+                _stage5.set_span_count(len(model_spans))
+                _stage5.set_labels(_span_labels(model_spans))
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
 
-            clinical_spans = self.stage6_clinical_phi_model(
-                normalized.normalized_text,
-                context,
-            )
-            clinical_spans = _stamp_span_sections(
-                clinical_spans,
-                context.section_metadata,
-            )
+            with telemetry.stage_span(6, STAGE_NAMES[5]) as _stage6:
+                clinical_spans = self.stage6_clinical_phi_model(
+                    normalized.normalized_text,
+                    context,
+                )
+                clinical_spans = _stamp_span_sections(
+                    clinical_spans,
+                    context.section_metadata,
+                )
+                _stage6.set_span_count(len(clinical_spans))
             stage_results.append(
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
 
         arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
-        merged_spans = self.stage7_arbitration(
-            arbitration_candidates,
-            context,
-        )
-        arbitration_trace_metadata = (
-            _arbitration_trace_metadata(
+        with telemetry.stage_span(
+            7,
+            STAGE_NAMES[6],
+            span_count_baseline=len(arbitration_candidates),
+        ) as _stage7:
+            merged_spans = self.stage7_arbitration(
                 arbitration_candidates,
-                merged_spans,
-                mode=self.arbitration_mode,
-                strict_no_leak=self.strict_no_leak,
-                language=route.lang,
-                policy_profile=self.policy_profile,
-                label_floors=self.arbitration_label_floors,
-                high_recall_label_floors=self.high_recall_label_floors,
-                threshold_matrix=self.threshold_matrix,
+                context,
             )
-            if explain and self.arbitration is None
-            else None
-        )
-        merged_spans, allow_metadata = self._suppress_custom_allowed_spans(
-            normalized.normalized_text,
-            merged_spans,
-        )
-        merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
-            normalized.normalized_text,
-            merged_spans,
-            context,
-        )
-        merged_spans = _stamp_span_sections(merged_spans, context.section_metadata)
+            arbitration_trace_metadata = (
+                _arbitration_trace_metadata(
+                    arbitration_candidates,
+                    merged_spans,
+                    mode=self.arbitration_mode,
+                    strict_no_leak=self.strict_no_leak,
+                    language=route.lang,
+                    policy_profile=self.policy_profile,
+                    label_floors=self.arbitration_label_floors,
+                    high_recall_label_floors=self.high_recall_label_floors,
+                    threshold_matrix=self.threshold_matrix,
+                )
+                if explain and self.arbitration is None
+                else None
+            )
+            merged_spans, allow_metadata = self._suppress_custom_allowed_spans(
+                normalized.normalized_text,
+                merged_spans,
+            )
+            merged_spans, clinical_protection_metadata = self._protect_clinical_spans(
+                normalized.normalized_text,
+                merged_spans,
+                context,
+            )
+            merged_spans = _stamp_span_sections(merged_spans, context.section_metadata)
+            _stage7.set_span_count(len(merged_spans))
+            _stage7.set_labels(_span_labels(merged_spans))
         arbitration_metadata = {
             **dict(allow_metadata),
             **dict(clinical_protection_metadata),
@@ -502,12 +545,14 @@ class Pipeline:
             )
         )
 
-        policy_spans = self.stage8_policy_actions(
-            merged_spans,
-            context,
-            explain=explain,
-        )
-        policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
+        with telemetry.stage_span(8, STAGE_NAMES[7]) as _stage8:
+            policy_spans = self.stage8_policy_actions(
+                merged_spans,
+                context,
+                explain=explain,
+            )
+            policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
+            _stage8.set_span_count(len(policy_spans))
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
         if self.policy is not None:
@@ -541,11 +586,13 @@ class Pipeline:
                 ],
             )
 
-        sweep_spans, sweep_metadata = self.stage9_safety_sweep(
-            normalized.normalized_text,
-            pii_result,
-            context,
-        )
+        with telemetry.stage_span(9, STAGE_NAMES[8]) as _stage9:
+            sweep_spans, sweep_metadata = self.stage9_safety_sweep(
+                normalized.normalized_text,
+                pii_result,
+                context,
+            )
+            _stage9.set_span_count(len(sweep_spans))
         stage_results.append(
             PipelineStageResult(
                 9,
@@ -558,45 +605,54 @@ class Pipeline:
         effective_keep_mapping = keep_mapping or bool(
             self.policy is not None and self.policy.keep_mapping
         )
-        emission_pii_result = _remap_pii_result_to_original(
-            pii_result,
-            normalized,
-            self.hmac_secret,
-        )
-        deidentified = self.stage10_emit(
-            normalized.original_text,
-            emission_pii_result,
-            effective_method=effective_method,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days,
-            patient_key=patient_key,
-            date_shift_max_days=date_shift_max_days,
-            date_shift_secret=date_shift_secret,
-            keep_mapping=effective_keep_mapping,
-            lang=route.lang,
-            consistent=consistent,
-            seed=seed,
-            locale=locale,
-            surrogate_vault=surrogate_vault,
-            model_name=route.model_name,
-            confidence_threshold=self.confidence_threshold,
-            normalize_accents=self.normalize_accents,
-            use_smart_merging=self.use_smart_merging,
-            use_safety_sweep=self.use_safety_sweep,
-            reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
-            policy_name=self.policy.name if self.policy is not None else None,
-            policy=self.policy.name if self.policy is not None else "hipaa_safe_harbor",
-            audit=audit,
-        )
-        final_spans = (
-            sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
-        )
-        final_spans = _stamp_span_sections(final_spans, context.section_metadata)
-        emission_spans = _remap_spans_to_original(
-            final_spans,
-            normalized,
-            self.hmac_secret,
-        )
+        with telemetry.stage_span(10, STAGE_NAMES[9]) as _stage10:
+            emission_pii_result = _remap_pii_result_to_original(
+                pii_result,
+                normalized,
+                self.hmac_secret,
+            )
+            deidentified = self.stage10_emit(
+                normalized.original_text,
+                emission_pii_result,
+                effective_method=effective_method,
+                keep_year=keep_year,
+                date_shift_days=date_shift_days,
+                patient_key=patient_key,
+                date_shift_max_days=date_shift_max_days,
+                date_shift_secret=date_shift_secret,
+                keep_mapping=effective_keep_mapping,
+                lang=route.lang,
+                consistent=consistent,
+                seed=seed,
+                locale=locale,
+                surrogate_vault=surrogate_vault,
+                model_name=route.model_name,
+                confidence_threshold=self.confidence_threshold,
+                normalize_accents=self.normalize_accents,
+                use_smart_merging=self.use_smart_merging,
+                use_safety_sweep=self.use_safety_sweep,
+                reversible_ids=bool(
+                    self.policy is not None and self.policy.reversible_id
+                ),
+                policy_name=self.policy.name if self.policy is not None else None,
+                policy=(
+                    self.policy.name if self.policy is not None else "hipaa_safe_harbor"
+                ),
+                audit=audit,
+            )
+            final_spans = (
+                sweep_spans
+                if self.policy is not None
+                else (sweep_spans or policy_spans)
+            )
+            final_spans = _stamp_span_sections(final_spans, context.section_metadata)
+            emission_spans = _remap_spans_to_original(
+                final_spans,
+                normalized,
+                self.hmac_secret,
+            )
+            _stage10.set_span_count(len(emission_spans))
+            _stage10.set_redacted_length(len(deidentified.deidentified_text))
         stage_results.append(
             PipelineStageResult(
                 10,
@@ -1743,6 +1799,20 @@ def _span_trace_ref(span: OpenMedSpan) -> Mapping[str, Any]:
         "detector": span.detector,
         "score": span.score,
     }
+
+
+def _span_labels(spans: Sequence[OpenMedSpan]) -> tuple[str, ...]:
+    """Return the set of canonical labels for telemetry (no raw surface text).
+
+    Canonical labels are non-PHI category names (e.g. ``NAME``, ``PHONE``), so
+    they are safe to emit as span attributes.
+    """
+    labels = {
+        str(span.canonical_label)
+        for span in spans
+        if getattr(span, "canonical_label", None)
+    }
+    return tuple(sorted(labels))
 
 
 def _cascade_stage_spans(
