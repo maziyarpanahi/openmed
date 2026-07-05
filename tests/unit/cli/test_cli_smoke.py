@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -79,6 +80,53 @@ def test_argparse_cli_without_command_prints_help(
 
     assert result == 0
     assert "Command-line utilities for OpenMed" in capsys.readouterr().out
+
+
+def test_profile_command_returns_gate_status(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    jsonl = tmp_path / "extracted.jsonl"
+    jsonl.write_text(
+        json.dumps(
+            {
+                "document_id": "secret-doc",
+                "person_id": "secret-patient",
+                "note_text": "Diabetes noted. Mystery term noted.",
+                "entities": [
+                    {
+                        "text": "Diabetes",
+                        "domain_id": "Condition",
+                        "start": 0,
+                        "end": 8,
+                        "concept_id": 201826,
+                    },
+                    {
+                        "text": "Mystery term",
+                        "domain_id": "Condition",
+                        "start": 16,
+                        "end": 28,
+                    },
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    passed = main_module.main(
+        ["profile", "--input", str(jsonl), "--completeness-floor", "0.7"]
+    )
+    pass_payload = json.loads(capsys.readouterr().out)
+    failed = main_module.main(
+        ["profile", "--input", str(jsonl), "--completeness-floor", "0.9"]
+    )
+    fail_payload = json.loads(capsys.readouterr().out)
+
+    assert passed == 0
+    assert pass_payload["pipeline_gate"]["passed"] is True
+    assert failed == 2
+    assert fail_payload["pipeline_gate"]["passed"] is False
 
 
 def test_tui_command_is_not_registered() -> None:

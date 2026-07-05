@@ -220,6 +220,46 @@ def test_analyze_blank_text_returns_validation_error(client):
     assert payload["error"]["details"][0]["field"] == "body.text"
 
 
+def test_profile_endpoint_returns_phi_free_gate_report(client):
+    response = client.post(
+        "/profile",
+        json={
+            "completeness_floor": 0.9,
+            "records": [
+                {
+                    "document_id": "secret-doc",
+                    "person_id": "secret-patient",
+                    "note_text": "Diabetes noted. Mystery term noted.",
+                    "entities": [
+                        {
+                            "text": "Diabetes",
+                            "domain_id": "Condition",
+                            "start": 0,
+                            "end": 8,
+                            "concept_id": 201826,
+                        },
+                        {
+                            "text": "Mystery term",
+                            "domain_id": "Condition",
+                            "start": 16,
+                            "end": 28,
+                        },
+                    ],
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    serialized = json.dumps(payload, sort_keys=True)
+    assert payload["pipeline_gate"]["passed"] is False
+    assert payload["status"] == "fail"
+    assert "secret-doc" not in serialized
+    assert "secret-patient" not in serialized
+    assert "Diabetes noted" not in serialized
+
+
 @pytest.mark.parametrize(
     ("path", "payload"),
     [

@@ -784,6 +784,40 @@
         "title": "PrivacyGatewayRequest",
         "type": "object"
       },
+      "ProfileRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for PHI-free extracted-result quality profiling.",
+        "properties": {
+          "completeness_floor": {
+            "default": 0.8,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Completeness Floor",
+            "type": "number"
+          },
+          "jsonl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jsonl"
+          },
+          "records": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Records",
+            "type": "array"
+          }
+        },
+        "title": "ProfileRequest",
+        "type": "object"
+      },
       "SMARTBackendIngestionRequest": {
         "additionalProperties": false,
         "description": "Request schema for starting SMART backend-services ingestion.",
@@ -1515,6 +1549,46 @@
           }
         },
         "summary": "Privacy Gateway Complete"
+      }
+    },
+    "/profile": {
+      "post": {
+        "operationId": "profile_profile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Profile Profile Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile"
       }
     },
     "/readyz": {

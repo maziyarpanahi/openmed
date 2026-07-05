@@ -541,6 +541,7 @@ def load_grounded_notes(
     *,
     vocabulary_version: str | None = None,
     mode: LoadMode = "append",
+    quality_floor: float | None = None,
 ) -> OmopCdmTables:
     """Build OMOP CDM tables from grounded clinical note records.
 
@@ -552,6 +553,9 @@ def load_grounded_notes(
             recorded in SOURCE_TO_CONCEPT_MAP rows.
         mode: Load mode. The first implementation supports append mode with
             deterministic upsert keys for idempotent reruns.
+        quality_floor: Optional completeness floor. When set, the extracted
+            batch is profiled before loading and low-completeness batches are
+            rejected without writing rows.
 
     Returns:
         In-memory CDM rows plus a PHI-free summary.
@@ -563,6 +567,18 @@ def load_grounded_notes(
 
     if mode != "append":
         raise ValueError("OMOP loader currently supports append mode only")
+
+    if quality_floor is not None:
+        records = tuple(notes)
+        from openmed.structured.quality import (
+            assert_profile_gate,
+            profile_extracted_batch,
+        )
+
+        assert_profile_gate(
+            profile_extracted_batch(records, completeness_floor=quality_floor)
+        )
+        notes = records
 
     table_rows: dict[str, dict[int, dict[str, Any]]] = {
         table: {} for table in _TABLE_ORDER
@@ -674,6 +690,7 @@ def load_grounded_jsonl(
     *,
     vocabulary_version: str | None = None,
     mode: LoadMode = "append",
+    quality_floor: float | None = None,
 ) -> OmopCdmTables:
     """Load grounded note records from JSONL into in-memory OMOP tables."""
 
@@ -691,6 +708,7 @@ def load_grounded_jsonl(
         records,
         vocabulary_version=vocabulary_version,
         mode=mode,
+        quality_floor=quality_floor,
     )
 
 
