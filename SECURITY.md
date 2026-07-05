@@ -5,6 +5,13 @@ A defect that causes identifiers to leak — a redaction bypass — is a **secur
 defect, not an ordinary bug. Please report it **privately** so it can be fixed
 before it is disclosed publicly.
 
+The structured analysis of *how* the redactor can fail — adversary model, trust
+boundaries, and a catalog of leakage-bypass abuse cases with their mitigations
+and known gaps — lives in the
+[redactor threat model](docs/security/threat-model.md). Each abuse case there is
+backed by an executable regression test
+(`tests/unit/security/test_redactor_leakage_bypass.py`).
+
 ## Reporting a vulnerability
 
 **Use GitHub Private Vulnerability Reporting:**
@@ -78,8 +85,11 @@ a public issue:
 
 ## Out of scope
 
-- A full project threat model, signing-key custody, and automated secret-scanning
-  configuration are tracked separately and are not part of this policy.
+- The redactor threat model itself lives in
+  [`docs/security/threat-model.md`](docs/security/threat-model.md); this policy
+  governs *reporting*, not the analysis. Signing-key custody and automated
+  secret-scanning configuration are tracked separately and are not part of this
+  policy.
 - Model accuracy or quality requests that are **not** a redaction bypass — please
   file those as a normal [issue](https://github.com/maziyarpanahi/openmed/issues).
 - Testing of, or findings against, hosted endpoints (for example `openmed.life`
