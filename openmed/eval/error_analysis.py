@@ -96,6 +96,34 @@ class ErrorSpanExample:
             payload["matched_text_hash"] = self.matched_text_hash
         return payload
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ErrorSpanExample":
+        """Rebuild an example from a :meth:`to_dict` payload."""
+        matched_start = payload.get("matched_start")
+        matched_end = payload.get("matched_end")
+        return cls(
+            kind=str(payload["kind"]),
+            fixture_id=str(payload["fixture_id"]),
+            label=str(payload["label"]),
+            start=int(payload["start"]),
+            end=int(payload["end"]),
+            context_start=int(payload["context_start"]),
+            context_end=int(payload["context_end"]),
+            text_hash=str(payload["text_hash"]),
+            matched_label=(
+                str(payload["matched_label"])
+                if payload.get("matched_label") is not None
+                else None
+            ),
+            matched_start=(int(matched_start) if matched_start is not None else None),
+            matched_end=(int(matched_end) if matched_end is not None else None),
+            matched_text_hash=(
+                str(payload["matched_text_hash"])
+                if payload.get("matched_text_hash") is not None
+                else None
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class ErrorAnalysisReport:
@@ -129,6 +157,42 @@ class ErrorAnalysisReport:
             "model_name": self.model_name,
             "suite": self.suite,
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ErrorAnalysisReport":
+        """Rebuild a report from a :meth:`to_dict` payload."""
+        confusion = payload.get("confusion_matrix") or {}
+        matrix = {
+            str(label): {
+                str(column): int(value)
+                for column, value in (confusion.get(label) or {}).items()
+            }
+            for label in confusion
+        }
+        return cls(
+            suite=str(payload["suite"]),
+            model_name=str(payload["model_name"]),
+            device=str(payload["device"]),
+            fixture_count=int(payload["fixture_count"]),
+            confusion_matrix=matrix,
+            false_negatives=_examples_from_dict(payload.get("false_negatives") or {}),
+            false_positives=_examples_from_dict(payload.get("false_positives") or {}),
+            example_cap=int(payload.get("example_cap", DEFAULT_EXAMPLE_CAP)),
+            generated_at=payload.get("generated_at"),
+            metadata=dict(payload.get("metadata") or {}),
+        )
+
+    @classmethod
+    def read_json(cls, path: str | Path) -> "ErrorAnalysisReport":
+        """Read an error-analysis report JSON file."""
+        report_path = Path(path)
+        with report_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, Mapping):
+            raise ValueError(
+                f"Error-analysis report must be a JSON object: {report_path}"
+            )
+        return cls.from_dict(payload)
 
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the report to deterministic JSON."""
@@ -1363,6 +1427,18 @@ def _examples_to_dict(
         label: [example.to_dict() for example in examples.get(label, ())]
         for label in LABELS
     }
+
+
+def _examples_from_dict(
+    payload: Mapping[str, Any],
+) -> dict[str, list[ErrorSpanExample]]:
+    result = _empty_examples()
+    for label, rows in payload.items():
+        bucket = result.setdefault(str(label), [])
+        for row in rows or ():
+            if isinstance(row, Mapping):
+                bucket.append(ErrorSpanExample.from_dict(row))
+    return result
 
 
 def _examples_markdown(
