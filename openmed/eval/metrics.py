@@ -108,6 +108,29 @@ class F1Metrics:
 
 
 @dataclass(frozen=True)
+class CoreferenceClusteringScore:
+    """Documented proxy score for clinical-event coreference clustering."""
+
+    precision: float
+    recall: float
+    f1: float
+    metric: str
+    item_count: int
+
+    def to_dict(self) -> dict[str, int | float | str]:
+        return {
+            "precision": self.precision,
+            "recall": self.recall,
+            "f1": self.f1,
+            "metric": self.metric,
+            "item_count": self.item_count,
+        }
+
+    def __getitem__(self, key: str) -> int | float | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class LeakageMetrics:
     """Character-weighted PHI leakage rate and required slices."""
 
@@ -681,6 +704,28 @@ def compute_recall_slices(
         by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
         covered_chars=covered_chars,
         total_chars=total_chars,
+    )
+
+
+def compute_coreference_clustering_score(
+    predicted: Mapping[Any, str],
+    gold: Mapping[Any, str],
+    *,
+    metric: str = "bcubed",
+) -> CoreferenceClusteringScore:
+    """Score coreference clusters with a documented B-cubed F1 proxy."""
+
+    if metric != "bcubed":
+        raise ValueError("only the documented 'bcubed' coreference proxy is supported")
+    from openmed.clinical.coref import bcubed_precision_recall_f1
+
+    score = bcubed_precision_recall_f1(predicted, gold)
+    return CoreferenceClusteringScore(
+        precision=score.precision,
+        recall=score.recall,
+        f1=score.f1,
+        metric=metric,
+        item_count=len(gold),
     )
 
 
@@ -1968,6 +2013,7 @@ __all__ = [
     "EvalSpan",
     "RateMetric",
     "F1Metrics",
+    "CoreferenceClusteringScore",
     "LeakageMetrics",
     "RecallSlices",
     "ConsistencyMetric",
@@ -1982,6 +2028,7 @@ __all__ = [
     "compute_leakage_rate",
     "compute_character_recall",
     "compute_recall_slices",
+    "compute_coreference_clustering_score",
     "compute_exact_span_f1",
     "compute_relaxed_span_f1",
     "compute_over_redaction_loss",

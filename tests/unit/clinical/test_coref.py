@@ -16,10 +16,16 @@ from openmed.clinical import (
     bcubed_precision_recall_f1,
     canonicalize_mentions,
     deduplicate_problem_list,
+    event_coreference_mentions,
     link_mentions,
+    resolve_coreference,
 )
+from openmed.eval.metrics import compute_coreference_clustering_score
 
 FIXTURE_PATH = Path(__file__).parents[2] / "fixtures/clinical/coref_gold.json"
+EVENT_FIXTURE_PATH = (
+    Path(__file__).parents[3] / "openmed/eval/golden/fixtures/event_coref.jsonl"
+)
 
 
 def _load_gold_corpus() -> list[dict[str, Any]]:
@@ -52,6 +58,43 @@ def _gold_labels(mentions: list[dict[str, Any]]) -> dict[tuple[str, int, int], s
         ]
         for mention in mentions
     }
+
+
+def _load_event_coref_gold() -> list[dict[str, Any]]:
+    return [
+        json.loads(line)
+        for line in EVENT_FIXTURE_PATH.read_text().splitlines()
+        if line.strip()
+    ]
+
+
+def _event_seed_mentions(document: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {**mention, "document_id": document["doc_id"]}
+        for mention in document["seed_mentions"]
+    ]
+
+
+def _event_gold_labels(document: dict[str, Any]) -> dict[tuple[str, int, int], str]:
+    return {
+        (document["doc_id"], mention["start"], mention["end"]): mention["gold_entity"]
+        for mention in document["gold_mentions"]
+    }
+
+
+def _event_predicted_labels(
+    document: dict[str, Any],
+) -> dict[tuple[str, int, int], str]:
+    result = resolve_coreference(
+        _event_seed_mentions(document),
+        document_text=document["text"],
+        document_id=document["doc_id"],
+    )
+    labels: dict[tuple[str, int, int], str] = {}
+    for cluster in result.clusters:
+        for start, end in cluster.member_offsets:
+            labels[(cluster.document_id, start, end)] = cluster.cluster_id
+    return labels
 
 
 def test_canonicalize_mentions_expands_abbreviations_and_preserves_offsets() -> None:
@@ -162,6 +205,59 @@ def test_problem_list_coref_dedup_reduces_duplicates_without_false_merges() -> N
 
     assert len(deduplicated) < len(baseline)
     assert _problem_list_pairwise_precision(deduplicated, mentions) >= 0.90
+
+
+def test_event_coreference_mentions_add_definite_np_and_pronoun_candidates() -> None:
+    document = _load_event_coref_gold()[0]
+
+    candidates = event_coreference_mentions(
+        document["text"],
+        _event_seed_mentions(document),
+        document_id=document["doc_id"],
+    )
+    canonical = canonicalize_mentions(candidates, document_text=document["text"])
+    by_offset = {(mention.start, mention.end): mention for mention in canonical}
+
+    assert (60, 71) in by_offset
+    assert (87, 89) in by_offset
+    assert by_offset[(60, 71)].canonical_text == "left lower lobe mass"
+    assert by_offset[(87, 89)].canonical_text == "left lower lobe mass"
+
+
+def test_resolve_coreference_scores_event_gold_and_keeps_clusters_sanitized() -> None:
+    predicted: dict[tuple[str, int, int], str] = {}
+    gold: dict[tuple[str, int, int], str] = {}
+    for document in _load_event_coref_gold():
+        document_predicted = _event_predicted_labels(document)
+        document_gold = _event_gold_labels(document)
+        assert set(document_gold).issubset(document_predicted)
+        predicted.update({key: document_predicted[key] for key in document_gold})
+        gold.update(document_gold)
+
+    score = compute_coreference_clustering_score(predicted, gold)
+
+    assert score.metric == "bcubed"
+    assert score.f1 >= 0.60
+
+    result = resolve_coreference(
+        _event_seed_mentions(_load_event_coref_gold()[1]),
+        document_text=_load_event_coref_gold()[1]["text"],
+        document_id="event-coref-2",
+    )
+    payload = json.dumps(result.to_dict()).casefold()
+    assert "lisinopril" not in payload
+    assert "medication" not in payload
+    assert all(cluster.member_hashes for cluster in result.clusters)
+
+
+def test_event_coreference_does_not_merge_opposite_assertion_polarity() -> None:
+    document = _load_event_coref_gold()[2]
+    predicted = _event_predicted_labels(document)
+
+    assert (
+        predicted[(document["doc_id"], 15, 24)]
+        != predicted[(document["doc_id"], 26, 35)]
+    )
 
 
 def _problem_list_pairwise_precision(
