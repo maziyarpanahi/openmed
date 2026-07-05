@@ -55,6 +55,8 @@ from openmed.core.pii_i18n import (
 
 from .clinical_ids import (
     AadhaarProvider,
+    AustralianMedicareProvider,
+    AustralianTFNProvider,
     DanishCPRProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
@@ -71,6 +73,8 @@ from .clinical_ids import (
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
+    validate_australian_medicare,
+    validate_australian_tfn,
     validate_npi,
 )
 
@@ -378,6 +382,20 @@ def _register_builtin_specs() -> None:
         validate=validate_uk_nino,
         faker_method="nino",
         faker_provider=UKNINOProvider,
+    )
+    _register_aliases(
+        ("en", "en_AU", "au"),
+        id_type="medicare",
+        validate=validate_australian_medicare,
+        faker_method="australian_medicare",
+        faker_provider=AustralianMedicareProvider,
+    )
+    _register_aliases(
+        ("en", "en_AU", "au"),
+        id_type="tfn",
+        validate=validate_australian_tfn,
+        faker_method="australian_tfn",
+        faker_provider=AustralianTFNProvider,
     )
 
 
