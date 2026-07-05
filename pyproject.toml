@@ -238,6 +238,7 @@ openmed = "openmed.cli:main"
 [tool.hatch.build]
 include = [
   "openmed/**",
+  "openmed/py.typed",
   "openmed/core/thresholds.json",
   "openmed/core/policies/*.json",
   "openmed/core/schemas/json/*.json",
@@ -303,3 +304,21 @@ known-first-party = ["openmed"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+
+# Lightweight, scoped type-checking configuration. This intentionally covers
+# only the newer v1.6 public surfaces that already ship precise annotations and
+# a py.typed marker; it is not a strict project-wide gate. The regression test
+# in tests/unit/test_packaging_typed.py runs mypy/pyright over exactly these
+# modules when a checker is installed and skips otherwise, so the offline CI
+# matrix (which does not ship a type checker) stays green.
+[tool.mypy]
+python_version = "3.10"
+files = [
+  "openmed/core/audit.py",
+  "openmed/core/pipeline.py",
+  "openmed/clinical/context.py",
+  "openmed/clinical/exporters/fhir/bundle.py",
+]
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false
