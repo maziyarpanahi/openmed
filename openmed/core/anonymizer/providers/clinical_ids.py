@@ -1214,6 +1214,129 @@ class ThaiNationalIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Australian Medicare card number (10 digits, weighted checksum + issue digit)
+# and Tax File Number (TFN, 8-9 digit weighted mod-11)
+# ---------------------------------------------------------------------------
+
+# Weights applied to the first eight Medicare digits before the mod-10 check
+# digit (the ninth digit). The tenth digit is the issue / reference number and
+# is not part of the checksum.
+_MEDICARE_WEIGHTS: Sequence[int] = (1, 3, 7, 9, 1, 3, 7, 9)
+
+# ATO Tax File Number weighting factors. Modern TFNs are nine digits; the
+# legacy eight-digit form is still encountered in historical records.
+_TFN_WEIGHTS_9: Sequence[int] = (1, 4, 3, 7, 5, 8, 6, 9, 10)
+_TFN_WEIGHTS_8: Sequence[int] = (10, 7, 8, 4, 6, 3, 5, 1)
+
+
+def validate_australian_medicare(text: str) -> bool:
+    """Validate an Australian Medicare card number.
+
+    Medicare card numbers are ten digits. The first eight digits are weighted
+    by ``1, 3, 7, 9, 1, 3, 7, 9`` and summed modulo 10; that remainder must
+    equal the ninth digit (the check digit). The tenth digit is the card's
+    issue / reference number and does not participate in the checksum. The
+    leading digit is constrained to ``2``-``6`` by Services Australia's
+    published numbering scheme.
+
+    This is a health identifier under HIPAA cross-mapping: it identifies an
+    individual's enrolment in the Australian Medicare scheme.
+
+    Args:
+        text: Medicare number, with or without spaces (``NNNN NNNNN N``).
+
+    Returns:
+        True when the value has a valid Medicare shape and checksum.
+    """
+
+    digits = _digits_only(text)
+    if len(digits) != 10:
+        return False
+    if digits[0] not in "23456":
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(_MEDICARE_WEIGHTS, numbers[:8]))
+    return total % 10 == numbers[8]
+
+
+def generate_australian_medicare(*, rng: random.Random | None = None) -> str:
+    """Generate a Medicare number accepted by :func:`validate_australian_medicare`.
+
+    Returns the digits-only ``NNNNNNNNNN`` form; the ninth digit is a valid
+    checksum and the tenth is a non-zero issue number.
+    """
+
+    source = rng or random.Random()
+    body = [source.randint(2, 6)]
+    body.extend(source.randint(0, 9) for _ in range(7))
+    check = sum(weight * value for weight, value in zip(_MEDICARE_WEIGHTS, body)) % 10
+    issue = source.randint(1, 9)
+    return "".join(str(digit) for digit in body) + str(check) + str(issue)
+
+
+def _tfn_checksum_ok(digits: str) -> bool:
+    numbers = [int(digit) for digit in digits]
+    if len(numbers) == 9:
+        weights = _TFN_WEIGHTS_9
+    elif len(numbers) == 8:
+        weights = _TFN_WEIGHTS_8
+    else:
+        return False
+    total = sum(weight * value for weight, value in zip(weights, numbers))
+    return total % 11 == 0
+
+
+def validate_australian_tfn(text: str) -> bool:
+    """Validate an Australian Tax File Number (TFN).
+
+    A TFN is eight or nine digits guarded by a weighted modulus-11 checksum.
+    Nine-digit numbers use the weights ``1, 4, 3, 7, 5, 8, 6, 9, 10`` and
+    eight-digit numbers use ``10, 7, 8, 4, 6, 3, 5, 1``; the weighted sum must
+    be divisible by 11.
+
+    Args:
+        text: TFN string, with or without spaces (``NNN NNN NNN``).
+
+    Returns:
+        True when the value has a valid TFN length and checksum.
+    """
+
+    digits = _digits_only(text)
+    if len(digits) not in (8, 9):
+        return False
+    return _tfn_checksum_ok(digits)
+
+
+def generate_australian_tfn(*, rng: random.Random | None = None) -> str:
+    """Generate a nine-digit TFN accepted by :func:`validate_australian_tfn`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body = [source.randint(0, 9) for _ in range(9)]
+        if any(body):
+            digits = "".join(str(digit) for digit in body)
+            if _tfn_checksum_ok(digits):
+                return digits
+
+    return "123456782"
+
+
+class AustralianMedicareProvider(BaseProvider):
+    """Generates valid 10-digit Australian Medicare card numbers."""
+
+    def australian_medicare(self) -> str:
+        return generate_australian_medicare(rng=self.generator.random)
+
+
+class AustralianTFNProvider(BaseProvider):
+    """Generates valid Australian Tax File Numbers."""
+
+    def australian_tfn(self) -> str:
+        return generate_australian_tfn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
@@ -1240,6 +1363,8 @@ def register_clinical_providers(faker) -> None:
 
 __all__ = [
     "AadhaarProvider",
+    "AustralianMedicareProvider",
+    "AustralianTFNProvider",
     "DanishCPRProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
@@ -1259,6 +1384,8 @@ __all__ = [
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
+    "generate_australian_medicare",
+    "generate_australian_tfn",
     "generate_bic",
     "generate_danish_cpr",
     "generate_iban",
@@ -1279,6 +1406,8 @@ __all__ = [
     "generate_uk_nhs_number",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "validate_australian_medicare",
+    "validate_australian_tfn",
     "validate_bic",
     "validate_iban",
     "validate_luhn",

@@ -2,6 +2,13 @@
 
 Language-specific data, validators, regex patterns, and fake data
 for multilingual PII detection and de-identification.
+
+Health identifiers (for HIPAA cross-map consumers): several validators here
+back numbers that are health identifiers in their jurisdiction. The Australian
+Medicare card number (:func:`validate_australian_medicare`) is a health
+identifier — it records enrolment in the Australian Medicare scheme — and is
+surfaced as a ``national_id`` span under the ``en_AU`` locale alongside the
+Tax File Number (:func:`validate_australian_tfn`).
 """
 
 from __future__ import annotations
@@ -10,6 +17,8 @@ import re
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    validate_australian_medicare,
+    validate_australian_tfn,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
@@ -1395,6 +1404,43 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_uk_nino,
         flags=re.IGNORECASE,
+    ),
+]
+
+
+_AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Australian Medicare card number (10 digits, ``NNNN NNNNN N`` with an
+    # optional trailing issue / reference digit; weighted mod-10 checksum on
+    # the first eight digits guards it).
+    PIIPattern(
+        r"\b\d{4}\s?\d{5}\s?\d(?:\s?/?\s?\d)?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "medicare",
+            "medicare number",
+            "medicare card",
+            "medicare no",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_medicare,
+    ),
+    # Australian Tax File Number (TFN, 8-9 digits, ``NNN NNN NNN`` spacing;
+    # weighted mod-11 checksum).
+    PIIPattern(
+        r"\b\d{3}\s?\d{3}\s?\d{2,3}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "tfn",
+            "tax file number",
+            "tax file no",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_tfn,
     ),
 ]
 
@@ -3351,6 +3397,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_au": _AU_ENGLISH_PII_PATTERNS,
 }
 
 
