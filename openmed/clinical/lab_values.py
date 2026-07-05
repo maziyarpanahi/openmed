@@ -16,6 +16,7 @@ from openmed.core.decoding import (
     decode_span_graph,
 )
 
+from .lexicons.clinical_norm import abnormal_flag_alias, parse_locale_number
 from .units import parse_measurement
 
 AbnormalFlag = Literal["low", "normal", "high", "critical", "unknown"]
@@ -71,7 +72,11 @@ _EN_DASH = "\u2013"
 _EM_DASH = "\u2014"
 _LESS_THAN_OR_EQUAL = "\u2264"
 _GREATER_THAN_OR_EQUAL = "\u2265"
-_NUMERIC = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+_NUMERIC = (
+    r"[+-]?(?:"
+    r"(?:\d{1,3}(?:[ \u00a0\u202f'’.,]\d{3})+|\d+)(?:[.,\u066b]\d+)?"
+    r"|[.,\u066b]\d+)"
+)
 _UNIT_SUFFIX = r"(?:\s+(?P<unit>\S.*))?"
 _RANGE_RE = re.compile(
     rf"^(?P<low>{_NUMERIC})\s*(?:-|to|{_EN_DASH}|{_EM_DASH})\s*"
@@ -122,14 +127,13 @@ def _empty_reference_range() -> ReferenceRange:
     }
 
 
-def _finite_float(value: object) -> float | None:
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(number):
+def _finite_float(
+    value: object,
+    *,
+    language: object | None = None,
+) -> float | None:
+    number = parse_locale_number(value, language=language)
+    if number is None or not math.isfinite(number):
         return None
     return number
 
@@ -142,7 +146,11 @@ def _set_unit_if_present(result: ReferenceRange, unit: str | None) -> None:
         result["unit"] = cleaned
 
 
-def parse_reference_range(text: object) -> ReferenceRange:
+def parse_reference_range(
+    text: object,
+    *,
+    language: object | None = None,
+) -> ReferenceRange:
     """Parse a laboratory reference range into numeric bounds.
 
     Supported forms are closed ranges such as ``"135-145"``, ``"0.5 - 1.2"``,
@@ -153,6 +161,8 @@ def parse_reference_range(text: object) -> ReferenceRange:
 
     Args:
         text: Raw reference-range text.
+        language: Optional source-language code for localized decimal and
+            thousands separators.
 
     Returns:
         A mapping with ``low``, ``high``, ``low_inclusive``, and
@@ -169,8 +179,8 @@ def parse_reference_range(text: object) -> ReferenceRange:
         return result
 
     if range_match := _RANGE_RE.fullmatch(normalized):
-        low = _finite_float(range_match.group("low"))
-        high = _finite_float(range_match.group("high"))
+        low = _finite_float(range_match.group("low"), language=language)
+        high = _finite_float(range_match.group("high"), language=language)
         if low is None or high is None or low > high:
             return result
         result["low"] = low
@@ -179,7 +189,7 @@ def parse_reference_range(text: object) -> ReferenceRange:
         return result
 
     if one_sided_match := _ONE_SIDED_RE.fullmatch(normalized):
-        bound = _finite_float(one_sided_match.group("bound"))
+        bound = _finite_float(one_sided_match.group("bound"), language=language)
         if bound is None:
             return result
 
@@ -211,16 +221,18 @@ def _unit_or_none(value: object) -> str | None:
 
 def _normalize_reference_range(
     reference_range: Mapping[str, object] | str | None,
+    *,
+    language: object | None = None,
 ) -> ReferenceRange:
     if isinstance(reference_range, str):
-        return parse_reference_range(reference_range)
+        return parse_reference_range(reference_range, language=language)
     if not isinstance(reference_range, Mapping):
         return _empty_reference_range()
 
     raw_low = reference_range.get("low")
     raw_high = reference_range.get("high")
-    low = _finite_float(raw_low)
-    high = _finite_float(raw_high)
+    low = _finite_float(raw_low, language=language)
+    high = _finite_float(raw_high, language=language)
 
     if raw_low is not None and low is None:
         return _empty_reference_range()
@@ -266,10 +278,11 @@ def _canonicalize_for_comparison(
     *,
     value_unit: object | None,
     reference_unit: object | None,
+    language: object | None,
 ) -> tuple[float, float | None, float | None] | None:
     range_unit = _range_unit(parsed_range, reference_unit)
     if value_unit is None and range_unit is None:
-        value = _finite_float(numeric_value)
+        value = _finite_float(numeric_value, language=language)
         if value is None:
             return None
         return value, parsed_range["low"], parsed_range["high"]
@@ -278,9 +291,13 @@ def _canonicalize_for_comparison(
         return None
 
     if value_unit is None:
-        value_measurement = parse_measurement(numeric_value)
+        value_measurement = parse_measurement(numeric_value, language=language)
     else:
-        value_measurement = parse_measurement(numeric_value, value_unit)
+        value_measurement = parse_measurement(
+            numeric_value,
+            value_unit,
+            language=language,
+        )
     if value_measurement["status"] != "ok":
         return None
 
@@ -291,7 +308,7 @@ def _canonicalize_for_comparison(
     canonical_high: float | None = None
 
     if low is not None:
-        low_measurement = parse_measurement(low, range_unit)
+        low_measurement = parse_measurement(low, range_unit, language=language)
         if (
             low_measurement["status"] != "ok"
             or low_measurement["dimension"] != dimension
@@ -299,7 +316,7 @@ def _canonicalize_for_comparison(
             return None
         canonical_low = low_measurement["canonical_magnitude"]
     if high is not None:
-        high_measurement = parse_measurement(high, range_unit)
+        high_measurement = parse_measurement(high, range_unit, language=language)
         if (
             high_measurement["status"] != "ok"
             or high_measurement["dimension"] != dimension
@@ -320,6 +337,7 @@ def derive_abnormal_flag(
     *,
     value_unit: object | None = None,
     reference_unit: object | None = None,
+    language: object | None = None,
 ) -> AbnormalFlag:
     """Derive a laboratory abnormal flag from a value and reference range.
 
@@ -340,6 +358,8 @@ def derive_abnormal_flag(
         value_unit: Optional unit for ``value``.
         reference_unit: Optional unit for ``reference_range`` bounds. A unit
             embedded in parsed range mappings or raw range text is also used.
+        language: Optional source-language code for localized numbers, unit
+            aliases, and explicit flag aliases.
 
     Returns:
         ``"low"``, ``"normal"``, ``"high"``, ``"critical"``, or ``"unknown"``.
@@ -349,9 +369,10 @@ def derive_abnormal_flag(
     if explicit_flag is not None:
         normalized_flag = explicit_flag.strip().upper()
         if normalized_flag:
-            return _EXPLICIT_FLAGS.get(normalized_flag, "unknown")
+            localized = abnormal_flag_alias(explicit_flag, language=language)
+            return localized or _EXPLICIT_FLAGS.get(normalized_flag, "unknown")
 
-    parsed_range = _normalize_reference_range(reference_range)
+    parsed_range = _normalize_reference_range(reference_range, language=language)
     low = parsed_range["low"]
     high = parsed_range["high"]
     if low is None and high is None:
@@ -362,6 +383,7 @@ def derive_abnormal_flag(
         parsed_range,
         value_unit=value_unit,
         reference_unit=reference_unit,
+        language=language,
     )
     if canonical is None:
         return "unknown"

@@ -6,6 +6,12 @@ import re
 from collections.abc import Mapping
 from typing import Any, Literal, TypedDict
 
+from .lexicons.clinical_norm import (
+    localized_duration_text,
+    localized_frequency_text,
+    parse_locale_number,
+)
+
 FrequencyPeriodUnit = Literal["h", "d", "wk"]
 DurationUnit = Literal["d", "wk"]
 MedicationSigAttributeType = Literal["frequency", "duration"]
@@ -144,7 +150,11 @@ _SLASH_DURATION_UNITS: Mapping[str, tuple[DurationUnit, int]] = {
     "52": ("wk", 7),
 }
 
-_NUMERIC = r"(?:\d+(?:\.\d*)?|\.\d+)"
+_NUMERIC = (
+    r"(?:"
+    r"(?:\d{1,3}(?:[ \u00a0\u202f'’.,]\d{3})+|\d+)(?:[.,\u066b]\d+)?"
+    r"|[.,\u066b]\d+)"
+)
 _INTERVAL_RE = re.compile(
     rf"^(?:q|every)\s*(?P<period>{_NUMERIC})\s*"
     r"(?P<unit>hours?|hrs?|hr|h|days?|d|weeks?|wks?|wk|w)$"
@@ -165,7 +175,11 @@ _DURATION_PUNCTUATION_RE = re.compile(r"[,;:()\[\]{}_-]+")
 _WHITESPACE_RE = re.compile(r"\s+")
 
 
-def normalize_frequency(text: object) -> FrequencyNormalization:
+def normalize_frequency(
+    text: object,
+    *,
+    language: object | None = None,
+) -> FrequencyNormalization:
     """Normalize a medication sig frequency cue.
 
     Supported forms include common Latin abbreviations and English
@@ -176,6 +190,8 @@ def normalize_frequency(text: object) -> FrequencyNormalization:
 
     Args:
         text: Raw medication sig frequency text.
+        language: Optional source-language code for localized frequency cue
+            aliases.
 
     Returns:
         A structured mapping containing the raw input, recognition status,
@@ -187,7 +203,7 @@ def normalize_frequency(text: object) -> FrequencyNormalization:
     if not isinstance(text, str):
         return _empty_frequency(text)
 
-    normalized = _phrase_text(text)
+    normalized = _phrase_text(localized_frequency_text(text, language=language))
     if not normalized:
         return _empty_frequency(text)
 
@@ -218,7 +234,7 @@ def normalize_frequency(text: object) -> FrequencyNormalization:
         )
 
     if interval := _INTERVAL_RE.fullmatch(scheduled_text):
-        period = _positive_number(interval.group("period"))
+        period = _positive_number(interval.group("period"), language=language)
         if period is not None:
             unit = _canonical_frequency_period_unit(interval.group("unit"))
             return _frequency_result(
@@ -244,7 +260,11 @@ def normalize_frequency(text: object) -> FrequencyNormalization:
     return _empty_frequency(text)
 
 
-def normalize_duration(text: object) -> DurationNormalization:
+def normalize_duration(
+    text: object,
+    *,
+    language: object | None = None,
+) -> DurationNormalization:
     """Normalize a medication sig duration cue.
 
     Supported deterministic forms include ``"x 7 days"``, ``"x7d"``,
@@ -254,6 +274,8 @@ def normalize_duration(text: object) -> DurationNormalization:
 
     Args:
         text: Raw medication sig duration text.
+        language: Optional source-language code for localized duration unit
+            aliases.
 
     Returns:
         A structured mapping containing the raw input, recognition status,
@@ -264,12 +286,12 @@ def normalize_duration(text: object) -> DurationNormalization:
     if not isinstance(text, str):
         return _empty_duration(text)
 
-    normalized = _duration_text(text)
+    normalized = _duration_text(localized_duration_text(text, language=language))
     if not normalized:
         return _empty_duration(text)
 
     if slash_match := _SLASH_DURATION_RE.fullmatch(normalized):
-        value = _positive_number(slash_match.group("value"))
+        value = _positive_number(slash_match.group("value"), language=language)
         if value is None:
             return _empty_duration(text)
         unit, multiplier = _SLASH_DURATION_UNITS[slash_match.group("unit")]
@@ -284,7 +306,7 @@ def normalize_duration(text: object) -> DurationNormalization:
         )
 
     if duration_match := _DURATION_RE.fullmatch(normalized):
-        value = _positive_number(duration_match.group("value"))
+        value = _positive_number(duration_match.group("value"), language=language)
         if value is None:
             return _empty_duration(text)
         unit, multiplier = _DURATION_UNITS[duration_match.group("unit")]
@@ -304,12 +326,15 @@ def normalize_duration(text: object) -> DurationNormalization:
 def normalize_medication_attribute(
     attribute_type: MedicationSigAttributeType | str,
     text: object,
+    *,
+    language: object | None = None,
 ) -> dict[str, Any] | None:
     """Normalize a linkable medication frequency or duration attribute.
 
     Args:
         attribute_type: Attribute type from the medication relation schema.
         text: Raw attribute text.
+        language: Optional source-language code for localized sig aliases.
 
     Returns:
         A frequency or duration normalization mapping, or ``None`` for
@@ -317,9 +342,9 @@ def normalize_medication_attribute(
     """
 
     if attribute_type == "frequency":
-        return normalize_frequency(text)
+        return normalize_frequency(text, language=language)
     if attribute_type == "duration":
-        return normalize_duration(text)
+        return normalize_duration(text, language=language)
     return None
 
 
@@ -406,8 +431,14 @@ def _find_frequency_cue(text: str) -> tuple[str, _FrequencyCue] | None:
     return None
 
 
-def _positive_number(text: str) -> Number | None:
-    value = float(text)
+def _positive_number(
+    text: str,
+    *,
+    language: object | None = None,
+) -> Number | None:
+    value = parse_locale_number(text, language=language)
+    if value is None:
+        return None
     if value <= 0:
         return None
     return _clean_number(value)
