@@ -1,0 +1,20 @@
+{"id":"norm-en-mgdl","language":"en","task":"measurement","text":"5 mg/dL","expected":{"canonical_magnitude":0.05,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-en-gl","language":"en","task":"measurement","text":"1.5 g/L","expected":{"canonical_magnitude":1.5,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-en-bp","language":"en","task":"vital","text":"BP: 120/80 mmHg","expected":{"kind":"blood_pressure","value":null,"unit":"mmHg","components":[{"kind":"systolic","value":120,"unit":"mmHg"},{"kind":"diastolic","value":80,"unit":"mmHg"}]},"provenance":"synthetic-permissive"}
+{"id":"norm-en-bid","language":"en","task":"frequency","text":"BID","expected":{"frequency_per_day":2.0,"as_needed":false},"provenance":"synthetic-permissive"}
+{"id":"norm-es-mgdl","language":"es","task":"measurement","text":"5,0 mg/dl","expected":{"canonical_magnitude":0.05,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-es-gl","language":"es","task":"measurement","text":"1,5 g/l","expected":{"canonical_magnitude":1.5,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-es-bp","language":"es","task":"vital","text":"TA: 120/80 mmHg","expected":{"kind":"blood_pressure","value":null,"unit":"mmHg","components":[{"kind":"systolic","value":120,"unit":"mmHg"},{"kind":"diastolic","value":80,"unit":"mmHg"}]},"provenance":"synthetic-permissive"}
+{"id":"norm-es-bid","language":"es","task":"frequency","text":"dos veces al día","expected":{"frequency_per_day":2.0,"as_needed":false},"provenance":"synthetic-permissive"}
+{"id":"norm-fr-mgdl","language":"fr","task":"measurement","text":"5,0 mg par dL","expected":{"canonical_magnitude":0.05,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-fr-gl","language":"fr","task":"measurement","text":"1,5 g/l","expected":{"canonical_magnitude":1.5,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-fr-bp","language":"fr","task":"vital","text":"TA: 120/80 mm Hg","expected":{"kind":"blood_pressure","value":null,"unit":"mmHg","components":[{"kind":"systolic","value":120,"unit":"mmHg"},{"kind":"diastolic","value":80,"unit":"mmHg"}]},"provenance":"synthetic-permissive"}
+{"id":"norm-fr-bid","language":"fr","task":"frequency","text":"deux fois par jour","expected":{"frequency_per_day":2.0,"as_needed":false},"provenance":"synthetic-permissive"}
+{"id":"norm-de-mgdl","language":"de","task":"measurement","text":"5,0 mg/dl","expected":{"canonical_magnitude":0.05,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-de-gl","language":"de","task":"measurement","text":"1,5 g/l","expected":{"canonical_magnitude":1.5,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-de-bp","language":"de","task":"vital","text":"RR: 120/80 mmHg","expected":{"kind":"blood_pressure","value":null,"unit":"mmHg","components":[{"kind":"systolic","value":120,"unit":"mmHg"},{"kind":"diastolic","value":80,"unit":"mmHg"}]},"provenance":"synthetic-permissive"}
+{"id":"norm-de-bid","language":"de","task":"frequency","text":"2x täglich","expected":{"frequency_per_day":2.0,"as_needed":false},"provenance":"synthetic-permissive"}
+{"id":"norm-zh-mgdl","language":"zh","task":"measurement","text":"５.０ 毫克/分升","expected":{"canonical_magnitude":0.05,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-zh-gl","language":"zh","task":"measurement","text":"１.５ 克/升","expected":{"canonical_magnitude":1.5,"canonical_unit":"g/L"},"provenance":"synthetic-permissive"}
+{"id":"norm-zh-bp","language":"zh","task":"vital","text":"血压: １２０/８０ 毫米汞柱","expected":{"kind":"blood_pressure","value":null,"unit":"mmHg","components":[{"kind":"systolic","value":120,"unit":"mmHg"},{"kind":"diastolic","value":80,"unit":"mmHg"}]},"provenance":"synthetic-permissive"}
+{"id":"norm-zh-bid","language":"zh","task":"frequency","text":"每日两次","expected":{"frequency_per_day":2.0,"as_needed":false},"provenance":"synthetic-permissive"}

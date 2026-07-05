@@ -234,6 +234,13 @@ from openmed.eval.metrics import (
     reliability_bins,
     weighted_coverage,
 )
+from openmed.eval.normalization import (
+    DEFAULT_MULTILINGUAL_NORM_FIXTURE,
+    MultilingualNormScore,
+    load_multilingual_norm_fixture,
+    score_multilingual_norm_fixture,
+    score_multilingual_norm_records,
+)
 from openmed.eval.perf import (
     DEFAULT_PERF_WORKLOAD_PATH,
     SYNTHETIC_PERF_MODEL_NAME,
@@ -354,6 +361,7 @@ __all__ = [
     "DEFAULT_GATE_FLIP_RATE_TOLERANCE",
     "DEFAULT_GATE_METRIC_VARIANCE_TOLERANCE",
     "DEFAULT_GATE_SEEDS",
+    "DEFAULT_MULTILINGUAL_NORM_FIXTURE",
     "DEFAULT_PERF_WORKLOAD_PATH",
     "DEFAULT_PERTURBATIONS",
     "DEFAULT_QUARANTINE_STABILITY_WINDOW",
@@ -411,6 +419,7 @@ __all__ = [
     "MetricDelta",
     "MetricHistoryPoint",
     "MemoryBudgetExceeded",
+    "MultilingualNormScore",
     "OPENMED_SYSTEM_NAME",
     "NondeterminismProbeReport",
     "NondeterministicGateRunError",
@@ -520,6 +529,7 @@ __all__ = [
     "load",
     "load_calibration_samples",
     "load_calibration_thresholds",
+    "load_multilingual_norm_fixture",
     "load_perf_documents",
     "load_or_compute",
     "lookup_tier_budget",
@@ -550,6 +560,8 @@ __all__ = [
     "run_reid_attack",
     "run_reid_benchmark",
     "run_suite",
+    "score_multilingual_norm_fixture",
+    "score_multilingual_norm_records",
     "score_span_nonconformity",
     "select_risk_controlled_abstention_threshold",
     "stratified_hard_negative_sample",
