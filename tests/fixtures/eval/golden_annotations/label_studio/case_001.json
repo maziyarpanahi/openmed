@@ -1,0 +1,137 @@
+[
+  {
+    "id": "case_001",
+    "data": {
+      "document_id": "case_001",
+      "language": "en",
+      "synthetic": true,
+      "text": "Patient Alex Rivera takes Metformin for diabetes. Alex reports nausea."
+    },
+    "annotations": [
+      {
+        "id": "ann-a",
+        "completed_by": {
+          "username": "annotator-a"
+        },
+        "result": [
+          {
+            "id": "s1",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 8,
+              "end": 19,
+              "text": "Alex Rivera",
+              "labels": ["PERSON"]
+            }
+          },
+          {
+            "id": "s2",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 26,
+              "end": 35,
+              "text": "Metformin",
+              "labels": ["MEDICATION"]
+            }
+          },
+          {
+            "id": "s3",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 40,
+              "end": 48,
+              "text": "diabetes",
+              "labels": ["CONDITION"]
+            }
+          },
+          {
+            "id": "r1",
+            "type": "relation",
+            "from_id": "s2",
+            "to_id": "s3",
+            "direction": "right",
+            "labels": ["TREATS"]
+          }
+        ]
+      },
+      {
+        "id": "ann-b",
+        "completed_by": {
+          "username": "annotator-b"
+        },
+        "result": [
+          {
+            "id": "s1",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 8,
+              "end": 19,
+              "text": "Alex Rivera",
+              "labels": ["PERSON"]
+            }
+          },
+          {
+            "id": "s2",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 26,
+              "end": 35,
+              "text": "Metformin",
+              "labels": ["MEDICATION"]
+            }
+          },
+          {
+            "id": "s3",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 40,
+              "end": 48,
+              "text": "diabetes",
+              "labels": ["CONDITION"]
+            }
+          },
+          {
+            "id": "s4",
+            "type": "labels",
+            "from_name": "label",
+            "to_name": "text",
+            "value": {
+              "start": 63,
+              "end": 69,
+              "text": "nausea",
+              "labels": ["CONDITION"]
+            }
+          },
+          {
+            "id": "r1",
+            "type": "relation",
+            "from_id": "s2",
+            "to_id": "s3",
+            "direction": "right",
+            "labels": ["TREATS"]
+          },
+          {
+            "id": "r2",
+            "type": "relation",
+            "from_id": "s2",
+            "to_id": "s4",
+            "direction": "right",
+            "labels": ["HAS_ADVERSE_EVENT"]
+          }
+        ]
+      }
+    ]
+  }
+]
