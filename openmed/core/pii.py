@@ -91,37 +91,6 @@ DeidentificationMethod = Literal[
 ]
 
 
-class MissingOptionalDependencyError(ImportError):
-    """Raised when a requested optional capability needs an unavailable package."""
-
-    def __init__(
-        self,
-        *,
-        package: str,
-        feature: str,
-        extra: str | None = None,
-    ) -> None:
-        instruction = _optional_dependency_install_instruction(package, extra)
-        super().__init__(
-            f"{feature} requires optional dependency '{package}'. {instruction}"
-        )
-        self.package = package
-        self.feature = feature
-        self.extra = extra
-
-
-def _optional_dependency_install_instruction(
-    package: str,
-    extra: str | None = None,
-) -> str:
-    if extra:
-        return (
-            f"Install it with `pip install openmed[{extra}]` "
-            f"or `pip install {package}`."
-        )
-    return f"Install it with `pip install {package}`."
-
-
 def _optional_dependency_status(
     *,
     package: str,
