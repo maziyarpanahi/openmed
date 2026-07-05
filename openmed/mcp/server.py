@@ -23,6 +23,7 @@ from openmed.mcp.tool_registry import (
 )
 from openmed.mcp.workflow import WorkflowRunner, builtin_workflow_step_executors
 from openmed.service.runtime import ServiceRuntime
+from openmed.utils.gateway import normalize_text, validate_language
 from openmed.utils.validation import validate_model_name
 
 RuntimeProvider = Callable[[], ServiceRuntime]
@@ -111,6 +112,10 @@ def openmed_analyze_text(
     """Run OpenMed named-entity recognition and return a JSON-ready result."""
     from openmed.service.schemas import AnalyzeRequest
 
+    # Validate through the shared gateway so the MCP surface applies the same
+    # length/size/encoding guardrails as the library and REST entry points.
+    text = normalize_text(text)
+
     payload = AnalyzeRequest(
         text=text,
         model_name=model_name,
@@ -165,6 +170,11 @@ def openmed_extract_pii(
     """Extract PII/PHI entities and return a JSON-ready result."""
     from openmed.service.schemas import PIIExtractRequest
 
+    # Shared gateway: normalize text and guard the language before dispatch so
+    # the MCP surface rejects the same bad inputs as the REST and library paths.
+    text = normalize_text(text)
+    lang = validate_language(lang)
+
     payload = PIIExtractRequest(
         text=text,
         model_name=model_name,
@@ -216,6 +226,11 @@ def openmed_deidentify(
 ) -> Dict[str, Any]:
     """De-identify text by masking, removing, replacing, hashing, or shifting PII."""
     from openmed.service.schemas import PIIDeidentifyRequest
+
+    # Shared gateway: normalize text and guard the language before dispatch so
+    # the MCP surface rejects the same bad inputs as the REST and library paths.
+    text = normalize_text(text)
+    lang = validate_language(lang)
 
     payload = PIIDeidentifyRequest(
         text=text,
