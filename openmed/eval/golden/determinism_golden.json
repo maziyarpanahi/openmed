@@ -1,0 +1,26 @@
+{
+  "corpus_signature": "sha256:81ac0f03acc159853a0f50347ea38116c437ba1802c847b4caeaeda5048c9118",
+  "items": {
+    "mask_name_email": {
+      "analyze_text": "sha256:4d13d6680834594544499698a6f6b9514ff7812e3e6990a5f1b6a20a4a983d40",
+      "deidentify": "sha256:7237ce9a8fa3a1e3ada07543c8083e80be1dcd6b0ecea10c7a69a32684fd5d71",
+      "extract_pii": "sha256:da702b99c2ddb8bcad66a8db194a73459b432ef8d80b6811f4796e5337c2de34"
+    },
+    "mask_repeated_name": {
+      "analyze_text": "sha256:70eb43c136046b655f7b493a3d21e433dd0bb4eaf8a5842ca27a91ed62278266",
+      "deidentify": "sha256:df6a71b9324b1f070dddc3261324095735899e4093f5d03d747bdc97b23b3563",
+      "extract_pii": "sha256:edbb40841705cf22b322d28e56c37498427476b902879946719f1b8fdadba4e7"
+    },
+    "replace_seeded_name": {
+      "analyze_text": "sha256:32cd62ce20d2c5bcb0c8c7a766ef710fa0be42069f26f5fcebe2f1de6c347bef",
+      "deidentify": "sha256:1652911ff1f1d8b04f800bf3d9b9b5b52371eab4ddd44a13ca6da1fa55935793",
+      "extract_pii": "sha256:c0df0ecde7748526be10430f2b9ff49507f99389ba651485a3024929fb493586"
+    },
+    "shift_dates_patient_keyed": {
+      "analyze_text": "sha256:3092808d3913f2a3518d5a9bc044494c0b9486c746f0c23011f716076476a710",
+      "deidentify": "sha256:66720b2e592931632609d5ab68e8f316aa48add67c157ad7abbd197634f83fc6",
+      "extract_pii": "sha256:4f4ae2a6d0262c9790d1d75bf42d07896f13bdfc5efe58d05f815bbbd1ff76ad"
+    }
+  },
+  "schema_version": "openmed.determinism_corpus.v1"
+}
