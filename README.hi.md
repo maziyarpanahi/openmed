@@ -1,18 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — लोकल-फर्स्ट हेल्थकेयर AI" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — डिवाइस पर क्लिनिकल AI · 1,500+ मॉडल" width="820" />
 
-<h3>लोकल-फर्स्ट हेल्थकेयर AI जो डिवाइस से कभी बाहर नहीं जाता</h3>
+<h3>आपका डेटा। आपका मॉडल। आपका हार्डवेयर।</h3>
 
-<p><b>क्लिनिकल टेक्स्ट को कोड की एक पंक्ति से संरचित अंतर्दृष्टि में बदलें।</b><br/>
-एंटिटी निष्कर्षण, PII डी-आइडेंटिफिकेशन, और 1,000+ विशेष चिकित्सा मॉडल जो पूरी तरह आपके अपने हार्डवेयर पर चलते हैं
-— Python की एक पंक्ति से लेकर Apple MLX द्वारा संचालित iPhone पर एक नेटिव Swift ऐप तक। कोई क्लाउड नहीं। कोई
-वेंडर लॉक-इन नहीं। रोगी का डेटा आपके नेटवर्क से बाहर नहीं जाता।</p>
+<p><b>क्लिनिकल टेक्स्ट को संरचित, डी-आइडेंटिफाई की गई अंतर्दृष्टि में बदलें — कुछ भी अपलोड किए बिना।</b><br/>
+OpenMed बायोमेडिकल एंटिटीज़ निकालता है और 55+ PHI प्रकारों को पूरी तरह उस हार्डवेयर पर हटा देता है जिस पर आपका नियंत्रण है, ताकि आपका डेटा कभी डिवाइस से बाहर न जाए। वही 1,500+ ओपन मॉडल फ़ोन से लेकर GPU सर्वर तक, पूरी तरह ऑफ़लाइन चलते हैं — OpenMedKit के माध्यम से iOS और iPadOS पर, ONNX के माध्यम से Android पर, साधारण CPU पर, Apple Silicon पर, NVIDIA GPU पर और ब्राउज़र में। कोई क्लाउड नहीं। कोई वेंडर लॉक-इन नहीं। रोगी का डेटा आपके नेटवर्क से बाहर नहीं जाता।</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -26,7 +24,7 @@
 </p>
 
 <p>
-  <b>1,000+ मॉडल</b> &nbsp;·&nbsp; <b>12 भाषाएँ</b> &nbsp;·&nbsp; <b>247 PII चेकपॉइंट</b> &nbsp;·&nbsp; <b>100% डिवाइस पर</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ मॉडल</b> &nbsp;·&nbsp; <b>15 PII भाषाएँ</b> &nbsp;·&nbsp; <b>247 PII चेकपॉइंट</b> &nbsp;·&nbsp; <b>100% डिवाइस पर</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -97,14 +95,14 @@ for entity in result.entities:
 | आपके डिवाइस/सर्वर पर चलता है           |            ✅            |            ❌             |
 | रोगी डेटा आपके नेटवर्क से बाहर जाता है  |       **कभी नहीं**       |    वेंडर को भेजा जाता है    |
 | लागत                                  | मुफ़्त और ओपन-सोर्स       |    प्रति-कॉल शुल्क          |
-| विशेष चिकित्सा मॉडल                     |          1,000+          |          सीमित            |
+| विशेष चिकित्सा मॉडल                     |          1,500+          |          सीमित            |
 | भाषाएँ                                 |           12+            |          भिन्न            |
 | ऑफ़लाइन / एयर-गैप्ड (air-gapped)       |            ✅            |            ❌             |
 | Apple Silicon (MLX) त्वरण             |            ✅            |         लागू नहीं         |
 | नेटिव iOS / macOS ऐप्स                 |  ✅ OpenMedKit के माध्यम से |            ❌             |
 | वेंडर लॉक-इन                           |   कोई नहीं — Apache-2.0   |            हाँ            |
 
-- **विशेष मॉडल** — 1,000+ सावधानी से चुने गए बायोमेडिकल और क्लिनिकल मॉडल, जिनमें से कई प्रोप्राइटरी समाधानों से बेहतर प्रदर्शन करते हैं।
+- **विशेष मॉडल** — 1,500+ सावधानी से चुने गए बायोमेडिकल और क्लिनिकल मॉडल, जिनमें से कई प्रोप्राइटरी समाधानों से बेहतर प्रदर्शन करते हैं।
 - **HIPAA-अनुरूप डी-आइडेंटिफिकेशन** — सभी 18 Safe Harbor पहचानकर्ता, स्मार्ट एंटिटी मर्जिंग, और फ़ॉर्मेट-संरक्षित नकली मान।
 - **हर जगह चलता है** — CPU, CUDA, Apple Silicon (MLX), और OpenMedKit के माध्यम से iOS/macOS ऐप्स में नेटिव रूप से।
 - **एक पंक्ति में परिनियोजन** — Python API, Docker-आधारित REST सेवा, या बैच पाइपलाइन।

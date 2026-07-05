@@ -1,18 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — లోకల్-ఫస్ట్ హెల్త్‌కేర్ AI" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — పరికరంలో నడిచే క్లినికల్ AI · 1,500+ మోడల్‌లు" width="820" />
 
-<h3>మీ పరికరం నుండి ఎప్పటికీ బయటకు వెళ్లని లోకల్-ఫస్ట్ హెల్త్‌కేర్ AI</h3>
+<h3>మీ డేటా. మీ మోడల్. మీ హార్డ్‌వేర్.</h3>
 
-<p><b>క్లినికల్ టెక్స్ట్‌ను ఒకే కోడ్ లైన్‌తో నిర్మాణాత్మక అంతర్దృష్టిగా మార్చండి.</b><br/>
-ఎంటిటీ వెలికితీత, PII డీ-ఐడెంటిఫికేషన్, మరియు పూర్తిగా మీ స్వంత హార్డ్‌వేర్‌పై నడిచే 1,000+ ప్రత్యేక వైద్య
-మోడల్‌లు — Python లో ఒక లైన్ నుండి, Apple MLX ద్వారా శక్తివంతమైన iPhone లో నేటివ్ Swift యాప్ వరకు. క్లౌడ్ లేదు.
-వెండర్ లాక్-ఇన్ లేదు. రోగి డేటా మీ నెట్‌వర్క్ నుండి బయటకు వెళ్లదు.</p>
+<p><b>క్లినికల్ టెక్స్ట్‌ను నిర్మాణాత్మక, డీ-ఐడెంటిఫై చేసిన అంతర్దృష్టిగా మార్చండి — ఏదీ అప్‌లోడ్ చేయకుండా.</b><br/>
+OpenMed బయోమెడికల్ ఎంటిటీలను వెలికితీస్తుంది మరియు 55+ PHI రకాలను మీ నియంత్రణలోని హార్డ్‌వేర్‌పైనే పూర్తిగా తొలగిస్తుంది, తద్వారా మీ డేటా ఎప్పటికీ పరికరం నుండి బయటకు వెళ్లదు. అదే 1,500+ ఓపెన్ మోడల్‌లు ఒక ఫోన్ నుండి GPU సర్వర్ వరకు, పూర్తిగా ఆఫ్‌లైన్‌గా నడుస్తాయి — OpenMedKit ద్వారా iOS మరియు iPadOS, ONNX ద్వారా Android, సాధారణ CPU లు, Apple Silicon, NVIDIA GPU లు, మరియు బ్రౌజర్. క్లౌడ్ లేదు. వెండర్ లాక్-ఇన్ లేదు. రోగి డేటా మీ నెట్‌వర్క్ నుండి బయటకు వెళ్లదు.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -26,7 +24,7 @@
 </p>
 
 <p>
-  <b>1,000+ మోడల్‌లు</b> &nbsp;·&nbsp; <b>12 భాషలు</b> &nbsp;·&nbsp; <b>247 PII చెక్‌పాయింట్‌లు</b> &nbsp;·&nbsp; <b>100% పరికరంలో</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ మోడల్‌లు</b> &nbsp;·&nbsp; <b>15 PII భాషలు</b> &nbsp;·&nbsp; <b>247 PII చెక్‌పాయింట్‌లు</b> &nbsp;·&nbsp; <b>100% పరికరంలో</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -87,14 +85,14 @@ for entity in result.entities:
 | మీ పరికరం/సర్వర్‌లలో నడుస్తుంది          |            ✅            |            ❌             |
 | రోగి డేటా మీ నెట్‌వర్క్ నుండి బయటకు వెళ్తుంది |     **ఎప్పటికీ లేదు**     |    వెండర్‌కు పంపబడుతుంది    |
 | ఖర్చు                                 |   ఉచితం & ఓపెన్-సోర్స్    |    కాల్‌కు ఛార్జ్           |
-| ప్రత్యేక వైద్య మోడల్‌లు                  |          1,000+          |          పరిమితం          |
+| ప్రత్యేక వైద్య మోడల్‌లు                  |          1,500+          |          పరిమితం          |
 | భాషలు                                 |           12+            |          మారుతుంది        |
 | ఆఫ్‌లైన్ / ఐసోలేటెడ్ (air-gapped)      |            ✅            |            ❌             |
 | Apple Silicon (MLX) త్వరణం             |            ✅            |          వర్తించదు        |
 | నేటివ్ iOS / macOS యాప్‌లు              |   ✅ OpenMedKit ద్వారా     |            ❌             |
 | వెండర్ లాక్-ఇన్                         |    లేదు — Apache-2.0      |            ఉంది           |
 
-- **ప్రత్యేక మోడల్‌లు** — జాగ్రత్తగా ఎంపిక చేసిన 1,000+ బయోమెడికల్ & క్లినికల్ మోడల్‌లు, వీటిలో చాలావి యాజమాన్య పరిష్కారాలను అధిగమిస్తాయి.
+- **ప్రత్యేక మోడల్‌లు** — జాగ్రత్తగా ఎంపిక చేసిన 1,500+ బయోమెడికల్ & క్లినికల్ మోడల్‌లు, వీటిలో చాలావి యాజమాన్య పరిష్కారాలను అధిగమిస్తాయి.
 - **HIPAA-అనుకూల డీ-ఐడెంటిఫికేషన్** — మొత్తం 18 Safe Harbor ఐడెంటిఫయర్‌లు, స్మార్ట్ ఎంటిటీ మెర్జింగ్, మరియు ఫార్మాట్‌ను నిలుపుకునే నకిలీ విలువలు.
 - **ప్రతిచోటా నడుస్తుంది** — CPU, CUDA, Apple Silicon (MLX), మరియు OpenMedKit ద్వారా iOS/macOS యాప్‌లలో నేటివ్‌గా.
 - **ఒక లైన్‌లో డిప్లాయ్‌మెంట్** — Python API, Docker REST సేవ, లేదా బ్యాచ్ పైప్‌లైన్‌లు.

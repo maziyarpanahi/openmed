@@ -1,18 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — IA de santé locale" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — IA clinique locale · 1 500+ modèles" width="820" />
 
-<h3>IA de santé locale qui ne quitte jamais votre appareil</h3>
+<h3>Vos données. Votre modèle. Votre matériel.</h3>
 
-<p><b>Transformez du texte clinique en informations structurées avec une seule ligne de code.</b><br/>
-Extraction d'entités, dé-identification des PII et plus de 1 000 modèles médicaux spécialisés qui s'exécutent
-entièrement sur votre propre matériel — d'une ligne en Python à une application Swift native sur iPhone,
-propulsée par Apple MLX. Sans cloud. Sans dépendance fournisseur. Sans que les données patient ne quittent votre réseau.</p>
+<p><b>Transformez le texte clinique en informations structurées et désidentifiées, sans aucun téléversement.</b><br/>
+OpenMed extrait les entités biomédicales et supprime plus de 55 types de PHI entièrement sur le matériel que vous contrôlez, de sorte que vos données ne quittent jamais l'appareil. Les mêmes 1 500+ modèles ouverts fonctionnent du téléphone au serveur GPU, entièrement hors ligne : iOS et iPadOS via OpenMedKit, Android via ONNX, les CPU classiques, Apple Silicon, les GPU NVIDIA et le navigateur. Pas de cloud. Pas de dépendance à un fournisseur. Aucune donnée de patient ne quitte votre réseau.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -26,7 +24,7 @@ propulsée par Apple MLX. Sans cloud. Sans dépendance fournisseur. Sans que les
 </p>
 
 <p>
-  <b>1 000+ modèles</b> &nbsp;·&nbsp; <b>12 langues</b> &nbsp;·&nbsp; <b>247 checkpoints PII</b> &nbsp;·&nbsp; <b>100 % sur l'appareil</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1 500+ modèles</b> &nbsp;·&nbsp; <b>15 langues PII</b> &nbsp;·&nbsp; <b>247 checkpoints PII</b> &nbsp;·&nbsp; <b>100 % sur l'appareil</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -87,14 +85,14 @@ Un modèle de NER clinique à l'état de l'art qui s'exécute localement — san
 | S'exécute sur votre appareil/serveurs |            ✅            |            ❌             |
 | Les données patient quittent le réseau |        **Jamais**       |   Envoyées au fournisseur  |
 | Coût                                  |   Gratuit et open source |    Tarification à l'appel  |
-| Modèles médicaux spécialisés          |          1 000+          |          Limités          |
+| Modèles médicaux spécialisés          |          1 500+          |          Limités          |
 | Langues                               |           12+            |          Variable         |
 | Hors ligne / isolé (air-gapped)       |            ✅            |            ❌             |
 | Accélération Apple Silicon (MLX)      |            ✅            |            s.o.           |
 | Applications natives iOS / macOS      |    ✅ via OpenMedKit     |            ❌             |
 | Dépendance fournisseur                |   Aucune — Apache-2.0    |            Oui            |
 
-- **Modèles spécialisés** — plus de 1 000 modèles biomédicaux et cliniques sélectionnés, dont beaucoup surpassent les solutions propriétaires.
+- **Modèles spécialisés** — plus de 1 500 modèles biomédicaux et cliniques sélectionnés, dont beaucoup surpassent les solutions propriétaires.
 - **Dé-identification conforme à HIPAA** — les 18 identifiants Safe Harbor, fusion intelligente des entités et substituts factices préservant le format.
 - **S'exécute partout** — CPU, CUDA, Apple Silicon (MLX), et nativement dans les applications iOS/macOS via OpenMedKit.
 - **Déploiement en une ligne** — API Python, service REST dockerisé ou pipelines par lots.

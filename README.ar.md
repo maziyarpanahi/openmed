@@ -1,18 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — ذكاء اصطناعي صحي محلي" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — ذكاء اصطناعي سريري على الجهاز · أكثر من 1,500 نموذج" width="820" />
 
-<h3>ذكاء اصطناعي صحي محلي لا يغادر جهازك أبدًا</h3>
+<h3>بياناتك. نموذجك. عتادك.</h3>
 
-<p><b>حوِّل النص السريري إلى رؤى منظَّمة بسطر واحد من التعليمات البرمجية.</b><br/>
-استخراج الكيانات، وإزالة معرّفات الهوية الشخصية (PII)، وأكثر من 1,000 نموذج طبي متخصص تعمل بالكامل على عتادك
-الخاص — من سطر واحد في بايثون إلى تطبيق Swift أصلي على iPhone، مدعومًا بـ Apple MLX. بدون سحابة. بدون ارتباط
-بمورّد. وبدون خروج بيانات المريض من شبكتك.</p>
+<p><b>حوِّل النص السريري إلى رؤى منظَّمة ومجرَّدة من الهوية — دون رفع أي شيء.</b><br/>
+يستخرج OpenMed الكيانات الطبية الحيوية ويزيل أكثر من 55 نوعًا من معرّفات الهوية الشخصية (PHI) بالكامل على العتاد الذي تتحكم به، بحيث لا تغادر بياناتك الجهاز أبدًا. وتعمل النماذج المفتوحة نفسها، وعددها أكثر من 1,500 نموذج، من الهاتف إلى خادم GPU، دون اتصال بالكامل — على iOS وiPadOS عبر OpenMedKit، وعلى Android عبر ONNX، وعلى معالجات CPU العادية، وApple Silicon، وبطاقات NVIDIA GPU، وفي المتصفح. بدون سحابة. بدون ارتباط بمورّد. وبدون خروج بيانات المريض من شبكتك.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -26,7 +24,7 @@
 </p>
 
 <p>
-  <b>1,000+ نموذج</b> &nbsp;·&nbsp; <b>12 لغة</b> &nbsp;·&nbsp; <b>247 نقطة تحقق PII</b> &nbsp;·&nbsp; <b>100% على الجهاز</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ نموذج</b> &nbsp;·&nbsp; <b>15 لغة PII</b> &nbsp;·&nbsp; <b>247 نقطة تحقق PII</b> &nbsp;·&nbsp; <b>100% على الجهاز</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -101,14 +99,14 @@ for entity in result.entities:
 | يعمل على جهازك/خوادمك                  |            ✅            |            ❌             |
 | بيانات المريض تغادر شبكتك              |        **أبدًا**         |     تُرسل إلى المورّد       |
 | التكلفة                               |  مجاني ومفتوح المصدر      |   تسعير لكل طلب            |
-| نماذج طبية متخصصة                      |          1,000+          |          محدودة           |
+| نماذج طبية متخصصة                      |          1,500+          |          محدودة           |
 | اللغات                                |           12+            |          متفاوتة          |
 | دون اتصال / معزول (air-gapped)         |            ✅            |            ❌             |
 | تسريع Apple Silicon (MLX)             |            ✅            |          غير متاح         |
 | تطبيقات iOS / macOS أصلية              |    ✅ عبر OpenMedKit      |            ❌             |
 | الارتباط بمورّد                        |    لا يوجد — Apache-2.0   |            نعم            |
 
-- **نماذج متخصصة** — أكثر من 1,000 نموذج طبي حيوي وسريري منتقى، يتفوق كثير منها على الحلول الاحتكارية.
+- **نماذج متخصصة** — أكثر من 1,500 نموذج طبي حيوي وسريري منتقى، يتفوق كثير منها على الحلول الاحتكارية.
 - **إزالة هوية متوافقة مع HIPAA** — جميع معرّفات Safe Harbor الثمانية عشر، ودمج ذكي للكيانات، وبدائل وهمية تحافظ على التنسيق.
 - **يعمل في كل مكان** — CPU وCUDA وApple Silicon (MLX)، وبشكل أصلي في تطبيقات iOS/macOS عبر OpenMedKit.
 - **نشر بسطر واحد** — واجهة Python، خدمة REST عبر Docker، أو مسارات معالجة دفعية.

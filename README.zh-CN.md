@@ -1,17 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — 本地优先的医疗 AI" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — 端侧临床 AI · 1,500+ 个模型" width="820" />
 
-<h3>本地优先的医疗 AI——数据永不离开你的设备</h3>
+<h3>你的数据。你的模型。你的硬件。</h3>
 
-<p><b>一行代码，将临床文本转化为结构化洞见。</b><br/>
-实体抽取、PII 去标识化，以及 1,000+ 个完全运行在你自己硬件上的专业医疗模型——从 Python 的一行调用，
-到由 Apple MLX 驱动的 iPhone 原生 Swift 应用。无需云端，无供应商锁定，患者数据绝不离开你的网络。</p>
+<p><b>将临床文本转化为结构化、去标识化的洞见——无需上传任何内容。</b><br/>
+OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除 55+ 种 PHI 类型，你的数据从不离开设备。同一套 1,500+ 个开源模型可完全离线运行，从手机到 GPU 服务器皆可——iOS 与 iPadOS 通过 OpenMedKit，Android 通过 ONNX，以及普通 CPU、Apple Silicon、NVIDIA GPU 和浏览器。无需云端，无供应商锁定，患者数据绝不离开你的网络。</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -25,7 +24,7 @@
 </p>
 
 <p>
-  <b>1,000+ 模型</b> &nbsp;·&nbsp; <b>12 种语言</b> &nbsp;·&nbsp; <b>247 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ 模型</b> &nbsp;·&nbsp; <b>15 种 PII 语言</b> &nbsp;·&nbsp; <b>247 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -86,14 +85,14 @@ for entity in result.entities:
 | 在你的设备/服务器上运行                |            ✅            |         ❌         |
 | 患者数据离开你的网络                   |        **从不**          |    发送给供应商     |
 | 成本                                   |       免费且开源         |    按调用计费       |
-| 专业医疗模型                           |          1,000+          |        有限         |
+| 专业医疗模型                           |          1,500+          |        有限         |
 | 语言                                   |           12+            |        不一         |
 | 离线 / 隔离网络（air-gapped）          |            ✅            |         ❌         |
 | Apple Silicon (MLX) 加速               |            ✅            |       不适用        |
 | 原生 iOS / macOS 应用                  |   ✅ 通过 OpenMedKit     |         ❌         |
 | 供应商锁定                             |     无 — Apache-2.0      |         有          |
 
-- **专业模型** — 1,000+ 个精选的生物医学与临床模型，其中许多性能超越商业专有方案。
+- **专业模型** — 1,500+ 个精选的生物医学与临床模型，其中许多性能超越商业专有方案。
 - **符合 HIPAA 的去标识化** — 覆盖全部 18 项 Safe Harbor 标识符，智能实体合并，保留格式的伪造替换。
 - **随处运行** — CPU、CUDA、Apple Silicon (MLX)，并可通过 OpenMedKit 原生运行于 iOS/macOS 应用。
 - **一行部署** — Python API、Docker 化的 REST 服务，或批处理流水线。
