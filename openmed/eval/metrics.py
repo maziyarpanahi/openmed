@@ -83,6 +83,37 @@ class RateMetric:
 
 
 @dataclass(frozen=True)
+class SrContentAccuracy:
+    """Node-level exact-match accuracy for DICOM SR content extraction.
+
+    A predicted content item counts as correct when its concept name, value
+    type, rendered value, and coded unit all match the gold item keyed by the
+    same ``node_path``. This mirrors the SR extraction gate: every node in the
+    content tree must be reproduced exactly.
+    """
+
+    accuracy: float
+    matched: int
+    total: int
+    missing_nodes: tuple[str, ...] = ()
+    mismatched_nodes: tuple[str, ...] = ()
+    extra_nodes: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "accuracy": self.accuracy,
+            "matched": self.matched,
+            "total": self.total,
+            "missing_nodes": list(self.missing_nodes),
+            "mismatched_nodes": list(self.mismatched_nodes),
+            "extra_nodes": list(self.extra_nodes),
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
 class F1Metrics:
     """Precision/recall/F1 counts for span matching."""
 
@@ -1134,6 +1165,84 @@ def compute_resource_metrics(
     )
 
 
+_SR_MATCH_FIELDS: tuple[str, ...] = (
+    "concept_name",
+    "value_type",
+    "value",
+    "unit_code",
+)
+
+
+def compute_sr_content_accuracy(
+    predicted_items: Sequence[Mapping[str, Any]],
+    gold_items: Sequence[Mapping[str, Any]],
+) -> SrContentAccuracy:
+    """Compute node-level exact-match accuracy for DICOM SR content extraction.
+
+    Items are aligned by ``node_path``. A gold node is matched only when a
+    predicted node with the same path reproduces its concept name, value type,
+    rendered value, and coded unit exactly. Accuracy is matched gold nodes over
+    total gold nodes; unmatched gold, mismatched, and unexpected extra predicted
+    node paths are reported for diagnosis.
+
+    Args:
+        predicted_items: Extracted SR content items (for example the
+            ``content_items`` list from
+            :func:`openmed.multimodal.extract_dicom_sr`).
+        gold_items: Reference SR content items for the same object.
+
+    Returns:
+        An :class:`SrContentAccuracy` summary.
+    """
+    predicted_by_path = {
+        str(item.get("node_path", "")): item for item in predicted_items
+    }
+    total = len(gold_items)
+    matched = 0
+    missing: list[str] = []
+    mismatched: list[str] = []
+    matched_paths: set[str] = set()
+
+    for gold in gold_items:
+        path = str(gold.get("node_path", ""))
+        prediction = predicted_by_path.get(path)
+        if prediction is None:
+            missing.append(path)
+            continue
+        matched_paths.add(path)
+        if all(
+            _sr_field_equal(prediction.get(field), gold.get(field))
+            for field in _SR_MATCH_FIELDS
+        ):
+            matched += 1
+        else:
+            mismatched.append(path)
+
+    extra = [
+        path
+        for path in predicted_by_path
+        if path not in {str(gold.get("node_path", "")) for gold in gold_items}
+    ]
+
+    accuracy = matched / total if total else 1.0
+    return SrContentAccuracy(
+        accuracy=accuracy,
+        matched=matched,
+        total=total,
+        missing_nodes=tuple(missing),
+        mismatched_nodes=tuple(mismatched),
+        extra_nodes=tuple(sorted(extra)),
+    )
+
+
+def _sr_field_equal(left: Any, right: Any) -> bool:
+    if left is None or (isinstance(left, str) and left == ""):
+        left = None
+    if right is None or (isinstance(right, str) and right == ""):
+        right = None
+    return left == right
+
+
 def reliability_bins(
     predictions_with_confidence: Iterable[Any],
     n_bins: int = 10,
@@ -1967,6 +2076,7 @@ __all__ = [
     "AbstentionMetrics",
     "EvalSpan",
     "RateMetric",
+    "SrContentAccuracy",
     "F1Metrics",
     "LeakageMetrics",
     "RecallSlices",
@@ -1991,6 +2101,7 @@ __all__ = [
     "compute_surrogate_consistency",
     "compute_latency_summary",
     "compute_resource_metrics",
+    "compute_sr_content_accuracy",
     "coverage_gaps_by_language",
     "reliability_bins",
     "expected_calibration_error",
