@@ -134,6 +134,55 @@ GI_SYMPTOM: Final = "GI_SYMPTOM"
 GI_SCORE: Final = "GI_SCORE"
 POLYP_DESCRIPTOR: Final = "POLYP_DESCRIPTOR"
 
+#: Relation-extraction head/attribute concepts (issue #252, OM-087).
+#: These are the head/attribute entity labels that clinical relation
+#: extraction (OM-043) and SDOH (OM-056) bind together: a problem head with
+#: its severity/status attributes, a medication head with its dosage, route,
+#: frequency, duration, form, strength, and indication attributes, and a
+#: lab-value head with its unit, reference-range, and abnormal-flag
+#: attributes. ``MEDICATION`` and ``BODY_SITE`` already exist above and double
+#: as the medication head and the anatomy attribute, so they are not
+#: redefined here.
+PROBLEM: Final = "PROBLEM"
+SEVERITY: Final = "SEVERITY"
+STATUS: Final = "STATUS"
+DOSAGE: Final = "DOSAGE"
+ROUTE: Final = "ROUTE"
+FREQUENCY: Final = "FREQUENCY"
+DURATION: Final = "DURATION"
+FORM: Final = "FORM"
+STRENGTH: Final = "STRENGTH"
+INDICATION: Final = "INDICATION"
+LAB_VALUE: Final = "LAB_VALUE"
+UNIT: Final = "UNIT"
+REFERENCE_RANGE: Final = "REFERENCE_RANGE"
+ABNORMAL_FLAG: Final = "ABNORMAL_FLAG"
+
+#: The clinical-concept relation-extraction label vocabulary added by OM-087.
+#: Every member carries ``policy_label == CLINICAL_CONCEPT`` and is therefore
+#: excluded from the default PII/PHI de-identification redaction set. This set
+#: is additive: it does NOT include the pre-existing clinical concepts (e.g.
+#: ``CONDITION``, ``MEDICATION``, ``BODY_SITE``) already in
+#: :data:`CANONICAL_LABELS`.
+CLINICAL_CONCEPT_LABELS: Final[FrozenSet[str]] = frozenset(
+    {
+        PROBLEM,
+        SEVERITY,
+        STATUS,
+        DOSAGE,
+        ROUTE,
+        FREQUENCY,
+        DURATION,
+        FORM,
+        STRENGTH,
+        INDICATION,
+        LAB_VALUE,
+        UNIT,
+        REFERENCE_RANGE,
+        ABNORMAL_FLAG,
+    }
+)
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -236,6 +285,20 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GI_SYMPTOM,
         GI_SCORE,
         POLYP_DESCRIPTOR,
+        PROBLEM,
+        SEVERITY,
+        STATUS,
+        DOSAGE,
+        ROUTE,
+        FREQUENCY,
+        DURATION,
+        FORM,
+        STRENGTH,
+        INDICATION,
+        LAB_VALUE,
+        UNIT,
+        REFERENCE_RANGE,
+        ABNORMAL_FLAG,
         OTHER,
     }
 )
@@ -434,6 +497,25 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     POLYP_DESCRIPTOR: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
+    # Relation-extraction head/attribute concepts (issue #252, OM-087). These
+    # are clinical concepts (kept out of the default redaction set); a
+    # free-text problem/diagnosis that names a rare condition is treated as a
+    # quasi-identifier downstream by relation extraction (OM-043), not by
+    # re-classifying the label's policy class here.
+    PROBLEM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED)),
+    SEVERITY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DOSAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FREQUENCY: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    DURATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    FORM: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    STRENGTH: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    INDICATION: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (ICD_10_CM, SNOMED)),
+    LAB_VALUE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    UNIT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    REFERENCE_RANGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    ABNORMAL_FLAG: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -532,6 +614,21 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GI_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
     GI_SCORE: HIPAA_UNIQUE_IDENTIFIER,
     POLYP_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    # Relation-extraction head/attribute concepts (issue #252, OM-087)
+    PROBLEM: HIPAA_UNIQUE_IDENTIFIER,
+    SEVERITY: HIPAA_UNIQUE_IDENTIFIER,
+    STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    DOSAGE: HIPAA_UNIQUE_IDENTIFIER,
+    ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    FREQUENCY: HIPAA_UNIQUE_IDENTIFIER,
+    DURATION: HIPAA_UNIQUE_IDENTIFIER,
+    FORM: HIPAA_UNIQUE_IDENTIFIER,
+    STRENGTH: HIPAA_UNIQUE_IDENTIFIER,
+    INDICATION: HIPAA_UNIQUE_IDENTIFIER,
+    LAB_VALUE: HIPAA_UNIQUE_IDENTIFIER,
+    UNIT: HIPAA_UNIQUE_IDENTIFIER,
+    REFERENCE_RANGE: HIPAA_UNIQUE_IDENTIFIER,
+    ABNORMAL_FLAG: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -719,7 +816,10 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "disease": CONDITION,
     "diagnosis": CONDITION,
     "finding": CONDITION,
-    "problem": CONDITION,
+    # ``problem`` names the relation-extraction PROBLEM head (issue #252,
+    # OM-087). ``diagnosis``/``disorder``/``finding``/``disease`` stay mapped
+    # to the CONDITION grounding label so existing behavior is unchanged.
+    "problem": PROBLEM,
     "disorder": CONDITION,
     "syndrome": CONDITION,
     "medication": MEDICATION,
@@ -814,6 +914,45 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "sessilepolyp": POLYP_DESCRIPTOR,
     "pedunculatedpolyp": POLYP_DESCRIPTOR,
     "biopsysite": BODY_SITE,
+    # Relation-extraction head/attribute concepts (issue #252, OM-087).
+    # ``diagnosis``/``finding``/``disorder``/``problem`` remain aliases of the
+    # pre-existing CONDITION grounding label (unchanged); PROBLEM is reached
+    # via the distinct problem-list surface forms below.
+    "dx": PROBLEM,
+    "problemlist": PROBLEM,
+    "problemlistitem": PROBLEM,
+    "activeproblem": PROBLEM,
+    "severity": SEVERITY,
+    "severitygrade": SEVERITY,
+    "status": STATUS,
+    "clinicalstatus": STATUS,
+    "conditionstatus": STATUS,
+    "dosage": DOSAGE,
+    "dose": DOSAGE,
+    "dosing": DOSAGE,
+    "route": ROUTE,
+    "routeofadministration": ROUTE,
+    "frequency": FREQUENCY,
+    "freq": FREQUENCY,
+    "duration": DURATION,
+    "form": FORM,
+    "doseform": FORM,
+    "dosageform": FORM,
+    "strength": STRENGTH,
+    "dosestrength": STRENGTH,
+    "indication": INDICATION,
+    "reasonfordrug": INDICATION,
+    "labvalue": LAB_VALUE,
+    "labresult": LAB_VALUE,
+    "resultvalue": LAB_VALUE,
+    "unit": UNIT,
+    "units": UNIT,
+    "uom": UNIT,
+    "referencerange": REFERENCE_RANGE,
+    "normalrange": REFERENCE_RANGE,
+    "refrange": REFERENCE_RANGE,
+    "abnormalflag": ABNORMAL_FLAG,
+    "abnormalityflag": ABNORMAL_FLAG,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -939,6 +1078,7 @@ _validate_label_metadata()
 
 __all__ = [
     "CANONICAL_LABELS",
+    "CLINICAL_CONCEPT_LABELS",
     "normalize_label",
     "id_subtype_for",
     "ID_ALIAS_SUBTYPES",
@@ -1042,5 +1182,19 @@ __all__ = [
     "GI_SYMPTOM",
     "GI_SCORE",
     "POLYP_DESCRIPTOR",
+    "PROBLEM",
+    "SEVERITY",
+    "STATUS",
+    "DOSAGE",
+    "ROUTE",
+    "FREQUENCY",
+    "DURATION",
+    "FORM",
+    "STRENGTH",
+    "INDICATION",
+    "LAB_VALUE",
+    "UNIT",
+    "REFERENCE_RANGE",
+    "ABNORMAL_FLAG",
     "OTHER",
 ]
