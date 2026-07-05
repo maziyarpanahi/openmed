@@ -1,5 +1,23 @@
 """Clinical lexicon registries used by deterministic context layers."""
 
+from .clinical_norm import (
+    ClinicalNormLexicon,
+    abbreviation_expansion,
+    abbreviation_surfaces,
+    abnormal_flag_alias,
+    available_clinical_norm_languages,
+    canonical_unit_alias,
+    clinical_norm_lexicon_stats,
+    get_clinical_norm_lexicon,
+    localized_duration_text,
+    localized_frequency_text,
+    normalize_language,
+    normalize_surface,
+    normalize_unit_surface,
+    parse_locale_number,
+    register_clinical_norm_lexicon,
+    split_measurement_text,
+)
 from .context_cues import (
     ClinicalCueLexicon,
     available_clinical_cue_languages,
@@ -9,9 +27,25 @@ from .context_cues import (
 )
 
 __all__ = [
+    "ClinicalNormLexicon",
     "ClinicalCueLexicon",
+    "abbreviation_expansion",
+    "abbreviation_surfaces",
+    "abnormal_flag_alias",
+    "available_clinical_norm_languages",
     "available_clinical_cue_languages",
+    "canonical_unit_alias",
     "clinical_context_lexicon_stats",
+    "clinical_norm_lexicon_stats",
     "get_clinical_cue_lexicon",
+    "get_clinical_norm_lexicon",
+    "localized_duration_text",
+    "localized_frequency_text",
+    "normalize_language",
+    "normalize_surface",
+    "normalize_unit_surface",
+    "parse_locale_number",
     "register_clinical_cue_lexicon",
+    "register_clinical_norm_lexicon",
+    "split_measurement_text",
 ]
