@@ -29,7 +29,7 @@ import re
 import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
@@ -432,7 +432,7 @@ def _prediction_result_from_privacy_filter_raw(
         text=original_text if do_normalize else text,
         entities=entities,
         model_name=model_name,
-        timestamp=datetime.now().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 
@@ -1605,7 +1605,7 @@ def _build_deidentification_result(
         deidentified_text=deidentified,
         pii_entities=pii_entities,
         method=effective_method,
-        timestamp=datetime.now(),
+        timestamp=datetime.now(timezone.utc),
         mapping=mapping,
         metadata=_copy_metadata(getattr(pii_result, "metadata", None)),
         audit_report=audit_report,

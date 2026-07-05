@@ -1761,7 +1761,7 @@ def _prediction_result_from_spans(
     *,
     model_name: str,
 ) -> Any:
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     from ..processing.outputs import EntityPrediction, PredictionResult
 
@@ -1783,7 +1783,7 @@ def _prediction_result_from_spans(
             for span in spans
         ],
         model_name=model_name,
-        timestamp=datetime.now().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 

@@ -5,7 +5,7 @@ import json
 import logging
 import unicodedata
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ class OutputFormatter:
             text=original_text,
             entities=entities,
             model_name=model_name,
-            timestamp=datetime.now().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             processing_time=kwargs.get("processing_time"),
             metadata=kwargs.get("metadata", {}),
         )

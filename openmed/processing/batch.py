@@ -538,11 +538,11 @@ class BatchProcessor:
         on_progress: Optional[BatchProgressCallback] = None,
     ) -> BatchResult:
         """Internal method to process batch items."""
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         batch_result = BatchResult(
             model_name=self.model_name,
-            started_at=datetime.now().isoformat(),
+            started_at=datetime.now(timezone.utc).isoformat(),
         )
 
         total = len(items)
@@ -562,7 +562,7 @@ class BatchProcessor:
                 )
 
         batch_result.total_processing_time = time.time() - batch_start
-        batch_result.completed_at = datetime.now().isoformat()
+        batch_result.completed_at = datetime.now(timezone.utc).isoformat()
 
         return batch_result
 
