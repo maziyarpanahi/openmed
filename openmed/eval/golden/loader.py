@@ -29,7 +29,9 @@ _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
 _TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
-_NON_DEID_FIXTURE_NAMES = frozenset({"context_multilingual.jsonl"})
+_NON_DEID_FIXTURE_NAMES = frozenset(
+    {"context_multilingual.jsonl", "grounding_crosslingual.jsonl"}
+)
 
 
 @dataclass(frozen=True)
