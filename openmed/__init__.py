@@ -18,6 +18,11 @@ from .core.anonymizer import (
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 from .core.custom_recognizer import CustomRecognizer
+from .core.document_stream import (
+    DocumentStreamDeidentifier,
+    DocumentStreamResult,
+    deidentify_document_stream,
+)
 from .core.explain import ExplainReport, explain
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
@@ -705,6 +710,9 @@ __all__ = [
     "StreamingDeidentificationEvent",
     "StreamingDeidentifier",
     "deidentify_stream",
+    "DocumentStreamDeidentifier",
+    "DocumentStreamResult",
+    "deidentify_document_stream",
     "replay_token_classifier",
     "stream_token_classifier",
     "redaction_preview",
