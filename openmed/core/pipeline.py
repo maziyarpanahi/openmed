@@ -6,9 +6,11 @@ import copy
 import importlib
 import inspect
 import logging
+import time
 import unicodedata
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Iterator, Mapping, Optional, Sequence
 
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
@@ -146,12 +148,24 @@ class PipelineResult:
     redacted_text: str
     audit_record: Mapping[str, Any]
     deidentification_result: Any = None
+    stage_durations_ms: Mapping[str, float] = field(default_factory=dict)
 
     def stage(self, name: str) -> PipelineStageResult:
         for result in self.stage_results:
             if result.name == name:
                 return result
         raise KeyError(name)
+
+    def stage_duration_ms(self, name: str) -> float:
+        """Return the measured wall-clock duration of ``name`` in milliseconds.
+
+        Durations are latency-only measurements: they never carry document text
+        and are safe to log. They are deliberately kept off the reproducible
+        audit record because wall-clock time is non-deterministic.
+        """
+        if name not in self.stage_durations_ms:
+            raise KeyError(name)
+        return self.stage_durations_ms[name]
 
     def explain(self) -> Any:
         """Return a reviewer-facing trace report for this pipeline result."""
@@ -166,7 +180,29 @@ ModelDetector = Callable[..., Any]
 
 
 class Pipeline:
-    """Orchestrate the ten-stage privacy detection pipeline."""
+    """Orchestrate the ten-stage privacy detection pipeline.
+
+    Complexity for long inputs
+    --------------------------
+    Let ``n`` be the note length in characters and ``m`` the number of
+    candidate spans (typically ``m << n`` for clinical notes).
+
+    * Stage 1 (normalize) builds three character-indexed offset maps, so it is
+      ``O(n)`` in time and memory. Encoding repair (optional ``ftfy``) runs per
+      segment only when a real repairer is active; when it is unavailable the
+      per-segment call is skipped so stage 1 stays ``O(n)`` without a
+      per-character Python-call overhead.
+    * Stages 4 and 9 (deterministic detectors / safety sweep) scan the text
+      once per regex pattern, i.e. ``O(P * n)`` for a fixed pattern set ``P``
+      -- linear in ``n``.
+    * Stage 7 (arbitration) sorts and sweeps candidates in ``O(m log m)``.
+
+    The pipeline is therefore expected to scale roughly linearly with note
+    length. ``run`` measures per-stage wall-clock latency (see
+    :meth:`PipelineResult.stage_duration_ms`); the latency-scaling regression
+    tests in ``tests/unit/core/test_pipeline_latency.py`` guard against a
+    regression that reintroduces super-linear behaviour.
+    """
 
     stage_names = STAGE_NAMES
 
@@ -276,14 +312,18 @@ class Pipeline:
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
         )
+        stage_durations_ms: dict[str, float] = {}
         original_text = text.strip()
-        normalized = self.stage1_normalize(original_text)
-        route = self.stage2_language_script(normalized.normalized_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
+            normalized = self.stage1_normalize(original_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[1]):
+            route = self.stage2_language_script(normalized.normalized_text)
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
         )
-        section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[2]):
+            section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
@@ -396,10 +436,11 @@ class Pipeline:
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
         else:
-            deterministic_spans = self.stage4_deterministic_detectors(
-                normalized.normalized_text,
-                context,
-            )
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+                deterministic_spans = self.stage4_deterministic_detectors(
+                    normalized.normalized_text,
+                    context,
+                )
             deterministic_spans = _stamp_span_sections(
                 deterministic_spans,
                 context.section_metadata,
@@ -408,34 +449,38 @@ class Pipeline:
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
-            pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
-            self._apply_calibration_thresholds(pii_result, route)
-            model_spans = self._entities_to_spans(
-                getattr(pii_result, "entities", ()),
-                normalized.normalized_text,
-                context,
-                default_detector=(
-                    f"model:{getattr(pii_result, 'model_name', route.model_name)}"
-                ),
-                stage=STAGE_NAMES[4],
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+                pii_result = self.stage5_fast_pii_model(
+                    normalized.normalized_text, route
+                )
+                self._apply_calibration_thresholds(pii_result, route)
+                model_spans = self._entities_to_spans(
+                    getattr(pii_result, "entities", ()),
                     normalized.normalized_text,
                     context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
+                    default_detector=(
+                        f"model:{getattr(pii_result, 'model_name', route.model_name)}"
+                    ),
+                    stage=STAGE_NAMES[4],
+                )
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
             model_spans = _stamp_span_sections(model_spans, context.section_metadata)
             stage_results.append(
                 PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
             )
 
-            clinical_spans = self.stage6_clinical_phi_model(
-                normalized.normalized_text,
-                context,
-            )
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+                clinical_spans = self.stage6_clinical_phi_model(
+                    normalized.normalized_text,
+                    context,
+                )
             clinical_spans = _stamp_span_sections(
                 clinical_spans,
                 context.section_metadata,
@@ -445,10 +490,11 @@ class Pipeline:
             )
 
         arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
-        merged_spans = self.stage7_arbitration(
-            arbitration_candidates,
-            context,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[6]):
+            merged_spans = self.stage7_arbitration(
+                arbitration_candidates,
+                context,
+            )
         arbitration_trace_metadata = (
             _arbitration_trace_metadata(
                 arbitration_candidates,
@@ -502,11 +548,12 @@ class Pipeline:
             )
         )
 
-        policy_spans = self.stage8_policy_actions(
-            merged_spans,
-            context,
-            explain=explain,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[7]):
+            policy_spans = self.stage8_policy_actions(
+                merged_spans,
+                context,
+                explain=explain,
+            )
         policy_spans = _stamp_span_sections(policy_spans, context.section_metadata)
         stage_results.append(PipelineStageResult(8, STAGE_NAMES[7], spans=policy_spans))
 
@@ -541,11 +588,12 @@ class Pipeline:
                 ],
             )
 
-        sweep_spans, sweep_metadata = self.stage9_safety_sweep(
-            normalized.normalized_text,
-            pii_result,
-            context,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[8]):
+            sweep_spans, sweep_metadata = self.stage9_safety_sweep(
+                normalized.normalized_text,
+                pii_result,
+                context,
+            )
         stage_results.append(
             PipelineStageResult(
                 9,
@@ -563,31 +611,36 @@ class Pipeline:
             normalized,
             self.hmac_secret,
         )
-        deidentified = self.stage10_emit(
-            normalized.original_text,
-            emission_pii_result,
-            effective_method=effective_method,
-            keep_year=keep_year,
-            date_shift_days=date_shift_days,
-            patient_key=patient_key,
-            date_shift_max_days=date_shift_max_days,
-            date_shift_secret=date_shift_secret,
-            keep_mapping=effective_keep_mapping,
-            lang=route.lang,
-            consistent=consistent,
-            seed=seed,
-            locale=locale,
-            surrogate_vault=surrogate_vault,
-            model_name=route.model_name,
-            confidence_threshold=self.confidence_threshold,
-            normalize_accents=self.normalize_accents,
-            use_smart_merging=self.use_smart_merging,
-            use_safety_sweep=self.use_safety_sweep,
-            reversible_ids=bool(self.policy is not None and self.policy.reversible_id),
-            policy_name=self.policy.name if self.policy is not None else None,
-            policy=self.policy.name if self.policy is not None else "hipaa_safe_harbor",
-            audit=audit,
-        )
+        with _stage_timer(stage_durations_ms, STAGE_NAMES[9]):
+            deidentified = self.stage10_emit(
+                normalized.original_text,
+                emission_pii_result,
+                effective_method=effective_method,
+                keep_year=keep_year,
+                date_shift_days=date_shift_days,
+                patient_key=patient_key,
+                date_shift_max_days=date_shift_max_days,
+                date_shift_secret=date_shift_secret,
+                keep_mapping=effective_keep_mapping,
+                lang=route.lang,
+                consistent=consistent,
+                seed=seed,
+                locale=locale,
+                surrogate_vault=surrogate_vault,
+                model_name=route.model_name,
+                confidence_threshold=self.confidence_threshold,
+                normalize_accents=self.normalize_accents,
+                use_smart_merging=self.use_smart_merging,
+                use_safety_sweep=self.use_safety_sweep,
+                reversible_ids=bool(
+                    self.policy is not None and self.policy.reversible_id
+                ),
+                policy_name=self.policy.name if self.policy is not None else None,
+                policy=(
+                    self.policy.name if self.policy is not None else "hipaa_safe_harbor"
+                ),
+                audit=audit,
+            )
         final_spans = (
             sweep_spans if self.policy is not None else (sweep_spans or policy_spans)
         )
@@ -628,10 +681,18 @@ class Pipeline:
             redacted_text=deidentified.deidentified_text,
             audit_record=audit_record,
             deidentification_result=deidentified,
+            stage_durations_ms=dict(stage_durations_ms),
         )
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
         repair_encoding, encoding_repair_metadata = _encoding_repairer()
+        # Encoding repair is an optional (ftfy) capability. When it is
+        # unavailable the repairer is the identity function, so calling it once
+        # per segment is pure overhead: on a long note stage 1 would make one
+        # no-op wrapper call per character. Detect the identity case once and
+        # skip the per-segment repair call, keeping stage 1 near-linear in note
+        # length without changing the normalized output.
+        repair_active = repair_encoding is not _identity_text
         normalized_parts: list[str] = []
         original_to_normalized: list[int | None] = [None] * len(text)
         normalized_to_original: list[int] = []
@@ -642,11 +703,13 @@ class Pipeline:
             normalized_start = normalized_length
             if is_whitespace:
                 normalized_segment = " "
-            else:
+            elif repair_active:
                 normalized_segment = unicodedata.normalize(
                     "NFC",
-                    _repair_encoding_segment(segment, repair_encoding=repair_encoding),
+                    repair_encoding(segment),
                 )
+            else:
+                normalized_segment = unicodedata.normalize("NFC", segment)
 
             if not normalized_segment:
                 continue
@@ -1198,6 +1261,10 @@ class Pipeline:
         *,
         redacted_text: str,
     ) -> Mapping[str, Any]:
+        # The audit record is reproducible: it carries only offsets, hashes,
+        # counts, and provenance -- never wall-clock timings, which are
+        # non-deterministic. Per-stage latency lives on
+        # ``PipelineResult.stage_durations_ms`` instead.
         record = {
             "doc_id": context.doc_id,
             "language": context.route.lang,
@@ -1228,6 +1295,24 @@ class Pipeline:
                 "threshold_profile": self.policy.threshold_profile,
             }
         return record
+
+
+@contextmanager
+def _stage_timer(
+    durations_ms: dict[str, float],
+    stage_name: str,
+) -> Iterator[None]:
+    """Record the wall-clock duration of a pipeline stage in milliseconds.
+
+    The recorded value is a latency measurement only; it carries no document
+    text and is safe to persist in audit records or logs.
+    """
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
 
 
 def _iter_normalization_segments(text: str):
