@@ -816,7 +816,7 @@ def _has_value(value: Any) -> bool:
     if value is None:
         return False
     if isinstance(value, (bytes, str)):
-        return len(value) > 0
+        return value
     if isinstance(value, Mapping):
         return bool(value)
     if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):

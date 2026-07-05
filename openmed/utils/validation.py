@@ -43,7 +43,7 @@ def validate_input(
 
     # Check length constraints
     if len(text) < min_length:
-        if allow_empty and len(text) == 0:
+        if allow_empty and not text:
             return text
         raise ValueError(f"Input text too short. Minimum length: {min_length}")
 

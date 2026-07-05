@@ -320,7 +320,7 @@ def validate_entity_spans(
             warnings.warn(msg, SpanValidationWarning, stacklevel=2)
 
         # Tag metadata so downstream code can inspect validity.
-        _set_span_valid(entity, len(problems) == 0)
+        _set_span_valid(entity, not problems)
 
     return entities
 

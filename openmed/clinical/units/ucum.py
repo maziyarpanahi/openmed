@@ -520,7 +520,7 @@ def parse_unit(unit: object) -> ParsedUnit:
 def is_dimensionless(dimension: Dimension) -> bool:
     """Return whether ``dimension`` has no base dimensions."""
 
-    return len(dimension) == 0
+    return not dimension
 
 
 def canonical_unit_for_dimension(dimension: Dimension) -> str:
