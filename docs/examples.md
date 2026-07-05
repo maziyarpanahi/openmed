@@ -14,6 +14,45 @@ synthetic data and are safe to run during release review.
 
 Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pip install ".[hf]"` baseline.
 
+### Rich highlight widget in notebooks
+
+`openmed.processing.show()` renders a displaCy-style colored highlight of every
+detected span — with a per-label legend and confidence scores — directly in a
+Jupyter/IPython cell. Typed results render themselves automatically (they expose
+`_repr_html_`), so evaluating an `AnalyzeResult` or `DeidentificationResult` as the
+last line of a cell shows the widget:
+
+```python
+from openmed import deidentify
+
+# Synthetic text only. The result renders inline in Jupyter via _repr_html_.
+deidentify("Patient John Doe called from 555-123-4567.", method="mask")
+```
+
+For explicit control, call `show()` (renders inline, or returns the HTML string
+outside a notebook) or `render_spans_html()` (always returns the HTML string):
+
+```python
+from openmed.processing import render_spans_html, show
+
+html = render_spans_html(
+    "Contact Jane Roe at jane.roe@example.com.",
+    [
+        {"start": 8, "end": 16, "label": "PERSON", "score": 0.98},
+        {"start": 20, "end": 40, "label": "EMAIL", "score": 0.95},
+    ],
+)
+show(html)  # in a notebook this displays the colored widget
+```
+
+`show()` accepts an `AnalyzeResult`, a `DeidentificationResult`, or an explicit
+`(text, spans)` pair, where spans may be dicts, `EntityPrediction`/`PIIEntity`
+objects, or `OpenMedSpan` records. IPython is an optional, lazily imported
+dependency: rendering the HTML string never requires it, and `show()` degrades to
+returning the string when IPython is absent. The source text is always
+HTML-escaped, so brackets and ampersands in clinical notes cannot break the view.
+Recipe 5 in `Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end.
+
 ## Scripts & tools
 
 | Path | What it does |

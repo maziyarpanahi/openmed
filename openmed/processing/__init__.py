@@ -29,6 +29,7 @@ from .checkpoint import (
     build_stream_fingerprint,
     dedupe_key_for_source,
 )
+from .display import NormalizedSpan, render_spans_html, show
 from .distributed import (
     DocumentIdExtractor,
     DocumentShard,
@@ -71,6 +72,9 @@ __all__ = [
     "clear_tokenizer_cache",
     "OutputFormatter",
     "format_predictions",
+    "render_spans_html",
+    "show",
+    "NormalizedSpan",
     "BatchProcessor",
     "BatchItem",
     "BatchItemResult",
