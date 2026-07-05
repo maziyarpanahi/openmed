@@ -15,6 +15,15 @@ from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
 from .redaction_preview import redaction_preview, render_redaction_preview
+from .review_workflow import (
+    ReviewFeedback,
+    ReviewItem,
+    ReviewQueue,
+    append_feedback,
+    build_review_queue,
+    critical_labels,
+    record_review_decision,
+)
 from .script_detect import (
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
@@ -52,6 +61,13 @@ __all__ = [
     "DetectorInfo",
     "redaction_preview",
     "render_redaction_preview",
+    "ReviewQueue",
+    "ReviewItem",
+    "ReviewFeedback",
+    "build_review_queue",
+    "record_review_decision",
+    "append_feedback",
+    "critical_labels",
     "SurrogateVault",
     "SurrogateKey",
     "SurrogateEntry",
