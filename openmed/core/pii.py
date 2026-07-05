@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequence
 
 from ..processing.outputs import EntityPrediction, PredictionResult
+from .budget import BudgetClock, RequestBudget, coerce_budget
 from .config import OpenMedConfig
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .date_shift import (
@@ -720,10 +721,20 @@ def _extract_pii_batch(
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
+    budget_clock: Optional[BudgetClock] = None,
     **pipeline_kwargs: Any,
 ) -> list[Any]:
     """Extract PII for multiple texts while reusing the same backend resources."""
     effective_model = _resolve_effective_pii_model(model_name, lang)
+
+    # Input-size guard: reject over-length input before any model inference.
+    if budget_clock is not None:
+        for text in texts:
+            budget_clock.check_input_length(
+                len(text),
+                checkpoint="extract_pii.input_guard",
+            )
+
     prepared = [
         _prepare_pii_text(
             text,
@@ -755,6 +766,10 @@ def _extract_pii_batch(
             for key in ("batch_size", "num_workers")
             if key in pipeline_kwargs and pipeline_kwargs[key] is not None
         }
+        # Cooperative cancellation checkpoint before the privacy-filter batch
+        # inference call.
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.privacy_filter_batch")
         with network_blocked_if_offline(config):
             raw_outputs = pipeline(inference_texts, **privacy_call_kwargs)
         batched_raw = _coerce_batched_raw_outputs(raw_outputs, len(prepared))
@@ -776,11 +791,22 @@ def _extract_pii_batch(
         from .. import analyze_text
         from .models import ModelLoader
 
+        # Cooperative cancellation checkpoint before allocating shared backend
+        # resources, so an already-exhausted budget stops cleanly rather than
+        # building a model loader it will never use.
+        if budget_clock is not None:
+            budget_clock.check("extract_pii.batch_setup")
+
         shared_loader = loader
         if shared_loader is None and len(prepared) > 1:
             shared_loader = ModelLoader(config)
         results = []
         for item in prepared:
+            # Cooperative cancellation checkpoint between batch items: check the
+            # deadline before starting each item so a stalled or oversized batch
+            # stops cleanly instead of running unbounded.
+            if budget_clock is not None:
+                budget_clock.check("extract_pii.batch_item")
             result = analyze_text(
                 item.inference_text,
                 model_name=effective_model,
@@ -834,6 +860,7 @@ def extract_pii(
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     custom_recognizer: Any = None,
+    budget: Optional[RequestBudget] = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -869,6 +896,11 @@ def extract_pii(
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
+        budget: Optional :class:`~openmed.core.budget.RequestBudget` bounding
+            the wall-clock time and/or input length of this call. ``None``
+            (default) means unlimited — identical to the historical behavior.
+            An over-length input raises
+            :class:`~openmed.core.budget.BudgetExceededError` before inference.
 
     Returns:
         PredictionResult with detected PII entities
@@ -900,6 +932,7 @@ def extract_pii(
         >>> next((entity.text, entity.label) for entity in result.entities)
         ('Casey Example', 'NAME')
     """
+    resolved_budget = coerce_budget(budget)
     if cache_results:
         params = dict(locals())
         cache_key = make_cache_key("extract_pii", params)
@@ -907,6 +940,7 @@ def extract_pii(
         final_result = cache.get(cache_key)
         if final_result is not None:
             return final_result
+    budget_clock = resolved_budget.start() if resolved_budget is not None else None
     final_result = _extract_pii_batch(
         [text],
         model_name=model_name,
@@ -918,6 +952,7 @@ def extract_pii(
         locale=locale,
         loader=loader,
         custom_recognizer=custom_recognizer,
+        budget_clock=budget_clock,
     )[0]
     if cache_results:
         cache.set(cache_key, final_result)
@@ -1690,6 +1725,7 @@ def _deidentify_batch(
     surrogate_vault: Optional["SurrogateVault"] = None,
     loader: Optional["ModelLoader"] = None,
     privacy_filter_pipeline: Optional[Any] = None,
+    budget_clock: Optional[BudgetClock] = None,
     **pipeline_kwargs: Any,
 ) -> list[DeidentificationResult]:
     """De-identify multiple texts after one batched PII extraction pass."""
@@ -1715,12 +1751,16 @@ def _deidentify_batch(
         custom_recognizer=recognizer,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
+        budget_clock=budget_clock,
         **pipeline_kwargs,
     )
 
     if use_safety_sweep:
         swept_results = []
         for stripped_text, pii_result in zip(stripped_texts, pii_results):
+            # Cooperative cancellation checkpoint between post-extraction items.
+            if budget_clock is not None:
+                budget_clock.check("deidentify.safety_sweep_item")
             pii_result, _ = _apply_safety_sweep_to_result(
                 stripped_text,
                 pii_result,
@@ -1787,6 +1827,7 @@ def deidentify(
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
+    budget: Optional[RequestBudget] = None,
 ) -> DeidentificationResult | "AuditReport":
     """De-identify text by detecting and redacting PII with intelligent merging.
 
@@ -1862,6 +1903,12 @@ def deidentify(
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
+        budget: Optional :class:`~openmed.core.budget.RequestBudget` bounding
+            the wall-clock time and/or input length of this call. Deadlines are
+            checked cooperatively between pipeline stages. ``None`` (default)
+            means unlimited — identical to the historical behavior. Over-length
+            input raises :class:`~openmed.core.budget.BudgetExceededError`
+            before any model inference runs.
 
     Returns:
         DeidentificationResult with original and de-identified text, or
@@ -1908,6 +1955,7 @@ def deidentify(
         {'[NAME]': 'Casey Example'}
     """
 
+    resolved_budget = coerce_budget(budget)
     if cache_results:
         params = dict(locals())
         cache_key = make_cache_key("deidentify", params)
@@ -1949,6 +1997,7 @@ def deidentify(
         locale=locale,
         surrogate_vault=surrogate_vault,
         audit=audit,
+        budget=resolved_budget,
     )
 
     if audit and result.deidentification_result.audit_report is not None:

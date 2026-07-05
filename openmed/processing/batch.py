@@ -244,6 +244,7 @@ class BatchProcessor:
         confidence_threshold: Optional[float] = None,
         group_entities: bool = False,
         continue_on_error: bool = True,
+        budget: Optional[Any] = None,
         **analyze_kwargs: Any,
     ):
         """Initialize batch processor.
@@ -266,6 +267,13 @@ class BatchProcessor:
             group_entities: Whether to group adjacent entities
                 (``analyze_text`` operation only).
             continue_on_error: Continue processing on individual item errors.
+            budget: Optional per-request
+                :class:`~openmed.core.budget.RequestBudget` (or a mapping of its
+                fields) applied to each ``extract_pii``/``deidentify`` item.
+                Each item gets a fresh clock, so the wall-time limit bounds a
+                single item, not the whole batch. ``None`` (default) means
+                unlimited — identical to the historical behavior. Ignored for
+                the ``analyze_text`` operation.
             **analyze_kwargs: Additional arguments passed to the selected function.
         """
         if operation not in _VALID_OPERATIONS:
@@ -289,6 +297,10 @@ class BatchProcessor:
         )
         self.group_entities = group_entities
         self.continue_on_error = continue_on_error
+
+        from ..core.budget import coerce_budget
+
+        self.budget = coerce_budget(budget)
         self.analyze_kwargs = analyze_kwargs
 
         self._analyze_text = None
@@ -682,6 +694,12 @@ class BatchProcessor:
             if privacy_filter_pipeline is not None:
                 operation_kwargs["privacy_filter_pipeline"] = privacy_filter_pipeline
 
+            if self.budget is not None:
+                # Fresh clock per chunk: the wall-time budget bounds this
+                # chunk's inference call and the per-item input-length guard
+                # runs inside the batch helper before any model inference.
+                operation_kwargs["budget_clock"] = self.budget.start()
+
             operation_results = batch_fn(
                 [item.text for item in valid_items],
                 **operation_kwargs,
@@ -741,13 +759,17 @@ class BatchProcessor:
                     **self.analyze_kwargs,
                 )
             else:
+                pii_kwargs = dict(self.analyze_kwargs)
+                if self.budget is not None:
+                    # Fresh per-item budget on the single-item fallback path.
+                    pii_kwargs.setdefault("budget", self.budget)
                 result = fn(
                     item.text,
                     model_name=self.model_name,
                     confidence_threshold=self.confidence_threshold,
                     config=self.config,
                     loader=self._get_shared_loader(),
-                    **self.analyze_kwargs,
+                    **pii_kwargs,
                 )
             processing_time = time.time() - start_time
 

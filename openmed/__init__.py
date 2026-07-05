@@ -17,6 +17,7 @@ from .core.anonymizer import (
     register_label_generator,
 )
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .core.budget import BudgetExceededError, RequestBudget, coerce_budget
 from .core.custom_recognizer import CustomRecognizer
 from .core.explain import ExplainReport, explain
 from .core.labels import CANONICAL_LABELS, normalize_label
@@ -700,6 +701,10 @@ __all__ = [
     "reidentify",
     "PIIEntity",
     "DeidentificationResult",
+    # Per-request resource / timeout budgets
+    "RequestBudget",
+    "BudgetExceededError",
+    "coerce_budget",
     "CustomRecognizer",
     "StreamingBufferError",
     "StreamingDeidentificationEvent",

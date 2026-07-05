@@ -1,6 +1,7 @@
 """Core functionality for OpenMed package."""
 
 from .audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
+from .budget import BudgetExceededError, RequestBudget, coerce_budget
 from .config import (
     PROFILE_PRESETS,
     OpenMedConfig,
@@ -77,4 +78,7 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "RequestBudget",
+    "BudgetExceededError",
+    "coerce_budget",
 ]
