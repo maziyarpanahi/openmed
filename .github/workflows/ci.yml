@@ -5,6 +5,10 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+  schedule:
+    # Nightly heavier property-based fuzz sweep (03:17 UTC).
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
 
 jobs:
   repo-policy:
@@ -133,6 +137,39 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  fuzz-nightly:
+    # Heavier property-based fuzz sweep with a larger Hypothesis example budget.
+    # Runs only on the nightly schedule or manual dispatch so pushes and PRs stay
+    # fast (the bounded fuzz profile already runs inside the `test` job).
+    needs: [repo-policy, lint]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Run nightly fuzz sweep
+      env:
+        HYPOTHESIS_PROFILE: fuzz-nightly
+      run: |
+        uv run pytest tests/fuzz -q -m fuzz
 
   security:
     needs: repo-policy
