@@ -744,7 +744,8 @@ def _validate_jwt_claims(
     now: float,
 ) -> None:
     exp = _numeric_claim(payload, "exp", required=True)
-    assert exp is not None
+    if exp is None:
+            raise ValueError("Token expiration (exp) claim must be present")
     if now > exp + config.jwt_leeway_seconds:
         raise invalid_credentials()
 
