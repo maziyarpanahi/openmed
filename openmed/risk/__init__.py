@@ -31,6 +31,7 @@ from .reid import (
     build_longitudinal_corpus,
     longitudinal_attack_fingerprint,
     longitudinal_risk_report,
+    quasi_identifier_key,
     risk_report,
 )
 
@@ -60,6 +61,7 @@ __all__ = [
     "evaluate_budget",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "quasi_identifier_key",
     "risk_report",
     "build_generalization_hierarchies",
     "enforce_kanon",
