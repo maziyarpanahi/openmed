@@ -14,8 +14,8 @@ id -> HL7 system URI); this module maps the grounding linker system tokens
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Iterable
+from dataclasses import dataclass, field
+from typing import Any, Iterable, Mapping
 
 from openmed.clinical.grounding import Candidate
 
@@ -42,13 +42,18 @@ class GroundedSpan:
 
     ``text`` is the source surface (used as ``CodeableConcept.text``),
     ``start``/``end`` are character offsets into the source document, and
-    ``candidates`` are the per-system linker results.
+    ``candidates`` are the per-system linker results. Calibrated grounding can
+    mark a span as ``abstained`` while preserving candidates for review; such
+    spans export as text-only concepts.
     """
 
     text: str
     start: int
     end: int
     candidates: tuple[Candidate, ...] = ()
+    calibrated_score: float | None = None
+    abstained: bool = False
+    provenance: Mapping[str, Any] = field(default_factory=dict)
 
 
 def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
@@ -60,8 +65,12 @@ def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
     system priority; ``.text`` is the source surface. A span with no candidates
     yields a text-only concept.
     """
-    if not grounded_span.candidates:
-        return {"text": grounded_span.text}
+    if grounded_span.abstained or not grounded_span.candidates:
+        result = {"text": grounded_span.text}
+        grounding = _grounding_provenance(grounded_span)
+        if grounding:
+            result["_grounding"] = grounding
+        return result
 
     codings = [
         {
@@ -69,10 +78,15 @@ def to_codeable_concept(grounded_span: GroundedSpan) -> dict[str, Any]:
             "code": candidate.code,
             "display": candidate.display,
             "_score": float(candidate.score),
+            **_candidate_calibration_fields(grounded_span),
         }
         for candidate in grounded_span.candidates
     ]
-    return _build_codeable_concept(codings, text=grounded_span.text)
+    result = _build_codeable_concept(codings, text=grounded_span.text)
+    grounding = _grounding_provenance(grounded_span)
+    if grounding:
+        result["_grounding"] = grounding
+    return result
 
 
 def build_reverse_index(
@@ -98,3 +112,38 @@ def _uri_for(system: str) -> str:
         raise ValueError(
             f"Unknown grounding system {system!r}. Known: {sorted(SYSTEM_URI)}."
         ) from None
+
+
+def _candidate_calibration_fields(grounded_span: GroundedSpan) -> dict[str, Any]:
+    has_provenance = bool(_grounding_provenance(grounded_span))
+    if (
+        grounded_span.calibrated_score is None
+        and not grounded_span.abstained
+        and not has_provenance
+    ):
+        return {}
+    fields: dict[str, Any] = {"_abstained": bool(grounded_span.abstained)}
+    if grounded_span.calibrated_score is not None:
+        fields["_calibrated_score"] = float(grounded_span.calibrated_score)
+    return fields
+
+
+def _grounding_provenance(grounded_span: GroundedSpan) -> dict[str, Any]:
+    provenance = (
+        dict(grounded_span.provenance)
+        if isinstance(grounded_span.provenance, Mapping)
+        else {}
+    )
+    calibration = provenance.get("grounding_calibration")
+    result: dict[str, Any] = {}
+    if isinstance(calibration, Mapping):
+        result.update(dict(calibration))
+    if grounded_span.calibrated_score is not None:
+        result.setdefault("calibrated_score", float(grounded_span.calibrated_score))
+    if grounded_span.abstained:
+        result["abstained"] = True
+    elif result:
+        result.setdefault("abstained", False)
+    if result:
+        result.setdefault("candidate_count", len(grounded_span.candidates))
+    return result

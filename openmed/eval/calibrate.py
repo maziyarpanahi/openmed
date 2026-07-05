@@ -1691,6 +1691,24 @@ def _slug(value: str) -> str:
     return slug or "artifact"
 
 
+def calibrate_grounding(*args: Any, **kwargs: Any) -> Any:
+    """Fit grounding calibration using the clinical grounding calibrator."""
+
+    from openmed.clinical.grounding.calibration import calibrate_grounding as _fit
+
+    return _fit(*args, **kwargs)
+
+
+def grounding_calibration_report(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Build a grounding calibration report with reliability diagrams."""
+
+    from openmed.clinical.grounding.calibration import (
+        grounding_calibration_report as _report,
+    )
+
+    return _report(*args, **kwargs)
+
+
 _DEFAULT_CRITICAL_LABELS = frozenset(
     {
         "SSN",
@@ -1724,10 +1742,12 @@ __all__ = [
     "UNDER_SHIFT_REPORT_ARTIFACT",
     "artifact_dir_for",
     "build_thresholds_payload",
+    "calibrate_grounding",
     "coerce_calibration_thresholds",
     "default_suite_calibration_samples",
     "fit_calibration_under_shift",
     "fit_calibration_thresholds",
+    "grounding_calibration_report",
     "load_calibration_samples",
     "load_calibration_thresholds",
     "score_span_nonconformity",

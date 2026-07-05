@@ -538,6 +538,7 @@ class ReleaseGate:
         checks.append(_calibration_check(metadata, profile))
         checks.append(_abstention_advisory_check(metrics, metadata, target_leakage))
         checks.append(_conformal_coverage_check(metrics, metadata))
+        checks.append(_grounding_coverage_check(metrics, metadata))
         checks.append(
             self._g1a_check(
                 per_label_recall,
@@ -1507,6 +1508,109 @@ def _conformal_coverage_report(
         return {}, f"could not read calibration-under-shift report: {exc}", True
     if not isinstance(payload, Mapping):
         return {}, "calibration-under-shift report must be a JSON object", True
+    return dict(payload), "", True
+
+
+def _grounding_coverage_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    report, error, explicit = _grounding_coverage_report(metrics, metadata)
+    required = bool(
+        _first_value(
+            metadata.get("require_grounding_coverage"),
+            metrics.get("require_grounding_coverage"),
+            False,
+        )
+    )
+    if error:
+        return GateCheck("grounding_coverage", False, reason=error)
+    if not report:
+        if required:
+            return GateCheck(
+                "grounding_coverage",
+                False,
+                reason="grounding calibration report is required",
+            )
+        return GateCheck(
+            "grounding_coverage",
+            True,
+            reason="not provided",
+            details={"required": False},
+        )
+
+    from openmed.clinical.grounding.calibration import (
+        evaluate_grounding_coverage_gate,
+    )
+
+    min_accuracy = _optional_float(
+        _first_value(
+            metadata.get("minimum_grounding_accuracy"),
+            metrics.get("minimum_grounding_accuracy"),
+            report.get("minimum_accuracy"),
+        )
+    )
+    if min_accuracy is None:
+        min_accuracy = 0.85
+    min_coverage = _optional_float(
+        _first_value(
+            metadata.get("minimum_grounding_coverage"),
+            metrics.get("minimum_grounding_coverage"),
+            report.get("minimum_coverage"),
+        )
+    )
+    if min_coverage is None:
+        min_coverage = 0.70
+
+    gate = evaluate_grounding_coverage_gate(
+        report,
+        min_accuracy=min_accuracy,
+        min_coverage=min_coverage,
+    )
+    return GateCheck(
+        "grounding_coverage",
+        bool(gate.get("passed")),
+        reason="ok"
+        if gate.get("passed")
+        else "grounded-span accuracy below required coverage",
+        details={**gate, "explicit": explicit, "required": required},
+    )
+
+
+def _grounding_coverage_report(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, Any], str, bool]:
+    inline = _first_mapping(
+        metadata.get("grounding_calibration"),
+        metadata.get("grounding_calibration_report"),
+        metadata.get("grounding_coverage"),
+        metrics.get("grounding_calibration"),
+        metrics.get("grounding_calibration_report"),
+        metrics.get("grounding_coverage"),
+    )
+    if inline:
+        return inline, "", True
+
+    path_value = _first_value(
+        metadata.get("grounding_calibration_report_path"),
+        metadata.get("grounding_coverage_report_path"),
+        metadata.get("grounding_coverage_path"),
+        metrics.get("grounding_calibration_report_path"),
+        metrics.get("grounding_coverage_report_path"),
+        metrics.get("grounding_coverage_path"),
+    )
+    if path_value is None:
+        return {}, "", False
+    path = Path(str(path_value))
+    if not path.is_file():
+        return {}, f"grounding calibration report not found: {path}", True
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return {}, f"could not read grounding calibration report: {exc}", True
+    if not isinstance(payload, Mapping):
+        return {}, "grounding calibration report must be a JSON object", True
     return dict(payload), "", True
 
 
