@@ -1,21 +1,21 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — on-device clinical AI · 1,500+ models" width="820" />
 
-<h2>Local-first healthcare AI that never leaves the device</h2>
+<h2>Your Data. Your Model. Your Hardware.</h2>
 
 <a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
 
-<p><b>Turn clinical text into structured insight with one line of code.</b><br/>
-Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
-your own hardware — from a one-liner in Python to native Swift apps, REST services,
-and browser token classification through Transformers.js/WebGPU.
-No cloud. No vendor lock-in. No patient data leaving your network.</p>
+<p><b>Turn clinical text into structured, de-identified insight — with nothing uploaded.</b><br/>
+OpenMed extracts biomedical entities and removes 55+ PHI types entirely on the
+hardware you control, so your data never leaves the device. The same 1,500+ open models run from a
+phone to a GPU server, fully offline — iOS and iPadOS via OpenMedKit, Android via ONNX, plain CPUs,
+Apple Silicon, NVIDIA GPUs, and the browser. No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -30,7 +30,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>15 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ models</b> &nbsp;·&nbsp; <b>15 PII languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -101,7 +101,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Runs on your device / servers         |            ✅            |           ❌           |
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
-| Specialized medical models            |          1,000+          |        Limited         |
+| Specialized medical models            |          1,500+          |        Limited         |
 | Languages                             |            15            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
@@ -109,7 +109,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Browser/WebGPU token classification   | ✅ via Transformers.js   |         Varies         |
 | Vendor lock-in                        |    None — Apache-2.0     |          Yes           |
 
-- **Specialized models** — 1,000+ curated biomedical & clinical models, many outperforming proprietary stacks.
+- **Specialized models** — 1,500+ curated biomedical & clinical models, many outperforming proprietary stacks.
 - **HIPAA-aware de-identification** — all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
 - **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, REST services, and browser/WebGPU bundles via Transformers.js.
 - **One-line deployment** — Python API, Dockerized REST service, or batch pipelines.

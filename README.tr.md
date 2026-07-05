@@ -1,18 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — yerel öncelikli sağlık yapay zekâsı" width="400" />
+<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — cihazda çalışan klinik yapay zekâ · 1.500+ model" width="820" />
 
-<h3>Cihazdan asla çıkmayan yerel öncelikli sağlık yapay zekâsı</h3>
+<h3>Sizin Veriniz. Sizin Modeliniz. Sizin Donanımınız.</h3>
 
-<p><b>Klinik metni tek satır kodla yapılandırılmış içgörüye dönüştürün.</b><br/>
-Varlık çıkarımı, PII kimliksizleştirme ve tamamen kendi donanımınızda çalışan 1.000'den fazla özelleşmiş tıbbi
-model — Python'da tek satırdan, Apple MLX destekli iPhone'da yerel bir Swift uygulamasına kadar. Bulut yok.
-Tedarikçi bağımlılığı yok. Hasta verileri ağınızdan çıkmıyor.</p>
+<p><b>Klinik metni, hiçbir şey yüklenmeden yapılandırılmış ve kimliksizleştirilmiş içgörüye dönüştürün.</b><br/>
+OpenMed, biyomedikal varlıkları çıkarır ve 55+ PHI türünü tamamen sizin kontrolünüzdeki donanımda kaldırır, böylece verileriniz cihazdan asla çıkmaz. Aynı 1.500+ açık model, bir telefondan bir GPU sunucusuna kadar tamamen çevrimdışı çalışır — iOS ve iPadOS için OpenMedKit, Android için ONNX, sıradan CPU'lar, Apple Silicon, NVIDIA GPU'ları ve tarayıcı üzerinden. Bulut yok. Tedarikçi bağımlılığı yok. Hasta verileri ağınızdan çıkmıyor.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -26,7 +24,7 @@ Tedarikçi bağımlılığı yok. Hasta verileri ağınızdan çıkmıyor.</p>
 </p>
 
 <p>
-  <b>1.000+ model</b> &nbsp;·&nbsp; <b>12 dil</b> &nbsp;·&nbsp; <b>247 PII denetim noktası</b> &nbsp;·&nbsp; <b>%100 cihazda</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1.500+ model</b> &nbsp;·&nbsp; <b>15 PII dili</b> &nbsp;·&nbsp; <b>247 PII denetim noktası</b> &nbsp;·&nbsp; <b>%100 cihazda</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -87,14 +85,14 @@ Yerel olarak çalışan son teknoloji bir klinik NER modeli — API anahtarı yo
 | Cihazınızda/sunucularınızda çalışır   |            ✅            |            ❌             |
 | Hasta verileri ağınızdan çıkar        |        **Asla**          |    Tedarikçiye gönderilir  |
 | Maliyet                               | Ücretsiz ve açık kaynak  |   Çağrı başına ücret       |
-| Özelleşmiş tıbbi modeller             |          1.000+          |          Sınırlı          |
+| Özelleşmiş tıbbi modeller             |          1.500+          |          Sınırlı          |
 | Diller                                |           12+            |          Değişken         |
 | Çevrimdışı / izole (air-gapped)       |            ✅            |            ❌             |
 | Apple Silicon (MLX) hızlandırma       |            ✅            |            yok            |
 | Yerel iOS / macOS uygulamaları        |   ✅ OpenMedKit ile       |            ❌             |
 | Tedarikçi bağımlılığı                 |     Yok — Apache-2.0     |            Var            |
 
-- **Özelleşmiş modeller** — 1.000'den fazla özenle seçilmiş biyomedikal ve klinik model; birçoğu tescilli çözümleri geride bırakır.
+- **Özelleşmiş modeller** — 1.500'den fazla özenle seçilmiş biyomedikal ve klinik model; birçoğu tescilli çözümleri geride bırakır.
 - **HIPAA uyumlu kimliksizleştirme** — 18 Safe Harbor tanımlayıcısının tamamı, akıllı varlık birleştirme ve biçimi koruyan sahte değerler.
 - **Her yerde çalışır** — CPU, CUDA, Apple Silicon (MLX) ve OpenMedKit ile iOS/macOS uygulamalarında yerel olarak.
 - **Tek satırda dağıtım** — Python API, Docker'lı REST servisi veya toplu işlem hatları.
