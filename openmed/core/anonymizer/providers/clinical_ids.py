@@ -1214,6 +1214,52 @@ class ThaiNationalIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Romanian CNP (13 digits, weighted mod-11 checksum with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_romanian_cnp(*, rng: random.Random | None = None) -> str:
+    """Generate a Romanian CNP that passes :func:`validate_romanian_cnp`.
+
+    Builds a 13-digit ``S YY MM DD JJ NNN C`` identifier for a random birth
+    date and county code, then appends the documented ``279146358279`` weighted
+    modulo-11 control digit (a remainder of 10 maps to control digit 1).
+    """
+    import calendar
+
+    source = rng or random.Random()
+
+    # Century/gender code -> century start.
+    century_by_code = {1: 1900, 2: 1900, 3: 1800, 4: 1800, 5: 2000, 6: 2000}
+    gender_code = source.choice(tuple(century_by_code))
+    century = century_by_code[gender_code]
+
+    year = century + source.randint(0, 99)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+
+    # County (judet) codes 01-46, sectors 51-52, or 70 for residents.
+    county = source.choice(tuple(range(1, 47)) + (51, 52, 70))
+    serial = source.randint(1, 999)  # non-zero sequence number
+
+    body = f"{gender_code}{year % 100:02d}{month:02d}{day:02d}{county:02d}{serial:03d}"
+    weights = (2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9)
+    total = sum(weight * int(digit) for weight, digit in zip(weights, body))
+    control = total % 11
+    if control == 10:
+        control = 1
+
+    return body + str(control)
+
+
+class RomanianCNPProvider(BaseProvider):
+    """Generates valid Romanian CNP (Cod Numeric Personal) identifiers."""
+
+    def romanian_cnp(self) -> str:
+        return generate_romanian_cnp(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
