@@ -11,9 +11,11 @@ from typing import Any
 from openmed.clinical.context import FAMILY_EXPERIENCER, PATIENT_EXPERIENCER
 
 from .mentions import (
+    DEFAULT_DOCUMENT_ID,
     CanonicalMention,
     SpanOffset,
     canonicalize_mentions,
+    event_coreference_mentions,
 )
 
 COREFERENCE_ADVISORY = (
@@ -63,6 +65,61 @@ class EntityCluster:
     members: tuple[CanonicalMention, ...]
     member_offsets: tuple[SpanOffset, ...]
     advisory: str = COREFERENCE_ADVISORY
+
+
+@dataclass(frozen=True)
+class ResolvedCoreferenceCluster:
+    """Privacy-safe cluster record for public document coreference output."""
+
+    cluster_id: str
+    document_id: str
+    semantic_type: str | None
+    member_offsets: tuple[SpanOffset, ...]
+    member_hashes: tuple[str, ...]
+    canonical_hash: str
+    mention_count: int
+    advisory: str = COREFERENCE_ADVISORY
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible cluster without raw mention text."""
+
+        return {
+            "cluster_id": self.cluster_id,
+            "document_id": self.document_id,
+            "semantic_type": self.semantic_type,
+            "member_offsets": [list(offset) for offset in self.member_offsets],
+            "member_hashes": list(self.member_hashes),
+            "canonical_hash": self.canonical_hash,
+            "mention_count": self.mention_count,
+            "advisory": self.advisory,
+        }
+
+
+@dataclass(frozen=True)
+class ResolvedCoreferenceResult:
+    """Privacy-safe result returned by ``resolve_coreference``."""
+
+    clusters: tuple[ResolvedCoreferenceCluster, ...]
+    advisory: str = COREFERENCE_ADVISORY
+    scorer_version: str = COMPATIBILITY_SCORER_VERSION
+
+    def entity_ids_by_offset(self) -> dict[tuple[str, SpanOffset], str]:
+        """Return ``(document_id, offset) -> cluster_id`` for all members."""
+
+        return {
+            (cluster.document_id, offset): cluster.cluster_id
+            for cluster in self.clusters
+            for offset in cluster.member_offsets
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible result without raw mention text."""
+
+        return {
+            "advisory": self.advisory,
+            "scorer_version": self.scorer_version,
+            "clusters": [cluster.to_dict() for cluster in self.clusters],
+        }
 
 
 @dataclass(frozen=True)
@@ -162,6 +219,49 @@ def link_mentions(
 
     clusters = _build_clusters(canonical_mentions, parents)
     return CoreferenceResult(clusters=clusters)
+
+
+def resolve_coreference(
+    mentions: Iterable[Any] | None = None,
+    *,
+    document_text: str | None = None,
+    document_id: str = DEFAULT_DOCUMENT_ID,
+    include_anaphora: bool = True,
+    abbreviation_expansions: Mapping[str, str] | None = None,
+    canonical_aliases: Mapping[str, str] | None = None,
+    threshold: float = DEFAULT_LINK_THRESHOLD,
+) -> ResolvedCoreferenceResult:
+    """Resolve event coreference into privacy-safe document clusters.
+
+    When ``document_text`` is supplied, typed PROBLEM/TEST/TREATMENT-like spans
+    are augmented with deterministic definite-NP and pronoun candidates before
+    clustering. The returned clusters contain only ids, offsets, and hashes.
+    """
+
+    source_mentions: Iterable[Any]
+    validation_text: str | None
+    if document_text is not None:
+        source_mentions = event_coreference_mentions(
+            document_text,
+            tuple(mentions or ()),
+            document_id=document_id,
+            include_anaphora=include_anaphora,
+        )
+        validation_text = document_text
+    else:
+        source_mentions = tuple(mentions or ())
+        validation_text = None
+
+    linked = link_mentions(
+        source_mentions,
+        document_text=validation_text,
+        abbreviation_expansions=abbreviation_expansions,
+        canonical_aliases=canonical_aliases,
+        threshold=threshold,
+    )
+    return ResolvedCoreferenceResult(
+        clusters=tuple(_sanitize_cluster(cluster) for cluster in linked.clusters)
+    )
 
 
 def score_mention_pair(
@@ -267,6 +367,9 @@ def _cannot_link(
         cannot = True
     if _conflicting_codes(left, right):
         reasons.append("conflicting coded identity")
+        cannot = True
+    if left.negation != right.negation:
+        reasons.append("opposite assertion polarity")
         cannot = True
     return cannot
 
@@ -493,6 +596,43 @@ def _entity_id(members: tuple[CanonicalMention, ...]) -> str:
     return f"{document_id}:entity:{digest.hexdigest()[:12]}"
 
 
+def _sanitize_cluster(cluster: EntityCluster) -> ResolvedCoreferenceCluster:
+    return ResolvedCoreferenceCluster(
+        cluster_id=cluster.entity_id,
+        document_id=cluster.document_id,
+        semantic_type=cluster.semantic_type,
+        member_offsets=cluster.member_offsets,
+        member_hashes=tuple(_mention_hash(member) for member in cluster.members),
+        canonical_hash=_hash_payload(
+            "canonical",
+            cluster.document_id,
+            cluster.canonical_text,
+            cluster.semantic_type or "",
+        ),
+        mention_count=len(cluster.member_offsets),
+    )
+
+
+def _mention_hash(member: CanonicalMention) -> str:
+    return _hash_payload(
+        "mention",
+        member.document_id,
+        str(member.start),
+        str(member.end),
+        member.canonical_text,
+        member.semantic_type or "",
+        member.negation,
+    )
+
+
+def _hash_payload(*parts: str) -> str:
+    digest = hashlib.sha256()
+    for part in parts:
+        digest.update(b"\0")
+        digest.update(part.encode("utf-8"))
+    return digest.hexdigest()[:16]
+
+
 __all__ = [
     "COREFERENCE_ADVISORY",
     "COMPATIBILITY_SCORER_VERSION",
@@ -502,7 +642,10 @@ __all__ = [
     "CoreferenceResult",
     "EntityCluster",
     "PairCompatibility",
+    "ResolvedCoreferenceCluster",
+    "ResolvedCoreferenceResult",
     "bcubed_precision_recall_f1",
     "link_mentions",
+    "resolve_coreference",
     "score_mention_pair",
 ]

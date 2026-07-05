@@ -13,6 +13,7 @@ from openmed.eval.metrics import (
     apply_abstention_policy,
     compute_abstention_metrics,
     compute_character_recall,
+    compute_coreference_clustering_score,
     compute_exact_span_f1,
     compute_leakage_rate,
     compute_recall_slices,
@@ -87,6 +88,17 @@ def test_exact_and_relaxed_f1_differ_on_boundary_drift():
     assert relaxed.f1 == 1.0
     assert exact.false_negatives == 1
     assert relaxed.true_positives == 1
+
+
+def test_coreference_clustering_metric_uses_documented_bcubed_proxy():
+    gold = {"m1": "a", "m2": "a", "m3": "b"}
+    predicted = {"m1": "x", "m2": "x", "m3": "y"}
+
+    score = compute_coreference_clustering_score(predicted, gold)
+
+    assert score.metric == "bcubed"
+    assert score.item_count == 3
+    assert score.f1 == 1.0
 
 
 def test_critical_abstentions_route_to_redaction_not_passthrough():
