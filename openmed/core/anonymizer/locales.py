@@ -47,6 +47,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "ar": "ar_EG",  # Egypt is the most-populous Arabic-speaking country; override for Gulf/Levant locales.
     "he": "he_IL",
     "ja": "ja_JP",
+    "zh": "zh_CN",  # CJK PERSON spans draw family-name-first Chinese surrogates
     "tr": "tr_TR",
     "id": "id_ID",
     "th": "th_TH",
