@@ -3,6 +3,10 @@
 These answers cover the questions that come up most often when teams start using OpenMed in local clinical NLP,
 PII detection, de-identification, and service deployments.
 
+Hitting a concrete error rather than a conceptual question? See
+[Troubleshooting & Common Errors](troubleshooting.md) for a symptom → cause → fix map of the failures users
+run into most (missing extras, model-download/offline issues, device selection, and REST/MCP setup).
+
 ## Install and Run
 
 ### Can OpenMed run fully locally or in an air-gapped environment?
