@@ -40,6 +40,7 @@ from .reid import (
     build_longitudinal_corpus,
     longitudinal_attack_fingerprint,
     longitudinal_risk_report,
+    quasi_identifier_key,
     risk_report,
 )
 from .synthetic_tabular import (
@@ -89,6 +90,7 @@ __all__ = [
     "fit_tabular_profile",
     "longitudinal_attack_fingerprint",
     "longitudinal_risk_report",
+    "quasi_identifier_key",
     "risk_report",
     "sample_synthetic_table",
     "tabular_fidelity_report",

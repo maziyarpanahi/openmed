@@ -28,6 +28,13 @@ from .lab_panels import (
     parse_lab_report,
     structure_lab_panels,
 )
+from .qi_detect import (
+    ROLE_DIRECT_ID,
+    ROLE_QUASI_ID,
+    ROLE_SAFE,
+    ROLE_SENSITIVE,
+    scan_table,
+)
 
 __all__ = [
     "FLOWSHEET_ADVISORY",
@@ -41,10 +48,15 @@ __all__ = [
     "Flowsheet",
     "LabPanel",
     "ParameterSeries",
+    "ROLE_DIRECT_ID",
+    "ROLE_QUASI_ID",
+    "ROLE_SAFE",
+    "ROLE_SENSITIVE",
     "TimeSeriesPoint",
     "canonical_analyte",
     "canonical_discharge_slot",
     "parse_lab_report",
+    "scan_table",
     "structure_discharge_summary",
     "structure_flowsheet",
     "structure_lab_panels",
