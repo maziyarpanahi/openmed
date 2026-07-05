@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenMed — Clinical AI that never leaves the device</title>
+    <title>OpenMed — On-Device Clinical AI for NER and PHI De-Identification</title>
     <meta name="description"
-        content="OpenMed 1.7.0 brings multimodal de-identification, OCR, FHIR and HL7 helpers, signed audit evidence, Transformers.js browser export, 1,000+ open-source healthcare LLM models, and Swift-native OpenMedKit." />
+        content="Open-source clinical AI that runs 100% on-device. Extract biomedical entities and de-identify 55+ PHI types across 15 PII languages — offline, from a phone to a GPU server. 1,500+ models, Apache-2.0." />
     <meta name="keywords"
         content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical language models, healthcare machine learning, clinical LLM workflows, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
     <meta name="author" content="Maziyar Panahi" />
@@ -18,25 +18,25 @@
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="OpenMed — Clinical AI that never leaves the device" />
+    <meta property="og:title" content="OpenMed — On-Device Clinical AI" />
     <meta property="og:description"
-        content="OpenMed 1.7.0 — multimodal de-identification, OCR, FHIR/HL7, release evidence, Transformers.js browser export, 1,000+ healthcare LLM models, and local-first runtimes across Python, Swift, REST, and WebGPU." />
+        content="Open-source clinical AI that runs 100% on-device — extract entities and de-identify 55+ PHI types offline, from a phone to a GPU server. 1,500+ models, 15 PII languages, Apache-2.0." />
     <meta property="og:url" content="https://openmed.life/" />
     <meta property="og:site_name" content="OpenMed" />
-    <meta property="og:image" content="https://openmed.life/og.png?v=20260425" />
-    <meta property="og:image:secure_url" content="https://openmed.life/og.png?v=20260425" />
+    <meta property="og:image" content="https://openmed.life/og.png?v=20260705" />
+    <meta property="og:image:secure_url" content="https://openmed.life/og.png?v=20260705" />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="OpenMed social preview showing local-first healthcare LLMs and an interactive clinical NER terminal." />
+    <meta property="og:image:alt" content="OpenMed — on-device clinical AI. Your data, your model, your hardware." />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@OpenMed_AI" />
     <meta name="twitter:creator" content="@MaziyarPanahi" />
-    <meta name="twitter:title" content="OpenMed — Clinical AI that never leaves the device" />
+    <meta name="twitter:title" content="OpenMed — On-Device Clinical AI" />
     <meta name="twitter:description"
-        content="OpenMed 1.7.0 · multimodal de-identification · OCR · FHIR/HL7 · signed audit evidence · Transformers.js browser export · Swift-native OpenMedKit." />
-    <meta name="twitter:image" content="https://openmed.life/og.png?v=20260425" />
-    <meta name="twitter:image:alt" content="OpenMed social preview showing local-first healthcare LLMs and an interactive clinical NER terminal." />
+        content="On-device clinical AI · biomedical NER · de-identify 55+ PHI types offline · 15 PII languages · runs from a phone to a GPU server · Apache-2.0." />
+    <meta name="twitter:image" content="https://openmed.life/og.png?v=20260705" />
+    <meta name="twitter:image:alt" content="OpenMed — on-device clinical AI. Your data, your model, your hardware." />
 
     <script type="application/ld+json">
     {
@@ -60,7 +60,7 @@
         "name": "OpenMed Clinical LLM Suite",
         "operatingSystem": "macOS, iOS, iPadOS, Cloud, On-Premises",
         "applicationCategory": "AIApplication",
-        "description": "OpenMed Clinical LLM Suite provides open-source healthcare language models, biomedical named-entity recognition, multimodal de-identification, Python MLX acceleration, browser Transformers.js export, and Swift-native deployment toolkits for compliant medical workflows.",
+        "description": "OpenMed provides open-source healthcare language models for biomedical named-entity recognition and PHI de-identification that run entirely on-device — on phones, CPUs, Apple Silicon, NVIDIA GPUs, in the browser, and on-premises — so clinical data never leaves your control.",
         "softwareVersion": "1.7.0",
         "url": "https://openmed.life/",
         "provider": { "@type": "Organization", "name": "OpenMed", "url": "https://openmed.life/" },
@@ -101,13 +101,9 @@
     <header class="nav">
         <div class="container nav-inner">
             <a href="#" class="logo" aria-label="OpenMed home">
-                <svg class="logo-mark" width="28" height="28" viewBox="0 0 40 40" aria-hidden="true">
-                    <rect x="2" y="2" width="36" height="36" rx="8" fill="var(--ink)" />
-                    <rect x="11" y="17.5" width="18" height="5" rx="1" fill="var(--paper)" />
-                    <rect x="17.5" y="11" width="5" height="18" rx="1" fill="var(--paper)" />
-                    <circle cx="20" cy="20" r="2" fill="var(--accent)" />
-                </svg>
-                <span class="wordmark">open<span class="med">med</span></span>
+                <img class="logo-mark logo-mark--onlight" src="brand/openmed-mark.svg" width="32" height="32" alt="" aria-hidden="true">
+                <img class="logo-mark logo-mark--ondark" src="brand/openmed-mark-light.svg" width="32" height="32" alt="" aria-hidden="true">
+                <span class="wordmark">OpenMed</span>
                 <span class="version-tag">v1.7.0</span>
             </a>
 
@@ -157,12 +153,12 @@
     <section id="home" class="hero bg-grid" data-screen>
         <div class="container hero-grid">
             <div>
-                <div class="eyebrow">OpenMed 1.7.0 · multimodal de-identification · browser export</div>
+                <div class="eyebrow">On-Device Clinical AI · Apache-2.0</div>
                 <h1 class="display-xl hero-title">
-                    Clinical AI that never leaves the <span class="serif-italic">device</span>.
+                    Your Data. Your Model. Your <span class="serif-italic">Hardware</span>.
                 </h1>
                 <p class="body-lg hero-desc">
-                    1,000+ state-of-the-art healthcare LLM models, Nemotron Privacy Filter MLX, OCR and multimodal redaction, FHIR/HL7 helpers, PII across 15 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, nl, pt, te, th, and tr, plus browser token classification through Transformers.js/WebGPU.
+                    OpenMed reads clinical text and removes 55+ PHI types on the hardware you control — so <span style="background:var(--highlight);color:#0E1116;padding:0 .2em;border-radius:3px">patient data never leaves the device</span>. The same open models run from a phone to a GPU server, fully offline. 1,500+ models, 15 PII languages, and state of the art on 10 of 12 biomedical NER benchmarks.
                 </p>
 
                 <div class="hero-ctas">
@@ -262,7 +258,7 @@
                     <div class="statband-label">PyPI Downloads</div>
                 </div>
                 <div class="statband-cell">
-                    <div class="statband-num">1,000<span class="suf">+</span></div>
+                    <div class="statband-num">1,500<span class="suf">+</span></div>
                     <div class="statband-label">HF Models</div>
                 </div>
                 <div class="statband-cell">
@@ -370,12 +366,12 @@
     <section id="apple-runtime" data-screen>
         <div class="container">
             <div class="section-head">
-                <div class="eyebrow">The runtime story</div>
-                <h2 class="display-lg" style="max-width:20ch">
-                    One local-first story across Python, Swift, REST, and browser.
+                <div class="eyebrow">Runs everywhere</div>
+                <h2 class="display-lg" style="max-width:22ch">
+                    The same models, from a phone to a GPU server.
                 </h2>
                 <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Prototype with Python MLX on Apple Silicon, ship native Swift apps with OpenMedKit, expose typed REST clients, or package ONNX/WebGPU artifacts for in-browser token classification through Transformers.js.
+                    The same open models run on iPhone and iPad via OpenMedKit, on Android via ONNX export, on plain laptop CPUs, Apple Silicon, and NVIDIA GPUs, in the browser through WebGPU, and as a Docker service — no cloud, no telemetry, nothing leaving the device.
                 </p>
             </div>
 
@@ -556,7 +552,7 @@
                         </p>
                     </div>
                     <a class="btn btn-outline" href="https://huggingface.co/OpenMed" target="_blank" rel="noopener">
-                        Browse 1,000+ on HF
+                        Browse 1,500+ on HF
                         <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <line x1="7" y1="17" x2="17" y2="7" />
                             <polyline points="7 7 17 7 17 17" />
@@ -947,13 +943,9 @@
             <div class="footer-grid">
                 <div class="footer-col">
                     <div class="footer-brand">
-                        <svg width="28" height="28" viewBox="0 0 40 40" aria-hidden="true">
-                            <rect x="2" y="2" width="36" height="36" rx="8" fill="var(--ink)" />
-                            <rect x="11" y="17.5" width="18" height="5" rx="1" fill="var(--paper)" />
-                            <rect x="17.5" y="11" width="5" height="18" rx="1" fill="var(--paper)" />
-                            <circle cx="20" cy="20" r="2" fill="var(--accent)" />
-                        </svg>
-                        <span class="wordmark">open<span class="med">med</span></span>
+                        <img class="logo-mark logo-mark--onlight" src="brand/openmed-mark.svg" width="28" height="28" alt="" aria-hidden="true">
+                        <img class="logo-mark logo-mark--ondark" src="brand/openmed-mark-light.svg" width="28" height="28" alt="" aria-hidden="true">
+                        <span class="wordmark">OpenMed</span>
                     </div>
                     <p class="body-sm" style="max-width:38ch">
                         Community-driven, non-profit effort to democratize state-of-the-art LLMs for healthcare. Founded by <a href="https://x.com/MaziyarPanahi" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">Maziyar Panahi</a>.
