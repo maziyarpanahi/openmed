@@ -744,7 +744,10 @@ def _validate_jwt_claims(
     now: float,
 ) -> None:
     exp = _numeric_claim(payload, "exp", required=True)
-    assert exp is not None
+    # _numeric_claim with required=True raises invalid_credentials() when
+    # the claim is missing, so exp is guaranteed non-None here.
+    if exp is None:
+        raise invalid_credentials()
     if now > exp + config.jwt_leeway_seconds:
         raise invalid_credentials()
 
