@@ -1,6 +1,6 @@
-"""Structured data privacy and quality utilities."""
+"""Structured clinical data-quality profiling."""
 
-from .quality import (
+from .profiler import (
     DomainGroundingCoverage,
     NoteQualityProfile,
     ProfileIssue,

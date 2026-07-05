@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pyarrow.parquet as pq
+import pytest
 
 from openmed.interop import adapter_spec, available_adapters, get_adapter
 from openmed.interop.omop import (
@@ -222,6 +223,11 @@ def test_load_grounded_jsonl_matches_in_memory_loader(tmp_path: Path) -> None:
     )
 
     assert from_jsonl.to_dict() == from_memory.to_dict()
+
+
+def test_omop_loader_quality_floor_blocks_low_completeness_batch() -> None:
+    with pytest.raises(ValueError, match="quality profile gate failed"):
+        load_grounded_notes(_fixture_notes(), quality_floor=0.99)
 
 
 def test_omop_loader_is_available_through_interop_registry() -> None:

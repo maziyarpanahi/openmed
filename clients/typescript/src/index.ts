@@ -99,6 +99,12 @@ export interface PrivacyGatewayRequest {
   keep_alive?: KeepAliveValue | null;
 }
 
+export interface ProfileRequest {
+  records?: JsonObject[];
+  jsonl?: string | null;
+  completeness_floor?: number;
+}
+
 export interface DeidentifyJobDocument {
   text: string;
   id?: string | null;
@@ -218,6 +224,8 @@ export type AnalyzeResponse = PredictionResult;
 export type PIIExtractResponse = PredictionResult;
 
 export type PIIExtractStreamResponse = string;
+
+export type ProfileResponse = JsonObject;
 
 export interface HealthResponse {
   status: string;
@@ -432,6 +440,10 @@ export class OpenMedClient {
     request: PrivacyGatewayRequest,
   ): Promise<PrivacyGatewayResponse> {
     return this.post("/privacy-gateway/complete", request);
+  }
+
+  async profile(request: ProfileRequest): Promise<ProfileResponse> {
+    return this.post("/profile", request);
   }
 
   async health(): Promise<HealthResponse> {
