@@ -273,16 +273,18 @@ section[data-screen] { padding: 96px 0; }
     text-decoration: none;
 }
 .logo-mark { display: block; }
+/* Open Cross mark: ink tile on light substrates, paper tile on dark. */
+.logo-mark--ondark { display: none; }
+[data-theme="dark"] .logo-mark--onlight { display: none; }
+[data-theme="dark"] .logo-mark--ondark { display: block; }
 .wordmark {
     font-family: var(--font-display);
-    font-style: italic;
     font-weight: 500;
     font-size: 22px;
     color: var(--fg);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
     line-height: 1;
 }
-.wordmark .med { color: var(--accent); }
 .version-tag {
     font-family: var(--font-mono);
     font-size: 10px;
@@ -1483,7 +1485,7 @@ section[data-screen] { padding: 96px 0; }
 .agent-shot-bar { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border-on-inverse); font-size: 11px; color: var(--fg-on-inverse-muted); }
 .agent-shot-body { padding: 16px; font-size: 12.5px; line-height: 1.95; color: #E9E4D7; }
 .agent-line { display: flex; align-items: center; gap: 9px; }
-.agent-line .dn { color: #4EC38A; }
+.agent-line .dn { color: var(--accent-on-inverse); }
 .agent-line .pend { color: var(--fg-on-inverse-muted); }
 .agent-line .svc { color: #6FB5B5; font-size: 10.5px; }
 .agent-line .pr { color: var(--highlight); }
