@@ -444,24 +444,16 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     POLYP_DESCRIPTOR: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
-    
     # Nephrology and renal concepts (issue #892)
-    CKD_STAGE: _label_metadata(
-        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
-    ),
+    CKD_STAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
     DIALYSIS_MODALITY: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
     RENAL_FUNCTION_MEASURE: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
-    URINE_FINDING: _label_metadata(
-        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
-    ),
-    
+    URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
-    
-
 }
 
 LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
@@ -846,7 +838,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "sessilepolyp": POLYP_DESCRIPTOR,
     "pedunculatedpolyp": POLYP_DESCRIPTOR,
     "biopsysite": BODY_SITE,
-    
     # Nephrology concepts
     "ckdstage": CKD_STAGE,
     "dialysis": DIALYSIS_MODALITY,
@@ -858,7 +849,6 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "urinefinding": URINE_FINDING,
     "proteinuria": URINE_FINDING,
     "hematuria": URINE_FINDING,
-
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
