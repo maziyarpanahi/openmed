@@ -120,6 +120,7 @@ def run_pip_audit(report_path: Path) -> dict[str, Any]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        timeout=300,
     )
 
     if result.stdout:

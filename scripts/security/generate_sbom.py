@@ -76,6 +76,7 @@ def main() -> int:
             str(OUTFILE),
         ],
         check=True,
+        timeout=300,
     )
 
     bom = json.loads(OUTFILE.read_text(encoding="utf-8"))

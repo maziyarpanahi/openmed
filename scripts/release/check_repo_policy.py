@@ -20,6 +20,7 @@ def git_ls_files(pattern: str) -> list[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(
@@ -37,6 +38,7 @@ def git_tracked_ignored_files() -> list[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
+        timeout=60,
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "git ls-files ignored check failed")
@@ -57,6 +59,7 @@ def git_deleted_files(pattern: str) -> set[str]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=False,
+            timeout=60,
         )
         if result.returncode != 0:
             raise RuntimeError(
