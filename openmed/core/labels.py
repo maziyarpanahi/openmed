@@ -134,6 +134,12 @@ GI_SYMPTOM: Final = "GI_SYMPTOM"
 GI_SCORE: Final = "GI_SCORE"
 POLYP_DESCRIPTOR: Final = "POLYP_DESCRIPTOR"
 
+#: Nephrology and renal concepts (issue #892)
+CKD_STAGE: Final = "CKD_STAGE"
+DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
+RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
+URINE_FINDING: Final = "URINE_FINDING"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -224,6 +230,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         FEEDING_ROUTE,
         NUTRITIONAL_STATUS,
         GENE_SYMBOL,
+        CKD_STAGE,
+        DIALYSIS_MODALITY,
+        RENAL_FUNCTION_MEASURE,
+        URINE_FINDING,
         VARIANT_DESCRIPTOR,
         PROTEIN_CHANGE,
         ZYGOSITY,
@@ -434,7 +444,24 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     POLYP_DESCRIPTOR: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
+    
+    # Nephrology and renal concepts (issue #892)
+    CKD_STAGE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    DIALYSIS_MODALITY: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    RENAL_FUNCTION_MEASURE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    URINE_FINDING: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    
+
 }
 
 LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
@@ -532,6 +559,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GI_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
     GI_SCORE: HIPAA_UNIQUE_IDENTIFIER,
     POLYP_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    # Nephrology concepts
+    CKD_STAGE: HIPAA_UNIQUE_IDENTIFIER,
+    DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
+    RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -814,6 +846,19 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "sessilepolyp": POLYP_DESCRIPTOR,
     "pedunculatedpolyp": POLYP_DESCRIPTOR,
     "biopsysite": BODY_SITE,
+    
+    # Nephrology concepts
+    "ckdstage": CKD_STAGE,
+    "dialysis": DIALYSIS_MODALITY,
+    "dialysismodality": DIALYSIS_MODALITY,
+    "renalfunctionmeasure": RENAL_FUNCTION_MEASURE,
+    "renalfunction": RENAL_FUNCTION_MEASURE,
+    "egfr": RENAL_FUNCTION_MEASURE,
+    "creatinine": RENAL_FUNCTION_MEASURE,
+    "urinefinding": URINE_FINDING,
+    "proteinuria": URINE_FINDING,
+    "hematuria": URINE_FINDING,
+
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -1043,4 +1088,8 @@ __all__ = [
     "GI_SCORE",
     "POLYP_DESCRIPTOR",
     "OTHER",
+    "CKD_STAGE",
+    "DIALYSIS_MODALITY",
+    "RENAL_FUNCTION_MEASURE",
+    "URINE_FINDING",
 ]
