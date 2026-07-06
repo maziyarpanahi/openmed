@@ -59,7 +59,7 @@ jobs:
       # SBOM generation runs after publish and is fail-open: a hiccup in any of
       # these steps must never block an otherwise-successful release.
       - name: Set up uv
-        uses: astral-sh/setup-uv@v8.2.0
+        uses: astral-sh/setup-uv@v8.3.0
         continue-on-error: true
         with:
           enable-cache: true
