@@ -41,6 +41,7 @@ nav:
       - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Clinical Validation Protocol: clinical-validation-protocol.md
       - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
