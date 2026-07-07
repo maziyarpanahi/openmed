@@ -105,6 +105,10 @@ _DURATION_RE = re.compile(
     r"(?:x|for)?\s*\d+\s*(?:day|days|week|weeks|wk|wks|month|months|mo|hour|hours|hr|hrs)\b",
     re.IGNORECASE,
 )
+_FREQUENCY_RANGE_RE = re.compile(
+    r"(?<!\w)q\s*(\d+(?:\.\d+)?)\s*[-–]\s*(\d+(?:\.\d+)?)\s*h(?:ours?|rs?)?(?!\w)",
+    re.IGNORECASE,
+)
 
 
 class Sig(TypedDict):
@@ -121,6 +125,8 @@ class Sig(TypedDict):
     form: str | None
     route: str | None
     frequency_per_day: float | None
+    frequency_period: object
+    frequency_period_unit: str | None
     as_needed: bool
     condition: str | None
     duration_days: object
@@ -157,6 +163,12 @@ def _parse_route(text: str) -> str | None:
     return best[1] if best is not None else None
 
 
+def _infer_route_from_form(form: str | None) -> str | None:
+    if form == "puff":
+        return "inhaled"
+    return None
+
+
 def _windows(text: str) -> list[str]:
     """Whitespace unigram/bigram/trigram windows, longest first, in order."""
 
@@ -168,14 +180,33 @@ def _windows(text: str) -> list[str]:
     return windows
 
 
-def _parse_frequency(text: str) -> tuple[float | None, bool]:
+def _range_frequency(text: str) -> tuple[float | None, object, str | None]:
+    """Normalize q4-6h-style ranges to the shortest deterministic interval."""
+
+    match = _FREQUENCY_RANGE_RE.search(text)
+    if match is None:
+        return None, None, None
+    lower = float(match.group(1))
+    upper = float(match.group(2))
+    interval = min(lower, upper)
+    if interval <= 0:
+        return None, None, None
+    result = normalize_frequency(f"q{interval:g}h")
+    return (
+        result["frequency_per_day"],
+        result["period"],
+        result["period_unit"],
+    )
+
+
+def _parse_frequency(text: str) -> tuple[float | None, object, str | None, bool]:
     """Delegate frequency normalization to the shipped helper.
 
     Isolates candidate windows and hands each to ``normalize_frequency`` so this
     module never re-implements the frequency lexicon.
     """
 
-    per_day: float | None = None
+    per_day, period, period_unit = _range_frequency(text)
     as_needed = False
     for window in _windows(text):
         result = normalize_frequency(window)
@@ -185,7 +216,9 @@ def _parse_frequency(text: str) -> tuple[float | None, bool]:
             as_needed = True
         if per_day is None and result["frequency_per_day"] is not None:
             per_day = result["frequency_per_day"]
-    return per_day, as_needed
+            period = result["period"]
+            period_unit = result["period_unit"]
+    return per_day, period, period_unit, as_needed
 
 
 def _parse_duration(text: str) -> object:
@@ -208,8 +241,8 @@ def parse_sig(text: str) -> Sig:
 
     raw = str(text)
     dose, unit, form = _parse_dose(raw)
-    route = _parse_route(raw)
-    per_day, as_needed = _parse_frequency(raw)
+    route = _parse_route(raw) or _infer_route_from_form(form)
+    per_day, period, period_unit, as_needed = _parse_frequency(raw)
     condition = _parse_condition(raw)
     duration_days = _parse_duration(raw)
 
@@ -228,6 +261,8 @@ def parse_sig(text: str) -> Sig:
         form=form,
         route=route,
         frequency_per_day=per_day,
+        frequency_period=period,
+        frequency_period_unit=period_unit,
         as_needed=as_needed,
         condition=condition,
         duration_days=duration_days,

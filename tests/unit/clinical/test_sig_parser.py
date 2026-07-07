@@ -23,6 +23,8 @@ def test_canonical_sig_parses_all_components():
     assert sig["form"] == "tablet"
     assert sig["route"] == "oral"
     assert sig["frequency_per_day"] == 2.0
+    assert sig["frequency_period"] is None
+    assert sig["frequency_period_unit"] is None
     assert sig["duration_days"] == 7
     assert sig["as_needed"] is False
     assert sig["missing"] == []
@@ -76,8 +78,24 @@ def test_puffs_inhaler_sig():
 
     assert sig["dose"] == 2.0
     assert sig["form"] == "puff"
+    assert sig["route"] == "inhaled"
     assert sig["as_needed"] is True
     assert sig["frequency_per_day"] == 6.0
+    assert sig["frequency_period"] == 4
+    assert sig["frequency_period_unit"] == "h"
+
+
+def test_interval_range_frequency_uses_shortest_interval():
+    sig = parse_sig("take 2 puffs q4-6h PRN")
+
+    assert sig["dose"] == 2.0
+    assert sig["form"] == "puff"
+    assert sig["route"] == "inhaled"
+    assert sig["as_needed"] is True
+    assert sig["frequency_per_day"] == 6.0
+    assert sig["frequency_period"] == 4
+    assert sig["frequency_period_unit"] == "h"
+    assert sig["missing"] == []
 
 
 # --------------------------------------------------------------------------
@@ -91,6 +109,8 @@ def test_partial_sig_flags_missing_dose():
     assert sig["dose"] is None
     assert sig["route"] == "oral"
     assert sig["frequency_per_day"] == 1.0
+    assert sig["frequency_period"] == 1
+    assert sig["frequency_period_unit"] == "d"
     assert "dose" in sig["missing"]
 
 
