@@ -94,8 +94,11 @@ from .experiencer import (
     EXPERIENCER_REFINED_VALUES,
     EXPERIENCER_REFINEMENT_ADVISORY,
     OTHER_EXPERIENCER,
+    Experiencer,
     ExperiencerAssignment,
+    RefinedExperiencerAssertion,
     refine_experiencer,
+    resolve_experiencer,
 )
 from .lab_values import (
     LAB_FLAG_ADVISORY,
@@ -412,8 +415,11 @@ __all__ = [
     "detect_negation_scopes",
     "negated_spans",
     "OTHER_EXPERIENCER",
+    "Experiencer",
     "EXPERIENCER_REFINED_VALUES",
     "EXPERIENCER_REFINEMENT_ADVISORY",
     "ExperiencerAssignment",
+    "RefinedExperiencerAssertion",
+    "resolve_experiencer",
     "refine_experiencer",
 ]
