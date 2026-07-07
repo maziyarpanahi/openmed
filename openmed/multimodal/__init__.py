@@ -16,6 +16,11 @@ from openmed.interop import cda as _cda
 from . import contacts_calendar as _contacts_calendar
 from . import dicom as _dicom
 
+# Importing the DICOM SR adapter registers content-aware SR flattening for
+# ``.dcm`` files. pydicom is imported lazily, so the public multimodal import
+# path stays free of the optional imaging extra.
+from . import dicom_sr as _dicom_sr
+
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
 # handlers. Third-party parser availability is checked only when a handler runs.
 from . import documents_docx as _documents_docx
@@ -47,6 +52,12 @@ from .dicom import (
     DicomResidualTextReport,
     deidentify_dicom_headers,
     redact_dicom_pixels,
+)
+from .dicom_sr import (
+    DICOM_SR_ADVISORY,
+    SrContentItem,
+    extract_dicom_sr,
+    walk_sr_content_tree,
 )
 from .documents_docx import (
     DocxRedaction,
@@ -135,6 +146,10 @@ __all__ = [
     "DicomResidualTextReport",
     "deidentify_dicom_headers",
     "redact_dicom_pixels",
+    "DICOM_SR_ADVISORY",
+    "SrContentItem",
+    "extract_dicom_sr",
+    "walk_sr_content_tree",
     "ProjectedRectangle",
     "extract_pdf",
     "project_text_spans",
