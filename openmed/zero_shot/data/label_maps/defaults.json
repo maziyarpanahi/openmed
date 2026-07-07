@@ -1,26 +1,149 @@
 {
-  "biomedical": ["Disease", "Drug", "Gene", "Organism"],
-  "clinical": ["Problem", "Treatment", "Test", "BodyPart"],
-  "genomic": ["Variant", "Gene", "Transcript", "Phenotype"],
-  "genomic_variant": ["GeneSymbol", "VariantDescriptor", "ProteinChange", "Zygosity", "AlleleFrequency", "ClinicalSignificance", "ReferenceTranscript"],
-  "finance": ["Company", "Ticker", "Instrument", "Event"],
-  "legal": ["Case", "Court", "Judge", "Statute"],
-  "news": ["Person", "Organization", "Location", "Date"],
-  "ecommerce": ["Product", "Brand", "Price", "Attribute"],
-  "cybersecurity": ["Vulnerability", "CVE", "Software", "Vendor"],
-  "chemistry": ["Compound", "Reaction", "Property", "Unit"],
-  "organism": ["Species", "Strain", "Taxon", "Habitat"],
-  "education": ["Course", "Topic", "Institution", "Degree"],
-  "social": ["Person", "Handle", "Hashtag", "URL"],
-  "public_health": ["Condition", "Intervention", "Outcome", "Population"],
-  "cardiology": ["CardiacFinding", "ECGFinding", "EjectionFraction", "CardiacProcedure", "CardiacDevice", "Anatomy"],
-  "microbiology": ["Microorganism", "Antibiotic", "Susceptibility", "SpecimenSource", "CultureResult"],
-  "dermatology": ["SkinLesion", "Morphology", "Distribution", "Anatomy"],
-  "ophthalmology": ["EyeFinding", "VisualAcuity", "IntraocularPressure", "Anatomy"],
-  "generic": ["Person", "Organization", "Location", "Date"],
-  "anesthesia": ["AnesthesiaType", "AnestheticAgent", "AirwayManagement", "ASAClass", "MonitoringModality", "IntraoperativeEvent"],
-  "nutrition_diet": ["DietType", "NutritionTarget", "Supplement", "FeedingRoute", "IntakeFinding", "NutritionalStatus", "FluidRestriction"],
-  "endocrinology": ["GlycemicMeasure", "ThyroidFunctionMeasure", "HormoneLevel", "InsulinRegimen", "MetabolicFinding", "EndocrineGland"],
+  "biomedical": [
+    "Disease",
+    "Drug",
+    "Gene",
+    "Organism"
+  ],
+  "clinical": [
+    "Problem",
+    "Treatment",
+    "Test",
+    "BodyPart"
+  ],
+  "genomic": [
+    "Variant",
+    "Gene",
+    "Transcript",
+    "Phenotype"
+  ],
+  "genomic_variant": [
+    "GeneSymbol",
+    "VariantDescriptor",
+    "ProteinChange",
+    "Zygosity",
+    "AlleleFrequency",
+    "ClinicalSignificance",
+    "ReferenceTranscript"
+  ],
+  "finance": [
+    "Company",
+    "Ticker",
+    "Instrument",
+    "Event"
+  ],
+  "legal": [
+    "Case",
+    "Court",
+    "Judge",
+    "Statute"
+  ],
+  "news": [
+    "Person",
+    "Organization",
+    "Location",
+    "Date"
+  ],
+  "ecommerce": [
+    "Product",
+    "Brand",
+    "Price",
+    "Attribute"
+  ],
+  "cybersecurity": [
+    "Vulnerability",
+    "CVE",
+    "Software",
+    "Vendor"
+  ],
+  "chemistry": [
+    "Compound",
+    "Reaction",
+    "Property",
+    "Unit"
+  ],
+  "organism": [
+    "Species",
+    "Strain",
+    "Taxon",
+    "Habitat"
+  ],
+  "education": [
+    "Course",
+    "Topic",
+    "Institution",
+    "Degree"
+  ],
+  "social": [
+    "Person",
+    "Handle",
+    "Hashtag",
+    "URL"
+  ],
+  "public_health": [
+    "Condition",
+    "Intervention",
+    "Outcome",
+    "Population"
+  ],
+  "cardiology": [
+    "CardiacFinding",
+    "ECGFinding",
+    "EjectionFraction",
+    "CardiacProcedure",
+    "CardiacDevice",
+    "Anatomy"
+  ],
+  "microbiology": [
+    "Microorganism",
+    "Antibiotic",
+    "Susceptibility",
+    "SpecimenSource",
+    "CultureResult"
+  ],
+  "dermatology": [
+    "SkinLesion",
+    "Morphology",
+    "Distribution",
+    "Anatomy"
+  ],
+  "ophthalmology": [
+    "EyeFinding",
+    "VisualAcuity",
+    "IntraocularPressure",
+    "Anatomy"
+  ],
+  "generic": [
+    "Person",
+    "Organization",
+    "Location",
+    "Date"
+  ],
+  "anesthesia": [
+    "AnesthesiaType",
+    "AnestheticAgent",
+    "AirwayManagement",
+    "ASAClass",
+    "MonitoringModality",
+    "IntraoperativeEvent"
+  ],
+  "nutrition_diet": [
+    "DietType",
+    "NutritionTarget",
+    "Supplement",
+    "FeedingRoute",
+    "IntakeFinding",
+    "NutritionalStatus",
+    "FluidRestriction"
+  ],
+  "endocrinology": [
+    "GlycemicMeasure",
+    "ThyroidFunctionMeasure",
+    "HormoneLevel",
+    "InsulinRegimen",
+    "MetabolicFinding",
+    "EndocrineGland"
+  ],
   "gastroenterology": [
     "EndoscopicFinding",
     "GISymptom",
@@ -29,5 +152,14 @@
     "GIScore",
     "LesionMorphology",
     "PolypDescriptor"
+  ],
+  "nephrology_renal": [
+    "RenalFunctionMeasure",
+    "CKDStage",
+    "DialysisModality",
+    "UrineFinding",
+    "FluidStatus",
+    "RenalReplacementAccess",
+    "ElectrolyteDisturbance"
   ]
 }
