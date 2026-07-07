@@ -24,12 +24,23 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from typing import Literal
 
-from .context import FAMILY_EXPERIENCER, PATIENT_EXPERIENCER
+from .context import (
+    AFFIRMED,
+    CERTAIN,
+    FAMILY_EXPERIENCER,
+    PATIENT_EXPERIENCER,
+    RECENT,
+    ClinicalAssertion,
+    ClinicalContextResult,
+)
 
 #: Non-patient, non-relative subject (donor, roommate, ...).
 OTHER_EXPERIENCER = "other"
+
+Experiencer = Literal["patient", "family", "other"]
 
 #: Experiencer values after refinement, from default to most specific.
 EXPERIENCER_REFINED_VALUES = (
@@ -122,6 +133,15 @@ class ExperiencerAssignment:
     source: str
 
 
+@dataclass(frozen=True)
+class RefinedExperiencerAssertion:
+    """A span assertion enriched with experiencer provenance."""
+
+    span: Mapping[str, object]
+    assertion: ClinicalAssertion
+    assignment: ExperiencerAssignment
+
+
 def _clause_start(text: str, span_start: int) -> int:
     """Offset just after the last clause boundary before ``span_start``."""
 
@@ -169,7 +189,7 @@ def _nearest_cue(
     return experiencer, cue_start, cue_end
 
 
-def refine_experiencer(
+def resolve_experiencer(
     text: str,
     span: Mapping[str, object],
     *,
@@ -211,10 +231,132 @@ def refine_experiencer(
     )
 
 
+def refine_experiencer(
+    spans: object,
+    context_result: object | None = None,
+    *,
+    text: str | None = None,
+    section_experiencer: str | None = None,
+) -> list[RefinedExperiencerAssertion] | ExperiencerAssignment:
+    """Return clinical assertions enriched with experiencer attribution.
+
+    The issue-facing API accepts an iterable of span mappings plus either one
+    shared context result/assertion or a per-span sequence of them, returning a
+    ``RefinedExperiencerAssertion`` for each span. For compatibility with the
+    single-span resolver introduced in the original PR,
+    ``refine_experiencer(text, span)`` still returns an
+    ``ExperiencerAssignment``; new code should prefer ``resolve_experiencer``
+    for that lower-level operation.
+    """
+
+    if isinstance(spans, str):
+        if not isinstance(context_result, Mapping):
+            raise TypeError("single-span refinement requires a span mapping")
+        return resolve_experiencer(
+            spans,
+            context_result,
+            section_experiencer=section_experiencer,
+        )
+
+    span_list = list(_iter_span_mappings(spans))
+    if not span_list:
+        return []
+
+    contexts = _context_sequence(context_result, len(span_list))
+    refined: list[RefinedExperiencerAssertion] = []
+    for span, context in zip(span_list, contexts, strict=True):
+        base_assertion = _coerce_assertion(context)
+        document_text = _document_text_for_span(span, text)
+        assignment = resolve_experiencer(
+            document_text,
+            span,
+            section_experiencer=section_experiencer or base_assertion.experiencer,
+        )
+        refined.append(
+            RefinedExperiencerAssertion(
+                span=span,
+                assertion=replace(
+                    base_assertion,
+                    experiencer=assignment.experiencer,
+                ),
+                assignment=assignment,
+            )
+        )
+    return refined
+
+
+def _iter_span_mappings(spans: object) -> list[Mapping[str, object]]:
+    if isinstance(spans, Mapping):
+        return [spans]
+    try:
+        items = list(spans)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise TypeError("spans must be a mapping or iterable of mappings") from exc
+    if not all(isinstance(item, Mapping) for item in items):
+        raise TypeError("all spans must be mappings")
+    return items
+
+
+def _context_sequence(context_result: object | None, count: int) -> list[object | None]:
+    if isinstance(context_result, (ClinicalAssertion, ClinicalContextResult, Mapping)):
+        return [context_result] * count
+    if context_result is None:
+        return [None] * count
+    try:
+        contexts = list(context_result)  # type: ignore[arg-type]
+    except TypeError:
+        return [context_result] * count
+    if len(contexts) != count:
+        raise ValueError("context_result sequence length must match spans")
+    return contexts
+
+
+def _coerce_assertion(context_result: object | None) -> ClinicalAssertion:
+    if isinstance(context_result, ClinicalAssertion):
+        return context_result
+    if isinstance(context_result, ClinicalContextResult):
+        return ClinicalAssertion(
+            temporality=context_result.temporality,
+            certainty=context_result.certainty,
+            negation=context_result.negation,
+        )
+    if isinstance(context_result, Mapping):
+        return ClinicalAssertion(
+            temporality=str(context_result.get("temporality", RECENT)),
+            certainty=str(context_result.get("certainty", CERTAIN)),  # type: ignore[arg-type]
+            negation=context_result.get("negation", AFFIRMED),  # type: ignore[arg-type]
+            experiencer=context_result.get("experiencer"),  # type: ignore[arg-type]
+        )
+    return ClinicalAssertion(
+        temporality=RECENT,
+        certainty=CERTAIN,
+        negation=AFFIRMED,
+    )
+
+
+def _document_text_for_span(span: Mapping[str, object], text: str | None) -> str:
+    if text is not None:
+        return text
+    for key in (
+        "document_text",
+        "context_text",
+        "source_text",
+        "full_text",
+        "note_text",
+    ):
+        value = span.get(key)
+        if isinstance(value, str):
+            return value
+    raise ValueError("document text is required for experiencer refinement")
+
+
 __all__ = [
     "OTHER_EXPERIENCER",
+    "Experiencer",
     "EXPERIENCER_REFINED_VALUES",
     "EXPERIENCER_REFINEMENT_ADVISORY",
     "ExperiencerAssignment",
+    "RefinedExperiencerAssertion",
+    "resolve_experiencer",
     "refine_experiencer",
 ]
