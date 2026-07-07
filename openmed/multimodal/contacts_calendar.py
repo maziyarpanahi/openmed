@@ -247,7 +247,9 @@ def _redact_value(
 
     action = _action_for(property_name, label, ACTION_MASK, options)
     if property_name in _STRUCTURED_PROPERTIES:
-        return _redact_structured_value(value, label=label, action=action, options=options)
+        return _redact_structured_value(
+            value, label=label, action=action, options=options
+        )
     if _is_uri_valued(property_name, prefix, value):
         return _redact_uri_value(
             property_name,
@@ -257,7 +259,9 @@ def _redact_value(
             options=options,
         )
     if property_name in _CALENDAR_ADDRESS_PROPERTIES:
-        return _redact_calendar_address(value, label=label, action=action, options=options)
+        return _redact_calendar_address(
+            value, label=label, action=action, options=options
+        )
     return _apply_action(value, label=label, action=action, options=options)
 
 
@@ -417,8 +421,7 @@ def _action_for(
             action = str(override).lower()
             if action not in SUPPORTED_ACTIONS:
                 raise ValueError(
-                    "unsupported contacts/calendar redaction action: "
-                    f"{override!r}"
+                    f"unsupported contacts/calendar redaction action: {override!r}"
                 )
             return action
     return default
@@ -515,11 +518,7 @@ def _split_unquoted(text: str, delimiter: str, *, maxsplit: int = -1) -> list[st
         if char == '"':
             quoted = not quoted
             continue
-        if (
-            char == delimiter
-            and not quoted
-            and (maxsplit < 0 or splits < maxsplit)
-        ):
+        if char == delimiter and not quoted and (maxsplit < 0 or splits < maxsplit):
             parts.append(text[start:index])
             start = index + 1
             splits += 1
