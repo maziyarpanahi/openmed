@@ -149,8 +149,7 @@ def test_icalendar_redacts_event_fields_values_and_cn_parameters():
     assert "DESCRIPTION:[PERSON] reported symptoms" in text
     assert "LOCATION:[LOCATION]" in text
     assert (
-        "ATTENDEE;CN=[PERSON];ROLE=REQ-PARTICIPANT:"
-        "mailto:redacted@example.invalid"
+        "ATTENDEE;CN=[PERSON];ROLE=REQ-PARTICIPANT:mailto:redacted@example.invalid"
     ) in text
     assert 'ORGANIZER;CN="[PERSON]":mailto:redacted@example.invalid' in text
     assert "Jane Roe" not in text
