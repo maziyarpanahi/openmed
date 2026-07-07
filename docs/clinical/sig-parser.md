@@ -1,7 +1,7 @@
 # Medication Sig Parser
 
 Medication sigs pack dose, dose-form, route, frequency, duration, and a PRN
-condition into terse strings ("1 tab PO BID x7 days", "take 2 puffs q4h PRN").
+condition into terse strings ("1 tab PO BID x7 days", "take 2 puffs q4-6h PRN").
 `openmed.clinical.sig_parser` turns them into a structured `Sig`, the value
 layer beneath medication grounding, reconciliation, and FHIR Dosage export.
 
@@ -31,6 +31,8 @@ The `Sig` mapping has these fields:
 | `form` | The controlled dose-form (`tablet`, `capsule`, `puff`, `drop`, ...) or `None`. |
 | `route` | The controlled route (`oral`, `intravenous`, `subcutaneous`, ...) or `None`. |
 | `frequency_per_day` | Scheduled rate per day, from `normalize_frequency`, or `None`. |
+| `frequency_period` | The normalized frequency period when available (`4` for `q4h`). |
+| `frequency_period_unit` | The normalized period unit (`h`, `d`, or `wk`) when available. |
 | `as_needed` | `True` when the sig is PRN. |
 | `condition` | The PRN reason ("PRN pain" -> `pain`), or `None`. |
 | `duration_days` | Duration in days, from `normalize_duration`, or `None`. |
@@ -42,7 +44,12 @@ Routes normalize from common abbreviations and phrases: `PO` / `by mouth` ->
 `oral`, `IV` -> `intravenous`, `IM` -> `intramuscular`, `SC` / `SQ` ->
 `subcutaneous`, `SL` -> `sublingual`, `PR` -> `rectal`, `INH` / `nebulized` ->
 `inhaled`, and so on. Dose-form words (`tab`, `cap`, `puff`, `gtt`, ...) map to a
-controlled form.
+controlled form; puff counts imply an inhaled route when no explicit route is
+present.
+
+Range intervals such as `q4-6h` normalize to the shortest deterministic interval
+for the structured rate (`q4h`, or `6.0` administrations per day). This captures
+the maximum allowed PRN frequency without adding dosing logic.
 
 ## Partial sigs
 
