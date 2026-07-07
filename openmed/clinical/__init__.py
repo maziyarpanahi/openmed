@@ -173,6 +173,13 @@ from .severity_laterality import (
     SeverityScale,
     extract_severity_laterality,
 )
+from .sig_parser import (
+    SIG_PARSER_ADVISORY,
+    Sig,
+    SpanSig,
+    parse_sig,
+    parse_sigs,
+)
 from .status_vocab import (
     CURRENT,
     FORMER,
@@ -366,6 +373,11 @@ __all__ = [
     "normalize_frequency",
     "normalize_duration",
     "normalize_medication_attribute",
+    "SIG_PARSER_ADVISORY",
+    "Sig",
+    "SpanSig",
+    "parse_sig",
+    "parse_sigs",
     "MedicationAttributeType",
     "MedicationRelation",
     "MedicationRelationGroup",
