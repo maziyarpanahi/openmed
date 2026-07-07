@@ -19,20 +19,45 @@ This axis is a hard safety boundary for coreference-style aggregation: a
 family-member or other-subject finding must not be merged into the patient
 record.
 
+## Refining assertions
+
+`refine_experiencer(spans, context_result, text=...)` accepts clinical spans and
+an existing `ClinicalContextResult` or `ClinicalAssertion`, then returns
+`RefinedExperiencerAssertion` records. Each record preserves the incoming
+temporality, certainty, and negation axes while attaching the refined
+experiencer to the assertion.
+
+```python
+from openmed.clinical import ClinicalAssertion, refine_experiencer
+
+text = "The patient's mother has type 2 diabetes"
+span = {"start": text.index("diabetes"), "end": len(text), "label": "CONDITION"}
+context = ClinicalAssertion(temporality="recent", certainty="certain")
+
+[result] = refine_experiencer([span], context, text=text)
+result.assertion.experiencer
+# 'family'
+result.assignment.cue
+# 'mother'
+```
+
+The lower-level `resolve_experiencer(text, span, *, section_experiencer=None)`
+API returns only the assignment provenance for one span.
+
 ## Resolving a span
 
 ```python
-from openmed.clinical import refine_experiencer
+from openmed.clinical import resolve_experiencer
 
 text = "The patient's mother has type 2 diabetes"
 span = {"start": text.index("diabetes"), "end": len(text), "label": "CONDITION"}
 
-result = refine_experiencer(text, span)
+result = resolve_experiencer(text, span)
 # ExperiencerAssignment(experiencer='family', cue='mother',
 #                       cue_offset=(14, 20), source='cue')
 ```
 
-`refine_experiencer(text, span, *, section_experiencer=None)` returns an
+`resolve_experiencer(text, span, *, section_experiencer=None)` returns an
 `ExperiencerAssignment`:
 
 | Field | Meaning |
