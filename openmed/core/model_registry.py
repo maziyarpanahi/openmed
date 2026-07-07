@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -218,14 +219,27 @@ _PII_ENTITY_TYPES = [
 _CATEGORY_ENTITY_TYPES = {
     "Disease": ["DISEASE", "CONDITION", "PATHOLOGY"],
     "Pharmaceutical": ["CHEM", "DRUG", "MEDICATION"],
-    "Oncology": ["CANCER", "CELL", "GENE_OR_GENE_PRODUCT"],
+    "Oncology": [
+        "SIMPLE_CHEMICAL",
+        "CHEM",
+        "CANCER",
+        "CELL",
+        "GENE_OR_GENE_PRODUCT",
+        "ORGANISM",
+        "SPECIES",
+        "ORGAN",
+        "TISSUE",
+        "CELLULAR_COMPONENT",
+        "AMINO_ACID",
+        "PATHOLOGICAL_FORMATION",
+    ],
     "Anatomy": ["ORGAN", "TISSUE", "ANATOMY"],
     "Genomics": ["GENE_OR_GENE_PRODUCT", "GENE", "PROTEIN", "DNA", "RNA"],
-    "Chemical": ["SIMPLE_CHEMICAL", "CHEM"],
+    "Chemical": ["SIMPLE_CHEMICAL", "CHEM", "DRUG", "MEDICATION"],
     "Species": ["ORGANISM", "SPECIES"],
     "Microbiology": ["MICROORGANISM", "ANTIBIOTIC", "SUSCEPTIBILITY"],
     "Protein": ["GENE_OR_GENE_PRODUCT", "PROTEIN"],
-    "Pathology": ["DISEASE", "PATHOLOGY"],
+    "Pathology": ["DISEASE", "CONDITION", "PATHOLOGY"],
     "Hematology": ["CANCER", "DISEASE"],
     # Forward metadata for future Cardiology models; no Cardiology model is
     # registered today (see issue #317).
@@ -434,10 +448,18 @@ def _description_from_row(row: Dict[str, Any], category: str) -> str:
     return "; ".join(parts)
 
 
+def _dedupe_entity_types(entity_types: Iterable[Any]) -> List[str]:
+    return list(dict.fromkeys(str(entity_type) for entity_type in entity_types))
+
+
 def _entity_types_from_row(row: Dict[str, Any], category: str) -> List[str]:
     labels = row.get("canonical_labels")
     if isinstance(labels, list) and labels:
-        return [str(label) for label in labels]
+        if category != "Privacy" and str(row.get("family") or "").upper() == "NER":
+            return _dedupe_entity_types(
+                chain(labels, _CATEGORY_ENTITY_TYPES.get(category, ()))
+            )
+        return _dedupe_entity_types(labels)
     return list(_CATEGORY_ENTITY_TYPES.get(category, []))
 
 
