@@ -130,6 +130,9 @@ dependencies: [
 ]
 ```
 
+Expected result: Swift Package Manager resolves OpenMedKit and makes
+`import OpenMedKit` available to your app target.
+
 - **MLX runtime** for PII token classification, the Privacy Filter family, experimental GLiNER-family zero-shot tasks, and Python MLX-LM text generation with Laneformer; includes a CoreML fallback path for supported token-classification artifacts.
 - **One model name, every platform** — MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
 - **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
@@ -158,6 +161,9 @@ flowchart LR
     style E fill:#F5E27A,stroke:#A9A088,color:#0E1116
 ```
 
+Rendered result: a local clinical-text pipeline that returns medical entities,
+PII findings, and de-identified text without sending data to a cloud API.
+
 ---
 
 ## Quick start
@@ -173,6 +179,12 @@ pip install "openmed[hf,service]"
 pip install "openmed[mlx]"
 ```
 
+Expected result:
+
+```text
+Successfully installed openmed-...
+```
+
 <table>
 <tr>
 <td width="33%" valign="top">
@@ -182,12 +194,19 @@ pip install "openmed[mlx]"
 ```python
 from openmed import analyze_text
 
-analyze_text(
+result = analyze_text(
   "Patient received 75mg "
   "clopidogrel for NSTEMI.",
   model_name=
   "pharma_detection_superclinical",
 )
+print([(e.label, e.text) for e in result.entities])
+```
+
+Example output:
+
+```text
+[('DRUG', 'clopidogrel'), ('CONDITION', 'NSTEMI')]
 ```
 
 </td>
@@ -198,6 +217,13 @@ analyze_text(
 ```bash
 uvicorn openmed.service.app:app \
   --host 0.0.0.0 --port 8080
+```
+
+Example output:
+
+```text
+INFO:     Uvicorn running on http://0.0.0.0:8080
+GET /health -> 200 OK
 ```
 
 `GET /health`
@@ -218,7 +244,16 @@ p = BatchProcessor(
   "disease_detection_superclinical",
   group_entities=True,
 )
-p.process_texts([...])
+results = p.process_texts([...])
+print(len(results), sum(len(r.entities) for r in results))
+print([(e.label, e.text) for e in results[0].entities[:1]])
+```
+
+Example output:
+
+```text
+3 7
+[('DISEASE', 'leukemia')]
 ```
 
 </td>
@@ -237,6 +272,12 @@ python -m openmed.onnx.convert \
   --include-transformersjs
 ```
 
+Example output:
+
+```text
+Exported Transformers.js bundle to dist/example-onnx
+```
+
 ```javascript
 import { pipeline } from "@huggingface/transformers";
 
@@ -246,6 +287,16 @@ const detector = await pipeline(
   { device: "webgpu" },
 );
 const entities = await detector("Patient Casey Example called 212-555-0198.");
+console.log(entities.slice(0, 2));
+```
+
+Example output:
+
+```javascript
+[
+  { entity: "NAME", word: "Casey Example", score: 0.99 },
+  { entity: "PHONE", word: "212-555-0198", score: 0.98 },
+]
 ```
 
 [Transformers.js export guide](docs/export-transformersjs.md)
@@ -260,7 +311,19 @@ result = analyze_text(
     model_id="./models/OpenMed-NER-DiseaseDetect-SuperClinical-434M",
     config=OpenMedConfig(device="cpu"),
 )
+for entity in result.entities:
+    print(f"{entity.label:<12} {entity.text:<28} {entity.confidence:.2f}")
 ```
+
+Example output:
+
+```text
+DISEASE      chronic myeloid leukemia     0.98
+DISEASE      Type 2 diabetes              0.96
+```
+
+Because `model_id` points to a local directory, this example does not contact
+the Hugging Face Hub or any external model provider.
 
 ---
 
@@ -287,12 +350,23 @@ text = "Patient: John Doe, DOB: 01/15/1970, SSN: 123-45-6789"
 
 # Extract PII with smart merging (prevents tokenization fragmentation)
 result = extract_pii(text, model_name="pii_superclinical_large", use_smart_merging=True)
+print([(e.label, e.text) for e in result.entities])
 
 # De-identify with the method you need
-deidentify(text, method="mask")     # [NAME], [DATE]
-deidentify(text, method="replace")  # Faker-backed, locale-aware, format-preserving fakes
-deidentify(text, method="hash")     # Cryptographic hashing
-deidentify(text, method="shift_dates", date_shift_days=180)
+print(deidentify(text, method="mask").deidentified_text)
+print(deidentify(text, method="replace").deidentified_text)
+print(deidentify(text, method="hash").deidentified_text)
+print(deidentify(text, method="shift_dates", date_shift_days=180).deidentified_text)
+```
+
+Example output:
+
+```text
+[('NAME', 'John Doe'), ('DATE', '01/15/1970'), ('SSN', '123-45-6789')]
+Patient: [NAME], DOB: [DATE], SSN: [SSN]
+Patient: Emily Chen, DOB: 03/22/1985, SSN: 456-78-9012
+Patient: 6b8f...c4a1, DOB: 48b1...91de, SSN: 3f13...e912
+Patient: John Doe, DOB: 07/14/1970, SSN: 123-45-6789
 ```
 
 - **Smart entity merging** keeps `01/15/1970` whole instead of fragmenting it.
@@ -315,6 +389,8 @@ deidentify(text, method="shift_dates", date_shift_days=180)
 <br/>
 
 Same model code (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), different training data. All route through the **same** `extract_pii()` / `deidentify()` API — only `model_name=` changes.
+`openai/privacy-filter` is a Hugging Face model identifier for local weights;
+using it here does not call the OpenAI API.
 
 | Variant | PyTorch (CPU + CUDA) | MLX (Apple Silicon) | MLX 8-bit |
 | --- | --- | --- | --- |
@@ -327,9 +403,18 @@ from openmed import extract_pii
 
 text = "Patient Sarah Connor (DOB: 03/15/1985) at MRN 4471882."
 
-extract_pii(text, model_name="openai/privacy-filter")              # PyTorch baseline
-extract_pii(text, model_name="OpenMed/privacy-filter-nemotron")    # same code, different weights
-extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silicon (MLX)
+variants = {
+    "baseline": extract_pii(text, model_name="openai/privacy-filter"),
+    "nemotron": extract_pii(text, model_name="OpenMed/privacy-filter-nemotron"),
+    "mlx": extract_pii(text, model_name="OpenMed/privacy-filter-mlx"),
+}
+print([(e.label, e.text) for e in variants["baseline"].entities])
+```
+
+Example output:
+
+```text
+[('NAME', 'Sarah Connor'), ('DATE', '03/15/1985'), ('ID', '4471882')]
 ```
 
 On non-Apple-Silicon hosts, MLX model names are automatically substituted with the matching PyTorch checkpoint (with a one-time warning) — ship one model name, run anywhere. See [Privacy Filter architecture & backend routing](docs/anonymization.md#privacy-filter-family).
@@ -345,6 +430,12 @@ Extraction and de-identification support **15 supported PII language codes**:
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
+```
+
+Example output:
+
+```text
+[('NAME', 'Pedro Almeida'), ('ID', '123.456.789-09'), ('EMAIL', 'pedro@hospital.pt')]
 ```
 
 <details>
@@ -366,6 +457,17 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
     print([(e.label, e.text) for e in r.entities])
 ```
 
+Example output:
+
+```text
+[('NAME', 'Pedro Almeida'), ('ID', '123.456.789-09'), ('PHONE', '+351 912 345 678')]
+[('NAME', 'Eva de Vries'), ('ID', '123456782'), ('PHONE', '+31 6 12345678')]
+[('NAME', 'अनीता शर्मा'), ('PHONE', '+91 9876543210'), ('ADDRESS', 'नई दिल्ली 110001')]
+[('NAME', 'ليلى حسن'), ('PHONE', '+20 10 1234 5678'), ('ID', '29801011234567')]
+[('NAME', '佐藤 花子'), ('PHONE', '+81 90 1234 5678'), ('ID', '1234 5678 9012')]
+[('NAME', 'Ayşe Yılmaz'), ('PHONE', '+90 532 123 45 67'), ('ID', '10000000146')]
+```
+
 </details>
 
 ---
@@ -383,10 +485,29 @@ docker build -t openmed:1.7.0 .
 docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.7.0
 ```
 
+Example output:
+
+```text
+INFO:     Uvicorn running on http://0.0.0.0:8080
+```
+
 ```bash
 curl -X POST http://127.0.0.1:8080/pii/extract \
   -H "Content-Type: application/json" \
   -d '{"text":"Paciente: Maria Garcia, DNI: 12345678Z","lang":"es"}'
+```
+
+Abbreviated example response:
+
+```json
+{
+  "text": "Paciente: Maria Garcia, DNI: 12345678Z",
+  "entities": [
+    {"text": "Maria Garcia", "label": "NAME", "confidence": 0.99, "start": 10, "end": 22},
+    {"text": "12345678Z", "label": "ID", "confidence": 0.98, "start": 29, "end": 38}
+  ],
+  "model_name": "OpenMed/privacy-filter-multilingual"
+}
 ```
 
 **Model lifecycle and service controls:** free memory on demand with
@@ -397,6 +518,16 @@ concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
 ```bash
 OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 curl -X POST http://127.0.0.1:8080/models/unload -H "Content-Type: application/json" -d '{"all":true}'
+```
+
+Example response:
+
+```json
+{
+  "unloaded": true,
+  "released": {"models": 1, "tokenizers": 1, "pipelines": 1},
+  "active_models": {}
+}
 ```
 
 See the full [REST service guide](docs/rest-service.md).
@@ -473,6 +604,9 @@ Released under the [Apache-2.0 License](LICENSE). Third-party asset notices are 
       url={https://arxiv.org/abs/2508.01630},
 }
 ```
+
+Expected result: BibTeX-compatible citation metadata for referencing OpenMed in
+papers, posters, and derived documentation.
 
 ---
 
