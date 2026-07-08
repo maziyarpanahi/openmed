@@ -22,11 +22,11 @@ from openmed.core.labels import (
     system_hints_for,
 )
 
-ALLOWED_SYSTEM_HINTS = {"RxNorm", "LOINC", "ICD-10-CM", "HPO", "SNOMED"}
+ALLOWED_SYSTEM_HINTS = {"RxNorm", "CVX", "LOINC", "ICD-10-CM", "HPO", "SNOMED"}
 
 
 def test_metadata_tables_cover_canonical_labels_exactly():
-    assert len(CANONICAL_LABELS) == 83
+    assert len(CANONICAL_LABELS) == 88
     assert set(LABEL_METADATA) == CANONICAL_LABELS
     assert set(LABEL_TO_HIPAA) == CANONICAL_LABELS
 
