@@ -4,6 +4,7 @@ import pytest
 
 from openmed.core.labels import (
     ACCOUNT_NUMBER,
+    ADMINISTRATION_ROUTE,
     AGE,
     AIRWAY_MANAGEMENT,
     AMOUNT,
@@ -29,6 +30,7 @@ from openmed.core.labels import (
     DATE_OF_BIRTH,
     DIALYSIS_MODALITY,
     DIET_TYPE,
+    DOSE_NUMBER,
     EMAIL,
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
@@ -88,6 +90,9 @@ from openmed.core.labels import (
     URL,
     USER_AGENT,
     USERNAME,
+    VACCINE_LOT,
+    VACCINE_NAME,
+    VACCINE_SERIES,
     VARIANT_DESCRIPTOR,
     VEHICLE_REGISTRATION,
     VIN,
@@ -503,6 +508,54 @@ class TestAnesthesiaConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestImmunizationConceptLabels:
+    """Immunization canonical labels and aliases for issue #897."""
+
+    NEW_LABELS = (
+        VACCINE_NAME,
+        DOSE_NUMBER,
+        ADMINISTRATION_ROUTE,
+        VACCINE_SERIES,
+        VACCINE_LOT,
+    )
+
+    def test_immunization_labels_in_canonical_set(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+
+    def test_immunization_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("vaccine name", VACCINE_NAME),
+            ("VaccineName", VACCINE_NAME),
+            ("vaccine", VACCINE_NAME),
+            ("dose number", DOSE_NUMBER),
+            ("DoseNumber", DOSE_NUMBER),
+            ("administration route", ADMINISTRATION_ROUTE),
+            ("AdministrationRoute", ADMINISTRATION_ROUTE),
+            ("vaccine series", VACCINE_SERIES),
+            ("VaccineSeries", VACCINE_SERIES),
+            ("vaccine lot", VACCINE_LOT),
+            ("VaccineLot", VACCINE_LOT),
+            ("lot number", VACCINE_LOT),
+            ("AdministrationSite", BODY_SITE),
+            ("AdministrationDate", DATE),
+        ],
+    )
+    def test_immunization_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_immunization_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestEndocrinologyConceptLabels:
     """Endocrinology canonical labels and representative aliases for issue #895."""
 
@@ -684,6 +737,11 @@ class TestClinicalLabelsAreAdditive:
             DIALYSIS_MODALITY,
             RENAL_FUNCTION_MEASURE,
             URINE_FINDING,
+            VACCINE_NAME,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
+            VACCINE_SERIES,
+            VACCINE_LOT,
         }
     )
 

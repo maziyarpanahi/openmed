@@ -26,6 +26,10 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
 
     assert "SDOH cue normalization" not in markdown
     assert "not clinical guidance" in markdown
+    assert "OM-138 alignment" in markdown
+    assert "Immunization.vaccineCode" in markdown
+    assert "Immunization.occurrence[x]" in markdown
+    assert "does not recommend vaccine schedules or due dates" in markdown
     for domain, labels in load_default_label_map().items():
         heading = domain.replace("_", " ").title()
         assert f"## {heading}" in markdown
@@ -37,6 +41,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/endocrinology.jsonl",
         "tests/fixtures/clinical/gastroenterology.jsonl",
         "tests/fixtures/clinical/genomic_variant.jsonl",
+        "tests/fixtures/clinical/immunization.jsonl",
         "tests/fixtures/clinical/nutrition_diet.jsonl",
     ):
         assert Path(fixture_path).exists()

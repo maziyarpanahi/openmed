@@ -314,6 +314,92 @@ class TestNutritionDomain:
 
 
 # ---------------------------------------------------------------------------
+# Immunization and vaccine-administration domain (issue #897)
+# ---------------------------------------------------------------------------
+
+
+class TestImmunizationDomain:
+    EXPECTED_LABELS = [
+        "VaccineName",
+        "DoseNumber",
+        "AdministrationRoute",
+        "AdministrationSite",
+        "VaccineLot",
+        "AdministrationDate",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "VaccineName": "VACCINE_NAME",
+        "DoseNumber": "DOSE_NUMBER",
+        "AdministrationRoute": "ADMINISTRATION_ROUTE",
+        "AdministrationSite": "BODY_SITE",
+        "VaccineLot": "VACCINE_LOT",
+        "AdministrationDate": "DATE",
+    }
+    EXPECTED_ENTITIES = [
+        ("VaccineName", 0, 12, "Tdap vaccine"),
+        ("DoseNumber", 13, 24, "dose 1 of 1"),
+        ("AdministrationRoute", 42, 44, "IM"),
+        ("AdministrationSite", 52, 64, "left deltoid"),
+        ("AdministrationDate", 68, 78, "2024-10-12"),
+        ("VaccineLot", 84, 90, "ABC123"),
+    ]
+
+    def test_immunization_in_available_domains(self):
+        assert "immunization" in available_domains()
+
+    def test_get_default_labels_returns_immunization_set(self):
+        assert get_default_labels("immunization") == self.EXPECTED_LABELS
+
+    def test_immunization_labels_have_no_duplicates(self):
+        labels = get_default_labels("immunization")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_immunization_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        if expected == "DATE":
+            assert policy_label_for(expected) == "QUASI_IDENTIFIER"
+            assert not system_hints_for(expected)
+        else:
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert system_hints_for(expected)
+
+    def test_immunization_fixture_reports_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "immunization.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not recommend vaccine schedules or due dates" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+
+# ---------------------------------------------------------------------------
 # Nutrition and Diet-Order routing in model_registry (issue #951)
 # ---------------------------------------------------------------------------
 

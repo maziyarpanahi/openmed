@@ -179,6 +179,19 @@
 | Location | LOCATION | QUASI_IDENTIFIER | medium | None | Not shipped |
 | Date | DATE | QUASI_IDENTIFIER | medium | None | Not shipped |
 
+## Immunization
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| VaccineName | VACCINE_NAME | CLINICAL_CONCEPT | low | CVX, RxNorm, SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| DoseNumber | DOSE_NUMBER | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| AdministrationRoute | ADMINISTRATION_ROUTE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| AdministrationSite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| VaccineLot | VACCINE_LOT | CLINICAL_CONCEPT | low | CVX, SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| AdministrationDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/immunization.jsonl |
+
+**OM-138 alignment:** This domain is label-map coverage for a future FHIR Immunization exporter. `VaccineName` aligns with `Immunization.vaccineCode`, `AdministrationRoute` with `Immunization.route`, `AdministrationSite` with `Immunization.site`, `VaccineLot` with `Immunization.lotNumber`, and `AdministrationDate` with `Immunization.occurrence[x]`. `DoseNumber` and `VaccineSeries` are series metadata only; this catalog does not recommend vaccine schedules or due dates.
+
 ## Anesthesia
 
 | Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |

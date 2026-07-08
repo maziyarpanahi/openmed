@@ -140,6 +140,13 @@ DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
 RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
 URINE_FINDING: Final = "URINE_FINDING"
 
+#: Immunization and vaccine-administration concepts (issue #897)
+VACCINE_NAME: Final = "VACCINE_NAME"
+DOSE_NUMBER: Final = "DOSE_NUMBER"
+ADMINISTRATION_ROUTE: Final = "ADMINISTRATION_ROUTE"
+VACCINE_SERIES: Final = "VACCINE_SERIES"
+VACCINE_LOT: Final = "VACCINE_LOT"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -246,6 +253,11 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GI_SYMPTOM,
         GI_SCORE,
         POLYP_DESCRIPTOR,
+        VACCINE_NAME,
+        DOSE_NUMBER,
+        ADMINISTRATION_ROUTE,
+        VACCINE_SERIES,
+        VACCINE_LOT,
         OTHER,
     }
 )
@@ -272,6 +284,7 @@ RISK_HIGH: Final = "high"
 RISK_LEVELS: Final[tuple[str, ...]] = (RISK_LOW, RISK_MEDIUM, RISK_HIGH)
 
 RXNORM: Final = "RxNorm"
+CVX: Final = "CVX"
 LOINC: Final = "LOINC"
 ICD_10_CM: Final = "ICD-10-CM"
 HPO: Final = "HPO"
@@ -453,6 +466,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
     URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Immunization and vaccine-administration concepts (issue #897)
+    VACCINE_NAME: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (CVX, RXNORM, SNOMED)),
+    DOSE_NUMBER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ADMINISTRATION_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VACCINE_SERIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (CVX, SNOMED)),
+    VACCINE_LOT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (CVX, SNOMED)),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -556,6 +575,12 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
     RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
     URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    # Immunization concepts
+    VACCINE_NAME: HIPAA_UNIQUE_IDENTIFIER,
+    DOSE_NUMBER: HIPAA_UNIQUE_IDENTIFIER,
+    ADMINISTRATION_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_SERIES: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_LOT: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -849,6 +874,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "urinefinding": URINE_FINDING,
     "proteinuria": URINE_FINDING,
     "hematuria": URINE_FINDING,
+    # Immunization and vaccine-administration concepts
+    "vaccinename": VACCINE_NAME,
+    "vaccination": VACCINE_NAME,
+    "vaccine": VACCINE_NAME,
+    "dosenumber": DOSE_NUMBER,
+    "administrationroute": ADMINISTRATION_ROUTE,
+    "vaccineseries": VACCINE_SERIES,
+    "vaccinelot": VACCINE_LOT,
+    "lotnumber": VACCINE_LOT,
+    "administrationsite": BODY_SITE,
+    "administrationdate": DATE,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -1077,6 +1113,11 @@ __all__ = [
     "GI_SYMPTOM",
     "GI_SCORE",
     "POLYP_DESCRIPTOR",
+    "VACCINE_NAME",
+    "DOSE_NUMBER",
+    "ADMINISTRATION_ROUTE",
+    "VACCINE_SERIES",
+    "VACCINE_LOT",
     "OTHER",
     "CKD_STAGE",
     "DIALYSIS_MODALITY",

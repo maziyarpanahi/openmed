@@ -119,6 +119,14 @@
     "Location",
     "Date"
   ],
+  "immunization": [
+    "VaccineName",
+    "DoseNumber",
+    "AdministrationRoute",
+    "AdministrationSite",
+    "VaccineLot",
+    "AdministrationDate"
+  ],
   "anesthesia": [
     "AnesthesiaType",
     "AnestheticAgent",

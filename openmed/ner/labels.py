@@ -32,8 +32,21 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
     "gastroenterology": "tests/fixtures/clinical/gastroenterology.jsonl",
     "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
+    "immunization": "tests/fixtures/clinical/immunization.jsonl",
     "nephrology_renal": "tests/fixtures/clinical/nephrology_renal.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
+}
+_DOMAIN_NOTES: Mapping[str, str] = {
+    "immunization": (
+        "**OM-138 alignment:** This domain is label-map coverage for a future "
+        "FHIR Immunization exporter. `VaccineName` aligns with "
+        "`Immunization.vaccineCode`, `AdministrationRoute` with "
+        "`Immunization.route`, `AdministrationSite` with `Immunization.site`, "
+        "`VaccineLot` with `Immunization.lotNumber`, and `AdministrationDate` "
+        "with `Immunization.occurrence[x]`. `DoseNumber` and `VaccineSeries` "
+        "are series metadata only; this catalog does not recommend vaccine "
+        "schedules or due dates."
+    ),
 }
 
 
@@ -170,6 +183,9 @@ def generate_clinical_domains_markdown() -> str:
                 f"{_markdown_cell(', '.join(system_hints) if system_hints else 'None')} | "
                 f"{_markdown_cell(fixture_path)} |"
             )
+        domain_note = _DOMAIN_NOTES.get(domain)
+        if domain_note:
+            sections.extend(["", domain_note])
         sections.append("")
     return "\n".join(sections)
 
