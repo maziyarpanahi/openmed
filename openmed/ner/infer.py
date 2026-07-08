@@ -9,14 +9,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from openmed.core.config import OpenMedConfig, get_config
 from openmed.core.models import ModelLoader
 
-from .exceptions import MissingDependencyError
 from .families import (
     ModelFamily,
     ensure_gliner2_available,
     ensure_gliner_available,
     load_gliner2_handle,
 )
-from .families.gliner import GLiNERHandle, load_gliner_handle
+from .families.gliner import load_gliner_handle
 from .indexing import DEFAULT_INDEX_PATH, ModelIndex, ModelRecord, load_index
 from .labels import get_default_labels
 

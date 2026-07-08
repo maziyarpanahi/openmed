@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -15,6 +16,24 @@ from .keep_alive import parse_keep_alive
 DEFAULT_WARM_PIPELINE_TASK = "token-classification"
 DEFAULT_WARM_AGGREGATION_STRATEGY = "simple"
 DEFAULT_WARM_USE_FAST_TOKENIZER = True
+DEFAULT_MODEL_FOOTPRINT_BYTES = 512 * 1024 * 1024
+DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS = 0.05
+
+_BYTE_SIZE_PATTERN = re.compile(
+    r"^\s*(?P<value>\d+(?:\.\d+)?)\s*"
+    r"(?P<unit>b|kb|kib|mb|mib|gb|gib)?\s*$",
+    re.IGNORECASE,
+)
+_BYTE_SIZE_UNITS = {
+    None: 1,
+    "b": 1,
+    "kb": 1_000,
+    "kib": 1024,
+    "mb": 1_000_000,
+    "mib": 1024 * 1024,
+    "gb": 1_000_000_000,
+    "gib": 1024 * 1024 * 1024,
+}
 
 
 def parse_max_resident_models(raw_value: Any) -> Optional[int]:
@@ -41,6 +60,96 @@ def parse_max_resident_models(raw_value: Any) -> Optional[int]:
     return value
 
 
+def parse_model_memory_budget_bytes(raw_value: Any) -> Optional[int]:
+    """Parse the optional service warm-pool memory budget in bytes."""
+    if raw_value is None:
+        return None
+    if isinstance(raw_value, str) and not raw_value.strip():
+        return None
+    return _parse_positive_byte_size(
+        raw_value,
+        setting_name="model memory budget",
+    )
+
+
+def parse_default_model_footprint_bytes(raw_value: Any) -> int:
+    """Parse the fallback per-model memory footprint used for admission."""
+    if raw_value is None:
+        return DEFAULT_MODEL_FOOTPRINT_BYTES
+    if isinstance(raw_value, str) and not raw_value.strip():
+        return DEFAULT_MODEL_FOOTPRINT_BYTES
+    return _parse_positive_byte_size(
+        raw_value,
+        setting_name="default model footprint",
+    )
+
+
+def parse_memory_admission_wait_seconds(raw_value: Any) -> float:
+    """Parse the bounded wait used when the model memory budget is saturated."""
+    if raw_value is None or (isinstance(raw_value, str) and not raw_value.strip()):
+        return DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
+    if isinstance(raw_value, bool):
+        raise ValueError("memory admission wait must be a non-negative number")
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("memory admission wait must be a non-negative number") from exc
+    if value < 0:
+        raise ValueError("memory admission wait must be greater than or equal to 0")
+    return value
+
+
+def _parse_positive_byte_size(raw_value: Any, *, setting_name: str) -> int:
+    if isinstance(raw_value, bool):
+        raise ValueError(f"{setting_name} must be a positive byte size")
+    if isinstance(raw_value, int):
+        value = raw_value
+    elif isinstance(raw_value, float):
+        if not raw_value.is_integer():
+            raise ValueError(f"{setting_name} must be a whole number of bytes")
+        value = int(raw_value)
+    elif isinstance(raw_value, str):
+        match = _BYTE_SIZE_PATTERN.match(raw_value)
+        if match is None:
+            raise ValueError(
+                f"{setting_name} must be a byte size like '512MiB' or '2GB'"
+            )
+        value = int(
+            float(match.group("value"))
+            * _BYTE_SIZE_UNITS[
+                match.group("unit").lower() if match.group("unit") else None
+            ]
+        )
+    else:
+        raise ValueError(f"{setting_name} must be a positive byte size")
+
+    if value <= 0:
+        raise ValueError(f"{setting_name} must be greater than 0")
+    return value
+
+
+class WarmPoolBackpressureError(RuntimeError):
+    """Raised when the warm-pool cannot admit a model within its wait bound."""
+
+    def __init__(
+        self,
+        *,
+        model_name: str,
+        required_bytes: int,
+        budget_bytes: Optional[int],
+        wait_seconds: float,
+    ) -> None:
+        self.model_name = model_name
+        self.required_bytes = int(required_bytes)
+        self.budget_bytes = None if budget_bytes is None else int(budget_bytes)
+        self.wait_seconds = float(wait_seconds)
+        super().__init__(
+            "Model memory budget is saturated; retry later"
+            if budget_bytes is not None
+            else "Model admission is saturated; retry later"
+        )
+
+
 @dataclass
 class WarmPoolEntry:
     """Resident model bookkeeping tracked by :class:`WarmPool`."""
@@ -50,11 +159,19 @@ class WarmPoolEntry:
     active_requests: int = 0
     keep_alive_deadline: Optional[float] = None
     handles: dict[Tuple[Any, ...], Any] = field(default_factory=dict)
+    footprint_bytes: int = 0
+    pending_footprint_bytes: int = 0
+    loading_keys: set[Tuple[Any, ...]] = field(default_factory=set)
 
     @property
     def resident(self) -> bool:
         """Return whether this entry owns any cached model handles."""
         return bool(self.handles)
+
+    @property
+    def loading(self) -> bool:
+        """Return whether a cold load is currently in progress."""
+        return bool(self.loading_keys)
 
 
 @dataclass
@@ -68,16 +185,33 @@ class WarmPool:
     loader_provider: Callable[[], Any]
     warm_models: Tuple[str, ...] = ()
     max_resident_models: Optional[int] = None
+    memory_budget_bytes: Optional[int] = None
+    default_model_footprint_bytes: int = DEFAULT_MODEL_FOOTPRINT_BYTES
+    memory_admission_wait_seconds: float = DEFAULT_MEMORY_ADMISSION_WAIT_SECONDS
+    footprint_provider: Optional[Callable[[str], int]] = None
     default_keep_alive_seconds: Optional[float] = None
+    metrics: Optional[Any] = None
     clock: Callable[[], float] = time.monotonic
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    _condition: threading.Condition = field(init=False, repr=False)
+    _load_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _entries: dict[str, WarmPoolEntry] = field(default_factory=dict, repr=False)
     _timers: dict[str, threading.Timer] = field(default_factory=dict, repr=False)
     _local: threading.local = field(default_factory=threading.local, repr=False)
 
     def __post_init__(self) -> None:
         self.max_resident_models = parse_max_resident_models(self.max_resident_models)
+        self.memory_budget_bytes = parse_model_memory_budget_bytes(
+            self.memory_budget_bytes
+        )
+        self.default_model_footprint_bytes = parse_default_model_footprint_bytes(
+            self.default_model_footprint_bytes
+        )
+        self.memory_admission_wait_seconds = parse_memory_admission_wait_seconds(
+            self.memory_admission_wait_seconds
+        )
         self.warm_models = tuple(self.warm_models)
+        self._condition = threading.Condition(self._lock)
 
     @property
     def loader(self) -> Any:
@@ -123,6 +257,9 @@ class WarmPool:
 
             self._drop_empty_idle_entries_locked()
             self._evict_over_capacity_locked()
+            self._evict_over_budget_locked()
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
 
     def _finish_model_request_locked(
         self,
@@ -171,26 +308,16 @@ class WarmPool:
             kwargs=kwargs,
         )
 
-        with self._lock:
-            now = self.clock()
-            self._drop_expired_locked(now)
-            entry = self._entry_for_model_locked(model_key, now)
-            self._activate_current_request_model_locked(model_key, now)
-            if cache_key in entry.handles:
-                entry.last_used = now
-                return entry.handles[cache_key]
-
-            handle = self.loader.create_pipeline(
+        def load_handle() -> Any:
+            return self.loader.create_pipeline(
                 model_key,
                 task=task,
                 aggregation_strategy=aggregation_strategy,
                 use_fast_tokenizer=use_fast_tokenizer,
                 **kwargs,
             )
-            entry.handles[cache_key] = handle
-            entry.last_used = now
-            self._evict_over_capacity_locked()
-            return handle
+
+        return self._get_or_load_handle(model_key, cache_key, load_handle)
 
     def load_model(
         self,
@@ -205,24 +332,19 @@ class WarmPool:
             self._freeze_cache_value(kwargs),
         )
 
-        with self._lock:
-            now = self.clock()
-            self._drop_expired_locked(now)
-            entry = self._entry_for_model_locked(model_key, now)
-            self._activate_current_request_model_locked(model_key, now)
-            if not force_reload and cache_key in entry.handles:
-                entry.last_used = now
-                return entry.handles[cache_key]
-
-            handle = self.loader.load_model(
+        def load_handle() -> Any:
+            return self.loader.load_model(
                 model_key,
                 force_reload=force_reload,
                 **kwargs,
             )
-            entry.handles[cache_key] = handle
-            entry.last_used = now
-            self._evict_over_capacity_locked()
-            return handle
+
+        return self._get_or_load_handle(
+            model_key,
+            cache_key,
+            load_handle,
+            reuse_cached=not force_reload,
+        )
 
     def get_max_sequence_length(
         self,
@@ -241,6 +363,77 @@ class WarmPool:
             return resolver(validated)
         return validated
 
+    def _get_or_load_handle(
+        self,
+        model_key: str,
+        cache_key: Tuple[Any, ...],
+        load_handle: Callable[[], Any],
+        *,
+        reuse_cached: bool = True,
+    ) -> Any:
+        reserved_bytes = 0
+        while True:
+            with self._lock:
+                now = self.clock()
+                self._drop_expired_locked(now)
+                entry = self._entry_for_model_locked(model_key, now)
+                self._activate_current_request_model_locked(model_key, now)
+
+                if reuse_cached and cache_key in entry.handles:
+                    entry.last_used = now
+                    return entry.handles[cache_key]
+
+                if cache_key in entry.loading_keys or (
+                    not entry.resident and entry.loading
+                ):
+                    self._condition.wait()
+                    continue
+
+                reserved_bytes = self._reserve_load_budget_locked(entry)
+                entry.loading_keys.add(cache_key)
+                entry.last_used = now
+                self._sync_residency_metrics_locked()
+                break
+
+        started_at = time.perf_counter()
+        try:
+            with self._load_lock:
+                handle = load_handle()
+        except Exception:
+            with self._lock:
+                self._finish_failed_load_locked(model_key, cache_key, reserved_bytes)
+            raise
+
+        load_latency_seconds = time.perf_counter() - started_at
+        with self._lock:
+            now = self.clock()
+            entry = self._entry_for_model_locked(model_key, now)
+            entry.handles[cache_key] = handle
+            entry.last_used = now
+            entry.loading_keys.discard(cache_key)
+            if reserved_bytes:
+                entry.pending_footprint_bytes = max(
+                    entry.pending_footprint_bytes - reserved_bytes,
+                    0,
+                )
+                entry.footprint_bytes = self._measured_model_footprint_bytes_locked(
+                    model_key,
+                    fallback_bytes=reserved_bytes,
+                )
+            elif entry.resident and entry.footprint_bytes <= 0:
+                entry.footprint_bytes = self._measured_model_footprint_bytes_locked(
+                    model_key,
+                    fallback_bytes=self.default_model_footprint_bytes,
+                )
+
+            self._record_model_load_locked()
+            self._record_model_load_latency_locked(load_latency_seconds)
+            self._evict_over_capacity_locked()
+            self._evict_over_budget_locked()
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
+            return handle
+
     def loaded_models(self) -> dict[str, Any]:
         """Return model cache, warm-pool, and keep-alive status."""
         with self._lock:
@@ -257,12 +450,21 @@ class WarmPool:
                     "active_requests": 0 if entry is None else entry.active_requests,
                     "keep_alive_seconds_remaining": remaining,
                     "resident": bool(entry is not None and entry.resident),
+                    "loading": bool(entry is not None and entry.loading),
+                    "footprint_bytes": 0 if entry is None else entry.footprint_bytes,
+                    "pending_footprint_bytes": (
+                        0 if entry is None else entry.pending_footprint_bytes
+                    ),
                 }
 
             for model_name, entry in self._entries.items():
                 if model_name in models:
                     continue
-                if not entry.resident and entry.active_requests <= 0:
+                if (
+                    not entry.resident
+                    and entry.active_requests <= 0
+                    and not entry.loading
+                ):
                     continue
                 deadline = entry.keep_alive_deadline
                 remaining = None if deadline is None else max(deadline - now, 0.0)
@@ -273,11 +475,18 @@ class WarmPool:
                     "active_requests": entry.active_requests,
                     "keep_alive_seconds_remaining": remaining,
                     "resident": entry.resident,
+                    "loading": entry.loading,
+                    "footprint_bytes": entry.footprint_bytes,
+                    "pending_footprint_bytes": entry.pending_footprint_bytes,
                 }
 
             return {
                 "default_keep_alive_seconds": self.default_keep_alive_seconds,
                 "max_resident_models": self.max_resident_models,
+                "memory_budget_bytes": self.memory_budget_bytes,
+                "resident_memory_bytes": self._resident_memory_bytes_locked(),
+                "pending_memory_bytes": self._pending_memory_bytes_locked(),
+                "memory_admission_wait_seconds": self.memory_admission_wait_seconds,
                 "warm_models": list(self.warm_models),
                 "models": models,
             }
@@ -288,21 +497,26 @@ class WarmPool:
         with self._lock:
             entry = self._entries.get(model_key)
             active_requests = 0 if entry is None else entry.active_requests
-            if active_requests:
+            loading = bool(entry is not None and entry.loading)
+            if active_requests or loading:
                 return {
                     "unloaded": False,
                     "model_name": model_key,
                     "active_requests": active_requests,
+                    "loading": loading,
                     "released": self._zero_release(),
                 }
 
             released = self._unload_entry_locked(model_key)
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
             return {
                 "unloaded": any(
                     released[name] for name in ("models", "tokenizers", "pipelines")
                 ),
                 "model_name": released.get("model_name", model_key),
                 "active_requests": 0,
+                "loading": False,
                 "released": {
                     "models": released.get("models", 0),
                     "tokenizers": released.get("tokenizers", 0),
@@ -316,16 +530,28 @@ class WarmPool:
             active_models = {
                 model_name: entry.active_requests
                 for model_name, entry in self._entries.items()
-                if entry.active_requests > 0
+                if entry.active_requests > 0 or entry.loading
             }
             if not active_models:
                 for model_name in list(self._timers):
                     self._cancel_timer_locked(model_name)
+                resident_count = sum(
+                    1 for entry in self._entries.values() if entry.resident
+                )
                 self._entries.clear()
                 unload_all = getattr(self.loader, "unload_all_models", None)
-                released = (
-                    unload_all() if callable(unload_all) else self._unload_all_loaded()
-                )
+                if callable(unload_all):
+                    with self._load_lock:
+                        released = unload_all()
+                    self._record_model_eviction_locked(
+                        resident_count or int(any(released.values()))
+                    )
+                else:
+                    released = self._unload_all_loaded()
+                    if resident_count and not any(released.values()):
+                        self._record_model_eviction_locked(resident_count)
+                self._sync_residency_metrics_locked()
+                self._condition.notify_all()
                 return {
                     "unloaded": any(released.values()),
                     "released": released,
@@ -346,6 +572,8 @@ class WarmPool:
                 for key in released:
                     released[key] += model_released.get(key, 0)
 
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
             return {
                 "unloaded": any(released.values()),
                 "released": released,
@@ -387,6 +615,167 @@ class WarmPool:
             entry = WarmPoolEntry(model_name=model_name, last_used=now)
             self._entries[model_name] = entry
         return entry
+
+    def _reserve_load_budget_locked(self, entry: WarmPoolEntry) -> int:
+        if entry.resident:
+            return 0
+
+        estimate = self._estimated_model_footprint_bytes_locked(entry.model_name)
+        if self.memory_budget_bytes is None:
+            entry.pending_footprint_bytes += estimate
+            return estimate
+
+        if estimate > self.memory_budget_bytes:
+            self._record_model_rejection_locked()
+            raise WarmPoolBackpressureError(
+                model_name=entry.model_name,
+                required_bytes=estimate,
+                budget_bytes=self.memory_budget_bytes,
+                wait_seconds=self.memory_admission_wait_seconds,
+            )
+
+        deadline = self.clock() + self.memory_admission_wait_seconds
+        while (
+            self._accounted_memory_bytes_locked() + estimate > self.memory_budget_bytes
+        ):
+            self._evict_for_budget_locked(estimate)
+            if (
+                self._accounted_memory_bytes_locked() + estimate
+                <= self.memory_budget_bytes
+            ):
+                break
+
+            remaining = deadline - self.clock()
+            if remaining <= 0:
+                self._record_model_rejection_locked()
+                raise WarmPoolBackpressureError(
+                    model_name=entry.model_name,
+                    required_bytes=estimate,
+                    budget_bytes=self.memory_budget_bytes,
+                    wait_seconds=self.memory_admission_wait_seconds,
+                )
+            self._condition.wait(timeout=remaining)
+            self._drop_expired_locked(self.clock())
+
+        entry.pending_footprint_bytes += estimate
+        self._sync_residency_metrics_locked()
+        return estimate
+
+    def _finish_failed_load_locked(
+        self,
+        model_name: str,
+        cache_key: Tuple[Any, ...],
+        reserved_bytes: int,
+    ) -> None:
+        entry = self._entries.get(model_name)
+        if entry is None:
+            self._condition.notify_all()
+            return
+        entry.loading_keys.discard(cache_key)
+        if reserved_bytes:
+            entry.pending_footprint_bytes = max(
+                entry.pending_footprint_bytes - reserved_bytes,
+                0,
+            )
+        if not entry.resident and entry.active_requests <= 0 and not entry.loading:
+            self._entries.pop(model_name, None)
+        self._sync_residency_metrics_locked()
+        self._condition.notify_all()
+
+    def _estimated_model_footprint_bytes_locked(self, model_name: str) -> int:
+        provided = self._provided_model_footprint_bytes(model_name)
+        if provided is not None:
+            return provided
+
+        loader_estimate = self._loader_model_footprint_bytes(model_name)
+        if loader_estimate is not None:
+            return loader_estimate
+
+        info = self._loader_model_info(model_name)
+        metadata_estimate = self._model_info_footprint_bytes(info)
+        if metadata_estimate is not None:
+            return metadata_estimate
+
+        return self.default_model_footprint_bytes
+
+    def _measured_model_footprint_bytes_locked(
+        self,
+        model_name: str,
+        *,
+        fallback_bytes: int,
+    ) -> int:
+        provided = self._provided_model_footprint_bytes(model_name)
+        if provided is not None:
+            return provided
+
+        loader_estimate = self._loader_model_footprint_bytes(model_name)
+        if loader_estimate is not None:
+            return loader_estimate
+
+        info = self._loader_model_info(model_name)
+        metadata_estimate = self._model_info_footprint_bytes(info)
+        if metadata_estimate is not None:
+            return metadata_estimate
+
+        return max(int(fallback_bytes), 1)
+
+    def _provided_model_footprint_bytes(self, model_name: str) -> Optional[int]:
+        if self.footprint_provider is None:
+            return None
+        value = self.footprint_provider(model_name)
+        return self._normalize_footprint_bytes(value)
+
+    def _loader_model_footprint_bytes(self, model_name: str) -> Optional[int]:
+        for method_name in (
+            "model_memory_footprint_bytes",
+            "measure_model_memory_bytes",
+            "estimate_model_memory_bytes",
+        ):
+            method = getattr(self.loader, method_name, None)
+            if not callable(method):
+                continue
+            value = method(model_name)
+            normalized = self._normalize_footprint_bytes(value)
+            if normalized is not None:
+                return normalized
+        return None
+
+    def _loader_model_info(self, model_name: str) -> Any:
+        get_info = getattr(self.loader, "get_model_info", None)
+        if not callable(get_info):
+            return None
+        return get_info(model_name)
+
+    def _model_info_footprint_bytes(self, info: Any) -> Optional[int]:
+        peak_ram_mb = getattr(info, "peak_ram_mb", None)
+        if isinstance(peak_ram_mb, Mapping):
+            values = [
+                float(value)
+                for value in peak_ram_mb.values()
+                if isinstance(value, (int, float)) and value > 0
+            ]
+            if values:
+                return max(int(max(values) * 1024 * 1024), 1)
+        elif isinstance(peak_ram_mb, (int, float)) and peak_ram_mb > 0:
+            return max(int(float(peak_ram_mb) * 1024 * 1024), 1)
+
+        param_count = getattr(info, "param_count", None)
+        if isinstance(param_count, int) and param_count > 0:
+            return max(param_count * 4, 1)
+        return None
+
+    def _normalize_footprint_bytes(self, value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError("model footprint must be a positive integer")
+        try:
+            normalized = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("model footprint must be a positive integer") from exc
+        if normalized <= 0:
+            raise ValueError("model footprint must be greater than 0")
+        return normalized
 
     def _push_request_model(self, model_name: str) -> None:
         stack = getattr(self._local, "request_models", None)
@@ -504,6 +893,9 @@ class WarmPool:
         ]
         for model_name in expired:
             self._unload_entry_locked(model_name)
+        if expired:
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
         return expired
 
     def _evict_over_capacity_locked(self) -> list[str]:
@@ -515,17 +907,84 @@ class WarmPool:
             candidates = [
                 entry
                 for entry in self._entries.values()
-                if entry.resident and entry.active_requests <= 0
+                if (entry.resident and entry.active_requests <= 0 and not entry.loading)
             ]
             if not candidates:
                 break
-            victim = min(candidates, key=lambda entry: entry.last_used)
+            victim = min(
+                candidates,
+                key=lambda entry: (entry.last_used, -entry.footprint_bytes),
+            )
             evicted.append(victim.model_name)
             self._unload_entry_locked(victim.model_name)
+        if evicted:
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
         return evicted
+
+    def _evict_over_budget_locked(self) -> list[str]:
+        if self.memory_budget_bytes is None:
+            return []
+        evicted: list[str] = []
+        while self._accounted_memory_bytes_locked() > self.memory_budget_bytes:
+            victim = self._budget_victim_locked()
+            if victim is None:
+                break
+            evicted.append(victim.model_name)
+            self._unload_entry_locked(victim.model_name)
+        if evicted:
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
+        return evicted
+
+    def _evict_for_budget_locked(self, required_bytes: int) -> list[str]:
+        if self.memory_budget_bytes is None:
+            return []
+        evicted: list[str] = []
+        while (
+            self._accounted_memory_bytes_locked() + required_bytes
+            > self.memory_budget_bytes
+        ):
+            victim = self._budget_victim_locked()
+            if victim is None:
+                break
+            evicted.append(victim.model_name)
+            self._unload_entry_locked(victim.model_name)
+        if evicted:
+            self._sync_residency_metrics_locked()
+            self._condition.notify_all()
+        return evicted
+
+    def _budget_victim_locked(self) -> Optional[WarmPoolEntry]:
+        candidates = [
+            entry
+            for entry in self._entries.values()
+            if entry.resident and entry.active_requests <= 0 and not entry.loading
+        ]
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda entry: (entry.last_used, -entry.footprint_bytes),
+        )
 
     def _resident_count_locked(self) -> int:
         return sum(1 for entry in self._entries.values() if entry.resident)
+
+    def _accounted_memory_bytes_locked(self) -> int:
+        return sum(
+            (entry.footprint_bytes if entry.resident else 0)
+            + entry.pending_footprint_bytes
+            for entry in self._entries.values()
+        )
+
+    def _resident_memory_bytes_locked(self) -> int:
+        return sum(
+            entry.footprint_bytes for entry in self._entries.values() if entry.resident
+        )
+
+    def _pending_memory_bytes_locked(self) -> int:
+        return sum(entry.pending_footprint_bytes for entry in self._entries.values())
 
     def _drop_empty_idle_entries_locked(self) -> None:
         empty = [
@@ -535,6 +994,7 @@ class WarmPool:
                 not entry.resident
                 and entry.active_requests <= 0
                 and entry.keep_alive_deadline is None
+                and not entry.loading
             )
         ]
         for model_name in empty:
@@ -542,13 +1002,20 @@ class WarmPool:
 
     def _unload_entry_locked(self, model_name: str) -> dict[str, Any]:
         self._cancel_timer_locked(model_name)
-        self._entries.pop(model_name, None)
+        entry = self._entries.pop(model_name, None)
+        was_resident = bool(entry is not None and entry.resident)
         unload = getattr(self.loader, "unload_model", None)
         if not callable(unload):
             released = self._zero_release()
             released["model_name"] = model_name
+            if was_resident:
+                self._record_model_eviction_locked()
             return released
-        return unload(model_name)
+        with self._load_lock:
+            released = unload(model_name)
+        if was_resident or any(released.get(name, 0) for name in self._zero_release()):
+            self._record_model_eviction_locked()
+        return released
 
     def _unload_all_loaded(self) -> dict[str, int]:
         released = self._zero_release()
@@ -567,8 +1034,38 @@ class WarmPool:
         loaded_models = getattr(self.loader, "loaded_models", None)
         if not callable(loaded_models):
             return {}
-        loaded = loaded_models()
+        with self._load_lock:
+            loaded = loaded_models()
         return dict(loaded) if isinstance(loaded, Mapping) else {}
 
     def _zero_release(self) -> dict[str, int]:
         return {"models": 0, "tokenizers": 0, "pipelines": 0}
+
+    def _record_model_load_locked(self) -> None:
+        record = getattr(self.metrics, "record_model_load", None)
+        if callable(record):
+            record()
+
+    def _record_model_eviction_locked(self, count: int = 1) -> None:
+        record = getattr(self.metrics, "record_model_eviction", None)
+        if callable(record):
+            record(count)
+
+    def _record_model_load_latency_locked(self, seconds: float) -> None:
+        record = getattr(self.metrics, "record_model_load_latency", None)
+        if callable(record):
+            record(seconds)
+
+    def _record_model_rejection_locked(self, count: int = 1) -> None:
+        record = getattr(self.metrics, "record_model_rejection", None)
+        if callable(record):
+            record(count)
+
+    def _sync_residency_metrics_locked(self) -> None:
+        record = getattr(self.metrics, "record_model_residency", None)
+        if callable(record):
+            record(
+                resident_count=self._resident_count_locked(),
+                resident_bytes=self._resident_memory_bytes_locked(),
+                pending_bytes=self._pending_memory_bytes_locked(),
+            )

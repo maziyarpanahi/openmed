@@ -9,6 +9,7 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+node_modules/
 develop-eggs/
 dist/
 downloads/
@@ -173,12 +174,20 @@ swift/OpenMedKit/.build/
 swift/OpenMedKit/Package.resolved
 swift/**/xcuserdata/
 
+# Gradle / Android local state
+android/.gradle/
+android/local.properties
+
 # Model cache directories
 .cache/
 cache/
 *.cache/
 huggingface_cache/
 transformers_cache/
+!android/openmedkit/src/main/kotlin/com/openmed/openmedkit/cache/
+!android/openmedkit/src/main/kotlin/com/openmed/openmedkit/cache/**
+!android/openmedkit/src/test/kotlin/com/openmed/openmedkit/cache/
+!android/openmedkit/src/test/kotlin/com/openmed/openmedkit/cache/**
 
 # API keys and credentials
 *.key
@@ -236,3 +245,5 @@ docs/api/_build/
 PLANS/**
 
 CLAUDE.md
+
+node_modules/

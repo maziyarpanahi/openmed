@@ -6,17 +6,44 @@ import json
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Iterable, Mapping, Sequence
 
 from openmed.core.labels import normalize_label
+from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+from openmed.core.thresholds import MembershipDefensePolicy
+from openmed.eval.metrics import (
+    coverage_gaps_by_language,
+    expected_calibration_error,
+    reliability_bins,
+    weighted_coverage,
+)
 
 SCHEMA_VERSION = 1
 THRESHOLDS_ARTIFACT = "openmed.calibration.thresholds"
 REPORT_ARTIFACT = "openmed.calibration.report"
+UNDER_SHIFT_REPORT_ARTIFACT = "openmed.calibration.under_shift"
 WILDCARD_LANGUAGE = "*"
+DEFAULT_CONFORMAL_ALPHA = 0.05
+DEFAULT_COVERAGE_TOLERANCE = 0.01
+DEFAULT_HISTOGRAM_BINS = 10
+DEFAULT_TEMPERATURE_BINS = 10
+DEFAULT_CRITICAL_LEAKAGE_LABELS = frozenset(
+    {
+        "SSN",
+        "ID_NUM",
+        "API_KEY",
+        "ACCOUNT_NUMBER",
+        "PASSWORD",
+        "PIN",
+        "CREDIT_CARD",
+        "CVV",
+        "IBAN",
+        "BIC",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -114,6 +141,7 @@ class CalibrationGroupReport:
     label: str
     language: str
     chosen_threshold: float
+    nonconformity_quantile: float
     target_leakage: float
     resulting_leakage: float
     over_redaction: float
@@ -129,6 +157,7 @@ class CalibrationGroupReport:
             "label": self.label,
             "language": self.language,
             "chosen_threshold": self.chosen_threshold,
+            "nonconformity_quantile": self.nonconformity_quantile,
             "target_leakage": self.target_leakage,
             "resulting_leakage": self.resulting_leakage,
             "over_redaction": self.over_redaction,
@@ -137,6 +166,135 @@ class CalibrationGroupReport:
             "positive_weight": self.positive_weight,
             "negative_weight": self.negative_weight,
             "reliability": [dict(row) for row in self.reliability],
+        }
+
+
+@dataclass(frozen=True)
+class TemperatureScalingReport:
+    """Global temperature scaling fit and reliability before/after scaling."""
+
+    temperature: float
+    pre_scaling_ece: float
+    post_scaling_ece: float
+    n_bins: int
+    sample_count: int
+    reliability: tuple[dict[str, Any], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "temperature": self.temperature,
+            "pre_scaling_ece": self.pre_scaling_ece,
+            "post_scaling_ece": self.post_scaling_ece,
+            "n_bins": self.n_bins,
+            "sample_count": self.sample_count,
+            "reliability": [dict(row) for row in self.reliability],
+        }
+
+
+@dataclass(frozen=True)
+class DistributionShiftEstimate:
+    """Score-histogram shift estimate used to widen conformal bands."""
+
+    method: str
+    distance: float
+    mean_score_drop: float
+    quantile_inflation: float
+    histogram: tuple[dict[str, Any], ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "method": self.method,
+            "distance": self.distance,
+            "mean_score_drop": self.mean_score_drop,
+            "quantile_inflation": self.quantile_inflation,
+            "histogram": [dict(row) for row in self.histogram],
+        }
+
+
+@dataclass(frozen=True)
+class ConformalCalibrationGroup:
+    """Per-label/per-language conformal band and observed gate coverage."""
+
+    model_id: str
+    label: str
+    language: str
+    alpha: float
+    target_coverage: float
+    calibration_count: int
+    gate_count: int
+    base_quantile: float
+    shifted_quantile: float
+    lower_bound: float
+    upper_bound: float
+    realized_coverage: float
+    coverage_gap: float
+    positive_coverage: float
+    positive_coverage_gap: float
+    total_gate_weight: float
+    covered_gate_weight: float
+    positive_gate_weight: float
+    covered_positive_gate_weight: float
+    critical_label: bool
+    shift: DistributionShiftEstimate
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "model_id": self.model_id,
+            "label": self.label,
+            "language": self.language,
+            "alpha": self.alpha,
+            "target_coverage": self.target_coverage,
+            "calibration_count": self.calibration_count,
+            "gate_count": self.gate_count,
+            "base_quantile": self.base_quantile,
+            "shifted_quantile": self.shifted_quantile,
+            "lower_bound": self.lower_bound,
+            "upper_bound": self.upper_bound,
+            "realized_coverage": self.realized_coverage,
+            "coverage_gap": self.coverage_gap,
+            "positive_coverage": self.positive_coverage,
+            "positive_coverage_gap": self.positive_coverage_gap,
+            "total_gate_weight": self.total_gate_weight,
+            "covered_gate_weight": self.covered_gate_weight,
+            "positive_gate_weight": self.positive_gate_weight,
+            "covered_positive_gate_weight": self.covered_positive_gate_weight,
+            "critical_label": self.critical_label,
+            "shift": self.shift.to_dict(),
+        }
+
+
+@dataclass(frozen=True)
+class ConformalCalibrationReport:
+    """Calibration-under-shift report used by release gates."""
+
+    model_id: str
+    suite: str
+    alpha: float
+    target_coverage: float
+    coverage_tolerance: float
+    generated_at: str
+    temperature: TemperatureScalingReport
+    groups: tuple[ConformalCalibrationGroup, ...]
+    language_coverage: Mapping[str, Mapping[str, Any]]
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "artifact_type": UNDER_SHIFT_REPORT_ARTIFACT,
+            "model_id": self.model_id,
+            "suite": self.suite,
+            "alpha": self.alpha,
+            "target_coverage": self.target_coverage,
+            "coverage_tolerance": self.coverage_tolerance,
+            "generated_at": self.generated_at,
+            "temperature": self.temperature.to_dict(),
+            "groups": [group.to_dict() for group in self.groups],
+            "language_coverage": {
+                key: dict(value)
+                for key, value in sorted(self.language_coverage.items())
+            },
+            "metadata": dict(self.metadata),
         }
 
 
@@ -150,10 +308,12 @@ class CalibrationReport:
     target_leakage: float
     min_recall: float
     generated_at: str
+    membership_defense: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    conformal: ConformalCalibrationReport | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "schema_version": SCHEMA_VERSION,
             "artifact_type": REPORT_ARTIFACT,
             "model_id": self.model_id,
@@ -161,10 +321,14 @@ class CalibrationReport:
             "target_leakage": self.target_leakage,
             "min_recall": self.min_recall,
             "generated_at": self.generated_at,
+            "membership_defense": dict(self.membership_defense),
             "objective": "target_leakage_first_over_redaction_second_recall_protected",
             "groups": [group.to_dict() for group in self.groups],
             "metadata": dict(self.metadata),
         }
+        if self.conformal is not None:
+            payload["calibration_under_shift"] = self.conformal.to_dict()
+        return payload
 
 
 @dataclass(frozen=True)
@@ -174,6 +338,7 @@ class CalibrationArtifactPaths:
     artifact_dir: Path
     thresholds_path: Path
     report_path: Path
+    under_shift_report_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -182,9 +347,20 @@ class CalibrationThresholdSet:
 
     schema_version: int
     thresholds: Mapping[tuple[str, str, str], float]
+    nonconformity_quantiles: Mapping[tuple[str, str, str], float] = field(
+        default_factory=dict
+    )
+    conformal_bands: Mapping[tuple[str, str, str], Mapping[str, Any]] = field(
+        default_factory=dict
+    )
     model_id: str | None = None
     suite: str | None = None
+    membership_defense: Mapping[str, Any] = field(default_factory=dict)
     source_path: str | None = None
+
+    @property
+    def membership_defense_policy(self) -> MembershipDefensePolicy:
+        return MembershipDefensePolicy.from_mapping(self.membership_defense)
 
     def lookup(
         self,
@@ -218,6 +394,73 @@ class CalibrationThresholdSet:
             f"no threshold for {model_id or self.model_id}:{canonical}:{lang}"
         )
 
+    def lookup_nonconformity_quantile(
+        self,
+        label: str,
+        language: str,
+        *,
+        model_id: str | None = None,
+        default: float | None = None,
+    ) -> float:
+        """Return the conformal nonconformity quantile for a label/language."""
+
+        canonical = normalize_label(label, language)
+        lang = (language or WILDCARD_LANGUAGE).lower()
+        candidate_models = []
+        if model_id:
+            candidate_models.append(str(model_id))
+        if self.model_id and self.model_id not in candidate_models:
+            candidate_models.append(self.model_id)
+        if len({key[0] for key in self.thresholds}) == 1:
+            only_model = next(iter({key[0] for key in self.thresholds}))
+            if only_model not in candidate_models:
+                candidate_models.append(only_model)
+
+        quantiles = self.nonconformity_quantiles or {
+            key: 1.0 - value for key, value in self.thresholds.items()
+        }
+        for candidate_model in candidate_models:
+            for candidate_language in (lang, WILDCARD_LANGUAGE):
+                key = (candidate_model, canonical, candidate_language)
+                if key in quantiles:
+                    return float(quantiles[key])
+
+        if default is not None:
+            return float(default)
+        return 1.0 - self.lookup(
+            label,
+            language,
+            model_id=model_id,
+        )
+
+    def conformal_band(
+        self,
+        label: str,
+        language: str,
+        *,
+        model_id: str | None = None,
+    ) -> Mapping[str, Any] | None:
+        """Return a loaded conformal band for a label/language if present."""
+
+        canonical = normalize_label(label, language)
+        lang = (language or WILDCARD_LANGUAGE).lower()
+        candidate_models = []
+        if model_id:
+            candidate_models.append(str(model_id))
+        if self.model_id and self.model_id not in candidate_models:
+            candidate_models.append(self.model_id)
+        if len({key[0] for key in self.conformal_bands}) == 1:
+            only_model = next(iter({key[0] for key in self.conformal_bands}))
+            if only_model not in candidate_models:
+                candidate_models.append(only_model)
+
+        for candidate_model in candidate_models:
+            for candidate_language in (lang, WILDCARD_LANGUAGE):
+                key = (candidate_model, canonical, candidate_language)
+                if key in self.conformal_bands:
+                    return dict(self.conformal_bands[key])
+        return None
+
     def active_for(
         self,
         *,
@@ -241,6 +484,153 @@ class CalibrationThresholdSet:
         return labels
 
 
+@dataclass(frozen=True)
+class SpanNonconformityScore:
+    """Confidence-derived conformal score for one span decision."""
+
+    label: str
+    language: str
+    confidence: float
+    confidence_threshold: float
+    nonconformity: float
+    nonconformity_quantile: float
+    accepted_by_quantile: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "language": self.language,
+            "confidence": self.confidence,
+            "confidence_threshold": self.confidence_threshold,
+            "nonconformity": self.nonconformity,
+            "nonconformity_quantile": self.nonconformity_quantile,
+            "accepted_by_quantile": self.accepted_by_quantile,
+        }
+
+
+@dataclass(frozen=True)
+class AbstentionRiskSample:
+    """One calibration row used to select a risk-controlled abstention cutoff."""
+
+    label: str
+    language: str
+    nonconformity: float
+    residual_leakage: bool
+    critical: bool = True
+    weight: float = 1.0
+
+    @classmethod
+    def from_mapping(
+        cls,
+        data: Mapping[str, Any] | CalibrationSample,
+        *,
+        critical_labels: frozenset[str],
+    ) -> "AbstentionRiskSample":
+        if isinstance(data, CalibrationSample):
+            label = data.label
+            language = data.language
+            confidence = data.score
+            residual_leakage = not data.target
+            weight = data.weight
+        else:
+            raw_label = (
+                data.get("canonical_label")
+                or data.get("label")
+                or data.get("entity_type")
+                or data.get("entity")
+            )
+            if not raw_label:
+                raise ValueError("abstention risk sample requires label")
+            language = str(data.get("language") or data.get("lang") or "en").lower()
+            label = normalize_label(str(raw_label), language)
+
+            confidence_value = data.get("score", data.get("confidence"))
+            if confidence_value is not None:
+                confidence = _bounded_float(confidence_value, "confidence")
+                nonconformity = 1.0 - confidence
+            else:
+                nonconformity = _bounded_float(
+                    data.get("nonconformity"),
+                    "nonconformity",
+                )
+
+            if confidence_value is None:
+                confidence = 1.0 - nonconformity
+
+            if data.get("residual_leakage") is not None:
+                residual_leakage = bool(data["residual_leakage"])
+            elif data.get("leakage") is not None:
+                residual_leakage = bool(data["leakage"])
+            elif data.get("correct") is not None:
+                residual_leakage = not bool(data["correct"])
+            elif data.get("target") is not None:
+                residual_leakage = not bool(data["target"])
+            else:
+                residual_leakage = False
+
+            raw_weight = data.get("weight", 1.0)
+            weight = float(raw_weight)
+
+        if not math.isfinite(weight) or weight <= 0.0:
+            raise ValueError("abstention risk sample weight must be positive")
+
+        return cls(
+            label=label,
+            language=language,
+            nonconformity=1.0 - confidence,
+            residual_leakage=residual_leakage,
+            critical=label in critical_labels,
+            weight=weight,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "language": self.language,
+            "nonconformity": self.nonconformity,
+            "residual_leakage": self.residual_leakage,
+            "critical": self.critical,
+            "weight": self.weight,
+        }
+
+
+@dataclass(frozen=True)
+class RiskControlledAbstentionThreshold:
+    """Selected nonconformity cutoff with finite-sample risk evidence."""
+
+    nonconformity_threshold: float
+    target_risk: float
+    confidence_level: float
+    empirical_residual_risk: float
+    residual_risk_upper_bound: float
+    accepted_critical_weight: float
+    residual_leakage_weight: float
+    abstention_rate: float
+    total_weight: float
+    method: str = "hoeffding_one_sided"
+
+    @property
+    def confidence_threshold(self) -> float:
+        """Return the equivalent minimum confidence cutoff."""
+
+        return 1.0 - self.nonconformity_threshold
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "nonconformity_threshold": self.nonconformity_threshold,
+            "confidence_threshold": self.confidence_threshold,
+            "target_risk": self.target_risk,
+            "confidence_level": self.confidence_level,
+            "empirical_residual_risk": self.empirical_residual_risk,
+            "residual_risk_upper_bound": self.residual_risk_upper_bound,
+            "accepted_critical_weight": self.accepted_critical_weight,
+            "residual_leakage_weight": self.residual_leakage_weight,
+            "abstention_rate": self.abstention_rate,
+            "total_weight": self.total_weight,
+            "method": self.method,
+        }
+
+
 def fit_calibration_thresholds(
     samples: Sequence[Mapping[str, Any] | CalibrationSample],
     *,
@@ -248,6 +638,10 @@ def fit_calibration_thresholds(
     suite: str,
     target_leakage: float = 0.0,
     min_recall: float | None = None,
+    conformal_alpha: float | None = None,
+    gate_samples: Sequence[Mapping[str, Any] | CalibrationSample] | None = None,
+    coverage_tolerance: float = DEFAULT_COVERAGE_TOLERANCE,
+    membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> CalibrationReport:
@@ -270,6 +664,14 @@ def fit_calibration_thresholds(
     ]
     if not normalized:
         raise ValueError("calibration requires at least one sample")
+    defense_policy = MembershipDefensePolicy.from_mapping(
+        membership_defense,
+        recall_floor=recall_floor,
+    )
+    normalized = _apply_membership_defense_to_samples(
+        normalized,
+        defense_policy,
+    )
 
     grouped: dict[tuple[str, str, str], list[CalibrationSample]] = defaultdict(list)
     for sample in normalized:
@@ -283,13 +685,183 @@ def fit_calibration_thresholds(
         )
         for _, group_samples in sorted(grouped.items())
     )
+    timestamp = generated_at or _utc_now()
+    conformal_report = None
+    if conformal_alpha is not None:
+        conformal_report = fit_calibration_under_shift(
+            normalized,
+            gate_samples=gate_samples,
+            model_id=model_id,
+            suite=suite,
+            alpha=conformal_alpha,
+            coverage_tolerance=coverage_tolerance,
+            generated_at=timestamp,
+            metadata=metadata,
+        )
+
     return CalibrationReport(
         model_id=model_id,
         suite=suite,
         groups=reports,
         target_leakage=target_leakage,
         min_recall=recall_floor,
+        generated_at=timestamp,
+        membership_defense=defense_policy.to_dict(),
+        metadata=dict(metadata or {}),
+        conformal=conformal_report,
+    )
+
+
+def fit_calibration_under_shift(
+    calibration_samples: Sequence[Mapping[str, Any] | CalibrationSample],
+    *,
+    gate_samples: Sequence[Mapping[str, Any] | CalibrationSample] | None = None,
+    model_id: str,
+    suite: str,
+    alpha: float = DEFAULT_CONFORMAL_ALPHA,
+    coverage_tolerance: float = DEFAULT_COVERAGE_TOLERANCE,
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    languages: Iterable[str] | None = None,
+    critical_labels: Iterable[str] = DEFAULT_CRITICAL_LEAKAGE_LABELS,
+    histogram_bins: int = DEFAULT_HISTOGRAM_BINS,
+    temperature_bins: int = DEFAULT_TEMPERATURE_BINS,
+) -> ConformalCalibrationReport:
+    """Fit temperature-scaled split-conformal bands under gate-set shift."""
+
+    alpha = _bounded_float(alpha, "alpha")
+    coverage_tolerance = _bounded_float(coverage_tolerance, "coverage_tolerance")
+    target_coverage = 1.0 - alpha
+    if histogram_bins < 1:
+        raise ValueError("histogram_bins must be at least 1")
+    if temperature_bins < 1:
+        raise ValueError("temperature_bins must be at least 1")
+
+    normalized = [
+        sample
+        if isinstance(sample, CalibrationSample)
+        else CalibrationSample.from_mapping(sample, default_model_id=model_id)
+        for sample in calibration_samples
+    ]
+    if not normalized:
+        raise ValueError("conformal calibration requires at least one sample")
+
+    gate_normalized = [
+        sample
+        if isinstance(sample, CalibrationSample)
+        else CalibrationSample.from_mapping(sample, default_model_id=model_id)
+        for sample in (gate_samples if gate_samples is not None else normalized)
+    ]
+
+    temperature = _fit_temperature_scaling(
+        normalized,
+        n_bins=temperature_bins,
+    )
+    critical = {normalize_label(label) for label in critical_labels}
+
+    calibration_by_group: dict[tuple[str, str, str], list[CalibrationSample]]
+    calibration_by_group = defaultdict(list)
+    for sample in normalized:
+        calibration_by_group[(sample.model_id, sample.label, sample.language)].append(
+            sample
+        )
+
+    gate_by_group: dict[tuple[str, str, str], list[CalibrationSample]]
+    gate_by_group = defaultdict(list)
+    for sample in gate_normalized:
+        gate_by_group[(sample.model_id, sample.label, sample.language)].append(sample)
+
+    groups: list[ConformalCalibrationGroup] = []
+    coverage_rows: list[dict[str, Any]] = []
+    for key in sorted(calibration_by_group):
+        group_samples = calibration_by_group[key]
+        gate_group = gate_by_group.get(key, ())
+        nonconformity = [
+            _nonconformity_score(
+                _scaled_score(sample.score, temperature.temperature),
+                sample.target,
+            )
+            for sample in group_samples
+        ]
+        base_quantile = _split_conformal_quantile(nonconformity, alpha=alpha)
+        shift = _estimate_distribution_shift(
+            [sample.score for sample in group_samples],
+            [sample.score for sample in gate_group],
+            base_quantile=base_quantile,
+            bins=histogram_bins,
+        )
+        shifted_quantile = min(
+            1.0,
+            max(base_quantile, base_quantile + shift.quantile_inflation),
+        )
+        coverage_group_rows: list[dict[str, Any]] = []
+        positive_rows: list[dict[str, Any]] = []
+        for sample in gate_group:
+            scaled = _scaled_score(sample.score, temperature.temperature)
+            covered = _nonconformity_score(scaled, sample.target) <= shifted_quantile
+            row = {
+                "language": sample.language,
+                "covered": covered,
+                "weight": sample.weight,
+            }
+            coverage_group_rows.append(row)
+            coverage_rows.append(row)
+            if sample.target:
+                positive_rows.append(row)
+
+        coverage = weighted_coverage(coverage_group_rows)
+        positive_coverage = weighted_coverage(positive_rows)
+        effective_coverage = (
+            float(positive_coverage.rate)
+            if float(positive_coverage.denominator) > 0.0
+            else float(coverage.rate)
+        )
+        model_key, label, language = key
+        groups.append(
+            ConformalCalibrationGroup(
+                model_id=model_key,
+                label=label,
+                language=language,
+                alpha=alpha,
+                target_coverage=target_coverage,
+                calibration_count=len(group_samples),
+                gate_count=len(gate_group),
+                base_quantile=base_quantile,
+                shifted_quantile=shifted_quantile,
+                lower_bound=max(0.0, 1.0 - shifted_quantile),
+                upper_bound=1.0,
+                realized_coverage=float(coverage.rate),
+                coverage_gap=max(target_coverage - effective_coverage, 0.0),
+                positive_coverage=float(positive_coverage.rate),
+                positive_coverage_gap=max(
+                    target_coverage - float(positive_coverage.rate),
+                    0.0,
+                ),
+                total_gate_weight=float(coverage.denominator),
+                covered_gate_weight=float(coverage.numerator),
+                positive_gate_weight=float(positive_coverage.denominator),
+                covered_positive_gate_weight=float(positive_coverage.numerator),
+                critical_label=label in critical,
+                shift=shift,
+            )
+        )
+
+    languages_to_report = languages if languages is not None else SUPPORTED_LANGUAGES
+    language_coverage = coverage_gaps_by_language(
+        coverage_rows,
+        target_coverage=target_coverage,
+        languages=languages_to_report,
+    )
+    return ConformalCalibrationReport(
+        model_id=model_id,
+        suite=suite,
+        alpha=alpha,
+        target_coverage=target_coverage,
+        coverage_tolerance=coverage_tolerance,
         generated_at=generated_at or _utc_now(),
+        temperature=temperature,
+        groups=tuple(groups),
+        language_coverage=language_coverage,
         metadata=dict(metadata or {}),
     )
 
@@ -298,17 +870,22 @@ def build_thresholds_payload(report: CalibrationReport) -> dict[str, Any]:
     """Build the JSON payload written as thresholds.json."""
 
     thresholds: dict[str, dict[str, dict[str, float]]] = {}
+    conformal_quantiles: dict[str, dict[str, dict[str, float]]] = {}
     groups: list[dict[str, Any]] = []
     for group in report.groups:
         thresholds.setdefault(group.model_id, {}).setdefault(group.label, {})[
             group.language
         ] = group.chosen_threshold
+        conformal_quantiles.setdefault(group.model_id, {}).setdefault(group.label, {})[
+            group.language
+        ] = group.nonconformity_quantile
         groups.append(
             {
                 "model_id": group.model_id,
                 "label": group.label,
                 "language": group.language,
                 "threshold": group.chosen_threshold,
+                "nonconformity_quantile": group.nonconformity_quantile,
                 "target_leakage": group.target_leakage,
                 "resulting_leakage": group.resulting_leakage,
                 "over_redaction": group.over_redaction,
@@ -317,7 +894,7 @@ def build_thresholds_payload(report: CalibrationReport) -> dict[str, Any]:
             }
         )
 
-    return {
+    payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "artifact_type": THRESHOLDS_ARTIFACT,
         "model_id": report.model_id,
@@ -325,9 +902,40 @@ def build_thresholds_payload(report: CalibrationReport) -> dict[str, Any]:
         "generated_at": report.generated_at,
         "target_leakage": report.target_leakage,
         "min_recall": report.min_recall,
+        "membership_defense": dict(report.membership_defense),
         "thresholds": thresholds,
+        "conformal_quantiles": conformal_quantiles,
         "groups": groups,
     }
+    if report.conformal is not None:
+        conformal_quantiles: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
+        for group in report.conformal.groups:
+            conformal_quantiles.setdefault(group.model_id, {}).setdefault(
+                group.label,
+                {},
+            )[group.language] = {
+                "alpha": group.alpha,
+                "target_coverage": group.target_coverage,
+                "base_quantile": group.base_quantile,
+                "shifted_quantile": group.shifted_quantile,
+                "shift_inflation": group.shift.quantile_inflation,
+                "lower_bound": group.lower_bound,
+                "upper_bound": group.upper_bound,
+                "realized_coverage": group.realized_coverage,
+                "coverage_gap": group.coverage_gap,
+                "positive_coverage": group.positive_coverage,
+                "positive_coverage_gap": group.positive_coverage_gap,
+                "critical_label": group.critical_label,
+            }
+        payload["conformal_quantiles"] = conformal_quantiles
+        payload["temperature_scaling"] = report.conformal.temperature.to_dict()
+        payload["coverage_tables"] = {
+            "language_coverage": {
+                key: dict(value)
+                for key, value in sorted(report.conformal.language_coverage.items())
+            }
+        }
+    return payload
 
 
 def write_calibration_artifacts(
@@ -338,10 +946,14 @@ def write_calibration_artifacts(
     suite: str,
     target_leakage: float = 0.0,
     min_recall: float | None = None,
+    conformal_alpha: float | None = DEFAULT_CONFORMAL_ALPHA,
+    gate_samples: Sequence[Mapping[str, Any] | CalibrationSample] | None = None,
+    coverage_tolerance: float = DEFAULT_COVERAGE_TOLERANCE,
+    membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> CalibrationArtifactPaths:
-    """Fit and write thresholds.json plus calibration_report.json."""
+    """Fit and write calibration artifacts."""
 
     report = fit_calibration_thresholds(
         samples,
@@ -349,6 +961,10 @@ def write_calibration_artifacts(
         suite=suite,
         target_leakage=target_leakage,
         min_recall=min_recall,
+        conformal_alpha=conformal_alpha,
+        gate_samples=gate_samples,
+        coverage_tolerance=coverage_tolerance,
+        membership_defense=membership_defense,
         generated_at=generated_at,
         metadata=metadata,
     )
@@ -356,6 +972,11 @@ def write_calibration_artifacts(
     output_dir.mkdir(parents=True, exist_ok=True)
     thresholds_path = output_dir / "thresholds.json"
     report_path = output_dir / "calibration_report.json"
+    under_shift_report_path = (
+        output_dir / "calibration_under_shift_report.json"
+        if report.conformal is not None
+        else None
+    )
     thresholds_path.write_text(
         json.dumps(build_thresholds_payload(report), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -364,10 +985,16 @@ def write_calibration_artifacts(
         json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    if under_shift_report_path is not None and report.conformal is not None:
+        under_shift_report_path.write_text(
+            json.dumps(report.conformal.to_dict(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     return CalibrationArtifactPaths(
         artifact_dir=output_dir,
         thresholds_path=thresholds_path,
         report_path=report_path,
+        under_shift_report_path=under_shift_report_path,
     )
 
 
@@ -476,13 +1103,45 @@ def coerce_calibration_thresholds(
                     f"thresholds.{model_key}.{canonical}.{language}",
                 )
 
+    quantiles: dict[tuple[str, str, str], float] = {}
+    conformal_bands: dict[tuple[str, str, str], Mapping[str, Any]] = {}
+    raw_conformal = payload.get("conformal_quantiles") or {}
+    if raw_conformal:
+        if not isinstance(raw_conformal, Mapping):
+            raise ValueError("conformal_quantiles must be an object")
+        for model_key, labels in raw_conformal.items():
+            if not isinstance(labels, Mapping):
+                raise ValueError(f"conformal_quantiles.{model_key} must be an object")
+            for label_key, languages in labels.items():
+                canonical = normalize_label(str(label_key))
+                if not isinstance(languages, Mapping):
+                    raise ValueError(
+                        f"conformal_quantiles.{model_key}.{canonical} must be an object"
+                    )
+                for language_key, value in languages.items():
+                    language = str(language_key or WILDCARD_LANGUAGE).lower()
+                    key = (str(model_key), canonical, language)
+                    if isinstance(value, Mapping):
+                        conformal_bands[key] = dict(value)
+                    else:
+                        quantiles[key] = _bounded_float(
+                            value,
+                            f"conformal_quantiles.{model_key}.{canonical}.{language}",
+                        )
+
+    if not quantiles:
+        quantiles = {key: 1.0 - value for key, value in thresholds.items()}
+
     return CalibrationThresholdSet(
         schema_version=int(payload["schema_version"]),
         thresholds=thresholds,
+        nonconformity_quantiles=quantiles,
+        conformal_bands=conformal_bands,
         model_id=(
             str(payload["model_id"]) if payload.get("model_id") is not None else None
         ),
         suite=str(payload["suite"]) if payload.get("suite") is not None else None,
+        membership_defense=dict(payload.get("membership_defense") or {}),
         source_path=source_path,
     )
 
@@ -491,6 +1150,310 @@ def artifact_dir_for(model_id: str, suite: str) -> Path:
     """Return the default calibration artifact directory."""
 
     return Path("artifacts") / "calibration" / _slug(model_id) / _slug(suite)
+
+
+def score_span_nonconformity(
+    span: Mapping[str, Any] | Any,
+    thresholds: Mapping[str, Any] | CalibrationThresholdSet,
+    *,
+    model_id: str | None = None,
+    default_language: str = "en",
+    default_threshold: float = 0.0,
+) -> SpanNonconformityScore:
+    """Score one span against calibration-artifact conformal quantiles."""
+
+    data = span if isinstance(span, Mapping) else vars(span)
+    metadata = data.get("metadata") if isinstance(data.get("metadata"), Mapping) else {}
+    language = str(
+        data.get("language")
+        or data.get("lang")
+        or metadata.get("language")
+        or metadata.get("lang")
+        or default_language
+    ).lower()
+    raw_label = (
+        data.get("canonical_label")
+        or data.get("label")
+        or data.get("entity_type")
+        or data.get("entity_group")
+        or data.get("entity")
+        or "OTHER"
+    )
+    label = normalize_label(str(raw_label), language)
+    confidence = _bounded_float(
+        data.get("confidence", data.get("score", metadata.get("confidence", 1.0))),
+        "confidence",
+    )
+    confidence_threshold = _lookup_confidence_threshold(
+        thresholds,
+        label,
+        language,
+        model_id=model_id,
+        default=default_threshold,
+    )
+    nonconformity_quantile = _lookup_nonconformity_quantile(
+        thresholds,
+        label,
+        language,
+        model_id=model_id,
+        default=1.0 - confidence_threshold,
+    )
+    nonconformity = 1.0 - confidence
+    return SpanNonconformityScore(
+        label=label,
+        language=language,
+        confidence=confidence,
+        confidence_threshold=confidence_threshold,
+        nonconformity=nonconformity,
+        nonconformity_quantile=nonconformity_quantile,
+        accepted_by_quantile=nonconformity <= nonconformity_quantile,
+    )
+
+
+def select_risk_controlled_abstention_threshold(
+    samples: Sequence[Mapping[str, Any] | CalibrationSample | AbstentionRiskSample],
+    *,
+    target_risk: float,
+    confidence_level: float = 0.95,
+    critical_labels: frozenset[str] | None = None,
+) -> RiskControlledAbstentionThreshold:
+    """Select the loosest nonconformity cutoff whose risk bound is safe.
+
+    The selector bounds residual leakage among accepted critical-label spans
+    using a one-sided Hoeffding upper confidence bound. Larger target risks can
+    only keep or loosen the selected cutoff, so abstention is monotonic in the
+    target risk on a fixed calibration set.
+    """
+
+    target_risk = _bounded_float(target_risk, "target_risk")
+    confidence_level = _bounded_float(confidence_level, "confidence_level")
+    if confidence_level >= 1.0:
+        raise ValueError("confidence_level must be less than 1.0")
+
+    critical_set = frozenset(critical_labels or _DEFAULT_CRITICAL_LABELS)
+    normalized = [
+        sample
+        if isinstance(sample, AbstentionRiskSample)
+        else AbstentionRiskSample.from_mapping(sample, critical_labels=critical_set)
+        for sample in samples
+    ]
+    if not normalized:
+        raise ValueError("abstention risk control requires at least one sample")
+
+    candidates = sorted({0.0, *(sample.nonconformity for sample in normalized)})
+    safe_rows: list[dict[str, float]] = []
+    for threshold in candidates:
+        row = _risk_row_at_nonconformity(
+            normalized,
+            threshold=threshold,
+            confidence_level=confidence_level,
+        )
+        if row["upper_bound"] <= target_risk:
+            safe_rows.append(row)
+
+    if safe_rows:
+        chosen = max(safe_rows, key=lambda row: row["threshold"])
+    else:
+        chosen = _risk_row_at_nonconformity(
+            normalized,
+            threshold=0.0,
+            confidence_level=confidence_level,
+        )
+
+    total_weight = sum(sample.weight for sample in normalized)
+    accepted_weight = sum(
+        sample.weight
+        for sample in normalized
+        if sample.nonconformity <= chosen["threshold"]
+    )
+    abstention_rate = 1.0 - (accepted_weight / total_weight)
+    return RiskControlledAbstentionThreshold(
+        nonconformity_threshold=float(chosen["threshold"]),
+        target_risk=target_risk,
+        confidence_level=confidence_level,
+        empirical_residual_risk=float(chosen["empirical_risk"]),
+        residual_risk_upper_bound=float(chosen["upper_bound"]),
+        accepted_critical_weight=float(chosen["accepted_critical_weight"]),
+        residual_leakage_weight=float(chosen["residual_leakage_weight"]),
+        abstention_rate=abstention_rate,
+        total_weight=total_weight,
+    )
+
+
+def _fit_temperature_scaling(
+    samples: Sequence[CalibrationSample],
+    *,
+    n_bins: int,
+) -> TemperatureScalingReport:
+    pre_bins = reliability_bins(
+        ((sample.score, sample.target) for sample in samples),
+        n_bins=n_bins,
+    )
+    pre_ece = expected_calibration_error(pre_bins)
+    candidates = _temperature_candidates()
+    scored: list[tuple[float, float, float]] = []
+    for temperature in candidates:
+        scaled_records = (
+            (_scaled_score(sample.score, temperature), sample.target)
+            for sample in samples
+        )
+        post_ece = expected_calibration_error(
+            reliability_bins(scaled_records, n_bins=n_bins)
+        )
+        nll = _weighted_log_loss(samples, temperature)
+        scored.append((nll, post_ece, temperature))
+
+    feasible = [item for item in scored if item[1] <= pre_ece + 1e-12] or [
+        (item[0], item[1], item[2]) for item in scored if item[2] == 1.0
+    ]
+    _, post_ece, temperature = min(
+        feasible, key=lambda item: (item[0], item[1], item[2])
+    )
+    post_bins = reliability_bins(
+        (
+            (_scaled_score(sample.score, temperature), sample.target)
+            for sample in samples
+        ),
+        n_bins=n_bins,
+    )
+    reliability = tuple(
+        {
+            "bin_index": int(pre["bin_index"]),
+            "lower_bound": float(pre["lower_bound"]),
+            "upper_bound": float(pre["upper_bound"]),
+            "pre_mean_confidence": float(pre["mean_confidence"]),
+            "pre_empirical_accuracy": float(pre["empirical_accuracy"]),
+            "post_mean_confidence": float(post["mean_confidence"]),
+            "post_empirical_accuracy": float(post["empirical_accuracy"]),
+            "count": int(post["count"]),
+        }
+        for pre, post in zip(pre_bins, post_bins, strict=True)
+    )
+    return TemperatureScalingReport(
+        temperature=temperature,
+        pre_scaling_ece=pre_ece,
+        post_scaling_ece=post_ece,
+        n_bins=n_bins,
+        sample_count=len(samples),
+        reliability=reliability,
+    )
+
+
+def _temperature_candidates() -> tuple[float, ...]:
+    values = {1.0}
+    values.update(round(0.25 + 0.05 * index, 2) for index in range(116))
+    return tuple(sorted(values))
+
+
+def _weighted_log_loss(
+    samples: Sequence[CalibrationSample],
+    temperature: float,
+) -> float:
+    total_weight = 0.0
+    loss = 0.0
+    for sample in samples:
+        probability = _clamp_probability(_scaled_score(sample.score, temperature))
+        total_weight += sample.weight
+        if sample.target:
+            loss -= sample.weight * math.log(probability)
+        else:
+            loss -= sample.weight * math.log1p(-probability)
+    return loss / total_weight if total_weight else 0.0
+
+
+def _scaled_score(score: float, temperature: float) -> float:
+    probability = _clamp_probability(score)
+    temp = max(float(temperature), 1e-6)
+    logit = math.log(probability / (1.0 - probability))
+    scaled = 1.0 / (1.0 + math.exp(-(logit / temp)))
+    return min(max(scaled, 0.0), 1.0)
+
+
+def _clamp_probability(value: float) -> float:
+    return min(max(float(value), 1e-12), 1.0 - 1e-12)
+
+
+def _nonconformity_score(probability: float, target: bool) -> float:
+    probability = _clamp_probability(probability)
+    return 1.0 - probability if target else probability
+
+
+def _split_conformal_quantile(
+    nonconformity: Sequence[float],
+    *,
+    alpha: float,
+) -> float:
+    values = sorted(float(value) for value in nonconformity)
+    if not values:
+        return 1.0
+    rank = math.ceil((len(values) + 1) * (1.0 - alpha))
+    index = min(max(rank, 1), len(values)) - 1
+    return min(max(values[index], 0.0), 1.0)
+
+
+def _estimate_distribution_shift(
+    calibration_scores: Sequence[float],
+    gate_scores: Sequence[float],
+    *,
+    base_quantile: float,
+    bins: int,
+) -> DistributionShiftEstimate:
+    calibration_histogram = _score_histogram(calibration_scores, bins=bins)
+    gate_histogram = _score_histogram(gate_scores or calibration_scores, bins=bins)
+    distance = 0.5 * sum(
+        abs(calibration_histogram[index] - gate_histogram[index])
+        for index in range(bins)
+    )
+    calibration_mean = _mean(calibration_scores)
+    gate_mean = _mean(gate_scores or calibration_scores)
+    mean_score_drop = max(calibration_mean - gate_mean, 0.0)
+    inflation = min(max(1.0 - base_quantile, 0.0), distance + mean_score_drop)
+    histogram = tuple(
+        {
+            "bin_index": index,
+            "lower_bound": index / bins,
+            "upper_bound": (index + 1) / bins,
+            "calibration_probability": calibration_histogram[index],
+            "gate_probability": gate_histogram[index],
+        }
+        for index in range(bins)
+    )
+    return DistributionShiftEstimate(
+        method="total_variation_plus_mean_score_drop",
+        distance=distance,
+        mean_score_drop=mean_score_drop,
+        quantile_inflation=inflation,
+        histogram=histogram,
+    )
+
+
+def _score_histogram(scores: Sequence[float], *, bins: int) -> tuple[float, ...]:
+    counts = [0.0 for _ in range(bins)]
+    if not scores:
+        return tuple(counts)
+    for score in scores:
+        bounded = min(max(float(score), 0.0), 1.0)
+        index = min(int(bounded * bins), bins - 1)
+        counts[index] += 1.0
+    total = sum(counts)
+    if not total:
+        return tuple(counts)
+    return tuple(count / total for count in counts)
+
+
+def _mean(values: Sequence[float]) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+
+def _apply_membership_defense_to_samples(
+    samples: Sequence[CalibrationSample],
+    policy: MembershipDefensePolicy,
+) -> list[CalibrationSample]:
+    if not policy.enabled:
+        return list(samples)
+    return [
+        replace(sample, score=policy.apply_score(sample.score)) for sample in samples
+    ]
 
 
 def _fit_group(
@@ -553,6 +1516,7 @@ def _fit_group(
         label=label,
         language=language,
         chosen_threshold=float(chosen["threshold"]),
+        nonconformity_quantile=1.0 - float(chosen["threshold"]),
         target_leakage=target_leakage,
         resulting_leakage=float(chosen["leakage"]),
         over_redaction=float(chosen["over_redaction"]),
@@ -608,6 +1572,116 @@ def _bounded_float(value: Any, field_name: str) -> float:
     return result
 
 
+def _lookup_confidence_threshold(
+    thresholds: Mapping[str, Any] | CalibrationThresholdSet,
+    label: str,
+    language: str,
+    *,
+    model_id: str | None,
+    default: float,
+) -> float:
+    if isinstance(thresholds, CalibrationThresholdSet):
+        return thresholds.lookup(
+            label,
+            language,
+            model_id=model_id,
+            default=default,
+        )
+    return _lookup_nested_threshold(
+        thresholds,
+        label,
+        language,
+        model_id=model_id,
+        default=default,
+    )
+
+
+def _lookup_nonconformity_quantile(
+    thresholds: Mapping[str, Any] | CalibrationThresholdSet,
+    label: str,
+    language: str,
+    *,
+    model_id: str | None,
+    default: float,
+) -> float:
+    if isinstance(thresholds, CalibrationThresholdSet):
+        return thresholds.lookup_nonconformity_quantile(
+            label,
+            language,
+            model_id=model_id,
+            default=default,
+        )
+    conformal = thresholds.get("conformal_quantiles") if thresholds else None
+    if isinstance(conformal, Mapping):
+        return _lookup_nested_threshold(
+            conformal,
+            label,
+            language,
+            model_id=model_id,
+            default=default,
+        )
+    return default
+
+
+def _lookup_nested_threshold(
+    payload: Mapping[str, Any],
+    label: str,
+    language: str,
+    *,
+    model_id: str | None,
+    default: float,
+) -> float:
+    candidates: list[Any] = []
+    if model_id and isinstance(payload.get(model_id), Mapping):
+        candidates.append(payload[model_id])
+    candidates.append(payload)
+    canonical = normalize_label(label, language)
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping):
+            continue
+        value = candidate[canonical] if canonical in candidate else candidate.get(label)
+        if isinstance(value, Mapping):
+            lang_value = (
+                value[language] if language in value else value.get(WILDCARD_LANGUAGE)
+            )
+            if lang_value is not None:
+                return _bounded_float(lang_value, "threshold")
+        elif value is not None:
+            return _bounded_float(value, "threshold")
+    return default
+
+
+def _risk_row_at_nonconformity(
+    samples: Sequence[AbstentionRiskSample],
+    *,
+    threshold: float,
+    confidence_level: float,
+) -> dict[str, float]:
+    accepted_critical = [
+        sample
+        for sample in samples
+        if sample.critical and sample.nonconformity <= threshold
+    ]
+    accepted_weight = sum(sample.weight for sample in accepted_critical)
+    residual_weight = sum(
+        sample.weight for sample in accepted_critical if sample.residual_leakage
+    )
+    empirical = residual_weight / accepted_weight if accepted_weight else 0.0
+    if accepted_weight:
+        delta = max(1.0 - confidence_level, 1e-12)
+        radius = math.sqrt(math.log(1.0 / delta) / (2.0 * accepted_weight))
+        upper = min(1.0, empirical + radius)
+    else:
+        upper = 0.0
+    return {
+        "threshold": threshold,
+        "empirical_risk": empirical,
+        "upper_bound": upper,
+        "accepted_critical_weight": accepted_weight,
+        "residual_leakage_weight": residual_weight,
+    }
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -617,18 +1691,46 @@ def _slug(value: str) -> str:
     return slug or "artifact"
 
 
+_DEFAULT_CRITICAL_LABELS = frozenset(
+    {
+        "SSN",
+        "ID_NUM",
+        "API_KEY",
+        "ACCOUNT_NUMBER",
+        "PASSWORD",
+        "PIN",
+        "CREDIT_CARD",
+        "CVV",
+        "IBAN",
+        "BIC",
+    }
+)
+
+
 __all__ = [
+    "AbstentionRiskSample",
     "CalibrationArtifactPaths",
+    "ConformalCalibrationGroup",
+    "ConformalCalibrationReport",
     "CalibrationGroupReport",
     "CalibrationReport",
     "CalibrationSample",
     "CalibrationThresholdSet",
+    "DEFAULT_CONFORMAL_ALPHA",
+    "DistributionShiftEstimate",
+    "RiskControlledAbstentionThreshold",
+    "SpanNonconformityScore",
+    "TemperatureScalingReport",
+    "UNDER_SHIFT_REPORT_ARTIFACT",
     "artifact_dir_for",
     "build_thresholds_payload",
     "coerce_calibration_thresholds",
     "default_suite_calibration_samples",
+    "fit_calibration_under_shift",
     "fit_calibration_thresholds",
     "load_calibration_samples",
     "load_calibration_thresholds",
+    "score_span_nonconformity",
+    "select_risk_controlled_abstention_threshold",
     "write_calibration_artifacts",
 ]

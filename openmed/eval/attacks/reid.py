@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from collections.abc import Mapping, Sequence
@@ -11,9 +13,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from openmed.core.audit import stable_hash
+from openmed.core.labels import normalize_label
+from openmed.core.safety_sweep import hashed_span_surface
+from openmed.core.thresholds import MembershipDefensePolicy
 from openmed.eval.golden import GoldenFixture, load_golden_fixtures
 from openmed.eval.report import BenchmarkReport
 from openmed.risk import risk_report
+
+from .linkage import linkage_attack
 
 
 @dataclass(frozen=True)
@@ -56,21 +64,70 @@ def run_reid_benchmark(
     *,
     suite: str = "golden",
     model_name: str = "privacy-filter",
+    attack_mode: str = "reid",
     deidentified_records: Sequence[Mapping[str, Any]] | None = None,
     auxiliary_records: Sequence[Mapping[str, Any]] | None = None,
+    quasi_id_table: Sequence[Mapping[str, Any]] | None = None,
+    quasi_identifiers: Sequence[str] | None = None,
     candidate_members: Sequence[Mapping[str, Any]] | None = None,
+    shadow_member_records: Sequence[Mapping[str, Any]] | None = None,
+    shadow_heldout_records: Sequence[Mapping[str, Any]] | None = None,
+    membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
+    membership_advantage_ceiling: float | None = None,
     output_json: str | Path | None = None,
     output_markdown: str | Path | None = None,
     generated_at: str | None = None,
 ) -> BenchmarkReport:
     """Run the re-identification attack and return a BenchmarkReport.
 
-    When ``candidate_members`` is provided, the membership-inference probe runs
-    against the de-identified records and its result is added to the report
-    metrics under ``"membership_inference"``.
+    ``attack_mode="linkage"`` runs a first-class external quasi-identifier
+    linkage attack against ``quasi_id_table``. When ``candidate_members`` is
+    provided in the default ``"reid"`` mode, the membership-inference probe
+    runs against the de-identified records and its result is added to the
+    report metrics under ``"membership_inference"``.
     """
 
     fixtures = _load_suite_fixtures(suite)
+    if attack_mode not in {"reid", "linkage"}:
+        raise ValueError("attack_mode must be 'reid' or 'linkage'")
+
+    if attack_mode == "linkage":
+        if quasi_id_table is None:
+            raise ValueError("quasi_id_table is required for linkage mode")
+        deidentified = (
+            list(deidentified_records)
+            if deidentified_records is not None
+            else [_deidentified_record(fixture) for fixture in fixtures]
+        )
+        linkage_result = linkage_attack(
+            deidentified,
+            quasi_id_table,
+            quasi_identifiers=quasi_identifiers,
+        )
+        report = BenchmarkReport(
+            suite=suite,
+            model_name=model_name,
+            device="attack",
+            fixture_count=linkage_result.record_count,
+            generated_at=generated_at or _utc_now(),
+            metrics={
+                "linkage_unique_match_rate": linkage_result.unique_match_rate,
+                "linkage_attack": linkage_result.to_metric(),
+            },
+            metadata={
+                "attack": "linkage",
+                "leaderboard_metric": "linkage_unique_match_rate",
+            },
+        )
+        if output_json is not None:
+            report.write_json(output_json)
+        if output_markdown is not None:
+            Path(output_markdown).write_text(
+                render_reid_leaderboard([report]),
+                encoding="utf-8",
+            )
+        return report
+
     result = run_reid_attack(
         fixtures,
         deidentified_records=deidentified_records,
@@ -92,6 +149,18 @@ def run_reid_benchmark(
         )
         metrics["membership_inference"] = membership_inference_attack(
             deidentified, candidate_members
+        ).to_metric()
+    if shadow_member_records is not None or shadow_heldout_records is not None:
+        if shadow_member_records is None or shadow_heldout_records is None:
+            raise ValueError(
+                "shadow_member_records and shadow_heldout_records must be provided "
+                "together"
+            )
+        metrics["membership_leakage"] = shadow_membership_inference_attack(
+            shadow_member_records,
+            shadow_heldout_records,
+            defense_policy=membership_defense,
+            advantage_ceiling=membership_advantage_ceiling,
         ).to_metric()
     report = BenchmarkReport(
         suite=suite,
@@ -166,6 +235,43 @@ _TOKEN_RE = re.compile(r"[a-z0-9]{4,}")
 
 
 @dataclass(frozen=True)
+class ShadowMembershipInferenceResult:
+    """Trained shadow-model membership-inference score over detector outputs."""
+
+    attacker_auc: float
+    attacker_advantage: float
+    accuracy: float
+    decision_threshold: float
+    train_record_count: int
+    eval_record_count: int
+    member_count: int
+    heldout_count: int
+    advantage_ceiling: float
+    defense: Mapping[str, Any] = field(default_factory=dict)
+    per_label: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    feature_hash: str = ""
+
+    def to_metric(self) -> dict[str, Any]:
+        return {
+            "attacker_auc": float(self.attacker_auc),
+            "attacker_advantage": float(self.attacker_advantage),
+            "advantage": float(self.attacker_advantage),
+            "accuracy": float(self.accuracy),
+            "decision_threshold": float(self.decision_threshold),
+            "advantage_ceiling": float(self.advantage_ceiling),
+            "train_record_count": int(self.train_record_count),
+            "eval_record_count": int(self.eval_record_count),
+            "member_count": int(self.member_count),
+            "heldout_count": int(self.heldout_count),
+            "feature_hash": self.feature_hash,
+            "defense": dict(self.defense),
+            "per_label": {
+                label: dict(values) for label, values in sorted(self.per_label.items())
+            },
+        }
+
+
+@dataclass(frozen=True)
 class MembershipInferenceResult:
     """Membership-inference probe score over de-identified records.
 
@@ -182,13 +288,42 @@ class MembershipInferenceResult:
     baseline: float = 0.5
 
     def to_metric(self) -> dict[str, Any]:
+        matched_count = sum(
+            1 for row in self.per_record if row.get("matched_candidate") is not None
+        )
         return {
             "advantage": float(self.advantage),
             "accuracy": float(self.accuracy),
             "baseline": float(self.baseline),
             "record_count": int(self.record_count),
             "confident_count": int(self.confident_count),
-            "per_record": [dict(row) for row in self.per_record],
+            "matched_count": int(matched_count),
+            "record_hashes": [
+                stable_hash({"record_id": row.get("record_id")})
+                for row in self.per_record
+            ],
+        }
+
+
+@dataclass(frozen=True)
+class SideChannelProbeResult:
+    """Mutual-information style probe for PHI encoded in timing metadata."""
+
+    flagged: bool
+    estimate_bits: float
+    threshold_bits: float
+    sample_count: int
+    findings: tuple[dict[str, Any], ...] = ()
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def to_metric(self) -> dict[str, Any]:
+        return {
+            "flagged": bool(self.flagged),
+            "estimate_bits": float(self.estimate_bits),
+            "threshold_bits": float(self.threshold_bits),
+            "sample_count": int(self.sample_count),
+            "findings": [dict(item) for item in self.findings],
+            "metadata": dict(self.metadata),
         }
 
 
@@ -262,6 +397,551 @@ def membership_inference_attack(
         confident_count=confident_count,
         per_record=tuple(per_record),
     )
+
+
+def probe_span_timing_side_channel(
+    fixtures: Sequence[Any],
+    timing_records: Sequence[Mapping[str, Any]],
+    *,
+    threshold_bits: float = 0.30,
+    min_samples: int = 4,
+) -> SideChannelProbeResult:
+    """Estimate whether span timings encode gold PHI beyond detection outputs.
+
+    The probe discretizes per-span duration around the median and compares that
+    bucket with a deterministic secret bit derived from the gold span surface.
+    Findings include only fixture ids, offsets, labels, and hashes.
+    """
+    gold_by_fixture = _gold_span_index(fixtures)
+    samples: list[tuple[int, float, dict[str, Any]]] = []
+
+    for record in timing_records:
+        fixture_id = str(record.get("fixture_id") or "")
+        duration = _optional_float(record.get("duration_ms"))
+        start = _optional_int(record.get("start"))
+        end = _optional_int(record.get("end"))
+        if duration is None or start is None or end is None:
+            continue
+        gold = _matching_gold_span(gold_by_fixture.get(fixture_id, ()), start, end)
+        if gold is None:
+            continue
+        surface = str(gold["surface"])
+        evidence = {
+            "fixture_id": fixture_id,
+            **hashed_span_surface(
+                str(gold["fixture_text"]),
+                int(gold["start"]),
+                int(gold["end"]),
+                label=str(gold["label"]),
+            ),
+        }
+        samples.append((_surface_secret_bit(surface), duration, evidence))
+
+    if len(samples) < min_samples:
+        return SideChannelProbeResult(
+            flagged=False,
+            estimate_bits=0.0,
+            threshold_bits=threshold_bits,
+            sample_count=len(samples),
+            metadata={"reason": "insufficient_timing_samples"},
+        )
+
+    durations = [duration for _secret_bit, duration, _evidence in samples]
+    median_duration = _median(durations)
+    bucketed = [
+        (secret_bit, int(duration > median_duration), evidence)
+        for secret_bit, duration, evidence in samples
+    ]
+    estimate = _mutual_information_bits(
+        [(secret_bit, timing_bucket) for secret_bit, timing_bucket, _ in bucketed]
+    )
+    flagged = estimate >= threshold_bits
+    findings = tuple(
+        {
+            **evidence,
+            "secret_bucket": secret_bit,
+            "timing_bucket": timing_bucket,
+        }
+        for secret_bit, timing_bucket, evidence in bucketed
+        if flagged
+    )
+    return SideChannelProbeResult(
+        flagged=flagged,
+        estimate_bits=estimate,
+        threshold_bits=threshold_bits,
+        sample_count=len(bucketed),
+        findings=findings,
+        metadata={"median_duration_ms": median_duration},
+    )
+
+
+@dataclass(frozen=True)
+class _ShadowExample:
+    record_hash: str
+    member: bool
+    features: tuple[float, ...]
+    label_scores: Mapping[str, tuple[float, ...]]
+
+
+def shadow_membership_inference_attack(
+    member_records: Sequence[Mapping[str, Any]],
+    heldout_records: Sequence[Mapping[str, Any]],
+    *,
+    defense_policy: Mapping[str, Any] | MembershipDefensePolicy | None = None,
+    advantage_ceiling: float | None = None,
+    train_fraction: float = 0.5,
+) -> ShadowMembershipInferenceResult:
+    """Train and evaluate a shadow attacker over synthetic score records.
+
+    Records may expose detector scores as top-level ``score``/``confidence``/
+    ``logit`` values, a ``scores`` mapping, or span-like ``entities``/
+    ``spans``/``detections`` rows. Raw note text is ignored; the report
+    contains only aggregate metrics and stable hashes over score metadata.
+    """
+
+    if not member_records or not heldout_records:
+        raise ValueError("shadow membership attack requires member and held-out rows")
+    train_fraction = _bounded_fraction(train_fraction, "train_fraction")
+    defense = MembershipDefensePolicy.from_mapping(defense_policy)
+    ceiling = (
+        defense.advantage_ceiling
+        if advantage_ceiling is None
+        else _bounded_fraction(advantage_ceiling, "advantage_ceiling")
+    )
+
+    members = [
+        _shadow_example(record, member=True, defense=defense)
+        for record in member_records
+    ]
+    heldout = [
+        _shadow_example(record, member=False, defense=defense)
+        for record in heldout_records
+    ]
+    train, evaluation = _train_eval_split(
+        members,
+        heldout,
+        train_fraction=train_fraction,
+    )
+    attack = _evaluate_shadow_examples(train, evaluation)
+
+    per_label: dict[str, Mapping[str, Any]] = {}
+    labels = sorted(
+        {label for example in (*members, *heldout) for label in example.label_scores}
+    )
+    for label in labels:
+        label_train = [_label_example(example, label) for example in train]
+        label_eval = [_label_example(example, label) for example in evaluation]
+        label_attack = _evaluate_shadow_examples(label_train, label_eval)
+        per_label[label] = {
+            "attacker_auc": label_attack["auc"],
+            "attacker_advantage": label_attack["advantage"],
+            "member_count": sum(1 for example in label_eval if example.member),
+            "heldout_count": sum(1 for example in label_eval if not example.member),
+            "feature_hash": stable_hash(
+                {
+                    "label": label,
+                    "records": [example.record_hash for example in label_eval],
+                }
+            ),
+        }
+
+    return ShadowMembershipInferenceResult(
+        attacker_auc=attack["auc"],
+        attacker_advantage=attack["advantage"],
+        accuracy=attack["accuracy"],
+        decision_threshold=attack["threshold"],
+        train_record_count=len(train),
+        eval_record_count=len(evaluation),
+        member_count=len(members),
+        heldout_count=len(heldout),
+        advantage_ceiling=ceiling,
+        defense=defense.to_dict(),
+        per_label=per_label,
+        feature_hash=stable_hash(
+            {
+                "members": [example.record_hash for example in members],
+                "heldout": [example.record_hash for example in heldout],
+                "defense": defense.to_dict(),
+            }
+        ),
+    )
+
+
+def _shadow_example(
+    record: Mapping[str, Any],
+    *,
+    member: bool,
+    defense: MembershipDefensePolicy,
+) -> _ShadowExample:
+    events = _score_events(record, defense)
+    label_scores: defaultdict[str, list[float]] = defaultdict(list)
+    for label, score in events:
+        label_scores[label].append(score)
+    scores = [score for _, score in events]
+    return _ShadowExample(
+        record_hash=_record_hash(record),
+        member=member,
+        features=_aggregate_score_features(scores),
+        label_scores={
+            label: tuple(values) for label, values in sorted(label_scores.items())
+        },
+    )
+
+
+def _label_example(example: _ShadowExample, label: str) -> _ShadowExample:
+    return _ShadowExample(
+        record_hash=example.record_hash,
+        member=example.member,
+        features=_aggregate_score_features(example.label_scores.get(label, ())),
+        label_scores={label: example.label_scores.get(label, ())},
+    )
+
+
+def _score_events(
+    record: Mapping[str, Any],
+    defense: MembershipDefensePolicy,
+) -> list[tuple[str, float]]:
+    events: list[tuple[str, float]] = []
+    direct_score = _score_from_mapping(record)
+    if direct_score is not None:
+        events.append(
+            (
+                _label_from_mapping(record),
+                defense.apply_score(direct_score),
+            )
+        )
+
+    scores = record.get("scores")
+    if isinstance(scores, Mapping):
+        for label, value in scores.items():
+            _append_score_value(events, str(label), value, defense)
+    elif isinstance(scores, Sequence) and not isinstance(
+        scores,
+        (str, bytes, bytearray),
+    ):
+        for item in scores:
+            _append_score_value(events, "OVERALL", item, defense)
+
+    for key in ("spans", "entities", "detections", "predictions", "outputs"):
+        rows = record.get(key)
+        if not isinstance(rows, Sequence) or isinstance(
+            rows,
+            (str, bytes, bytearray),
+        ):
+            continue
+        for item in rows:
+            _append_score_value(events, "OVERALL", item, defense)
+
+    return events or [("OVERALL", defense.apply_score(0.0))]
+
+
+def _append_score_value(
+    events: list[tuple[str, float]],
+    fallback_label: str,
+    value: Any,
+    defense: MembershipDefensePolicy,
+) -> None:
+    if isinstance(value, Mapping):
+        score = _score_from_mapping(value)
+        if score is None:
+            nested_scores = value.get("scores")
+            if isinstance(nested_scores, Mapping):
+                for label, nested in nested_scores.items():
+                    _append_score_value(events, str(label), nested, defense)
+            return
+        events.append(
+            (
+                _label_from_mapping(value, fallback_label),
+                defense.apply_score(score),
+            )
+        )
+        return
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    ):
+        for item in value:
+            _append_score_value(events, fallback_label, item, defense)
+        return
+    score = _coerce_score(value)
+    if score is not None:
+        events.append(
+            (
+                _normalise_attack_label(fallback_label),
+                defense.apply_score(score),
+            )
+        )
+
+
+def _score_from_mapping(value: Mapping[str, Any]) -> float | None:
+    if value.get("logit") is not None:
+        try:
+            return _sigmoid(float(value["logit"]))
+        except (TypeError, ValueError):
+            return None
+    for key in ("score", "confidence", "probability", "prob"):
+        score = _coerce_score(value.get(key))
+        if score is not None:
+            return score
+    return None
+
+
+def _label_from_mapping(
+    value: Mapping[str, Any],
+    fallback: str = "OVERALL",
+) -> str:
+    raw = (
+        value.get("canonical_label")
+        or value.get("label")
+        or value.get("entity_type")
+        or value.get("entity")
+        or fallback
+    )
+    language = str(value.get("language") or value.get("lang") or "en")
+    return _normalise_attack_label(str(raw), language=language)
+
+
+def _normalise_attack_label(label: str, *, language: str = "en") -> str:
+    if label.strip().upper() == "OVERALL":
+        return "OVERALL"
+    return normalize_label(label, language)
+
+
+def _coerce_score(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(score):
+        return None
+    return min(1.0, max(0.0, score))
+
+
+def _aggregate_score_features(scores: Sequence[float]) -> tuple[float, ...]:
+    if not scores:
+        return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    values = [min(1.0, max(0.0, float(score))) for score in scores]
+    count = len(values)
+    mean = sum(values) / count
+    variance = sum((score - mean) ** 2 for score in values) / count
+    margins = [abs(score - 0.5) * 2.0 for score in values]
+    return (
+        max(values),
+        mean,
+        min(values),
+        min(1.0, count / 10.0),
+        min(1.0, variance * 4.0),
+        sum(margins) / count,
+    )
+
+
+def _train_eval_split(
+    members: Sequence[_ShadowExample],
+    heldout: Sequence[_ShadowExample],
+    *,
+    train_fraction: float,
+) -> tuple[list[_ShadowExample], list[_ShadowExample]]:
+    train: list[_ShadowExample] = []
+    evaluation: list[_ShadowExample] = []
+    for examples in (members, heldout):
+        ordered = sorted(examples, key=lambda example: example.record_hash)
+        train_count = max(1, int(round(len(ordered) * train_fraction)))
+        if len(ordered) > 1:
+            train_count = min(train_count, len(ordered) - 1)
+        train.extend(ordered[:train_count])
+        evaluation.extend(ordered[train_count:] or ordered[:train_count])
+    return train, evaluation
+
+
+def _evaluate_shadow_examples(
+    train: Sequence[_ShadowExample],
+    evaluation: Sequence[_ShadowExample],
+) -> dict[str, float]:
+    weights = _train_logistic(train)
+    train_scores = [_predict_membership(weights, example.features) for example in train]
+    train_labels = [1 if example.member else 0 for example in train]
+    eval_scores = [
+        _predict_membership(weights, example.features) for example in evaluation
+    ]
+    eval_labels = [1 if example.member else 0 for example in evaluation]
+    threshold = _best_score_threshold(train_scores, train_labels)
+    accuracy = _threshold_accuracy(eval_scores, eval_labels, threshold)
+    return {
+        "auc": _auc(eval_scores, eval_labels),
+        "advantage": _max_tpr_minus_fpr(eval_scores, eval_labels),
+        "accuracy": accuracy,
+        "threshold": threshold,
+    }
+
+
+def _train_logistic(
+    examples: Sequence[_ShadowExample],
+    *,
+    epochs: int = 300,
+    learning_rate: float = 0.2,
+    l2: float = 0.001,
+) -> tuple[float, ...]:
+    width = max((len(example.features) for example in examples), default=0)
+    weights = [0.0] * (width + 1)
+    ordered = sorted(examples, key=lambda example: example.record_hash)
+    for _ in range(epochs):
+        for example in ordered:
+            label = 1.0 if example.member else 0.0
+            score = _predict_membership(tuple(weights), example.features)
+            error = score - label
+            weights[0] -= learning_rate * error
+            for index, value in enumerate(example.features, start=1):
+                weights[index] -= learning_rate * (error * value + l2 * weights[index])
+    return tuple(weights)
+
+
+def _predict_membership(weights: Sequence[float], features: Sequence[float]) -> float:
+    if not weights:
+        return 0.5
+    logit = float(weights[0])
+    for index, value in enumerate(features, start=1):
+        if index >= len(weights):
+            break
+        logit += float(weights[index]) * float(value)
+    return _sigmoid(logit)
+
+
+def _best_score_threshold(scores: Sequence[float], labels: Sequence[int]) -> float:
+    if not scores:
+        return 0.5
+    candidates = sorted(set(float(score) for score in scores))
+    return max(
+        candidates,
+        key=lambda threshold: (
+            _threshold_accuracy(scores, labels, threshold),
+            _tpr_minus_fpr(scores, labels, threshold),
+            -threshold,
+        ),
+    )
+
+
+def _threshold_accuracy(
+    scores: Sequence[float],
+    labels: Sequence[int],
+    threshold: float,
+) -> float:
+    if not scores:
+        return 0.5
+    correct = 0
+    for score, label in zip(scores, labels):
+        prediction = 1 if score >= threshold else 0
+        correct += int(prediction == label)
+    return correct / len(scores)
+
+
+def _max_tpr_minus_fpr(scores: Sequence[float], labels: Sequence[int]) -> float:
+    if not scores:
+        return 0.0
+    return max(
+        0.0,
+        *(_tpr_minus_fpr(scores, labels, threshold) for threshold in set(scores)),
+    )
+
+
+def _tpr_minus_fpr(
+    scores: Sequence[float],
+    labels: Sequence[int],
+    threshold: float,
+) -> float:
+    positives = sum(1 for label in labels if label == 1)
+    negatives = sum(1 for label in labels if label == 0)
+    if positives == 0 or negatives == 0:
+        return 0.0
+    true_positive = sum(
+        1 for score, label in zip(scores, labels) if label == 1 and score >= threshold
+    )
+    false_positive = sum(
+        1 for score, label in zip(scores, labels) if label == 0 and score >= threshold
+    )
+    return (true_positive / positives) - (false_positive / negatives)
+
+
+def _auc(scores: Sequence[float], labels: Sequence[int]) -> float:
+    positives = [score for score, label in zip(scores, labels) if label == 1]
+    negatives = [score for score, label in zip(scores, labels) if label == 0]
+    if not positives or not negatives:
+        return 0.5
+    wins = 0.0
+    for positive in positives:
+        for negative in negatives:
+            if positive > negative:
+                wins += 1.0
+            elif positive == negative:
+                wins += 0.5
+    return wins / (len(positives) * len(negatives))
+
+
+def _bounded_fraction(value: Any, field_name: str) -> float:
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be between 0.0 and 1.0") from exc
+    if not math.isfinite(result) or not 0.0 <= result <= 1.0:
+        raise ValueError(f"{field_name} must be between 0.0 and 1.0")
+    return result
+
+
+def _sigmoid(value: float) -> float:
+    if value >= 0.0:
+        z = math.exp(-value)
+        return 1.0 / (1.0 + z)
+    z = math.exp(value)
+    return z / (1.0 + z)
+
+
+def _record_hash(record: Mapping[str, Any]) -> str:
+    return stable_hash(_record_hash_material(record))
+
+
+def _record_hash_material(record: Mapping[str, Any]) -> dict[str, Any]:
+    material: dict[str, Any] = {}
+    for key, value in sorted(record.items()):
+        if str(key) in {"text", "note", "source_text", "raw_text"}:
+            material[str(key)] = {"sha256": stable_hash({"value": str(value)})}
+        elif str(key) in _ID_FIELDS:
+            material[str(key)] = str(value)
+        elif str(key) in {
+            "score",
+            "confidence",
+            "probability",
+            "prob",
+            "logit",
+            "scores",
+            "spans",
+            "entities",
+            "detections",
+            "predictions",
+            "outputs",
+            "label",
+            "canonical_label",
+            "entity_type",
+            "language",
+            "lang",
+        }:
+            material[str(key)] = _hash_safe_value(value)
+    return material
+
+
+def _hash_safe_value(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _hash_safe_value(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+            if str(key) not in {"text", "note", "source_text", "raw_text"}
+        }
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (str, bytes, bytearray),
+    ):
+        return [_hash_safe_value(item) for item in value]
+    return value
 
 
 def _best_candidate(hits: Counter[str]) -> str | None:
@@ -521,6 +1201,114 @@ def _rate(numerator: int, denominator: int) -> float:
     return float(numerator / denominator) if denominator else 0.0
 
 
+def _gold_span_index(fixtures: Sequence[Any]) -> dict[str, list[dict[str, Any]]]:
+    indexed: dict[str, list[dict[str, Any]]] = {}
+    for fixture in fixtures:
+        fixture_id = str(
+            _fixture_value(fixture, "fixture_id")
+            or _fixture_value(fixture, "id")
+            or "fixture"
+        )
+        text = str(_fixture_value(fixture, "text") or "")
+        spans = (
+            _fixture_value(fixture, "gold_spans")
+            or _fixture_value(fixture, "entities")
+            or ()
+        )
+        entries: list[dict[str, Any]] = []
+        for span in spans:
+            start = _optional_int(_span_value(span, "start"))
+            end = _optional_int(_span_value(span, "end"))
+            if start is None or end is None or not (0 <= start < end <= len(text)):
+                continue
+            entries.append(
+                {
+                    "start": start,
+                    "end": end,
+                    "label": _span_value(span, "label")
+                    or _span_value(span, "entity_type")
+                    or "OTHER",
+                    "surface": text[start:end],
+                    "fixture_text": text,
+                }
+            )
+        indexed[fixture_id] = entries
+    return indexed
+
+
+def _matching_gold_span(
+    spans: Sequence[Mapping[str, Any]],
+    start: int,
+    end: int,
+) -> Mapping[str, Any] | None:
+    for span in spans:
+        if int(span["start"]) == start and int(span["end"]) == end:
+            return span
+    for span in spans:
+        if start < int(span["end"]) and end > int(span["start"]):
+            return span
+    return None
+
+
+def _surface_secret_bit(surface: str) -> int:
+    return hashlib.sha256(surface.encode("utf-8")).digest()[0] & 1
+
+
+def _median(values: Sequence[float]) -> float:
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[midpoint]
+    return (ordered[midpoint - 1] + ordered[midpoint]) / 2.0
+
+
+def _mutual_information_bits(samples: Sequence[tuple[int, int]]) -> float:
+    total = len(samples)
+    if total == 0:
+        return 0.0
+    joint = Counter(samples)
+    x_counts = Counter(secret for secret, _timing in samples)
+    y_counts = Counter(timing for _secret, timing in samples)
+    estimate = 0.0
+    for (secret, timing), count in joint.items():
+        p_xy = count / total
+        p_x = x_counts[secret] / total
+        p_y = y_counts[timing] / total
+        estimate += p_xy * math.log2(p_xy / (p_x * p_y))
+    return float(max(0.0, estimate))
+
+
+def _fixture_value(fixture: Any, key: str) -> Any:
+    if isinstance(fixture, Mapping):
+        return fixture.get(key)
+    return getattr(fixture, key, None)
+
+
+def _span_value(span: Any, key: str) -> Any:
+    if isinstance(span, Mapping):
+        return span.get(key)
+    return getattr(span, key, None)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -528,9 +1316,13 @@ def _utc_now() -> str:
 __all__ = [
     "ReidAttackResult",
     "MembershipInferenceResult",
+    "SideChannelProbeResult",
+    "ShadowMembershipInferenceResult",
     "generate_reid_leaderboard",
     "membership_inference_attack",
+    "probe_span_timing_side_channel",
     "render_reid_leaderboard",
     "run_reid_attack",
     "run_reid_benchmark",
+    "shadow_membership_inference_attack",
 ]

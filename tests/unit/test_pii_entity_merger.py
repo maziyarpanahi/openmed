@@ -310,6 +310,7 @@ class TestMultilingualPatterns:
         assert normalize_label("codice_fiscale") == "national_id"
         assert normalize_label("cpf") == "national_id"
         assert normalize_label("cnpj") == "national_id"
+        assert normalize_label("teudat_zehut") == "national_id"
 
     def test_normalize_label_postcode_variants(self):
         """Test normalize_label handles postcode variants."""
@@ -329,6 +330,7 @@ class TestMultilingualPatterns:
         assert is_more_specific("codice_fiscale", "national_id") is True
         assert is_more_specific("cpf", "national_id") is True
         assert is_more_specific("cnpj", "national_id") is True
+        assert is_more_specific("teudat_zehut", "national_id") is True
         assert is_more_specific("national_id", "nir") is False
 
     def test_french_date_pattern_with_context(self):

@@ -95,6 +95,187 @@
         "title": "AnalyzeRequest",
         "type": "object"
       },
+      "DeidentifyJobDocument": {
+        "additionalProperties": false,
+        "description": "One document in an async de-identification job.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "DeidentifyJobDocument",
+        "type": "object"
+      },
+      "DeidentifyJobRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for POST /jobs.",
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "date_shift_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date Shift Days"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DeidentifyJobDocument"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "keep_mapping": {
+            "default": false,
+            "title": "Keep Mapping",
+            "type": "boolean"
+          },
+          "keep_year": {
+            "default": false,
+            "title": "Keep Year",
+            "type": "boolean"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "method": {
+            "default": "mask",
+            "enum": [
+              "mask",
+              "remove",
+              "replace",
+              "hash",
+              "shift_dates"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy"
+          },
+          "shift_dates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Dates"
+          },
+          "use_safety_sweep": {
+            "default": true,
+            "title": "Use Safety Sweep",
+            "type": "boolean"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          },
+          "webhook": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobWebhookRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "documents"
+        ],
+        "title": "DeidentifyJobRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -106,6 +287,40 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "JobWebhookRequest": {
+        "additionalProperties": false,
+        "description": "Webhook callback configuration for async jobs.",
+        "properties": {
+          "backoff_seconds": {
+            "default": 0.5,
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Backoff Seconds",
+            "type": "number"
+          },
+          "max_attempts": {
+            "default": 3,
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "secret"
+        ],
+        "title": "JobWebhookRequest",
         "type": "object"
       },
       "ModelUnloadRequest": {
@@ -194,9 +409,11 @@
               "te",
               "pt",
               "ar",
+              "he",
               "ja",
               "tr",
-              "id"
+              "id",
+              "th"
             ],
             "title": "Lang",
             "type": "string"
@@ -313,9 +530,11 @@
               "te",
               "pt",
               "ar",
+              "he",
               "ja",
               "tr",
-              "id"
+              "id",
+              "th"
             ],
             "title": "Lang",
             "type": "string"
@@ -350,6 +569,400 @@
           "text"
         ],
         "title": "PIIExtractRequest",
+        "type": "object"
+      },
+      "PIIExtractStreamRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for /pii/extract/stream.",
+        "properties": {
+          "chunk_size": {
+            "default": 1024,
+            "maximum": 32768.0,
+            "minimum": 1.0,
+            "title": "Chunk Size",
+            "type": "integer"
+          },
+          "confidence_threshold": {
+            "default": 0.5,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "include_text": {
+            "default": true,
+            "title": "Include Text",
+            "type": "boolean"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "max_entity_chars": {
+            "default": 512,
+            "minimum": 1.0,
+            "title": "Max Entity Chars",
+            "type": "integer"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "tokenizer_context_chars": {
+            "default": 128,
+            "minimum": 0.0,
+            "title": "Tokenizer Context Chars",
+            "type": "integer"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          },
+          "window_chars": {
+            "default": 4096,
+            "minimum": 64.0,
+            "title": "Window Chars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PIIExtractStreamRequest",
+        "type": "object"
+      },
+      "PrivacyGatewayRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for /privacy-gateway/complete.",
+        "properties": {
+          "confidence_threshold": {
+            "default": 0.85,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "detector_confidence_floor": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Detector Confidence Floor",
+            "type": "number"
+          },
+          "disallowed_entity_categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Disallowed Entity Categories",
+            "type": "array"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "policy": {
+            "default": "strict",
+            "title": "Policy",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "PrivacyGatewayRequest",
+        "type": "object"
+      },
+      "SMARTBackendIngestionRequest": {
+        "additionalProperties": false,
+        "description": "Request schema for starting SMART backend-services ingestion.",
+        "properties": {
+          "checkpoint_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checkpoint Path"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "confidence_threshold": {
+            "default": 0.7,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence Threshold",
+            "type": "number"
+          },
+          "export_path": {
+            "default": "$export",
+            "title": "Export Path",
+            "type": "string"
+          },
+          "fhir_base_url": {
+            "title": "Fhir Base Url",
+            "type": "string"
+          },
+          "keep_alive": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Alive"
+          },
+          "key_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Id"
+          },
+          "lang": {
+            "default": "en",
+            "enum": [
+              "en",
+              "fr",
+              "de",
+              "it",
+              "es",
+              "nl",
+              "hi",
+              "te",
+              "pt",
+              "ar",
+              "he",
+              "ja",
+              "tr",
+              "id",
+              "th"
+            ],
+            "title": "Lang",
+            "type": "string"
+          },
+          "max_inflight_downloads": {
+            "default": 2,
+            "minimum": 1.0,
+            "title": "Max Inflight Downloads",
+            "type": "integer"
+          },
+          "method": {
+            "default": "replace",
+            "enum": [
+              "mask",
+              "remove",
+              "replace",
+              "hash",
+              "shift_dates"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "model_name": {
+            "default": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
+            "title": "Model Name",
+            "type": "string"
+          },
+          "normalize_accents": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalize Accents"
+          },
+          "output_dir": {
+            "title": "Output Dir",
+            "type": "string"
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "hipaa_safe_harbor",
+            "title": "Policy"
+          },
+          "poll_interval_seconds": {
+            "default": 1.0,
+            "minimum": 0.0,
+            "title": "Poll Interval Seconds",
+            "type": "number"
+          },
+          "private_key_pem": {
+            "title": "Private Key Pem",
+            "type": "string"
+          },
+          "request_timeout_seconds": {
+            "default": 30.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Request Timeout Seconds",
+            "type": "number"
+          },
+          "scope": {
+            "default": "system/*.read",
+            "title": "Scope",
+            "type": "string"
+          },
+          "token_url": {
+            "title": "Token Url",
+            "type": "string"
+          },
+          "use_safety_sweep": {
+            "default": true,
+            "title": "Use Safety Sweep",
+            "type": "boolean"
+          },
+          "use_smart_merging": {
+            "default": true,
+            "title": "Use Smart Merging",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fhir_base_url",
+          "token_url",
+          "client_id",
+          "private_key_pem",
+          "output_dir"
+        ],
+        "title": "SMARTBackendIngestionRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -397,7 +1010,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "1.6.0"
+    "version": "1.7.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -441,6 +1054,128 @@
         "summary": "Analyze"
       }
     },
+    "/fhir/smart-backend/ingestions": {
+      "post": {
+        "operationId": "start_smart_backend_ingestion_fhir_smart_backend_ingestions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SMARTBackendIngestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Start Smart Backend Ingestion Fhir Smart Backend Ingestions Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Smart Backend Ingestion"
+      }
+    },
+    "/fhir/smart-backend/ingestions/{job_id}": {
+      "get": {
+        "operationId": "smart_backend_ingestion_status_fhir_smart_backend_ingestions__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Smart Backend Ingestion Status Fhir Smart Backend Ingestions  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Smart Backend Ingestion Status"
+      }
+    },
+    "/fhir/smart-backend/ingestions/{job_id}/summary": {
+      "get": {
+        "operationId": "smart_backend_ingestion_summary_fhir_smart_backend_ingestions__job_id__summary_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Smart Backend Ingestion Summary Fhir Smart Backend Ingestions  Job Id  Summary Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Smart Backend Ingestion Summary"
+      }
+    },
     "/health": {
       "get": {
         "operationId": "health_health_get",
@@ -461,6 +1196,87 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/jobs": {
+      "post": {
+        "operationId": "create_job_jobs_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeidentifyJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Create Job Jobs Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Job"
+      }
+    },
+    "/jobs/{job_id}": {
+      "get": {
+        "operationId": "get_job_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Job Jobs  Job Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Job"
       }
     },
     "/livez": {
@@ -623,6 +1439,82 @@
           }
         },
         "summary": "Pii Extract"
+      }
+    },
+    "/pii/extract/stream": {
+      "post": {
+        "operationId": "pii_extract_stream_pii_extract_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PIIExtractStreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pii Extract Stream"
+      }
+    },
+    "/privacy-gateway/complete": {
+      "post": {
+        "operationId": "privacy_gateway_complete_privacy_gateway_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrivacyGatewayRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Privacy Gateway Complete Privacy Gateway Complete Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Privacy Gateway Complete"
       }
     },
     "/readyz": {

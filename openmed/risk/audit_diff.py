@@ -347,7 +347,10 @@ def _coerce_report(report: AuditReportInput) -> dict[str, Any]:
     if isinstance(report, Mapping):
         return copy.deepcopy(dict(report))
     if isinstance(report, (str, Path)):
-        payload = json.loads(Path(report).read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(Path(report).read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in audit report {report}: {exc}") from exc
     elif hasattr(report, "to_dict") and callable(report.to_dict):
         payload = report.to_dict()
     else:

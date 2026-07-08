@@ -1,0 +1,18 @@
+name: 'openmed_deidentify'
+version: '1.0.0'
+config-version: 2
+
+# This example uses the DuckDB adapter for a fully local, no-warehouse run.
+profile: 'openmed_deidentify'
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  openmed_deidentify:
+    +materialized: view
