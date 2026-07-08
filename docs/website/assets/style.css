@@ -593,37 +593,87 @@ section[data-screen] { padding: 96px 0; }
     box-shadow: 0 0 8px var(--accent-on-inverse);
 }
 
-/* ---------- Stat band ----------------------------------------------------- */
+/* ---------- Stat band (ink) ------------------------------------------------ */
 .statband {
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-elevated);
+    background: var(--surface-inverse);
+    padding: 52px 0 36px;
 }
-[data-theme="dark"] .statband { background: var(--bg-panel); }
+.statband-head {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-on-inverse);
+}
+.statband-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent-on-inverse);
+}
+.statband-desc {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    color: var(--stone-200);
+}
+.statband-meta {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--fg-on-inverse-muted);
+}
+.statband-head .statband-meta { margin-left: auto; }
 .statband-grid {
     display: grid;
-    grid-template-columns: repeat(6, 1fr);
+    grid-template-columns: repeat(4, 1fr);
 }
 .statband-cell {
-    padding: 28px 24px;
-    border-right: 1px solid var(--border);
+    padding: 46px 28px 38px;
+    border-right: 1px solid var(--border-on-inverse);
 }
-.statband-cell:last-child { border-right: none; }
+.statband-cell:first-child { padding-left: 0; }
+.statband-cell:last-child { border-right: none; padding-right: 0; }
 .statband-num {
     font-family: var(--font-display);
-    font-size: var(--fs-display-md);
+    font-size: clamp(52px, 6.5vw, 92px);
     font-weight: 500;
-    line-height: 1.1;
-    letter-spacing: -0.012em;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--fg-on-inverse);
+    font-variation-settings: "opsz" 72;
 }
-.statband-num .suf { color: var(--accent); }
 .statband-label {
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--fg-muted);
-    letter-spacing: .1em;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: .12em;
     text-transform: uppercase;
-    margin-top: 8px;
+    color: var(--fg-on-inverse-muted);
+    margin-top: 20px;
+    line-height: 1.7;
+}
+.statband-foot {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    padding-top: 22px;
+    border-top: 1px solid var(--border-on-inverse);
+}
+.statband-pills { display: flex; flex-wrap: wrap; gap: 10px; }
+.statband-pill {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--fg-on-inverse);
+    border: 1px solid #323843;
+    border-radius: var(--radius-pill);
+    padding: 8px 18px;
+    line-height: 1;
 }
 
 /* ---------- Section headings --------------------------------------------- */
@@ -1303,9 +1353,11 @@ section[data-screen] { padding: 96px 0; }
     .runtime-cell:last-child,
     .deid-cell:last-child,
     .model-cell:last-child { border-bottom: none; }
-    .statband-grid { grid-template-columns: repeat(3, 1fr); }
-    .statband-cell:nth-child(3n) { border-right: none; }
-    .statband-cell:nth-child(n+4) { border-top: 1px solid var(--border); }
+    .statband-grid { grid-template-columns: repeat(2, 1fr); }
+    .statband-cell { padding: 34px 24px 28px; }
+    .statband-cell:nth-child(odd) { padding-left: 0; }
+    .statband-cell:nth-child(2n) { border-right: none; }
+    .statband-cell:nth-child(n+3) { border-top: 1px solid var(--border-on-inverse); }
     .footer-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 720px) {
@@ -1348,9 +1400,10 @@ section[data-screen] { padding: 96px 0; }
     .sage-grid,
     .research-stats { grid-template-columns: 1fr; }
     .runtime-cell, .deid-cell, .model-cell, .research-stat { border-right: none; }
-    .statband-grid { grid-template-columns: repeat(2, 1fr); }
-    .statband-cell:nth-child(2n) { border-right: none; }
-    .statband-cell:nth-child(n+3) { border-top: 1px solid var(--border); }
+    .statband-grid { grid-template-columns: 1fr; }
+    .statband-cell { border-right: none; padding: 26px 0 22px; }
+    .statband-cell:nth-child(n+2) { border-top: 1px solid var(--border-on-inverse); }
+    .statband-head .statband-meta { margin-left: 0; }
     .footer-grid { grid-template-columns: 1fr; gap: 32px; }
 }
 @media (max-width: 480px) {
