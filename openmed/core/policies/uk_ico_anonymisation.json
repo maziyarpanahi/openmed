@@ -103,6 +103,11 @@
     "DIALYSIS_MODALITY": "mask",
     "RENAL_FUNCTION_MEASURE": "mask",
     "URINE_FINDING": "mask",
+    "VACCINE_NAME": "keep",
+    "DOSE_NUMBER": "keep",
+    "ADMINISTRATION_ROUTE": "keep",
+    "VACCINE_SERIES": "keep",
+    "VACCINE_LOT": "keep",
     "OTHER": "keep"
   }
 }

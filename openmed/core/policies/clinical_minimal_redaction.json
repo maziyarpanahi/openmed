@@ -102,6 +102,11 @@
     "DIALYSIS_MODALITY": "keep",
     "RENAL_FUNCTION_MEASURE": "keep",
     "URINE_FINDING": "keep",
+    "VACCINE_NAME": "keep",
+    "DOSE_NUMBER": "keep",
+    "ADMINISTRATION_ROUTE": "keep",
+    "VACCINE_SERIES": "keep",
+    "VACCINE_LOT": "keep",
     "OTHER": "keep"
   }
 }

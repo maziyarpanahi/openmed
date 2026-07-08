@@ -103,6 +103,11 @@
     "DIALYSIS_MODALITY": "mask",
     "RENAL_FUNCTION_MEASURE": "mask",
     "URINE_FINDING": "mask",
+    "VACCINE_NAME": "mask",
+    "DOSE_NUMBER": "mask",
+    "ADMINISTRATION_ROUTE": "mask",
+    "VACCINE_SERIES": "mask",
+    "VACCINE_LOT": "mask",
 
 
     "OTHER": "mask"
