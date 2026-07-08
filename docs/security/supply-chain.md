@@ -25,3 +25,35 @@ Do not edit the lockfile by hand.
 CI and every tagged release also generate a CycloneDX SBOM (`sbom.cdx.json`)
 inventorying the dependency tree. See the
 [Software Bill of Materials](sbom.md) guide to regenerate or consume it.
+
+Container image releases also publish `image-sbom.cdx.json`, which inventories
+the built Docker image including OS packages and Python components. See the
+[Container Image SBOM](../supply-chain/sbom.md) guide for release artifacts,
+image labels, and digest verification.
+
+## PyPI provenance
+
+Tagged library releases use PyPI Trusted Publishing instead of a stored PyPI
+API token. The publish workflow uploads distributions with Sigstore
+attestations, giving each wheel and source distribution signed provenance from
+the release workflow identity. See the
+[PyPI Trusted Publishing](../release/trusted-publishing.md) guide for the PyPI
+configuration and token-retirement checklist.
+
+## Container image signatures
+
+Published service images are signed by digest with Sigstore keyless signing.
+The signing workflow also attaches signed CycloneDX SBOM and SLSA provenance
+attestations, then verifies the signature and both attestations before the run
+can pass. See [Container Image Signing](../supply-chain/image-signing.md) for
+verification commands and the cluster admission policy.
+
+## SLSA build provenance
+
+Tagged releases generate SLSA provenance for the wheel, source distribution, and
+GHCR image digest before publishing can complete. The release workflow verifies
+the distribution attestations before the PyPI upload job runs, using the same
+builder workflow that produced the wheel and source distribution. The container
+workflow verifies the pushed manifest-list attestation before the image job can
+pass. See [SLSA Build Provenance](../supply-chain/provenance.md) for consumer
+verification commands.

@@ -1,0 +1,266 @@
+name: Reproducible Lock Gate
+
+# Runs whenever the dependency surface changes, and on demand.
+# Intentionally separate from ci.yml so the gate is independently auditable
+# and can be required as a branch-protection check on its own.
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/reproducible-lock.yml"
+      - "uv.lock"
+      - "pyproject.toml"
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - ".github/workflows/reproducible-lock.yml"
+      - "uv.lock"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+jobs:
+  # Parse uv.lock and assert that every resolved package carries:
+  #   - an exact pinned version
+  #   - at least one sha256 integrity hash
+  # Packages from non-registry sources are rejected because they cannot be
+  # content-addressed by uv.lock hashes. The editable root project is skipped.
+  # On success, emits a single reproducibility digest that fingerprints the
+  # entire dependency set and uploads it as a CI artifact.
+  lock-integrity:
+    name: Assert lock is fully pinned and hashed
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+      uv_lock_sha256: ${{ steps.digest.outputs.uv_lock_sha256 }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv (cache disabled for clean resolver state)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: false
+
+      # Reuse the same check that lockfile-drift in ci.yml performs, but now
+      # as a hard prerequisite before we inspect the file contents.
+      - name: Assert uv.lock is consistent with pyproject.toml
+        run: |
+          if ! uv lock --check; then
+            echo "::error title=uv.lock is out of date::Run 'uv lock' locally and commit the result."
+            exit 1
+          fi
+
+      - name: Assert all packages are pinned with integrity hashes
+        id: digest
+        run: |
+          python3 - <<'PYEOF'
+          import hashlib
+          import os
+          from pathlib import Path
+          import sys
+          import tomllib
+
+          LOCK_PATH = Path("uv.lock")
+
+          with LOCK_PATH.open("rb") as fh:
+              lock = tomllib.load(fh)
+
+          packages = lock.get("package", [])
+
+          def source_type(package):
+              source = package.get("source") or {}
+              return next(iter(source), None)
+
+          def is_root_project(package):
+              source = package.get("source") or {}
+              return source.get("editable") == "." or source.get("virtual") == "."
+
+          errors = []
+          digest_parts = []
+          checked = 0
+
+          for pkg in packages:
+              name = pkg.get("name", "<unknown>")
+              version = pkg.get("version")
+
+              if is_root_project(pkg):
+                  continue
+
+              if not version:
+                  errors.append(f"  MISSING VERSION      : {name}")
+                  continue
+
+              pkg_source_type = source_type(pkg)
+              if pkg_source_type != "registry":
+                  errors.append(
+                      f"  UNSUPPORTED SOURCE   : {name}=={version} "
+                      f"(source type {pkg_source_type!r} is not registry-backed)"
+                  )
+                  continue
+
+              hashes = []
+              invalid_hashes = []
+              sdist = pkg.get("sdist")
+              if sdist and sdist.get("hash"):
+                  digest = sdist["hash"]
+                  if digest.startswith("sha256:"):
+                      hashes.append(digest)
+                  else:
+                      invalid_hashes.append(digest)
+              for wheel in pkg.get("wheels", []):
+                  if wheel.get("hash"):
+                      digest = wheel["hash"]
+                      if digest.startswith("sha256:"):
+                          hashes.append(digest)
+                      else:
+                          invalid_hashes.append(digest)
+
+              if invalid_hashes:
+                  errors.append(
+                      f"  INVALID HASH TYPE    : {name}=={version} "
+                      f"({', '.join(sorted(invalid_hashes))})"
+                  )
+                  continue
+
+              if not hashes:
+                  errors.append(f"  MISSING HASHES       : {name}=={version}")
+                  continue
+
+              digest_parts.append(
+                  f"{name}=={version}:" + ",".join(sorted(hashes))
+              )
+              checked += 1
+
+          if errors:
+              print("::error title=Lock integrity check failed::")
+              print("The following packages have missing pins or hashes:")
+              for e in errors:
+                  print(e)
+              sys.exit(1)
+
+          digest_parts.sort()
+          raw = "\n".join(digest_parts).encode()
+          digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+          lock_hash = hashlib.sha256(LOCK_PATH.read_bytes()).hexdigest()
+
+          print(f"Lock integrity      : OK ({checked} packages checked)")
+          print(f"Reproducibility digest: {digest}")
+
+          Path("reproducibility-digest.txt").write_text(
+              f"digest: {digest}\n"
+              f"packages: {checked}\n"
+              f"uv-lock-sha256: sha256:{lock_hash}\n",
+              encoding="utf-8",
+          )
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
+              gh.write(f"digest={digest}\n")
+              gh.write(f"uv_lock_sha256=sha256:{lock_hash}\n")
+          PYEOF
+
+      - name: Upload reproducibility digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: reproducibility-digest
+          path: reproducibility-digest.txt
+
+  # Prove that running `uv sync --frozen` twice in completely independent, cache-
+  # free virtual environments produces byte-for-byte the same installed package
+  # set.  This catches any residual non-determinism in the resolution or
+  # download layer that the lock file alone would not expose.
+  reproducibility:
+    name: Prove two clean installs are identical
+    needs: lock-integrity
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv (cache disabled for independent installs)
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: false
+
+      # First clean install.
+      # --frozen       : refuse to update the lock file; fail if it would need to change.
+      # --no-cache     : do not read from or write to uv's download cache.
+      # --no-install-project : install only dependencies, not the openmed package
+      #                        itself, so the list contains only third-party packages.
+      - name: Install 1 - first clean environment
+        run: |
+          uv sync --frozen --no-cache --no-install-project --python 3.11
+          uv pip freeze | sort > resolve-1.txt
+          echo "Resolve 1"
+          cat resolve-1.txt
+          echo "Digest: $(sha256sum resolve-1.txt | awk '{print $1}')"
+
+      # Tear down the venv entirely before the second install so there is
+      # zero state carried over from the first run.
+      - name: Install 2 - second independent clean environment
+        run: |
+          rm -rf .venv
+          uv sync --frozen --no-cache --no-install-project --python 3.11
+          uv pip freeze | sort > resolve-2.txt
+          echo "Resolve 2"
+          cat resolve-2.txt
+          echo "Digest: $(sha256sum resolve-2.txt | awk '{print $1}')"
+
+      # The gate: both installs must be identical.  If they differ, print a
+      # unified diff so the cause is immediately visible in the log.
+      - name: Assert both installs are byte-for-byte identical
+        run: |
+          d1=$(sha256sum resolve-1.txt | awk '{print $1}')
+          d2=$(sha256sum resolve-2.txt | awk '{print $1}')
+          if [ "$d1" != "$d2" ]; then
+            echo "::error title=Non-reproducible install::The two resolves produced different package sets."
+            echo "Install 1 digest : sha256:$d1"
+            echo "Install 2 digest : sha256:$d2"
+            echo ""
+            echo "Diff (lines only in resolve-1 prefixed with <, resolve-2 with >):"
+            diff resolve-1.txt resolve-2.txt || true
+            exit 1
+          fi
+          echo "Reproducibility confirmed."
+          echo "Install digest : sha256:$d1"
+
+      # Upload both snapshots on success and failure so diffs are auditable
+      # even when the gate fails.
+      - name: Upload resolve snapshots
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: resolve-snapshots
+          path: |
+            resolve-1.txt
+            resolve-2.txt
+
+  # The named gate that branch-protection rules and downstream workflows reference
+  # via 'needs: lock-gate'.  It only reaches this point if both jobs above passed,
+  # so any other job that declares `needs: lock-gate` is guaranteed a fully
+  # pinned, hash-verified, reproducible dependency set.
+  lock-gate:
+    name: Lock gate (all checks passed)
+    needs: [lock-integrity, reproducibility]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Summarise gate result
+        run: |
+          echo "Lock gate passed."
+          echo "Reproducibility digest: ${{ needs.lock-integrity.outputs.digest }}"
+          echo "uv.lock sha256: ${{ needs.lock-integrity.outputs.uv_lock_sha256 }}"
+          echo ""
+          echo "This confirms:"
+          echo "  - Every transitive dependency is pinned to an exact version."
+          echo "  - Every package carries at least one sha256 integrity hash."
+          echo "  - Two independent clean installs produced identical package sets."

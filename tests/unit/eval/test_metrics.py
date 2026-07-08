@@ -8,7 +8,10 @@ import pytest
 
 from openmed.eval.harness import BenchmarkFixture, load_fixtures, run_benchmark
 from openmed.eval.metrics import (
+    ABSTENTION_ROUTE_REDACT,
     EvalSpan,
+    apply_abstention_policy,
+    compute_abstention_metrics,
     compute_character_recall,
     compute_exact_span_f1,
     compute_leakage_rate,
@@ -33,6 +36,7 @@ def test_eval_modules_import_cleanly():
         "n2c2",
         "shield",
         "drugprot",
+        "policy_compliance",
         "biomedical-ner",
     )
 
@@ -83,6 +87,91 @@ def test_exact_and_relaxed_f1_differ_on_boundary_drift():
     assert relaxed.f1 == 1.0
     assert exact.false_negatives == 1
     assert relaxed.true_positives == 1
+
+
+def test_critical_abstentions_route_to_redaction_not_passthrough():
+    decisions = apply_abstention_policy(
+        [],
+        [
+            {
+                "start": 0,
+                "end": 11,
+                "label": "SSN",
+                "language": "en",
+                "confidence": 0.25,
+            }
+        ],
+        confidence_threshold=0.90,
+    )
+
+    assert decisions[0].accepted is False
+    assert decisions[0].route == ABSTENTION_ROUTE_REDACT
+    assert all(decision.route != "passthrough" for decision in decisions)
+
+
+def test_abstention_metrics_are_sliced_deterministic_and_risk_bounded():
+    gold: list[dict[str, object]] = []
+    predicted: list[dict[str, object]] = []
+    for index in range(120):
+        start = index * 5
+        span = {
+            "start": start,
+            "end": start + 3,
+            "label": "SSN",
+            "language": "en",
+        }
+        gold.append(span)
+        predicted.append({**span, "confidence": 0.95})
+    for index in range(40):
+        start = 1000 + index * 5
+        predicted.append(
+            {
+                "start": start,
+                "end": start + 3,
+                "label": "SSN",
+                "language": "en",
+                "confidence": 0.40,
+            }
+        )
+    for index in range(4):
+        start = 2000 + index * 5
+        predicted.append(
+            {
+                "start": start,
+                "end": start + 4,
+                "label": "PERSON",
+                "language": "fr",
+                "confidence": 0.30,
+            }
+        )
+
+    first = compute_abstention_metrics(
+        gold,
+        predicted,
+        confidence_threshold=0.95,
+        target_risk=0.10,
+        confidence_level=0.80,
+        bootstrap_resamples=100,
+        seed=7,
+    ).to_dict()
+    second = compute_abstention_metrics(
+        gold,
+        predicted,
+        confidence_threshold=0.95,
+        target_risk=0.10,
+        confidence_level=0.80,
+        bootstrap_resamples=100,
+        seed=7,
+    ).to_dict()
+
+    assert first == second
+    assert first["abstention_rate"]["by_label"]["SSN"] == pytest.approx(0.25)
+    assert first["abstention_rate"]["by_language"]["en"] == pytest.approx(0.25)
+    assert first["abstention_rate"]["by_language"]["fr"] == pytest.approx(1.0)
+    assert first["residual_risk"]["by_label"]["SSN"] == 0.0
+    assert first["residual_risk"]["by_language"]["en"] == 0.0
+    assert first["residual_risk"]["critical"] == 0.0
+    assert first["residual_risk"]["bootstrap"]["max"] <= 0.10
 
 
 def test_recall_slices_cover_label_language_and_device_edges():
@@ -155,6 +244,51 @@ def test_harness_runs_with_injected_runner_without_loading_models():
     assert report.fixture_count == 1
     assert report.metrics["leakage"]["overall"] == 0.0
     assert report.metrics["exact_span_f1"]["f1"] == 1.0
+
+
+def test_harness_surfaces_abstention_metrics_with_thresholds():
+    fixture = BenchmarkFixture.from_mapping(
+        {
+            "id": "note-1",
+            "text": "Patient John and Jane",
+            "language": "en",
+            "gold_spans": [
+                {"start": 8, "end": 12, "label": "PERSON"},
+                {"start": 17, "end": 21, "label": "PERSON"},
+            ],
+        }
+    )
+
+    def runner(fixture, model_name, device):
+        return [
+            {
+                "start": 8,
+                "end": 12,
+                "label": "PERSON",
+                "confidence": 0.95,
+            },
+            {
+                "start": 17,
+                "end": 21,
+                "label": "PERSON",
+                "confidence": 0.50,
+            },
+        ]
+
+    report = run_benchmark(
+        [fixture],
+        suite="golden",
+        model_name="test-model",
+        runner=runner,
+        abstention_thresholds={"PERSON": {"en": 0.90}},
+        abstention_target_risk=0.10,
+        abstention_confidence_level=0.80,
+        abstention_bootstrap_resamples=10,
+        abstention_seed=3,
+    )
+
+    assert report.metrics["abstention"]["abstention_rate"]["overall"] == 0.5
+    assert "abstention.residual_risk.critical" in report.to_markdown()
 
 
 def test_harness_rejects_duplicate_fixture_ids(tmp_path):

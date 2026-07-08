@@ -1,0 +1,17 @@
+= Clinical handover
+
+Patient *Jane Roe* reviewed https://records.example.test/p/Jane_Roe?mrn=MRN-991[chart].
+image::images/John_Doe.png[John Doe scan,title="John Doe radiograph"]
+
+* MRN `MRN-991`
+NOTE: Call 555-0101
+
+|===
+|Field |Value
+|Clinician |Dr. Alice Smith
+|Follow up |2026-02-03
+|===
+
+----
+Raw code Patient John Doe
+----

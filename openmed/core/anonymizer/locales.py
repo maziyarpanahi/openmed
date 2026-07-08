@@ -15,7 +15,7 @@ Regression contract (OM-135):
 - Every ``openmed.core.pii_i18n.SUPPORTED_LANGUAGES`` code must have a
   :data:`LANG_TO_LOCALE` entry whose locale exists in Faker (or is a
   documented approximation in :data:`_APPROXIMATE_LOCALES`).
-- Every language with a checksum-validated national ID must appear in
+- Every language with a validator-backed national ID must appear in
   :data:`NATIONAL_ID_PROVIDERS`, and its generated surrogates must round-trip
   that language's registered validator in :mod:`openmed.core.pii_i18n`.
   Some entries are national-ID-only and intentionally not full model-backed
@@ -31,7 +31,9 @@ from __future__ import annotations
 import warnings
 from typing import Final, Mapping
 
-# Default Faker locale per OpenMed language code.
+# Default conceptual Faker locale per OpenMed language code. Some conceptual
+# locales are backed by another installed Faker locale at runtime; see
+# ``FAKER_BACKEND_LOCALE``.
 LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "en": "en_US",
     "fr": "fr_FR",
@@ -43,22 +45,37 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "te": "en_IN",  # Faker has no Telugu locale; en_IN is the closest match
     "pt": "pt_PT",
     "ar": "ar_EG",  # Egypt is the most-populous Arabic-speaking country; override for Gulf/Levant locales.
+    "he": "he_IL",
     "ja": "ja_JP",
     "tr": "tr_TR",
     "id": "id_ID",
+    "th": "th_TH",
     "pl": "pl_PL",
+    "lv": "lv_LV",
     "ko": "ko_KR",
+    "sk": "sk_SK",
+    "ms": "ms_MY",
+    "tl": "fil_PH",
+    "da": "da_DK",
 }
 
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te"})
+_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
+
+
+# Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
+# keyed by the target country while allowing generic names/addresses to use a
+# nearby installed Faker backend.
+FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
+    "ms_MY": "id_ID",
+}
 
 
 # Per-language national-ID surrogate providers — the single source of truth for
 # the OM-135 round-trip fidelity suite. Maps each language that has a
-# checksum-validated national ID to the ``(faker_locale, faker_method)`` whose
+# validator-backed national ID to the ``(faker_locale, faker_method)`` whose
 # generated surrogates pass that language's registered validator(s) in
 # :mod:`openmed.core.pii_i18n`. The locale here can differ from the language's
 # default display locale when the registered validators target another country's
@@ -77,9 +94,17 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
     "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    "tr": ("tr_TR", "ssn"),  # TCKN
+    "he": ("he_IL", "teudat_zehut"),  # Israeli Teudat Zehut
     "id": ("id_ID", "indonesian_nik"),  # NIK
+    "th": ("th_TH", "thai_national_id"),  # Thai 13-digit national ID
     "pl": ("pl_PL", "pesel"),  # PESEL
+    "lv": ("lv_LV", "personas_kods"),
     "ko": ("ko_KR", "korean_rrn"),  # RRN
+    "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
+    "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
+    "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
+    "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
 }
 
 _warned: set[str] = set()
@@ -104,15 +129,23 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
         return LANG_TO_LOCALE["en"]
 
     if lang in _APPROXIMATE_LOCALES and lang not in _warned:
+        backend = FAKER_BACKEND_LOCALE.get(locale)
+        backend_note = f" backed by {backend!r}" if backend else ""
         warnings.warn(
             f"OpenMed: language {lang!r} has no native Faker locale; "
-            f"falling back to {locale!r}. Pass locale=... to override.",
+            f"using {locale!r}{backend_note}. Pass locale=... to override.",
             UserWarning,
             stacklevel=3,
         )
         _warned.add(lang)
 
     return locale
+
+
+def resolve_faker_backend_locale(locale: str) -> str:
+    """Return the installed Faker locale backing a conceptual locale."""
+
+    return FAKER_BACKEND_LOCALE.get(locale, locale)
 
 
 def locale_coherence_report() -> list[dict[str, object]]:
@@ -156,7 +189,9 @@ def locale_coherence_report() -> list[dict[str, object]]:
 
 __all__ = [
     "LANG_TO_LOCALE",
+    "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
     "locale_coherence_report",
+    "resolve_faker_backend_locale",
     "resolve_locale",
 ]

@@ -36,15 +36,15 @@ if TYPE_CHECKING:
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
 from .model_registry import (
-    OPENMED_MODELS,
+    ModelInfo as RegistryModelInfo,
+)
+from .model_registry import (
     get_all_models,
     get_model_info,
     get_model_suggestions,
     get_models_by_category,
 )
-from .model_registry import (
-    ModelInfo as RegistryModelInfo,
-)
+from .offline import configure_offline_mode, is_local_only
 
 
 class ModelLoader:
@@ -63,6 +63,7 @@ class ModelLoader:
             )
 
         self.config = config or get_config()
+        configure_offline_mode(self.config)
         self._models = {}  # Cache for loaded models
         self._tokenizers = {}  # Cache for loaded tokenizers
         self._pipelines = {}  # Cache for created pipelines
@@ -82,6 +83,8 @@ class ModelLoader:
             List of model names available for loading.
         """
         models = []
+        if is_local_only(self.config):
+            include_remote = False
 
         if include_registry:
             registry_models = [info.model_id for info in get_all_models().values()]
@@ -116,7 +119,7 @@ class ModelLoader:
 
         # Check cache
         if not force_reload and full_model_name in self._models:
-            logger.info(f"Using cached model: {full_model_name}")
+            logger.info("Using cached model: %s", full_model_name)
             return {
                 "model": self._models[full_model_name],
                 "tokenizer": self._tokenizers[full_model_name],
@@ -124,7 +127,7 @@ class ModelLoader:
             }
 
         try:
-            logger.info(f"Loading model: {full_model_name}")
+            logger.info("Loading model: %s", full_model_name)
 
             auth_kwargs = self._hub_auth_kwargs()
             local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
@@ -135,6 +138,10 @@ class ModelLoader:
             resolved_device = self._resolve_torch_device(device_preference)
             attn_implementation = self._resolve_attn_implementation(
                 attention_preference
+            )
+            quantization_config = self._build_load_quantization_config(
+                load_kwargs,
+                device=resolved_device,
             )
 
             # Load config first to verify it's a token classification model
@@ -155,7 +162,8 @@ class ModelLoader:
                     for arch in ["tokenclassification", "ner", "pos"]
                 ):
                     logger.warning(
-                        f"Model {full_model_name} may not be a TokenClassification model"
+                        "Model %s may not be a TokenClassification model",
+                        full_model_name,
                     )
 
             # Load tokenizer
@@ -173,19 +181,24 @@ class ModelLoader:
             # Load model
             model_kwargs = {**pretrained_kwargs, **load_kwargs}
             model_kwargs["attn_implementation"] = attn_implementation
+            if quantization_config is not None:
+                model_kwargs["quantization_config"] = quantization_config
+            model_uses_quantization = (
+                model_kwargs.get("quantization_config") is not None
+            )
             model = AutoModelForTokenClassification.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
                 **model_kwargs,
             )
-            if hasattr(model, "to"):
+            if not model_uses_quantization and hasattr(model, "to"):
                 model.to(resolved_device)
 
             # Cache the loaded model and tokenizer
             self._models[full_model_name] = model
             self._tokenizers[full_model_name] = tokenizer
 
-            logger.info(f"Successfully loaded model: {full_model_name}")
+            logger.info("Successfully loaded model: %s", full_model_name)
 
             return {
                 "model": model,
@@ -194,8 +207,8 @@ class ModelLoader:
             }
 
         except Exception as e:
-            logger.error(f"Failed to load model {full_model_name}: {e}")
-            raise ValueError(f"Could not load model {full_model_name}: {e}")
+            logger.error("Failed to load model %s: %s", full_model_name, e)
+            raise ValueError(f"Could not load model {full_model_name}: {e}") from e
 
     def create_pipeline(
         self,
@@ -276,7 +289,7 @@ class ModelLoader:
         )
 
         if cache_key in self._pipelines:
-            logger.info(f"Using cached pipeline for {full_model_name}")
+            logger.info("Using cached pipeline for %s", full_model_name)
             return self._pipelines[cache_key]
 
         try:
@@ -290,17 +303,33 @@ class ModelLoader:
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
             pipeline_kwargs.update(self._local_loading_kwargs(full_model_name, kwargs))
-            pipeline_kwargs.update(kwargs)
+            pipeline_load_kwargs = dict(kwargs)
+            model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
+            if "quantization_config" in pipeline_load_kwargs:
+                model_kwargs.setdefault(
+                    "quantization_config",
+                    pipeline_load_kwargs.pop("quantization_config"),
+                )
+            quantization_config = self._build_load_quantization_config(
+                pipeline_load_kwargs,
+                device=self._resolve_torch_device(kwargs.get("device")),
+                existing_quantization_config=model_kwargs.get("quantization_config"),
+            )
+            if quantization_config is not None:
+                model_kwargs["quantization_config"] = quantization_config
+            if model_kwargs:
+                pipeline_load_kwargs["model_kwargs"] = model_kwargs
+            pipeline_kwargs.update(pipeline_load_kwargs)
             self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
             ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
 
-            logger.info(f"Created pipeline for {full_model_name}")
+            logger.info("Created pipeline for %s", full_model_name)
             return ner_pipeline
 
         except Exception as e:
-            logger.error(f"Failed to create pipeline for {full_model_name}: {e}")
+            logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
             model_data = self.load_model(model_name)
 
@@ -547,11 +576,46 @@ class ModelLoader:
         kwargs: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Force local-only Hub loading for filesystem-backed model names."""
+        if is_local_only(self.config):
+            configure_offline_mode(self.config)
+            return {"local_files_only": True}
         if kwargs and "local_files_only" in kwargs:
             return {"local_files_only": kwargs["local_files_only"]}
         if self._as_existing_local_path(model_name) is not None:
             return {"local_files_only": True}
         return {}
+
+    def _build_load_quantization_config(
+        self,
+        load_kwargs: Dict[str, Any],
+        *,
+        device: str,
+        existing_quantization_config: Any | None = None,
+    ) -> Any | None:
+        """Extract loader quantization flags and return a model config."""
+        if (
+            existing_quantization_config is not None
+            or "quantization_config" in load_kwargs
+        ):
+            load_kwargs.pop("load_in_4bit", None)
+            load_kwargs.pop("bnb_4bit_use_double_quant", None)
+            return None
+
+        load_in_4bit = bool(load_kwargs.pop("load_in_4bit", self.config.load_in_4bit))
+        bnb_4bit_use_double_quant = bool(
+            load_kwargs.pop(
+                "bnb_4bit_use_double_quant",
+                self.config.bnb_4bit_use_double_quant,
+            )
+        )
+
+        from openmed.torch.loader_quant import build_bnb_4bit_quantization_config
+
+        return build_bnb_4bit_quantization_config(
+            load_in_4bit=load_in_4bit,
+            bnb_4bit_use_double_quant=bnb_4bit_use_double_quant,
+            device=device,
+        )
 
     def _build_pipeline_cache_key(
         self,

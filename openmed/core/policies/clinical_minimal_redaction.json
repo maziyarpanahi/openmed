@@ -10,7 +10,10 @@
   "safety_sweep_mandatory": false,
   "keep_mapping": false,
   "reversible_id": false,
-  "forced_cascade_tiers": ["R0", "R1"],
+  "forced_cascade_tiers": [
+    "R0",
+    "R1"
+  ],
   "policy_label_actions": {
     "DIRECT_IDENTIFIER": "mask",
     "QUASI_IDENTIFIER": "keep",
@@ -74,6 +77,31 @@
     "LAB_TEST": "keep",
     "PROCEDURE": "keep",
     "BODY_SITE": "keep",
+    "ANESTHESIA_TYPE": "keep",
+    "ANESTHETIC_AGENT": "keep",
+    "AIRWAY_MANAGEMENT": "keep",
+    "ASA_CLASS": "keep",
+    "DIET_TYPE": "keep",
+    "NUTRITION_TARGET": "keep",
+    "FEEDING_ROUTE": "keep",
+    "NUTRITIONAL_STATUS": "keep",
+    "GENE_SYMBOL": "keep",
+    "VARIANT_DESCRIPTOR": "keep",
+    "PROTEIN_CHANGE": "keep",
+    "ZYGOSITY": "keep",
+    "CLINICAL_SIGNIFICANCE": "keep",
+    "GLYCEMIC_MEASURE": "keep",
+    "THYROID_MEASURE": "keep",
+    "HORMONE_LEVEL": "keep",
+    "INSULIN_REGIMEN": "keep",
+    "ENDOSCOPIC_FINDING": "keep",
+    "GI_SYMPTOM": "keep",
+    "GI_SCORE": "keep",
+    "POLYP_DESCRIPTOR": "keep",
+    "CKD_STAGE": "keep",
+    "DIALYSIS_MODALITY": "keep",
+    "RENAL_FUNCTION_MEASURE": "keep",
+    "URINE_FINDING": "keep",
     "OTHER": "keep"
   }
 }

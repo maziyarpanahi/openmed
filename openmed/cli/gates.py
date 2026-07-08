@@ -1,4 +1,4 @@
-"""CLI helpers for release-gate evidence workflows."""
+"""CLI helpers for release-gate workflows."""
 
 from __future__ import annotations
 
@@ -8,18 +8,70 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from openmed.core import baseline as baseline_store
 from openmed.eval.evidence_bundle import bundle_gate_evidence
+from openmed.eval.release_gates import RELEASABLE, format_preview, preview
 
 
 def add_gates_command(subparsers: argparse._SubParsersAction) -> None:
     """Register ``openmed gates`` subcommands."""
     gates_parser = subparsers.add_parser(
         "gates",
-        help="Release gate evidence utilities.",
+        help="Release gate evidence and preview utilities.",
     )
     gates_sub = gates_parser.add_subparsers(dest="gates_command")
 
-    bundle_parser = gates_sub.add_parser(
+    _add_preview_command(gates_sub)
+    _add_bundle_command(gates_sub)
+
+
+def _add_preview_command(subparsers: argparse._SubParsersAction) -> None:
+    preview_parser = subparsers.add_parser(
+        "preview",
+        help="Preview gate outcomes without signing or writing a report.",
+    )
+    preview_parser.add_argument(
+        "--candidate",
+        required=True,
+        type=Path,
+        help="Path to a candidate BenchmarkReport JSON payload.",
+    )
+    preview_parser.add_argument(
+        "--baseline",
+        type=Path,
+        help="Optional baseline JSON payload. Defaults to the baseline store.",
+    )
+    preview_parser.add_argument(
+        "--baseline-store",
+        type=Path,
+        default=baseline_store.BASELINE_PATH,
+        help="Path to the last-green baseline store.",
+    )
+    preview_parser.add_argument(
+        "--milestone",
+        default="v1.7",
+        help="Milestone version used for release thresholds.",
+    )
+    preview_parser.add_argument(
+        "--policy",
+        default="hipaa_safe_harbor",
+        help="Policy profile used when the candidate report omits one.",
+    )
+    preview_parser.add_argument(
+        "--thresholds-matrix",
+        type=Path,
+        help="Optional thresholds matrix JSON path.",
+    )
+    preview_parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero when any previewed gate fails.",
+    )
+    preview_parser.set_defaults(handler=handle_gates_preview)
+
+
+def _add_bundle_command(subparsers: argparse._SubParsersAction) -> None:
+    bundle_parser = subparsers.add_parser(
         "bundle",
         help="Assemble a release-gate evidence bundle.",
     )
@@ -62,6 +114,34 @@ def add_gates_command(subparsers: argparse._SubParsersAction) -> None:
         help="Exit non-zero when required evidence is missing.",
     )
     bundle_parser.set_defaults(handler=_handle_bundle)
+
+
+def handle_gates_preview(args: argparse.Namespace) -> int:
+    """Run a read-only release-gate preview."""
+
+    if not args.candidate.is_file():
+        sys.stderr.write(f"Candidate report not found: {args.candidate}\n")
+        return 2
+
+    try:
+        candidate = _read_json_object(args.candidate)
+        baseline = _read_json_object(args.baseline) if args.baseline else None
+        report = preview(
+            candidate,
+            baseline,
+            milestone=args.milestone,
+            policy=args.policy,
+            baseline_path=args.baseline_store,
+            thresholds_matrix_path=args.thresholds_matrix,
+        )
+    except Exception as exc:
+        sys.stderr.write(f"Release gate preview failed: {exc}\n")
+        return 2
+
+    sys.stdout.write(format_preview(report) + "\n")
+    if args.strict and report.decision != RELEASABLE:
+        return 1
+    return 0
 
 
 def _handle_bundle(args: argparse.Namespace) -> int:
@@ -117,3 +197,6 @@ def _parse_artifact(value: str) -> dict[str, Any]:
     if gates:
         payload["gates"] = gates
     return payload
+
+
+__all__ = ["add_gates_command", "handle_gates_preview"]

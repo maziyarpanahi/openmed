@@ -10,17 +10,31 @@ validators):
   - ``nl_NL.ssn()``  (BSN)        valid
   - ``fr_FR.ssn()``  (NIR)        valid
   - ``it_IT.ssn()``  (Codice Fiscale) valid
-  - ``es_ES.nie()``               valid
 
 Custom providers below cover the gaps where Faker either has no built-in
-or emits a US-style format unrelated to the requested locale's actual ID:
+or emits a US-style format unrelated to the requested locale's actual ID.
+They also replace generators whose checksums are valid but not instance-seed
+deterministic:
 
   - German Steuer-ID (Faker's ``de_DE.ssn`` is US-format)
   - Aadhaar with Verhoeff checksum (Faker's ``en_IN.aadhaar_id`` rarely
     passes the official Verhoeff check — only ~1 in 20 by sampling)
+  - Spanish NIE (Faker's built-in uses non-instance randomness)
+  - Spanish DNI (Faker's ``es_ES`` provider exposes NIE but not DNI)
+  - Israeli Teudat Zehut (Faker has no built-in)
   - Indonesian NIK with a decodable embedded birth date
+  - Malaysian MyKad / NRIC with a decodable embedded birth date
+  - Philippine PhilSys PSN and PhilHealth PIN structural formats
+  - Danish CPR / personnummer with a decodable embedded birth date
+  - Thai national ID (13 digits with a weighted mod-11 checksum)
+  - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
+    cislo
+  - UK NHS Number, a patient health identifier validated with the NHS
+    Modulus 11 check
+  - UK National Insurance Number (NINO)
   - Generic medical record numbers (MRN-XXXXXXX style)
   - US National Provider Identifier (Luhn over a "80840" prefix)
+  - IBAN and SWIFT/BIC financial identifiers with deterministic validation
 """
 
 from __future__ import annotations
@@ -144,6 +158,21 @@ def generate_npi(*, rng: random.Random | None = None) -> str:
     return "".join(str(digit) for digit in body) + str(check_digit)
 
 
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+_SPANISH_NIE_PREFIX_VALUES = {"X": "0", "Y": "1", "Z": "2"}
+
+
+def generate_spanish_nie(*, rng: random.Random | None = None) -> str:
+    """Generate a Spanish NIE with a valid modulo-23 check letter."""
+
+    source = rng or random.Random()
+    prefix = source.choice(tuple(_SPANISH_NIE_PREFIX_VALUES))
+    digits = f"{source.randint(0, 9999999):07d}"
+    number = int(_SPANISH_NIE_PREFIX_VALUES[prefix] + digits)
+    check = _SPANISH_DNI_LETTERS[number % len(_SPANISH_DNI_LETTERS)]
+    return f"{prefix}{digits}{check}"
+
+
 def generate_ssn(*, rng: random.Random | None = None) -> str:
     """Generate a US SSN-shaped value accepted by :func:`validate_ssn`."""
 
@@ -233,6 +262,207 @@ _IBAN_LENGTHS = {
 }
 
 
+_IBAN_SURROGATE_COUNTRIES = ("GB", "DE", "FR", "ES", "NL", "BE", "IT", "PL")
+_BIC_SURROGATE_COUNTRIES = ("GB", "DE", "FR", "ES", "NL", "BE", "IT", "US")
+_BIC_COUNTRY_CODES = frozenset(_IBAN_LENGTHS) | {
+    "AG",
+    "AI",
+    "AM",
+    "AO",
+    "AQ",
+    "AR",
+    "AS",
+    "AU",
+    "AW",
+    "BB",
+    "BD",
+    "BF",
+    "BI",
+    "BJ",
+    "BM",
+    "BN",
+    "BO",
+    "BS",
+    "BT",
+    "BV",
+    "BW",
+    "BZ",
+    "CA",
+    "CC",
+    "CD",
+    "CF",
+    "CG",
+    "CI",
+    "CK",
+    "CL",
+    "CM",
+    "CN",
+    "CO",
+    "CU",
+    "CV",
+    "CW",
+    "CX",
+    "DJ",
+    "DM",
+    "DZ",
+    "ER",
+    "ET",
+    "FJ",
+    "FM",
+    "GA",
+    "GD",
+    "GF",
+    "GH",
+    "GM",
+    "GN",
+    "GP",
+    "GQ",
+    "GW",
+    "GY",
+    "HM",
+    "HK",
+    "ID",
+    "IN",
+    "IO",
+    "IQ",
+    "IR",
+    "JM",
+    "JP",
+    "KE",
+    "KG",
+    "KH",
+    "KI",
+    "KM",
+    "KN",
+    "KP",
+    "KR",
+    "LA",
+    "LK",
+    "LR",
+    "LS",
+    "LY",
+    "MA",
+    "MG",
+    "MH",
+    "ML",
+    "MM",
+    "MN",
+    "MO",
+    "MP",
+    "MQ",
+    "MS",
+    "MV",
+    "MW",
+    "MX",
+    "MY",
+    "MZ",
+    "NA",
+    "NC",
+    "NE",
+    "NF",
+    "NG",
+    "NI",
+    "NP",
+    "NR",
+    "NU",
+    "NZ",
+    "OM",
+    "PA",
+    "PE",
+    "PF",
+    "PG",
+    "PH",
+    "PM",
+    "PN",
+    "PR",
+    "PW",
+    "PY",
+    "RE",
+    "RU",
+    "RW",
+    "SB",
+    "SD",
+    "SG",
+    "SH",
+    "SL",
+    "SN",
+    "SO",
+    "SR",
+    "SS",
+    "ST",
+    "SV",
+    "SX",
+    "SY",
+    "SZ",
+    "TC",
+    "TD",
+    "TF",
+    "TG",
+    "TJ",
+    "TK",
+    "TM",
+    "TO",
+    "TT",
+    "TV",
+    "TW",
+    "TZ",
+    "UG",
+    "UM",
+    "US",
+    "UY",
+    "UZ",
+    "VC",
+    "VE",
+    "VI",
+    "VN",
+    "VU",
+    "WF",
+    "WS",
+    "YE",
+    "YT",
+    "ZA",
+    "ZM",
+    "ZW",
+}
+_UPPER_ALPHA = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_UPPER_ALNUM = _UPPER_ALPHA + "0123456789"
+
+
+def _mod97_remainder(value: str) -> int:
+    remainder = 0
+    for char in value:
+        if char.isdigit():
+            values = char
+        else:
+            values = str(ord(char) - 55)
+        for digit in values:
+            remainder = (remainder * 10 + int(digit)) % 97
+    return remainder
+
+
+def _random_alnum(length: int, rng: random.Random) -> str:
+    return "".join(rng.choice(_UPPER_ALNUM) for _ in range(length))
+
+
+def generate_iban(
+    *,
+    country_code: str | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic IBAN that passes :func:`validate_iban`."""
+
+    source = rng or random.Random()
+    country = (country_code or source.choice(_IBAN_SURROGATE_COUNTRIES)).upper()
+    expected_length = _IBAN_LENGTHS.get(country)
+    if expected_length is None:
+        raise ValueError(f"unsupported IBAN surrogate country: {country!r}")
+
+    bban = _random_alnum(expected_length - 4, source)
+    provisional = f"{country}00{bban}"
+    check_digits = 98 - _mod97_remainder(provisional[4:] + provisional[:4])
+    return f"{country}{check_digits:02d}{bban}"
+
+
 def validate_iban(iban_text: str) -> bool:
     """Validate an IBAN with the ISO 13616 mod-97 checksum."""
     cleaned = re.sub(r"[\s-]", "", iban_text).upper()
@@ -247,16 +477,48 @@ def validate_iban(iban_text: str) -> bool:
         return False
 
     rearranged = cleaned[4:] + cleaned[:4]
-    remainder = 0
-    for char in rearranged:
-        if char.isdigit():
-            values = char
-        else:
-            values = str(ord(char) - 55)
-        for digit in values:
-            remainder = (remainder * 10 + int(digit)) % 97
+    return _mod97_remainder(rearranged) == 1
 
-    return remainder == 1
+
+def validate_bic(bic_text: str) -> bool:
+    """Validate a SWIFT/BIC code's 8- or 11-character structure."""
+
+    cleaned = re.sub(r"\s", "", bic_text).upper()
+    if not re.fullmatch(r"[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?", cleaned):
+        return False
+    return cleaned[4:6] in _BIC_COUNTRY_CODES
+
+
+def generate_bic(
+    *,
+    country_code: str | None = None,
+    include_branch: bool | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic SWIFT/BIC accepted by :func:`validate_bic`."""
+
+    source = rng or random.Random()
+    country = (country_code or source.choice(_BIC_SURROGATE_COUNTRIES)).upper()
+    if not re.fullmatch(r"[A-Z]{2}", country):
+        raise ValueError("country_code must be a two-letter ISO code")
+
+    bank = "".join(source.choice(_UPPER_ALPHA) for _ in range(4))
+    location = _random_alnum(2, source)
+    should_include_branch = source.choice((False, True))
+    if include_branch is not None:
+        should_include_branch = include_branch
+    branch = _random_alnum(3, source) if should_include_branch else ""
+    return f"{bank}{country}{location}{branch}"
+
+
+class FinancialIdentifierProvider(BaseProvider):
+    """Generates checksum-valid IBANs and structurally valid SWIFT/BIC codes."""
+
+    def financial_iban(self) -> str:
+        return generate_iban(rng=self.generator.random)
+
+    def financial_bic(self) -> str:
+        return generate_bic(include_branch=True, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +572,18 @@ class AadhaarProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Spanish NIE (prefix + 7 digits + modulo-23 check letter)
+# ---------------------------------------------------------------------------
+
+
+class SpanishNIEProvider(BaseProvider):
+    """Generates Spanish NIE values using Faker's instance RNG."""
+
+    def nie(self) -> str:
+        return generate_spanish_nie(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -339,6 +613,55 @@ class GermanSteuerIdProvider(BaseProvider):
                 return candidate
         # Fallback: return any 11 digits; validator may reject downstream.
         return self.numerify("###########")
+
+
+# ---------------------------------------------------------------------------
+# Israeli Teudat Zehut (9 digits, alternating 1/2 checksum)
+# ---------------------------------------------------------------------------
+
+
+def _teudat_zehut_check_digit(body_digits: Sequence[int]) -> int:
+    """Return the final check digit for the first eight Teudat Zehut digits."""
+    if len(body_digits) != 8:
+        raise ValueError("Teudat Zehut body must contain exactly eight digits")
+
+    total = 0
+    for index, digit in enumerate(body_digits):
+        product = digit * (1 if index % 2 == 0 else 2)
+        total += product if product < 10 else (product // 10) + (product % 10)
+    return (10 - total % 10) % 10
+
+
+def generate_teudat_zehut(*, rng: random.Random | None = None) -> str:
+    """Generate an Israeli Teudat Zehut that passes its checksum validator."""
+    source = rng or random.Random()
+    body = [source.randint(0, 9) for _ in range(8)]
+    if all(digit == 0 for digit in body):
+        body[-1] = 1
+    body.append(_teudat_zehut_check_digit(body))
+    return "".join(str(digit) for digit in body)
+
+
+class IsraeliTeudatZehutProvider(BaseProvider):
+    """Generates 9-digit Israeli Teudat Zehut numbers."""
+
+    def teudat_zehut(self) -> str:
+        return generate_teudat_zehut(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Spanish DNI (8 digits + modulo-23 letter)
+# ---------------------------------------------------------------------------
+
+_SPANISH_DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+
+
+class SpanishDNIProvider(BaseProvider):
+    """Generates Spanish DNI values that pass the existing validator."""
+
+    def dni(self) -> str:
+        number = self.generator.random.randint(0, 99_999_999)
+        return f"{number:08d}{_SPANISH_DNI_LETTERS[number % 23]}"
 
 
 # ---------------------------------------------------------------------------
@@ -382,6 +705,107 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# UK NHS Number and National Insurance Number
+# ---------------------------------------------------------------------------
+
+_UK_NINO_DISALLOWED_PREFIX_CHARS = frozenset("DFIQUV")
+_UK_NINO_DISALLOWED_SECOND_CHARS = _UK_NINO_DISALLOWED_PREFIX_CHARS | {"O"}
+_UK_NINO_DISALLOWED_PREFIXES = frozenset({"BG", "GB", "KN", "NK", "NT", "TN", "ZZ"})
+
+
+def validate_uk_nhs_number(text: str) -> bool:
+    """Validate a 10-digit UK NHS Number with the Modulus 11 checksum."""
+
+    digits = _digits_only(text)
+    if len(digits) != 10:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(range(10, 1, -1), numbers[:9]))
+    check = 11 - (total % 11)
+    if check == 11:
+        check = 0
+    if check == 10:
+        return False
+
+    return numbers[9] == check
+
+
+def generate_uk_nhs_number(*, rng: random.Random | None = None) -> str:
+    """Generate a UK NHS Number accepted by :func:`validate_uk_nhs_number`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body_digits = [source.randint(0, 9) for _ in range(9)]
+        if all(digit == 0 for digit in body_digits):
+            continue
+
+        total = sum(
+            weight * value for weight, value in zip(range(10, 1, -1), body_digits)
+        )
+        check = 11 - (total % 11)
+        if check == 11:
+            check = 0
+        if check == 10:
+            continue
+
+        return "".join(str(digit) for digit in body_digits) + str(check)
+
+    return "9434765919"
+
+
+def validate_uk_nino(text: str) -> bool:
+    """Validate a UK National Insurance Number's current structure."""
+
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if not re.fullmatch(r"[A-Z]{2}\d{6}[A-D]", cleaned):
+        return False
+
+    prefix = cleaned[:2]
+    if prefix in _UK_NINO_DISALLOWED_PREFIXES:
+        return False
+    if prefix[0] in _UK_NINO_DISALLOWED_PREFIX_CHARS:
+        return False
+    if prefix[1] in _UK_NINO_DISALLOWED_SECOND_CHARS:
+        return False
+
+    return True
+
+
+class UKNHSNumberProvider(BaseProvider):
+    """Generates valid 10-digit UK NHS Numbers."""
+
+    def nhs_number(self) -> str:
+        return generate_uk_nhs_number(rng=self.generator.random)
+
+
+class UKNINOProvider(BaseProvider):
+    """Generates structurally valid UK National Insurance Numbers."""
+
+    _FIRST_LETTERS = tuple(
+        letter
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if letter not in _UK_NINO_DISALLOWED_PREFIX_CHARS
+    )
+    _SECOND_LETTERS = tuple(
+        letter
+        for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if letter not in _UK_NINO_DISALLOWED_SECOND_CHARS
+    )
+
+    def nino(self) -> str:
+        rng = self.generator.random
+        while True:
+            prefix = rng.choice(self._FIRST_LETTERS) + rng.choice(self._SECOND_LETTERS)
+            if prefix not in _UK_NINO_DISALLOWED_PREFIXES:
+                break
+
+        digits = f"{rng.randint(0, 999999):06d}"
+        suffix = rng.choice("ABCD")
+        return f"{prefix} {digits[:2]} {digits[2:4]} {digits[4:]} {suffix}"
+
+
+# ---------------------------------------------------------------------------
 # Polish PESEL (11 digits, weighted checksum with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -391,8 +815,6 @@ def generate_pesel(*, rng: random.Random | None = None) -> str:
 
     Constructs a PESEL for a random birth date between 1920 and 2029.
     """
-    from datetime import date
-
     source = rng or random.Random()
 
     # Random date between 1920-01-01 and 2029-12-31.
@@ -446,6 +868,61 @@ class PolishPeselProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Latvian Personas Kods
+# ---------------------------------------------------------------------------
+
+
+def generate_latvian_personas_kods(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Latvian personas kods accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    if source.random() < 0.5:
+        # Legacy form: DDMMYY-CNNNQ.
+        year = source.randint(1900, 2029)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        century = (year - 1800) // 100
+
+        body = [
+            day // 10,
+            day % 10,
+            month // 10,
+            month % 10,
+            (year % 100) // 10,
+            year % 10,
+            century,
+        ]
+        body.extend(source.randint(0, 9) for _ in range(3))
+        check = _latvian_personas_kods_check_digit(body)
+
+        digits = "".join(str(digit) for digit in body) + str(check)
+        return f"{digits[:6]}-{digits[6:]}"
+
+    # New 32-prefixed format: 32 + 8 random digits + check digit.
+    body = [3, 2]
+    body.extend(source.randint(0, 9) for _ in range(8))
+    check = _latvian_personas_kods_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
+    weights = (1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+    return (
+        (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
+    )
+
+
+class LatvianPersonasKodsProvider(BaseProvider):
+    """Generate synthetic Latvian personas kods values."""
+
+    def personas_kods(self) -> str:
+        return generate_latvian_personas_kods(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -485,6 +962,129 @@ class IndonesianNIKProvider(BaseProvider):
 
     def indonesian_nik(self) -> str:
         return generate_indonesian_nik(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Malaysian MyKad / NRIC (YYMMDD-PB-XXXX with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_malaysian_mykad(*, rng: random.Random | None = None) -> str:
+    """Generate a Malaysian MyKad accepted by ``validate_malaysian_mykad``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1940, 2009)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    place_code = source.randint(1, 99)
+    serial = source.randint(1, 9999)
+
+    candidate = f"{year % 100:02d}{month:02d}{day:02d}-{place_code:02d}-{serial:04d}"
+
+    from openmed.core.pii_i18n import validate_malaysian_mykad
+
+    if validate_malaysian_mykad(candidate):
+        return candidate
+    return "850817-14-5678"
+
+
+class MalaysianMyKadProvider(BaseProvider):
+    """Generates valid Malaysian MyKad / NRIC numbers."""
+
+    def mykad(self) -> str:
+        return generate_malaysian_mykad(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Philippine PhilSys PSN / PhilHealth PIN
+# ---------------------------------------------------------------------------
+
+
+def generate_philsys_psn(*, rng: random.Random | None = None) -> str:
+    """Generate a Philippine PhilSys PSN accepted by its structural validator."""
+    source = rng or random.Random()
+
+    for _ in range(100):
+        digits = "".join(str(source.randint(0, 9)) for _ in range(12))
+        candidate = f"{digits[:4]}-{digits[4:8]}-{digits[8:]}"
+
+        from openmed.core.pii_i18n import validate_philsys_psn
+
+        if validate_philsys_psn(candidate):
+            return candidate
+
+    return "1234-5678-9012"
+
+
+def generate_philhealth_pin(*, rng: random.Random | None = None) -> str:
+    """Generate a Philippine PhilHealth PIN accepted by its structural validator."""
+    source = rng or random.Random()
+
+    for _ in range(100):
+        prefix = source.randint(1, 99)
+        serial = source.randint(1, 999_999_999)
+        suffix = source.randint(0, 9)
+        candidate = f"{prefix:02d}-{serial:09d}-{suffix}"
+
+        from openmed.core.pii_i18n import validate_philhealth_pin
+
+        if validate_philhealth_pin(candidate):
+            return candidate
+
+    return "98-765432109-8"
+
+
+class PhilippinesIdProvider(BaseProvider):
+    """Generates structurally valid Philippine PhilSys and PhilHealth IDs."""
+
+    def philsys_psn(self) -> str:
+        return generate_philsys_psn(rng=self.generator.random)
+
+    def philhealth_pin(self) -> str:
+        return generate_philhealth_pin(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Danish CPR / personnummer (DDMMYY-SSSS with century digit)
+# ---------------------------------------------------------------------------
+
+
+def generate_danish_cpr(*, rng: random.Random | None = None) -> str:
+    """Generate a Danish CPR accepted by ``validate_danish_cpr``."""
+    import calendar
+
+    source = rng or random.Random()
+
+    for _ in range(200):
+        year = source.randint(1940, 2009)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+
+        if year >= 2000:
+            century_digit = source.choice((4, 5, 6, 7, 8, 9))
+        else:
+            century_digit = source.choice((0, 1, 2, 3))
+        serial_tail = source.randint(1, 999)
+
+        candidate = (
+            f"{day:02d}{month:02d}{year % 100:02d}-{century_digit}{serial_tail:03d}"
+        )
+
+        from openmed.core.pii_i18n import validate_danish_cpr
+
+        if validate_danish_cpr(candidate):
+            return candidate
+
+    return "170885-1234"
+
+
+class DanishCPRProvider(BaseProvider):
+    """Generates structurally valid Danish CPR / personnummer values."""
+
+    def danish_cpr(self) -> str:
+        return generate_danish_cpr(rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -545,40 +1145,146 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
+# ---------------------------------------------------------------------------
+
+
+def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
+    """Generate a Slovak rodne cislo accepted by its checksum validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    for _ in range(500):
+        year = source.randint(1954, 2029)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+
+        encoded_month = month
+        if source.choice((False, True)):
+            encoded_month += 50
+        elif year >= 2004 and source.randint(0, 9) == 0:
+            encoded_month += 20
+
+        yy = year % 100
+        serial = source.randint(0, 999)
+        first_nine = f"{yy:02d}{encoded_month:02d}{day:02d}{serial:03d}"
+        check = (-int(first_nine) * 10) % 11
+        if check == 10:
+            continue
+
+        candidate = f"{first_nine[:6]}/{first_nine[6:]}{check}"
+        from openmed.core.pii_i18n import validate_czechoslovak_rodne_cislo
+
+        if validate_czechoslovak_rodne_cislo(candidate):
+            return candidate
+
+    return "850505/1236"
+
+
+class RodneCisloProvider(BaseProvider):
+    """Generates valid Slovak rodne cislo birth numbers."""
+
+    def rodne_cislo(self) -> str:
+        return generate_rodne_cislo(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Thai national ID (13 digits, weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_thai_national_id(*, rng: random.Random | None = None) -> str:
+    """Generate a Thai national ID accepted by ``validate_thai_national_id``."""
+    source = rng or random.Random()
+    body_digits = [source.randint(1, 9)]
+    body_digits.extend(source.randint(0, 9) for _ in range(11))
+
+    total = sum(weight * value for weight, value in zip(range(13, 1, -1), body_digits))
+    check = (11 - total % 11) % 10
+
+    return "".join(str(digit) for digit in body_digits) + str(check)
+
+
+class ThaiNationalIdProvider(BaseProvider):
+    """Generates valid 13-digit Thai national IDs."""
+
+    def thai_national_id(self) -> str:
+        return generate_thai_national_id(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
 
+class MrzProvider(BaseProvider):
+    """Faker provider for ICAO 9303 passport/ID MRZ surrogates."""
+
+    def passport_mrz(self) -> str:
+        from openmed.core.pii_i18n import generate_mrz_td3
+
+        return generate_mrz_td3(self.generator.random)
+
+
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
-    faker.add_provider(AadhaarProvider)
-    faker.add_provider(GermanSteuerIdProvider)
-    faker.add_provider(IndonesianNIKProvider)
-    faker.add_provider(KoreanRRNProvider)
+    from .registry_ids import national_id_faker_provider_classes
+
+    for provider in national_id_faker_provider_classes():
+        faker.add_provider(provider)
     faker.add_provider(MedicalRecordNumberProvider)
-    faker.add_provider(NPIProvider)
-    faker.add_provider(PolishPeselProvider)
+    faker.add_provider(FinancialIdentifierProvider)
+    faker.add_provider(MrzProvider)
 
 
 __all__ = [
     "AadhaarProvider",
+    "DanishCPRProvider",
+    "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
     "IndonesianNIKProvider",
+    "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
+    "LatvianPersonasKodsProvider",
+    "MalaysianMyKadProvider",
     "MedicalRecordNumberProvider",
+    "MrzProvider",
     "NPIProvider",
+    "PhilippinesIdProvider",
     "PolishPeselProvider",
+    "RodneCisloProvider",
+    "ThaiNationalIdProvider",
+    "SpanishDNIProvider",
+    "SpanishNIEProvider",
+    "UKNHSNumberProvider",
+    "UKNINOProvider",
+    "generate_bic",
+    "generate_danish_cpr",
+    "generate_iban",
     "generate_indonesian_nik",
+    "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
     "generate_pesel",
+    "generate_latvian_personas_kods",
+    "generate_malaysian_mykad",
+    "generate_philhealth_pin",
+    "generate_philsys_psn",
+    "generate_rodne_cislo",
+    "generate_spanish_nie",
     "generate_ssn",
+    "generate_thai_national_id",
+    "generate_uk_nhs_number",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "validate_bic",
     "validate_iban",
     "validate_luhn",
     "validate_npi",
     "validate_phone_us",
     "validate_ssn",
+    "validate_uk_nhs_number",
+    "validate_uk_nino",
 ]

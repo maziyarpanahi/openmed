@@ -32,6 +32,8 @@ class PIIPattern:
     - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
     - context_words: Keywords that boost confidence when found nearby
     - validator: Optional checksum/validation function to confirm matches
+    - safety_sweep_requires_context: Require nearby context before the
+      deterministic safety sweep accepts this pattern
 
     Example:
         PIIPattern(
@@ -55,6 +57,7 @@ class PIIPattern:
     validator: Optional[Callable[[str], bool]] = (
         None  # Validation function (e.g., checksum)
     )
+    safety_sweep_requires_context: bool = False
 
 
 # ============================================================================
@@ -120,6 +123,13 @@ def validate_iban(iban_text: str) -> bool:
     from .anonymizer.providers import clinical_ids
 
     return clinical_ids.validate_iban(iban_text)
+
+
+def validate_bic(bic_text: str) -> bool:
+    """Validate a SWIFT/BIC using the shared clinical identifier validator."""
+    from .anonymizer.providers import clinical_ids
+
+    return clinical_ids.validate_bic(bic_text)
 
 
 def validate_phone_us(phone_text: str) -> bool:
@@ -356,6 +366,7 @@ PII_PATTERNS = [
         base_score=0.4,  # Could be other 5-digit numbers
         context_words=["zip", "zipcode", "zip code", "postal", "postal code"],
         context_boost=0.45,
+        safety_sweep_requires_context=True,
     ),
     # Credit card with Luhn validation
     PIIPattern(
@@ -381,10 +392,32 @@ PII_PATTERNS = [
         r"\b[A-Z]{2}\d{2}(?:[\s-]?[A-Z0-9]){11,30}\b",
         "iban",
         priority=9,
+        flags=0,
         base_score=0.85,
         context_words=["iban", "bank account", "account", "routing", "wire"],
         context_boost=0.1,
         validator=validate_iban,
+    ),
+    # SWIFT/BIC codes have fixed 8/11-character structure but no checksum, so
+    # require context during deterministic safety sweeps.
+    PIIPattern(
+        r"\b[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b",
+        "bic",
+        priority=8,
+        flags=0,
+        base_score=0.25,
+        context_words=[
+            "bic",
+            "swift",
+            "swift/bic",
+            "swift code",
+            "bank identifier",
+            "wire",
+            "wire transfer",
+        ],
+        context_boost=0.65,
+        validator=validate_bic,
+        safety_sweep_requires_context=True,
     ),
     # Account numbers when explicitly labeled in context
     PIIPattern(
@@ -873,6 +906,9 @@ def normalize_label(label: str) -> str:
         "aadhaar",
         "cpf",
         "cnpj",
+        "teudat_zehut",
+        "teudatzehut",
+        "tz",
     ):
         return "national_id"
 
@@ -933,6 +969,7 @@ def is_more_specific(label1: str, label2: str) -> bool:
             "codice_fiscale",
             "cpf",
             "cnpj",
+            "teudat_zehut",
         ],
     }
 
