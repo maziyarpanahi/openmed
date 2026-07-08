@@ -47,6 +47,8 @@ formatting — do not run Black, isort, or flake8. For Swift changes under
 - Reference the issue you are closing and complete the
   [pull request template](.github/PULL_REQUEST_TEMPLATE.md).
 - Update `CHANGELOG.md` and the docs when behavior changes.
+- Add docstrings for new public exports in `openmed.__all__`; the API
+  reference is generated from those docstrings.
 - For privacy-sensitive paths, add tests for direct-identifier recall, critical
   leakage, and span integrity (see [docs/contributing.md](docs/contributing.md)).
 
