@@ -5,8 +5,8 @@ import inspect
 import openmed
 
 
-def test_public_api_exports_have_docstrings() -> None:
-    """Every top-level public export resolves and has a docstring."""
+def test_public_api_callable_exports_have_docstrings() -> None:
+    """Every public function/class export resolves and has a docstring."""
     unresolved = []
     missing_docstrings = []
 
@@ -17,7 +17,10 @@ def test_public_api_exports_have_docstrings() -> None:
             unresolved.append(name)
             continue
 
-        if not inspect.getdoc(obj):
+        if not inspect.isfunction(obj) and not inspect.isclass(obj):
+            continue
+
+        if not getattr(obj, "__doc__", None):
             missing_docstrings.append(name)
 
     assert unresolved == []

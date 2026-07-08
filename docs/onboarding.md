@@ -58,8 +58,8 @@ Before making changes, confirm the baseline passes:
 
 - Implement your change. Keep it focused on the issue scope.
 - Add or update tests if the issue asks for them.
-- Add docstrings for new public exports in `openmed.__all__`; the API
-  reference is generated from those docstrings.
+- Add docstrings for new public function/class exports in `openmed.__all__`;
+  the API reference is generated from those docstrings.
 - Run `make format` and `make lint` before committing.
 
 ## 5. Open a pull request
