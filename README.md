@@ -8,8 +8,9 @@
 
 <p><b>Turn clinical text into structured insight with one line of code.</b><br/>
 Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
-your own hardware — from a one-liner in Python to native Swift apps, REST services,
-and browser token classification through Transformers.js/WebGPU.
+your own hardware — from a one-liner in Python to native Swift and Kotlin apps,
+REST/gRPC services, React Native, and browser token classification through
+Transformers.js/WebGPU.
 No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 <p>
@@ -30,7 +31,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>15 languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,000+ models</b> &nbsp;·&nbsp; <b>15 model-backed PII languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -102,7 +103,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          1,000+          |        Limited         |
-| Languages                             |            15            |         Varies         |
+| Model-backed PII languages            |            15            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
@@ -111,7 +112,7 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 
 - **Specialized models** — 1,000+ curated biomedical & clinical models, many outperforming proprietary stacks.
 - **HIPAA-aware de-identification** — all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
-- **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, REST services, and browser/WebGPU bundles via Transformers.js.
+- **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, Android/Kotlin, React Native, REST/gRPC services, and browser/WebGPU bundles via Transformers.js.
 - **One-line deployment** — Python API, Dockerized REST service, or batch pipelines.
 - **Zero lock-in** — Apache-2.0, your infrastructure, your data.
 
@@ -126,7 +127,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.7.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.8.0"),
 ]
 ```
 
@@ -338,10 +339,14 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 
 ---
 
-## Multilingual PII (15 languages)
+## Multilingual PII (15 model-backed languages)
 
 Extraction and de-identification support **15 supported PII language codes**:
 `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr` — **247 PII checkpoints** total.
+These are the model-backed PII language allow-list.
+OpenMed also includes validator-backed national-ID coverage for additional
+ID-only locales such as Polish, Korean, Latvian, Slovak, Malay, Filipino, and
+Danish.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
@@ -379,8 +384,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.7.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.7.0
+docker build -t openmed:1.8.0 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.8.0
 ```
 
 ```bash
@@ -391,8 +396,9 @@ curl -X POST http://127.0.0.1:8080/pii/extract \
 
 **Model lifecycle and service controls:** free memory on demand with
 `GET /models/loaded`, `POST /models/unload`, and a `keep_alive` idle window;
-v1.7 also adds warm pools, dynamic batching, request coalescing, rate and
-concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
+v1.8 also includes API-key/JWT auth, no-PHI request logging, tracing, gRPC,
+async jobs, webhooks, warm pools, dynamic batching, request coalescing, rate
+and concurrency limits, `/livez`, `/readyz`, and opt-in metrics:
 
 ```bash
 OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
@@ -413,7 +419,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [v1.6-v1.7 Feature Coverage](docs/release/v1.6-v1.7-feature-coverage.md) | [OpenMed 1.7.0 Release Notes](docs/release/v1.7.0.md) | [Examples](docs/examples.md) |
+| [OpenMed 1.8.0 Release Notes](docs/release/v1.8.0.md) | [v1.6-v1.7 Feature Coverage](docs/release/v1.6-v1.7-feature-coverage.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | |
 
