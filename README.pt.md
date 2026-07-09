@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — IA clínica local · mais de 1.500 modelos" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — IA clínica local · mais de 1.500 modelos" width="400" />
 
 <h3>Seus dados. Seu modelo. Seu hardware.</h3>
 
