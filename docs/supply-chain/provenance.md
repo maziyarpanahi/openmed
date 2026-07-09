@@ -7,18 +7,21 @@ attestation.
 
 ## Release coverage
 
-- Python wheel and source distribution files are built, attested, and verified
-  by the reusable `.github/workflows/provenance.yml` job before the PyPI upload
-  job starts.
+- Python wheel and source distribution files are built and checked by the
+  reusable `.github/workflows/provenance.yml` job before the PyPI upload job
+  starts. The job also attempts to generate and verify SLSA provenance, and
+  uploads that evidence when GitHub OIDC attestation services are available.
 - The GHCR manifest list is built by `.github/workflows/container-multiarch.yml`
   and attested by digest after the image is pushed.
-- The workflows verify the `https://slsa.dev/provenance/v1` predicate, source
-  commit, source ref, and signer workflow before release jobs can pass.
+- When attestation succeeds, the workflows verify the
+  `https://slsa.dev/provenance/v1` predicate, source commit, source ref, and
+  signer workflow before uploading provenance evidence.
 
 The PyPI publish action currently uploads with the project-scoped PyPI API
-token, so PyPI-native Sigstore attestations are disabled. The SLSA provenance
-workflow provides the repository-level attestation and digest manifest that
-downstream users can verify with the GitHub CLI.
+token, so PyPI-native Sigstore attestations are disabled. When GitHub OIDC
+attestation succeeds, the SLSA provenance workflow provides the
+repository-level attestation and digest manifest that downstream users can
+verify with the GitHub CLI.
 
 ## Online verification
 
