@@ -1,5 +1,5 @@
 /* =============================================================================
-   OpenMed Website — editorial-scientific redesign.
+   OpenMed Website: editorial-scientific redesign.
    Paper substrate · ink body · one restrained clinical accent (teal),
    one reserved signal color (coral). Hairlines, not glows.
    ============================================================================= */
@@ -568,7 +568,7 @@ section[data-screen] { padding: 96px 0; }
     vertical-align: super;
 }
 /* PHI card is always the dark inverse surface in both themes,
-   so token colors are fixed — they don't use theme-flipping vars. */
+   so token colors are fixed; they don't use theme-flipping vars. */
 .phi-token[data-k="NAME"].revealed { background: #C5453A; color: #fff; }
 .phi-token[data-k="DATE"].revealed { background: #0D6E6E; color: #fff; }
 .phi-token[data-k="ID"].revealed { background: #F5E27A; color: #0E1116; }
@@ -812,7 +812,7 @@ section[data-screen] { padding: 96px 0; }
     font-size: 10px;
     letter-spacing: .08em;
     text-transform: uppercase;
-    /* fixed high-contrast colors — the chip semantics are the same in both themes */
+    /* fixed high-contrast colors; the chip semantics are the same in both themes */
     background: #F5E27A;
     color: #0E1116;
     padding: 3px 7px;
@@ -1508,7 +1508,7 @@ section[data-screen] { padding: 96px 0; }
 .product-card.dark .product-cta { background: var(--fg-on-inverse); color: var(--surface-inverse); }
 .product-card.dark:hover .product-cta { background: #fff; }
 
-/* Models — managed deployment strip (SageMaker) */
+/* Models: managed deployment strip (SageMaker) */
 .deploy-strip {
     display: flex;
     justify-content: space-between;
