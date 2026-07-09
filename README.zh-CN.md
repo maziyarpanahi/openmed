@@ -24,7 +24,7 @@ OpenMed 完全在你掌控的硬件上抽取生物医学实体，并彻底移除
 </p>
 
 <p>
-  <b>1,500+ 模型</b> &nbsp;·&nbsp; <b>15 种 PII 语言</b> &nbsp;·&nbsp; <b>247 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ 模型</b> &nbsp;·&nbsp; <b>15 种 PII 语言</b> &nbsp;·&nbsp; <b>600+ 个 PII 检查点</b> &nbsp;·&nbsp; <b>100% 本地运行</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -284,7 +284,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 ## 多语言 PII（12 种语言）
 
-在 `en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja` 和 `tr` 等语言上进行抽取与去标识化——共 **247 个 PII 检查点**。
+在 `en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja` 和 `tr` 等语言上进行抽取与去标识化——共 **600+ 个 PII 检查点**。
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"

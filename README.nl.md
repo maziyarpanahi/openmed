@@ -24,7 +24,7 @@ OpenMed extraheert biomedische entiteiten en verwijdert 55+ PHI-typen volledig o
 </p>
 
 <p>
-  <b>1.500+ modellen</b> &nbsp;·&nbsp; <b>15 PII-talen</b> &nbsp;·&nbsp; <b>247 PII-checkpoints</b> &nbsp;·&nbsp; <b>100% op het apparaat</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1.500+ modellen</b> &nbsp;·&nbsp; <b>15 PII-talen</b> &nbsp;·&nbsp; <b>600+ PII-checkpoints</b> &nbsp;·&nbsp; <b>100% op het apparaat</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -284,7 +284,7 @@ Op niet-Apple-Silicon-hosts worden MLX-modelnamen automatisch vervangen door het
 
 ## Meertalige PII (12 talen)
 
-Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr` — in totaal **247 PII-checkpoints**.
+Extractie en de-identificatie in `en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` en `tr` — in totaal **600+ PII-checkpoints**.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"

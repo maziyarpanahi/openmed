@@ -24,7 +24,7 @@
 </p>
 
 <p>
-  <b>1,500+ نموذج</b> &nbsp;·&nbsp; <b>15 لغة PII</b> &nbsp;·&nbsp; <b>247 نقطة تحقق PII</b> &nbsp;·&nbsp; <b>100% على الجهاز</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ نموذج</b> &nbsp;·&nbsp; <b>15 لغة PII</b> &nbsp;·&nbsp; <b>600+ نقطة تحقق PII</b> &nbsp;·&nbsp; <b>100% على الجهاز</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -342,7 +342,7 @@ extract_pii(text, model_name="OpenMed/privacy-filter-mlx")         # Apple Silic
 
 ## PII متعدد اللغات (12 لغة)
 
-الاستخراج وإزالة الهوية في `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و`tr` — **247 نقطة تحقق PII** إجمالاً.
+الاستخراج وإزالة الهوية في `en`، `fr`، `de`، `it`، `es`، `nl`، `hi`، `te`، `pt`، `ar`، `ja` و`tr` — **600+ نقطة تحقق PII** إجمالاً.
 
 </div>
 

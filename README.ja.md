@@ -24,7 +24,7 @@ OpenMed は生物医学エンティティを抽出し、55+ 種類の PHI を、
 </p>
 
 <p>
-  <b>1,500+ モデル</b> &nbsp;·&nbsp; <b>15 の PII 対応言語</b> &nbsp;·&nbsp; <b>247 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ モデル</b> &nbsp;·&nbsp; <b>15 の PII 対応言語</b> &nbsp;·&nbsp; <b>600+ 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -284,7 +284,7 @@ Apple Silicon 以外のホストでは、MLX のモデル名は対応する PyTo
 
 ## 多言語 PII（12 言語）
 
-`en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化——合計 **247 個の PII チェックポイント**。
+`en`、`fr`、`de`、`it`、`es`、`nl`、`hi`、`te`、`pt`、`ar`、`ja`、`tr` での抽出と非識別化——合計 **600+ 個の PII チェックポイント**。
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"

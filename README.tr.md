@@ -24,7 +24,7 @@ OpenMed, biyomedikal varlıkları çıkarır ve 55+ PHI türünü tamamen sizin 
 </p>
 
 <p>
-  <b>1.500+ model</b> &nbsp;·&nbsp; <b>15 PII dili</b> &nbsp;·&nbsp; <b>247 PII denetim noktası</b> &nbsp;·&nbsp; <b>%100 cihazda</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1.500+ model</b> &nbsp;·&nbsp; <b>15 PII dili</b> &nbsp;·&nbsp; <b>600+ PII denetim noktası</b> &nbsp;·&nbsp; <b>%100 cihazda</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -284,7 +284,7 @@ Apple Silicon olmayan ana makinelerde MLX model adları otomatik olarak ilgili P
 
 ## Çok dilli PII (12 dil)
 
-`en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` ve `tr` dillerinde çıkarım ve kimliksizleştirme — toplam **247 PII denetim noktası**.
+`en`, `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `ja` ve `tr` dillerinde çıkarım ve kimliksizleştirme — toplam **600+ PII denetim noktası**.
 
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
