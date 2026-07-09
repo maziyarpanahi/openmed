@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — هوش مصنوعی بالینیِ روی دستگاه · بیش از 1,500 مدل" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — هوش مصنوعی بالینیِ روی دستگاه · بیش از 1,500 مدل" width="400" />
 
 <h3>دادهٔ شما. مدلِ شما. سخت‌افزارِ شما.</h3>
 
