@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — cihazda çalışan klinik yapay zekâ · 1.500+ model" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — cihazda çalışan klinik yapay zekâ · 1.500+ model" width="400" />
 
 <h3>Sizin Veriniz. Sizin Modeliniz. Sizin Donanımınız.</h3>
 
