@@ -5,12 +5,18 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PROVENANCE_WORKFLOW = ROOT / ".github" / "workflows" / "provenance.yml"
 IMAGE_SBOM_WORKFLOW = ROOT / ".github" / "workflows" / "sbom-image.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
+
+
+def _load_workflow(path: Path) -> dict[str, object]:
+    return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
 def test_publish_workflow_reads_version_without_importing_openmed_package():
@@ -57,17 +63,28 @@ def test_only_publish_workflow_uses_pypi_publish_action():
 def test_publish_workflow_keeps_release_gates():
     publish_workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
     provenance_workflow = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
+    workflow = _load_workflow(PUBLISH_WORKFLOW)
+    publish_job = workflow["jobs"]["publish"]
+    publish_step = next(
+        step
+        for step in publish_job["steps"]
+        if step.get("uses", "").startswith("pypa/gh-action-pypi-publish@")
+    )
 
     assert "tags:\n      - 'v*'" in publish_workflow
     assert "workflow_dispatch:" not in publish_workflow
     assert "pull_request:" not in publish_workflow
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
     assert "needs: provenance" in publish_workflow
-    assert "name: pypi" in publish_workflow
     assert "pypa/gh-action-pypi-publish@v1.14.0" in publish_workflow
-    assert "password: ${{ secrets.PYPI_API_TOKEN }}" in publish_workflow
-    assert "attestations: false" in publish_workflow
     assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in publish_workflow
+
+    assert publish_job["environment"]["name"] == "pypi"
+    assert publish_job["environment"]["url"] == "https://pypi.org/p/openmed"
+    assert publish_job["permissions"] == {"contents": "read"}
+    assert "id-token" not in publish_job["permissions"]
+    assert publish_step["with"]["password"] == "${{ secrets.PYPI_API_TOKEN }}"
+    assert publish_step["with"]["attestations"] == "false"
 
     assert "fetch-depth: 0" in provenance_workflow
     assert "id-token: write" in provenance_workflow
