@@ -90,7 +90,7 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
-      - PyPI Trusted Publishing: release/trusted-publishing.md
+      - PyPI Publishing: release/trusted-publishing.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md
