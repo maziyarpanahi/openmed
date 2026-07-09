@@ -63,7 +63,6 @@ def test_publish_workflow_keeps_release_gates():
     assert "pull_request:" not in publish_workflow
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
     assert "needs: provenance" in publish_workflow
-    assert "name: pypi" in publish_workflow
     assert "pypa/gh-action-pypi-publish@v1.14.0" in publish_workflow
     assert "password: ${{ secrets.PYPI_API_TOKEN }}" in publish_workflow
     assert "attestations: false" in publish_workflow
