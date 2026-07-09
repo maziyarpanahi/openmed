@@ -15,9 +15,10 @@ attestation.
 - The workflows verify the `https://slsa.dev/provenance/v1` predicate, source
   commit, source ref, and signer workflow before release jobs can pass.
 
-The PyPI publish action still emits PyPI/Sigstore attestations for uploaded
-distributions. The SLSA provenance workflow adds a repository-level attestation
-and a digest manifest that downstream users can verify with the GitHub CLI.
+The PyPI publish action currently uploads with the project-scoped PyPI API
+token, so PyPI-native Sigstore attestations are disabled. The SLSA provenance
+workflow provides the repository-level attestation and digest manifest that
+downstream users can verify with the GitHub CLI.
 
 ## Online verification
 

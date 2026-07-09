@@ -36,7 +36,7 @@ def test_about_version_is_parseable_without_runtime_dependencies():
     assert re.fullmatch(r"\d+\.\d+\.\d+", match.group(1))
 
 
-def test_only_publish_workflow_uses_trusted_publishing_action():
+def test_only_publish_workflow_uses_pypi_publish_action():
     publishing_workflows = [
         workflow
         for workflow in WORKFLOWS_DIR.glob("*.yml")
@@ -48,8 +48,10 @@ def test_only_publish_workflow_uses_trusted_publishing_action():
     for workflow in WORKFLOWS_DIR.glob("*.yml"):
         content = workflow.read_text(encoding="utf-8")
         assert "hatch publish" not in content
-        assert "PYPI_API_TOKEN" not in content
         assert "HATCH_INDEX_AUTH" not in content
+
+    publish_workflow = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    assert "PYPI_API_TOKEN" in publish_workflow
 
 
 def test_publish_workflow_keeps_release_gates():
@@ -62,12 +64,13 @@ def test_publish_workflow_keeps_release_gates():
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
     assert "needs: provenance" in publish_workflow
     assert "name: pypi" in publish_workflow
-    assert "id-token: write" in publish_workflow
     assert "pypa/gh-action-pypi-publish@v1.14.0" in publish_workflow
-    assert "attestations: true" in publish_workflow
+    assert "password: ${{ secrets.PYPI_API_TOKEN }}" in publish_workflow
+    assert "attestations: false" in publish_workflow
     assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in publish_workflow
 
     assert "fetch-depth: 0" in provenance_workflow
+    assert "id-token: write" in provenance_workflow
     assert "python scripts/release/check_repo_policy.py" in provenance_workflow
     assert "Compute release metadata" in provenance_workflow
     assert "python scripts/release/changelog.py" in provenance_workflow
