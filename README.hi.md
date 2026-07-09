@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — डिवाइस पर क्लिनिकल AI · 1,500+ मॉडल" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — डिवाइस पर क्लिनिकल AI · 1,500+ मॉडल" width="400" />
 
 <h3>आपका डेटा। आपका मॉडल। आपका हार्डवेयर।</h3>
 
