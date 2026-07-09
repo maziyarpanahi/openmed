@@ -16,7 +16,9 @@ pre-commit install
 ```
 
 The secret-scanning hook is pinned in `.pre-commit-config.yaml` and uses the
-rules in `.gitleaks.toml`.
+rules in `.gitleaks.toml` plus the committed `.secrets.baseline`. See
+[Secret Scanning](secret-scanning.md) for local setup, CI behavior, and
+baseline maintenance.
 
 Run the staged-change secret scanner manually when changing auth, release, or
 CI files:
@@ -40,8 +42,9 @@ where the repository plan supports it.
 
 Prefer replacing realistic-looking examples with placeholders such as
 `<TOKEN>` or `<PYPI_TOKEN>`. If a false positive cannot be avoided, add the
-narrowest possible allowlist entry in `.gitleaks.toml`, scoped by path and
-pattern, and explain the reason in the pull request.
+narrowest possible allowlist entry in `.gitleaks.toml` or redacted baseline
+entry in `.secrets.baseline`, scoped by path and pattern, and explain the
+reason in the pull request.
 
 ## If A Secret Is Committed
 

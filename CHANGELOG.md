@@ -7,8 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-09
+
+This release summarizes the cross-platform runtime, service hardening, multimodal privacy, clinical extraction, and release-evidence work merged after `v1.7.0`. The reviewed range is broad: 434 commits from `v1.7.0` through the final `release/openmed-180` branch tip prepared for the `v1.8.0` tag, covering Android, browser, and React Native runtimes, production service controls, structured health-data pipelines, and the privacy/evaluation gates that keep those surfaces aligned.
+
 ### Added
 
+- Added the Android OpenMedKit surface: a Gradle project, Kotlin public API, token-classification decoder, ONNX and ORT Mobile paths, ML Kit OCR adapter, model catalog/download cache, document/image intake, Compose demo, scan demo, Python-to-Android span parity fixtures, Android CI, and guarded Maven Central publishing (#1114, #1115, #1116, #1117, #1118, #1119, #1120, #1121, #1122, #1123, #1124, #1146, #1148, #1149, #1150, #1155, #1156, #1161, #1162).
+- Added browser, mobile JavaScript, and cross-platform client runtimes, including a typed OpenMedKit web package for Transformers.js/ONNX Runtime Web, a React Native bridge, Swift-Kotlin parity checks, public API parity coverage, and a typed TypeScript service client surface (#1132, #1177, #1178, #1123).
+- Added production service and deployment capabilities: API-key/JWT auth, request correlation IDs, no-PHI JSON logging, OpenTelemetry tracing, gRPC, async jobs and webhooks, Helm deployment, multi-arch containers, circuit breakers, model-load retry/backoff, privacy-gateway redaction before external calls, SMART-on-FHIR bulk ingestion, object-storage batch runs, Spark/Dask/lakehouse/columnar redaction, DuckDB and pandas/polars accessors, agent/MCP tool orchestration, hardened distroless images, image signing, SLSA provenance, container SBOMs, and vulnerability scanning (#1080, #1081, #1082, #1084, #1109, #1110, #1126, #1127, #1129, #1130, #1131, #1133, #1136, #1138, #1139, #1140, #1141, #1143, #1144, #1152, #1153, #1154, #1175, #1176, #1179, #1180, #1185, #1189).
+- Added deeper clinical extraction and interoperability: normalized clinical timelines, document assertion graphs, clinical event frames, medication relation decoding, concept normalization, UCUM units, free vocabulary grounding, RxNorm/ICD-10-CM/HPO linkers, CodeableConcept export, deterministic CDM extraction, OMOP CDM loader foundation, GDPR DSAR export, and severity/laterality, clinical-genomics, gastroenterology, endocrinology, nutrition/diet, and anesthesia domain coverage (#1019, #1022, #1025, #1026, #1027, #1079, #1086, #1105, #1134, #1135, #1137, #1160, #1164, #1165, #1166, #1167, #1170, #1182, #1183, #1184, #1187, #1219, #1292, #1299).
+- Added multimodal and structured privacy coverage for DOCX offset extraction, plain-image redaction, DICOM header de-identification, burned-in DICOM pixel OCR redaction, redacted-PDF text-layer fidelity checks, EPUB extraction, vCard/iCalendar PHI redaction, UK health identifiers, IBAN/SWIFT/BIC identifiers, passport/MRZ validation, and additional validator-backed ID packs for Slovak, Latvian, Malay, Filipino, and Danish locales (#1093, #1098, #1106, #1107, #1108, #1112, #1128, #1142, #1163, #1171, #1173, #1186, #1188, #1406).
+- Added evaluation, model, and release evidence infrastructure: streaming token classification, speculative MLX PII decoding, QLoRA smoke recipes, leakage-weighted distillation, Core ML and ONNX optimization/parity gates, OpenVINO export, paged KV-cache attention, memory-budgeted model scheduling, benchmark ledgers, active-learning gate queues, hard-negative mining, cross-lingual transfer evaluation, model-card/datasheet generation, flakiness quarantine, conformal calibration and abstention, mobile performance benchmarking, comparator matrices, load-test harnesses, and training provenance reproducibility gates (#1002, #1003, #1009, #1014, #1015, #1016, #1017, #1018, #1036, #1054, #1055, #1056, #1062, #1063, #1064, #1065, #1066, #1097, #1113, #1147, #1151, #1172, #1220).
 - Added an endocrinology zero-shot domain for glycemic and thyroid-function
   measures, hormone levels, insulin regimens, metabolic findings, and endocrine
   glands, with canonical label normalization, keyword routing metadata, and
@@ -23,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (keeping cold-start peak RSS low on the phone/laptop tiers), with
   `OPENMED_MLX_MMAP=0` forcing eager materialization as a documented fallback
   for debugging (#296).
+
+### Changed
+
+- Extended OpenMed from a Python/Swift-centered toolkit into a coordinated Python, Swift, Kotlin/Android, TypeScript, React Native, browser, REST, gRPC, and deployment release, with parity tests and shared fixtures keeping the platform surfaces aligned.
+- Updated release engineering around trusted publishing, SLSA attestations, SBOMs, signed images, static OpenAPI regeneration, reproducible release metadata, baseline-aware secret scanning, and guarded mobile/container publishing so library, container, and mobile artifacts can be validated from the same source tree (#1104, #1144, #1153, #1154, #1405).
+
+### Fixed
+
+- Fixed optimizer-stripped assertions, explicit UTF-8 handling, JSON decoding failures, exception chaining, iOS MLX pinning, multilingual test span offsets, Pages deployment concurrency, HPO linker test adaptation, DSAR vault-key matching, and lint cleanup after the large v1.8 merge train (#1091, #1094, #1095, #1096, #1100, #1158, #1181, #1194, #1404).
+
+### Security
+
+- Added and strengthened no-raw-PHI logging, offline mode socket blocking, privacy-gateway redaction before external LLM calls, policy compiler coverage proofs, DP surrogate budgeting, k-anonymity/l-diversity/t-closeness enforcement, membership-inference defenses, adversarial de-identification robustness, federated leakage evaluation, secret scanning, pre-commit hook scanning, and vulnerability gates (#189, #190, #1034, #1035, #1037, #1043, #1047, #1082, #1127, #1141, #1405).
 
 ## [1.7.0] - 2026-07-01
 
@@ -1049,7 +1072,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/maziyarpanahi/openmed/compare/v1.5.5...v1.6.0
 [0.6.1]: https://github.com/OpenMed/openmed/compare/v0.6.0...v0.6.1
