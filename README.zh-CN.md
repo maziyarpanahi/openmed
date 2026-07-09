@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — 端侧临床 AI · 1,500+ 个模型" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — 端侧临床 AI · 1,500+ 个模型" width="400" />
 
 <h3>你的数据。你的模型。你的硬件。</h3>
 
