@@ -1,0 +1,2 @@
+{"text":"eGFR 38 mL/min/1.73m2, CKD stage 3b, on HD MWF for ESRD.","spans":[{"text":"eGFR 38","label":"RenalFunctionMeasure","start":0,"end":7},{"text":"CKD stage 3b","label":"CKDStage","start":20,"end":32},{"text":"HD MWF","label":"DialysisModality","start":37,"end":43}]}
+{"text":"Creatinine 2.1 mg/dL with proteinuria and intermittent hematuria.","spans":[{"text":"Creatinine 2.1","label":"RenalFunctionMeasure","start":0,"end":14},{"text":"proteinuria","label":"UrineFinding","start":30,"end":40},{"text":"hematuria","label":"UrineFinding","start":58,"end":67}]}

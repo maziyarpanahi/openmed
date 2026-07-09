@@ -98,6 +98,10 @@
     "GI_SYMPTOM": "keep",
     "GI_SCORE": "keep",
     "POLYP_DESCRIPTOR": "keep",
+    "CKD_STAGE": "keep",
+    "DIALYSIS_MODALITY": "keep",
+    "RENAL_FUNCTION_MEASURE": "keep",
+    "URINE_FINDING": "keep",
     "OTHER": "keep"
   }
 }

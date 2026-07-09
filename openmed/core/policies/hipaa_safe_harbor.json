@@ -99,6 +99,12 @@
     "GI_SYMPTOM": "mask",
     "GI_SCORE": "mask",
     "POLYP_DESCRIPTOR": "mask",
+    "CKD_STAGE": "mask",
+    "DIALYSIS_MODALITY": "mask",
+    "RENAL_FUNCTION_MEASURE": "mask",
+    "URINE_FINDING": "mask",
+
+
     "OTHER": "mask"
   }
 }

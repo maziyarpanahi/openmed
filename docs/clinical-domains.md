@@ -224,3 +224,15 @@
 | GIScore | GI_SCORE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/gastroenterology.jsonl |
 | LesionMorphology | POLYP_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/gastroenterology.jsonl |
 | PolypDescriptor | POLYP_DESCRIPTOR | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/gastroenterology.jsonl |
+
+## Nephrology Renal
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| RenalFunctionMeasure | RENAL_FUNCTION_MEASURE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+| CKDStage | CKD_STAGE | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+| DialysisModality | DIALYSIS_MODALITY | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+| UrineFinding | URINE_FINDING | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+| FluidStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+| RenalReplacementAccess | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+| ElectrolyteDisturbance | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |

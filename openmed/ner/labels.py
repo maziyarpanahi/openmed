@@ -32,6 +32,7 @@ _DOMAIN_FIXTURE_PATHS: Mapping[str, str] = {
     "endocrinology": "tests/fixtures/clinical/endocrinology.jsonl",
     "gastroenterology": "tests/fixtures/clinical/gastroenterology.jsonl",
     "genomic_variant": "tests/fixtures/clinical/genomic_variant.jsonl",
+    "nephrology_renal": "tests/fixtures/clinical/nephrology_renal.jsonl",
     "nutrition_diet": "tests/fixtures/clinical/nutrition_diet.jsonl",
 }
 
