@@ -20,6 +20,9 @@ jobs:
     needs: provenance
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/openmed
     permissions:
       contents: read
 
