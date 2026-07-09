@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — ذكاء اصطناعي سريري على الجهاز · أكثر من 1,500 نموذج" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — ذكاء اصطناعي سريري على الجهاز · أكثر من 1,500 نموذج" width="400" />
 
 <h3>بياناتك. نموذجك. عتادك.</h3>
 
