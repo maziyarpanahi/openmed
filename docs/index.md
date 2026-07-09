@@ -7,22 +7,24 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-OpenMed `1.7.0` extends the v1.6 privacy foundation into a broader local-first
-clinical data platform:
+OpenMed `1.8.0` extends the v1.7 multimodal and browser foundation into a
+broader cross-platform clinical data platform:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility
   hashes, review bundles, redaction previews, and release gates.
-- **Multimodal and structured inputs** across OCR, images, PDFs, Markdown,
-  AsciiDoc, CSV/TSV, JSONL chat logs, HL7 v2, CDA/C-CDA, FHIR operations, and
-  FHIR Bulk NDJSON.
-- **Python, Swift, REST, TypeScript, and browser paths** including OpenMedKit,
-  typed REST clients, ONNX/WebGPU, and Transformers.js export bundles.
-- **15 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja,
-  nl, pt, te, th, and tr** with locale-aware validation and surrogate
-  generation.
+- **Multimodal and structured inputs** across OCR, images, PDFs, DOCX, EPUB,
+  vCard/iCalendar, DICOM, CSV/TSV, JSONL chat logs, HL7 v2, CDA/C-CDA, FHIR
+  operations, and FHIR Bulk NDJSON.
+- **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
+  browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
+  Transformers.js export bundles.
+- **15 model-backed PII language codes: ar, de, en, es, fr, he, hi, id, it,
+  ja, nl, pt, te, th, and tr** with locale-aware validation and surrogate
+  generation, plus additional validator-backed national-ID coverage for
+  ID-only locales.
 - **Release evidence** for leakage heatmaps, model scorecards, threshold
-  sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, and
-  reproducible dependency locks.
+  sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, signed
+  images, SLSA provenance, secret scanning, and reproducible dependency locks.
 
 ## What you get
 
@@ -30,12 +32,12 @@ clinical data platform:
 - **One-line orchestration** – `analyze_text` wraps validation, inference, and formatting for scripts, notebooks, or services.
 - **PII detection & de-identification** – HIPAA-aware smart entity merging,
   policy profiles, signed audit reports, and production-ready de-identification.
-- **Apple Silicon acceleration** – MLX-backed Python inference plus Swift-native app integration through `OpenMedKit`.
+- **Apple Silicon and mobile acceleration** – MLX-backed Python inference plus Swift-native and Android/Kotlin app integration through OpenMedKit.
 - **REST service** – FastAPI endpoints for `/livez`, `/readyz`, `/analyze`,
   `/pii/extract`, `/pii/deidentify`, warm pools, batching, metrics, and
   typed Python/TypeScript clients.
-- **Browser export** – ONNX/WebGPU bundles for Transformers.js token
-  classification in browser runtimes.
+- **Browser and React Native export** – ONNX/WebGPU bundles for Transformers.js token
+  classification in browser runtimes plus a React Native bridge for mobile apps.
 - **Advanced NER post-processing** – score-aware grouping, PHI-friendly filtering, and CSV/JSON/HTML export helpers.
 - **Composable config** – `OpenMedConfig` reads YAML/ENV so deployments stay reproducible across laptops and clusters.
 
@@ -69,18 +71,18 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – coverage checklist across examples, docs, website, and source modules.
-- [OpenMed 1.7.0 Release Notes](./release/v1.7.0.md) – detailed release inventory and migration notes.
+- [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – detailed release inventory, commit coverage, and migration notes.
+- [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – historical coverage checklist across examples, docs, website, and source modules.
 - [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, Apple runtimes, browser export, multimodal inputs, and FHIR/HL7.
 - [Transformers.js Export](./export-transformersjs.md) – browser/WebGPU packaging for token classification bundles.
-- [FHIR Interop Helpers](./fhir-interop.md) and [HL7 v2 De-identification](./hl7v2-deidentification.md) – structured health-data workflows.
-- [MLX Backend](./mlx-backend.md), [OpenMedKit](./swift-openmedkit.md), and [CoreML Packaging](./coreml-export.md) – local Apple runtime paths.
+- [FHIR Interop Helpers](./fhir-interop.md), [HL7 v2 De-identification](./hl7v2-deidentification.md), and [OMOP/lakehouse integrations](./integrations/lakehouse-redaction.md) – structured health-data workflows.
+- [MLX Backend](./mlx-backend.md), [OpenMedKit](./swift-openmedkit.md), [Android Span Parity](./android-parity.md), and [CoreML Packaging](./coreml-export.md) – local mobile/runtime paths.
 
 ## How these docs are structured
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – verify release feature coverage across examples and docs.
+3. [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – review the post-v1.7 release inventory and migration notes.
 4. Core guides:
    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
    - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.
