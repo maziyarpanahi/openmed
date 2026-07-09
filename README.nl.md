@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-readme-banner.png" alt="OpenMed — klinische AI op het apparaat · 1.500+ modellen" width="820" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — klinische AI op het apparaat · 1.500+ modellen" width="400" />
 
 <h3>Jouw data. Jouw model. Jouw hardware.</h3>
 
