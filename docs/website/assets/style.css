@@ -657,6 +657,16 @@ section[data-screen] { padding: 96px 0; }
     margin-top: 20px;
     line-height: 1.7;
 }
+.statband-grid--secondary {
+    grid-template-columns: repeat(2, 1fr);
+    border-top: 1px solid var(--border-on-inverse);
+}
+:where(.statband-grid--secondary) .statband-cell { padding: 30px 28px 26px; }
+.statband-num--sm {
+    font-size: clamp(34px, 3.6vw, 54px);
+    font-variation-settings: "opsz" 48;
+}
+.statband-grid--secondary .statband-label { margin-top: 12px; }
 .statband-foot {
     display: flex;
     align-items: center;
