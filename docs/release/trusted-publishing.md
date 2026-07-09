@@ -7,7 +7,7 @@ separate provenance job builds, checks, attests, and verifies the distributions.
 
 PyPI Trusted Publishing is the preferred future path, but it must not be used
 until the PyPI `openmed` project has a trusted publisher that exactly matches
-this repository, workflow file, and GitHub environment.
+this repository and workflow file.
 
 ## Workflow contract
 
@@ -20,6 +20,9 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
   attestations before upload.
 - The publish job downloads those verified distributions, uses
   `pypa/gh-action-pypi-publish`, and grants only `contents: read`.
+- The publish job intentionally does not attach a protected GitHub environment
+  while token upload is active, so repository-scoped release credentials can run
+  without a separate environment approval queue.
 - The publish action is configured with `password: ${{ secrets.PYPI_API_TOKEN }}`
   and `attestations: false`.
 - PyPI-native PEP 740 attestations are disabled while token upload is active,
@@ -40,14 +43,13 @@ PyPI `openmed` project first:
    - Owner: `maziyarpanahi`
    - Repository name: `openmed`
    - Workflow name: `publish.yml`
-   - Environment name: `pypi`
-3. Ensure the GitHub `pypi` environment exists and is protected according to
-   the release policy.
-4. Remove the `password` input from the publish action, grant the publish job
+   - Environment name: leave blank unless the workflow is changed to attach a
+     GitHub environment
+3. Remove the `password` input from the publish action, grant the publish job
    `id-token: write`, and set `attestations: true`.
 
-If PyPI reports an invalid publisher during release, check those four fields
-first. The workflow filename and environment name must match exactly.
+If PyPI reports an invalid publisher during release, check those fields first.
+The workflow filename and optional environment name must match exactly.
 
 ## Release checklist
 
