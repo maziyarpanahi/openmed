@@ -33,6 +33,30 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 Do not add a second PyPI publishing workflow. Do not add `hatch publish` or
 Twine upload commands back to release CI.
 
+## v1.8.0 Incident Lessons
+
+On 2026-07-09, the first `v1.8.0` PyPI publish failed because the release
+workflow used `pypa/gh-action-pypi-publish` without a password. In that mode,
+the action falls back to Trusted Publishing. PyPI rejected the GitHub OIDC
+exchange with `invalid-publisher` because the `openmed` project did not have a
+trusted publisher matching this repository, `publish.yml`, and the `pypi`
+environment.
+
+Two follow-up checks matter:
+
+- `PYPI_API_TOKEN` is currently an environment secret on the GitHub `pypi`
+  environment, not a repository secret. The publish job must keep
+  `environment: pypi` while token upload is active.
+- GitHub OIDC attestation retrieval can fail independently of PyPI upload. SLSA
+  provenance should be attempted and verified when GitHub's identity-token
+  service is healthy, but transient attestation failures must not hide the
+  separate PyPI credential contract.
+
+The regression tests in `tests/unit/test_publish_workflow_version.py` and
+`tests/unit/release/test_provenance_workflow.py` are the local guardrails for
+this contract. Update them in the same change as any PyPI release workflow
+change.
+
 ## PyPI project setup
 
 To migrate back to Trusted Publishing, configure the trusted publisher on the
