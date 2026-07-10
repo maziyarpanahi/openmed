@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-07-10
+
+### Fixed
+
+- Fixed automatic PyTorch attention selection so `auto` no longer forces SDPA onto Transformers architectures that do not support it, including `DebertaV2ForTokenClassification`; explicit `eager`, `sdpa`, and `flash_attention_2` selections remain available.
+- Changed unavailable accelerated-attention fallbacks to use the architecture-independent eager implementation instead of selecting another accelerated backend from runtime capability alone.
+
 ## [1.8.0] - 2026-07-09
 
 This release summarizes the cross-platform runtime, service hardening, multimodal privacy, clinical extraction, and release-evidence work merged after `v1.7.0`. The reviewed range is broad: 434 commits from `v1.7.0` through the final `release/openmed-180` branch tip prepared for the `v1.8.0` tag, covering Android, browser, and React Native runtimes, production service controls, structured health-data pipelines, and the privacy/evaluation gates that keep those surfaces aligned.
@@ -1072,7 +1079,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...v1.7.0
 [1.6.0]: https://github.com/maziyarpanahi/openmed/compare/v1.5.5...v1.6.0
