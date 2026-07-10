@@ -80,7 +80,8 @@ jobs:
           fi
 
           if git diff --quiet "$PREVIOUS_TAG" "$GITHUB_SHA" -- \
-            android/ ':(exclude,glob)android/**/*.md'; then
+            android/ models.jsonl scripts/android/build_android_catalog.py \
+            ':(exclude,glob)android/**/*.md'; then
             echo "publish_android=false" >> "$GITHUB_OUTPUT"
             echo "No Android artifact changes since $PREVIOUS_TAG; skipping publication."
           else
