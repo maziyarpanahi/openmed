@@ -96,22 +96,27 @@ nav:
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md
 
+extra_css:
+  - stylesheets/openmed-brand.css
+
 theme:
   name: material
   language: en
+  logo: assets/openmed-mark.svg
+  favicon: assets/openmed-favicon.svg
   font:
-    text: Inter
+    text: Inter Tight
     code: JetBrains Mono
   palette:
     - scheme: default
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
