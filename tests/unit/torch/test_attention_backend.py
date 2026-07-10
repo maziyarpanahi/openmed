@@ -28,10 +28,21 @@ def _set_availability(monkeypatch, *, flash: bool, sdpa: bool) -> None:
     monkeypatch.setattr(attention, "_sdpa_is_available", lambda: sdpa)
 
 
-def test_auto_selects_flash_attention_2_when_available(monkeypatch) -> None:
-    _set_availability(monkeypatch, flash=True, sdpa=True)
+def test_auto_defers_to_transformers_when_accelerated_backends_exist(
+    monkeypatch,
+) -> None:
+    flash_available = Mock(return_value=True)
+    sdpa_available = Mock(return_value=True)
+    monkeypatch.setattr(
+        attention,
+        "_flash_attention_2_is_available",
+        flash_available,
+    )
+    monkeypatch.setattr(attention, "_sdpa_is_available", sdpa_available)
 
-    assert select_attn_implementation("auto") == "flash_attention_2"
+    assert select_attn_implementation("auto") is None
+    flash_available.assert_not_called()
+    sdpa_available.assert_not_called()
 
 
 def test_flash_attention_2_requires_package_and_cuda(monkeypatch) -> None:
@@ -57,20 +68,6 @@ def test_flash_attention_2_requires_package_and_cuda(monkeypatch) -> None:
     assert attention._flash_attention_2_is_available() is True
 
 
-def test_auto_selects_sdpa_when_flash_attention_2_is_unavailable(monkeypatch) -> None:
-    _set_availability(monkeypatch, flash=False, sdpa=True)
-
-    assert select_attn_implementation("auto") == "sdpa"
-
-
-def test_auto_selects_eager_when_no_accelerated_backend_is_available(
-    monkeypatch,
-) -> None:
-    _set_availability(monkeypatch, flash=False, sdpa=False)
-
-    assert select_attn_implementation("auto") == "eager"
-
-
 def test_explicit_unavailable_flash_attention_2_downgrades_with_warning(
     monkeypatch,
     caplog,
@@ -80,9 +77,9 @@ def test_explicit_unavailable_flash_attention_2_downgrades_with_warning(
 
     selected = select_attn_implementation("flash_attention_2")
 
-    assert selected == "sdpa"
+    assert selected == "eager"
     assert "flash_attention_2 is unavailable" in caplog.text
-    assert "using sdpa instead" in caplog.text
+    assert "using eager instead" in caplog.text
 
 
 def test_explicit_unavailable_sdpa_downgrades_to_eager_with_warning(
@@ -99,19 +96,25 @@ def test_explicit_unavailable_sdpa_downgrades_to_eager_with_warning(
     assert "using eager instead" in caplog.text
 
 
-def test_selection_logs_chosen_backend_once(monkeypatch, caplog) -> None:
+def test_explicit_available_sdpa_is_preserved(monkeypatch) -> None:
+    _set_availability(monkeypatch, flash=False, sdpa=True)
+
+    assert select_attn_implementation("sdpa") == "sdpa"
+
+
+def test_auto_delegation_logs_once(monkeypatch, caplog) -> None:
     _set_availability(monkeypatch, flash=False, sdpa=True)
     caplog.set_level(logging.INFO)
 
-    assert select_attn_implementation("auto") == "sdpa"
-    assert select_attn_implementation("auto") == "sdpa"
+    assert select_attn_implementation("auto") is None
+    assert select_attn_implementation("auto") is None
 
     messages = [
         record.message
         for record in caplog.records
-        if record.message.startswith("Using PyTorch attention backend:")
+        if record.message.startswith("Using Transformers automatic attention")
     ]
-    assert messages == ["Using PyTorch attention backend: sdpa"]
+    assert messages == ["Using Transformers automatic attention backend selection"]
 
 
 def test_config_accepts_attention_backend_from_env(monkeypatch) -> None:
@@ -134,17 +137,26 @@ def test_config_dict_round_trips_attention_backend() -> None:
 @patch("openmed.core.models.AutoModelForTokenClassification")
 @patch("openmed.core.models.AutoTokenizer")
 @patch("openmed.core.models.AutoConfig")
-def test_load_model_threads_attention_backend_to_model_from_pretrained(
+@pytest.mark.parametrize(
+    ("attention_backend", "expected_backend"),
+    [
+        pytest.param("auto", None, id="deberta-auto"),
+        pytest.param("eager", "eager", id="explicit-eager"),
+    ],
+)
+def test_loader_only_forwards_explicit_attention_backends(
     mock_config_class,
     mock_tokenizer_class,
     mock_model_class,
     monkeypatch,
+    attention_backend,
+    expected_backend,
 ) -> None:
     _set_availability(monkeypatch, flash=False, sdpa=True)
     hf_config = Mock()
     hf_config.num_labels = 3
     hf_config.problem_type = "token_classification"
-    hf_config.architectures = ["BertForTokenClassification"]
+    hf_config.architectures = ["DebertaV2ForTokenClassification"]
     mock_config_class.from_pretrained.return_value = hf_config
     mock_tokenizer_class.from_pretrained.return_value = Mock()
     model = Mock()
@@ -155,7 +167,7 @@ def test_load_model_threads_attention_backend_to_model_from_pretrained(
         OpenMedConfig(
             backend="hf",
             device="cpu",
-            torch_attention_backend="auto",
+            torch_attention_backend=attention_backend,
         )
     )
     loader.load_model("test-model")
@@ -163,16 +175,28 @@ def test_load_model_threads_attention_backend_to_model_from_pretrained(
     _, model_kwargs = mock_model_class.from_pretrained.call_args
     _, config_kwargs = mock_config_class.from_pretrained.call_args
     _, tokenizer_kwargs = mock_tokenizer_class.from_pretrained.call_args
-    assert model_kwargs["attn_implementation"] == "sdpa"
+    if expected_backend is None:
+        assert "attn_implementation" not in model_kwargs
+    else:
+        assert model_kwargs["attn_implementation"] == expected_backend
     assert "attn_implementation" not in config_kwargs
     assert "attn_implementation" not in tokenizer_kwargs
 
 
 @patch("openmed.core.models.HF_AVAILABLE", True)
 @patch("openmed.core.models.pipeline")
-def test_hf_pipeline_threads_attention_backend_through_model_kwargs(
+@pytest.mark.parametrize(
+    ("attention_backend", "expected_backend"),
+    [
+        pytest.param("auto", None, id="auto"),
+        pytest.param("eager", "eager", id="explicit-eager"),
+    ],
+)
+def test_pipeline_only_forwards_explicit_attention_backends(
     mock_pipeline,
     monkeypatch,
+    attention_backend,
+    expected_backend,
 ) -> None:
     _set_availability(monkeypatch, flash=False, sdpa=True)
 
@@ -180,10 +204,15 @@ def test_hf_pipeline_threads_attention_backend_through_model_kwargs(
         OpenMedConfig(
             backend="hf",
             device="cpu",
-            torch_attention_backend="auto",
+            torch_attention_backend=attention_backend,
         )
     )
     loader.create_pipeline("test-model")
 
     _, pipeline_kwargs = mock_pipeline.call_args
-    assert pipeline_kwargs["model_kwargs"]["attn_implementation"] == "sdpa"
+    if expected_backend is None:
+        assert "model_kwargs" not in pipeline_kwargs
+    else:
+        assert (
+            pipeline_kwargs["model_kwargs"]["attn_implementation"] == expected_backend
+        )
