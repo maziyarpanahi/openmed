@@ -115,7 +115,8 @@ def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():
     assert "fetch-depth: 0" in workflow
     assert "Detect Android artifact changes" in workflow
     assert 'git describe --tags --abbrev=0 "${GITHUB_SHA}^"' in workflow
-    assert "android/ ':(exclude,glob)android/**/*.md'" in workflow
+    assert "android/ models.jsonl scripts/android/build_android_catalog.py" in workflow
+    assert "':(exclude,glob)android/**/*.md'" in workflow
     assert 'echo "publish_android=false"' in workflow
     assert workflow.count("if: needs.guard.outputs.publish_android == 'true'") == 2
     assert ":openmedkit:assembleDebug" in workflow
