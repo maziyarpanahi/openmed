@@ -110,20 +110,22 @@ def honorifics_for(lang: str) -> Tuple[str, ...]:
 
 
 def _split_trailing_honorific(text: str, lang: str) -> Tuple[str, str]:
-    """Peel a single trailing honorific off ``text``.
+    """Peel a single trailing honorific suffix off ``text``.
 
-    Returns ``(core, honorific)`` where ``honorific`` is ``""`` when none of
-    the language's registered honorifics match the end of ``text``. Any
-    whitespace between the name and honorific (common in Japanese) is dropped
-    from ``core`` and preserved on re-attachment by the caller.
+    Returns ``(core, suffix)`` where ``suffix`` is ``""`` when none of the
+    language's registered honorifics match. When a match exists, ``suffix``
+    preserves the exact separator and trailing whitespace from the input so
+    surrogate replacement cannot concatenate a spaced honorific onto the new
+    name. An honorific-only span returns an empty ``core`` and its full input as
+    ``suffix`` so callers can use a safe fallback without dropping the title.
     """
 
-    stripped = text.rstrip()
+    content_end = len(text.rstrip())
+    stripped = text[:content_end]
     for honorific in honorifics_for(lang):
-        if len(stripped) > len(honorific) and stripped.endswith(honorific):
+        if stripped.endswith(honorific):
             core = stripped[: -len(honorific)].rstrip()
-            if core:
-                return core, honorific
+            return core, text[len(core) :]
     return text, ""
 
 
@@ -131,8 +133,9 @@ def normalize_person_span(span_text: str, lang: str) -> Tuple[str, str]:
     """Separate a trailing honorific from a CJK PERSON span.
 
     This is the entry point the surrogate-replacement step uses: it hands back
-    the bare ``name`` (to be swapped for a surrogate) and the ``honorific`` (to
-    be re-attached verbatim afterwards), so the honorific survives replacement.
+    the bare ``name`` (to be swapped for a surrogate) and the honorific suffix
+    (to be re-attached verbatim afterwards), so both the title and any separator
+    whitespace survive replacement.
 
     Args:
         span_text: The detected PERSON span text.
@@ -141,7 +144,8 @@ def normalize_person_span(span_text: str, lang: str) -> Tuple[str, str]:
             this uniformly without a language guard.
 
     Returns:
-        ``(name, honorific)``. ``honorific`` is ``""`` when no honorific is
+        ``(name, honorific_suffix)``. The suffix includes separator/trailing
+        whitespace exactly as written. It is ``""`` when no honorific is
         present (or ``lang`` is not a CJK language), in which case ``name`` is
         the original ``span_text`` unchanged.
 
@@ -209,6 +213,6 @@ def split_name(name: str, lang: str) -> Tuple[str, str, str]:
     if lang not in CJK_LANGUAGES or not name:
         return name, "", ""
 
-    core, honorific = _split_trailing_honorific(name, lang)
+    core, honorific_suffix = _split_trailing_honorific(name, lang)
     family, given = _split_family_given(core, lang)
-    return family, given, honorific
+    return family, given, honorific_suffix.strip()
