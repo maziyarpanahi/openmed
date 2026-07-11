@@ -8,15 +8,24 @@ import inspect
 import logging
 import unicodedata
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence, cast
+from typing import Any, Callable, Literal, Mapping, Optional, Sequence, cast
 
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
 
-if TYPE_CHECKING:
-    from .pii import DeidentificationMethod
+# Keep this runtime alias aligned with ``pii.DeidentificationMethod``. Importing
+# ``pii`` here would eagerly load the heavier public de-identification module,
+# which otherwise imports ``Pipeline`` only when ``deidentify`` is called.
+DeidentificationMethod = Literal[
+    "mask",
+    "remove",
+    "replace",
+    "hash",
+    "shift_dates",
+    "format_preserve",
+]
 
 STAGE_NAMES: tuple[str, ...] = (
     "normalize",

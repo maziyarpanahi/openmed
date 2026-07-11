@@ -69,6 +69,26 @@ def test_py_typed_declared_in_hatch_build_include() -> None:
     )
 
 
+def _public_annotation_targets(
+    export_name: str, obj: object
+) -> list[tuple[str, object]]:
+    """Return an export and the public callables declared directly on it."""
+    targets = [(export_name, obj)]
+    if not inspect.isclass(obj):
+        return targets
+
+    for member_name, descriptor in vars(obj).items():
+        if member_name.startswith("_"):
+            continue
+        if isinstance(descriptor, (classmethod, staticmethod)):
+            descriptor = descriptor.__func__
+        elif isinstance(descriptor, property):
+            descriptor = descriptor.fget
+        if inspect.isfunction(descriptor):
+            targets.append((f"{export_name}.{member_name}", descriptor))
+    return targets
+
+
 @pytest.mark.parametrize("module_name", TYPED_MODULES)
 def test_typed_modules_expose_resolvable_hints(module_name: str) -> None:
     """Each scoped v1.6 module imports and its public hints resolve.
@@ -77,17 +97,22 @@ def test_typed_modules_expose_resolvable_hints(module_name: str) -> None:
     modules declare under ``from __future__ import annotations``; a broken or
     dangling annotation on a public class or function would raise here. Public
     aliases (e.g. ``Literal`` type aliases) are not callables carrying their own
-    annotations and are intentionally skipped.
+    annotations and are intentionally skipped. Exported classes are also walked
+    so annotations on their public methods and properties cannot hide behind a
+    resolvable class-level annotation.
     """
     module = importlib.import_module(module_name)
     for name in getattr(module, "__all__", ()):
         obj = getattr(module, name)
         if not (inspect.isclass(obj) or inspect.isfunction(obj)):
             continue
-        try:
-            typing.get_type_hints(obj)
-        except (NameError, TypeError) as exc:  # pragma: no cover - failure path
-            pytest.fail(f"{module_name}.{name} has an unresolvable type hint: {exc}")
+        for qualname, target in _public_annotation_targets(name, obj):
+            try:
+                typing.get_type_hints(target)
+            except (NameError, TypeError) as exc:  # pragma: no cover - failure path
+                pytest.fail(
+                    f"{module_name}.{qualname} has an unresolvable type hint: {exc}"
+                )
 
 
 def test_scoped_modules_type_check_cleanly() -> None:
