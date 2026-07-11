@@ -1,8 +1,8 @@
 # Examples & Copy/Paste Recipes
 
 This page curates the most useful samples already in the repository so you can
-jump straight to runnable notebooks or scripts. The v1.6 and v1.7 examples use
-synthetic data and are safe to run during release review.
+jump straight to runnable notebooks or scripts. The v1.6, v1.7, and v1.8
+examples use synthetic data and are safe to run during release review.
 
 ## Notebooks (`examples/notebooks/`)
 
@@ -63,6 +63,9 @@ Recipe 5 in `Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end
 | `examples/gradio_deid_app.py` | Interactive Gradio UI to paste synthetic text, pick a `mask`/`replace`/`hash` method, and view the de-identified output plus detected entities (optional `pip install gradio`). |
 | `examples/v16_policy_audit_release_gates.py` | Demonstrates v1.6 policy profiles, canonical spans, signed audit reports, review bundles, redaction previews, leakage heatmaps, and k-anonymity metrics without model downloads. |
 | `examples/v17_multimodal_browser_interop.py` | Demonstrates v1.7 multimodal and interop surfaces: AsciiDoc offset projection, OCR contracts, chat JSONL, CSV manifests, FHIR, HL7 v2, and Transformers.js browser bundle checks. |
+| `examples/privacy_gateway_quickstart.py` | Shows redaction before an external model call and safe re-identification after the protected boundary. |
+| `examples/dbt-deidentify/` | Demonstrates the v1.8 warehouse transformation package for table redaction macros and redacted staging models. |
+| `examples/spark-streaming/` | Demonstrates Spark structured-streaming de-identification against synthetic records. |
 | `examples/first_five_minutes_redact_extract_fhir.py` | Walks through synthetic redaction, deterministic clinical extraction, and FHIR Bundle assembly. |
 | `scripts/smoke_gliner.py` | Runs a bounded set of GLiNER models/texts to confirm zero-shot dependencies are installed before releasing. |
 | `tests/run-tests.sh` | Convenience runner that stitches together unit, integration, and smoke tests; extend it to include docs builds and API smoke checks. |
@@ -89,12 +92,23 @@ The v1.7 examples are grouped around the main new public surfaces:
 - Browser deployment: ONNX/WebGPU artifacts packaged for Transformers.js, with
   the expected `transformersjs/` file layout checked before publishing.
 
+## v1.8 runtime, deployment, and warehouse recipes
+
+The v1.8 examples and guides focus on cross-platform runtime and production
+deployment paths:
+
+- Android/Kotlin and Swift-Kotlin parity: [Android Span Parity](./android-parity.md), [Android ONNX Export](./export-onnx-android.md), and [Swift-Kotlin API Parity](./swift-kotlin-parity.md).
+- Browser and mobile JavaScript: [ONNX Runtime Web Loader](./runtimes/onnxruntime-web.md), [Transformers.js Export](./export-transformersjs.md), and the React Native bridge under `js/openmedkit-react-native/`.
+- Service operations: [REST Authentication](./serving/authentication.md), [gRPC Service](./serving/grpc.md), [Async REST Jobs & Webhooks](./serving/async-jobs.md), [Serving Resilience](./serving/resilience.md), and [REST Tracing](./serving/tracing.md).
+- Structured-data jobs: [Columnar Redactor](./integrations/columnar-redactor.md), [Lakehouse Table Redaction](./integrations/lakehouse-redaction.md), [Dask DataFrame De-identification](./integrations/dask.md), [DuckDB De-identification UDFs](./duckdb-deidentification.md), and `examples/dbt-deidentify/`.
+
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.7.0` includes release-critical Apple and browser entry points:
+OpenMed `1.8.1` includes release-critical Apple, Android, browser, and service entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps
+- [Android ONNX Export](./export-onnx-android.md) and [Android Span Parity](./android-parity.md) for the Kotlin OpenMedKit surface
 - [Transformers.js Export](./export-transformersjs.md) for browser token classification through ONNX/WebGPU artifacts
 
 Python MLX quick check:
