@@ -234,6 +234,10 @@ def _primary_coding(entity: Any) -> Mapping[str, Any] | None:
             coding = _coerce_coding(candidate)
             if coding is not None:
                 return coding
+        candidate = _value(source, "candidates")
+        coding = _coerce_coding(candidate)
+        if coding is not None:
+            return coding
     return None
 
 
