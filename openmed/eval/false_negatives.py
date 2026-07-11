@@ -1,9 +1,12 @@
 """False-negative explorer over benchmark error-analysis reports.
 
-The explorer surfaces the gold PHI spans a model missed (false negatives) from
-a persisted :class:`~openmed.eval.error_analysis.ErrorAnalysisReport`. Span
-matching is never re-implemented here: the misses are the ``kind == "missed"``
-examples already produced by the harness span comparison.
+The explorer surfaces persisted examples of gold PHI spans a model missed
+(false negatives) from an
+:class:`~openmed.eval.error_analysis.ErrorAnalysisReport`. Canonical miss
+counts come from the report's confusion matrix, while the records come from its
+bounded example lists. Span matching is never re-implemented here: the records
+are the ``kind == "missed"`` examples already produced by the harness span
+comparison.
 
 By default the explorer emits only offsets, labels, and span hashes, keeping
 raw PHI out of the output. Span text and a surrounding-context window are shown
@@ -72,34 +75,56 @@ class FalseNegativeRecord:
 
 @dataclass(frozen=True)
 class FalseNegativeGroup:
-    """All missed spans for a single label, most-frequent labels first."""
+    """Canonical miss count and available examples for one label.
+
+    ``count`` is the full missed-span count from the confusion matrix.
+    ``available`` is the number of persisted examples in the report, before a
+    CLI display limit is applied. ``records`` contains only the examples shown
+    under that limit, so it may be shorter than either value.
+    """
 
     label: str
     count: int
+    available: int
     records: tuple[FalseNegativeRecord, ...]
 
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, JSON-ready group."""
         return {
+            "available": self.available,
             "count": self.count,
             "label": self.label,
             "records": [record.to_dict() for record in self.records],
+            "shown": len(self.records),
         }
 
 
 @dataclass(frozen=True)
 class FalseNegativeExploration:
-    """Grouped false-negative view derived from an error-analysis report."""
+    """Grouped false-negative view derived from an error-analysis report.
+
+    ``total_missed`` is canonical and comes from confusion-matrix ``missed``
+    counts. ``available`` counts persisted missed-span examples, which may be
+    lower because :class:`ErrorAnalysisReport` caps examples per label.
+    ``shown`` is the number left after applying the optional display limit.
+    """
 
     suite: str
     model_name: str
     device: str
     total_missed: int
+    available: int
     shown: int
     groups: tuple[FalseNegativeGroup, ...]
+    example_cap: int
     label_filter: str | None = None
     limit: int | None = None
     has_text: bool = False
+
+    @property
+    def examples_truncated(self) -> bool:
+        """Return whether canonical misses exceed persisted examples."""
+        return self.available < self.total_missed
 
     def iter_records(self) -> Iterable[FalseNegativeRecord]:
         """Yield every record across groups in display order."""
@@ -109,7 +134,10 @@ class FalseNegativeExploration:
     def to_dict(self) -> dict[str, Any]:
         """Return a deterministic, JSON-ready exploration payload."""
         return {
+            "available": self.available,
             "device": self.device,
+            "example_cap": self.example_cap,
+            "examples_truncated": self.examples_truncated,
             "groups": [group.to_dict() for group in self.groups],
             "has_text": self.has_text,
             "label_filter": self.label_filter,
@@ -167,9 +195,9 @@ def explore_false_negatives(
         limit: Optional cap on the total number of records shown.
 
     Returns:
-        A :class:`FalseNegativeExploration` with labels ordered by miss
-        frequency (descending), ties broken alphabetically, and records within
-        a label ordered by fixture id then span offset.
+        A :class:`FalseNegativeExploration` with labels ordered by canonical
+        miss frequency (descending), ties broken alphabetically, and persisted
+        records within a label ordered by fixture id then span offset.
     """
     if limit is not None and limit < 0:
         raise ValueError("limit must be non-negative")
@@ -178,46 +206,51 @@ def explore_false_negatives(
     texts = dict(fixture_texts or {})
 
     grouped: dict[str, list[FalseNegativeRecord]] = {}
-    total_missed = 0
     for group_label, examples in report.false_negatives.items():
+        if wanted_label is not None and group_label.upper() != wanted_label:
+            continue
         for example in examples:
             if example.kind != MISSED:
                 # ``label_confusion`` spans are recall losses too, but a missed
                 # gold span (kind == MISSED) is the leaked-PHI case this
                 # explorer is scoped to. Skip mislabel confusions here.
                 continue
-            if wanted_label is not None and group_label.upper() != wanted_label:
-                continue
-            total_missed += 1
             grouped.setdefault(group_label, []).append(
                 _record(group_label, example, texts)
             )
 
+    canonical_counts = _canonical_missed_counts(report, wanted_label=wanted_label)
+    for name, records in grouped.items():
+        canonical_count = canonical_counts.get(name, 0)
+        if len(records) > canonical_count:
+            raise ValueError(
+                f"persisted missed examples for {name!r} exceed "
+                "the confusion-matrix missed count"
+            )
+
     ordered_labels = sorted(
-        grouped,
-        key=lambda name: (-len(grouped[name]), name),
+        canonical_counts,
+        key=lambda name: (-canonical_counts[name], name),
     )
 
     groups: list[FalseNegativeGroup] = []
     shown = 0
+    available = sum(len(grouped.get(name, ())) for name in ordered_labels)
     remaining = limit
     for name in ordered_labels:
-        if remaining is not None and remaining <= 0:
-            break
         records = sorted(
-            grouped[name],
+            grouped.get(name, ()),
             key=lambda record: (record.fixture_id, record.start, record.end),
         )
         if remaining is not None:
-            records = records[:remaining]
+            records = records[: max(remaining, 0)]
             remaining -= len(records)
-        if not records:
-            continue
         shown += len(records)
         groups.append(
             FalseNegativeGroup(
                 label=name,
-                count=len(grouped[name]),
+                count=canonical_counts[name],
+                available=len(grouped.get(name, ())),
                 records=tuple(records),
             )
         )
@@ -226,15 +259,41 @@ def explore_false_negatives(
         suite=report.suite,
         model_name=report.model_name,
         device=report.device,
-        total_missed=total_missed,
+        total_missed=sum(canonical_counts.values()),
+        available=available,
         shown=shown,
         groups=tuple(groups),
+        example_cap=report.example_cap,
         label_filter=wanted_label,
         limit=limit,
         has_text=any(
             record.span_text is not None for group in groups for record in group.records
         ),
     )
+
+
+def _canonical_missed_counts(
+    report: ErrorAnalysisReport,
+    *,
+    wanted_label: str | None,
+) -> dict[str, int]:
+    """Return positive per-label miss counts from the confusion matrix."""
+    counts: dict[str, int] = {}
+    for raw_label, row in report.confusion_matrix.items():
+        label = str(raw_label)
+        if wanted_label is not None and label.upper() != wanted_label:
+            continue
+        if not isinstance(row, Mapping):
+            raise ValueError(f"confusion-matrix row for {label!r} must be a mapping")
+        count = row.get(MISSED, 0)
+        if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+            raise ValueError(
+                f"confusion-matrix missed count for {label!r} "
+                "must be a non-negative integer"
+            )
+        if count:
+            counts[label] = count
+    return counts
 
 
 def _record(
