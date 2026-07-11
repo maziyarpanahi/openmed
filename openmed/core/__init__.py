@@ -11,6 +11,13 @@ from .config import (
     save_profile,
 )
 from .custom_recognizer import CustomRecognizer
+from .hf_hub import (
+    CachedModel,
+    clear_cached_model,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
@@ -77,4 +84,9 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "prefetch_model",
+    "list_cached_models",
+    "clear_cached_model",
+    "resolve_repo_id",
+    "CachedModel",
 ]
