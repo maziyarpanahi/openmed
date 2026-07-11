@@ -5,17 +5,14 @@ All notable changes to OpenMed will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] 
+## [Unreleased]
 
-Date: 2026-07-09
+### Added
 
-### Added - Regarding issue 262
-
-- Added Korean (ko) PII language pack: 
-* `validate_korean_rrn()` mod-11 checksum validator, 
-* `_KOREAN_PII_PATTERNS` covering YYYY년 MM월 DD일 dates, +82/010 phone numbers, RRN national ID, 5-digit postcode, and 시/구/동/로/길 addresses, * `_generate_korean_rrn_surrogate()` in `anonymizer/registry.py` to produce checksum-valid RRN surrogates (Faker's ko_KR `ssn()` uses random     digit templates without computing the mod-11 checksum). 
-* Includes `openmed/eval/golden/fixtures/i18n/ko.jsonl` with clinical and checksum-ids fixtures. Registers `ko` in `SUPPORTED_LANGUAGES` and  removes it from `NATIONAL_ID_ONLY_LANGUAGES`.
-
+- Added a full Korean (`ko`) PII language pack with native date, phone, RRN,
+  postcode, and address patterns, checksum-valid local surrogates, synthetic
+  golden coverage, service and training wiring, and the manifest-backed Korean
+  default model (#262).
 
 ## [1.8.1] - 2026-07-10
 

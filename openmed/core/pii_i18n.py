@@ -95,7 +95,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
     "id": "OpenMed/privacy-filter-multilingual",
     "th": "OpenMed/privacy-filter-multilingual",
-    "ko": "OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
 }
 
 
@@ -2966,7 +2966,7 @@ _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     ),
     # Korean RRN (13-digit Resident Registration Number)
     PIIPattern(
-        r"\b\d{6}[-\s]?\d{7}\b",
+        r"(?<!\d)\d{6}[-\s]?\d{7}(?!\d)",
         "national_id",
         priority=10,
         base_score=0.5,
@@ -2983,7 +2983,7 @@ _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     ),
     # Korean street addresses
     PIIPattern(
-        r"\b(?:[\uac00-\ud7a3]{1,4}(?:\ud2b9\ubcc4\uc2dc|\uad11\uc5ed\uc2dc|\ud2b9\ubcc4\uc790\uce58\uc2dc|\ud2b9\ubcc4\uc790\uce58\ub3c4|\ub3c4|\uc2dc|\uad70|\uad6c)\s*)+[\uac00-\ud7a30-9]{1,5}(?:\ub85c|\uae38)\s?\d+(?:-\d+)?\b",
+        r"(?<![\uac00-\ud7a30-9])(?:[\uac00-\ud7a3]{1,4}(?:\ud2b9\ubcc4\uc2dc|\uad11\uc5ed\uc2dc|\ud2b9\ubcc4\uc790\uce58\uc2dc|\ud2b9\ubcc4\uc790\uce58\ub3c4|\ub3c4|\uc2dc|\uad70|\uad6c)\s*)+[\uac00-\ud7a30-9]{1,5}(?:\ub85c|\uae38)\s?\d+(?:-\d+)?(?!\d)",
         "street_address",
         priority=7,
         base_score=0.65,
@@ -2998,7 +2998,7 @@ _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     ),
     # Korean postal code (5-digit)
     PIIPattern(
-        r"\b\d{5}\b",
+        r"(?<!\d)\d{5}(?!\d)",
         "postcode",
         priority=6,
         base_score=0.15,
