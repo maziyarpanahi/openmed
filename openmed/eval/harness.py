@@ -24,10 +24,18 @@ from openmed.eval.calibrate import load_calibration_thresholds
 from openmed.eval.metrics import (
     EvalSpan,
     compute_confidence_intervals,
+    compute_latency_summary,
     compute_metrics_bundle,
+    compute_resource_metrics,
     expected_calibration_error,
     normalize_eval_spans,
     reliability_bins,
+)
+from openmed.eval.relation_metrics import (
+    EvalRelation,
+    compute_relation_confidence_intervals,
+    compute_relation_metrics_bundle,
+    normalize_eval_relations,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -35,8 +43,15 @@ if TYPE_CHECKING:
     from openmed.eval.attacks.reid import SideChannelProbeResult
 
 ModelRunner = Callable[["BenchmarkFixture", str, str], Iterable[Any]]
+RelationModelRunner = Callable[[Any, str, str], Iterable[Any]]
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
+DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
+    Path(__file__).resolve().parent
+    / "golden"
+    / "fixtures"
+    / "context_multilingual.jsonl"
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +95,15 @@ class FixtureResult:
 
     fixture_id: str
     predicted_spans: tuple[EvalSpan, ...]
+    latency_ms: float
+
+
+@dataclass(frozen=True)
+class RelationFixtureResult:
+    """Predicted relation triples and timing for one relation fixture."""
+
+    fixture_id: str
+    predicted_relations: tuple[EvalRelation, ...]
     latency_ms: float
 
 
@@ -347,6 +371,176 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     return fixtures
 
 
+def load_context_multilingual_fixtures(
+    path: str | Path = DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
+) -> tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]:
+    """Load synthetic multilingual ConText assertion fixtures."""
+
+    fixture_path = Path(path)
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not rows or rows[0].get("kind") != "meta":
+        raise ValueError("context multilingual fixture must start with a meta row")
+    fixtures = tuple(row for row in rows[1:] if row.get("kind") != "meta")
+    case_ids = [str(row.get("case_id", "")) for row in fixtures]
+    if any(not case_id for case_id in case_ids) or len(case_ids) != len(set(case_ids)):
+        raise ValueError("context multilingual fixtures require unique case_id values")
+    return rows[0], fixtures
+
+
+def run_context_multilingual_eval(
+    path: str | Path = DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
+    *,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Score deterministic multilingual ConText axes on synthetic fixtures."""
+
+    from openmed.clinical.context import (
+        CERTAINTY_VALUES,
+        NEGATION_VALUES,
+        TEMPORALITY_VALUES,
+        clinical_context_lexicon_stats,
+        resolve_span_context,
+    )
+
+    meta, fixtures = load_context_multilingual_fixtures(path)
+    labels_by_axis = {
+        "negation": NEGATION_VALUES,
+        "temporality": TEMPORALITY_VALUES,
+        "uncertainty": CERTAINTY_VALUES,
+    }
+    expected_by_language: dict[str, dict[str, list[str]]] = {}
+    predicted_by_language: dict[str, dict[str, list[str]]] = {}
+
+    for row in fixtures:
+        language = str(row.get("language") or "en")
+        span = _context_fixture_span(row)
+        context = resolve_span_context(span, language=language)
+        expected = row.get("expected")
+        if not isinstance(expected, Mapping):
+            raise ValueError(
+                f"context fixture {row.get('case_id')} lacks expected axes"
+            )
+
+        axis_predictions = {
+            "negation": context.negation,
+            "temporality": context.temporality,
+            "uncertainty": context.certainty,
+        }
+        axis_expected = {
+            "negation": str(expected["negation"]),
+            "temporality": str(expected["temporality"]),
+            "uncertainty": str(expected["certainty"]),
+        }
+        language_expected = expected_by_language.setdefault(language, {})
+        language_predicted = predicted_by_language.setdefault(language, {})
+        for axis in labels_by_axis:
+            language_expected.setdefault(axis, []).append(axis_expected[axis])
+            language_predicted.setdefault(axis, []).append(axis_predictions[axis])
+
+    macro_f1 = {
+        language: {
+            axis: _macro_f1(
+                expected_by_language[language][axis],
+                predicted_by_language[language][axis],
+                labels_by_axis[axis],
+            )
+            for axis in labels_by_axis
+        }
+        for language in sorted(expected_by_language)
+    }
+    thresholds = {"negation": 0.90, "temporality": 0.85, "uncertainty": 0.85}
+    gate_passed = all(
+        macro_f1[language][axis] >= thresholds[axis]
+        for language in macro_f1
+        for axis in thresholds
+    )
+    metrics = {
+        "context_macro_f1": macro_f1,
+        "context_thresholds": thresholds,
+        "context_gate_passed": gate_passed,
+        "context_lexicon_coverage": clinical_context_lexicon_stats(),
+    }
+    return BenchmarkReport(
+        suite="context_multilingual",
+        model_name="deterministic-context",
+        device="local",
+        fixture_count=len(fixtures),
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata={
+            "fixture_ids": [str(row["case_id"]) for row in fixtures],
+            "languages": sorted(expected_by_language),
+            "parent_issue": "OM-724",
+            "synthetic": bool(meta.get("synthetic")),
+        },
+    )
+
+
+def _context_fixture_span(row: Mapping[str, Any]) -> dict[str, Any]:
+    text = str(row.get("text", ""))
+    target = row.get("target")
+    if not isinstance(target, Mapping):
+        raise ValueError(f"context fixture {row.get('case_id')} lacks target")
+    target_text = str(target.get("text") or "")
+    if not target_text:
+        raise ValueError(f"context fixture {row.get('case_id')} has empty target")
+    start = text.find(target_text)
+    if start == -1:
+        raise ValueError(
+            f"context fixture {row.get('case_id')} target is absent from text"
+        )
+    return {
+        "text": target_text,
+        "context": text,
+        "start": start,
+        "end": start + len(target_text),
+    }
+
+
+def _macro_f1(
+    expected: Sequence[str],
+    predicted: Sequence[str],
+    labels: Sequence[str],
+) -> float:
+    if len(expected) != len(predicted):
+        raise ValueError("expected and predicted labels must be the same length")
+    scores = [
+        _label_f1(expected, predicted, label)
+        for label in labels
+        if label in expected or label in predicted
+    ]
+    if not scores:
+        return 1.0
+    return sum(scores) / len(scores)
+
+
+def _label_f1(expected: Sequence[str], predicted: Sequence[str], label: str) -> float:
+    true_positive = sum(
+        1
+        for gold, guess in zip(expected, predicted)
+        if gold == label and guess == label
+    )
+    false_positive = sum(
+        1
+        for gold, guess in zip(expected, predicted)
+        if gold != label and guess == label
+    )
+    false_negative = sum(
+        1
+        for gold, guess in zip(expected, predicted)
+        if gold == label and guess != label
+    )
+    if true_positive == 0:
+        return 0.0 if false_positive or false_negative else 1.0
+    precision = true_positive / (true_positive + false_positive)
+    recall = true_positive / (true_positive + false_negative)
+    return 2 * precision * recall / (precision + recall)
+
+
 def default_model_runner(
     fixture: BenchmarkFixture,
     model_name: str,
@@ -524,6 +718,111 @@ def run_benchmark(
     report_metadata = dict(metadata or {})
     report_metadata.setdefault(
         "fixture_ids", [fixture.fixture_id for fixture in fixtures]
+    )
+    return BenchmarkReport(
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        fixture_count=len(fixtures),
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata=report_metadata,
+    )
+
+
+def run_relation_benchmark(
+    fixtures: Sequence[Any],
+    *,
+    suite: str,
+    model_name: str,
+    runner: RelationModelRunner,
+    device: str = "cpu",
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    ci_resamples: int = 1000,
+    ci_alpha: float = 0.05,
+    ci_seed: int = 0,
+) -> BenchmarkReport:
+    """Run a relation-extraction model over DrugProt-style relation fixtures."""
+    if not fixtures:
+        raise ValueError("relation benchmark requires at least one fixture")
+    _validate_unique_fixture_ids(fixtures)
+    results: list[RelationFixtureResult] = []
+    peak_rss_start = _peak_rss_bytes()
+
+    for fixture in fixtures:
+        fixture_id = str(getattr(fixture, "fixture_id"))
+        text = str(getattr(fixture, "text", ""))
+        started = time.perf_counter()
+        raw_predictions = list(runner(fixture, model_name, device))
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        predicted_relations = tuple(
+            normalize_eval_relations(
+                raw_predictions,
+                entity_spans=getattr(fixture, "entities", None),
+                fixture_id=fixture_id,
+                default_language=str(getattr(fixture, "language", "en")),
+                source_text=text,
+            )
+        )
+        for relation in predicted_relations:
+            _validate_relation_offsets(relation, text, fixture_id)
+        results.append(
+            RelationFixtureResult(
+                fixture_id=fixture_id,
+                predicted_relations=predicted_relations,
+                latency_ms=latency_ms,
+            )
+        )
+
+    gold_relations, predicted_relations = _relation_corpus_relations(
+        fixtures,
+        results,
+    )
+    per_document_relations = _per_document_relations(fixtures, results)
+    relation_metrics = compute_relation_metrics_bundle(
+        gold_relations,
+        predicted_relations,
+    )
+    relation_intervals = compute_relation_confidence_intervals(
+        per_document_relations,
+        n_resamples=ci_resamples,
+        alpha=ci_alpha,
+        seed=ci_seed,
+    )
+    for key, interval in relation_intervals.items():
+        metric = relation_metrics.get(key)
+        if isinstance(metric, Mapping):
+            relation_metrics[key] = {**metric, "confidence_interval": interval}
+
+    peak_rss_end = _peak_rss_bytes()
+    rss_values = [
+        value for value in (peak_rss_start, peak_rss_end) if value is not None
+    ]
+    peak_rss = max(rss_values) if rss_values else None
+    metrics: dict[str, Any] = {
+        "latency": {
+            **compute_latency_summary(
+                [result.latency_ms for result in results[1:]]
+            ).to_dict(),
+            "cold_start_ms": results[0].latency_ms if results else None,
+        },
+        "relation_extraction": relation_metrics,
+        "resources": compute_resource_metrics(peak_rss_bytes=peak_rss).to_dict(),
+    }
+    metrics["strict_relation_f1"] = relation_metrics["strict"]
+    metrics["relaxed_relation_f1"] = relation_metrics["relaxed"]
+    metrics["per_relation_type_re_f1"] = relation_metrics["per_relation_type"]
+
+    report_metadata = dict(metadata or {})
+    report_metadata.setdefault(
+        "fixture_ids",
+        [str(getattr(fixture, "fixture_id")) for fixture in fixtures],
+    )
+    report_metadata.setdefault("task", "relation")
+    report_metadata.setdefault(
+        "relation_types",
+        sorted({relation.relation_type for relation in gold_relations}),
     )
     return BenchmarkReport(
         suite=suite,
@@ -1529,6 +1828,75 @@ def _corpus_coordinates(
     return gold, predicted, "\n".join(text_parts)
 
 
+def _relation_corpus_relations(
+    fixtures: Sequence[Any],
+    results: Sequence[RelationFixtureResult],
+) -> tuple[list[EvalRelation], list[EvalRelation]]:
+    result_by_id = {result.fixture_id: result for result in results}
+    gold: list[EvalRelation] = []
+    predicted: list[EvalRelation] = []
+    for fixture in fixtures:
+        fixture_id = str(getattr(fixture, "fixture_id"))
+        text = str(getattr(fixture, "text", ""))
+        gold.extend(
+            normalize_eval_relations(
+                getattr(fixture, "relations", ()),
+                entity_spans=getattr(fixture, "entities", None),
+                fixture_id=fixture_id,
+                default_language=str(getattr(fixture, "language", "en")),
+                source_text=text,
+            )
+        )
+        result = result_by_id.get(fixture_id)
+        if result is not None:
+            predicted.extend(result.predicted_relations)
+    return gold, predicted
+
+
+def _per_document_relations(
+    fixtures: Sequence[Any],
+    results: Sequence[RelationFixtureResult],
+) -> list[tuple[tuple[EvalRelation, ...], tuple[EvalRelation, ...]]]:
+    result_by_id = {result.fixture_id: result for result in results}
+    documents: list[tuple[tuple[EvalRelation, ...], tuple[EvalRelation, ...]]] = []
+    for fixture in fixtures:
+        fixture_id = str(getattr(fixture, "fixture_id"))
+        result = result_by_id.get(fixture_id)
+        documents.append(
+            (
+                tuple(
+                    normalize_eval_relations(
+                        getattr(fixture, "relations", ()),
+                        entity_spans=getattr(fixture, "entities", None),
+                        fixture_id=fixture_id,
+                        default_language=str(getattr(fixture, "language", "en")),
+                        source_text=str(getattr(fixture, "text", "")),
+                    )
+                ),
+                result.predicted_relations if result is not None else (),
+            )
+        )
+    return documents
+
+
+def _validate_relation_offsets(
+    relation: EvalRelation,
+    text: str,
+    fixture_id: str,
+) -> None:
+    for argument_name, argument in (("head", relation.head), ("tail", relation.tail)):
+        if (
+            argument.start < 0
+            or argument.end < argument.start
+            or argument.end > len(text)
+        ):
+            raise ValueError(
+                "invalid relation argument offsets "
+                f"{fixture_id}:{argument_name} "
+                f"{argument.start}:{argument.end} for text length {len(text)}"
+            )
+
+
 def _shift_spans(spans: Iterable[EvalSpan], offset: int) -> list[EvalSpan]:
     return [
         replace(span, start=span.start + offset, end=span.end + offset)
@@ -1592,17 +1960,20 @@ def _key_bytes(key: bytes | str) -> bytes:
 
 __all__ = [
     "ModelRunner",
+    "RelationModelRunner",
     "BenchmarkFixture",
     "BoundaryLeakageFinding",
     "BoundaryLeakageResult",
     "FederatedDetectorSpec",
     "FederatedEvalReport",
     "FixtureResult",
+    "RelationFixtureResult",
     "SandboxViolation",
     "load_fixtures",
     "default_model_runner",
     "run_federated_leakage_eval",
     "run_benchmark",
+    "run_relation_benchmark",
     "run_cross_lingual_transfer",
     "run_cross_lingual_transfer_suite",
     "run_suite",
