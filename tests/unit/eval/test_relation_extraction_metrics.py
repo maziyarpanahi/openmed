@@ -6,9 +6,9 @@ import pytest
 
 from openmed.eval.datasets import DRUGPROT, corpus_from_rows
 from openmed.eval.harness import run_relation_benchmark
-from openmed.eval.metrics import (
-    RelationArgument,
-    RelationTriple,
+from openmed.eval.metrics import EvalSpan
+from openmed.eval.relation_metrics import (
+    EvalRelation,
     compute_relaxed_relation_f1,
     compute_strict_relation_f1,
 )
@@ -97,9 +97,9 @@ def _relation(
     arg1_end: int,
     arg2_start: int,
     arg2_end: int,
-) -> RelationTriple:
-    return RelationTriple(
+) -> EvalRelation:
+    return EvalRelation(
         relation_type=relation_type,
-        arg1=RelationArgument(start=arg1_start, end=arg1_end),
-        arg2=RelationArgument(start=arg2_start, end=arg2_end),
+        head=EvalSpan(start=arg1_start, end=arg1_end, label="OTHER"),
+        tail=EvalSpan(start=arg2_start, end=arg2_end, label="OTHER"),
     )
