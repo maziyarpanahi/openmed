@@ -2,16 +2,19 @@
 
 Dependency-light Go client for the OpenMed REST service. It is built entirely on
 the standard library (`net/http`) with **no third-party dependencies**, and it
-mirrors the request/response schemas published in the committed OpenAPI spec
-(`docs/api/openapi.json`).
+tracks the operations and request schemas published in the committed OpenAPI
+spec (`docs/api/openapi.json`).
 
-- Typed request/response structs for every service endpoint.
+- Typed request structs for every JSON request, typed structs for stable JSON
+  responses, and an incremental typed decoder for the NDJSON endpoint.
 - Enum-like typed string constants for the de-identification method, PII
   language, aggregation strategy, privacy policy, and job status.
 - A configurable base URL and injectable `*http.Client`.
 - A `context.Context` on every call for cancellation and deadlines.
 - Non-2xx responses surfaced as a typed `*APIError` carrying the service error
   envelope (`code`, `message`, `details`, `request_id`).
+- Bounded buffered responses, bounded stream events, and redirects disabled by
+  default so clinical text is not silently forwarded to another origin.
 
 ## Install
 
@@ -120,11 +123,22 @@ client, err := openmed.New("http://localhost:8080", openmed.WithHTTPClient(hc))
 ### Streaming and batch jobs
 
 ```go
-// NDJSON stream of PII spans.
+// Incrementally consume the NDJSON stream of PII events.
 stream, err := client.ExtractPIIStream(ctx, openmed.PIIExtractStreamRequest{
 	Text:      longClinicalNote,
 	ChunkSize: 2048,
 })
+if err != nil {
+	log.Fatal(err)
+}
+defer stream.Close()
+for stream.Next() {
+	event := stream.Event()
+	fmt.Println(event.Type)
+}
+if err := stream.Err(); err != nil {
+	log.Fatal(err)
+}
 
 // Submit a batch de-identification job and poll it.
 job, err := client.CreateJob(ctx, openmed.DeidentifyJobRequest{
@@ -137,8 +151,11 @@ status, err := client.GetJob(ctx, job.ID)
 ## Error handling
 
 Every non-2xx response is returned as a typed `*APIError`. It preserves the HTTP
-status code and the service error envelope, including `error.code`,
-`error.message`, and `error.details`.
+status code and a valid JSON service error envelope with non-empty
+`error.code` and `error.message`, including any `error.details`. If an upstream
+proxy returns an empty, oversized, wrongly typed, or malformed body, the client
+returns a synthetic `http_error` with nil details and does not retain that body;
+the body may contain raw clinical text or credentials.
 
 ```go
 _, err := client.Deidentify(ctx, openmed.PIIDeidentifyRequest{
@@ -152,6 +169,18 @@ if apiErr, ok := openmed.AsAPIError(err); ok {
 	fmt.Println("details:", apiErr.Details())
 }
 ```
+
+## Response limits and redirects
+
+Buffered JSON success responses are limited to 64 MiB by default. Configure a
+different positive limit with `WithMaxResponseBodyBytes`. The NDJSON endpoint is
+not buffered as a whole; each decoded event is limited to 4 MiB by default and
+can be configured with `WithMaxStreamEventBytes`.
+
+The default HTTP client does not follow redirects. This prevents POST bodies
+containing clinical text from being forwarded to a redirect target. A custom
+client supplied with `WithHTTPClient` uses that client's redirect policy, so set
+`CheckRedirect` deliberately if you provide one.
 
 ## Endpoint coverage
 
@@ -174,9 +203,9 @@ if apiErr, ok := openmed.AsAPIError(err); ok {
 | `SMARTBackendIngestionSummary` | `GET /fhir/smart-backend/ingestions/{job_id}/summary` |
 
 A Python parity test (`tests/unit/service/test_go_client_parity.py`) guards
-against drift: it asserts that every endpoint path in the OpenAPI spec maps to
-an exported Go method and that every request field name appears in the Go
-source.
+against drift: it asserts that every OpenAPI HTTP operation maps to an exported
+Go method and that request fields, requiredness, and explicit-zero semantics
+stay aligned with the committed schemas.
 
 ## Development
 

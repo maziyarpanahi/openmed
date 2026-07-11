@@ -3,11 +3,13 @@ package openmed_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	openmed "github.com/maziyarpanahi/openmed/clients/go"
 )
@@ -45,6 +47,29 @@ func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
 
+type countingReadCloser struct {
+	remaining int
+	read      int
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	if r.remaining == 0 {
+		return 0, io.EOF
+	}
+	n := len(p)
+	if n > r.remaining {
+		n = r.remaining
+	}
+	for i := 0; i < n; i++ {
+		p[i] = 'x'
+	}
+	r.remaining -= n
+	r.read += n
+	return n, nil
+}
+
+func (r *countingReadCloser) Close() error { return nil }
+
 func TestNewNormalizesBaseURL(t *testing.T) {
 	client, err := openmed.New("http://example.com:8080///")
 	if err != nil {
@@ -67,6 +92,10 @@ func TestNewRejectsNonHTTPBaseURLs(t *testing.T) {
 		"/relative",
 		"ftp://example.com",
 		"http:///missing-host",
+		"http://:8080",
+		"http://user:secret@example.com",
+		"http://example.com/api/../v1",
+		"http://example.com/api/%2e%2e/v1",
 		"http://example.com?token=secret",
 		"http://example.com#fragment",
 	} {
@@ -93,6 +122,34 @@ func TestNewPreservesBasePath(t *testing.T) {
 	}
 	if _, err := client.Health(context.Background()); err != nil {
 		t.Fatalf("Health: %v", err)
+	}
+}
+
+func TestDefaultClientDoesNotForwardClinicalTextAcrossRedirects(t *testing.T) {
+	redirectTargetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectTargetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+	client, err := openmed.New(redirector.URL)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = client.Deidentify(context.Background(), openmed.PIIDeidentifyRequest{
+		Text: "synthetic patient Maria Garcia, MRN 12345",
+	})
+	apiErr, ok := openmed.AsAPIError(err)
+	if !ok || apiErr.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("Deidentify error = %v, want a 307 APIError", err)
+	}
+	if redirectTargetCalled {
+		t.Fatal("default client forwarded clinical text to a redirect target")
 	}
 }
 
@@ -135,8 +192,11 @@ func TestEndpointMethodsAndPaths(t *testing.T) {
 			return err
 		}},
 		{"ExtractPIIStream", http.MethodPost, "/pii/extract/stream", func(c *openmed.Client) error {
-			_, err := c.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{Text: "note"})
-			return err
+			stream, err := c.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{Text: "note"})
+			if err != nil {
+				return err
+			}
+			return stream.Close()
 		}},
 		{"Deidentify", http.MethodPost, "/pii/deidentify", func(c *openmed.Client) error {
 			_, err := c.Deidentify(context.Background(), openmed.PIIDeidentifyRequest{Text: "note"})
@@ -289,7 +349,7 @@ func TestExtractPII(t *testing.T) {
 }
 
 func TestExtractPIIStream(t *testing.T) {
-	const ndjson = "{\"event\":\"entity\"}\n{\"event\":\"done\"}\n"
+	const ndjson = "{\"type\":\"emit\",\"entity_id\":\"ent-1\",\"span\":{\"id\":\"ent-1\",\"label\":\"NAME\",\"start\":0,\"end\":5,\"byte_start\":0,\"byte_end\":5,\"score\":0.99,\"text\":\"Maria\"},\"audit\":{\"type\":\"emit\"}}\n{\"type\":\"final\",\"audit\":{\"type\":\"final\"}}\n"
 	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/pii/extract/stream" {
 			t.Fatalf("path = %q", r.URL.Path)
@@ -301,15 +361,117 @@ func TestExtractPIIStream(t *testing.T) {
 		_, _ = io.WriteString(w, ndjson)
 	})
 
-	body, err := client.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{
+	stream, err := client.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{
 		Text:      "hello",
 		ChunkSize: 512,
 	})
 	if err != nil {
 		t.Fatalf("ExtractPIIStream: %v", err)
 	}
-	if body != ndjson {
-		t.Fatalf("stream body = %q", body)
+	defer stream.Close()
+
+	if !stream.Next() {
+		t.Fatalf("first Next = false: %v", stream.Err())
+	}
+	event := stream.Event()
+	if event.Type != "emit" || event.Span == nil || event.Span.Label != "NAME" {
+		t.Fatalf("unexpected first event: %+v", event)
+	}
+	if event.Span.Text == nil || *event.Span.Text != "Maria" {
+		t.Fatalf("span text = %v, want Maria", event.Span.Text)
+	}
+	if !stream.Next() || stream.Event().Type != "final" {
+		t.Fatalf("unexpected final event: %+v, err=%v", stream.Event(), stream.Err())
+	}
+	if stream.Next() {
+		t.Fatal("unexpected third stream event")
+	}
+	if err := stream.Err(); err != nil {
+		t.Fatalf("stream error: %v", err)
+	}
+}
+
+func TestExtractPIIStreamReturnsBeforeResponseCompletes(t *testing.T) {
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, "{\"type\":\"emit\",\"audit\":{\"type\":\"emit\"}}\n")
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("test response writer does not support flushing")
+			return
+		}
+		flusher.Flush()
+		<-release
+		_, _ = io.WriteString(w, "{\"type\":\"final\",\"audit\":{\"type\":\"final\"}}\n")
+	}))
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+		srv.Close()
+	}()
+
+	client, err := openmed.New(srv.URL)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	type result struct {
+		stream *openmed.PIIExtractStream
+		err    error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		stream, streamErr := client.ExtractPIIStream(
+			context.Background(),
+			openmed.PIIExtractStreamRequest{Text: "synthetic note"},
+		)
+		resultCh <- result{stream: stream, err: streamErr}
+	}()
+
+	var got result
+	select {
+	case got = <-resultCh:
+	case <-time.After(time.Second):
+		t.Fatal("ExtractPIIStream waited for the response to finish")
+	}
+	if got.err != nil {
+		t.Fatalf("ExtractPIIStream: %v", got.err)
+	}
+	defer got.stream.Close()
+	if !got.stream.Next() || got.stream.Event().Type != "emit" {
+		t.Fatalf("first event = %+v, err=%v", got.stream.Event(), got.stream.Err())
+	}
+	close(release)
+}
+
+func TestExtractPIIStreamBoundsEachEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, "{\"type\":\"emit\",\"audit\":{\"padding\":\"")
+		_, _ = io.WriteString(w, strings.Repeat("x", 1024))
+		_, _ = io.WriteString(w, "\"}}\n")
+	}))
+	defer srv.Close()
+	client, err := openmed.New(srv.URL, openmed.WithMaxStreamEventBytes(128))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	stream, err := client.ExtractPIIStream(
+		context.Background(),
+		openmed.PIIExtractStreamRequest{Text: "synthetic note"},
+	)
+	if err != nil {
+		t.Fatalf("ExtractPIIStream: %v", err)
+	}
+	defer stream.Close()
+	if stream.Next() {
+		t.Fatal("oversized event unexpectedly decoded")
+	}
+	if stream.Err() == nil {
+		t.Fatal("oversized event should produce a stream error")
 	}
 }
 
@@ -470,9 +632,10 @@ func TestAPIErrorEnvelope(t *testing.T) {
 }
 
 func TestAPIErrorNonEnvelopeFallback(t *testing.T) {
+	const sensitiveBody = "upstream rendered patient: Maria Garcia, MRN 12345"
 	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
-		_, _ = io.WriteString(w, "upstream boom")
+		_, _ = io.WriteString(w, sensitiveBody)
 	})
 
 	_, err := client.Health(context.Background())
@@ -485,6 +648,98 @@ func TestAPIErrorNonEnvelopeFallback(t *testing.T) {
 	}
 	if apiErr.Code() != "http_error" {
 		t.Fatalf("Code = %q, want http_error", apiErr.Code())
+	}
+	if apiErr.Details() != nil {
+		t.Fatalf("Details = %#v, want fail-closed nil", apiErr.Details())
+	}
+	encoded, marshalErr := json.Marshal(apiErr.Envelope)
+	if marshalErr != nil {
+		t.Fatalf("marshal fallback envelope: %v", marshalErr)
+	}
+	if strings.Contains(apiErr.Error(), sensitiveBody) || strings.Contains(string(encoded), sensitiveBody) {
+		t.Fatal("malformed upstream body was retained in APIError")
+	}
+}
+
+func TestAPIErrorRejectsUntrustedOrMalformedEnvelopes(t *testing.T) {
+	const sensitive = "Maria Garcia, MRN 12345"
+	tests := []struct {
+		name        string
+		contentType string
+		body        string
+	}{
+		{
+			name:        "wrong content type",
+			contentType: "text/plain",
+			body:        `{"error":{"code":"proxy_error","message":"` + sensitive + `","details":"` + sensitive + `"}}`,
+		},
+		{
+			name:        "missing message",
+			contentType: "application/json",
+			body:        `{"error":{"code":"proxy_error","details":"` + sensitive + `"}}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", test.contentType)
+				w.WriteHeader(http.StatusBadGateway)
+				_, _ = io.WriteString(w, test.body)
+			})
+			_, err := client.Health(context.Background())
+			apiErr, ok := openmed.AsAPIError(err)
+			if !ok {
+				t.Fatalf("expected *APIError, got %T", err)
+			}
+			encoded, marshalErr := json.Marshal(apiErr.Envelope)
+			if marshalErr != nil {
+				t.Fatalf("marshal fallback envelope: %v", marshalErr)
+			}
+			if apiErr.Details() != nil || strings.Contains(string(encoded), sensitive) {
+				t.Fatalf("untrusted error body was retained: %s", encoded)
+			}
+		})
+	}
+}
+
+func TestAPIErrorFallbackReadsMalformedBodyWithBound(t *testing.T) {
+	body := &countingReadCloser{remaining: 4 << 20}
+	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusBadGateway,
+			Header:     make(http.Header),
+			Body:       body,
+			Request:    req,
+		}, nil
+	})}
+	client, err := openmed.New("https://openmed.invalid", openmed.WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = client.Health(context.Background())
+	apiErr, ok := openmed.AsAPIError(err)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.Details() != nil {
+		t.Fatalf("Details = %#v, want fail-closed nil", apiErr.Details())
+	}
+	if body.read >= 4<<20 {
+		t.Fatalf("client read an unbounded error body: %d bytes", body.read)
+	}
+}
+
+func TestBufferedResponseBodyIsBounded(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, strings.Repeat("x", 1024))
+	})
+	limited, err := openmed.New(client.BaseURL(), openmed.WithMaxResponseBodyBytes(128))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := limited.Health(context.Background()); !errors.Is(err, openmed.ErrResponseTooLarge) {
+		t.Fatalf("Health error = %v, want ErrResponseTooLarge", err)
 	}
 }
 
@@ -516,6 +771,44 @@ func TestGetJobEscapesPath(t *testing.T) {
 	}
 	if resp.Status != openmed.JobDone {
 		t.Fatalf("Status = %q, want done", resp.Status)
+	}
+}
+
+func TestJobMethodsRejectAmbiguousPathSegments(t *testing.T) {
+	called := false
+	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		called = true
+		return nil, errors.New("unexpected request")
+	})}
+	client, err := openmed.New("https://openmed.invalid", openmed.WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	calls := []struct {
+		name string
+		call func(string) error
+	}{
+		{"GetJob", func(id string) error { _, err := client.GetJob(context.Background(), id); return err }},
+		{"SMARTBackendIngestionStatus", func(id string) error {
+			_, err := client.SMARTBackendIngestionStatus(context.Background(), id)
+			return err
+		}},
+		{"SMARTBackendIngestionSummary", func(id string) error {
+			_, err := client.SMARTBackendIngestionSummary(context.Background(), id)
+			return err
+		}},
+	}
+	for _, call := range calls {
+		for _, jobID := range []string{"", "   ", ".", ".."} {
+			t.Run(call.name+"/"+jobID, func(t *testing.T) {
+				if err := call.call(jobID); err == nil {
+					t.Fatalf("job ID %q unexpectedly succeeded", jobID)
+				}
+			})
+		}
+	}
+	if called {
+		t.Fatal("invalid job ID reached the HTTP transport")
 	}
 }
 
@@ -591,11 +884,15 @@ func TestOptionalZeroValuesAreSent(t *testing.T) {
 		}
 	})
 
-	if _, err := client.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{
+	stream, err := client.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{
 		Text:                  "synthetic note",
 		TokenizerContextChars: ptrInt(0),
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("ExtractPIIStream: %v", err)
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("close ExtractPIIStream: %v", err)
 	}
 	if _, err := client.StartSMARTBackendIngestion(context.Background(), openmed.SMARTBackendIngestionRequest{
 		FHIRBaseURL:         "https://fhir.example.com",
