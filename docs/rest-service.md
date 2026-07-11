@@ -42,11 +42,19 @@ A ready-to-import [Postman collection](api/openmed.postman_collection.json)
 endpoint group so you can exercise the API without writing any client code.
 Import it into Postman (or any tool that reads the Postman v2.1 schema), then set
 the `base_url` collection variable to your server (it defaults to
-`http://localhost:8080`). For an authenticated deployment, configure
+`http://127.0.0.1:8080`, matching the Python client's safe loopback default).
+For an authenticated deployment, configure
 collection-level authorization in Postman or add either an `X-API-Key` header or
 an `Authorization: Bearer <token>` header. The collection intentionally stores
 no credentials. Every example body uses synthetic clinical text only — no real
 PHI.
+
+Before polling, copy the identifier returned by the async-job or SMART-ingestion
+POST request into `job_id`. The SMART request leaves
+`{{smart_private_key_pem}}` unresolved on purpose. Define it only in a secure
+local-client environment; in Postman, the secure variable can be backed by
+Local Vault. Escape PEM newlines as `\n` for the JSON body, and never replace
+the reference with a real key in a saved or exported collection.
 
 ## Python Client
 
