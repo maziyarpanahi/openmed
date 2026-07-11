@@ -38,6 +38,19 @@ Start the API server:
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 ```
 
+## Postman Collection
+
+A ready-to-import [Postman collection](api/openmed.postman_collection.json)
+(`docs/api/openmed.postman_collection.json`) ships with one example request per
+endpoint group so you can exercise the API without writing any client code.
+Import it into Postman (or any tool that reads the Postman v2.1 schema), then set
+the `base_url` collection variable to your server (it defaults to
+`http://localhost:8080`). For an authenticated deployment, configure
+collection-level authorization in Postman or add either an `X-API-Key` header or
+an `Authorization: Bearer <token>` header. The collection intentionally stores
+no credentials. Every example body uses synthetic clinical text only — no real
+PHI.
+
 ## Python Client
 
 The service extra includes the typed sync client and its `httpx` dependency:

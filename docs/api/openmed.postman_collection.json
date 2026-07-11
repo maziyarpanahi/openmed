@@ -1,0 +1,532 @@
+{
+  "info": {
+    "_postman_id": "0f7a1c2e-4d3b-4a1e-9c6f-2b8d5e7a1c00",
+    "name": "OpenMed REST API",
+    "description": "Importable Postman collection for the OpenMed REST service (OpenAPI 1.7.0).\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://localhost:8080`). Start the service with `uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. For an authenticated deployment, configure collection-level authorization in Postman or add either an `X-API-Key` header or an `Authorization: Bearer <token>` header. The collection does not store credential variables.\n\nSee docs/rest-service.md for the full endpoint reference.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string",
+      "description": "Base URL of the running OpenMed REST service."
+    },
+    {
+      "key": "job_id",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "type": "string",
+      "description": "Placeholder job identifier for async job and SMART backend ingestion status lookups."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health & Readiness",
+      "description": "Liveness, readiness, and health probes. No request body.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Overall service health summary (status, service name, version, profile)."
+          },
+          "response": []
+        },
+        {
+          "name": "Livez",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/livez",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "livez"
+              ]
+            },
+            "description": "Kubernetes-style liveness probe."
+          },
+          "response": []
+        },
+        {
+          "name": "Readyz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/readyz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "readyz"
+              ]
+            },
+            "description": "Readiness probe. Returns 503 until startup preload completes."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Models",
+      "description": "Inspect and manage models loaded in the service warm pool.",
+      "item": [
+        {
+          "name": "Loaded Models",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/models/loaded",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "models",
+                "loaded"
+              ]
+            },
+            "description": "List models currently resident in the warm pool."
+          },
+          "response": []
+        },
+        {
+          "name": "Unload Models",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"all\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/models/unload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "models",
+                "unload"
+              ]
+            },
+            "description": "Unload a specific model by name, or set \"all\": true to unload everything."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Analyze",
+      "description": "General clinical entity analysis.",
+      "item": [
+        {
+          "name": "Analyze",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"The patient reports a persistent cough and was diagnosed with community-acquired pneumonia.\",\n  \"model_name\": \"disease_detection_superclinical\",\n  \"aggregation_strategy\": \"simple\",\n  \"confidence_threshold\": 0.0,\n  \"group_entities\": false,\n  \"sentence_detection\": true,\n  \"sentence_language\": \"en\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/analyze",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "analyze"
+              ]
+            },
+            "description": "Run named-entity analysis over clinical text using the configured model."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "PII",
+      "description": "PII extraction and de-identification endpoints.",
+      "item": [
+        {
+          "name": "PII Extract",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Contact Jordan Sample at 555-0100 or jordan.sample@example.org regarding appointment on 2021-04-15.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.5,\n  \"lang\": \"en\",\n  \"use_smart_merging\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pii/extract",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pii",
+                "extract"
+              ]
+            },
+            "description": "Detect PII spans in the supplied text and return their categories and offsets."
+          },
+          "response": []
+        },
+        {
+          "name": "PII Extract (Stream)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/x-ndjson"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Contact Jordan Sample at 555-0100 or jordan.sample@example.org regarding appointment on 2021-04-15.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.5,\n  \"lang\": \"en\",\n  \"use_smart_merging\": true,\n  \"include_text\": true,\n  \"chunk_size\": 1024,\n  \"window_chars\": 4096\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pii/extract/stream",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pii",
+                "extract",
+                "stream"
+              ]
+            },
+            "description": "Stream PII extraction events as newline-delimited JSON (application/x-ndjson)."
+          },
+          "response": []
+        },
+        {
+          "name": "PII Deidentify",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Contact Jordan Sample at 555-0100 or jordan.sample@example.org regarding appointment on 2021-04-15.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.7,\n  \"lang\": \"en\",\n  \"method\": \"mask\",\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true,\n  \"keep_mapping\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pii/deidentify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "pii",
+                "deidentify"
+              ]
+            },
+            "description": "De-identify PII in the supplied text using the selected method (mask, remove, replace, hash, shift_dates)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Privacy Gateway",
+      "description": "Policy-guarded completion pass-through.",
+      "item": [
+        {
+          "name": "Privacy Gateway Complete",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Patient Jordan Sample called about lab results; reach them at jordan.sample@example.org.\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"policy\": \"strict\",\n  \"confidence_threshold\": 0.85,\n  \"lang\": \"en\",\n  \"use_smart_merging\": true,\n  \"disallowed_entity_categories\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/privacy-gateway/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "privacy-gateway",
+                "complete"
+              ]
+            },
+            "description": "Screen text against a privacy policy before it is forwarded to a downstream completion."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Async Jobs",
+      "description": "Asynchronous de-identification job submission and status polling.",
+      "item": [
+        {
+          "name": "Create Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documents\": [\n    {\n      \"id\": \"doc-1\",\n      \"text\": \"Contact Jordan Sample at 555-0100 regarding appointment on 2021-04-15.\"\n    }\n  ],\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"confidence_threshold\": 0.7,\n  \"lang\": \"en\",\n  \"method\": \"mask\",\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/jobs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "jobs"
+              ]
+            },
+            "description": "Submit an async de-identification job. Returns 202 with a job id and status URL."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/jobs/{{job_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "jobs",
+                "{{job_id}}"
+              ]
+            },
+            "description": "Poll the status and results of a previously submitted async job."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "FHIR SMART Backend",
+      "description": "SMART on FHIR backend-services bulk ingestion with de-identification.",
+      "item": [
+        {
+          "name": "Start SMART Backend Ingestion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fhir_base_url\": \"https://fhir.example.org\",\n  \"token_url\": \"https://fhir.example.org/oauth/token\",\n  \"client_id\": \"example-backend-client\",\n  \"private_key_pem\": \"-----BEGIN PRIVATE KEY-----\\nSYNTHETIC-PLACEHOLDER-KEY\\n-----END PRIVATE KEY-----\",\n  \"output_dir\": \"/tmp/openmed-smart-export\",\n  \"scope\": \"system/*.read\",\n  \"export_path\": \"$export\",\n  \"policy\": \"hipaa_safe_harbor\",\n  \"method\": \"replace\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"lang\": \"en\",\n  \"confidence_threshold\": 0.7,\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/fhir/smart-backend/ingestions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fhir",
+                "smart-backend",
+                "ingestions"
+              ]
+            },
+            "description": "Kick off a SMART backend-services bulk export ingestion. Uses a synthetic placeholder private key."
+          },
+          "response": []
+        },
+        {
+          "name": "SMART Backend Ingestion Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fhir/smart-backend/ingestions/{{job_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fhir",
+                "smart-backend",
+                "ingestions",
+                "{{job_id}}"
+              ]
+            },
+            "description": "Fetch the current status of a SMART backend ingestion job."
+          },
+          "response": []
+        },
+        {
+          "name": "SMART Backend Ingestion Summary",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/fhir/smart-backend/ingestions/{{job_id}}/summary",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "fhir",
+                "smart-backend",
+                "ingestions",
+                "{{job_id}}",
+                "summary"
+              ]
+            },
+            "description": "Fetch the de-identification summary for a completed SMART backend ingestion job."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
