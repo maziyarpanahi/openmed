@@ -1200,7 +1200,7 @@ class TestMultilingualPII:
     def test_extract_pii_unsupported_language_raises(self):
         """Test that unsupported language raises ValueError."""
         with pytest.raises(ValueError, match="Unsupported language"):
-            extract_pii("test", lang="ko")
+            extract_pii("test", lang="xx")
 
     @patch("openmed.analyze_text")
     def test_extract_pii_french_uses_french_model(self, mock_analyze):

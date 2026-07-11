@@ -166,6 +166,49 @@ def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
 
+def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, object]:
+    strict = {
+        "confidence_interval": {
+            "lower": strict_lower,
+            "point": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+            "upper": 1.0,
+        },
+        "f1": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+        "true_positives": 10,
+    }
+    relaxed = {
+        "confidence_interval": {
+            "lower": relaxed_lower,
+            "point": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+            "upper": 1.0,
+        },
+        "f1": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+        "true_positives": 10,
+    }
+    return {
+        "relation_extraction": {
+            "gold_relation_count": 10,
+            "per_relation_type": {
+                "INHIBITOR": {
+                    "relaxed": relaxed,
+                    "strict": strict,
+                }
+            },
+            "predicted_relation_count": 10,
+            "relaxed": relaxed,
+            "strict": strict,
+        }
+    }
+
+
 def test_release_gate_passes_and_emits_signed_section_64_report(
     tmp_path: Path,
     monkeypatch,
@@ -206,6 +249,51 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     restored = GateReport.from_json(result.to_json())
     assert restored.verify(SIGNING_KEY)
     assert restored.to_json() == result.to_json()
+
+
+def test_g9_relation_gate_fails_when_strict_lower_ci_below_floor(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"task": "relation"},
+            metric_updates=_relation_metric(
+                strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR - 0.001,
+                relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+            ),
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["strict_floor"] == release_gates.G9_STRICT_RE_F1_FLOOR
+    assert "strict_relation_f1" in check.details["violations"]
+
+
+def test_g9_relation_gate_passes_at_configured_lower_ci_floor(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"task": "relation"},
+            metric_updates=_relation_metric(
+                strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR,
+                relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+            ),
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9")
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["per_relation_type"]["INHIBITOR"]["strict_f1"] == (
+        release_gates.G9_STRICT_RE_F1_FLOOR
+    )
 
 
 def test_gate_report_from_json_rejects_malformed_payload() -> None:
@@ -298,6 +386,53 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
 
     assert result.decision == QUARANTINED
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
+
+
+def test_g11_quarantines_single_missed_drug_allergy(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_finding_recall": {
+                    "overall": 2 / 3,
+                    "by_category": {
+                        "critical_diagnosis": 1.0,
+                        "drug_allergy": 0.0,
+                        "critical_result": 1.0,
+                    },
+                    "covered": 2,
+                    "total": 3,
+                    "missed_findings": [
+                        {
+                            "category": "drug_allergy",
+                            "fixture_id": "golden-critical-findings-synthetic-en",
+                            "start": 71,
+                            "end": 81,
+                            "label": "MEDICATION",
+                        }
+                    ],
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G11")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["floor"] == release_gates.G11_CRITICAL_RECALL_FLOOR
+    assert check.details["missed_findings"] == [
+        {
+            "category": "drug_allergy",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert check.details["violations"]["must_not_miss_findings"][0]["fixture_id"] == (
+        "golden-critical-findings-synthetic-en"
+    )
 
 
 def test_conformal_coverage_gate_quarantines_shifted_critical_labels(

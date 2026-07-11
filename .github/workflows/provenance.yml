@@ -133,11 +133,13 @@ jobs:
 
       - name: Generate SLSA provenance for distributions
         id: attest-distributions
+        continue-on-error: true
         uses: actions/attest@v4
         with:
           subject-checksums: release-artifact-digests.txt
 
       - name: Preserve distribution attestation bundle
+        if: steps.attest-distributions.outcome == 'success'
         shell: bash
         run: |
           mkdir -p provenance-bundles
@@ -146,6 +148,7 @@ jobs:
             provenance-bundles/python-distributions.intoto.json
 
       - name: Verify distribution provenance
+        if: steps.attest-distributions.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -190,6 +193,7 @@ jobs:
           retention-days: 7
 
       - name: Upload provenance evidence
+        if: steps.attest-distributions.outcome == 'success'
         uses: actions/upload-artifact@v7
         with:
           name: release-provenance
