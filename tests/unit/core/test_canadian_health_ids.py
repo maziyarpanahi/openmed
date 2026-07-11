@@ -12,6 +12,7 @@ import pytest
 from faker import Faker
 
 from openmed.core.anonymizer.providers.clinical_ids import (
+    generate_ontario_health_card,
     register_clinical_providers,
     validate_bc_phn,
     validate_canadian_sin,
@@ -45,12 +46,16 @@ def test_validate_canadian_sin_rejects_transposed_and_malformed():
     assert not validate_canadian_sin("046454286")
     assert not validate_canadian_sin("13069254")  # too short
     assert not validate_canadian_sin("1306925440")  # too long
+    assert not validate_canadian_sin("SIN=130692544!")
+    assert not validate_canadian_sin("130/692/544")
+    assert not validate_canadian_sin("130-692 544")
 
 
 def test_validate_ontario_health_card_accepts_core_and_version_code():
     assert validate_ontario_health_card(VALID_ONTARIO_CARD)
     assert validate_ontario_health_card("6317-048-459")
-    # Optional two-letter version code, spaced or hyphenated.
+    # The official HCV schema permits an optional one- or two-letter version.
+    assert validate_ontario_health_card(f"{VALID_ONTARIO_CARD}-Q")
     assert validate_ontario_health_card(f"{VALID_ONTARIO_CARD}-QC")
     assert validate_ontario_health_card("6317 048 459 QC")
 
@@ -58,8 +63,6 @@ def test_validate_ontario_health_card_accepts_core_and_version_code():
 def test_validate_ontario_health_card_rejects_corrupted_and_bad_version():
     # Flip the check digit.
     assert not validate_ontario_health_card("6317048458")
-    # Single-letter version code is malformed.
-    assert not validate_ontario_health_card(f"{VALID_ONTARIO_CARD}-Q")
     # Three-letter version code is malformed.
     assert not validate_ontario_health_card(f"{VALID_ONTARIO_CARD}-QCX")
     # Version letters are valid only as a suffix after the 10-digit number.
@@ -67,6 +70,9 @@ def test_validate_ontario_health_card_rejects_corrupted_and_bad_version():
     assert not validate_ontario_health_card("6317-QC-048-459")
     assert not validate_ontario_health_card("6317048QC459")
     assert not validate_ontario_health_card("631704845")  # too short
+    assert not validate_ontario_health_card("0115244931")  # must start 1-9
+    assert not validate_ontario_health_card("6317-048 459-Q")
+    assert not validate_ontario_health_card("OHIP=6317048459-Q!")
 
 
 def test_validate_bc_phn_accepts_valid_and_rejects_corrupted():
@@ -77,6 +83,28 @@ def test_validate_bc_phn_accepts_valid_and_rejects_corrupted():
     # PHNs always start with 9.
     assert not validate_bc_phn("1291417779")
     assert not validate_bc_phn("929141777")  # too short
+    assert not validate_bc_phn("PHN=9291417779!")
+    assert not validate_bc_phn("9291/417/779")
+    assert not validate_bc_phn("9291-417 779")
+
+
+def test_ontario_generator_emits_nonzero_prefix_and_valid_version_codes():
+    import random
+
+    rng = random.Random(29)
+    for _ in range(200):
+        value = generate_ontario_health_card(rng=rng)
+        assert value[0] in "123456789"
+        assert validate_ontario_health_card(value)
+
+
+def test_ontario_one_letter_version_is_detected_as_one_complete_span():
+    text = "Ontario health card 6317048459-Q was verified."
+    entities = safety_sweep(text, [], lang="en", locale="en_CA")
+
+    assert [(entity.text, entity.start, entity.end) for entity in entities] == [
+        ("6317048459-Q", 20, 32)
+    ]
 
 
 def test_bc_phn_locale_pattern_matches_valid_10_digit_number():

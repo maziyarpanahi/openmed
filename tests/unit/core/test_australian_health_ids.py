@@ -22,14 +22,14 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.pii import extract_pii
 from openmed.core.pii_i18n import LOCALE_PII_PATTERNS
+from openmed.core.safety_sweep import SAFETY_SWEEP_SOURCE, safety_sweep
 from openmed.processing.outputs import PredictionResult
 
-# Synthetic, checksum-valid fixtures (Services Australia / ATO published
-# format-test values are valid by construction).
+# Synthetic fixtures constructed to satisfy the documented format and checksum
+# rules; none are asserted to be issued identifiers.
 VALID_MEDICARE = "2123456701"
 VALID_MEDICARE_SPACED = "2123 45670 1"
 VALID_TFN_9 = "123456782"
-VALID_TFN_8 = "47041532"
 
 
 class TestMedicareChecksum:
@@ -50,19 +50,34 @@ class TestMedicareChecksum:
             candidate = VALID_MEDICARE[:9] + issue
             assert validate_australian_medicare(candidate), candidate
 
+    def test_accepts_separate_individual_reference_number(self):
+        for candidate in (
+            "21234567012",
+            "2123 45670 1/2",
+            "2123 45670 1 / 2",
+            "2123 45670 1 2",
+            "2123 45670 1-2",
+        ):
+            assert validate_australian_medicare(candidate), candidate
+
     def test_rejects_wrong_length_and_bad_leading_digit(self):
         assert not validate_australian_medicare("212345670")  # 9 digits
-        assert not validate_australian_medicare("21234567012")  # 11 digits
+        assert not validate_australian_medicare("212345670123")  # 12 digits
+        assert not validate_australian_medicare("21234567010")  # invalid IRN
         # Leading digit outside the 2-6 issuing range.
         assert not validate_australian_medicare("1123456701")
         assert not validate_australian_medicare("7123456701")
+
+    def test_rejects_decorated_or_noncanonical_formats(self):
+        assert not validate_australian_medicare("Medicare=2123456701!")
+        assert not validate_australian_medicare("2123-45670-1")
+        assert not validate_australian_medicare("2123 45670-1")
 
 
 class TestTfnChecksum:
     def test_accepts_weighted_mod11_valid_tfn(self):
         assert validate_australian_tfn(VALID_TFN_9)
         assert validate_australian_tfn("123 456 782")
-        assert validate_australian_tfn(VALID_TFN_8)  # legacy 8-digit form
 
     def test_rejects_corrupted_tfn(self):
         # Increment the last digit so the weighted sum is no longer mod-11 zero.
@@ -72,7 +87,14 @@ class TestTfnChecksum:
 
     def test_rejects_wrong_length(self):
         assert not validate_australian_tfn("1234567")  # 7 digits
+        assert not validate_australian_tfn("47041532")  # 8 digits
         assert not validate_australian_tfn("1234567890")  # 10 digits
+        assert not validate_australian_tfn("000000000")
+
+    def test_rejects_decorated_or_noncanonical_formats(self):
+        assert not validate_australian_tfn("TFN=123456782!")
+        assert not validate_australian_tfn("123-456-782")
+        assert not validate_australian_tfn("123 456-782")
 
 
 def test_en_au_patterns_accept_only_exact_valid_identifiers():
@@ -84,16 +106,15 @@ def test_en_au_patterns_accept_only_exact_valid_identifiers():
         match = re.fullmatch(pattern.pattern, value, pattern.flags)
         return match is not None and pattern.validator(value)
 
-    assert accepted(medicare_pattern, VALID_MEDICARE_SPACED)
-    for impossible_shape in ("2123 45670 1 2", "2123 45670 1/2", "21234567012"):
-        assert (
-            re.search(
-                medicare_pattern.pattern,
-                impossible_shape,
-                medicare_pattern.flags,
-            )
-            is None
-        )
+    for supported_shape in (
+        VALID_MEDICARE_SPACED,
+        "2123 45670 1 2",
+        "2123 45670 1/2",
+        "21234567012",
+    ):
+        assert accepted(medicare_pattern, supported_shape)
+    for impossible_shape in ("2123 45670 1/0", "212345670123"):
+        assert not accepted(medicare_pattern, impossible_shape)
     assert not accepted(medicare_pattern, "2123 45671 1")
     assert accepted(tfn_pattern, "123 456 782")
     assert not accepted(tfn_pattern, "123 456 783")
@@ -106,12 +127,14 @@ class TestGenerators:
             value = generate_australian_medicare(rng=rng)
             assert len(value) == 10
             assert validate_australian_medicare(value), value
+            assert validate_australian_medicare(f"{value}/1"), value
 
     def test_generated_tfn_round_trips(self):
         rng = random.Random(4321)
         for _ in range(200):
             value = generate_australian_tfn(rng=rng)
             assert len(value) == 9
+            assert value != "000000000"
             assert validate_australian_tfn(value), value
 
 
@@ -188,3 +211,15 @@ def test_extract_pii_en_au_locale_yields_medicare_and_tfn_spans(monkeypatch):
         tfn_start,
         tfn_start + len(tfn_value),
     ) in spans
+
+
+def test_safety_sweep_protects_medicare_card_and_irn_as_one_span():
+    text = "Medicare number 2123 45670 1/2 was verified."
+    entities = safety_sweep(text, [], lang="en", locale="en_AU")
+
+    assert len(entities) == 1
+    entity = entities[0]
+    assert entity.text == "2123 45670 1/2"
+    assert entity.start == text.index(entity.text)
+    assert entity.end == entity.start + len(entity.text)
+    assert entity.metadata["source"] == SAFETY_SWEEP_SOURCE

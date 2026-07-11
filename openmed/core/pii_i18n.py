@@ -390,6 +390,49 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
+_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+_CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Validate a mainland China 18-digit resident identity card number.
+
+    The second-generation resident identity card stores a six-digit address
+    code, an eight-digit Gregorian birth date, a three-digit sequence, and a
+    MOD 11-2 checksum digit. OpenMed validates only these offline structural
+    and checksum properties; it does not bundle or query a region registry.
+    """
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+        return False
+
+    if cleaned[:6] == "000000":
+        return False
+
+    try:
+        year = int(cleaned[6:10])
+        month = int(cleaned[10:12])
+        day = int(cleaned[12:14])
+    except ValueError:
+        return False
+
+    import calendar
+
+    if month < 1 or month > 12 or day < 1:
+        return False
+    try:
+        if day > calendar.monthrange(year, month)[1]:
+            return False
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+    total = sum(
+        int(digit) * weight
+        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+
+
 def validate_portuguese_cpf(text: str) -> bool:
     """Validate Brazilian CPF number.
 
@@ -1550,11 +1593,12 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Ontario (OHIP) health card: 10 digits (4-3-3 spacing) plus an optional
-    # two-letter version code, Luhn-checked. Health identifier. Checked before
-    # the SIN so the longer 10-digit match wins.
+    # Ontario (OHIP) health card: 10 digits beginning with 1-9 (4-3-3 spacing)
+    # plus an optional one- or two-letter version code, Luhn-checked. Health
+    # identifier. Checked before the SIN so the longer 10-digit match wins.
     PIIPattern(
-        r"\b\d{4}[\s-]?\d{3}[\s-]?\d{3}(?:[\s-]?[A-Za-z]{2})?\b",
+        r"\b[1-9]\d{3}(?P<ohip_sep>[ -]?)\d{3}(?P=ohip_sep)\d{3}"
+        r"(?:[ -]?[A-Za-z]{1,2})?\b",
         "national_id",
         priority=12,
         base_score=0.45,
@@ -1608,10 +1652,12 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Australian Medicare card number (exactly 10 digits, ``NNNN NNNNN N``;
-    # weighted mod-10 checksum on the first eight digits guards it).
+    # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
+    # optional separate one-digit IRN. The main card's first eight digits carry
+    # a weighted mod-10 checksum; the full matched identifier is protected.
     PIIPattern(
-        r"\b\d{4}\s?\d{5}\s?\d\b(?!\s?/?\s?\d)",
+        r"\b(?:[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+        r"(?:(?:[ ]*/[ ]*|[ -]?)[1-9])?\b",
         "national_id",
         priority=12,
         base_score=0.45,
@@ -1625,10 +1671,10 @@ _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_australian_medicare,
     ),
-    # Australian Tax File Number (TFN, 8-9 digits, ``NNN NNN NNN`` spacing;
-    # weighted mod-11 checksum).
+    # Australian Tax File Number (TFN, exactly 9 digits, ``NNN NNN NNN``
+    # spacing; weighted mod-11 checksum).
     PIIPattern(
-        r"\b\d{3}\s?\d{3}\s?\d{2,3}\b",
+        r"\b(?:\d{9}|\d{3} \d{3} \d{3})\b",
         "national_id",
         priority=11,
         base_score=0.45,
