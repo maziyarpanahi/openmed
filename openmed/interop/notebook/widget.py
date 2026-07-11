@@ -48,15 +48,98 @@ def render_span_html(
     carries ``data-start``, ``data-end``, ``data-label``, and ``data-code`` so
     tests and lightweight notebook consumers can inspect the DOM without a JS
     dependency.
+
+    Overlapping and nested spans are assigned to deterministic annotation
+    layers. Each source row therefore remains represented by one complete
+    ``mark`` element instead of being clipped or discarded.
     """
 
     safe_rows = _valid_rows(tuple(rows), len(text))
+    layers = _span_layers(safe_rows)
+    rendered_layers = "".join(
+        '<pre class="openmed-span-layer" '
+        f'data-layer="{index}" aria-label="Annotation layer {index + 1}">'
+        f"{_render_layer(text, layer)}"
+        "</pre>"
+        for index, layer in enumerate(layers)
+    )
+    legend = _legend(safe_rows)
+    return (
+        '<div class="openmed-clinical-widget">'
+        "<style>"
+        ".openmed-clinical-widget{font-family:system-ui,-apple-system,Segoe UI,"
+        "sans-serif;line-height:1.5;color:#111827}"
+        ".openmed-clinical-widget .openmed-span-layers{display:grid;gap:0.25rem;"
+        "margin:0.5rem 0 0}"
+        ".openmed-clinical-widget .openmed-span-layer{white-space:pre-wrap;"
+        "font:inherit;margin:0}"
+        ".openmed-clinical-widget .openmed-span-layer+.openmed-span-layer{"
+        "border-left:2px solid #d1d5db;padding-left:0.5rem;color:#4b5563}"
+        ".openmed-clinical-widget .openmed-title{font-weight:600;margin:0 0 "
+        "0.35rem}"
+        ".openmed-clinical-widget .openmed-legend{display:flex;gap:0.5rem;"
+        "flex-wrap:wrap;font-size:0.85rem;color:#374151}"
+        ".openmed-clinical-widget .openmed-chip{display:inline-flex;gap:0.25rem;"
+        "align-items:center}"
+        "</style>"
+        f'<div class="openmed-title">{html.escape(title)}</div>'
+        f"{legend}"
+        f'<div class="openmed-span-layers">{rendered_layers}</div>'
+        "</div>"
+    )
+
+
+def _valid_rows(
+    rows: tuple[Mapping[str, Any], ...],
+    text_length: int,
+) -> tuple[Mapping[str, Any], ...]:
+    valid: list[Mapping[str, Any]] = []
+    for row in sorted(
+        rows,
+        key=lambda item: (
+            _offset(item.get("start")),
+            -_offset(item.get("end")),
+        ),
+    ):
+        start = _offset(row.get("start"))
+        end = _offset(row.get("end"))
+        if start < 0 or end <= start or end > text_length:
+            continue
+        valid.append(row)
+    return tuple(valid)
+
+
+def _span_layers(
+    rows: tuple[Mapping[str, Any], ...],
+) -> tuple[tuple[Mapping[str, Any], ...], ...]:
+    if not rows:
+        return ((),)
+
+    layers: list[list[Mapping[str, Any]]] = []
+    layer_ends: list[int] = []
+
+    for row in rows:
+        start = _offset(row.get("start"))
+        end = _offset(row.get("end"))
+        for index, occupied_end in enumerate(layer_ends):
+            if start >= occupied_end:
+                layers[index].append(row)
+                layer_ends[index] = end
+                break
+        else:
+            layers.append([row])
+            layer_ends.append(end)
+
+    return tuple(tuple(layer) for layer in layers)
+
+
+def _render_layer(text: str, rows: tuple[Mapping[str, Any], ...]) -> str:
     chunks: list[str] = []
     cursor = 0
 
-    for row in safe_rows:
-        start = int(row["start"])
-        end = int(row["end"])
+    for row in rows:
+        start = _offset(row.get("start"))
+        end = _offset(row.get("end"))
         label = str(row.get("entity_label") or "")
         code = str(row.get("code") or "")
         display = str(row.get("display") or row.get("normalized_text") or "")
@@ -76,44 +159,7 @@ def render_span_html(
         cursor = end
 
     chunks.append(html.escape(text[cursor:]))
-    legend = _legend(safe_rows)
-    return (
-        '<div class="openmed-clinical-widget">'
-        "<style>"
-        ".openmed-clinical-widget{font-family:system-ui,-apple-system,Segoe UI,"
-        "sans-serif;line-height:1.5;color:#111827}"
-        ".openmed-clinical-widget pre{white-space:pre-wrap;font:inherit;"
-        "margin:0.5rem 0 0}"
-        ".openmed-clinical-widget .openmed-title{font-weight:600;margin:0 0 "
-        "0.35rem}"
-        ".openmed-clinical-widget .openmed-legend{display:flex;gap:0.5rem;"
-        "flex-wrap:wrap;font-size:0.85rem;color:#374151}"
-        ".openmed-clinical-widget .openmed-chip{display:inline-flex;gap:0.25rem;"
-        "align-items:center}"
-        "</style>"
-        f'<div class="openmed-title">{html.escape(title)}</div>'
-        f"{legend}"
-        f"<pre>{''.join(chunks)}</pre>"
-        "</div>"
-    )
-
-
-def _valid_rows(
-    rows: tuple[Mapping[str, Any], ...],
-    text_length: int,
-) -> tuple[Mapping[str, Any], ...]:
-    valid: list[Mapping[str, Any]] = []
-    occupied_end = -1
-    for row in sorted(
-        rows, key=lambda item: (_offset(item.get("start")), _offset(item.get("end")))
-    ):
-        start = _offset(row.get("start"))
-        end = _offset(row.get("end"))
-        if start < 0 or end <= start or end > text_length or start < occupied_end:
-            continue
-        valid.append(row)
-        occupied_end = end
-    return tuple(valid)
+    return "".join(chunks)
 
 
 def _offset(value: Any) -> int:
