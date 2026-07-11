@@ -13,6 +13,7 @@ never downward: adding an undocumented public export fails the gate.
 from __future__ import annotations
 
 import importlib.util
+import inspect
 import sys
 from pathlib import Path
 
@@ -78,6 +79,16 @@ def test_key_dataclasses_are_documented():
         symbol = by_name[name]
         assert symbol.kind == "class"
         assert symbol.documented, f"{name} is missing a docstring"
+
+
+def test_live_public_api_exports_resolve_and_are_documented():
+    """Every live public export must resolve and expose a docstring."""
+    import openmed
+
+    assert openmed.__all__, "openmed.__all__ must define the public API"
+    for name in openmed.__all__:
+        exported = getattr(openmed, name)
+        assert inspect.getdoc(exported), f"openmed.{name} is missing a docstring"
 
 
 def test_cli_gate_passes_at_floor():
