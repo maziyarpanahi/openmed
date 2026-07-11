@@ -213,9 +213,27 @@ def test_mapping_inputs_are_accepted() -> None:
 
 def test_json_serialization_is_deterministic_and_round_trips_shape() -> None:
     points = [
-        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80, leakage=0.01),
-        FrontierPoint(label="accurate", throughput=60.0, accuracy=0.97, leakage=0.0),
-        FrontierPoint(label="bad", throughput=50.0, accuracy=0.70, leakage=0.02),
+        FrontierPoint(
+            label="fast",
+            throughput=200.0,
+            accuracy=0.80,
+            leakage=0.01,
+            accuracy_metric="exact_span_f1",
+        ),
+        FrontierPoint(
+            label="accurate",
+            throughput=60.0,
+            accuracy=0.97,
+            leakage=0.0,
+            accuracy_metric="exact_span_f1",
+        ),
+        FrontierPoint(
+            label="bad",
+            throughput=50.0,
+            accuracy=0.70,
+            leakage=0.02,
+            accuracy_metric="exact_span_f1",
+        ),
     ]
 
     report = frontier_report(points, accuracy_metric="exact_span_f1")
@@ -237,6 +255,7 @@ def test_json_serialization_is_deterministic_and_round_trips_shape() -> None:
         assert set(entry) == {"dominated_by", "on_frontier", "point"}
         assert set(entry["point"]) == {
             "accuracy",
+            "accuracy_metric",
             "label",
             "leakage",
             "metadata",
@@ -245,6 +264,26 @@ def test_json_serialization_is_deterministic_and_round_trips_shape() -> None:
 
     # sort_keys makes the top-level ordering stable and canonical.
     assert list(payload.keys()) == sorted(payload.keys())
+
+
+def test_arbitrary_metadata_is_hashed_and_never_serialized_verbatim() -> None:
+    secret = "synthetic patient plaintext"
+    point = FrontierPoint(
+        label="safe-label",
+        throughput=10.0,
+        accuracy=0.9,
+        leakage=0.0,
+        metadata={"patient_name": secret, "nested": {"mrn": secret}},
+    )
+
+    report = frontier_report([point], metadata={"raw_note": secret})
+    payload = report.to_json()
+
+    assert secret not in payload
+    assert set(point.metadata) == {"additional_metadata_hash"}
+    assert set(report.metadata) == {"additional_metadata_hash"}
+    assert point.metadata["additional_metadata_hash"].startswith("sha256:")
+    assert report.metadata["additional_metadata_hash"].startswith("sha256:")
 
 
 def test_markdown_lists_every_configuration_with_status() -> None:
@@ -264,6 +303,30 @@ def test_markdown_lists_every_configuration_with_status() -> None:
         "`dominated`" in line and "`fast`" in line for line in markdown.splitlines()
     )
     assert "2026-07-05T00:00:00Z" in markdown
+
+
+def test_markdown_escapes_pipes_and_backticks_in_labels() -> None:
+    points = [
+        FrontierPoint(
+            label="fast|`tier`",
+            throughput=200.0,
+            accuracy=0.9,
+            leakage=0.0,
+        ),
+        FrontierPoint(
+            label="slow|`old`",
+            throughput=100.0,
+            accuracy=0.8,
+            leakage=0.0,
+        ),
+    ]
+
+    markdown = frontier_report(points).to_markdown()
+
+    assert "| `` fast\\|`tier` `` | 200 | 0.9 | 0 | yes |  |" in markdown
+    assert (
+        "| `` slow\\|`old` `` | 100 | 0.8 | 0 | no | `` fast\\|`tier` `` |" in markdown
+    )
 
 
 def test_chart_data_splits_frontier_and_dominated_series() -> None:
@@ -379,31 +442,94 @@ def test_direct_point_construction_uses_the_same_validation() -> None:
     assert point.leakage == 1.0
 
 
+def test_frontier_rejects_unlike_accuracy_metrics_before_comparison() -> None:
+    points = [
+        FrontierPoint(
+            "exact",
+            throughput=100.0,
+            accuracy=0.8,
+            leakage=0.0,
+            accuracy_metric="exact_span_f1.f1",
+        ),
+        FrontierPoint(
+            "recall",
+            throughput=100.0,
+            accuracy=0.95,
+            leakage=0.0,
+            accuracy_metric="character_recall.overall",
+        ),
+    ]
+
+    with pytest.raises(ValueError, match="cannot compare unlike accuracy metrics"):
+        frontier_report(points)
+
+
+def test_frontier_rejects_an_incorrect_explicit_accuracy_metric() -> None:
+    point = FrontierPoint(
+        "exact",
+        throughput=100.0,
+        accuracy=0.8,
+        leakage=0.0,
+        accuracy_metric="exact_span_f1.f1",
+    )
+
+    with pytest.raises(ValueError, match="does not match point metric"):
+        frontier_report([point], accuracy_metric="character_recall.overall")
+
+
 # --- Assembling points from existing PerfReport / BenchmarkReport outputs -----
 
 
 class _FakePerfReport:
     """Minimal stand-in exposing the PerfReport surface the frontier reads."""
 
-    def __init__(self, model_name: str | None, docs_per_second: float) -> None:
+    def __init__(
+        self,
+        model_name: str | None,
+        docs_per_second: float,
+        *,
+        device: str = "cpu",
+        configuration_id: str | None = "default-config",
+    ) -> None:
         self.model_name = model_name
         self.docs_per_second = docs_per_second
-        self.device = "cpu"
+        self.device = device
         self.tier = "base"
         self.canonical_tier = "Base"
+        self.metadata = (
+            {"configuration_id": configuration_id}
+            if configuration_id is not None
+            else {}
+        )
 
 
 class _FakeBenchmarkReport:
     """Minimal stand-in exposing the BenchmarkReport surface the frontier reads."""
 
-    def __init__(self, model_name: str | None, f1: float, leakage: float) -> None:
+    def __init__(
+        self,
+        model_name: str | None,
+        f1: float,
+        leakage: float,
+        *,
+        device: str = "cpu",
+        configuration_id: str | None = "default-config",
+        accuracy_key: str = "exact_span_f1",
+    ) -> None:
         self.model_name = model_name
         self.suite = "phi-en"
-        self.device = "cpu"
+        self.device = device
         self.metrics = {
-            "exact_span_f1": {"f1": f1, "precision": f1, "recall": f1},
+            accuracy_key: {
+                "f1" if accuracy_key != "character_recall" else "overall": f1
+            },
             "leakage": {"overall": leakage},
         }
+        self.metadata = (
+            {"configuration_id": configuration_id}
+            if configuration_id is not None
+            else {}
+        )
 
 
 def test_frontier_point_from_reports_reuses_measured_numbers() -> None:
@@ -416,8 +542,23 @@ def test_frontier_point_from_reports_reuses_measured_numbers() -> None:
     assert point.throughput == 180.0
     assert point.accuracy == 0.93
     assert point.leakage == 0.004
+    assert point.accuracy_metric == "exact_span_f1.f1"
     assert point.metadata["accuracy_key"] == "exact_span_f1.f1"
     assert point.metadata["leakage_key"] == "leakage.overall"
+    assert set(point.metadata) == {
+        "accuracy_key",
+        "benchmark_evidence_hash",
+        "configuration_hash",
+        "device_hash",
+        "leakage_key",
+        "model_hash",
+        "perf_evidence_hash",
+    }
+    assert all(
+        value.startswith("sha256:")
+        for key, value in point.metadata.items()
+        if key.endswith("_hash")
+    )
 
 
 def test_frontier_from_assembled_report_points_matches_direct_computation() -> None:
@@ -482,9 +623,43 @@ def test_frontier_point_from_reports_rejects_invalid_metrics(
         frontier_point_from_reports(perf, benchmark)
 
 
-def test_frontier_point_from_reports_requires_a_stable_label() -> None:
+@pytest.mark.parametrize("mismatch", ["model_name", "device", "configuration_id"])
+def test_frontier_point_from_reports_rejects_identity_mismatches(
+    mismatch: str,
+) -> None:
+    perf = _FakePerfReport("model-a", docs_per_second=10.0)
+    benchmark = _FakeBenchmarkReport("model-a", f1=0.9, leakage=0.0)
+    if mismatch == "model_name":
+        benchmark.model_name = "model-b"
+    elif mismatch == "device":
+        benchmark.device = "gpu"
+    else:
+        benchmark.metadata = {"configuration_id": "different-config"}
+
+    with pytest.raises(ValueError, match=rf"identity mismatch for: {mismatch}"):
+        frontier_point_from_reports(perf, benchmark)
+
+
+@pytest.mark.parametrize("missing_from", ["perf", "benchmark"])
+def test_frontier_point_from_reports_requires_configuration_identity(
+    missing_from: str,
+) -> None:
+    perf = _FakePerfReport("m", docs_per_second=10.0)
+    benchmark = _FakeBenchmarkReport("m", f1=0.9, leakage=0.0)
+    if missing_from == "perf":
+        perf.metadata = {}
+    else:
+        benchmark.metadata = {}
+
+    with pytest.raises(
+        ValueError, match=rf"{missing_from} report requires configuration"
+    ):
+        frontier_point_from_reports(perf, benchmark)
+
+
+def test_frontier_point_from_reports_requires_complete_report_identity() -> None:
     perf = _FakePerfReport(None, docs_per_second=10.0)
     benchmark = _FakeBenchmarkReport(None, f1=0.9, leakage=0.0)
 
-    with pytest.raises(ValueError, match="label is required"):
+    with pytest.raises(ValueError, match=r"perf.model_name"):
         frontier_point_from_reports(perf, benchmark)
