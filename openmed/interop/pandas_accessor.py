@@ -1,4 +1,4 @@
-"""Pandas DataFrame accessor for OpenMed de-identification workflows."""
+"""Pandas DataFrame accessor for OpenMed clinical table workflows."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ except ImportError as exc:  # pragma: no cover - exercised by packaging users
 
 Deidentifier = Callable[..., Any]
 RiskReporter = Callable[..., dict[str, Any]]
+ClinicalExtractor = Callable[..., Any]
 
 
 @register_dataframe_accessor("openmed")
@@ -92,6 +93,63 @@ class OpenMedDataFrameAccessor:
             aux=_records_for_risk(aux, selected_columns),
         )
 
+    def extract(
+        self,
+        column: str,
+        *,
+        extractor: ClinicalExtractor | None = None,
+        extractor_kwargs: dict[str, Any] | None = None,
+        systems: Sequence[str] | None = None,
+        top_k: int = 1,
+        warn_on_phi: bool = True,
+    ) -> Any:
+        """Return a long-form clinical entity DataFrame for ``column``.
+
+        The returned columns are ordered exactly like
+        :data:`openmed.clinical.exporters.flat_table.FLAT_TABLE_COLUMNS`, so
+        pandas/polars/DuckDB rows remain column-consistent with CSV/FHIR export
+        paths. ``extractor`` can be injected for model-backed pipelines; the
+        default extractor is local and performs no network calls.
+        """
+
+        _validate_columns(self._obj, column)
+        from openmed.interop.clinical_dataframe import (
+            FLAT_TABLE_COLUMNS,
+            extract_records,
+        )
+
+        rows = extract_records(
+            self._obj.to_dict("records"),
+            column,
+            extractor=extractor,
+            extractor_kwargs=extractor_kwargs,
+            systems=systems,
+            top_k=top_k,
+            warn_on_phi=warn_on_phi,
+        )
+        return pd.DataFrame(rows, columns=list(FLAT_TABLE_COLUMNS))
+
+    def ground(
+        self,
+        column: str,
+        *,
+        extractor: ClinicalExtractor | None = None,
+        extractor_kwargs: dict[str, Any] | None = None,
+        systems: Sequence[str] | None = None,
+        top_k: int = 1,
+        warn_on_phi: bool = True,
+    ) -> Any:
+        """Alias for :meth:`extract` emphasizing grounded entities."""
+
+        return self.extract(
+            column,
+            extractor=extractor,
+            extractor_kwargs=extractor_kwargs,
+            systems=systems,
+            top_k=top_k,
+            warn_on_phi=warn_on_phi,
+        )
+
 
 def _load_deidentifier() -> Deidentifier:
     from openmed.core.pii import deidentify
@@ -103,6 +161,22 @@ def _load_risk_report() -> RiskReporter:
     from openmed.risk import risk_report
 
     return risk_report
+
+
+def ensure_registered() -> None:
+    """Ensure the accessor is registered on the currently imported pandas."""
+
+    global pd, register_dataframe_accessor
+
+    import pandas as current_pd
+    from pandas.api.extensions import (
+        register_dataframe_accessor as current_register_dataframe_accessor,
+    )
+
+    pd = current_pd
+    register_dataframe_accessor = current_register_dataframe_accessor
+    if "openmed" not in getattr(current_pd.DataFrame, "_accessors", set()):
+        current_register_dataframe_accessor("openmed")(OpenMedDataFrameAccessor)
 
 
 def _validate_columns(frame: Any, columns: Sequence[str] | str) -> tuple[str, ...]:
@@ -176,7 +250,9 @@ def _records_for_risk(
 
 
 __all__ = [
+    "ClinicalExtractor",
     "Deidentifier",
     "OpenMedDataFrameAccessor",
     "RiskReporter",
+    "ensure_registered",
 ]
