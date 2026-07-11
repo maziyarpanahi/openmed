@@ -44,6 +44,7 @@ def test_eval_modules_import_cleanly():
         "drugprot",
         "policy_compliance",
         "biomedical-ner",
+        "multilingual-clinical-ner",
     )
 
 
