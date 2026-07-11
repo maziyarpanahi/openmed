@@ -53,6 +53,7 @@ dev = [
   "pandas>=2.0",
   "polars>=0.20",
   "python-dateutil>=2.8",
+  "hypothesis>=6.100",
   "fsspec>=2025.9.0",
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
@@ -264,6 +265,7 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 markers = [
   "integration: marks end-to-end or external integration tests",
   "slow: marks tests that are expected to run slowly",
+  "fuzz: marks property-based (Hypothesis) fuzz tests",
   "doctest_examples: runs doctest examples for targeted public modules"
 ]
 python_files = [
