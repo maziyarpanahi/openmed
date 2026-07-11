@@ -35,6 +35,7 @@ from typing import Any, Dict, Optional
 
 from .. import labels as L
 from ..labels import normalize_label
+from ..name_order import CJK_LANGUAGES, normalize_person_span
 from .format_preserve import (
     preserve_date_format,
     preserve_email_pattern,
@@ -180,13 +181,33 @@ class Anonymizer:
         effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
         canonical = normalize_label(label, effective_lang)
 
+        # CJK PERSON spans: peel a trailing honorific (さん/様/씨/님/先生/…) so
+        # the name is swapped while the honorific is re-attached verbatim.
+        # Only ja/ko/zh PERSON spans take this path; all other languages and
+        # labels are unaffected. See ``openmed.core.name_order`` (OM-291).
+        honorific_suffix = ""
+        seed_value = original
+        generator_input = original
+        if canonical == L.PERSON and effective_lang in CJK_LANGUAGES:
+            core_name, honorific_suffix = normalize_person_span(
+                original, effective_lang
+            )
+            if honorific_suffix:
+                if not core_name:
+                    return f"[{label}]{honorific_suffix}"
+                # Seed on the bare name so a name with and without an honorific
+                # map to the same core surrogate in deterministic mode.
+                seed_value = core_name
+                generator_input = core_name
+
         faker = self._get_faker(effective_locale)
         if self.config.consistent:
-            faker.seed_instance(self._derive_seed(canonical, original))
+            faker.seed_instance(self._derive_seed(canonical, seed_value))
 
         generator = LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"])
         try:
-            return generator(faker, original, locale=effective_locale)
+            generated = generator(faker, generator_input, locale=effective_locale)
+            return f"{generated}{honorific_suffix}"
         except Exception as exc:  # noqa: BLE001 — never let a single label kill the doc
             warnings.warn(
                 f"Anonymizer fallback for label {label!r} (canonical "
@@ -194,7 +215,7 @@ class Anonymizer:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return f"[{label}]"
+            return f"[{label}]{honorific_suffix}"
 
     def can_format_preserve(
         self,
