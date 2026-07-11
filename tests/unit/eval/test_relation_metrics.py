@@ -107,6 +107,37 @@ def test_relation_metrics_include_type_and_scope_breakdowns():
     assert metrics["by_scope"]["document"]["strict"]["f1"] == 0.0
 
 
+def test_relation_metrics_do_not_cross_match_fixture_ids():
+    gold = [
+        EvalRelation(
+            relation_type="TREATS",
+            head=_span(0, 7, "MEDICATION", "Aspirin"),
+            tail=_span(15, 20, "CONDITION", "fever"),
+            fixture_id="fixture-a",
+        ),
+        EvalRelation(
+            relation_type="TREATS",
+            head=_span(30, 37, "MEDICATION", "Insulin"),
+            tail=_span(45, 53, "CONDITION", "diabetes"),
+            fixture_id="fixture-b",
+        ),
+    ]
+    predictions = [
+        EvalRelation(
+            relation_type="TREATS",
+            head=_span(30, 37, "MEDICATION", "Insulin"),
+            tail=_span(45, 53, "CONDITION", "diabetes"),
+            fixture_id="fixture-a",
+        )
+    ]
+
+    strict = compute_strict_relation_f1(gold, predictions)
+
+    assert strict.true_positives == 0
+    assert strict.false_positives == 1
+    assert strict.false_negatives == 2
+
+
 def test_committed_relation_fixture_loads_and_scores_exact_predictions():
     fixtures = load_relation_fixtures()
     predictions = {
