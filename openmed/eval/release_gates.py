@@ -52,6 +52,7 @@ from openmed.eval.report import BenchmarkReport
 RELEASABLE = "RELEASABLE"
 QUARANTINED = "QUARANTINED"
 FLAKINESS_GATE = "flakiness"
+SURROGATE_QUALITY_GATE = "surrogate_quality"
 
 G1A_V16_RECALL_FLOOR = 0.990
 G1A_V20_RECALL_FLOOR = 0.995
@@ -586,6 +587,7 @@ class ReleaseGate:
         )
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        checks.append(_surrogate_quality_release_check(metrics, metadata))
         checks.append(_g9_relation_extraction_check(metrics, metadata))
         coreml_manifest = _coreml_conversion_manifest(metadata)
         if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
@@ -788,6 +790,143 @@ def apply_flakiness_quarantine(
         target_leakage_rate=report.target_leakage_rate,
         blocked_formats=report.blocked_formats,
         stability_summary=summary,
+    )
+
+
+def evaluate_surrogate_quality_gate(
+    report: Mapping[str, Any] | Any | None = None,
+    *,
+    fixture_path: str | Path | None = None,
+    min_pass_rate: float | None = None,
+) -> GateCheck:
+    """Return the offline multilingual surrogate-quality release gate check."""
+
+    from openmed.eval.surrogate_quality import (
+        DEFAULT_SURROGATE_QUALITY_FIXTURE,
+        DEFAULT_SURROGATE_QUALITY_PASS_RATE,
+        SurrogateQualityReport,
+        evaluate_surrogate_quality,
+    )
+
+    if isinstance(report, SurrogateQualityReport):
+        quality_report = SurrogateQualityReport(
+            locale_reports=report.locale_reports,
+            required_locales=report.required_locales,
+            min_pass_rate=(
+                report.min_pass_rate if min_pass_rate is None else min_pass_rate
+            ),
+        )
+    elif report is not None:
+        quality_report = evaluate_surrogate_quality(
+            report.get("records") if isinstance(report, Mapping) else report,
+            fixture_path=(
+                fixture_path
+                if fixture_path is not None
+                else (
+                    report.get("fixture_path")
+                    if isinstance(report, Mapping)
+                    else DEFAULT_SURROGATE_QUALITY_FIXTURE
+                )
+            ),
+            min_pass_rate=(
+                min_pass_rate
+                if min_pass_rate is not None
+                else (
+                    float(report.get("min_pass_rate"))
+                    if isinstance(report, Mapping) and report.get("min_pass_rate")
+                    else DEFAULT_SURROGATE_QUALITY_PASS_RATE
+                )
+            ),
+        )
+    else:
+        quality_report = evaluate_surrogate_quality(
+            fixture_path=fixture_path or DEFAULT_SURROGATE_QUALITY_FIXTURE,
+            min_pass_rate=(
+                DEFAULT_SURROGATE_QUALITY_PASS_RATE
+                if min_pass_rate is None
+                else min_pass_rate
+            ),
+        )
+
+    failing = {
+        lang: locale_report.pass_rate
+        for lang, locale_report in quality_report.locale_reports.items()
+        if locale_report.pass_rate < quality_report.min_pass_rate
+    }
+    details = quality_report.to_dict()
+    details["failing_locales"] = failing
+    reason = (
+        "ok"
+        if quality_report.passed
+        else "surrogate quality below per-locale pass-rate floor"
+    )
+    return GateCheck(
+        SURROGATE_QUALITY_GATE,
+        quality_report.passed,
+        reason=reason,
+        details=details,
+    )
+
+
+def _surrogate_quality_release_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    from openmed.eval.surrogate_quality import DEFAULT_SURROGATE_QUALITY_PASS_RATE
+
+    evidence = _first_value(
+        metrics.get("surrogate_quality"),
+        metadata.get("surrogate_quality"),
+    )
+    required = bool(
+        metrics.get("surrogate_quality_required")
+        or metadata.get("surrogate_quality_required")
+    )
+    if evidence is None:
+        return GateCheck(
+            SURROGATE_QUALITY_GATE,
+            not required,
+            reason=(
+                "surrogate-quality evidence is required"
+                if required
+                else "not applicable"
+            ),
+            details={"required": required},
+        )
+
+    if isinstance(evidence, Mapping) and not (
+        evidence.get("records") is not None or evidence.get("fixture_path")
+    ):
+        return GateCheck(
+            SURROGATE_QUALITY_GATE,
+            False,
+            reason="surrogate-quality evidence is malformed",
+            details={
+                "error": "evidence must include records or fixture_path",
+                "required": required,
+            },
+        )
+
+    try:
+        check = evaluate_surrogate_quality_gate(
+            evidence,
+            min_pass_rate=DEFAULT_SURROGATE_QUALITY_PASS_RATE,
+        )
+    except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
+        return GateCheck(
+            SURROGATE_QUALITY_GATE,
+            False,
+            reason="surrogate-quality evidence is invalid",
+            details={"error": str(exc), "required": required},
+        )
+
+    details = dict(check.details)
+    details["required"] = required
+    return GateCheck(
+        SURROGATE_QUALITY_GATE,
+        check.passed,
+        reason=check.reason,
+        details=details,
     )
 
 
@@ -3428,6 +3567,7 @@ __all__ = [
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
+    "SURROGATE_QUALITY_GATE",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",
     "RELEASABLE",
@@ -3438,6 +3578,7 @@ __all__ = [
     "apply_flakiness_quarantine",
     "build_arg_parser",
     "evaluate_federated_boundary_gate",
+    "evaluate_surrogate_quality_gate",
     "format_preview",
     "main",
     "preview",
