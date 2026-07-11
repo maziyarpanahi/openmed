@@ -13,6 +13,7 @@ from __future__ import annotations
 # stdlib-only, so the public multimodal import path remains free of heavy deps.
 from openmed.interop import cda as _cda
 
+from . import contacts_calendar as _contacts_calendar
 from . import dicom as _dicom
 
 # Importing the Markdown/AsciiDoc adapter registers lightweight text-markup
@@ -35,6 +36,7 @@ from .chatlog_jsonl import (
     redact_chatlog_jsonl,
     write_redacted_chatlog_jsonl,
 )
+from .contacts_calendar import redact_contacts_calendar
 from .dicom import (
     DicomHeaderAction,
     DicomHeaderDeidPolicy,
@@ -123,6 +125,7 @@ __all__ = [
     "iter_redacted_chatlog_jsonl",
     "redact_chatlog_jsonl",
     "write_redacted_chatlog_jsonl",
+    "redact_contacts_calendar",
     "DicomHeaderAction",
     "DicomHeaderDeidPolicy",
     "DicomHeaderDeidResult",
