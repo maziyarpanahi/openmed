@@ -5,9 +5,14 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from math import isfinite
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
-from openmed.eval.metrics import EvalSpan, F1Metrics, normalize_eval_span
+from openmed.eval.metrics import (
+    EvalSpan,
+    F1Metrics,
+    bootstrap_ci,
+    normalize_eval_span,
+)
 
 RELATION_SCOPE_SENTENCE = "sentence"
 RELATION_SCOPE_DOCUMENT = "document"
@@ -87,6 +92,9 @@ def normalize_eval_relation(
         if fixture_id and not relation.fixture_id:
             return replace(relation, fixture_id=fixture_id)
         return relation
+
+    if isinstance(relation, Sequence) and not isinstance(relation, str | bytes):
+        relation = _relation_sequence_mapping(relation)
 
     data = relation if isinstance(relation, Mapping) else vars(relation)
     entities = _entity_lookup(
@@ -248,6 +256,62 @@ def compute_relation_metrics(
     }
 
 
+def compute_relation_metrics_bundle(
+    gold_relations: Iterable[Any],
+    predicted_relations: Iterable[Any],
+) -> dict[str, Any]:
+    """Return relation metrics in the release-report payload shape."""
+    gold = _as_relations(gold_relations)
+    predicted = _as_relations(predicted_relations)
+    metrics = compute_relation_metrics(gold, predicted)
+    return {
+        "gold_relation_count": len(gold),
+        "per_relation_type": metrics["by_type"],
+        "predicted_relation_count": len(predicted),
+        "relaxed": metrics["relaxed"],
+        "strict": metrics["strict"],
+        "by_scope": metrics["by_scope"],
+    }
+
+
+def compute_relation_confidence_intervals(
+    per_document_relations: Sequence[tuple[Iterable[Any], Iterable[Any]]],
+    *,
+    n_resamples: int = 1000,
+    alpha: float = 0.05,
+    seed: int = 0,
+) -> dict[str, dict[str, Any]]:
+    """Bootstrap document-level confidence intervals for relation F1."""
+    strict_docs: list[tuple[int, int, int]] = []
+    relaxed_docs: list[tuple[int, int, int]] = []
+    for gold_relations, predicted_relations in per_document_relations:
+        strict = compute_strict_relation_f1(gold_relations, predicted_relations)
+        relaxed = compute_relaxed_relation_f1(gold_relations, predicted_relations)
+        strict_docs.append(
+            (strict.true_positives, strict.false_positives, strict.false_negatives)
+        )
+        relaxed_docs.append(
+            (relaxed.true_positives, relaxed.false_positives, relaxed.false_negatives)
+        )
+
+    return {
+        "relaxed": bootstrap_ci(
+            relaxed_docs,
+            _f1_over_documents,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+        "strict": bootstrap_ci(
+            strict_docs,
+            _f1_over_documents,
+            n_resamples=n_resamples,
+            alpha=alpha,
+            seed=seed,
+        ).to_dict(),
+    }
+
+
 def _metric_pair(
     gold: list[EvalRelation], predicted: list[EvalRelation]
 ) -> dict[str, Any]:
@@ -351,6 +415,8 @@ def _resolve_argument(
 ) -> EvalSpan:
     value = _read_value(data, *keys)
     if value is None:
+        value = _flat_argument_mapping(data, keys)
+    if value is None:
         names = "/".join(keys)
         raise ValueError(f"relation must include {names}")
     if isinstance(value, EvalSpan):
@@ -375,6 +441,57 @@ def _resolve_argument(
         default_language=default_language,
         default_device=default_device,
         source_text=source_text,
+    )
+
+
+def _flat_argument_mapping(
+    data: Mapping[str, Any],
+    prefixes: tuple[str, ...],
+) -> dict[str, Any] | None:
+    for prefix in prefixes:
+        start = _read_value(data, f"{prefix}_start", f"{prefix}Start")
+        end = _read_value(data, f"{prefix}_end", f"{prefix}End")
+        if start is None or end is None:
+            continue
+        label = _read_value(
+            data,
+            f"{prefix}_label",
+            f"{prefix}Label",
+            f"{prefix}_type",
+        )
+        text = _read_value(data, f"{prefix}_text", f"{prefix}Text")
+        return {
+            "start": start,
+            "end": end,
+            "label": label or "OTHER",
+            "text": text or "",
+        }
+    return None
+
+
+def _relation_sequence_mapping(data: Sequence[Any]) -> dict[str, Any]:
+    if len(data) == 3:
+        relation_type, head, tail = data
+        return {"type": relation_type, "head": head, "tail": tail}
+    if len(data) == 5:
+        relation_type, head_start, head_end, tail_start, tail_end = data
+        return {
+            "type": relation_type,
+            "head": {"start": head_start, "end": head_end},
+            "tail": {"start": tail_start, "end": tail_end},
+        }
+    if len(data) == 6:
+        relation_id, relation_type, head_start, head_end, tail_start, tail_end = data
+        return {
+            "id": relation_id,
+            "type": relation_type,
+            "head": {"start": head_start, "end": head_end},
+            "tail": {"start": tail_start, "end": tail_end},
+        }
+    raise ValueError(
+        "relation tuple must be (type, head, tail), "
+        "(type, head_start, head_end, tail_start, tail_end), or "
+        "(id, type, head_start, head_end, tail_start, tail_end)"
     )
 
 
@@ -461,6 +578,17 @@ def _f1_from_counts(
         false_positives=false_positives,
         false_negatives=false_negatives,
     )
+
+
+def _f1_over_documents(rows: Sequence[tuple[int, int, int]]) -> float:
+    true_positives = sum(row[0] for row in rows)
+    false_positives = sum(row[1] for row in rows)
+    false_negatives = sum(row[2] for row in rows)
+    return _f1_from_counts(
+        true_positives,
+        true_positives + false_positives,
+        true_positives + false_negatives,
+    ).f1
 
 
 def _safe_rate(
