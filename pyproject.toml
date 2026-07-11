@@ -41,6 +41,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
+  "mypy==2.2.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "fastapi>=0.110",
@@ -305,12 +306,10 @@ quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
 
-# Lightweight, scoped type-checking configuration. This intentionally covers
-# only the newer v1.6 public surfaces that already ship precise annotations and
-# a py.typed marker; it is not a strict project-wide gate. The regression test
-# in tests/unit/test_packaging_typed.py runs mypy/pyright over exactly these
-# modules when a checker is installed and skips otherwise, so the offline CI
-# matrix (which does not ship a type checker) stays green.
+# Scoped type-checking configuration. This intentionally covers only the newer
+# v1.6 public surfaces that already ship precise annotations and a py.typed
+# marker; it is not a strict project-wide gate. The pinned development checker,
+# local Make target, regression test, and CI lint job all use this same scope.
 [tool.mypy]
 python_version = "3.10"
 files = [
