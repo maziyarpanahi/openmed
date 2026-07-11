@@ -177,6 +177,12 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     assert "leakage" in rows[0]["benchmark"]
 
 
+def test_manifest_generator_infers_korean_from_repo_name():
+    assert generate_manifest._languages(
+        "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1", []
+    ) == ["ko"]
+
+
 def test_only_manifest_generator_lists_org_models():
     allowed = {
         ROOT / "scripts" / "manifest" / "generate_manifest.py",
