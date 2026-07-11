@@ -5,40 +5,47 @@ guard APIs against malformed inputs.
 
 ## OpenMedConfig sources
 
-`OpenMedConfig` reads values in the following order:
+Construct `OpenMedConfig` directly for explicit in-process settings, or load a
+flat TOML file with `load_config_from_file()`. When no path is passed, the
+loader checks `OPENMED_CONFIG` and then
+`~/.config/openmed/config.toml` (or the matching XDG config directory).
 
-1. Explicit keyword arguments when you instantiate it.
-2. Environment variables prefixed with `OPENMED_`.
-3. YAML file passed via `OPENMED_CONFIG_FILE` (or `openmed_config=` argument).
-4. Sensible defaults (CPU device, `~/.cache/openmed`, unauthenticated Hugging Face access).
+Environment controls are field-specific rather than a generic mapping from
+every `OPENMED_*` name. For example, `HF_TOKEN`, `OPENMED_OFFLINE`,
+`OPENMED_PROFILE`, and `OPENMED_TORCH_ATTENTION_BACKEND` are supported. When
+the device preference is unset or `"auto"`, `OPENMED_TORCH_DEVICE` (or the
+legacy `OPENMED_DEVICE`) is checked before automatic **MPS → CUDA → CPU**
+selection. Set the model cache with `cache_dir=` or the TOML `cache_dir` key;
+`OPENMED_CACHE_DIR` is used by selected deployment and data tooling and is not
+a generic `OpenMedConfig` override.
 
 ```python
 from pathlib import Path
-from openmed.core import ModelLoader, OpenMedConfig
+from openmed.core import ModelLoader
+from openmed.core.config import load_config_from_file
 
-config = OpenMedConfig.from_file(Path.home() / ".config/openmed/config.yaml")
+config = load_config_from_file(Path.home() / ".config/openmed/config.toml")
 loader = ModelLoader(config=config)
 ner = loader.create_pipeline("disease_detection_superclinical", aggregation_strategy="simple")
 entities = ner("Dapagliflozin added for HFpEF symptom relief.")
 ```
 
-### Minimal YAML file
+### Minimal TOML file
 
-```yaml title="~/.config/openmed/config.yaml"
-default_org: OpenMed
-device: cuda
-cache_dir: ~/.cache/openmed
-hf_token: ${HF_TOKEN}  # optional
-pipeline:
-  aggregation_strategy: simple
-  return_all_scores: false
+```toml title="~/.config/openmed/config.toml"
+default_org = "OpenMed"
+device = "cuda"
+cache_dir = "/mnt/cache/openmed"
+torch_attention_backend = "auto"
 ```
 
-Environment variables override YAML values, making it easy to swap devices or cache directories in CI/CD:
+Runtime environment controls can select the config path, provide Hub
+credentials, or choose a device when the loaded config leaves it automatic:
 
 ```bash
-export OPENMED_DEVICE=cuda:1
-export OPENMED_CACHE_DIR=/mnt/cache/openmed
+export OPENMED_CONFIG=/etc/openmed/config.toml
+export HF_TOKEN=hf_xxx
+export OPENMED_TORCH_DEVICE=cuda:1
 ```
 
 ## PyTorch attention backends
@@ -106,13 +113,14 @@ text = validate_input(
     user_supplied_text,
     max_length=2000,
     allow_empty=False,
-    strip=True,
 )
 model_id = validate_model_name("disease_detection_superclinical")
 ```
 
 - `validate_input` trims whitespace, enforces max lengths, and raises informative errors for API clients.
-- `validate_model_name` normalizes registry aliases and protects service endpoints from arbitrary HF IDs.
+- `validate_model_name` trims the value and accepts an existing local path, a
+  bare model name, or one `org/model` identifier. It validates syntax; it does
+  not enforce a model allowlist or resolve a registry alias.
 
 ## Logging and tracing
 
@@ -120,16 +128,21 @@ model_id = validate_model_name("disease_detection_superclinical")
 from openmed.utils import setup_logging
 from openmed.core import ModelLoader
 
-setup_logging(level="INFO", json=True)
+setup_logging(level="INFO", include_timestamp=True)
 loader = ModelLoader()
 ```
 
-- Use JSON output with your log shipper or disable it during notebooks.
-- Combine with `OPENMED_DISABLE_WARNINGS=1` when you want the quietest possible inference loop.
+- `setup_logging` configures standard Python logging. Add structured logging in
+  the host application when needed; OpenMed does not expose a `json=` option.
+- Keep raw clinical text, entity values, model outputs, access tokens, and
+  reversible mappings out of log records and tracing attributes.
 
 ## Cache & device tips
 
-- **CPU-only teams**: keep `device="cpu"` and rely on HF caching. PyTorch installs stay optional unless you add the
-  `gliner` extra.
-- **GPU nodes**: set `device="cuda"` and optionally `torch_dtype=float16` inside `OpenMedConfig.pipeline`.
+- **CPU-only teams**: keep `device="cpu"`, install a CPU-compatible PyTorch
+  runtime for Hugging Face inference, and rely on the configured model cache.
+- **GPU nodes**: set `device="cuda"` (or a concrete index such as `"cuda:1"`).
+  Pass backend-specific model-loading options to `ModelLoader.create_pipeline`
+  only after verifying the selected model and hardware support them;
+  `OpenMedConfig` has no `pipeline` field.
 - **Shared runners**: point `cache_dir` at an ephemeral volume per job to avoid artifacts leaking between builds.

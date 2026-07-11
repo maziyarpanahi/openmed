@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a PEP 561 `py.typed` marker plus a pinned, scoped mypy gate for the
+  annotated public-module surface, with built-wheel and sdist verification
+  that the marker ships in release artifacts (#548).
 - Added a full Korean (`ko`) PII language pack with native date, phone, RRN,
   postcode, and address patterns, checksum-valid local surrogates, synthetic
   golden coverage, service and training wiring, and the manifest-backed Korean
