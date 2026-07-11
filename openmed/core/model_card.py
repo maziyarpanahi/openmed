@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 DEFAULT_ARXIV = "2508.01630"
 
@@ -82,6 +82,18 @@ def write_model_card(path: str | Path, row: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(render_model_card(row), encoding="utf-8")
     return path
+
+
+def append_model_card_sections(card: str, sections: Sequence[str]) -> str:
+    """Append generated Markdown sections to a rendered model card."""
+
+    rendered = card if card.endswith("\n") else f"{card}\n"
+    for section in sections:
+        section_text = str(section).strip()
+        if not section_text:
+            continue
+        rendered = f"{rendered.rstrip()}\n\n{section_text}\n"
+    return rendered
 
 
 def _string(value: Any, default: str) -> str:
