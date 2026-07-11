@@ -1,11 +1,11 @@
 """Leakage-bypass abuse-case suite for the de-identification redactor.
 
 This suite is the executable half of the redactor threat model in
-``docs/security/threat-model.md``. Each ``AC-*`` id below maps 1:1 to an abuse
-case in that document's catalog (Section 6). Every test drives a documented
-redaction-bypass attempt through the *real* OpenMed de-identification surfaces
-and asserts the identifier is caught -- or is ``xfail``-marked against a tracking
-issue when it is a known limitation, so no gap is ever silent.
+``docs/security/threat-model.md``. The tests drive mitigated abuse classes
+through the *real* OpenMed de-identification surfaces and assert the identifier
+is caught. Known, unmitigated bypass details are intentionally excluded from
+public tests and tracked through the private disclosure process in
+``SECURITY.md`` until a coordinated fix is ready.
 
 Hard rules honored here:
 
@@ -133,40 +133,10 @@ def test_ac01_zero_width_chars_are_all_stripped_offset_preserving():
     assert 0 <= start <= end <= len(text)
 
 
-# --- AC-02: punctuation-injection split identifier (KNOWN GAP) -----------------
-
-
-@pytest.mark.xfail(
-    reason=(
-        "AC-02 known gap: visible ASCII punctuation injected between identifier "
-        "digits is not folded by normalize_for_pii_detection, so the "
-        "deterministic safety sweep does not recover the structured identifier. "
-        "Tracked in https://github.com/maziyarpanahi/openmed/issues/1345."
-    ),
-    strict=True,
-)
-def test_ac02_punctuation_injection_ssn_is_a_known_bypass():
-    """AC-02: this SHOULD pass once #1345 closes the punctuation-injection gap.
-
-    Marked ``xfail(strict=True)`` so the day the gap is fixed, this test starts
-    passing and the strict marker fails the build -- forcing the ``xfail`` to be
-    removed and issue #1345 closed. That is the anti-silent-hole guarantee.
-    """
-    text = "SSN 1.2.3-4.5-6.7.8.9 documented in chart."
-    assert "ssn" in _sweep_after_normalize(text)
-
-
-def test_ac02_gap_is_currently_real_and_documented():
-    """AC-02: pin the *current* (bypassed) behavior so the gap is not silent.
-
-    This companion test asserts the leak exists today. It exists so the suite is
-    green while #1345 is open, and it documents the exact residual risk described
-    in the threat model. It must be deleted together with the xfail above when the
-    gap is closed.
-    """
-    text = "SSN 1.2.3-4.5-6.7.8.9 documented in chart."
-    # The deterministic sweep does NOT recover an SSN from the punctuated form.
-    assert "ssn" not in _sweep_after_normalize(text)
+# AC-02 is a known, unmitigated separator-mutation class. Its actionable
+# reproduction is intentionally tracked through GitHub Private Vulnerability
+# Reporting rather than published in this regression suite. A public regression
+# should land with the coordinated fix and advisory.
 
 
 # --- AC-03: unicode confusable / mixed-script obfuscation ---------------------
@@ -202,10 +172,8 @@ def test_ac04_fullwidth_card_is_redacted_end_to_end():
     assert fullwidth != SYNTHETIC_CARD
     output = _deidentify_with_blind_model(f"card {fullwidth}")
     assert "credit_debit_card" in output.lower()
-    # No full-width digit survives in the output.
-    assert not any(
-        ch in output for ch in fullwidth if ch.isdigit() is False and ord(ch) >= 0xFF10
-    )
+    assert fullwidth not in output
+    assert not any("０" <= char <= "９" for char in output)
 
 
 def test_ac04_fullwidth_ssn_is_recovered_by_normalize_then_sweep():
@@ -329,11 +297,57 @@ def test_ac08_day_first_date_is_not_left_in_the_clear():
     assert date_value not in result.deidentified_text
 
 
+@pytest.mark.parametrize(
+    ("date_value", "expected_replacement"),
+    (
+        ("13/07/1970", "14/07/1970"),
+        ("31/31/1970", "[DATE_SHIFTED]"),
+    ),
+)
+def test_ac08_shift_dates_changes_parseable_dates_and_masks_parse_failures(
+    date_value: str,
+    expected_replacement: str,
+):
+    """AC-08: shift_dates never passes a detected source date through unchanged."""
+    text = f"DOB {date_value} recorded."
+    start = text.index(date_value)
+
+    def analyze_with_date(t, *args, **kwargs):
+        return PredictionResult(
+            text=t,
+            entities=[
+                EntityPrediction(
+                    text=date_value,
+                    label="date",
+                    start=start,
+                    end=start + len(date_value),
+                    confidence=0.97,
+                )
+            ],
+            model_name="fixture-date",
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    with patch("openmed.analyze_text", side_effect=analyze_with_date):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            result = deidentify(
+                text,
+                method="shift_dates",
+                date_shift_days=1,
+                lang="fr",
+                use_safety_sweep=True,
+            )
+
+    assert date_value not in result.deidentified_text
+    assert expected_replacement in result.deidentified_text
+
+
 # --- AC-09: reversible-id / surrogate key compromise --------------------------
 
 
-def test_ac09_replace_surrogate_is_non_invertible_without_mapping():
-    """AC-09: a consistent surrogate leaks none of the original tokens."""
+def test_ac09_replace_surrogate_omits_mapping_and_plaintext():
+    """AC-09: replace output omits its mapping and the original tokens."""
     text = "Patient Casey Example was seen."
     name = "Casey Example"
     start = text.index(name)
@@ -357,7 +371,7 @@ def test_ac09_replace_surrogate_is_non_invertible_without_mapping():
     with patch("openmed.analyze_text", side_effect=analyze_with_name):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            # keep_mapping=False -> no re-identification handle is emitted.
+            # keep_mapping=False -> no explicit replacement mapping is emitted.
             result = deidentify(
                 text,
                 method="replace",
@@ -367,7 +381,7 @@ def test_ac09_replace_surrogate_is_non_invertible_without_mapping():
                 use_safety_sweep=True,
             )
 
-    assert result.mapping is None  # no reversible handle without a key/mapping
+    assert result.mapping is None
     # Neither original token survives in the output surrogate.
     assert "Casey" not in result.deidentified_text
     assert "Example" not in result.deidentified_text
