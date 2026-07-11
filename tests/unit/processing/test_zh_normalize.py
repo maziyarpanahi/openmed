@@ -160,3 +160,8 @@ def test_config_accepts_nfkc_and_rejects_unknown():
     assert OpenMedConfig(cjk_width_convention="nfkc").cjk_width_convention == "nfkc"
     with pytest.raises(ValueError):
         OpenMedConfig(cjk_width_convention="bogus")
+
+
+def test_config_from_dict_preserves_width_convention():
+    config = OpenMedConfig.from_dict({"cjk_width_convention": "nfkc"})
+    assert config.cjk_width_convention == "nfkc"
