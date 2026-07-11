@@ -9,9 +9,13 @@ lossless strip round-trip.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
+import openmed.core.rtl_render as rtl_render
 from openmed.core.rtl_render import (
+    BIDI_CONTROL_CHARS,
     RenderedRedaction,
     base_direction,
     contains_rtl,
@@ -22,12 +26,12 @@ from openmed.core.rtl_render import (
 
 # Bidi control code points asserted independently of the module constants so
 # the tests pin the actual Unicode characters, not the module's own aliases.
-_FSI = "⁨"  # First Strong Isolate
-_PDI = "⁩"  # Pop Directional Isolate
-_LRM = "‎"  # Left-to-Right Mark
-_RLM = "‏"  # Right-to-Left Mark
-_RLE = "‫"  # Right-to-Left Embedding
-_PDF = "‬"  # Pop Directional Formatting
+_FSI = "\u2068"  # First Strong Isolate
+_PDI = "\u2069"  # Pop Directional Isolate
+_LRM = "\u200e"  # Left-to-Right Mark
+_RLM = "\u200f"  # Right-to-Left Mark
+_RLE = "\u202b"  # Right-to-Left Embedding
+_PDF = "\u202c"  # Pop Directional Formatting
 
 # Synthetic redacted lines: masks/surrogates already substituted for PII.
 _ARABIC_WITH_SURROGATE = "المريض John Smith زار"
@@ -68,6 +72,11 @@ def test_contains_rtl_detects_arabic_run():
     assert contains_rtl(_ARABIC_WITH_MASK) is True
     assert contains_rtl(_HEBREW_WITH_MASK) is True
     assert contains_rtl(_LTR_WITH_MASK) is False
+
+
+def test_source_contains_no_literal_bidi_controls():
+    source = Path(rtl_render.__file__).read_text(encoding="utf-8")
+    assert BIDI_CONTROL_CHARS.isdisjoint(source)
 
 
 # --- Arabic line with an injected Latin surrogate ----------------------------
@@ -203,6 +212,11 @@ def test_invalid_direction_rejected():
         render_redacted(_LTR_WITH_MASK, [], direction="sideways")
 
 
+def test_non_string_direction_rejected():
+    with pytest.raises(TypeError, match="direction must be a string"):
+        render_redacted(_LTR_WITH_MASK, [], direction=None)  # type: ignore[arg-type]
+
+
 # --- Empty / degenerate spans ------------------------------------------------
 
 
@@ -278,6 +292,16 @@ def test_wrap_mask_isolates_by_default():
 
 def test_wrap_mask_ltr_is_noop():
     assert wrap_mask("[NAME]", direction="ltr") == "[NAME]"
+
+
+def test_wrap_mask_invalid_direction_rejected():
+    with pytest.raises(ValueError):
+        wrap_mask("[NAME]", direction="sideways")
+
+
+def test_wrap_mask_non_string_direction_rejected():
+    with pytest.raises(TypeError, match="direction must be a string"):
+        wrap_mask("[NAME]", direction=None)  # type: ignore[arg-type]
 
 
 def test_wrap_mask_round_trips_through_strip():
