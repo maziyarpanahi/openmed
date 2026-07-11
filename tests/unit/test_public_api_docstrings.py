@@ -1,13 +1,14 @@
-"""Docstring-coverage gate for OpenMed's public API surface.
+"""Docstring and export-inventory gates for OpenMed's public API surface.
 
-These tests enforce that every public export (the names in ``openmed.__all__``)
-carries a docstring, so the mkdocstrings-generated API reference never ships an
-empty entry. The measurement is performed statically by
-``scripts/check_public_api_docstrings.py`` (stdlib-only ``ast`` parsing) so it
-does not need the heavy runtime dependencies to import.
+The stdlib-only static checker resolves every name in the source
+``openmed.__all__`` without importing the package. Runtime parity tests import
+``openmed`` separately to prove that the live export order matches the static
+inventory. Exported functions/classes require meaningful docstrings; data
+exports are checked against an explicit name/module/type inventory instead of
+passing through generic built-in instance documentation.
 
-The floor is pinned to the current coverage and is intended to ratchet upward,
-never downward: adding an undocumented public export fails the gate.
+Function/class coverage is fixed at 100%: adding an undocumented public
+function or class fails the gate.
 """
 
 from __future__ import annotations
@@ -40,10 +41,19 @@ def _load_checker():
 
 checker = _load_checker()
 
-# The coverage floor is set to the current measured coverage (100%). Keep this
-# at or below the live value; raise it as coverage improves, never lower it to
-# accommodate a regression.
+# Every exported function/class must remain documented.
 MIN_COVERAGE = 100.0
+
+EXPECTED_DATA_EXPORTS = {
+    "__version__": ("openmed", str),
+    "PII_PATTERNS": ("openmed.core.pii_entity_merger", list),
+    "SUPPORTED_LANGUAGES": ("openmed.core.pii_i18n", set),
+    "DEFAULT_PII_MODELS": ("openmed.core.pii_i18n", dict),
+    "LANGUAGE_PII_PATTERNS": ("openmed.core.pii_i18n", dict),
+    "CANONICAL_LABELS": ("openmed.core.labels", frozenset),
+    "LANG_TO_LOCALE": ("openmed.core.anonymizer.locales", dict),
+    "ENCRYPTION_SCHEME": ("openmed.core.surrogate_vault", str),
+}
 
 
 def test_public_api_docstring_coverage_meets_floor():
@@ -81,17 +91,42 @@ def test_key_dataclasses_are_documented():
         assert symbol.documented, f"{name} is missing a docstring"
 
 
-def test_live_public_api_exports_resolve_and_are_documented():
-    """Every live public export must resolve and expose a docstring."""
+def test_live_public_api_matches_static_inventory_and_callable_docs():
+    """Live exports must match static order and document functions/classes."""
     import openmed
 
     assert openmed.__all__, "openmed.__all__ must define the public API"
-    for name in openmed.__all__:
-        exported = getattr(openmed, name)
-        assert inspect.getdoc(exported), f"openmed.{name} is missing a docstring"
+    assert len(openmed.__all__) == len(set(openmed.__all__))
+
+    report = checker.measure_public_api_docstrings()
+    assert [symbol.name for symbol in report.symbols] == openmed.__all__
+
+    for symbol in report.scored:
+        exported = getattr(openmed, symbol.name)
+        docstring = inspect.getdoc(exported)
+        assert docstring, f"openmed.{symbol.name} is missing a docstring"
+        assert len(docstring.strip()) >= checker.MIN_DOCSTRING_CHARS
 
 
-def test_cli_gate_passes_at_floor():
-    """The CLI entry point exits 0 when coverage meets the floor."""
+def test_data_exports_match_explicit_inventory():
+    """Data exports must resolve by exact name, module, and runtime type."""
+    import openmed
+
+    report = checker.measure_public_api_docstrings()
+    by_name = {symbol.name: symbol for symbol in report.data}
+
+    assert set(by_name) == set(EXPECTED_DATA_EXPORTS)
+    for name, (expected_module, expected_type) in EXPECTED_DATA_EXPORTS.items():
+        symbol = by_name[name]
+        assert symbol.module == expected_module
+        assert type(getattr(openmed, name)) is expected_type
+        assert symbol.reason == "data export (inventory only)"
+
+
+def test_cli_gate_passes_at_floor(capsys: pytest.CaptureFixture[str]):
+    """The CLI passes and prints the exact data-export inventory."""
     exit_code = checker.main(["--min-coverage", str(MIN_COVERAGE)])
     assert exit_code == 0
+    output = capsys.readouterr().out
+    for name in EXPECTED_DATA_EXPORTS:
+        assert f"  - {name} (" in output

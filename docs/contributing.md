@@ -39,23 +39,27 @@ make format-swift
 make lint-swift
 ```
 
-## Public API docstrings
+## Public API docstrings and export inventory
 
-Every name exported from `openmed.__all__` must carry a Google-style docstring.
-The API reference on the docs site is generated from these docstrings by
-mkdocstrings, so an undocumented public export silently ships an empty reference
-entry. A dedicated gate enforces this on the public surface only (it does not
-touch private or internal modules):
+Every function and class exported from `openmed.__all__` must carry a meaningful
+docstring. This keeps runtime help, IDE inspection, and explicitly configured
+mkdocstrings entries useful without imposing coverage requirements on private or
+internal modules. Data exports cannot carry symbol-specific instance docstrings,
+so the gate resolves them into an explicit inventory instead of scoring them as
+functions or classes.
 
 ```bash
 python scripts/check_public_api_docstrings.py            # prints coverage + offenders
 pytest tests/unit/test_public_api_docstrings.py -q       # CI gate
 ```
 
-The checker is stdlib-only (`ast` parsing, no runtime import), so it runs in CI
-without the heavy optional dependencies. The coverage floor is pinned to the
-current value and is meant to ratchet upward: when you add a public export, give
-it a docstring in the same pull request.
+The standalone checker is stdlib-only (`ast` parsing, no runtime import). The
+pytest gate adds a separate runtime parity check: it imports `openmed`, requires
+the live `__all__` order to match the static inventory, verifies meaningful
+docstrings on exported functions/classes, and checks the exact allow-list of data
+exports without relying on generic built-in instance documentation. Function and
+class coverage must remain at 100%; add a docstring in the same pull request as a
+new public callable or class.
 
 ## Release outline
 
