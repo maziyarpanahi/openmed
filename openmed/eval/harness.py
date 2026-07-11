@@ -56,6 +56,9 @@ DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
     / "fixtures"
     / "context_multilingual.jsonl"
 )
+DEFAULT_SECTION_MULTILINGUAL_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "section_multilingual.jsonl"
+)
 
 
 @dataclass(frozen=True)
@@ -508,6 +511,131 @@ def run_context_multilingual_eval(
     )
 
 
+def load_section_multilingual_fixtures(
+    path: str | Path = DEFAULT_SECTION_MULTILINGUAL_FIXTURE,
+) -> tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]:
+    """Load synthetic multilingual clinical section detection fixtures."""
+
+    fixture_path = Path(path)
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not rows or rows[0].get("kind") != "meta":
+        raise ValueError("section multilingual fixture must start with a meta row")
+    fixtures = tuple(row for row in rows[1:] if row.get("kind") != "meta")
+    case_ids = [str(row.get("case_id", "")) for row in fixtures]
+    if any(not case_id for case_id in case_ids) or len(case_ids) != len(set(case_ids)):
+        raise ValueError("section multilingual fixtures require unique case_id values")
+    return rows[0], fixtures
+
+
+def run_section_multilingual_eval(
+    path: str | Path = DEFAULT_SECTION_MULTILINGUAL_FIXTURE,
+    *,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Score deterministic multilingual section detection on synthetic notes."""
+
+    from openmed.clinical.lexicons import section_lexicon_stats
+    from openmed.clinical.sections import detect_sections
+    from openmed.eval.section_recall import (
+        compute_section_detection_metrics,
+        compute_section_recall,
+    )
+
+    meta, fixtures = load_section_multilingual_fixtures(path)
+    label_f1_by_language: dict[str, list[float]] = {}
+    boundary_recall_by_language: dict[str, list[float]] = {}
+    char_recall_by_language: dict[str, list[float]] = {}
+    char_baseline_by_language: dict[str, list[float]] = {}
+
+    for row in fixtures:
+        language = str(row.get("language") or "en")
+        text = str(row.get("text") or "")
+        gold_sections = _section_fixture_gold_sections(row)
+        predicted_sections = detect_sections(text, language=language)
+        detection_metrics = compute_section_detection_metrics(
+            text,
+            gold_sections,
+            predicted_sections,
+        )
+        gold_spans = _section_fixture_gold_spans(row)
+        character_report = compute_section_recall(
+            text,
+            predicted_sections,
+            gold_spans,
+            gold_spans,
+            default_language=language,
+        )
+        baseline_report = compute_section_recall(
+            text,
+            gold_sections,
+            gold_spans,
+            gold_spans,
+            default_language=language,
+        )
+
+        label_f1_by_language.setdefault(language, []).append(detection_metrics.label_f1)
+        boundary_recall_by_language.setdefault(language, []).append(
+            detection_metrics.boundary_recall
+        )
+        char_recall_by_language.setdefault(language, []).append(
+            character_report.overall.recall
+        )
+        char_baseline_by_language.setdefault(language, []).append(
+            baseline_report.overall.recall
+        )
+
+    section_label_f1 = {
+        language: _mean(values)
+        for language, values in sorted(label_f1_by_language.items())
+    }
+    section_boundary_recall = {
+        language: _mean(values)
+        for language, values in sorted(boundary_recall_by_language.items())
+    }
+    section_character_recall = {
+        language: _mean(values)
+        for language, values in sorted(char_recall_by_language.items())
+    }
+    section_character_baseline = {
+        language: _mean(values)
+        for language, values in sorted(char_baseline_by_language.items())
+    }
+    label_threshold = 0.85
+    gate_passed = all(
+        score >= label_threshold for score in section_label_f1.values()
+    ) and all(
+        section_character_recall[language] >= baseline
+        for language, baseline in section_character_baseline.items()
+    )
+
+    return BenchmarkReport(
+        suite="section_multilingual",
+        model_name="deterministic-section-detector",
+        device="local",
+        fixture_count=len(fixtures),
+        metrics={
+            "section_boundary_recall": section_boundary_recall,
+            "section_character_recall": section_character_recall,
+            "section_character_recall_baseline": section_character_baseline,
+            "section_gate_passed": gate_passed,
+            "section_label_f1": section_label_f1,
+            "section_label_f1_threshold": label_threshold,
+            "section_lexicon_coverage": section_lexicon_stats(),
+        },
+        generated_at=generated_at,
+        metadata={
+            "fixture_ids": [str(row["case_id"]) for row in fixtures],
+            "languages": sorted(label_f1_by_language),
+            "parent_issue": "OM-729",
+            "synthetic": bool(meta.get("synthetic")),
+        },
+    )
+
+
 def _context_fixture_span(row: Mapping[str, Any]) -> dict[str, Any]:
     text = str(row.get("text", ""))
     target = row.get("target")
@@ -527,6 +655,87 @@ def _context_fixture_span(row: Mapping[str, Any]) -> dict[str, Any]:
         "start": start,
         "end": start + len(target_text),
     }
+
+
+def _section_fixture_gold_sections(
+    row: Mapping[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    from openmed.clinical.sections import UNSECTIONED_SECTION
+
+    text = str(row.get("text") or "")
+    raw_sections = row.get("gold_sections")
+    if not isinstance(raw_sections, Sequence) or isinstance(raw_sections, (str, bytes)):
+        raise ValueError(f"section fixture {row.get('case_id')} lacks gold sections")
+    if all(
+        isinstance(section, Mapping)
+        and "start" in section
+        and "end" in section
+        and "label" in section
+        for section in raw_sections
+    ):
+        return tuple(dict(section) for section in raw_sections)
+
+    header_starts: list[tuple[str, str, int]] = []
+    search_from = 0
+    for section in raw_sections:
+        if not isinstance(section, Mapping):
+            raise ValueError("gold section entries must be mappings")
+        label = str(section.get("label") or "")
+        header = str(section.get("header") or "")
+        if not label or not header:
+            raise ValueError("gold section entries require label and header")
+        start = text.find(header, search_from)
+        if start == -1:
+            raise ValueError(
+                f"section fixture {row.get('case_id')} lacks header {header!r}"
+            )
+        header_starts.append((label, header, start))
+        search_from = start + len(header)
+
+    sections: list[dict[str, Any]] = []
+    cursor = 0
+    for index, (label, _header, start) in enumerate(header_starts):
+        if cursor < start:
+            sections.append(
+                {"label": UNSECTIONED_SECTION, "start": cursor, "end": start}
+            )
+        end = (
+            header_starts[index + 1][2] if index + 1 < len(header_starts) else len(text)
+        )
+        sections.append({"label": label, "start": start, "end": end})
+        cursor = end
+    if cursor < len(text):
+        sections.append(
+            {"label": UNSECTIONED_SECTION, "start": cursor, "end": len(text)}
+        )
+    return tuple(sections)
+
+
+def _section_fixture_gold_spans(row: Mapping[str, Any]) -> tuple[dict[str, Any], ...]:
+    text = str(row.get("text") or "")
+    raw_spans = row.get("gold_spans") or ()
+    if not isinstance(raw_spans, Sequence) or isinstance(raw_spans, (str, bytes)):
+        raise ValueError("gold_spans must be a sequence")
+    spans: list[dict[str, Any]] = []
+    search_from = 0
+    for raw_span in raw_spans:
+        if not isinstance(raw_span, Mapping):
+            raise ValueError("gold span entries must be mappings")
+        if "start" in raw_span and "end" in raw_span:
+            spans.append(dict(raw_span))
+            continue
+        surface = str(raw_span.get("text") or "")
+        if not surface:
+            raise ValueError("gold span entries require text or offsets")
+        start = text.find(surface, search_from)
+        if start == -1:
+            raise ValueError(f"gold span surface is absent: {surface!r}")
+        search_from = start + len(surface)
+        span = dict(raw_span)
+        span["start"] = start
+        span["end"] = start + len(surface)
+        spans.append(span)
+    return tuple(spans)
 
 
 def _macro_f1(
@@ -567,6 +776,12 @@ def _label_f1(expected: Sequence[str], predicted: Sequence[str], label: str) -> 
     precision = true_positive / (true_positive + false_positive)
     recall = true_positive / (true_positive + false_negative)
     return 2 * precision * recall / (precision + recall)
+
+
+def _mean(values: Sequence[float]) -> float:
+    if not values:
+        return 1.0
+    return sum(values) / len(values)
 
 
 def default_model_runner(
