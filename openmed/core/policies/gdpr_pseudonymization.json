@@ -86,6 +86,11 @@
     "NUTRITION_TARGET": "keep",
     "FEEDING_ROUTE": "keep",
     "NUTRITIONAL_STATUS": "keep",
+    "VACCINE_NAME": "keep",
+    "DOSE_NUMBER": "keep",
+    "ADMINISTRATION_ROUTE": "keep",
+    "VACCINE_LOT": "keep",
+    "VACCINE_SERIES": "keep",
     "GENE_SYMBOL": "keep",
     "VARIANT_DESCRIPTOR": "keep",
     "PROTEIN_CHANGE": "keep",
@@ -99,6 +104,11 @@
     "GI_SYMPTOM": "keep",
     "GI_SCORE": "keep",
     "POLYP_DESCRIPTOR": "keep",
+
+    "CKD_STAGE": "mask",
+    "DIALYSIS_MODALITY": "mask",
+    "RENAL_FUNCTION_MEASURE": "mask",
+    "URINE_FINDING": "mask",
     "OTHER": "keep"
   }
 }
