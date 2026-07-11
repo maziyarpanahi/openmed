@@ -18,6 +18,7 @@ Health identifiers for HIPAA cross-map consumers:
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
@@ -1043,10 +1044,10 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     return False
 
 
-# Romanian CNP county codes: 01-46 for the 41 counties plus Bucharest and its
-# sectors, 51-52 for Calarasi and Giurgiu, and 70 for pre-2005 residents
-# without a settled county (foreign residents / naturalised persons). Codes
-# 47-50 are unassigned and must not be accepted as a numeric range shortcut.
+# Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
+# Bucharest, and its sectors; 51-52 cover Calarasi and Giurgiu. Current SIIEASC
+# issuance uses 70 nationwide. Codes 47-50 are unassigned and must not be
+# accepted as a numeric range shortcut.
 _ROMANIAN_CNP_COUNTY_CODES: frozenset[int] = frozenset(set(range(1, 47)) | {51, 52, 70})
 
 # Documented CNP control-digit weights ("279146358279").
@@ -1060,8 +1061,6 @@ _ROMANIAN_CNP_CENTURY: Dict[int, int] = {
     4: 1800,  # female, 1800-1899
     5: 2000,  # male, 2000-2099
     6: 2000,  # female, 2000-2099
-    7: 1900,  # male resident, disambiguated by issue date (default 1900s)
-    8: 1900,  # female resident
 }
 
 
@@ -1071,12 +1070,12 @@ def validate_romanian_cnp(text: str) -> bool:
     The CNP is a 13-digit national identifier with the layout
     ``S YY MM DD JJ NNN C``:
 
-    - ``S``: century and gender code (1-8). Codes 1/3/5/7 are male and
-      2/4/6/8 female; 1/2 map to the 1900s, 3/4 to the 1800s, 5/6 to the
-      2000s, and 7/8 to residents (defaulted here to the 1900s).
-    - ``YYMMDD``: date of birth. The century is taken from ``S``.
-    - ``JJ``: county (judet) code, 01-46 or 51-52, plus 70 for pre-2005
-      residents without a settled county. Unassigned codes 47-50 are invalid.
+    - ``S``: documented century and gender code (1-6). Codes 1/3/5 are male
+      and 2/4/6 female; 1/2 map to the 1900s, 3/4 to the 1800s, and 5/6 to
+      the 2000s.
+    - ``YYMMDD``: non-future date of birth. The century is taken from ``S``.
+    - ``JJ``: legacy county/sector code 01-46 or 51-52, or the current
+      nationwide SIIEASC sequence code 70. Unassigned codes 47-50 are invalid.
     - ``NNN``: non-zero sequence number.
     - ``C``: control digit, computed as the sum of the first twelve digits
       weighted by the documented constant ``279146358279`` taken modulo 11.
@@ -1109,18 +1108,11 @@ def validate_romanian_cnp(text: str) -> bool:
     month = numbers[3] * 10 + numbers[4]
     day = numbers[5] * 10 + numbers[6]
 
-    if month < 1 or month > 12:
-        return False
-    if day < 1 or day > 31:
-        return False
-
-    import calendar
-
     try:
-        max_day = calendar.monthrange(year, month)[1]
-    except (ValueError, calendar.IllegalMonthError):
+        birth_date = date(year, month, day)
+    except ValueError:
         return False
-    if day > max_day:
+    if birth_date > date.today():
         return False
 
     # --- county code ---
@@ -3669,11 +3661,14 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.4,
         validator=validate_romanian_cnp,
     ),
-    # Romanian street addresses ("Str. Mihai Eminescu 12").
+    # Romanian street addresses ("Str. Mihai Eminescu 12"). Accept modern
+    # comma-below, legacy cedilla, and decomposed combining-mark spellings.
     PIIPattern(
         r"\b(?:Str\.?|Strada|Bd\.?|Bdul|Bulevardul|Calea|Aleea|"
-        r"[SȘ]oseaua|Splaiul|Pia[țt]a|Intrarea)\s+"
-        r"[A-ZĂÂÎȘȚ][A-Za-zĂÂÎȘȚăâîșț0-9 .'-]{1,60}\s+"
+        r"(?:[SȘŞ]|S[\u0326\u0327])oseaua|Splaiul|"
+        r"Pia(?:[TȚŢ]|T[\u0326\u0327])a|Intrarea)\s+"
+        r"[^\W\d_](?:[\u0300-\u036f])?"
+        r"(?:[^\W_]|[\u0300-\u036f .'-]){1,60}\s+"
         r"(?:nr\.?\s*)?\d{1,5}[A-Za-z]?\b",
         "street_address",
         priority=7,
@@ -3685,6 +3680,9 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
             "strada",
             "resedinta",
             "reședința",
+            "reşedinţa",
+            "res\u0326edint\u0326a",
+            "res\u0327edint\u0327a",
         ],
         context_boost=0.25,
         flags=re.IGNORECASE,
@@ -3695,7 +3693,17 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
         "postcode",
         priority=6,
         base_score=0.25,
-        context_words=["cod postal", "cod poștal", "cp", "adresa", "adresă"],
+        context_words=[
+            "cod postal",
+            "cod poștal",
+            "cod poştal",
+            "cod pos\u0326tal",
+            "cod pos\u0327tal",
+            "cp",
+            "adresa",
+            "adresă",
+            "adresa\u0306",
+        ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
     ),
