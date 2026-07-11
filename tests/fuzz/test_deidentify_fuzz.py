@@ -37,6 +37,7 @@ not the raw generator input.
 
 from __future__ import annotations
 
+import hashlib
 from typing import Sequence
 from unittest.mock import patch
 
@@ -44,7 +45,7 @@ import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
-from openmed.core.pii import deidentify, extract_pii, reidentify
+from openmed.core.pii import _shift_date, deidentify, extract_pii, reidentify
 from openmed.core.pipeline import Pipeline
 from openmed.core.streaming import StreamingDeidentifier
 from openmed.processing.outputs import EntityPrediction, PredictionResult
@@ -95,14 +96,67 @@ _FILLER_ALPHABET = st.sampled_from(
 
 _LONG_FILLER = "Patient record 🧬 é ‍ 北京 مستشفى. "
 _STREAM_MAX_BUFFER = 96
+_DATE_IDENTIFIER = ("DATE", "2020-02-29")
+
+
+def _safe_text_ref(value: str) -> str:
+    """Return a diagnostic fingerprint without reproducing the source text."""
+    digest = hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+    return f"length={len(value)} sha256={digest}"
+
+
+def _safe_identifier_ref(label: str, value: str) -> str:
+    """Describe a planted identifier without exposing its raw value."""
+    return f"label={label} {_safe_text_ref(value)}"
+
+
+class PlantedDocument:
+    """Synthetic fuzz input whose failure representation never includes raw text."""
+
+    __slots__ = ("planted", "text")
+
+    def __init__(self, text: str, planted: tuple[tuple[str, str], ...]) -> None:
+        self.text = text
+        self.planted = planted
+
+    def __repr__(self) -> str:
+        identifiers = ", ".join(
+            _safe_identifier_ref(label, value) for label, value in self.planted
+        )
+        return f"PlantedDocument({_safe_text_ref(self.text)}, planted=[{identifiers}])"
+
+
+class ChunkBoundaryDocument:
+    """Streaming fuzz input with a PHI-safe Hypothesis failure representation."""
+
+    __slots__ = ("chunks", "planted", "text")
+
+    def __init__(
+        self,
+        text: str,
+        chunks: tuple[str, str],
+        planted: tuple[str, str],
+    ) -> None:
+        self.text = text
+        self.chunks = chunks
+        self.planted = planted
+
+    def __repr__(self) -> str:
+        label, value = self.planted
+        return (
+            f"ChunkBoundaryDocument({_safe_text_ref(self.text)}, "
+            f"chunk_lengths=({len(self.chunks[0])}, {len(self.chunks[1])}), "
+            f"planted={_safe_identifier_ref(label, value)})"
+        )
 
 
 @st.composite
 def planted_documents(draw):
     """Generate a synthetic document plus the sentinels planted into it.
 
-    Returns ``(text, planted)`` where ``planted`` is a list of
-    ``(label, value)`` sentinel identifiers embedded in ``text``. ``text`` has
+    Returns a redacted-representation ``PlantedDocument`` whose ``planted``
+    field contains ``(label, value)`` sentinel identifiers embedded in its text.
+    The text has
     no leading/trailing whitespace so ``text.strip() == text`` (keeps the
     canonical text stable for exact-match assertions), and the surrounding
     filler is adversarial unicode that the pipeline folds/remaps.
@@ -125,7 +179,7 @@ def planted_documents(draw):
     parts.append("end")  # non-whitespace trailing anchor
 
     text = "".join(parts)
-    return text, chosen
+    return PlantedDocument(text=text, planted=tuple(chosen))
 
 
 @st.composite
@@ -137,7 +191,16 @@ def long_planted_documents(draw):
     parts = [_LONG_FILLER] * repeats
     parts.insert(insertion, f"{planted[1]} ")
     text = "".join(parts) + "end"
-    return text, [planted]
+    return PlantedDocument(text=text, planted=(planted,))
+
+
+@st.composite
+def repeated_identifier_documents(draw):
+    """Generate two occurrences of one identifier for consistency properties."""
+    planted = draw(st.sampled_from(_PLANTED_IDENTIFIERS))
+    gap = draw(st.sampled_from((" and ", "\n", " 🧬 é ‍ 北京 ")))
+    text = f"Patient {planted[1]}{gap}{planted[1]} end"
+    return PlantedDocument(text=text, planted=(planted,))
 
 
 @st.composite
@@ -153,7 +216,7 @@ def chunk_boundary_documents(draw):
     suffix += "end"
     text = f"{prefix}{planted[1]}{suffix}"
     chunks = (f"{prefix}{planted[1][:split]}", f"{planted[1][split:]}{suffix}")
-    return text, chunks, planted
+    return ChunkBoundaryDocument(text=text, chunks=chunks, planted=planted)
 
 
 def _find_spans(query_text: str, planted: Sequence[tuple[str, str]]):
@@ -161,26 +224,30 @@ def _find_spans(query_text: str, planted: Sequence[tuple[str, str]]):
 
     Substring search makes the stub robust to the pipeline's internal
     normalization (strip/fold): wherever the sentinel actually lands in the
-    inference text, we report a correctly-offset span for it. Sentinels absent
-    from ``query_text`` (e.g. placeholder re-scans) yield nothing.
+    inference text, we report a correctly-offset span for every occurrence.
+    Sentinels absent from ``query_text`` (e.g. placeholder re-scans) yield
+    nothing.
     """
     entities: list[EntityPrediction] = []
     for label, value in planted:
-        start = query_text.find(value)
-        if start == -1:
-            continue
-        end = start + len(value)
-        entities.append(
-            EntityPrediction(
-                text=value,
-                label=label,
-                confidence=0.99,
-                start=start,
-                end=end,
+        cursor = 0
+        while True:
+            start = query_text.find(value, cursor)
+            if start == -1:
+                break
+            end = start + len(value)
+            entities.append(
+                EntityPrediction(
+                    text=value,
+                    label=label,
+                    confidence=0.99,
+                    start=start,
+                    end=end,
+                )
             )
-        )
-    # Detector output must be non-overlapping and sorted; sentinels are unique
-    # and non-substring of one another, so sorting by start suffices.
+            cursor = end
+    # Detector output must be non-overlapping and sorted; sentinel values are
+    # non-substrings of one another, so sorting by start suffices.
     entities.sort(key=lambda e: e.start)
     return entities
 
@@ -205,38 +272,149 @@ def _assert_span_invariants(entities, text: str) -> None:
     prev_end = -1
     for ent in entities:
         start, end = ent.start, ent.end
-        assert start is not None and end is not None
-        assert 0 <= start < end <= n, f"span [{start}:{end}] out of bounds for n={n}"
+        if start is None or end is None:
+            raise AssertionError("retained entity is missing character offsets")
+        if not 0 <= start < end <= n:
+            raise AssertionError(f"span [{start}:{end}] out of bounds for n={n}")
         # ``text[start:end]`` is well-defined for valid code-point indices; this
         # also guards against surrogate/astral index confusion.
-        assert text[start:end] == ent.text
-        assert start >= prev_end, (
-            f"overlapping spans: prev_end={prev_end} start={start}"
-        )
+        if text[start:end] != ent.text:
+            raise AssertionError(
+                "span text mismatch at "
+                f"[{start}:{end}]: source {_safe_text_ref(text[start:end])}; "
+                f"entity {_safe_text_ref(ent.text)}"
+            )
+        if start < prev_end:
+            raise AssertionError(
+                f"overlapping spans: prev_end={prev_end} start={start}"
+            )
         prev_end = end
 
 
 def _assert_planted_spans_covered(
     entities, text: str, planted: Sequence[tuple[str, str]]
 ) -> None:
-    """Assert every planted identifier is covered by a retained entity span."""
-    for _, value in planted:
-        start = text.index(value)
-        end = start + len(value)
-        assert any(
-            entity.start is not None
-            and entity.end is not None
-            and entity.start <= start
-            and entity.end >= end
-            for entity in entities
-        ), f"planted identifier {value!r} was not covered by a retained span"
+    """Assert every occurrence of every planted value is covered by a span."""
+    for label, value in planted:
+        cursor = 0
+        occurrences = 0
+        while True:
+            start = text.find(value, cursor)
+            if start == -1:
+                break
+            occurrences += 1
+            end = start + len(value)
+            if not any(
+                entity.start is not None
+                and entity.end is not None
+                and entity.start <= start
+                and entity.end >= end
+                for entity in entities
+            ):
+                raise AssertionError(
+                    f"{_safe_identifier_ref(label, value)} at [{start}:{end}] "
+                    "was not covered by a retained span"
+                )
+            cursor = end
+        if occurrences == 0:
+            raise AssertionError(
+                f"{_safe_identifier_ref(label, value)} was absent from source text"
+            )
+
+
+def _assert_identifier_absent(
+    output: str,
+    label: str,
+    value: str,
+    *,
+    context: str,
+) -> None:
+    """Fail with a fingerprint rather than echoing a leaked identifier."""
+    if value in output:
+        raise AssertionError(
+            f"{_safe_identifier_ref(label, value)} survived in {context}"
+        )
+
+
+def _assert_text_equal(actual: str, expected: str, *, context: str) -> None:
+    """Compare sensitive-shaped text while keeping diagnostics content-free."""
+    if actual != expected:
+        raise AssertionError(
+            f"{context}: actual {_safe_text_ref(actual)}; "
+            f"expected {_safe_text_ref(expected)}"
+        )
+
+
+def test_planted_case_failure_representations_do_not_expose_values() -> None:
+    """Hypothesis counterexamples for planted cases contain hashes, never values."""
+    case = PlantedDocument("prefix Zzyxx Qwerty suffix", (_PLANTED_IDENTIFIERS[0],))
+    rendered = repr(case)
+
+    assert "sha256=" in rendered
+    for _, value in case.planted:
+        assert value not in rendered
+
+
+@pytest.mark.parametrize(
+    ("label", "value"),
+    _PLANTED_IDENTIFIERS,
+    ids=[label.lower() for label, _ in _PLANTED_IDENTIFIERS],
+)
+def test_every_sentinel_is_deterministically_covered_and_removed(label, value):
+    """The bounded suite exercises every sentinel, independent of random draws."""
+    text = f"Patient {value} end"
+    planted = ((label, value),)
+    with patch("openmed.analyze_text", _make_analyze_stub(planted)):
+        result = deidentify(
+            text,
+            method="mask",
+            model_name=_MODEL,
+            confidence_threshold=0.5,
+            use_safety_sweep=False,
+        )
+
+    _assert_span_invariants(result.pii_entities, result.original_text)
+    _assert_planted_spans_covered(result.pii_entities, result.original_text, planted)
+    _assert_identifier_absent(
+        result.deidentified_text,
+        label,
+        value,
+        context="masked output",
+    )
+
+
+def test_replace_heterogeneous_semantic_union_never_reuses_raw_components():
+    """A greedy typed surrogate cannot preserve another label's raw value."""
+    planted = (_PLANTED_IDENTIFIERS[1], _PLANTED_IDENTIFIERS[0])
+    text = "PatientPatientzzq-sentinel@fuzz.invalidPatientZzyxx Qwertyend"
+    with patch("openmed.analyze_text", _make_analyze_stub(planted)):
+        result = deidentify(
+            text,
+            method="replace",
+            model_name=_MODEL,
+            confidence_threshold=0.5,
+            consistent=True,
+            seed=1234,
+            use_safety_sweep=False,
+        )
+
+    assert len(result.pii_entities) == 1
+    semantic_merge = result.pii_entities[0].metadata.get("semantic_merge", {})
+    assert semantic_merge.get("mixed_label_union") is True
+    for label, value in planted:
+        _assert_identifier_absent(
+            result.deidentified_text,
+            label,
+            value,
+            context="heterogeneous replacement output",
+        )
 
 
 @given(doc=planted_documents())
 def test_deidentify_mask_invariants(doc):
     """Masking arbitrary planted documents preserves every structural invariant
     and never leaks a planted identifier verbatim."""
-    text, planted = doc
+    text, planted = doc.text, doc.planted
     with patch("openmed.analyze_text", _make_analyze_stub(planted)):
         result = deidentify(
             text,
@@ -247,7 +425,7 @@ def test_deidentify_mask_invariants(doc):
         )
 
     # Never crashes; documented shape; canonical text is the stripped input.
-    assert result.original_text == text
+    _assert_text_equal(result.original_text, text, context="canonical source mismatch")
     assert isinstance(result.deidentified_text, str)
 
     _assert_span_invariants(result.pii_entities, result.original_text)
@@ -258,9 +436,12 @@ def test_deidentify_mask_invariants(doc):
     )
 
     # Leakage-first invariant: no planted identifier survives verbatim.
-    for _, value in planted:
-        assert value not in result.deidentified_text, (
-            f"raw identifier {value!r} leaked into masked output"
+    for label, value in planted:
+        _assert_identifier_absent(
+            result.deidentified_text,
+            label,
+            value,
+            context="masked output",
         )
 
 
@@ -268,7 +449,7 @@ def test_deidentify_mask_invariants(doc):
 def test_extract_pii_span_invariants(doc):
     """``extract_pii`` returns only in-bounds, non-overlapping, code-point spans
     that slice back to their recorded text."""
-    text, planted = doc
+    text, planted = doc.text, doc.planted
     with patch("openmed.analyze_text", _make_analyze_stub(planted)):
         result = extract_pii(
             text,
@@ -277,8 +458,6 @@ def test_extract_pii_span_invariants(doc):
         )
     _assert_span_invariants(result.entities, result.text)
     _assert_planted_spans_covered(result.entities, result.text, planted)
-    for ent in result.entities:
-        assert result.text[ent.start : ent.end] == ent.text
 
 
 @given(doc=planted_documents())
@@ -295,7 +474,7 @@ def test_deidentify_mask_idempotent(doc):
     ``test_deidentify_mask_invariants``; here we assert the second pass neither
     churns the masked text nor reintroduces any planted identifier.
     """
-    text, planted = doc
+    text, planted = doc.text, doc.planted
     stub = _make_analyze_stub(planted)
     with patch("openmed.analyze_text", stub):
         first = deidentify(
@@ -316,15 +495,25 @@ def test_deidentify_mask_idempotent(doc):
             use_safety_sweep=False,
             use_smart_merging=False,
         )
-    assert second.deidentified_text == masked
-    for _, value in planted:
-        assert value not in second.deidentified_text
+    _assert_text_equal(
+        second.deidentified_text,
+        masked,
+        context="second mask pass changed output",
+    )
+    for label, value in planted:
+        _assert_identifier_absent(
+            second.deidentified_text,
+            label,
+            value,
+            context="second-pass masked output",
+        )
 
 
 @given(doc=planted_documents())
 def test_deidentify_deterministic_fixed_seed(doc):
     """A fixed seed yields byte-identical redacted output across runs."""
-    text, planted = doc
+    text, planted = doc.text, doc.planted
+    assume(planted)
     stub = _make_analyze_stub(planted)
     outputs = []
     for _ in range(2):
@@ -339,7 +528,14 @@ def test_deidentify_deterministic_fixed_seed(doc):
                 use_safety_sweep=False,
             )
         outputs.append(result.deidentified_text)
-    assert outputs[0] == outputs[1]
+    _assert_text_equal(outputs[0], outputs[1], context="seeded replacement drifted")
+    for label, value in planted:
+        _assert_identifier_absent(
+            outputs[0],
+            label,
+            value,
+            context="seeded replacement output",
+        )
 
 
 @given(doc=planted_documents())
@@ -349,7 +545,7 @@ def test_deidentify_keep_mapping_reidentify_inverse(doc):
     ``reidentify`` must be a left inverse of the redaction mapping: applying it
     to the masked text brings back the original identifiers exactly.
     """
-    text, planted = doc
+    text, planted = doc.text, doc.planted
     assume(planted)  # round-trip is only meaningful when something was redacted
     with patch("openmed.analyze_text", _make_analyze_stub(planted)):
         result = deidentify(
@@ -367,19 +563,148 @@ def test_deidentify_keep_mapping_reidentify_inverse(doc):
         planted,
     )
     mapped_values = tuple(result.mapping.values())
-    for _, value in planted:
-        assert value not in result.deidentified_text
-        assert any(value in mapped_value for mapped_value in mapped_values), (
-            f"planted identifier {value!r} was not covered by the reversible mapping"
+    for label, value in planted:
+        _assert_identifier_absent(
+            result.deidentified_text,
+            label,
+            value,
+            context="reversibly masked output",
         )
+        if not any(value in mapped_value for mapped_value in mapped_values):
+            raise AssertionError(
+                f"{_safe_identifier_ref(label, value)} was not covered by "
+                "the reversible mapping"
+            )
     restored = reidentify(result.deidentified_text, result.mapping)
-    assert restored == result.original_text == text
+    _assert_text_equal(restored, result.original_text, context="reidentify mismatch")
+    _assert_text_equal(result.original_text, text, context="canonical source mismatch")
+
+
+@given(
+    doc=repeated_identifier_documents(),
+    seed=st.integers(min_value=0, max_value=2**32 - 1),
+)
+def test_repeated_identifier_surrogate_and_mapping_consistency(doc, seed):
+    """Repeated values reuse one surrogate and remain exactly reversible."""
+    text, planted = doc.text, doc.planted
+    label, value = planted[0]
+    stub = _make_analyze_stub(planted)
+
+    with patch("openmed.analyze_text", stub):
+        replaced = deidentify(
+            text,
+            method="replace",
+            model_name=_MODEL,
+            confidence_threshold=0.5,
+            consistent=True,
+            seed=seed,
+            use_smart_merging=False,
+            use_safety_sweep=False,
+        )
+
+    matching = [
+        entity for entity in replaced.pii_entities if entity.original_text == value
+    ]
+    if len(matching) != 2:
+        raise AssertionError(
+            f"{_safe_identifier_ref(label, value)} retained {len(matching)} of 2 spans"
+        )
+    surrogates = [entity.redacted_text for entity in matching]
+    if any(not surrogate for surrogate in surrogates):
+        raise AssertionError(
+            f"{_safe_identifier_ref(label, value)} produced an empty surrogate"
+        )
+    if surrogates[0] != surrogates[1]:
+        raise AssertionError(
+            f"{_safe_identifier_ref(label, value)} produced inconsistent surrogates"
+        )
+    _assert_identifier_absent(
+        replaced.deidentified_text,
+        label,
+        value,
+        context="replacement output",
+    )
+
+    with patch("openmed.analyze_text", stub):
+        masked = deidentify(
+            text,
+            method="mask",
+            model_name=_MODEL,
+            confidence_threshold=0.5,
+            keep_mapping=True,
+            use_smart_merging=False,
+            use_safety_sweep=False,
+        )
+    if masked.mapping is None:
+        raise AssertionError("reversible mask did not return a mapping")
+    _assert_planted_spans_covered(masked.pii_entities, masked.original_text, planted)
+    mapped_occurrences = sum(
+        value in mapped_value for mapped_value in masked.mapping.values()
+    )
+    if mapped_occurrences != 2:
+        raise AssertionError(
+            f"{_safe_identifier_ref(label, value)} mapped {mapped_occurrences} of 2 "
+            "occurrences"
+        )
+    restored = reidentify(masked.deidentified_text, masked.mapping)
+    _assert_text_equal(restored, text, context="repeated-value reidentify mismatch")
+
+
+@given(
+    shift=st.one_of(
+        st.integers(min_value=-3650, max_value=-1),
+        st.integers(min_value=1, max_value=3650),
+    ),
+    keep_year=st.booleans(),
+)
+def test_repeated_dates_share_one_pipeline_shift(shift, keep_year):
+    """The full pipeline applies one exact shift to every repeated date value."""
+    label, value = _DATE_IDENTIFIER
+    planted = (_DATE_IDENTIFIER,)
+    text = f"Dates {value} and {value} end"
+    with patch("openmed.analyze_text", _make_analyze_stub(planted)):
+        result = deidentify(
+            text,
+            method="shift_dates",
+            model_name=_MODEL,
+            confidence_threshold=0.5,
+            date_shift_days=shift,
+            keep_year=keep_year,
+            use_smart_merging=False,
+            use_safety_sweep=False,
+        )
+
+    matching = [
+        entity for entity in result.pii_entities if entity.original_text == value
+    ]
+    if len(matching) != 2:
+        raise AssertionError(
+            f"{_safe_identifier_ref(label, value)} retained {len(matching)} of 2 spans"
+        )
+    redactions = [entity.redacted_text or "" for entity in matching]
+    _assert_text_equal(
+        redactions[0],
+        redactions[1],
+        context="repeated date received inconsistent shifts",
+    )
+    expected = _shift_date(
+        value,
+        shift,
+        keep_year=keep_year,
+        lang="en",
+        require_dateutil=True,
+    )
+    _assert_text_equal(
+        redactions[0],
+        expected,
+        context="pipeline date shift diverged from helper",
+    )
 
 
 @given(doc=long_planted_documents())
 def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
     """The real one-shot path handles multi-kilobyte normalized input exactly."""
-    text, planted = doc
+    text, planted = doc.text, doc.planted
     assert len(text) >= 4096
     with patch("openmed.analyze_text", _make_analyze_stub(planted)):
         result = deidentify(
@@ -390,21 +715,26 @@ def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
             use_safety_sweep=False,
         )
 
-    assert result.original_text == text
+    _assert_text_equal(result.original_text, text, context="long source mismatch")
     _assert_span_invariants(result.pii_entities, result.original_text)
     _assert_planted_spans_covered(
         result.pii_entities,
         result.original_text,
         planted,
     )
-    for _, value in planted:
-        assert value not in result.deidentified_text
+    for label, value in planted:
+        _assert_identifier_absent(
+            result.deidentified_text,
+            label,
+            value,
+            context="long masked output",
+        )
 
 
 @given(case=chunk_boundary_documents())
 def test_streaming_chunk_boundary_matches_single_pass(case):
     """A boundary inside an identifier is buffered and redacted as one span."""
-    text, chunks, planted = case
+    text, chunks, planted = case.text, case.chunks, case.planted
     detector = _make_analyze_stub([planted])
     single = Pipeline(
         model_detector=detector,
@@ -430,7 +760,12 @@ def test_streaming_chunk_boundary_matches_single_pass(case):
 
     redacted = "".join(event.redacted_text for event in events)
     assert redacted == single.redacted_text
-    assert planted[1] not in redacted
+    _assert_identifier_absent(
+        redacted,
+        planted[0],
+        planted[1],
+        context="streaming masked output",
+    )
     assert streamer.max_observed_buffer <= _STREAM_MAX_BUFFER
     identifier_start = text.index(planted[1])
     assert (identifier_start, identifier_start + len(planted[1])) in {

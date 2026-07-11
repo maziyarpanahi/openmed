@@ -27,13 +27,16 @@ import pytest
 
 try:  # pragma: no cover - exercised indirectly; skip cleanly if unavailable.
     from hypothesis import HealthCheck, settings
+    from hypothesis.errors import InvalidArgument
 except ImportError:  # pragma: no cover
     settings = None  # type: ignore[assignment]
     HealthCheck = None  # type: ignore[assignment]
+    InvalidArgument = ValueError  # type: ignore[misc,assignment]
 
 
 _DEFAULT_PROFILE = "fuzz-default"
 _NIGHTLY_PROFILE = "fuzz-nightly"
+_ALLOWED_PROFILES = frozenset({_DEFAULT_PROFILE, _NIGHTLY_PROFILE})
 _PROFILES_REGISTERED = False
 
 
@@ -71,8 +74,14 @@ def _load_selected_profile() -> None:
     if settings is None:
         return
     _register_profiles()
-    profile = os.environ.get("HYPOTHESIS_PROFILE")
-    settings.load_profile(profile if profile is not None else _DEFAULT_PROFILE)
+    requested_profile = os.environ.get("HYPOTHESIS_PROFILE")
+    profile = _DEFAULT_PROFILE if requested_profile is None else requested_profile
+    if profile not in _ALLOWED_PROFILES:
+        allowed = ", ".join(sorted(_ALLOWED_PROFILES))
+        raise InvalidArgument(
+            f"Unsupported HYPOTHESIS_PROFILE {profile!r}; expected one of: {allowed}"
+        )
+    settings.load_profile(profile)
 
 
 # Register + load at import so the settings apply to every test in this package.
