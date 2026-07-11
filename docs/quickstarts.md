@@ -148,7 +148,7 @@ Or use the typed Python client bundled with the `service` extra:
 ```python
 from openmed.service.client import OpenMedClient
 
-with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
+with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
     redacted = client.deidentify(
         "Contact Jordan Sample at jordan.sample@example.org.",
         method="mask",
