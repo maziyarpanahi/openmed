@@ -29,8 +29,10 @@ than an import-time failure, and the accompanying tests skip cleanly.
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import hashlib
+import hmac
 import importlib
 import re
 from dataclasses import dataclass, field
@@ -78,16 +80,27 @@ _HEADER_PHI_LABELS: dict[str, str] = {
     "StudyDate": DATE,
 }
 
-# Keywords whose header values must be gone from the de-identified dataset for a
-# clean pass. ``PatientName`` / ``PatientID`` are cleared to empty strings;
-# ``PatientBirthDate`` / ``StudyDate`` are date-shifted so the *original* value
-# must not survive.
+# Original values that must be absent from every textual element in the final
+# dataset for a clean pass. ``PatientName`` / ``PatientID`` are cleared;
+# ``PatientBirthDate`` / ``StudyDate`` are cleared or shifted, and copies in
+# nested/private/unexpected elements must not survive either.
 _HEADER_DIRECT_IDENTIFIERS: tuple[str, ...] = (
     "PatientName",
     "PatientID",
     "PatientBirthDate",
     "StudyDate",
 )
+
+# DICOM value representations that may contain arbitrary binary payloads. They
+# are excluded from header-residual scans so pixel bytes and embedded binary
+# artifacts are never coerced to strings or copied into benchmark diagnostics.
+_BINARY_VRS = frozenset({"OB", "OD", "OF", "OL", "OV", "OW", "UN"})
+
+# Fixture loading without an explicit output directory must keep the generated
+# paths alive for callers. TemporaryDirectory objects are retained here and
+# cleaned automatically at interpreter shutdown instead of leaking mkdtemp
+# directories on disk.
+_FIXTURE_TEMP_DIRS: list[Any] = []
 
 
 @dataclass(frozen=True)
@@ -125,6 +138,15 @@ class SyntheticDicomCase:
     pixel_text: str
     pixel_gold_spans: tuple[EvalSpan, ...]
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _ProcessedDicomCase:
+    result: Any
+    dataset: Any
+    pixels: Any
+    frame_count: int
+    artifact_sha256: str
 
 
 class GoldBoxOcrEngine:
@@ -246,8 +268,10 @@ def run_multimodal_dicom(
     redaction path over every case, and returns a leakage-first
     :class:`BenchmarkReport`. The pixel and header passes are both scored:
 
-    * ``metrics["leakage"]`` -- character-weighted residual-PHI rate over the
-      burned-in pixel text (``overall`` is the headline residual-PHI rate).
+    * ``metrics["leakage"]`` / ``metrics["pixel_residual_phi_rate"]`` --
+      character-weighted residual-PHI rate over the burned-in pixel text.
+    * ``metrics["residual_phi_rate"]`` -- safety-first maximum of the pixel and
+      header residual rates, so a leak on either surface fails the headline.
     * ``metrics["character_recall"]`` / ``metrics["recall_slices"]`` --
       character recall of the pixel-text detector.
     * ``metrics["header_residual_phi_rate"]`` -- fraction of header direct
@@ -286,12 +310,6 @@ def run_multimodal_dicom(
     """
     import tempfile
 
-    from openmed.multimodal import (
-        DicomHeaderDeidPolicy,
-        deidentify_dicom_headers,
-        redact_dicom_pixels,
-    )
-
     pydicom = _import_pydicom()
     np = _import_numpy()
 
@@ -307,10 +325,16 @@ def run_multimodal_dicom(
         )
     else:
         corpus = list(cases)
-    if not corpus:
-        raise ValueError("cases must contain at least one synthetic DICOM case")
-
-    resolved_pii_model = pii_model_name or _default_pii_model_name()
+    try:
+        if not corpus:
+            raise ValueError("cases must contain at least one synthetic DICOM case")
+        _validate_synthetic_corpus(corpus, pydicom=pydicom, np=np)
+        resolved_pii_model = pii_model_name or _default_pii_model_name()
+    except Exception:
+        if temp_holder is not None:
+            temp_holder.cleanup()
+            temp_holder = None
+        raise
 
     pixel_gold: list[EvalSpan] = []
     pixel_pred: list[EvalSpan] = []
@@ -325,49 +349,25 @@ def run_multimodal_dicom(
     try:
         with model_context:
             for case in corpus:
-                # Pixel redaction runs first so the real path can seed its deny
-                # recognizer from the original headers. Header de-identification
-                # then consumes that output, leaving one final artifact with
-                # both surfaces de-identified. The PHI-bearing intermediate is
-                # always removed.
-                pixel_stage = case.path.with_name(f"{case.path.stem}.pixel-stage.dcm")
-                final_out = case.path.with_name(f"{case.path.stem}.redacted.dcm")
-                final_out.unlink(missing_ok=True)
-                try:
-                    result = redact_dicom_pixels(
-                        case.path,
-                        output_path=pixel_stage,
-                        ocr_engine=GoldBoxOcrEngine(case.pixel_words),
-                        model_name=resolved_pii_model,
-                        verify_residual=True,
-                        fail_on_residual=False,
-                    )
-                    deidentify_dicom_headers(
-                        pixel_stage,
-                        policy=DicomHeaderDeidPolicy(
-                            output_path=final_out,
-                            date_shift_days=date_shift_days,
-                        ),
-                    )
-                except Exception:
-                    final_out.unlink(missing_ok=True)
-                    raise
-                finally:
-                    pixel_stage.unlink(missing_ok=True)
-
-                deidentified = pydicom.dcmread(final_out)
-                final_artifact_hashes.append(_sha256_file(final_out))
+                processed = _process_dicom_case(
+                    case,
+                    model_name=resolved_pii_model,
+                    date_shift_days=date_shift_days,
+                )
+                result = processed.result
+                deidentified = processed.dataset
+                final_artifact_hashes.append(processed.artifact_sha256)
                 for keyword in _HEADER_DIRECT_IDENTIFIERS:
                     original = case.header_phi.get(keyword)
                     if not original:
                         continue
                     header_identifier_total += 1
-                    if _header_value_survives(deidentified, keyword, original):
+                    if _header_value_survives(deidentified, original):
                         header_identifier_residual += 1
 
                 residual_pixel_findings += result.residual_report.residual_entity_count
-                final_pixels = np.asarray(deidentified.pixel_array)
-                frame_count = int(getattr(deidentified, "NumberOfFrames", 1) or 1)
+                final_pixels = processed.pixels
+                frame_count = processed.frame_count
 
                 # Offset every case's spans into a single concatenated source
                 # string so character-level leakage/recall accounting is well
@@ -443,7 +443,8 @@ def run_multimodal_dicom(
 
     metrics: dict[str, Any] = {
         "leakage": leakage.to_dict(),
-        "residual_phi_rate": leakage.overall,
+        "pixel_residual_phi_rate": leakage.overall,
+        "residual_phi_rate": max(leakage.overall, header_residual_rate),
         "character_recall": recall.to_dict(),
         "recall_slices": recall_slices.to_dict(),
         "pixel_residual_finding_count": residual_pixel_findings,
@@ -453,7 +454,7 @@ def run_multimodal_dicom(
     }
 
     metadata = multimodal_dicom_metadata(seed=seed, corpus_size=len(corpus))
-    metadata["case_ids"] = [case.case_id for case in corpus]
+    metadata["case_id_sha256"] = [_sha256_text(case.case_id) for case in corpus]
     metadata["date_shift_days"] = date_shift_days
     metadata["offline"] = offline
     metadata["system_name"] = system_name
@@ -484,19 +485,25 @@ def load_multimodal_dicom_fixtures(
     the pixel PHI spans, so the corpus plugs into the generic harness. The
     on-disk DICOM path and header truth are carried in fixture metadata.
     """
-    import tempfile
-
+    temp_holder: Any | None = None
     if output_dir is None:
         # Keep the generated files alive for the life of the process so callers
-        # can still read the DICOM paths from fixture metadata.
-        holder = tempfile.mkdtemp(prefix="om162-dicom-fixtures-")
-        corpus_dir: str | Path = holder
+        # can still read the DICOM paths from fixture metadata. The retained
+        # TemporaryDirectory is cleaned at interpreter shutdown.
+        temp_holder = _new_fixture_temp_dir()
+        corpus_dir: str | Path = temp_holder.name
     else:
         corpus_dir = output_dir
 
-    corpus = generate_synthetic_dicom_corpus(
-        corpus_dir, seed=seed, corpus_size=corpus_size
-    )
+    try:
+        corpus = generate_synthetic_dicom_corpus(
+            corpus_dir, seed=seed, corpus_size=corpus_size
+        )
+    except Exception:
+        if temp_holder is not None:
+            _FIXTURE_TEMP_DIRS.remove(temp_holder)
+            temp_holder.cleanup()
+        raise
     base_metadata = multimodal_dicom_metadata(seed=seed, corpus_size=len(corpus))
     fixtures: list[BenchmarkFixture] = []
     for case in corpus:
@@ -519,6 +526,176 @@ def load_multimodal_dicom_fixtures(
             )
         )
     return fixtures
+
+
+def _new_fixture_temp_dir() -> Any:
+    import tempfile
+
+    holder = tempfile.TemporaryDirectory(prefix="om162-dicom-fixtures-")
+    _FIXTURE_TEMP_DIRS.append(holder)
+    return holder
+
+
+def _cleanup_fixture_temp_dirs() -> None:
+    while _FIXTURE_TEMP_DIRS:
+        _FIXTURE_TEMP_DIRS.pop().cleanup()
+
+
+atexit.register(_cleanup_fixture_temp_dirs)
+
+
+# ---------------------------------------------------------------------------
+# Corpus and artifact validation
+# ---------------------------------------------------------------------------
+
+
+def _validate_synthetic_corpus(
+    corpus: Sequence[SyntheticDicomCase],
+    *,
+    pydicom: Any,
+    np: Any,
+) -> None:
+    """Reject stale, malformed, colliding, or non-synthetic supplied cases."""
+    case_ids: set[str] = set()
+    source_paths: list[Path] = []
+
+    for index, case in enumerate(corpus):
+        if not isinstance(case, SyntheticDicomCase):
+            raise ValueError(f"case {index} is not a SyntheticDicomCase")
+        if not case.case_id or case.case_id in case_ids:
+            raise ValueError(
+                "synthetic DICOM case identifiers must be non-empty and unique"
+            )
+        case_ids.add(case.case_id)
+
+        path = Path(case.path)
+        if not path.is_file():
+            raise ValueError(f"case {index} source artifact is not a readable file")
+        try:
+            resolved_path = path.resolve(strict=True)
+        except OSError:
+            raise ValueError(
+                f"case {index} source artifact is not a readable file"
+            ) from None
+        if resolved_path in source_paths:
+            raise ValueError("synthetic DICOM source paths must be unique")
+        source_paths.append(resolved_path)
+
+        metadata = case.metadata
+        if (
+            metadata.get("corpus_provenance") != CORPUS_PROVENANCE
+            or metadata.get("license") != CORPUS_LICENSE
+            or metadata.get("phi_kind") != "synthetic"
+        ):
+            raise ValueError(
+                f"case {index} does not carry the required synthetic provenance"
+            )
+
+        expected_hash = str(metadata.get("source_dicom_sha256", ""))
+        if not re.fullmatch(r"[0-9a-f]{64}", expected_hash) or not _constant_time_equal(
+            _sha256_file(path), expected_hash
+        ):
+            raise ValueError(f"case {index} source artifact hash does not match truth")
+
+        try:
+            dataset = pydicom.dcmread(path)
+            pixels = np.asarray(dataset.pixel_array)
+        except Exception:
+            raise ValueError(
+                f"case {index} is not a readable DICOM with decodable Pixel Data"
+            ) from None
+
+        for keyword in _HEADER_DIRECT_IDENTIFIERS:
+            expected = str(case.header_phi.get(keyword, ""))
+            if not expected or str(getattr(dataset, keyword, "")) != expected:
+                raise ValueError(f"case {index} header truth does not match the DICOM")
+
+        expected_text = " ".join(word.text for word in case.pixel_words)
+        if not case.pixel_words or case.pixel_text != expected_text:
+            raise ValueError(f"case {index} pixel word truth is inconsistent")
+        expected_spans = _spans_for_words(case.pixel_words, case.pixel_text)
+        if case.pixel_gold_spans != expected_spans:
+            raise ValueError(f"case {index} pixel span truth is inconsistent")
+
+        frame_count = int(getattr(dataset, "NumberOfFrames", 1) or 1)
+        rows = int(getattr(dataset, "Rows", 0) or 0)
+        columns = int(getattr(dataset, "Columns", 0) or 0)
+        if not rows or not columns or not pixels.size:
+            raise ValueError(f"case {index} has empty pixel data")
+        for word in case.pixel_words:
+            x0, y0, x1, y1 = word.bbox
+            if (
+                word.frame_index < 0
+                or word.frame_index >= frame_count
+                or not (0 <= x0 < x1 <= columns)
+                or not (0 <= y0 < y1 <= rows)
+            ):
+                raise ValueError(f"case {index} has invalid pixel bbox truth")
+            frame = pixels[word.frame_index] if frame_count > 1 else pixels
+            if not bool(np.any(frame[y0:y1, x0:x1])):
+                raise ValueError(f"case {index} pixel bbox truth contains no ink")
+
+    sources = set(source_paths)
+    artifacts: set[Path] = set()
+    for source in source_paths:
+        for suffix in (".pixel-stage.dcm", ".redacted.dcm"):
+            artifact = source.with_name(f"{source.stem}{suffix}")
+            if artifact in sources or artifact in artifacts:
+                raise ValueError("synthetic DICOM artifact paths must not collide")
+            artifacts.add(artifact)
+
+
+def _process_dicom_case(
+    case: SyntheticDicomCase,
+    *,
+    model_name: str,
+    date_shift_days: int,
+) -> _ProcessedDicomCase:
+    """Run both de-identification stages with failure-safe artifact cleanup."""
+    from openmed.multimodal import (
+        DicomHeaderDeidPolicy,
+        deidentify_dicom_headers,
+        redact_dicom_pixels,
+    )
+
+    pydicom = _import_pydicom()
+    np = _import_numpy()
+    pixel_stage = case.path.with_name(f"{case.path.stem}.pixel-stage.dcm")
+    final_out = case.path.with_name(f"{case.path.stem}.redacted.dcm")
+    final_out.unlink(missing_ok=True)
+    succeeded = False
+    try:
+        result = redact_dicom_pixels(
+            case.path,
+            output_path=pixel_stage,
+            ocr_engine=GoldBoxOcrEngine(case.pixel_words),
+            model_name=model_name,
+            verify_residual=True,
+            fail_on_residual=False,
+        )
+        deidentify_dicom_headers(
+            pixel_stage,
+            policy=DicomHeaderDeidPolicy(
+                output_path=final_out,
+                date_shift_days=date_shift_days,
+            ),
+        )
+        dataset = pydicom.dcmread(final_out)
+        pixels = np.asarray(dataset.pixel_array)
+        frame_count = int(getattr(dataset, "NumberOfFrames", 1) or 1)
+        processed = _ProcessedDicomCase(
+            result=result,
+            dataset=dataset,
+            pixels=pixels,
+            frame_count=frame_count,
+            artifact_sha256=_sha256_file(final_out),
+        )
+        succeeded = True
+        return processed
+    finally:
+        pixel_stage.unlink(missing_ok=True)
+        if not succeeded:
+            final_out.unlink(missing_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -582,6 +759,9 @@ def _generate_case(
         metadata={
             "seed": seed,
             "index": index,
+            "corpus_provenance": CORPUS_PROVENANCE,
+            "license": CORPUS_LICENSE,
+            "phi_kind": "synthetic",
             "source_dicom_sha256": _sha256_file(path),
         },
     )
@@ -685,6 +865,11 @@ def _write_pixel_dicom(
     dataset.PatientID = header_phi["PatientID"]
     dataset.PatientBirthDate = header_phi["PatientBirthDate"]
     dataset.StudyDate = header_phi["StudyDate"]
+    # Exercise PS3.15 private-element removal with a synthetic PHI copy. The
+    # final header scan also catches this value if a future regression leaves
+    # the private block behind.
+    dataset.add_new((0x0011, 0x0010), "LO", "OPENMED_SYNTHETIC")
+    dataset.add_new((0x0011, 0x1001), "LO", header_phi["PatientID"])
     dataset.Modality = "OT"
     dataset.BurnedInAnnotation = "YES"
     dataset.Rows = int(pixels.shape[-2])
@@ -702,21 +887,58 @@ def _write_pixel_dicom(
     return path
 
 
-def _header_value_survives(dataset: Any, keyword: str, original: str) -> bool:
-    """Return True if the *original* header value still appears after de-id."""
-    value = getattr(dataset, keyword, None)
-    if value is None:
-        return False
-    text = str(value)
-    if not text:
-        return False
-    # Direct match of the original value (or its digits for numeric ids/dates).
-    if original and original in text:
-        return True
+def _header_value_survives(dataset: Any, original: str) -> bool:
+    """Return whether an original value appears anywhere in final metadata."""
+    text_variants = _header_text_variants(original)
     original_digits = re.sub(r"\D", "", original)
-    if original_digits and original_digits in re.sub(r"\D", "", text):
-        return True
+    if len(original_digits) < 4:
+        original_digits = ""
+
+    containers = [dataset]
+    file_meta = getattr(dataset, "file_meta", None)
+    if file_meta is not None:
+        containers.append(file_meta)
+
+    for container in containers:
+        for element in container.iterall():
+            if (
+                int(element.tag) == 0x7FE00010
+                or str(element.VR) in _BINARY_VRS
+                or str(element.VR) == "SQ"
+            ):
+                continue
+            for value in _iter_header_scalar_values(element.value):
+                candidate = _normalize_header_text(value)
+                if candidate and any(variant in candidate for variant in text_variants):
+                    return True
+                if original_digits:
+                    candidate_digits = re.sub(r"\D", "", str(value))
+                    if original_digits in candidate_digits:
+                        return True
     return False
+
+
+def _header_text_variants(value: str) -> tuple[str, ...]:
+    variants = {_normalize_header_text(value)}
+    parts = [part.strip() for part in value.split("^") if part.strip()]
+    if len(parts) >= 2:
+        variants.add(_normalize_header_text(" ".join(reversed(parts))))
+    return tuple(variant for variant in variants if variant)
+
+
+def _normalize_header_text(value: Any) -> str:
+    text = re.sub(r"[\^=,_]+", " ", str(value))
+    return " ".join(text.casefold().split())
+
+
+def _iter_header_scalar_values(value: Any) -> Iterator[Any]:
+    if isinstance(value, bytes):
+        return
+    if isinstance(value, list | tuple):
+        for item in value:
+            yield from _iter_header_scalar_values(item)
+        return
+    yield value
 
 
 def _word_is_fully_redacted(
@@ -743,6 +965,14 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+
+
+def _constant_time_equal(left: str, right: str) -> bool:
+    return hmac.compare_digest(left, right)
 
 
 def _default_pii_model_name() -> str:
