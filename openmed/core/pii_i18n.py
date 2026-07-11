@@ -18,6 +18,7 @@ Health identifiers for HIPAA cross-map consumers:
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
@@ -388,6 +389,49 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+_CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Validate a mainland China 18-digit resident identity card number.
+
+    The second-generation resident identity card stores a six-digit address
+    code, an eight-digit Gregorian birth date, a three-digit sequence, and a
+    MOD 11-2 checksum digit. OpenMed validates only these offline structural
+    and checksum properties; it does not bundle or query a region registry.
+    """
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+        return False
+
+    if cleaned[:6] == "000000":
+        return False
+
+    try:
+        year = int(cleaned[6:10])
+        month = int(cleaned[10:12])
+        day = int(cleaned[12:14])
+    except ValueError:
+        return False
+
+    import calendar
+
+    if month < 1 or month > 12 or day < 1:
+        return False
+    try:
+        if day > calendar.monthrange(year, month)[1]:
+            return False
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+    total = sum(
+        int(digit) * weight
+        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
 
 
 def validate_portuguese_cpf(text: str) -> bool:
@@ -1000,10 +1044,10 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     return False
 
 
-# Romanian CNP county codes: 01-46 for the 41 counties plus Bucharest and its
-# sectors, 51-52 for Calarasi and Giurgiu, and 70 for pre-2005 residents
-# without a settled county (foreign residents / naturalised persons). Codes
-# 47-50 are unassigned and must not be accepted as a numeric range shortcut.
+# Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
+# Bucharest, and its sectors; 51-52 cover Calarasi and Giurgiu. Current SIIEASC
+# issuance uses 70 nationwide. Codes 47-50 are unassigned and must not be
+# accepted as a numeric range shortcut.
 _ROMANIAN_CNP_COUNTY_CODES: frozenset[int] = frozenset(set(range(1, 47)) | {51, 52, 70})
 
 # Documented CNP control-digit weights ("279146358279").
@@ -1017,8 +1061,6 @@ _ROMANIAN_CNP_CENTURY: Dict[int, int] = {
     4: 1800,  # female, 1800-1899
     5: 2000,  # male, 2000-2099
     6: 2000,  # female, 2000-2099
-    7: 1900,  # male resident, disambiguated by issue date (default 1900s)
-    8: 1900,  # female resident
 }
 
 
@@ -1028,12 +1070,12 @@ def validate_romanian_cnp(text: str) -> bool:
     The CNP is a 13-digit national identifier with the layout
     ``S YY MM DD JJ NNN C``:
 
-    - ``S``: century and gender code (1-8). Codes 1/3/5/7 are male and
-      2/4/6/8 female; 1/2 map to the 1900s, 3/4 to the 1800s, 5/6 to the
-      2000s, and 7/8 to residents (defaulted here to the 1900s).
-    - ``YYMMDD``: date of birth. The century is taken from ``S``.
-    - ``JJ``: county (judet) code, 01-46 or 51-52, plus 70 for pre-2005
-      residents without a settled county. Unassigned codes 47-50 are invalid.
+    - ``S``: documented century and gender code (1-6). Codes 1/3/5 are male
+      and 2/4/6 female; 1/2 map to the 1900s, 3/4 to the 1800s, and 5/6 to
+      the 2000s.
+    - ``YYMMDD``: non-future date of birth. The century is taken from ``S``.
+    - ``JJ``: legacy county/sector code 01-46 or 51-52, or the current
+      nationwide SIIEASC sequence code 70. Unassigned codes 47-50 are invalid.
     - ``NNN``: non-zero sequence number.
     - ``C``: control digit, computed as the sum of the first twelve digits
       weighted by the documented constant ``279146358279`` taken modulo 11.
@@ -1066,18 +1108,11 @@ def validate_romanian_cnp(text: str) -> bool:
     month = numbers[3] * 10 + numbers[4]
     day = numbers[5] * 10 + numbers[6]
 
-    if month < 1 or month > 12:
-        return False
-    if day < 1 or day > 31:
-        return False
-
-    import calendar
-
     try:
-        max_day = calendar.monthrange(year, month)[1]
-    except (ValueError, calendar.IllegalMonthError):
+        birth_date = date(year, month, day)
+    except ValueError:
         return False
-    if day > max_day:
+    if birth_date > date.today():
         return False
 
     # --- county code ---
@@ -1550,11 +1585,12 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Ontario (OHIP) health card: 10 digits (4-3-3 spacing) plus an optional
-    # two-letter version code, Luhn-checked. Health identifier. Checked before
-    # the SIN so the longer 10-digit match wins.
+    # Ontario (OHIP) health card: 10 digits beginning with 1-9 (4-3-3 spacing)
+    # plus an optional one- or two-letter version code, Luhn-checked. Health
+    # identifier. Checked before the SIN so the longer 10-digit match wins.
     PIIPattern(
-        r"\b\d{4}[\s-]?\d{3}[\s-]?\d{3}(?:[\s-]?[A-Za-z]{2})?\b",
+        r"\b[1-9]\d{3}(?P<ohip_sep>[ -]?)\d{3}(?P=ohip_sep)\d{3}"
+        r"(?:[ -]?[A-Za-z]{1,2})?\b",
         "national_id",
         priority=12,
         base_score=0.45,
@@ -1608,10 +1644,12 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Australian Medicare card number (exactly 10 digits, ``NNNN NNNNN N``;
-    # weighted mod-10 checksum on the first eight digits guards it).
+    # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
+    # optional separate one-digit IRN. The main card's first eight digits carry
+    # a weighted mod-10 checksum; the full matched identifier is protected.
     PIIPattern(
-        r"\b\d{4}\s?\d{5}\s?\d\b(?!\s?/?\s?\d)",
+        r"\b(?:[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+        r"(?:(?:[ ]*/[ ]*|[ -]?)[1-9])?\b",
         "national_id",
         priority=12,
         base_score=0.45,
@@ -1625,10 +1663,10 @@ _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_australian_medicare,
     ),
-    # Australian Tax File Number (TFN, 8-9 digits, ``NNN NNN NNN`` spacing;
-    # weighted mod-11 checksum).
+    # Australian Tax File Number (TFN, exactly 9 digits, ``NNN NNN NNN``
+    # spacing; weighted mod-11 checksum).
     PIIPattern(
-        r"\b\d{3}\s?\d{3}\s?\d{2,3}\b",
+        r"\b(?:\d{9}|\d{3} \d{3} \d{3})\b",
         "national_id",
         priority=11,
         base_score=0.45,
@@ -3623,11 +3661,14 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.4,
         validator=validate_romanian_cnp,
     ),
-    # Romanian street addresses ("Str. Mihai Eminescu 12").
+    # Romanian street addresses ("Str. Mihai Eminescu 12"). Accept modern
+    # comma-below, legacy cedilla, and decomposed combining-mark spellings.
     PIIPattern(
         r"\b(?:Str\.?|Strada|Bd\.?|Bdul|Bulevardul|Calea|Aleea|"
-        r"[SȘ]oseaua|Splaiul|Pia[țt]a|Intrarea)\s+"
-        r"[A-ZĂÂÎȘȚ][A-Za-zĂÂÎȘȚăâîșț0-9 .'-]{1,60}\s+"
+        r"(?:[SȘŞ]|S[\u0326\u0327])oseaua|Splaiul|"
+        r"Pia(?:[TȚŢ]|T[\u0326\u0327])a|Intrarea)\s+"
+        r"[^\W\d_](?:[\u0300-\u036f])?"
+        r"(?:[^\W_]|[\u0300-\u036f .'-]){1,60}\s+"
         r"(?:nr\.?\s*)?\d{1,5}[A-Za-z]?\b",
         "street_address",
         priority=7,
@@ -3639,6 +3680,9 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
             "strada",
             "resedinta",
             "reședința",
+            "reşedinţa",
+            "res\u0326edint\u0326a",
+            "res\u0327edint\u0327a",
         ],
         context_boost=0.25,
         flags=re.IGNORECASE,
@@ -3649,7 +3693,17 @@ _ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
         "postcode",
         priority=6,
         base_score=0.25,
-        context_words=["cod postal", "cod poștal", "cp", "adresa", "adresă"],
+        context_words=[
+            "cod postal",
+            "cod poștal",
+            "cod poştal",
+            "cod pos\u0326tal",
+            "cod pos\u0327tal",
+            "cp",
+            "adresa",
+            "adresă",
+            "adresa\u0306",
+        ],
         context_boost=0.5,
         safety_sweep_requires_context=True,
     ),
