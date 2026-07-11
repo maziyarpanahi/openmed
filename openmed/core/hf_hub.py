@@ -99,7 +99,7 @@ def prefetch_model(
     name_or_alias: str,
     *,
     revision: Optional[str] = None,
-    allow_patterns: Optional[Sequence[str]] = None,
+    allow_patterns: str | Sequence[str] | None = None,
     cache_dir: Optional[str] = None,
     org: str = DEFAULT_ORG,
     config: "OpenMedConfig | None" = None,
@@ -136,7 +136,7 @@ def prefetch_model(
         OfflineModeError: If offline mode is active and the model is not cached.
     """
 
-    snapshot_download = _import_snapshot_download()
+    snapshot_download, local_entry_not_found = _import_snapshot_download()
     repo_id = resolve_repo_id(name_or_alias, org=org)
     local_only = is_local_only(config)
 
@@ -147,13 +147,15 @@ def prefetch_model(
         "local_files_only": local_only,
     }
     if allow_patterns is not None:
-        download_kwargs["allow_patterns"] = list(allow_patterns)
+        download_kwargs["allow_patterns"] = (
+            allow_patterns if isinstance(allow_patterns, str) else list(allow_patterns)
+        )
     if cache_dir is not None:
         download_kwargs["cache_dir"] = cache_dir
 
     try:
         return snapshot_download(**download_kwargs)
-    except Exception as exc:  # noqa: BLE001 - re-raised with actionable guidance
+    except local_entry_not_found as exc:
         if local_only:
             raise OfflineModeError(
                 f"{repo_id} is not available in the local cache and offline mode "
@@ -185,7 +187,7 @@ def list_cached_models(
         ImportError: If the optional ``[hf]`` extra is not installed.
     """
 
-    scan_cache_dir, cache_not_found = _import_scan_cache_dir()
+    scan_cache_dir, cache_not_found, default_cache_dir = _import_scan_cache_dir()
     prefix = f"{org}/"
 
     try:
@@ -193,18 +195,35 @@ def list_cached_models(
     except (FileNotFoundError, cache_not_found):
         return []
 
+    cache_root = Path(cache_dir or default_cache_dir).expanduser()
+    try:
+        cache_root = cache_root.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return []
+
     cached: List[CachedModel] = []
     for repo in getattr(cache_info, "repos", ()):
         repo_id = getattr(repo, "repo_id", "")
         repo_type = getattr(repo, "repo_type", "model")
-        if repo_type != "model" or not repo_id.startswith(prefix):
+        if (
+            repo_type != "model"
+            or not isinstance(repo_id, str)
+            or not repo_id.startswith(prefix)
+        ):
+            continue
+        repo_path = _safe_cached_repo_path(
+            repo_id=repo_id,
+            repo_path=getattr(repo, "repo_path", None),
+            cache_root=cache_root,
+        )
+        if repo_path is None:
             continue
         cached.append(
             CachedModel(
                 repo_id=repo_id,
                 size_on_disk=int(getattr(repo, "size_on_disk", 0) or 0),
                 last_accessed=_as_optional_float(getattr(repo, "last_accessed", None)),
-                path=Path(str(getattr(repo, "repo_path", ""))),
+                path=repo_path,
             )
         )
 
@@ -242,20 +261,55 @@ def clear_cached_model(
     return False
 
 
-def _import_snapshot_download() -> Any:
+def _import_snapshot_download() -> tuple[Any, type[Exception]]:
     try:
         from huggingface_hub import snapshot_download
+        from huggingface_hub.errors import LocalEntryNotFoundError
     except ImportError as exc:
         raise ImportError(_HF_INSTALL_HINT) from exc
-    return snapshot_download
+    return snapshot_download, LocalEntryNotFoundError
 
 
-def _import_scan_cache_dir() -> tuple[Any, type[Exception]]:
+def _import_scan_cache_dir() -> tuple[Any, type[Exception], Path]:
     try:
         from huggingface_hub import CacheNotFound, scan_cache_dir
+        from huggingface_hub.constants import HF_HUB_CACHE
     except ImportError as exc:
         raise ImportError(_HF_INSTALL_HINT) from exc
-    return scan_cache_dir, CacheNotFound
+    return scan_cache_dir, CacheNotFound, Path(HF_HUB_CACHE)
+
+
+def _safe_cached_repo_path(
+    *,
+    repo_id: str,
+    repo_path: Any,
+    cache_root: Path,
+) -> Path | None:
+    """Return a canonical cache entry path, failing closed on unsafe values."""
+
+    try:
+        path = Path(repo_path)
+    except (TypeError, ValueError):
+        return None
+    if not path.is_absolute() or path.is_symlink():
+        return None
+
+    try:
+        resolved_path = path.resolve(strict=True)
+        cwd = Path.cwd().resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None
+
+    expected_name = f"models--{repo_id.replace('/', '--')}"
+    filesystem_root = Path(resolved_path.anchor)
+    if (
+        not resolved_path.is_dir()
+        or resolved_path.name != expected_name
+        or resolved_path.parent != cache_root
+        or resolved_path in {cache_root, filesystem_root, cwd}
+    ):
+        return None
+    return resolved_path
 
 
 def _as_optional_float(value: Any) -> Optional[float]:
