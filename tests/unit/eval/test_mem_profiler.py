@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import tracemalloc
@@ -145,27 +146,78 @@ def test_profile_memory_defaults_to_committed_synthetic_workload() -> None:
     )
 
 
-def test_default_loader_constructs_model_during_load_phase(monkeypatch) -> None:
+def test_default_loader_reuses_exact_preloaded_non_hf_pipeline(monkeypatch) -> None:
     events: list[str] = []
 
     class FakeLoader:
-        def create_pipeline(self, model_name, **kwargs):
-            events.append(f"load:{model_name}")
-            return object()
+        config = None
 
-    def fake_extract(text, *, model_name, lang, loader):
-        events.append(f"forward:{model_name}:{lang}:{text}")
-        assert isinstance(loader, FakeLoader)
-        return []
+        def create_pipeline(self, model_name, **kwargs):
+            events.append(f"create:{model_name}")
+
+            def run_pipeline(text, **call_kwargs):
+                events.append(f"run:{text}")
+                return []
+
+            return run_pipeline
+
+        def get_max_sequence_length(self, model_name, *, tokenizer=None):
+            events.append(f"max-length:{model_name}")
+            return 128
 
     monkeypatch.setattr("openmed.core.models.ModelLoader", FakeLoader)
-    monkeypatch.setattr("openmed.core.pii.extract_pii", fake_extract)
 
     runnable = memprofile_module._default_loader("fixture-model")
-    assert events == ["load:fixture-model"]
+    assert events == ["create:fixture-model", "max-length:fixture-model"]
 
-    runnable(PerfDocument("note-a", "Synthetic note.", language="en"))
-    assert events[-1].startswith("forward:fixture-model:en:")
+    result = runnable(PerfDocument("note-a", "Synthetic note.", language="en"))
+
+    assert result.text == "Synthetic note."
+    assert events.count("create:fixture-model") == 1
+    assert events.count("max-length:fixture-model") == 1
+    assert events.count("run:['Synthetic note.']") == 1
+
+
+def test_default_loader_preloads_and_reuses_privacy_filter_pipeline(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+
+    def fake_create_privacy_filter_pipeline(model_name, config=None):
+        events.append(f"create:{model_name}")
+
+        def run_pipeline(texts, **kwargs):
+            events.append(f"run:{len(texts)}")
+            return [
+                [
+                    {
+                        "entity_group": "PERSON",
+                        "score": 0.99,
+                        "start": 0,
+                        "end": 9,
+                        "word": "Synthetic",
+                    }
+                ]
+                for _ in texts
+            ]
+
+        return run_pipeline
+
+    monkeypatch.setattr(
+        "openmed.core.backends.create_privacy_filter_pipeline",
+        fake_create_privacy_filter_pipeline,
+    )
+
+    runnable = memprofile_module._default_loader("openai/privacy-filter")
+    assert events == ["create:openai/privacy-filter"]
+
+    result = runnable(PerfDocument("note-a", "Synthetic note.", language="en"))
+
+    assert events == ["create:openai/privacy-filter", "run:1"]
+    assert result.text == "Synthetic note."
+    assert [(entity.text, entity.label) for entity in result.entities] == [
+        ("Synthetic", "PERSON")
+    ]
 
 
 def test_measure_phase_samples_phase_local_current_rss() -> None:
@@ -217,6 +269,80 @@ def test_profile_memory_preserves_preexisting_tracemalloc_state() -> None:
         assert all(phase.tracemalloc_preexisting for phase in profile.phases)
     finally:
         tracemalloc.stop()
+
+
+def test_preexisting_tracemalloc_peak_uses_non_destructive_phase_sampling() -> None:
+    tracemalloc.start()
+    try:
+        prior_high_water = bytearray(4 * MIB)
+        del prior_high_water
+        _, peak_before = tracemalloc.get_traced_memory()
+        assert peak_before >= 4 * MIB
+
+        def transient_work() -> None:
+            transient = bytearray(MIB)
+            time.sleep(0.02)
+            del transient
+            time.sleep(0.01)
+
+        _, phase = memprofile_module._measure_phase(
+            "fixture",
+            transient_work,
+            sample_rss=lambda: 100 * MIB,
+            top_allocators=5,
+        )
+
+        _, peak_after = tracemalloc.get_traced_memory()
+        assert phase.tracemalloc_preexisting is True
+        assert phase.traced_peak_bytes >= MIB - 16 * 1024
+        assert phase.traced_peak_bytes < peak_before
+        assert phase.to_dict()["traced_peak_semantics"] == "current-sampled-delta"
+        assert peak_after >= peak_before
+    finally:
+        tracemalloc.stop()
+
+
+def test_caller_metadata_cannot_override_protected_hashes_or_leak_phi() -> None:
+    secret = "PATIENT-SECRET-METADATA"
+    profile = profile_memory(
+        "mock-model",
+        docs=[PerfDocument(document_id="note-safe", text="Synthetic note.")],
+        loader=_mock_loader,
+        rss_sampler=lambda: 100 * MIB,
+        generated_at="2026-07-05T00:00:00Z",
+        metadata={
+            "document_hashes": [secret],
+            "raw_note": {"value": secret},
+            "source": "cli",
+        },
+    )
+
+    expected_hash = "sha256:" + hashlib.sha256(b"note-safe").hexdigest()
+    serialized = profile.to_json() + profile.to_markdown()
+
+    assert profile.metadata["document_hashes"] == [expected_hash]
+    assert profile.metadata["caller_metadata"]["entry_count"] == 3
+    assert profile.metadata["caller_metadata"]["sha256"].startswith("sha256:")
+    assert profile.metadata["provenance"] == {"source": "cli"}
+    assert secret not in serialized
+
+
+def test_local_model_path_is_hashed_in_report(tmp_path) -> None:
+    local_model = tmp_path / "PATIENT-SECRET-model"
+    local_model.mkdir()
+
+    profile = profile_memory(
+        str(local_model),
+        docs=["Synthetic note."],
+        loader=_mock_loader,
+        rss_sampler=lambda: 100 * MIB,
+        generated_at="2026-07-05T00:00:00Z",
+    )
+    serialized = profile.to_json() + profile.to_markdown()
+
+    assert profile.model_name.startswith("local-model:sha256:")
+    assert str(local_model) not in serialized
+    assert local_model.name not in serialized
 
 
 def test_profile_memory_rejects_non_callable_loader_result() -> None:
