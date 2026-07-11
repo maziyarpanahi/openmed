@@ -97,7 +97,7 @@ def test_synthetic_values_exercise_image_resources_and_secret_env():
     container = deployment["spec"]["template"]["spec"]["containers"][0]
 
     assert deployment["spec"]["replicas"] == 2
-    assert container["image"] == "ghcr.io/maziyarpanahi/openmed:1.7.0"
+    assert container["image"] == "ghcr.io/maziyarpanahi/openmed:v1.8.1"
     assert container["resources"]["limits"]["memory"] == "8Gi"
     assert container["env"] == [
         {
