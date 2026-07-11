@@ -338,7 +338,13 @@ class Pipeline:
             self.hmac_secret,
         )
         with _stage_timer(stage_durations_ms, STAGE_NAMES[2]):
-            section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
+            section_metadata = _remap_section_metadata_to_normalized(
+                self.stage3_doc_type_section(
+                    normalized.original_text,
+                    language=route.lang,
+                ),
+                normalized,
+            )
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
@@ -810,9 +816,14 @@ class Pipeline:
             metadata={"available_default_model": DEFAULT_PII_MODELS.get(lang)},
         )
 
-    def stage3_doc_type_section(self, text: str) -> Mapping[str, Any]:
+    def stage3_doc_type_section(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+    ) -> Mapping[str, Any]:
         if self.section_detector is not None:
-            return dict(self.section_detector(text))
+            return dict(_call_section_detector(self.section_detector, text, language))
 
         try:
             sections = importlib.import_module("openmed.clinical.sections")
@@ -826,12 +837,13 @@ class Pipeline:
         if hasattr(sections, "detect_sections"):
             return {
                 "section_hook": "detect_sections",
-                "sections": sections.detect_sections(text),
+                "sections": sections.detect_sections(text, language=language),
                 "section_detection": {
                     "feature": "clinical section detection",
                     "available": True,
                     "skipped": False,
                     "dependency": "openmed.clinical.sections",
+                    "language": language,
                 },
             }
         return {
@@ -1430,6 +1442,80 @@ def _section_detection_unavailable_metadata(exc: ImportError) -> dict[str, Any]:
     }
 
 
+def _call_section_detector(
+    detector: Callable[..., Mapping[str, Any]],
+    text: str,
+    language: str | None,
+) -> Mapping[str, Any]:
+    if language is None:
+        return detector(text)
+    try:
+        signature = inspect.signature(detector)
+    except (TypeError, ValueError):
+        return detector(text)
+    accepts_language = "language" in signature.parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in signature.parameters.values()
+    )
+    if accepts_language:
+        return detector(text, language=language)
+    return detector(text)
+
+
+def _remap_section_metadata_to_normalized(
+    section_metadata: Mapping[str, Any],
+    document: NormalizedDocument,
+) -> Mapping[str, Any]:
+    sections = section_metadata.get("sections")
+    if not sections:
+        return section_metadata
+    try:
+        section_iter = iter(sections)
+    except TypeError:
+        return section_metadata
+    remapped_sections = tuple(
+        _remap_section_to_normalized(section, document.offset_map)
+        for section in section_iter
+    )
+    return {**dict(section_metadata), "sections": remapped_sections}
+
+
+def _remap_section_to_normalized(section: Any, offset_map: OffsetMap) -> Any:
+    if isinstance(section, Mapping):
+        data = dict(section)
+    else:
+        label = _section_label(section)
+        section_start = getattr(section, "start", None)
+        section_end = getattr(section, "end", None)
+        if (
+            label is None
+            or not isinstance(section_start, int)
+            or not isinstance(section_end, int)
+        ):
+            return section
+        data = {"label": label, "start": section_start, "end": section_end}
+
+    start = data.get("start")
+    end = data.get("end")
+    if isinstance(start, int) and isinstance(end, int):
+        data["start"], data["end"] = offset_map.original_span_to_normalized(start, end)
+
+    header_start = data.get("header_start")
+    header_end = data.get("header_end")
+    if isinstance(header_start, int) and isinstance(header_end, int):
+        data["header_start"], data["header_end"] = (
+            offset_map.original_span_to_normalized(header_start, header_end)
+        )
+
+    content_start = data.get("content_start")
+    if isinstance(content_start, int):
+        data["content_start"] = offset_map.original_span_to_normalized(
+            content_start,
+            content_start,
+        )[0]
+    return data
+
+
 def _detect_script(text: str) -> str:
     for char in text:
         codepoint = ord(char)
@@ -1586,6 +1672,8 @@ def _section_ranges(
             and section_start < section_end
             and section_label is not None
         ):
+            continue
+        if section_label == "unsectioned":
             continue
         ranges.append((section_start, section_end, section_label))
     return tuple(sorted(ranges, key=lambda item: (item[0], item[1], item[2])))
