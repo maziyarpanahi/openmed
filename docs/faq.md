@@ -3,6 +3,10 @@
 These answers cover the questions that come up most often when teams start using OpenMed in local clinical NLP,
 PII detection, de-identification, and service deployments.
 
+Hitting a concrete error rather than a conceptual question? See
+[Troubleshooting & Common Errors](troubleshooting.md) for a symptom → cause → fix map of the failures users
+run into most (missing extras, model-download/offline issues, device selection, and REST/MCP setup).
+
 ## Install and Run
 
 ### Can OpenMed run fully locally or in an air-gapped environment?
@@ -15,8 +19,12 @@ When the identifier is an existing local path, OpenMed asks the underlying loade
 missing tokenizer, config, or weight files fail locally instead of downloading from the model hub. See
 [Loading from a local path](analyze-text.md#loading-from-a-local-path).
 
-Do not rely on an `OPENMED_OFFLINE` switch in the current package. That dedicated offline guard is tracked separately;
-today, local model paths and pre-seeded caches are the supported offline controls.
+After warming the configured cache, set `OPENMED_OFFLINE=1` or use
+`OpenMedConfig(local_only=True)`. OpenMed then enables the Hugging Face
+cache-only flags, passes `local_files_only=True` to Hub-backed loaders, and
+blocks outbound sockets during inference and de-identification. See
+[Local-only offline mode](configuration.md#local-only-offline-mode) and the
+[offline troubleshooting entry](troubleshooting.md#running-offline-air-gapped-or-offlinemodeerror-on-inference).
 
 ### Which package extras should I install?
 
@@ -79,13 +87,13 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **16 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `te`, `th`, and `tr`.
+PII extraction and de-identification support **17 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, and `tr`.
 These are the model-backed PII language allow-list.
 Validator-backed national-ID coverage is broader for specific ID-only locales,
 including Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-16-model-backed-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-17-model-backed-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.

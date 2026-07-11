@@ -44,7 +44,11 @@ from .model_registry import (
     get_model_suggestions,
     get_models_by_category,
 )
-from .offline import configure_offline_mode, is_local_only
+from .offline import (
+    configure_offline_mode,
+    is_local_only,
+    network_blocked_if_offline,
+)
 
 
 class ModelLoader:
@@ -131,8 +135,9 @@ class ModelLoader:
 
             auth_kwargs = self._hub_auth_kwargs()
             local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
-            pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
             load_kwargs = dict(kwargs)
+            load_kwargs.pop("local_files_only", None)
+            pretrained_kwargs = {**auth_kwargs, **local_loading_kwargs}
             device_preference = load_kwargs.pop("device", None)
             attention_preference = load_kwargs.pop("attn_implementation", None)
             resolved_device = self._resolve_torch_device(device_preference)
@@ -179,7 +184,7 @@ class ModelLoader:
             # not by modifying the model tokenizer/vocabulary.
 
             # Load model
-            model_kwargs = {**pretrained_kwargs, **load_kwargs}
+            model_kwargs = {**load_kwargs, **pretrained_kwargs}
             if attn_implementation is not None:
                 model_kwargs["attn_implementation"] = attn_implementation
             if quantization_config is not None:
@@ -293,6 +298,7 @@ class ModelLoader:
             logger.info("Using cached pipeline for %s", full_model_name)
             return self._pipelines[cache_key]
 
+        model_kwargs: Dict[str, Any] = {}
         try:
             # Create pipeline directly with model name for better caching
             pipeline_device = kwargs.get("device", self._get_device_id())
@@ -303,9 +309,18 @@ class ModelLoader:
                 "use_fast": use_fast_tokenizer,
             }
             pipeline_kwargs.update(self._hub_auth_kwargs())
-            pipeline_kwargs.update(self._local_loading_kwargs(full_model_name, kwargs))
+            local_loading_kwargs = self._local_loading_kwargs(full_model_name, kwargs)
             pipeline_load_kwargs = dict(kwargs)
             model_kwargs = dict(pipeline_load_kwargs.pop("model_kwargs", {}) or {})
+            # Transformers forwards loader options through ``model_kwargs``;
+            # top-level extras are sent to the instantiated pipeline instead.
+            pipeline_load_kwargs.pop("local_files_only", None)
+            model_kwargs.update(local_loading_kwargs)
+            cache_dir = pipeline_load_kwargs.pop("cache_dir", None)
+            if cache_dir is None and local_loading_kwargs.get("local_files_only"):
+                cache_dir = getattr(self.config, "cache_dir", None)
+            if cache_dir is not None:
+                model_kwargs.setdefault("cache_dir", cache_dir)
             if "quantization_config" in pipeline_load_kwargs:
                 model_kwargs.setdefault(
                     "quantization_config",
@@ -323,7 +338,12 @@ class ModelLoader:
             pipeline_kwargs.update(pipeline_load_kwargs)
             self._apply_attention_pipeline_kwargs(pipeline_kwargs)
 
-            ner_pipeline = pipeline(task, **pipeline_kwargs)
+            effective_local_only = bool(model_kwargs.get("local_files_only"))
+            with network_blocked_if_offline(
+                self.config,
+                local_only=effective_local_only,
+            ):
+                ner_pipeline = pipeline(task, **pipeline_kwargs)
             self._pipelines[cache_key] = ner_pipeline
 
             logger.info("Created pipeline for %s", full_model_name)
@@ -332,20 +352,32 @@ class ModelLoader:
         except Exception as e:
             logger.error("Failed to create pipeline for %s: %s", full_model_name, e)
             # Fall back to loading model components manually
-            model_data = self.load_model(model_name)
+            fallback_load_kwargs = {
+                key: model_kwargs[key]
+                for key in ("local_files_only",)
+                if key in model_kwargs
+            }
+            with network_blocked_if_offline(
+                self.config,
+                local_only=bool(fallback_load_kwargs.get("local_files_only")),
+            ):
+                model_data = self.load_model(model_name, **fallback_load_kwargs)
 
-            fallback_kwargs = dict(kwargs)
-            fallback_kwargs.pop("device", None)
-            if aggregation_strategy is not None:
-                fallback_kwargs["aggregation_strategy"] = aggregation_strategy
+                fallback_kwargs = dict(kwargs)
+                fallback_kwargs.pop("device", None)
+                fallback_kwargs.pop("local_files_only", None)
+                fallback_kwargs.pop("cache_dir", None)
+                fallback_kwargs.pop("model_kwargs", None)
+                if aggregation_strategy is not None:
+                    fallback_kwargs["aggregation_strategy"] = aggregation_strategy
 
-            ner_pipeline = pipeline(
-                task,
-                model=model_data["model"],
-                tokenizer=model_data["tokenizer"],
-                device=kwargs.get("device", self._get_device_id()),
-                **fallback_kwargs,
-            )
+                ner_pipeline = pipeline(
+                    task,
+                    model=model_data["model"],
+                    tokenizer=model_data["tokenizer"],
+                    device=kwargs.get("device", self._get_device_id()),
+                    **fallback_kwargs,
+                )
             self._pipelines[cache_key] = ner_pipeline
             return ner_pipeline
 

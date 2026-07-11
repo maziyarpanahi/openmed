@@ -195,7 +195,8 @@
               "tr",
               "id",
               "th",
-              "ko"
+              "ko",
+              "ro"
             ],
             "title": "Lang",
             "type": "string"
@@ -415,7 +416,8 @@
               "tr",
               "id",
               "th",
-              "ko"
+              "ko",
+              "ro"
             ],
             "title": "Lang",
             "type": "string"
@@ -537,7 +539,8 @@
               "tr",
               "id",
               "th",
-              "ko"
+              "ko",
+              "ro"
             ],
             "title": "Lang",
             "type": "string"
@@ -632,7 +635,8 @@
               "tr",
               "id",
               "th",
-              "ko"
+              "ko",
+              "ro"
             ],
             "title": "Lang",
             "type": "string"
@@ -747,7 +751,8 @@
               "tr",
               "id",
               "th",
-              "ko"
+              "ko",
+              "ro"
             ],
             "title": "Lang",
             "type": "string"
@@ -870,7 +875,8 @@
               "tr",
               "id",
               "th",
-              "ko"
+              "ko",
+              "ro"
             ],
             "title": "Lang",
             "type": "string"
