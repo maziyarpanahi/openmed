@@ -7,7 +7,7 @@ from openmed.core.cascade import (
     R3_ACCURATE,
     CascadeRouter,
 )
-from openmed.core.pipeline import Pipeline
+from openmed.core.pipeline import STAGE_NAMES, Pipeline
 from openmed.core.schemas.span import OpenMedSpan, hmac_text_hash
 
 
@@ -110,3 +110,29 @@ def test_pipeline_can_use_cascade_router_for_detection_stages():
     assert result.stage("deterministic_detectors").spans == (rules_span,)
     assert result.stage("fast_pii_model").spans == (tiny_span,)
     assert result.stage("span_arbitration").spans == (rules_span, tiny_span)
+
+
+def test_pipeline_reports_complete_stage_and_shared_cascade_durations(monkeypatch):
+    ticks = iter(index / 1000 for index in range(100))
+    monkeypatch.setattr(
+        "openmed.core.pipeline.perf_counter",
+        lambda: next(ticks),
+    )
+    router = CascadeRouter(
+        rules_detector=lambda text, **kwargs: [],
+        tiny_detector=lambda text, **kwargs: [],
+    )
+
+    result = Pipeline(
+        cascade_router=router,
+        use_safety_sweep=False,
+    ).run("Synthetic clinical note without identifiers.")
+
+    assert set(result.stage_durations_ms) == set(STAGE_NAMES)
+    assert all(result.stage_duration_ms(name) > 0.0 for name in STAGE_NAMES)
+    assert result.cascade_duration_ms == pytest.approx(1.0)
+    assert (
+        "reported separately" in result.stage("fast_pii_model").metadata["timing_scope"]
+    )
+    assert "stage_durations_ms" not in result.audit_record
+    assert "cascade_duration_ms" not in result.audit_record
