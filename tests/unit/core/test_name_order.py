@@ -138,6 +138,10 @@ class TestHonorificsMap:
         register_honorific("", "さん")
         assert honorifics_for("ja") == before
 
+    def test_register_ignores_non_cjk_languages(self):
+        register_honorific("en", "Dr")
+        assert honorifics_for("en") == ()
+
     def test_honorifics_for_unknown_language_is_empty(self):
         assert honorifics_for("en") == ()
 
