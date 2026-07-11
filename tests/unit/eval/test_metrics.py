@@ -11,10 +11,12 @@ from openmed.eval.harness import BenchmarkFixture, load_fixtures, run_benchmark
 from openmed.eval.leakage_heatmap import compute_extraction_reemission_heatmap
 from openmed.eval.metrics import (
     ABSTENTION_ROUTE_REDACT,
+    CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
     EvalSpan,
     apply_abstention_policy,
     compute_abstention_metrics,
     compute_character_recall,
+    compute_critical_finding_recall,
     compute_exact_span_f1,
     compute_extraction_reemission_leakage,
     compute_leakage_rate,
@@ -301,6 +303,62 @@ def test_recall_slices_cover_label_language_and_device_edges():
     assert recall.by_language["fr"] == pytest.approx(5 / 11)
     assert recall.by_device["coreml"] == pytest.approx(5 / 11)
     assert "mlx-8bit" in recall.by_device
+
+
+def test_critical_finding_recall_reports_phi_free_missed_details():
+    text = (
+        "Critical safety probe: The synthetic patient has documented allergy to "
+        "penicillin with anaphylaxis, acute myocardial infarction, and potassium "
+        "6.9 mmol/L requiring urgent review."
+    )
+    gold = [
+        EvalSpan(
+            start=71,
+            end=81,
+            label="MEDICATION",
+            text="penicillin",
+            metadata={
+                "critical_finding": True,
+                "critical_finding_category": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+                "fixture_id": "fixture-critical",
+            },
+        ),
+        EvalSpan(
+            start=100,
+            end=127,
+            label="CONDITION",
+            text="acute myocardial infarction",
+            metadata={
+                "critical_finding": True,
+                "critical_finding_category": "critical_diagnosis",
+                "fixture_id": "fixture-critical",
+            },
+        ),
+    ]
+    predicted = [
+        EvalSpan(
+            start=100,
+            end=127,
+            label="CONDITION",
+            text="acute myocardial infarction",
+        )
+    ]
+
+    recall = compute_critical_finding_recall(gold, predicted, source_text=text)
+    payload = recall.to_dict()
+
+    assert recall.overall == pytest.approx(0.5)
+    assert recall.by_category[CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY] == 0.0
+    assert payload["missed_findings"] == [
+        {
+            "category": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+            "fixture_id": "fixture-critical",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert "penicillin" not in json.dumps(payload)
 
 
 def test_benchmark_report_serializes_deterministically_to_json_and_markdown():

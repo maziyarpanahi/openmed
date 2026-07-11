@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -12,8 +12,15 @@ from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.core.pii_i18n import NATIONAL_ID_ONLY_LANGUAGES, SUPPORTED_LANGUAGES
 from openmed.eval.golden.hard_negatives import HARD_NEGATIVE_CATEGORY
 from openmed.eval.harness import BenchmarkFixture
-from openmed.eval.metrics import EvalSpan, normalize_eval_spans
+from openmed.eval.metrics import (
+    CRITICAL_FINDING_CATEGORIES,
+    EvalSpan,
+    critical_finding_category,
+    normalize_critical_finding_category,
+    normalize_eval_spans,
+)
 
+CRITICAL_FINDINGS_CATEGORY = "critical_findings"
 GOLDEN_CATEGORIES: tuple[str, ...] = (
     "nested_overlapping",
     "chunk_boundary",
@@ -23,12 +30,21 @@ GOLDEN_CATEGORIES: tuple[str, ...] = (
     "date_arithmetic",
     "policy_profile_actions",
     HARD_NEGATIVE_CATEGORY,
+    CRITICAL_FINDINGS_CATEGORY,
 )
 
 _FIXTURE_VERSION = 1
 _GOLDEN_DIR = Path(__file__).resolve().parent
 _FIXTURE_DIR = _GOLDEN_DIR / "fixtures"
 _TOP_LEVEL_FIXTURES: tuple[Path, ...] = (_GOLDEN_DIR / "financial_ids.jsonl",)
+_NON_DEID_FIXTURE_NAMES = frozenset(
+    {
+        "context_multilingual.jsonl",
+        "grounding_crosslingual.jsonl",
+        "relation_assertion.jsonl",
+        "relation_gold.jsonl",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -80,6 +96,10 @@ class GoldenFixture:
         if not text:
             raise ValueError("golden fixture text is required")
 
+        fixture_id = str(data.get("id") or data.get("fixture_id") or "")
+        if not fixture_id:
+            raise ValueError("golden fixture id is required")
+
         raw_spans = data.get("gold_spans") or []
         if not isinstance(raw_spans, list):
             raise ValueError("golden fixture gold_spans must be a list")
@@ -93,10 +113,13 @@ class GoldenFixture:
         _validate_offsets(text, gold_spans)
         if category == HARD_NEGATIVE_CATEGORY:
             _validate_hard_negative_fixture(text, metadata, language)
-
-        fixture_id = str(data.get("id") or data.get("fixture_id") or "")
-        if not fixture_id:
-            raise ValueError("golden fixture id is required")
+        if category == CRITICAL_FINDINGS_CATEGORY:
+            gold_spans = _validate_critical_finding_fixture(
+                fixture_id,
+                text,
+                metadata,
+                gold_spans,
+            )
 
         return cls(
             fixture_id=fixture_id,
@@ -134,7 +157,14 @@ def list_fixture_paths(path: str | Path | None = None) -> tuple[Path, ...]:
     fixture_path = Path(path) if path is not None else _FIXTURE_DIR
     if fixture_path.is_file():
         return (fixture_path,)
-    paths = [*fixture_path.glob("*.json"), *fixture_path.glob("**/*.jsonl")]
+    paths = [
+        *fixture_path.glob("*.json"),
+        *(
+            path
+            for path in fixture_path.glob("**/*.jsonl")
+            if path.name not in _NON_DEID_FIXTURE_NAMES
+        ),
+    ]
     if path is None:
         paths.extend(fixture for fixture in _TOP_LEVEL_FIXTURES if fixture.exists())
     return tuple(sorted(paths))
@@ -264,6 +294,52 @@ def _validate_raw_span_labels(raw_spans: list[Any], language: str) -> None:
             raise ValueError(f"gold span label must be canonical: {raw_label!r}")
 
 
+def _validate_critical_finding_fixture(
+    fixture_id: str,
+    text: str,
+    metadata: Mapping[str, Any],
+    spans: tuple[EvalSpan, ...],
+) -> tuple[EvalSpan, ...]:
+    disclaimer = str(metadata.get("medical_device_disclaimer") or "")
+    normalized_disclaimer = disclaimer.lower()
+    if (
+        "assistive safety probe" not in normalized_disclaimer
+        or "not clinical ground truth" not in normalized_disclaimer
+    ):
+        raise ValueError(
+            "critical finding fixtures require a medical_device_disclaimer "
+            "noting the set is an assistive safety probe, not clinical ground truth"
+        )
+
+    source = str(metadata.get("source") or metadata.get("source_dataset") or "")
+    if _is_dua_source_marker(source):
+        raise ValueError("critical finding fixtures must not reference DUA sources")
+
+    validated: list[EvalSpan] = []
+    for span in spans:
+        category = critical_finding_category(span)
+        if category is None:
+            raise ValueError(
+                "critical finding gold spans require critical_finding_category"
+            )
+        category = normalize_critical_finding_category(category)
+        if category not in CRITICAL_FINDING_CATEGORIES:
+            raise ValueError(f"unknown critical finding category: {category!r}")
+        span_fixture_id = span.metadata.get("fixture_id")
+        if span_fixture_id is not None and str(span_fixture_id) != fixture_id:
+            raise ValueError("critical finding span fixture_id must match fixture id")
+        span_metadata = dict(span.metadata)
+        span_metadata["critical_finding"] = True
+        span_metadata["critical_finding_category"] = category
+        span_metadata["fixture_id"] = fixture_id
+        validated.append(replace(span, metadata=span_metadata))
+
+    if not validated:
+        raise ValueError("critical finding fixture must include critical gold spans")
+    _validate_offsets(text, tuple(validated))
+    return tuple(validated)
+
+
 def _validate_hard_negative_fixture(
     text: str,
     metadata: Mapping[str, Any],
@@ -381,6 +457,7 @@ def _plain(value: Any) -> Any:
 
 
 __all__ = [
+    "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
     "GoldenFixture",
