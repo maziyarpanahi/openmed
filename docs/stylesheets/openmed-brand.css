@@ -1,0 +1,20 @@
+/* =============================================================================
+   OpenMed brand — Material for MkDocs palette override.
+   Clinical Teal accent (#0D6E6E). No indigo, no purple.
+   Docs render with the "custom" primary/accent (set in mkdocs.yml palette).
+   ============================================================================= */
+
+/* Light ("Clinical Paper") */
+[data-md-color-primary=custom] {
+  --md-primary-fg-color:        #0D6E6E;
+  --md-primary-fg-color--light: #128787;
+  --md-primary-fg-color--dark:  #0A5656;
+}
+[data-md-color-accent=custom] {
+  --md-accent-fg-color:         #0D6E6E;
+}
+
+/* Dark ("Ink Clinic") — lift the accent for contrast on slate */
+[data-md-color-scheme=slate][data-md-color-accent=custom] {
+  --md-accent-fg-color:         #2BA5A5;
+}

@@ -128,4 +128,8 @@ for doc in docs:
 - **“Tokenizer length mismatch”**: call `loader.get_max_sequence_length(model_name)` and set `max_length` explicitly.
 - **“Model not found”**: confirm it exists in `openmed.core.model_registry.OPENMED_MODELS` or pass a full HF path and set
   `include_remote=True` if you rely on discovery.
+- **“scaled_dot_product_attention is unsupported”**: upgrade to OpenMed 1.8.1
+  or later. For an environment pinned to 1.7.0 or 1.8.0, set
+  `OPENMED_TORCH_ATTENTION_BACKEND=eager`; see the
+  [FAQ](faq.md#why-does-a-deberta-model-say-that-scaled-dot-product-attention-is-unsupported).
 - **Slow cold-starts**: prefetch pipelines at startup and mount the cache dir on SSD/NVMe storage.
