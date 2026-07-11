@@ -184,8 +184,8 @@ privacy gateway, and the full endpoint reference are in
 
 ## Data engineer
 
-**Goal:** de-identify many files or dataset rows with progress reporting and an
-aggregate audit trail — no per-record boilerplate.
+**Goal:** de-identify many files or dataset rows with progress reporting and
+PHI-free aggregate summaries — no per-record boilerplate.
 
 ### 1. Process a directory of notes
 
@@ -194,6 +194,9 @@ single record fails. It returns de-identified text in memory and does not
 overwrite the source files:
 
 ```python
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 from openmed import BatchProcessor
 
 processor = BatchProcessor(
@@ -205,19 +208,32 @@ processor = BatchProcessor(
     continue_on_error=True,
 )
 
-result = processor.process_directory("/path/to/notes/", pattern="*.txt", recursive=True)
+with TemporaryDirectory() as temp_dir:
+    notes_dir = Path(temp_dir)
+    (notes_dir / "note-1.txt").write_text(
+        "Patient Casey Example called from 555-0100.", encoding="utf-8"
+    )
+    (notes_dir / "note-2.txt").write_text(
+        "Email Jordan Sample at jordan.sample@example.org.", encoding="utf-8"
+    )
 
-redacted_texts = [
-    item.result.deidentified_text for item in result.get_successful_results()
-]
-print(f"Processed {len(redacted_texts)}/{result.total_items} files")
-print(f"Failures: {result.failed_items}")
+    result = processor.process_directory(
+        notes_dir, pattern="*.txt", recursive=True
+    )
+
+    redacted_texts = [
+        item.result.deidentified_text for item in result.get_successful_results()
+    ]
+    print(f"Processed {len(redacted_texts)}/{result.total_items} files")
+    print(f"Failures: {result.failed_items}")
 ```
 
 ### 2. Redact specific columns of a dataset
 
-For CSV, JSONL, or Parquet input, `redact_dataset()` de-identifies only the
-free-text columns you name and writes an aggregate, PHI-free audit summary:
+For CSV or JSONL input, `redact_dataset()` de-identifies only the free-text
+columns you name and returns an aggregate, PHI-free audit summary. Parquet uses
+the same API after installing the `columnar` extra with
+`uv pip install "openmed[hf,columnar]"`:
 
 ```python
 from openmed import redact_dataset
@@ -232,6 +248,9 @@ result = redact_dataset(
 # Aggregate counts only — total spans, per-label counts, residual-leakage estimate.
 print(result.summary.to_dict())
 ```
+
+The source dataset is never overwritten: `output_path` receives the redacted
+rows, while the summary remains in memory unless you explicitly persist it.
 
 The same path is available from the console entry point:
 
