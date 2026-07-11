@@ -9,7 +9,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 _HASH_ALGORITHM = "sha256"
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
@@ -76,21 +76,31 @@ def _safe_context_descriptor(
     side: str,
     span_start: int,
     span_end: int,
+    document_length: int | None = None,
 ) -> dict[str, int | str] | None:
+    start: Any
+    end: Any
+    length: Any
+    text_hash: Any
     if isinstance(value, str):
-        return _raw_context_descriptor(
+        descriptor = _raw_context_descriptor(
             value,
             side=side,
             span_start=span_start,
             span_end=span_end,
         )
-    if not isinstance(value, Mapping):
-        return None
+        start = descriptor["start"]
+        end = descriptor["end"]
+        length = descriptor["length"]
+        text_hash = descriptor["text_hash"]
+    else:
+        if not isinstance(value, Mapping):
+            return None
+        start = value.get("start")
+        end = value.get("end")
+        length = value.get("length")
+        text_hash = value.get("text_hash")
 
-    start = value.get("start")
-    end = value.get("end")
-    length = value.get("length")
-    text_hash = value.get("text_hash")
     if not all(type(item) is int and item >= 0 for item in (start, end, length)):
         return None
     if end < start or length != end - start or not _is_sha256_hash(text_hash):
@@ -99,11 +109,13 @@ def _safe_context_descriptor(
         return None
     if side == "after" and start != span_end:
         return None
+    if document_length is not None and end > document_length:
+        return None
     return {
-        "start": start,
-        "end": end,
-        "length": length,
-        "text_hash": text_hash,
+        "start": cast(int, start),
+        "end": cast(int, end),
+        "length": cast(int, length),
+        "text_hash": cast(str, text_hash),
     }
 
 
@@ -112,8 +124,16 @@ def _sanitize_audit_context(
     *,
     span_start: int,
     span_end: int,
+    document_length: int | None = None,
 ) -> dict[str, dict[str, int | str]]:
     """Return only validated offsets, lengths, and hashes for audit context."""
+    if not all(type(item) is int and item >= 0 for item in (span_start, span_end)):
+        return {}
+    if span_end < span_start:
+        return {}
+    if document_length is not None:
+        if type(document_length) is not int or document_length < span_end:
+            return {}
     if not isinstance(context, Mapping):
         return {}
     safe_context: dict[str, dict[str, int | str]] = {}
@@ -123,6 +143,7 @@ def _sanitize_audit_context(
             side=side,
             span_start=span_start,
             span_end=span_end,
+            document_length=document_length,
         )
         if descriptor is not None:
             safe_context[side] = descriptor
@@ -205,16 +226,32 @@ class AuditSpan:
     context: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        self._validate_offsets()
         self.context = self._serialized_context()
 
-    def _serialized_context(self) -> dict[str, dict[str, int | str]]:
+    def _validate_offsets(self, *, document_length: int | None = None) -> None:
+        if type(self.start) is not int or self.start < 0:
+            raise ValueError("audit span start must be a non-negative integer")
+        if type(self.end) is not int or self.end < self.start:
+            raise ValueError("audit span end must be an integer at or after start")
+        if document_length is not None and self.end > document_length:
+            raise ValueError("audit span offsets must be within document_length")
+
+    def _serialized_context(
+        self,
+        *,
+        document_length: int | None = None,
+    ) -> dict[str, dict[str, int | str]]:
+        self._validate_offsets(document_length=document_length)
         return _sanitize_audit_context(
             self.context,
             span_start=self.start,
             span_end=self.end,
+            document_length=document_length,
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self, *, document_length: int | None = None) -> dict[str, Any]:
+        self._validate_offsets(document_length=document_length)
         return {
             "start": self.start,
             "end": self.end,
@@ -227,14 +264,15 @@ class AuditSpan:
             "surrogate": self.surrogate,
             "text_hash": self.text_hash,
             "evidence": copy.deepcopy(self.evidence),
-            "context": self._serialized_context(),
+            "context": self._serialized_context(document_length=document_length),
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> "AuditSpan":
+        context = data.get("context")
         return cls(
-            start=int(data.get("start", 0)),
-            end=int(data.get("end", 0)),
+            start=data.get("start", 0),
+            end=data.get("end", 0),
             label=str(data.get("label", "")),
             canonical_label=str(data.get("canonical_label", "")),
             sources=[str(source) for source in data.get("sources", [])],
@@ -246,9 +284,7 @@ class AuditSpan:
             ),
             text_hash=str(data.get("text_hash", "")),
             evidence=dict(data.get("evidence") or {}),
-            context=(
-                data.get("context") if isinstance(data.get("context"), Mapping) else {}
-            ),
+            context=dict(context) if isinstance(context, Mapping) else {},
         )
 
 
@@ -296,8 +332,21 @@ class AuditReport:
     signature: AuditSignature | None = None
 
     def __post_init__(self) -> None:
+        self._validate_structure()
+        for span in self.spans:
+            span.context = span._serialized_context(
+                document_length=self.document_length
+            )
         if not self.repro_hash:
             self.repro_hash = self.recompute_repro_hash()
+
+    def _validate_structure(self) -> None:
+        if type(self.document_length) is not int or self.document_length < 0:
+            raise ValueError("document_length must be a non-negative integer")
+        for span in self.spans:
+            if not isinstance(span, AuditSpan):
+                raise TypeError("audit report spans must contain AuditSpan values")
+            span._validate_offsets(document_length=self.document_length)
 
     def _sorted_spans(self) -> list[AuditSpan]:
         """Return spans in a stable, content-derived order for hashing/export.
@@ -313,6 +362,7 @@ class AuditReport:
         ``sources``, ``confidence``, ``evidence``, ...) still sort
         deterministically rather than retaining input order.
         """
+        self._validate_structure()
         return sorted(
             self.spans,
             key=lambda span: (
@@ -320,7 +370,7 @@ class AuditReport:
                 span.end,
                 span.canonical_label,
                 span.action,
-                _canonical_json(span.to_dict()),
+                _canonical_json(span.to_dict(document_length=self.document_length)),
             ),
         )
 
@@ -331,13 +381,17 @@ class AuditReport:
         include_signature: bool,
         spans: list[AuditSpan] | None = None,
     ) -> dict[str, Any]:
+        self._validate_structure()
         span_source = self._sorted_spans() if spans is None else spans
         payload = {
             "policy": self.policy,
             "resolved_profile": copy.deepcopy(self.resolved_profile),
             "detectors": [detector.to_dict() for detector in self.detectors],
             "safety_sweep": copy.deepcopy(self.safety_sweep),
-            "spans": [span.to_dict() for span in span_source],
+            "spans": [
+                span.to_dict(document_length=self.document_length)
+                for span in span_source
+            ],
             "thresholds": {
                 str(label): float(value)
                 for label, value in sorted(self.thresholds.items())
@@ -443,7 +497,7 @@ class AuditReport:
             residual_risk=dict(data.get("residual_risk") or {}),
             openmed_version=str(data.get("openmed_version", "")),
             manifest_hash=str(data.get("manifest_hash", "")),
-            document_length=int(data.get("document_length", 0)),
+            document_length=data.get("document_length", 0),
             input_hash=str(data.get("input_hash", "")),
             deidentified_text_hash=str(data.get("deidentified_text_hash", "")),
             repro_hash=str(data.get("repro_hash", "")),
@@ -460,6 +514,8 @@ class AuditReport:
             parsed = json.loads(data)
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid JSON for AuditReport: {exc}") from exc
+        if not isinstance(parsed, Mapping):
+            raise ValueError("AuditReport JSON must contain an object")
         return cls.from_dict(parsed)
 
     def sign(
@@ -521,6 +577,7 @@ class AuditReport:
 
     def export_review_bundle(self) -> dict[str, Any]:
         """Export reviewable spans and hashed context descriptors without text."""
+        self._validate_structure()
         return {
             "policy": self.policy,
             "document_length": self.document_length,
@@ -539,7 +596,9 @@ class AuditReport:
                     "action": span.action,
                     "surrogate": span.surrogate,
                     "text_hash": span.text_hash,
-                    "context": span._serialized_context(),
+                    "context": span._serialized_context(
+                        document_length=self.document_length
+                    ),
                 }
                 for span in self._sorted_spans()
             ],
