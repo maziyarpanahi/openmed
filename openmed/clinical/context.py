@@ -36,7 +36,7 @@ Sibling axes such as experiencer and absolute-date timeline normalization
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any, Literal
@@ -249,12 +249,13 @@ def _cue_category_lookup(
 ) -> dict[str, ContextCueCategory]:
     active_lexicon = lexicon or _ENGLISH_CONTEXT_LEXICON
     category_by_cue: dict[str, ContextCueCategory] = {}
-    for category, cues in (
+    categorized_cues: tuple[tuple[ContextCueCategory, Sequence[str]], ...] = (
         ("historical", active_lexicon.historical),
         ("hypothetical", active_lexicon.hypothetical),
         ("uncertainty", active_lexicon.uncertainty),
         ("negation", active_lexicon.negation),
-    ):
+    )
+    for category, cues in categorized_cues:
         for cue in cues:
             category_by_cue.setdefault(_normalize_cue_text(cue), category)
     return category_by_cue
@@ -441,7 +442,7 @@ class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
             pass
         return self._unhashable_lookup(span) is not None
 
-    def __iter__(self) -> Iterable[Any]:
+    def __iter__(self) -> Iterator[Any]:
         yield from super().__iter__()
         for span, _ in self._unhashable_entries:
             yield span
@@ -449,7 +450,12 @@ class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
     def __len__(self) -> int:
         return super().__len__() + len(self._unhashable_entries)
 
-    def get(
+    # ``get``/``items``/``keys``/``values`` intentionally broaden the ``dict``
+    # signatures: they must also surface the unhashable span entries kept in a
+    # side list, so they return simple iterables rather than the invariant
+    # ``dict`` view/overload types. The override incompatibility is deliberate
+    # and safe for this read-mostly result container.
+    def get(  # type: ignore[override]
         self,
         span: Any,
         default: tuple[ModifierHit, ...] | None = None,
@@ -459,15 +465,15 @@ class _ContextCueResults(dict[Any, tuple[ModifierHit, ...]]):
         except KeyError:
             return default
 
-    def items(self) -> Iterable[tuple[Any, tuple[ModifierHit, ...]]]:
+    def items(self) -> Iterator[tuple[Any, tuple[ModifierHit, ...]]]:  # type: ignore[override]
         yield from super().items()
         yield from self._unhashable_entries
 
-    def keys(self) -> Iterable[Any]:
+    def keys(self) -> Iterator[Any]:  # type: ignore[override]
         for span, _ in self.items():
             yield span
 
-    def values(self) -> Iterable[tuple[ModifierHit, ...]]:
+    def values(self) -> Iterator[tuple[ModifierHit, ...]]:  # type: ignore[override]
         for _, hits in self.items():
             yield hits
 
@@ -868,6 +874,7 @@ def _sentence_windows(
     text: str,
     sentences: Iterable[Any] | None,
 ) -> tuple[_SentenceWindow, ...]:
+    windows: tuple[_SentenceWindow, ...] | None
     if sentences is not None:
         windows = tuple(_coerce_sentence_windows(text, sentences))
     else:
@@ -944,7 +951,8 @@ def _coerce_sentence_windows(
             cursor = end
         else:
             start, end = _offsets_from_obj(sentence)
-        yield _validate_offsets(text, start, end, name="sentence")
+        window_start, window_end = _validate_offsets(text, start, end, name="sentence")
+        yield _SentenceWindow(window_start, window_end)
 
 
 def _target_offsets(text: str, span: Any) -> tuple[int, int]:
@@ -1250,7 +1258,7 @@ def apply_section_context(
     if not prior:
         return resolved_assertion
 
-    changes: dict[str, str] = {}
+    changes: dict[str, Any] = {}
     temporality_prior = prior.get("temporality")
     if (
         temporality_prior
