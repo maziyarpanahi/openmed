@@ -52,12 +52,17 @@ class _FakeCacheInfo:
         self.repos = repos
 
 
+class _FakeCacheNotFound(Exception):
+    """Stand-in for ``huggingface_hub.CacheNotFound``."""
+
+
 def _install_fake_hub(
     monkeypatch: pytest.MonkeyPatch, **attrs: Any
 ) -> types.ModuleType:
     """Install a fake ``huggingface_hub`` module exposing *attrs*."""
 
     module = types.ModuleType("huggingface_hub")
+    module.CacheNotFound = _FakeCacheNotFound
     for name, value in attrs.items():
         setattr(module, name, value)
     monkeypatch.setitem(sys.modules, "huggingface_hub", module)
@@ -228,6 +233,17 @@ def test_list_cached_models_absent_cache_returns_empty(
     _install_fake_hub(monkeypatch, scan_cache_dir=fake_scan_cache_dir)
 
     assert list_cached_models() == []
+
+
+def test_list_cached_models_hf_cache_not_found_returns_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_scan_cache_dir(cache_dir: Any = None) -> _FakeCacheInfo:
+        raise _FakeCacheNotFound("cache dir missing")
+
+    _install_fake_hub(monkeypatch, scan_cache_dir=fake_scan_cache_dir)
+
+    assert list_cached_models(cache_dir="/missing/hf-cache") == []
 
 
 # --- clear_cached_model ----------------------------------------------------
