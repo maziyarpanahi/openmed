@@ -19,6 +19,7 @@ CONFIGURATION = ROOT / "docs" / "configuration.md"
 MKDOCS = ROOT / "mkdocs.yml"
 PYPROJECT = ROOT / "pyproject.toml"
 REST_GUIDE = ROOT / "docs" / "rest-service.md"
+QUICKSTARTS = ROOT / "docs" / "quickstarts.md"
 OPENAPI = ROOT / "docs" / "api" / "openapi.json"
 
 REQUIRED_SECTIONS = (
@@ -113,6 +114,15 @@ def test_support_examples_require_synthetic_phi_safe_reproductions() -> None:
     assert "access tokens" in guide
     assert "keep_mapping=True" not in rest_guide
     assert "timeout=300.0" in rest_guide
+
+
+def test_persona_quickstarts_use_safe_current_rest_defaults() -> None:
+    quickstarts = QUICKSTARTS.read_text(encoding="utf-8")
+
+    assert "timeout=300.0" in quickstarts
+    assert "--host 127.0.0.1 --port 8080" in quickstarts
+    assert "--host 0.0.0.0" not in quickstarts
+    assert "**synthetic, non-PHI**" in quickstarts
 
 
 def test_troubleshooting_describes_real_loader_and_middleware_lifecycles() -> None:
