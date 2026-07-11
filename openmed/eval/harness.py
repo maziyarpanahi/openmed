@@ -44,6 +44,12 @@ ModelRunner = Callable[["BenchmarkFixture", str, str], Iterable[Any]]
 RelationModelRunner = Callable[[Any, str, str], Iterable[Any]]
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
 _DEFAULT_FEDERATED_SIGNING_KEY = "openmed-federated-eval-local-key"
+DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE = (
+    Path(__file__).resolve().parent
+    / "golden"
+    / "fixtures"
+    / "context_multilingual.jsonl"
+)
 
 
 @dataclass(frozen=True)
@@ -361,6 +367,176 @@ def load_fixtures(path: str | Path) -> list[BenchmarkFixture]:
     fixtures = [BenchmarkFixture.from_mapping(row) for row in rows]
     _validate_unique_fixture_ids(fixtures)
     return fixtures
+
+
+def load_context_multilingual_fixtures(
+    path: str | Path = DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
+) -> tuple[Mapping[str, Any], tuple[Mapping[str, Any], ...]]:
+    """Load synthetic multilingual ConText assertion fixtures."""
+
+    fixture_path = Path(path)
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not rows or rows[0].get("kind") != "meta":
+        raise ValueError("context multilingual fixture must start with a meta row")
+    fixtures = tuple(row for row in rows[1:] if row.get("kind") != "meta")
+    case_ids = [str(row.get("case_id", "")) for row in fixtures]
+    if any(not case_id for case_id in case_ids) or len(case_ids) != len(set(case_ids)):
+        raise ValueError("context multilingual fixtures require unique case_id values")
+    return rows[0], fixtures
+
+
+def run_context_multilingual_eval(
+    path: str | Path = DEFAULT_CONTEXT_MULTILINGUAL_FIXTURE,
+    *,
+    generated_at: str | None = None,
+) -> BenchmarkReport:
+    """Score deterministic multilingual ConText axes on synthetic fixtures."""
+
+    from openmed.clinical.context import (
+        CERTAINTY_VALUES,
+        NEGATION_VALUES,
+        TEMPORALITY_VALUES,
+        clinical_context_lexicon_stats,
+        resolve_span_context,
+    )
+
+    meta, fixtures = load_context_multilingual_fixtures(path)
+    labels_by_axis = {
+        "negation": NEGATION_VALUES,
+        "temporality": TEMPORALITY_VALUES,
+        "uncertainty": CERTAINTY_VALUES,
+    }
+    expected_by_language: dict[str, dict[str, list[str]]] = {}
+    predicted_by_language: dict[str, dict[str, list[str]]] = {}
+
+    for row in fixtures:
+        language = str(row.get("language") or "en")
+        span = _context_fixture_span(row)
+        context = resolve_span_context(span, language=language)
+        expected = row.get("expected")
+        if not isinstance(expected, Mapping):
+            raise ValueError(
+                f"context fixture {row.get('case_id')} lacks expected axes"
+            )
+
+        axis_predictions = {
+            "negation": context.negation,
+            "temporality": context.temporality,
+            "uncertainty": context.certainty,
+        }
+        axis_expected = {
+            "negation": str(expected["negation"]),
+            "temporality": str(expected["temporality"]),
+            "uncertainty": str(expected["certainty"]),
+        }
+        language_expected = expected_by_language.setdefault(language, {})
+        language_predicted = predicted_by_language.setdefault(language, {})
+        for axis in labels_by_axis:
+            language_expected.setdefault(axis, []).append(axis_expected[axis])
+            language_predicted.setdefault(axis, []).append(axis_predictions[axis])
+
+    macro_f1 = {
+        language: {
+            axis: _macro_f1(
+                expected_by_language[language][axis],
+                predicted_by_language[language][axis],
+                labels_by_axis[axis],
+            )
+            for axis in labels_by_axis
+        }
+        for language in sorted(expected_by_language)
+    }
+    thresholds = {"negation": 0.90, "temporality": 0.85, "uncertainty": 0.85}
+    gate_passed = all(
+        macro_f1[language][axis] >= thresholds[axis]
+        for language in macro_f1
+        for axis in thresholds
+    )
+    metrics = {
+        "context_macro_f1": macro_f1,
+        "context_thresholds": thresholds,
+        "context_gate_passed": gate_passed,
+        "context_lexicon_coverage": clinical_context_lexicon_stats(),
+    }
+    return BenchmarkReport(
+        suite="context_multilingual",
+        model_name="deterministic-context",
+        device="local",
+        fixture_count=len(fixtures),
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata={
+            "fixture_ids": [str(row["case_id"]) for row in fixtures],
+            "languages": sorted(expected_by_language),
+            "parent_issue": "OM-724",
+            "synthetic": bool(meta.get("synthetic")),
+        },
+    )
+
+
+def _context_fixture_span(row: Mapping[str, Any]) -> dict[str, Any]:
+    text = str(row.get("text", ""))
+    target = row.get("target")
+    if not isinstance(target, Mapping):
+        raise ValueError(f"context fixture {row.get('case_id')} lacks target")
+    target_text = str(target.get("text") or "")
+    if not target_text:
+        raise ValueError(f"context fixture {row.get('case_id')} has empty target")
+    start = text.find(target_text)
+    if start == -1:
+        raise ValueError(
+            f"context fixture {row.get('case_id')} target is absent from text"
+        )
+    return {
+        "text": target_text,
+        "context": text,
+        "start": start,
+        "end": start + len(target_text),
+    }
+
+
+def _macro_f1(
+    expected: Sequence[str],
+    predicted: Sequence[str],
+    labels: Sequence[str],
+) -> float:
+    if len(expected) != len(predicted):
+        raise ValueError("expected and predicted labels must be the same length")
+    scores = [
+        _label_f1(expected, predicted, label)
+        for label in labels
+        if label in expected or label in predicted
+    ]
+    if not scores:
+        return 1.0
+    return sum(scores) / len(scores)
+
+
+def _label_f1(expected: Sequence[str], predicted: Sequence[str], label: str) -> float:
+    true_positive = sum(
+        1
+        for gold, guess in zip(expected, predicted)
+        if gold == label and guess == label
+    )
+    false_positive = sum(
+        1
+        for gold, guess in zip(expected, predicted)
+        if gold != label and guess == label
+    )
+    false_negative = sum(
+        1
+        for gold, guess in zip(expected, predicted)
+        if gold == label and guess != label
+    )
+    if true_positive == 0:
+        return 0.0 if false_positive or false_negative else 1.0
+    precision = true_positive / (true_positive + false_positive)
+    recall = true_positive / (true_positive + false_negative)
+    return 2 * precision * recall / (precision + recall)
 
 
 def default_model_runner(
