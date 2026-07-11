@@ -2,27 +2,15 @@
   "info": {
     "_postman_id": "0f7a1c2e-4d3b-4a1e-9c6f-2b8d5e7a1c00",
     "name": "OpenMed REST API",
-    "description": "Importable Postman collection for the OpenMed REST service (OpenAPI 1.7.0).\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://localhost:8000`). Start the service with `uvicorn openmed.service.app:app --host 0.0.0.0 --port 8000`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. If the service is started with API-key or JWT auth enabled, set the `{{api_key}}` or `{{bearer_token}}` collection variables and add the corresponding header.\n\nSee docs/rest-service.md for the full endpoint reference.",
+    "description": "Importable Postman collection for the OpenMed REST service (OpenAPI 1.7.0).\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://localhost:8080`). Start the service with `uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. For an authenticated deployment, configure collection-level authorization in Postman or add either an `X-API-Key` header or an `Authorization: Bearer <token>` header. The collection does not store credential variables.\n\nSee docs/rest-service.md for the full endpoint reference.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8000",
+      "value": "http://localhost:8080",
       "type": "string",
       "description": "Base URL of the running OpenMed REST service."
-    },
-    {
-      "key": "api_key",
-      "value": "",
-      "type": "string",
-      "description": "Optional static API key sent via the X-API-Key header when auth is enabled."
-    },
-    {
-      "key": "bearer_token",
-      "value": "",
-      "type": "string",
-      "description": "Optional JWT bearer token sent via the Authorization header when auth is enabled."
     },
     {
       "key": "job_id",

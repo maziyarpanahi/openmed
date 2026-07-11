@@ -16,10 +16,16 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
+import yaml
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 COLLECTION_FILE = BASE_DIR / "docs" / "api" / "openmed.postman_collection.json"
 OPENAPI_FILE = BASE_DIR / "docs" / "api" / "openapi.json"
+DOCKERFILE = BASE_DIR / "deploy" / "docker" / "Dockerfile"
+COMPOSE_FILE = BASE_DIR / "docker-compose.yml"
+HELM_VALUES_FILE = BASE_DIR / "deploy" / "helm" / "openmed-service" / "values.yaml"
+SERVICE_PORT = 8080
+HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
 # The endpoints the issue explicitly requires the collection to exercise.
 REQUIRED_ENDPOINTS = (
@@ -58,18 +64,36 @@ def _iter_requests(items: list) -> Iterator[dict]:
                 yield from _iter_requests([child])
 
 
-def _request_paths() -> set[str]:
-    """Return the normalized ``/`` path for every request in the collection."""
+def _request_operations() -> set[tuple[str, str]]:
+    """Return normalized ``(method, path)`` pairs for every collection request."""
     collection = _load_collection()
-    paths: set[str] = set()
+    operations: set[tuple[str, str]] = set()
     for request_item in _iter_requests(collection.get("item", [])):
-        url = request_item["request"]["url"]
+        request = request_item["request"]
+        url = request["url"]
         segments = url["path"] if isinstance(url, dict) else []
         path = "/" + "/".join(segments)
         # Normalize Postman ``{{job_id}}`` placeholders to OpenAPI ``{job_id}``.
         path = re.sub(r"\{\{(\w+)\}\}", r"{\1}", path)
-        paths.add(path)
-    return paths
+        operations.add((request["method"].lower(), path))
+    return operations
+
+
+def _request_paths() -> set[str]:
+    """Return the normalized ``/`` path for every request in the collection."""
+    return {path for _, path in _request_operations()}
+
+
+def _openapi_operations() -> set[tuple[str, str]]:
+    """Return the public HTTP operations declared by the committed OpenAPI spec."""
+    operations: set[tuple[str, str]] = set()
+    for path, path_item in _load_openapi().get("paths", {}).items():
+        operations.update(
+            (method.lower(), path)
+            for method in path_item
+            if method.lower() in HTTP_METHODS
+        )
+    return operations
 
 
 def test_collection_is_valid_json_and_v21_schema() -> None:
@@ -83,7 +107,34 @@ def test_collection_declares_base_url_variable() -> None:
     collection = _load_collection()
     variables = {var["key"]: var for var in collection.get("variable", [])}
     assert "base_url" in variables
-    assert variables["base_url"]["value"].startswith("http")
+    assert variables["base_url"]["value"] == f"http://localhost:{SERVICE_PORT}"
+
+
+def test_base_url_matches_deployment_runtime_port() -> None:
+    collection = _load_collection()
+    variables = {var["key"]: var for var in collection.get("variable", [])}
+    assert variables["base_url"]["value"] == f"http://localhost:{SERVICE_PORT}"
+    assert f"EXPOSE {SERVICE_PORT}" in DOCKERFILE.read_text(encoding="utf-8")
+
+    compose = yaml.safe_load(COMPOSE_FILE.read_text(encoding="utf-8"))
+    assert f"{SERVICE_PORT}:{SERVICE_PORT}" in compose["services"]["app"]["ports"]
+
+    helm_values = yaml.safe_load(HELM_VALUES_FILE.read_text(encoding="utf-8"))
+    assert helm_values["service"]["port"] == SERVICE_PORT
+    assert helm_values["service"]["targetPort"] == SERVICE_PORT
+
+
+def test_every_declared_collection_variable_is_used() -> None:
+    collection = _load_collection()
+    consumers = json.dumps(
+        {
+            "event": collection.get("event", []),
+            "item": collection.get("item", []),
+        }
+    )
+    for variable in collection.get("variable", []):
+        key = variable["key"]
+        assert f"{{{{{key}}}}}" in consumers, f"unused collection variable: {key}"
 
 
 def test_requests_reference_base_url_variable() -> None:
@@ -113,6 +164,10 @@ def test_collection_covers_all_openapi_paths() -> None:
         "Postman collection is missing requests for OpenAPI paths: "
         f"{missing}. Update docs/api/openmed.postman_collection.json."
     )
+
+
+def test_collection_methods_match_openapi_operations() -> None:
+    assert _request_operations() == _openapi_operations()
 
 
 def test_collection_requests_are_well_formed() -> None:
