@@ -19,6 +19,7 @@ nav:
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
