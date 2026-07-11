@@ -27,22 +27,22 @@ from .script_detect import detect_script, segment_by_script
 
 # --- Unicode bidi control characters (UAX #9) --------------------------------
 
-FSI = "⁨"  # First Strong Isolate
-LRI = "⁦"  # Left-to-Right Isolate
-RLI = "⁧"  # Right-to-Left Isolate
-PDI = "⁩"  # Pop Directional Isolate
+FSI = "\u2068"  # First Strong Isolate
+LRI = "\u2066"  # Left-to-Right Isolate
+RLI = "\u2067"  # Right-to-Left Isolate
+PDI = "\u2069"  # Pop Directional Isolate
 
 # Legacy embedding/override controls plus explicit directional marks. These are
 # stripped by :func:`strip_bidi_controls` so plain-text consumers recover clean
 # output regardless of which control scheme produced it.
-_LRE = "‪"  # Left-to-Right Embedding
-_RLE = "‫"  # Right-to-Left Embedding
-_PDF = "‬"  # Pop Directional Formatting
-_LRO = "‭"  # Left-to-Right Override
-_RLO = "‮"  # Right-to-Left Override
-_LRM = "‎"  # Left-to-Right Mark
-_RLM = "‏"  # Right-to-Left Mark
-_ALM = "؜"  # Arabic Letter Mark
+_LRE = "\u202a"  # Left-to-Right Embedding
+_RLE = "\u202b"  # Right-to-Left Embedding
+_PDF = "\u202c"  # Pop Directional Formatting
+_LRO = "\u202d"  # Left-to-Right Override
+_RLO = "\u202e"  # Right-to-Left Override
+_LRM = "\u200e"  # Left-to-Right Mark
+_RLM = "\u200f"  # Right-to-Left Mark
+_ALM = "\u061c"  # Arabic Letter Mark
 
 #: All bidi control code points recognised by :func:`strip_bidi_controls`.
 BIDI_CONTROL_CHARS = frozenset(
@@ -70,6 +70,17 @@ RTL_SCRIPTS = frozenset({"Arabic", "Hebrew"})
 _LTR = "ltr"
 _RTL = "rtl"
 _AUTO = "auto"
+
+
+def _normalize_direction(direction: str) -> str:
+    """Validate and normalize a rendering direction."""
+
+    if not isinstance(direction, str):
+        raise TypeError("direction must be a string")
+    normalized = direction.lower()
+    if normalized not in {_AUTO, _RTL, _LTR}:
+        raise ValueError("direction must be one of 'auto', 'rtl', or 'ltr'")
+    return normalized
 
 
 # --- Base direction ----------------------------------------------------------
@@ -224,7 +235,7 @@ def render_redacted(
         direction, and the source offsets of every wrapped span.
 
     Raises:
-        TypeError: If ``text`` is not a string.
+        TypeError: If ``text`` or ``direction`` is not a string.
         ValueError: If ``direction`` is invalid or spans overlap or fall
             outside ``text``.
     """
@@ -232,9 +243,7 @@ def render_redacted(
     if not isinstance(text, str):
         raise TypeError("text must be a string")
 
-    direction = direction.lower()
-    if direction not in {_AUTO, _RTL, _LTR}:
-        raise ValueError("direction must be one of 'auto', 'rtl', or 'ltr'")
+    direction = _normalize_direction(direction)
 
     if direction == _AUTO:
         resolved = _RTL if contains_rtl(text) else _LTR
@@ -290,12 +299,14 @@ def wrap_mask(mask: str, direction: str = _AUTO) -> str:
         The isolated mask, or the mask unchanged for the LTR no-op path.
 
     Raises:
-        TypeError: If ``mask`` is not a string.
+        TypeError: If ``mask`` or ``direction`` is not a string.
+        ValueError: If ``direction`` is invalid.
     """
 
     if not isinstance(mask, str):
         raise TypeError("mask must be a string")
-    if direction.lower() == _LTR:
+    direction = _normalize_direction(direction)
+    if direction == _LTR:
         return mask
     return f"{FSI}{mask}{PDI}"
 
