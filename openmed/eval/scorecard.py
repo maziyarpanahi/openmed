@@ -209,10 +209,12 @@ class ModelScorecard:
             "## Device Tiers",
             "",
             (
-                "| Device Tier | Targeted | Reports | Fixtures | Recall | Leakage Rate | "
-                "Latency p50/p95 ms | Peak RSS MB | Model Size MB |"
+                "| Device Tier | Targeted | Reports | Fixtures | Recall | "
+                "Critical Finding Recall | Leakage Rate | Strict RE-F1 | "
+                "Relaxed RE-F1 | Per-Type RE-F1 | Latency p50/p95 ms | "
+                "Peak RSS MB | Model Size MB |"
             ),
-            "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|",
         ]
         for row in payload["device_tiers"]:
             lines.append(
@@ -222,7 +224,11 @@ class ModelScorecard:
                 f"{row['report_count']} | "
                 f"{row['fixture_count']} | "
                 f"{_format_percent_or_placeholder(row['recall'], self.placeholder)} | "
+                f"{_format_percent_or_placeholder(row['critical_finding_recall'], self.placeholder)} | "
                 f"{_format_percent_or_placeholder(row['leakage_rate'], self.placeholder)} | "
+                f"{_format_percent_or_placeholder(row['relation_strict_f1'], self.placeholder)} | "
+                f"{_format_percent_or_placeholder(row['relation_relaxed_f1'], self.placeholder)} | "
+                f"{_format_relation_type_f1(row['relation_per_type_f1'], self.placeholder)} | "
                 f"{_format_latency(row, self.placeholder)} | "
                 f"{_format_number_or_placeholder(row['peak_rss_mb'], self.placeholder)} | "
                 f"{_format_number_or_placeholder(row['model_size_mb'], self.placeholder)} |"
@@ -252,12 +258,16 @@ class ModelScorecard:
         return {
             "device_tier": device,
             "fixture_count": sum(report.fixture_count for report in reports),
+            "critical_finding_recall": _aggregate_critical_finding_recall(reports),
             "leakage_rate": _aggregate_leakage(reports),
             "latency_p50_ms": _aggregate_latency(reports, "p50_ms"),
             "latency_p95_ms": _aggregate_latency(reports, "p95_ms"),
             "model_size_mb": _aggregate_model_size_mb(reports, self.manifest_row),
             "peak_rss_mb": _aggregate_peak_rss_mb(reports, self.manifest_row, device),
             "recall": _aggregate_recall(reports),
+            "relation_per_type_f1": _aggregate_relation_per_type_f1(reports),
+            "relation_relaxed_f1": _aggregate_relation_f1(reports, "relaxed"),
+            "relation_strict_f1": _aggregate_relation_f1(reports, "strict"),
             "report_count": len(reports),
             "targeted": device in self.target_formats,
         }
@@ -334,6 +344,30 @@ def _aggregate_recall(reports: Sequence[BenchmarkReport]) -> float | None:
     )
 
 
+def _aggregate_critical_finding_recall(
+    reports: Sequence[BenchmarkReport],
+) -> float | None:
+    covered = 0.0
+    total = 0.0
+    saw_denominator = False
+    for report in reports:
+        metrics = _plain(report.metrics)
+        raw_covered = _number_at(metrics, "critical_finding_recall.covered")
+        raw_total = _number_at(metrics, "critical_finding_recall.total")
+        if raw_covered is None or raw_total is None:
+            continue
+        saw_denominator = True
+        covered += raw_covered
+        total += raw_total
+    if saw_denominator:
+        return covered / total if total > 0 else None
+    return _aggregate_rate(
+        reports,
+        numerator_denominator_keys=(),
+        value_keys=("critical_finding_recall.overall",),
+    )
+
+
 def _aggregate_leakage(reports: Sequence[BenchmarkReport]) -> float | None:
     return _aggregate_rate(
         reports,
@@ -343,6 +377,52 @@ def _aggregate_leakage(reports: Sequence[BenchmarkReport]) -> float | None:
         ),
         value_keys=("leakage.overall", "leakage_rate.overall"),
     )
+
+
+def _aggregate_relation_f1(
+    reports: Sequence[BenchmarkReport],
+    mode: str,
+) -> float | None:
+    metrics = [
+        relation_metric
+        for report in reports
+        if (relation_metric := _relation_metric(report, mode))
+    ]
+    return _aggregate_f1_metrics(metrics)
+
+
+def _aggregate_relation_per_type_f1(
+    reports: Sequence[BenchmarkReport],
+) -> dict[str, dict[str, float | None]]:
+    by_type: dict[str, dict[str, list[Mapping[str, Any]]]] = {}
+    for report in reports:
+        metrics = _plain(report.metrics)
+        per_type = _nested_get(metrics, "relation_extraction.per_relation_type")
+        if per_type is None:
+            per_type = _nested_get(metrics, "per_relation_type_re_f1")
+        if not isinstance(per_type, Mapping):
+            continue
+        for relation_type, payload in per_type.items():
+            if not isinstance(payload, Mapping):
+                continue
+            bucket = by_type.setdefault(
+                str(relation_type),
+                {"relaxed": [], "strict": []},
+            )
+            strict = payload.get("strict")
+            relaxed = payload.get("relaxed")
+            if isinstance(strict, Mapping):
+                bucket["strict"].append(strict)
+            if isinstance(relaxed, Mapping):
+                bucket["relaxed"].append(relaxed)
+
+    return {
+        relation_type: {
+            "relaxed": _aggregate_f1_metrics(metrics["relaxed"]),
+            "strict": _aggregate_f1_metrics(metrics["strict"]),
+        }
+        for relation_type, metrics in sorted(by_type.items())
+    }
 
 
 def _aggregate_rate(
@@ -376,6 +456,56 @@ def _aggregate_rate(
     if not values:
         return None
     return sum(values) / len(values)
+
+
+def _relation_metric(
+    report: BenchmarkReport,
+    mode: str,
+) -> Mapping[str, Any] | None:
+    metrics = _plain(report.metrics)
+    nested = _nested_get(metrics, f"relation_extraction.{mode}")
+    if isinstance(nested, Mapping):
+        return nested
+    alias = _nested_get(metrics, f"{mode}_relation_f1")
+    return alias if isinstance(alias, Mapping) else None
+
+
+def _aggregate_f1_metrics(metrics: Sequence[Mapping[str, Any]]) -> float | None:
+    true_positives = 0.0
+    false_positives = 0.0
+    false_negatives = 0.0
+    has_counts = False
+    values: list[float] = []
+    for metric in metrics:
+        tp = _number_at(metric, "true_positives")
+        fp = _number_at(metric, "false_positives")
+        fn = _number_at(metric, "false_negatives")
+        if tp is not None and fp is not None and fn is not None:
+            true_positives += tp
+            false_positives += fp
+            false_negatives += fn
+            has_counts = True
+            continue
+        f1 = _number_at(metric, "f1")
+        if f1 is not None:
+            values.append(f1)
+    if has_counts:
+        precision = _safe_ratio(
+            true_positives,
+            true_positives + false_positives,
+            zero_denominator=1.0,
+        )
+        recall = _safe_ratio(
+            true_positives,
+            true_positives + false_negatives,
+            zero_denominator=1.0,
+        )
+        if precision + recall == 0:
+            return 0.0
+        return 2 * precision * recall / (precision + recall)
+    if values:
+        return sum(values) / len(values)
+    return None
 
 
 def _aggregate_latency(
@@ -477,6 +607,17 @@ def _number_or_none(value: Any) -> float | None:
     return None
 
 
+def _safe_ratio(
+    numerator: float,
+    denominator: float,
+    *,
+    zero_denominator: float,
+) -> float:
+    if denominator == 0:
+        return zero_denominator
+    return numerator / denominator
+
+
 def _bytes_to_mib(value: float | None) -> float | None:
     if value is None:
         return None
@@ -489,6 +630,21 @@ def _format_percent_or_placeholder(value: Any, placeholder: str) -> str:
     if isinstance(value, (int, float)):
         return f"{value:.2%}"
     return str(value)
+
+
+def _format_relation_type_f1(value: Any, placeholder: str) -> str:
+    if not isinstance(value, Mapping) or not value:
+        return placeholder
+    parts: list[str] = []
+    for relation_type, metrics in value.items():
+        if not isinstance(metrics, Mapping):
+            continue
+        strict = metrics.get("strict")
+        relaxed = metrics.get("relaxed")
+        strict_text = _format_percent_or_placeholder(strict, placeholder)
+        relaxed_text = _format_percent_or_placeholder(relaxed, placeholder)
+        parts.append(f"{relation_type}: strict {strict_text}, relaxed {relaxed_text}")
+    return "; ".join(parts) if parts else placeholder
 
 
 def _format_number_or_placeholder(value: Any, placeholder: str) -> str:
