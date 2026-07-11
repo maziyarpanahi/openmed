@@ -1,0 +1,1 @@
+{"id":"pharmaconer-smoke-1","language":"es","split":"smoke","text":"Paciente simulado recibe ibuprofeno oral.","spans":[{"start":25,"end":35,"label":"NORMALIZABLES","text":"ibuprofeno"}],"metadata":{"synthetic":true}}
