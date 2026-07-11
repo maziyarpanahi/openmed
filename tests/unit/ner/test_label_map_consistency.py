@@ -14,7 +14,9 @@ import pytest
 
 from openmed.core.labels import (
     CANONICAL_LABELS,
+    hipaa_class_for,
     policy_label_for,
+    risk_level_for,
     system_hints_for,
 )
 from openmed.core.labels import normalize_label as normalize_canonical_label
@@ -335,6 +337,109 @@ class TestNutritionRouting:
         suggestions = get_model_suggestions(self.NUTRITION_TEXT)
         assert suggestions
         assert all(info.category != "Nutrition" for _k, info, _r in suggestions)
+
+
+# ---------------------------------------------------------------------------
+# Immunization and Vaccine-Administration domain (issue #897)
+# ---------------------------------------------------------------------------
+class TestImmunizationDomain:
+    """FHIR Immunization-aligned labels and offline fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "VaccineName",
+        "DoseNumber",
+        "AdministrationRoute",
+        "AdministrationSite",
+        "VaccineLot",
+        "AdministrationDate",
+        "VaccineSeries",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "VaccineName": "VACCINE_NAME",
+        "DoseNumber": "DOSE_NUMBER",
+        "AdministrationRoute": "ADMINISTRATION_ROUTE",
+        "AdministrationSite": "BODY_SITE",
+        "VaccineLot": "VACCINE_LOT",
+        "AdministrationDate": "DATE",
+        "VaccineSeries": "VACCINE_SERIES",
+    }
+    EXPECTED_ENTITIES = [
+        ("VaccineName", 0, 12, "Tdap vaccine"),
+        ("DoseNumber", 14, 25, "dose 1 of 2"),
+        ("AdministrationRoute", 44, 59, "intramuscularly"),
+        ("AdministrationSite", 67, 79, "left deltoid"),
+        ("AdministrationDate", 83, 93, "2026-03-14"),
+        ("VaccineLot", 103, 108, "A123B"),
+        ("VaccineSeries", 112, 125, "series 1 of 2"),
+    ]
+
+    def test_immunization_in_available_domains(self):
+        assert "immunization" in available_domains()
+
+    def test_get_default_labels_returns_immunization_set(self):
+        assert get_default_labels("immunization") == self.EXPECTED_LABELS
+
+    def test_immunization_labels_have_no_duplicates(self):
+        labels = get_default_labels("immunization")
+        lowered = [l.lower() for l in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_immunization_labels_normalize_with_metadata(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert hipaa_class_for(expected)
+
+        if label == "AdministrationDate":
+            assert policy_label_for(expected) == "QUASI_IDENTIFIER"
+            assert risk_level_for(expected) == "medium"
+            assert system_hints_for(expected) == ()
+        else:
+            assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+            assert risk_level_for(expected) == "low"
+            assert system_hints_for(expected)
+
+    def test_immunization_fixture_reports_offline_per_label_coverage(self):
+        path = CLINICAL_FIXTURES_PATH / "immunization.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not recommend vaccination" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+    def test_immunization_domain_does_not_add_model_routing(self):
+        assert "Immunization" not in _CATEGORY_ENTITY_TYPES
+        categories = [
+            category
+            for category, _reason in _match_categories(
+                "Tdap vaccine, dose 1 of 2, left deltoid"
+            )
+        ]
+        assert "Immunization" not in categories
 
 
 # ---------------------------------------------------------------------------

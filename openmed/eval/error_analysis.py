@@ -96,6 +96,47 @@ class ErrorSpanExample:
             payload["matched_text_hash"] = self.matched_text_hash
         return payload
 
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ErrorSpanExample":
+        """Rebuild an example from a :meth:`to_dict` payload."""
+        matched_start = payload.get("matched_start")
+        matched_end = payload.get("matched_end")
+        example = cls(
+            kind=str(payload["kind"]),
+            fixture_id=str(payload["fixture_id"]),
+            label=str(payload["label"]),
+            start=int(payload["start"]),
+            end=int(payload["end"]),
+            context_start=int(payload["context_start"]),
+            context_end=int(payload["context_end"]),
+            text_hash=str(payload["text_hash"]),
+            matched_label=(
+                str(payload["matched_label"])
+                if payload.get("matched_label") is not None
+                else None
+            ),
+            matched_start=(int(matched_start) if matched_start is not None else None),
+            matched_end=(int(matched_end) if matched_end is not None else None),
+            matched_text_hash=(
+                str(payload["matched_text_hash"])
+                if payload.get("matched_text_hash") is not None
+                else None
+            ),
+        )
+        if not example.kind or not example.fixture_id or not example.label:
+            raise ValueError("error examples require kind, fixture_id, and label")
+        if not (
+            0
+            <= example.context_start
+            <= example.start
+            <= example.end
+            <= example.context_end
+        ):
+            raise ValueError("error example offsets are inconsistent")
+        if not example.text_hash:
+            raise ValueError("error examples require a text_hash")
+        return example
+
 
 @dataclass(frozen=True)
 class ErrorAnalysisReport:
@@ -129,6 +170,67 @@ class ErrorAnalysisReport:
             "model_name": self.model_name,
             "suite": self.suite,
         }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ErrorAnalysisReport":
+        """Rebuild a report from a :meth:`to_dict` payload."""
+        confusion = _report_mapping(payload, "confusion_matrix")
+        matrix = {
+            str(label): {
+                str(column): _report_count(value, f"confusion_matrix.{label}.{column}")
+                for column, value in _report_mapping(
+                    confusion,
+                    label,
+                    context="confusion_matrix",
+                ).items()
+            }
+            for label in confusion
+        }
+        try:
+            fixture_count = _report_count(payload["fixture_count"], "fixture_count")
+        except KeyError as exc:
+            raise ValueError("fixture_count is required") from exc
+        example_cap = _report_count(
+            payload.get("example_cap", DEFAULT_EXAMPLE_CAP),
+            "example_cap",
+        )
+        if fixture_count < 0 or example_cap < 0:
+            raise ValueError("fixture_count and example_cap must be non-negative")
+
+        metadata = payload.get("metadata")
+        if metadata is None:
+            metadata = {}
+        if not isinstance(metadata, Mapping):
+            raise ValueError("metadata must be an object")
+
+        return cls(
+            suite=str(payload["suite"]),
+            model_name=str(payload["model_name"]),
+            device=str(payload["device"]),
+            fixture_count=fixture_count,
+            confusion_matrix=matrix,
+            false_negatives=_examples_from_dict(
+                _report_mapping(payload, "false_negatives")
+            ),
+            false_positives=_examples_from_dict(
+                _report_mapping(payload, "false_positives")
+            ),
+            example_cap=example_cap,
+            generated_at=payload.get("generated_at"),
+            metadata=dict(metadata),
+        )
+
+    @classmethod
+    def read_json(cls, path: str | Path) -> "ErrorAnalysisReport":
+        """Read an error-analysis report JSON file."""
+        report_path = Path(path)
+        with report_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if not isinstance(payload, Mapping):
+            raise ValueError(
+                f"Error-analysis report must be a JSON object: {report_path}"
+            )
+        return cls.from_dict(payload)
 
     def to_json(self, *, indent: int = 2) -> str:
         """Serialize the report to deterministic JSON."""
@@ -1363,6 +1465,52 @@ def _examples_to_dict(
         label: [example.to_dict() for example in examples.get(label, ())]
         for label in LABELS
     }
+
+
+def _examples_from_dict(
+    payload: Mapping[str, Any],
+) -> dict[str, list[ErrorSpanExample]]:
+    result = _empty_examples()
+    for label, rows in payload.items():
+        label_name = str(label)
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise ValueError(f"error examples for {label_name} must be a list")
+        bucket = result.setdefault(label_name, [])
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping):
+                raise ValueError(
+                    f"error example {label_name}[{index}] must be an object"
+                )
+            example = ErrorSpanExample.from_dict(row)
+            if example.label != label_name:
+                raise ValueError(
+                    f"error example {label_name}[{index}] has label {example.label}"
+                )
+            bucket.append(example)
+    return result
+
+
+def _report_mapping(
+    payload: Mapping[str, Any],
+    key: Any,
+    *,
+    context: str = "report",
+) -> Mapping[str, Any]:
+    value = payload.get(key)
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{context}.{key} must be an object")
+    return value
+
+
+def _report_count(value: Any, path: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{path} must be a non-negative integer")
+    count = value
+    if count < 0:
+        raise ValueError(f"{path} must be a non-negative integer")
+    return count
 
 
 def _examples_markdown(

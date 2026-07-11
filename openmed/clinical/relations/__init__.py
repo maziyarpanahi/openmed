@@ -1,5 +1,16 @@
 """Medication relation linking public API."""
 
+from .assertion_filter import (
+    ASSERTION_FILTER_ADVISORY,
+    RELATION_ASSERTION_STATUSES,
+    RELATION_CONDITIONAL,
+    RELATION_CONFIRMED,
+    RELATION_POSSIBLE,
+    RELATION_REFUTED,
+    RelationAssertion,
+    filter_asserted_relations,
+    propagate_relation_assertion,
+)
 from .candidate import (
     ATTRIBUTE_RELATION_TYPES,
     DRUG_TO_DOSE,
@@ -23,6 +34,15 @@ from .medication_links import (
 )
 
 __all__ = [
+    "ASSERTION_FILTER_ADVISORY",
+    "RELATION_ASSERTION_STATUSES",
+    "RELATION_CONFIRMED",
+    "RELATION_REFUTED",
+    "RELATION_CONDITIONAL",
+    "RELATION_POSSIBLE",
+    "RelationAssertion",
+    "propagate_relation_assertion",
+    "filter_asserted_relations",
     "ATTRIBUTE_RELATION_TYPES",
     "DRUG_TO_DOSE",
     "DRUG_TO_DURATION",
