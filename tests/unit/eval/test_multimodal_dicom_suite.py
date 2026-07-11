@@ -7,7 +7,9 @@ carries only synthetic PHI.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import types
 
 import pytest
 
@@ -25,10 +27,8 @@ from openmed.eval.suites import (  # noqa: E402
 )
 from openmed.eval.suites.multimodal_dicom import (  # noqa: E402
     CORPUS_LICENSE,
-    GoldBoxOcrEngine,
+    DEFAULT_SYSTEM_NAME,
     SyntheticDicomCase,
-    _offline_pixel_model,
-    _word_is_covered,
     generate_synthetic_dicom_corpus,
     load_multimodal_dicom_fixtures,
     multimodal_dicom_metadata,
@@ -44,6 +44,8 @@ def test_suite_is_registered() -> None:
 
 
 def test_generator_is_deterministic_with_span_and_bbox_truth(tmp_path) -> None:
+    import pydicom
+
     cases_a = generate_synthetic_dicom_corpus(tmp_path / "a", seed=4242, corpus_size=3)
     cases_b = generate_synthetic_dicom_corpus(tmp_path / "b", seed=4242, corpus_size=3)
 
@@ -55,6 +57,27 @@ def test_generator_is_deterministic_with_span_and_bbox_truth(tmp_path) -> None:
         assert left.header_phi == right.header_phi
         assert left.pixel_text == right.pixel_text
         assert [w.bbox for w in left.pixel_words] == [w.bbox for w in right.pixel_words]
+        assert (
+            left.metadata["source_dicom_sha256"]
+            == right.metadata["source_dicom_sha256"]
+        )
+        assert (
+            hashlib.sha256(left.path.read_bytes()).digest()
+            == hashlib.sha256(right.path.read_bytes()).digest()
+        )
+
+        left_dataset = pydicom.dcmread(left.path)
+        right_dataset = pydicom.dcmread(right.path)
+        for keyword in (
+            "SOPInstanceUID",
+            "StudyInstanceUID",
+            "SeriesInstanceUID",
+        ):
+            assert getattr(left_dataset, keyword) == getattr(right_dataset, keyword)
+        assert (
+            left_dataset.file_meta.ImplementationClassUID
+            == right_dataset.file_meta.ImplementationClassUID
+        )
 
     case = cases_a[0]
     # Header PHI is present on disk and burned-in words carry gold spans+bboxes.
@@ -73,6 +96,27 @@ def test_generator_is_deterministic_with_span_and_bbox_truth(tmp_path) -> None:
     for word in case.pixel_words:
         x0, y0, x1, y1 = word.bbox
         assert x0 < x1 and y0 < y1
+
+
+def test_final_artifact_hashes_and_report_are_deterministic(tmp_path) -> None:
+    report_a = run_multimodal_dicom(
+        output_dir=tmp_path / "a",
+        seed=9191,
+        corpus_size=2,
+        generated_at="2026-01-01T00:00:00Z",
+    )
+    report_b = run_multimodal_dicom(
+        output_dir=tmp_path / "b",
+        seed=9191,
+        corpus_size=2,
+        generated_at="2026-01-01T00:00:00Z",
+    )
+
+    assert (
+        report_a.metadata["final_artifact_sha256"]
+        == report_b.metadata["final_artifact_sha256"]
+    )
+    assert report_a.to_dict() == report_b.to_dict()
 
 
 def test_generator_writes_readable_dicoms_with_burned_in_pixels(tmp_path) -> None:
@@ -96,12 +140,18 @@ def test_generator_writes_readable_dicoms_with_burned_in_pixels(tmp_path) -> Non
 
 def test_run_scores_clean_redaction_with_leakage_first_metrics(tmp_path) -> None:
     report = run_multimodal_dicom(
-        output_dir=tmp_path, seed=123, corpus_size=4, model_name="unit-test-system"
+        output_dir=tmp_path,
+        seed=123,
+        corpus_size=4,
+        system_name="unit-test-system",
     )
 
     assert isinstance(report, BenchmarkReport)
     assert report.suite == MULTIMODAL_DICOM
     assert report.fixture_count == 4
+    assert report.model_name == "unit-test-system"
+    assert report.metadata["pii_model_name"].startswith("OpenMed/")
+    assert report.metadata["pii_model_name"] != report.model_name
 
     metrics = report.metrics
     # The redaction path fully clears burned-in and header PHI on the happy path.
@@ -126,15 +176,44 @@ def test_run_scores_clean_redaction_with_leakage_first_metrics(tmp_path) -> None
 
 def test_run_report_never_contains_raw_phi(tmp_path) -> None:
     cases = generate_synthetic_dicom_corpus(tmp_path, seed=555, corpus_size=3)
-    report = run_multimodal_dicom(cases=cases, model_name="unit-test-system")
+    report = run_multimodal_dicom(cases=cases, system_name="unit-test-system")
 
     serialized = json.dumps(report.to_dict(), sort_keys=True)
     serialized += report.to_markdown()
     for case in cases:
         for word in case.pixel_words:
             assert word.text not in serialized
-        assert case.header_phi["PatientID"] not in serialized
-        assert str(case.header_phi["PatientName"]) not in serialized
+        for value in case.header_phi.values():
+            assert str(value) not in serialized
+
+
+def test_run_scores_one_combined_pixel_and_header_artifact(tmp_path) -> None:
+    import numpy as np
+    import pydicom
+
+    case = generate_synthetic_dicom_corpus(tmp_path, seed=77, corpus_size=1)[0]
+    report = run_multimodal_dicom(cases=[case])
+
+    final_path = case.path.with_name(f"{case.path.stem}.redacted.dcm")
+    pixel_stage = case.path.with_name(f"{case.path.stem}.pixel-stage.dcm")
+    assert final_path.exists()
+    assert not pixel_stage.exists()
+
+    final_dataset = pydicom.dcmread(final_path)
+    for keyword, original in case.header_phi.items():
+        assert str(original) not in str(getattr(final_dataset, keyword, ""))
+
+    pixels = np.asarray(final_dataset.pixel_array)
+    for word in case.pixel_words:
+        x0, y0, x1, y1 = word.bbox
+        assert not np.any(pixels[y0:y1, x0:x1])
+
+    assert report.metadata["artifact_pipeline"] == (
+        "pixel-redaction-then-header-deidentification"
+    )
+    assert report.metadata["final_artifact_sha256"] == [
+        hashlib.sha256(final_path.read_bytes()).hexdigest()
+    ]
 
 
 def test_report_round_trips_through_report_format(tmp_path) -> None:
@@ -149,54 +228,61 @@ def test_report_round_trips_through_report_format(tmp_path) -> None:
     assert json.loads(report.to_json())["suite"] == MULTIMODAL_DICOM
 
 
-def test_benchmark_detects_leakage_under_partial_redaction(tmp_path) -> None:
-    from openmed.eval.metrics import (
-        EvalSpan,
-        compute_character_recall,
-        compute_leakage_rate,
-    )
-    from openmed.multimodal import redact_dicom_pixels
+def test_partial_bbox_overlap_does_not_count_as_fully_redacted(
+    tmp_path, monkeypatch
+) -> None:
+    import numpy as np
+    import pydicom
+
+    import openmed.multimodal as multimodal
 
     case = generate_synthetic_dicom_corpus(tmp_path, seed=321, corpus_size=1)[0]
-    # Drop the MRN word so the detector misses it -> that PHI must leak.
-    missed = next(word for word in case.pixel_words if word.label == ID_NUM)
-    partial = tuple(word for word in case.pixel_words if word is not missed)
+    target = next(word for word in case.pixel_words if word.label == ID_NUM)
+    received_models = []
 
-    with _offline_pixel_model():
-        result = redact_dicom_pixels(
-            case.path,
-            output_path=tmp_path / "partial.dcm",
-            ocr_engine=GoldBoxOcrEngine(partial),
-            model_name=None,
-            verify_residual=True,
-            fail_on_residual=False,
+    def partial_redact(path, *, output_path, model_name, **_kwargs):
+        received_models.append(model_name)
+        dataset = pydicom.dcmread(path)
+        pixels = np.array(dataset.pixel_array, copy=True)
+        for word in case.pixel_words:
+            x0, y0, x1, y1 = word.bbox
+            if word == target:
+                # A sliver overlaps the gold box, but most PHI ink remains.
+                pixels[y0:y1, x0 : x0 + 1] = 0
+            else:
+                pixels[y0:y1, x0:x1] = 0
+        dataset.PixelData = np.ascontiguousarray(pixels).tobytes()
+        dataset.save_as(output_path, enforce_file_format=True)
+        return types.SimpleNamespace(
+            findings=(
+                types.SimpleNamespace(
+                    frame_index=target.frame_index,
+                    bbox=(
+                        target.bbox[0],
+                        target.bbox[1],
+                        target.bbox[0] + 1,
+                        target.bbox[3],
+                    ),
+                ),
+            ),
+            residual_report=types.SimpleNamespace(residual_entity_count=1),
         )
 
-    detected = [
-        (finding.frame_index, tuple(int(v) for v in finding.bbox))
-        for finding in result.findings
-    ]
-    predicted = []
-    cursor = 0
-    for word in case.pixel_words:
-        start = case.pixel_text.index(word.text, cursor)
-        cursor = start + len(word.text)
-        if _word_is_covered(word, detected):
-            predicted.append(
-                EvalSpan(start, start + len(word.text), word.label, word.text)
-            )
-
-    leakage = compute_leakage_rate(
-        list(case.pixel_gold_spans), predicted, source_text=case.pixel_text
-    )
-    recall = compute_character_recall(
-        list(case.pixel_gold_spans), predicted, source_text=case.pixel_text
+    monkeypatch.setattr(multimodal, "redact_dicom_pixels", partial_redact)
+    report = run_multimodal_dicom(
+        cases=[case],
+        system_name="unit-test-system",
+        pii_model_name="OpenMed/unit-test-pii",
     )
 
-    assert leakage.overall > 0.0
-    assert recall.rate < 1.0
-    # The whole MRN string leaked.
-    assert leakage.leaked_chars_by_label[ID_NUM] == len(missed.text)
+    assert received_models == ["OpenMed/unit-test-pii"]
+    assert report.model_name == "unit-test-system"
+    assert report.metadata["pii_model_name"] == "OpenMed/unit-test-pii"
+    assert report.metrics["residual_phi_rate"] > 0.0
+    assert report.metrics["character_recall"]["rate"] < 1.0
+    assert report.metrics["leakage"]["leaked_chars_by_label"][ID_NUM] == len(
+        target.text
+    )
 
 
 def test_load_fixtures_via_registry_and_direct(tmp_path) -> None:
@@ -224,3 +310,19 @@ def test_load_fixtures_via_registry_and_direct(tmp_path) -> None:
 def test_generate_rejects_non_positive_corpus_size(tmp_path) -> None:
     with pytest.raises(ValueError):
         generate_synthetic_dicom_corpus(tmp_path, corpus_size=0)
+
+
+def test_run_rejects_an_empty_supplied_corpus() -> None:
+    with pytest.raises(ValueError, match="at least one"):
+        run_multimodal_dicom(cases=[])
+
+
+def test_default_report_system_name_is_not_used_as_pii_checkpoint(tmp_path) -> None:
+    from openmed.core.model_registry import get_default_pii_model
+
+    report = run_multimodal_dicom(output_dir=tmp_path, seed=5, corpus_size=1)
+
+    assert report.model_name == DEFAULT_SYSTEM_NAME
+    assert report.metadata["system_name"] == DEFAULT_SYSTEM_NAME
+    assert report.metadata["pii_model_name"] == get_default_pii_model("en")
+    assert report.metadata["pii_model_name"] != DEFAULT_SYSTEM_NAME
