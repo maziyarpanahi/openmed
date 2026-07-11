@@ -20,6 +20,7 @@ from openmed.core.pii_i18n import (
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cpf,
+    validate_romanian_cnp,
 )
 from openmed.eval import harness
 from openmed.eval.golden import (
@@ -254,6 +255,39 @@ def test_slovak_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "81101"
     assert gold_by_label["STREET_ADDRESS"] == "Hlavna ulica 12"
     assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
+
+
+def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ro.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 2
+    fixtures = {row["id"]: GoldenFixture.from_mapping(row) for row in rows}
+    fixture = fixtures["golden-i18n-ro-clinical-pii"]
+    assert fixture.language == "ro"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "12 martie 1985"
+    assert gold_by_label["PHONE"] == "+40 721 234 567"
+    assert gold_by_label["ZIPCODE"] == "010011"
+    assert gold_by_label["STREET_ADDRESS"] == "Str. Mihai Eminescu 12"
+    assert validate_romanian_cnp(gold_by_label["ID_NUM"])
+
+    diacritic_fixture = fixtures["golden-i18n-ro-diacritics"]
+    diacritic_by_label = {
+        span.label: span.text for span in diacritic_fixture.gold_spans
+    }
+    assert "Pacientă" in diacritic_fixture.text
+    assert "București" in diacritic_fixture.text
+    assert diacritic_by_label["DATE"] == "22 iulie 2005"
+    assert diacritic_by_label["PHONE"] == "0721 234 567"
+    assert diacritic_by_label["STREET_ADDRESS"] == "Șoseaua Ștefan cel Mare 15"
+    assert diacritic_by_label["ZIPCODE"] == "010101"
+    assert validate_romanian_cnp(diacritic_by_label["ID_NUM"])
 
 
 def test_malay_i18n_jsonl_fixture_offsets_and_checksum():
