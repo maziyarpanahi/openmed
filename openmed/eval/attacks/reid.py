@@ -18,6 +18,7 @@ from openmed.core.labels import normalize_label
 from openmed.core.safety_sweep import hashed_span_surface
 from openmed.core.thresholds import MembershipDefensePolicy
 from openmed.eval.golden import GoldenFixture, load_golden_fixtures
+from openmed.eval.metrics import compute_extraction_reemission_leakage
 from openmed.eval.report import BenchmarkReport
 from openmed.risk import risk_report
 
@@ -74,6 +75,7 @@ def run_reid_benchmark(
     shadow_heldout_records: Sequence[Mapping[str, Any]] | None = None,
     membership_defense: Mapping[str, Any] | MembershipDefensePolicy | None = None,
     membership_advantage_ceiling: float | None = None,
+    extraction_outputs: Any | None = None,
     output_json: str | Path | None = None,
     output_markdown: str | Path | None = None,
     generated_at: str | None = None,
@@ -162,6 +164,13 @@ def run_reid_benchmark(
             defense_policy=membership_defense,
             advantage_ceiling=membership_advantage_ceiling,
         ).to_metric()
+    if extraction_outputs is not None:
+        metrics["extraction_reemission_leakage"] = (
+            compute_extraction_reemission_leakage(
+                [span for fixture in fixtures for span in fixture.gold_spans],
+                extraction_outputs,
+            ).to_dict()
+        )
     report = BenchmarkReport(
         suite=suite,
         model_name=model_name,
