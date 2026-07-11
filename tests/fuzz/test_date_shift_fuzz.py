@@ -26,7 +26,8 @@ All dates are synthetic. No real PHI is used.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+import calendar
+from datetime import date, datetime, timedelta
 
 import pytest
 from hypothesis import assume, given
@@ -47,6 +48,9 @@ _PLACEHOLDER = "[DATE_SHIFTED]"
 # interval-semantics invariant).
 _dates = st.dates(min_value=date(1900, 1, 1), max_value=date(2100, 12, 31))
 _offsets = st.integers(min_value=-3650, max_value=3650)
+_leap_years = st.sampled_from(
+    [year for year in range(1900, 2101) if calendar.isleap(year)]
+)
 
 
 @given(d=_dates, shift=_offsets, keep_year=st.booleans())
@@ -79,21 +83,23 @@ def test_shift_date_zero_offset_is_identity(d):
     iso = d.isoformat()
     out = _shift_date(iso, 0, keep_year=False, lang="en")
     assume(out != _PLACEHOLDER)
-    assert datetime.strptime(out, "%Y-%m-%d").date() == d
+    assert out == iso
 
 
 @given(d=_dates, shift=_offsets)
 def test_shift_date_keep_year_preserves_year(d, shift):
-    """With ``keep_year=True`` the shifted date keeps the original year."""
+    """With ``keep_year=True`` the exact shifted month/day is re-homed."""
     iso = d.isoformat()
     out = _shift_date(iso, shift, keep_year=True, lang="en")
     assume(out != _PLACEHOLDER)
     parsed = datetime.strptime(out, "%Y-%m-%d").date()
-    assert parsed.year == d.year
+    shifted = datetime(d.year, d.month, d.day) + timedelta(days=shift)
+    expected = _replace_year_safe(shifted, d.year).date()
+    assert parsed == expected
 
 
 @given(
-    year=st.integers(min_value=1900, max_value=2100),
+    year=_leap_years,
     shift=_offsets,
     keep_year=st.booleans(),
 )
@@ -103,7 +109,6 @@ def test_shift_date_leap_day_never_crashes(year, shift, keep_year):
     This is the motivating regression class: ``keep_year`` re-homing a shifted
     date onto a non-leap year must not raise (it clamps to Feb 28).
     """
-    assume(year % 4 == 0 and (year % 100 != 0 or year % 400 == 0))  # leap years
     leap_day = date(year, 2, 29).isoformat()
     out = _shift_date(leap_day, shift, keep_year=keep_year, lang="en")
     assert isinstance(out, str)
@@ -133,3 +138,6 @@ def test_replace_year_safe_is_total_and_preserves_year(d, year):
     out = _replace_year_safe(dt, year)
     assert isinstance(out, datetime)
     assert out.year == year
+    assert out.month == d.month
+    expected_day = min(d.day, calendar.monthrange(year, d.month)[1])
+    assert out.day == expected_day
