@@ -1,9 +1,10 @@
 # REST API Recipes
 
-Copy-paste recipes for the OpenMed REST service. Every request below is a
-ready-to-run `curl` command paired with an equivalent Python
-[`requests`](https://requests.readthedocs.io/) snippet, plus the real response
-shape so callers can wire up parsing and error handling in one pass.
+Copy-paste recipes for the OpenMed REST service. Each primary request below is
+a ready-to-run `curl` command paired with an equivalent Python
+[`requests`](https://requests.readthedocs.io/) snippet. Additional variants may
+be shown in one form; the real response shapes let callers wire up parsing and
+error handling in one pass.
 
 This page is the task-oriented companion to the endpoint reference in
 [REST Service](rest-service.md). Use the reference for the full field-by-field
