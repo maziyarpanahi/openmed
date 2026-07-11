@@ -41,6 +41,15 @@ from openmed.eval.suites.policy_compliance import (
     load_policy_compliance_fixtures,
     policy_compliance_metadata,
 )
+from openmed.eval.suites.relations import (
+    RELATIONS,
+    RelationFixture,
+    RelationTrap,
+    load_relation_fixtures,
+    relation_suite_metadata,
+    relation_trap_summary,
+    score_relation_fixtures,
+)
 from openmed.eval.suites.shield import (
     SHIELD,
     load_shield_fixtures,
@@ -126,6 +135,9 @@ __all__ = [
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
+    "RELATIONS",
+    "RelationFixture",
+    "RelationTrap",
     "ComparatorAdapter",
     "ComparatorMatrixReport",
     "ComparatorMatrixRow",
@@ -148,5 +160,9 @@ __all__ = [
     "shield_suite_metadata",
     "load_policy_compliance_fixtures",
     "policy_compliance_metadata",
+    "load_relation_fixtures",
+    "relation_suite_metadata",
+    "relation_trap_summary",
+    "score_relation_fixtures",
     "run_biomedical_ner_benchmark",
 ]
