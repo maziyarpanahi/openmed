@@ -43,11 +43,14 @@ endpoint group so you can exercise the API without writing any client code.
 Import it into Postman (or any tool that reads the Postman v2.1 schema), then set
 the `base_url` collection variable to your server (it defaults to
 `http://127.0.0.1:8080`, matching the Python client's safe loopback default).
-For an authenticated deployment, configure
+Use an `https://` base URL for every non-loopback deployment; never send
+credentials or clinical data over plaintext HTTP. For an authenticated
+deployment, configure
 collection-level authorization in Postman or add either an `X-API-Key` header or
 an `Authorization: Bearer <token>` header. The collection intentionally stores
 no credentials. Every example body uses synthetic clinical text only — no real
-PHI.
+PHI. Keep those bodies synthetic because real patient text can persist in
+Postman history, console output, shared workspaces, exports, or screenshots.
 
 Before polling, copy the identifier returned by the async-job or SMART-ingestion
 POST request into `job_id`. The SMART request leaves
