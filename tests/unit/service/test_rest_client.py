@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, get_args
+from dataclasses import MISSING, fields
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 import httpx
 import pytest
@@ -14,9 +15,15 @@ from openmed.service import runtime as service_runtime
 from openmed.service.app import create_app
 from openmed.service.client import (
     CLIENT_ENDPOINTS,
+    AnalyzeRequest,
+    ModelUnloadRequest,
     OpenMedAPIError,
     OpenMedClient,
+    PIIDeidentifyRequest,
+    PIIExtractRequest,
+    PIIExtractStreamRequest,
     PIILanguage,
+    PrivacyGatewayRequest,
 )
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
@@ -226,6 +233,15 @@ def test_client_propagates_request_id_on_error() -> None:
 
 def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
     spec = json.loads(open("docs/api/openapi.json", encoding="utf-8").read())
+    request_types = {
+        "analyze": AnalyzeRequest,
+        "extract_pii": PIIExtractRequest,
+        "extract_pii_stream": PIIExtractStreamRequest,
+        "deidentify": PIIDeidentifyRequest,
+        "privacy_gateway": PrivacyGatewayRequest,
+        "unload_model": ModelUnloadRequest,
+        "unload_all_models": ModelUnloadRequest,
+    }
 
     assert set(CLIENT_ENDPOINTS) == {
         "analyze",
@@ -247,7 +263,23 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
             continue
 
         schema = _request_body_schema(spec, operation)
-        assert endpoint.request_fields <= set(schema["properties"])
+        assert endpoint.request_fields == set(schema["properties"])
+
+        request_type = request_types[method_name]
+        required_fields = {
+            field.name
+            for field in fields(request_type)
+            if field.default is MISSING and field.default_factory is MISSING
+        }
+        assert required_fields == set(schema.get("required", []))
+
+        type_hints = get_type_hints(request_type)
+        for field_name, annotation in type_hints.items():
+            literal_values = _literal_values(annotation)
+            if not literal_values:
+                continue
+            openapi_values = _schema_enum_values(schema["properties"][field_name])
+            assert literal_values == openapi_values
 
 
 def test_client_pii_language_literal_matches_core() -> None:
@@ -267,3 +299,20 @@ def _request_body_schema(
 
     _, _, schema_name = ref.rpartition("/")
     return spec["components"]["schemas"][schema_name]
+
+
+def _literal_values(annotation: Any) -> set[Any]:
+    if get_origin(annotation) is Literal:
+        return set(get_args(annotation))
+
+    values: set[Any] = set()
+    for child in get_args(annotation):
+        values.update(_literal_values(child))
+    return values
+
+
+def _schema_enum_values(schema: dict[str, Any]) -> set[Any]:
+    values = set(schema.get("enum", []))
+    for child in schema.get("anyOf", []):
+        values.update(_schema_enum_values(child))
+    return values
