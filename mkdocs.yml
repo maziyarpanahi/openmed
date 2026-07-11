@@ -12,6 +12,7 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
       - Persona Quickstarts: quickstarts.md
@@ -31,6 +32,7 @@ nav:
       - Model Manifest: model-manifest.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
@@ -39,9 +41,11 @@ nav:
       - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
+      - Document Adapter Provenance: document-adapter-provenance.md
       - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Experiencer Refinement: clinical/experiencer-refinement.md
       - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
@@ -87,27 +91,33 @@ nav:
       - Container Image SBOM: supply-chain/sbom.md
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
-      - PyPI Trusted Publishing: release/trusted-publishing.md
+      - PyPI Publishing: release/trusted-publishing.md
+      - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md
 
+extra_css:
+  - stylesheets/openmed-brand.css
+
 theme:
   name: material
   language: en
+  logo: assets/openmed-mark.svg
+  favicon: assets/openmed-favicon.svg
   font:
-    text: Inter
+    text: Inter Tight
     code: JetBrains Mono
   palette:
     - scheme: default
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
