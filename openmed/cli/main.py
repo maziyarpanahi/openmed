@@ -2075,14 +2075,25 @@ def _render_false_negatives_table(
         f"# False Negatives: {exploration.suite}",
         "",
         f"Model: {exploration.model_name}  Device: {exploration.device}",
-        (f"Missed gold spans: {exploration.total_missed}  Shown: {exploration.shown}"),
+        (
+            f"Missed gold spans: {exploration.total_missed}  "
+            f"Stored examples: {exploration.available}  Shown: {exploration.shown}"
+        ),
     ]
     if exploration.label_filter is not None:
         lines.append(f"Label filter: {exploration.label_filter}")
     if exploration.limit is not None:
         lines.append(f"Limit: {exploration.limit}")
-    if not exploration.has_text:
-        lines.append("Fixtures not supplied: showing offsets, labels, and hashes only.")
+    if exploration.examples_truncated:
+        lines.append(
+            "Stored examples are capped by the report "
+            f"(example cap: {exploration.example_cap} per label)."
+        )
+    if exploration.shown and not exploration.has_text:
+        lines.append(
+            "Verified synthetic fixture text unavailable: showing offsets, "
+            "labels, and hashes only."
+        )
 
     if not exploration.groups:
         lines.append("")
@@ -2092,6 +2103,12 @@ def _render_false_negatives_table(
     for group in exploration.groups:
         lines.append("")
         lines.append(f"## {group.label} ({group.count})")
+        lines.append(f"Stored examples: {group.available}  Shown: {len(group.records)}")
+        if not group.records:
+            if group.available:
+                lines.append("- No stored example shown under the current limit.")
+            else:
+                lines.append("- No missed-span example is stored for this label.")
         for record in group.records:
             span = f"{record.fixture_id} [{record.start}:{record.end}]"
             if record.span_text is not None:
