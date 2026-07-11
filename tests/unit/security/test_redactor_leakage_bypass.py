@@ -31,6 +31,7 @@ from unittest.mock import patch
 
 import pytest
 
+from openmed.core.audit import hash_text
 from openmed.core.pii import deidentify
 from openmed.core.pii_entity_merger import merge_entities_with_semantic_units
 from openmed.core.pii_i18n import get_patterns_for_language
@@ -431,8 +432,8 @@ def test_ac09_replace_surrogate_omits_mapping_and_plaintext():
 
 
 def test_ac10_audit_report_contains_no_plaintext_identifier():
-    """AC-10: an audit report stores hashes/offsets, never the raw identifier."""
-    text = f"card {SYNTHETIC_CARD}."
+    """AC-10: audit context stores hashes/offsets, never neighboring identifiers."""
+    text = f"{SYNTHETIC_SSN} {SYNTHETIC_CARD} {SYNTHETIC_EMAIL}"
     with patch("openmed.analyze_text", side_effect=_blind_analyze):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -443,11 +444,38 @@ def test_ac10_audit_report_contains_no_plaintext_identifier():
                 audit=True,
             )
 
-    serialized = repr(report.to_dict())
-    assert SYNTHETIC_CARD not in serialized
-    assert SYNTHETIC_CARD_DIGITS not in serialized
-    # But the audit still recorded that a card was found (by canonical label).
-    assert "credit_debit_card" in serialized.lower()
+    serialized_artifacts = (
+        repr(report.to_dict()),
+        report.to_json(),
+        repr(report.export_review_bundle()),
+    )
+    for serialized in serialized_artifacts:
+        assert SYNTHETIC_SSN not in serialized
+        assert SYNTHETIC_CARD not in serialized
+        assert SYNTHETIC_CARD_DIGITS not in serialized
+        assert SYNTHETIC_EMAIL not in serialized
+
+    email_span = next(
+        span for span in report.spans if span.text_hash == hash_text(SYNTHETIC_EMAIL)
+    )
+    before_start = max(0, email_span.start - 32)
+    after_end = min(len(text), email_span.end + 32)
+    assert email_span.context == {
+        "before": {
+            "start": before_start,
+            "end": email_span.start,
+            "length": email_span.start - before_start,
+            "text_hash": hash_text(text[before_start : email_span.start]),
+        },
+        "after": {
+            "start": email_span.end,
+            "end": after_end,
+            "length": after_end - email_span.end,
+            "text_hash": hash_text(text[email_span.end : after_end]),
+        },
+    }
+    # But the audit still recorded that the neighboring identifier was found.
+    assert "email" in report.to_json().lower()
 
 
 # --- AC-11: prompt injection of an LLM reviewer stage -------------------------
