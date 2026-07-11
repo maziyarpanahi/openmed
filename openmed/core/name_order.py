@@ -84,14 +84,15 @@ def register_honorific(lang: str, honorific: str) -> None:
     Args:
         lang: ISO 639-1 language code (``ja``, ``ko``, or ``zh``).
         honorific: Trailing honorific to recognize (e.g. a pack-specific
-            regional variant). No-ops on empty input; de-duplicates.
+            regional variant). Unsupported languages and empty input are
+            ignored; duplicate values are not added twice.
 
     The registry is kept sorted longest-first so multi-character additions
     take precedence over shorter prefixes during suffix matching.
     """
 
     honorific = (honorific or "").strip()
-    if not lang or not honorific:
+    if lang not in CJK_LANGUAGES or not honorific:
         return
     bucket = HONORIFICS.setdefault(lang, [])
     if honorific not in bucket:
