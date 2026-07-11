@@ -1,7 +1,7 @@
 # REST API Recipes
 
 Copy-paste recipes for the OpenMed REST service. Every request below is a
-ready-to-run `curl` one-liner paired with an equivalent Python
+ready-to-run `curl` command paired with an equivalent Python
 [`requests`](https://requests.readthedocs.io/) snippet, plus the real response
 shape so callers can wire up parsing and error handling in one pass.
 
@@ -71,7 +71,7 @@ Response:
 {
   "status": "ok",
   "service": "openmed-rest",
-  "version": "1.7.0",
+  "version": "1.8.1",
   "profile": "prod"
 }
 ```
@@ -108,40 +108,47 @@ for entity in result["entities"]:
     print(entity["label"], entity["text"], round(entity["confidence"], 3))
 ```
 
-Response (same shape as `analyze_text(..., output_format="dict")`):
+Representative response (same shape as
+`analyze_text(..., output_format="dict")`; scores and timings vary by
+hardware):
 
 ```json
 {
   "text": "Patient started imatinib for CML.",
   "entities": [
     {
-      "text": "imatinib",
-      "label": "CHEM",
-      "confidence": 0.994,
-      "start": 16,
-      "end": 24,
-      "metadata": {}
-    },
-    {
       "text": "CML",
       "label": "DISEASE",
-      "confidence": 0.981,
+      "confidence": 0.957,
       "start": 29,
       "end": 32,
-      "metadata": {}
+      "metadata": {
+        "sentence_index": 0,
+        "sentence_text": "Patient started imatinib for CML.",
+        "sentence_start": 0,
+        "sentence_end": 33,
+        "span_valid": true
+      }
     }
   ],
   "model_name": "disease_detection_superclinical",
-  "timestamp": "2026-01-02T09:30:00",
-  "processing_time": 0.042,
-  "metadata": {"sentence_detection": true}
+  "timestamp": "2026-07-11T16:58:55.987165",
+  "processing_time": 1.527,
+  "metadata": {
+    "sentence_detection": true,
+    "sentence_count": 1,
+    "sentence_language": "en",
+    "medical_tokenizer": true,
+    "max_length": 512
+  }
 }
 ```
 
 ## Extract PII — `POST /pii/extract`
 
-Detect personally identifiable information. `model_name` defaults to the small
-multilingual PII model; set `lang` to one of the supported ISO codes (`en`,
+Detect personally identifiable information. Unless `model_name` is set, OpenMed
+selects the recommended PII model for `lang`; set `lang` to one of the supported
+ISO codes (`en`,
 `fr`, `de`, `it`, `es`, `nl`, `hi`, `te`, `pt`, `ar`, `he`, `ja`, `tr`, `id`,
 `th`). `confidence_threshold` defaults to `0.5`.
 
@@ -167,41 +174,64 @@ for entity in response.json()["entities"]:
     print(entity["label"], entity["start"], entity["end"], entity["text"])
 ```
 
-Response (same shape as `extract_pii(...).to_dict()`):
+Representative response (same shape as `extract_pii(...).to_dict()`; scores and
+timings vary by hardware):
 
 ```json
 {
   "text": "Patient Jordan Ramirez, MRN 4482910, called from 555-0147.",
   "entities": [
     {
-      "text": "Jordan Ramirez",
-      "label": "NAME",
-      "confidence": 0.987,
+      "text": "Jordan",
+      "label": "first_name",
+      "confidence": 0.999,
       "start": 8,
-      "end": 22,
-      "metadata": {}
+      "end": 14,
+      "metadata": {"span_valid": true}
     },
     {
-      "text": "4482910",
-      "label": "ID",
-      "confidence": 0.973,
-      "start": 28,
+      "text": "Ramirez",
+      "label": "last_name",
+      "confidence": 0.999,
+      "start": 15,
+      "end": 22,
+      "metadata": {"span_valid": true}
+    },
+    {
+      "text": "MRN 4482910",
+      "label": "medical_record_number",
+      "confidence": 0.708,
+      "start": 24,
       "end": 35,
-      "metadata": {}
+      "metadata": {"span_valid": true}
     },
     {
       "text": "555-0147",
-      "label": "PHONE",
-      "confidence": 0.965,
+      "label": "phone_number",
+      "confidence": 0.992,
       "start": 49,
       "end": 57,
-      "metadata": {}
+      "metadata": {"span_valid": true}
     }
   ],
   "model_name": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
-  "timestamp": "2026-01-02T09:30:00",
-  "processing_time": 0.031,
-  "metadata": {"lang": "en"}
+  "timestamp": "2026-07-11T16:58:02.718948",
+  "processing_time": 1.772,
+  "metadata": {
+    "sentence_detection": true,
+    "sentence_count": 1,
+    "sentence_language": "en",
+    "medical_tokenizer": true,
+    "max_length": 512,
+    "clinical_protection": {
+      "source": "openmed/core/data/clinical_protect_terms.txt",
+      "version": "clinical-protect-terms-v1",
+      "protected_term_count": 71,
+      "checked_spans": 2,
+      "suppressed_spans": 0,
+      "enabled": true
+    }
+  }
 }
 ```
 
@@ -216,7 +246,7 @@ defaults to `0.7`.
 curl -sS -X POST "$OPENMED_URL/pii/deidentify" \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "Patient Jordan Ramirez was admitted on 2026-01-02.",
+    "text": "Call 555-0147 to confirm the appointment.",
     "method": "mask",
     "lang": "en",
     "keep_mapping": true
@@ -225,7 +255,7 @@ curl -sS -X POST "$OPENMED_URL/pii/deidentify" \
 
 ```python
 payload = {
-    "text": "Patient Jordan Ramirez was admitted on 2026-01-02.",
+    "text": "Call 555-0147 to confirm the appointment.",
     "method": "mask",
     "lang": "en",
     "keep_mapping": True,
@@ -237,37 +267,53 @@ print(result["deidentified_text"])
 print("redacted:", result["num_entities_redacted"])
 ```
 
-Response (`deidentify(...).to_dict()`; the `mapping` field appears only when
-`keep_mapping=true` and mapping data exists):
+Representative abridged response (`deidentify(...).to_dict()`; the `mapping`
+field appears only when `keep_mapping=true` and mapping data exists, while
+scores, timings, and nested provenance metadata vary by runtime):
 
 ```json
 {
-  "original_text": "Patient Jordan Ramirez was admitted on 2026-01-02.",
-  "deidentified_text": "Patient [NAME] was admitted on 2026-01-02.",
+  "original_text": "Call 555-0147 to confirm the appointment.",
+  "deidentified_text": "Call [phone_number] to confirm the appointment.",
   "pii_entities": [
     {
-      "text": "Jordan Ramirez",
-      "label": "NAME",
-      "entity_type": "NAME",
-      "start": 8,
-      "end": 22,
-      "confidence": 0.987,
-      "redacted_text": "[NAME]",
-      "canonical_label": null,
-      "sources": [],
-      "evidence": {},
-      "threshold": null,
-      "action": null,
-      "surrogate": null,
-      "metadata": {}
+      "text": "555-0147",
+      "label": "phone_number",
+      "entity_type": "phone_number",
+      "start": 5,
+      "end": 13,
+      "confidence": 0.986,
+      "redacted_text": "[phone_number]",
+      "canonical_label": "PHONE",
+      "sources": ["ml"],
+      "evidence": {
+        "raw_label": "phone_number",
+        "language": "en",
+        "model_id": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
+      },
+      "threshold": 0.7,
+      "action": "mask",
+      "surrogate": "[phone_number]",
+      "metadata": {"span_valid": true}
     }
   ],
   "method": "mask",
-  "timestamp": "2026-01-02T09:30:00",
+  "timestamp": "2026-07-11T16:58:43.445519",
   "num_entities_redacted": 1,
-  "metadata": {},
+  "metadata": {
+    "sentence_detection": true,
+    "sentence_count": 1,
+    "sentence_language": "en",
+    "medical_tokenizer": true,
+    "max_length": 512,
+    "safety_sweep": {
+      "source": "safety_sweep",
+      "patterns_version": "safety-sweep-v1",
+      "spans_added": 0
+    }
+  },
   "audit_report": null,
-  "mapping": {"[NAME]": "Jordan Ramirez"}
+  "mapping": {"[phone_number]": "555-0147"}
 }
 ```
 
@@ -305,36 +351,26 @@ print("warm:", state["warm_models"])
 print("resident cap:", state["max_resident_models"])
 ```
 
-Response with one resident model:
+Response immediately after an unconfigured local service starts:
 
 ```json
 {
-  "default_keep_alive_seconds": 600.0,
-  "max_resident_models": 2,
+  "default_keep_alive_seconds": null,
+  "max_resident_models": null,
   "memory_budget_bytes": null,
   "resident_memory_bytes": 0,
   "pending_memory_bytes": 0,
-  "memory_admission_wait_seconds": 5.0,
-  "warm_models": ["disease_detection_superclinical"],
-  "models": {
-    "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M": {
-      "models": 0,
-      "tokenizers": 0,
-      "pipelines": 1,
-      "active_requests": 0,
-      "keep_alive_seconds_remaining": 287.4,
-      "resident": true,
-      "loading": false,
-      "footprint_bytes": 0,
-      "pending_footprint_bytes": 0
-    }
-  }
+  "memory_admission_wait_seconds": 0.05,
+  "warm_models": [],
+  "models": {}
 }
 ```
 
-When no model is cached, `models` is `{}` and `warm_models` lists only the
-configured preload set. `default_keep_alive_seconds`, `max_resident_models`, and
-`memory_budget_bytes` are `null` when their optional env vars are unset.
+After a model-backed request, `models` contains one entry per resolved model and
+reports its cached resources, active requests, residency, idle-unload countdown,
+and memory footprint. `warm_models` lists only the configured preload set.
+`default_keep_alive_seconds`, `max_resident_models`, and `memory_budget_bytes`
+are `null` when their optional env vars are unset.
 
 ## Unload a model — `POST /models/unload`
 
@@ -356,15 +392,16 @@ response.raise_for_status()
 print(response.json())
 ```
 
-Response:
+Representative response after the analyze recipe has loaded the default disease
+model (released resource counts vary by backend):
 
 ```json
 {
   "unloaded": true,
-  "model_name": "disease_detection_superclinical",
+  "model_name": "OpenMed/OpenMed-NER-DiseaseDetect-SuperClinical-434M",
   "active_requests": 0,
   "loading": false,
-  "released": {"models": 1, "tokenizers": 1, "pipelines": 1}
+  "released": {"models": 0, "tokenizers": 0, "pipelines": 1}
 }
 ```
 
@@ -384,12 +421,13 @@ response.raise_for_status()
 print(response.json())
 ```
 
-Response:
+Representative response after both an analysis pipeline and a PII pipeline were
+cached (released resource counts vary by backend):
 
 ```json
 {
   "unloaded": true,
-  "released": {"models": 1, "tokenizers": 1, "pipelines": 2},
+  "released": {"models": 0, "tokenizers": 0, "pipelines": 2},
   "active_models": {}
 }
 ```
@@ -413,30 +451,36 @@ validation, bad-request, timeout, and internal errors:
         "message": "Value error, Text must not be blank",
         "type": "value_error"
       }
-    ]
+    ],
+    "request_id": "recipe-validation-error"
   }
 }
 ```
 
-The `error.code` is one of `validation_error`, `bad_request`, `timeout`,
-`not_ready`, `service_busy`, `circuit_breaker_open`, `internal_error`, or one of
-the `privacy_gateway_*` codes. `details` may be a list (validation errors), an
-object (for example `{"timeout_seconds": 300}`), or `null`. Responses may also
-carry an `X-Request-ID` header (echoed as `request_id` in the envelope) for
-correlating logs.
+Common `error.code` values include `validation_error`, `bad_request`, `timeout`,
+`not_ready`, `rate_limited`, `backpressure`, `service_busy`,
+`circuit_breaker_open`, and `internal_error`. Authentication and privacy-gateway
+features add their own documented codes. `details` may be a list (validation
+errors), an object (for example `{"timeout_seconds": 300}`), or `null`. Every
+response carries an `X-Request-ID` header, and error envelopes echo it as
+`error.request_id` for correlating logs.
 
 Reproduce the validation envelope with a blank `text`:
 
 ```bash
 curl -sS -X POST "$OPENMED_URL/analyze" \
   -H "Content-Type: application/json" \
+  -H "X-Request-ID: recipe-validation-error" \
   -d '{"text": "   "}'
 ```
 
 ```python
 def analyze(text: str) -> dict:
     response = requests.post(
-        f"{BASE_URL}/analyze", json={"text": text}, timeout=60
+        f"{BASE_URL}/analyze",
+        json={"text": text},
+        headers={"X-Request-ID": "recipe-validation-error"},
+        timeout=60,
     )
     if response.status_code >= 400:
         error = response.json()["error"]
