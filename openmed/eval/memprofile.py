@@ -5,11 +5,13 @@ This module profiles *where* memory goes across the inference path -- model load
 vs. the first forward pass vs. a steady-state batch -- so tier-budget overshoots
 can be diagnosed with a reproducible breakdown.
 
-Each phase records a baseline RSS, a peak RSS (reusing the resource-metric
-helpers in :mod:`openmed.eval.metrics`), and a ``tracemalloc`` top-allocator
-snapshot. Allocator entries carry only ``file:lineno`` provenance and byte
-counts -- never document text -- so the report stays local-first and free of raw
-PHI.
+Each phase records a baseline RSS, a sampled peak RSS (reusing the
+resource-metric helpers in :mod:`openmed.eval.metrics`), a sampled peak of
+current Python-traced memory, and a ``tracemalloc`` top-allocator snapshot.
+Document payloads are never retained; document identifiers, arbitrary caller
+metadata, and local model paths are represented by hashes. Allocator entries
+retain source ``file:lineno`` provenance and byte/count aggregates, so callers
+should still apply their normal policy to source paths and remote model ids.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ import threading
 import tracemalloc
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Callable, Mapping, Sequence
 
 from openmed.eval.metrics import ResourceMetrics, compute_resource_metrics
@@ -42,6 +44,8 @@ PROFILE_PHASES: tuple[str, ...] = (PHASE_LOAD, PHASE_FIRST_FORWARD, PHASE_STEADY
 SYNTHETIC_MEMPROFILE_MODEL_NAME = "synthetic-one-page-note-runner"
 DEFAULT_TOP_ALLOCATORS = 10
 _RSS_POLL_INTERVAL_SECONDS = 0.005
+_TRACED_MEMORY_POLL_INTERVAL_SECONDS = 0.001
+_SAFE_PROVENANCE_SOURCES = frozenset({"cli"})
 
 #: A model loader takes the ``model`` handle and returns a runnable callable.
 ModelLoader = Callable[[Any], Callable[[PerfDocument], Any]]
@@ -51,10 +55,12 @@ RssSampler = Callable[[], "int | None"]
 
 @dataclass(frozen=True)
 class AllocatorStat:
-    """One ``tracemalloc`` top-allocator entry, free of raw PHI.
+    """One ``tracemalloc`` top-allocator entry without allocation payloads.
 
     Only source provenance (``file``/``lineno``) and byte/count aggregates are
-    retained -- never the allocated payload -- so the record is safe to log.
+    retained -- never the allocated payload. Source paths can still disclose
+    local filesystem provenance and should be handled under the caller's normal
+    logging policy.
     """
 
     file: str
@@ -116,6 +122,7 @@ class PhaseMemory:
             "rss_semantics": "current-sampled",
             "traced_current_bytes": self.traced_current_bytes,
             "traced_peak_bytes": self.traced_peak_bytes,
+            "traced_peak_semantics": "current-sampled-delta",
             "tracemalloc_preexisting": self.tracemalloc_preexisting,
             "top_allocators": [stat.to_dict() for stat in self.top_allocators],
         }
@@ -265,10 +272,20 @@ def profile_memory(
     ``first-forward`` phase and the remaining documents (or a re-run of the
     single document) under the ``steady-state-batch`` phase.
 
-    Each phase captures a baseline RSS, a peak RSS via the shared resource-metric
-    helpers, and a ``tracemalloc`` top-allocator snapshot. Only file/line
-    provenance and byte counts are retained -- no document text -- so the returned
-    :class:`MemoryProfile` is safe to persist and log.
+    Each phase captures a baseline RSS, a sampled peak RSS via the shared
+    resource-metric helpers, a sampled peak of current Python-traced memory, and a
+    ``tracemalloc`` top-allocator snapshot. The traced-memory sampler is
+    non-destructive when another caller already owns ``tracemalloc``: it never
+    clears traces or resets the process-wide high-water mark. Sampling is
+    process-wide, so concurrent allocations can be included and allocations that
+    live for less than the polling interval can be missed.
+
+    Document identifiers are hashed, arbitrary caller metadata is represented by
+    a fingerprint rather than copied into the report, and local model paths are
+    replaced by stable hashes. Remote model identifiers, safe source provenance,
+    allocator source locations, and byte/count aggregates remain available for
+    diagnosis. Callers should still avoid PHI in model identifiers and source file
+    paths.
 
     Args:
         model: Model path, identifier, or callable to profile.
@@ -278,7 +295,9 @@ def profile_memory(
             platform-native process RSS sampler.
         top_allocators: Number of top allocator entries to keep per phase.
         generated_at: Optional ISO timestamp override for deterministic output.
-        metadata: Optional extra metadata merged into the profile.
+        metadata: Optional caller metadata. Values are not copied into the report;
+            a stable fingerprint and entry count are recorded instead. Recognized
+            safe provenance values may also be retained.
 
     Returns:
         A :class:`MemoryProfile` with per-phase peak RSS and top allocators for
@@ -333,13 +352,20 @@ def profile_memory(
     )
     phases.append(steady_phase)
 
-    profile_metadata = {
+    profile_metadata: dict[str, Any] = {
         "document_hashes": [
             _document_hash(document.document_id) for document in documents
         ],
         "top_allocators": top_allocators,
     }
-    profile_metadata.update(metadata or {})
+    if metadata:
+        profile_metadata["caller_metadata"] = {
+            "entry_count": len(metadata),
+            "sha256": _metadata_hash(metadata),
+        }
+        source = metadata.get("source")
+        if isinstance(source, str) and source in _SAFE_PROVENANCE_SOURCES:
+            profile_metadata["provenance"] = {"source": source}
 
     return MemoryProfile(
         model_name=_model_name(model),
@@ -360,32 +386,87 @@ def synthetic_memprofile_loader(model: Any) -> Callable[[PerfDocument], Any]:
 
 
 def _default_loader(model: Any) -> Callable[[PerfDocument], Any]:
-    """Load the model now and return a warmed per-document inference callable."""
+    """Load the real inference pipeline now and reuse it for every document."""
 
     if callable(model):
         return lambda document: model(document.text)
 
-    from openmed.core.models import ModelLoader
-    from openmed.core.pii import extract_pii
+    from openmed.core import pii as pii_module
 
     model_name = str(model)
+    if pii_module._looks_like_privacy_filter_identifier(
+        model_name
+    ) or pii_module._is_privacy_filter_artifact_path(model_name):
+        from openmed.core.backends import create_privacy_filter_pipeline
+
+        pipeline = create_privacy_filter_pipeline(model_name)
+
+        def run_privacy_filter(document: PerfDocument) -> Any:
+            return pii_module._extract_pii_batch(
+                [document.text],
+                model_name=model_name,
+                lang=document.language,
+                privacy_filter_pipeline=pipeline,
+            )[0]
+
+        return run_privacy_filter
+
+    from openmed.core.models import ModelLoader
+
     shared_loader = ModelLoader()
-    shared_loader.create_pipeline(
+    pipeline = shared_loader.create_pipeline(
         model_name,
         task="token-classification",
         aggregation_strategy="simple",
         use_fast_tokenizer=True,
     )
+    max_sequence_length = shared_loader.get_max_sequence_length(
+        model_name,
+        tokenizer=getattr(pipeline, "tokenizer", None),
+    )
+    preloaded_loader = _PreloadedPipelineLoader(
+        shared_loader,
+        pipeline,
+        max_sequence_length=max_sequence_length,
+    )
 
     def run_document(document: PerfDocument) -> Any:
-        return extract_pii(
+        return pii_module.extract_pii(
             document.text,
             model_name=model_name,
             lang=document.language,
-            loader=shared_loader,
+            loader=preloaded_loader,
         )
 
     return run_document
+
+
+class _PreloadedPipelineLoader:
+    """Duck-typed model loader that always returns one preloaded pipeline."""
+
+    def __init__(
+        self,
+        delegate: Any,
+        pipeline: Callable[..., Any],
+        *,
+        max_sequence_length: int | None,
+    ) -> None:
+        self.config = getattr(delegate, "config", None)
+        self._pipeline = pipeline
+        self._max_sequence_length = max_sequence_length
+
+    def create_pipeline(self, model_name: str, **kwargs: Any) -> Callable[..., Any]:
+        """Return the exact pipeline constructed during the load phase."""
+        return self._pipeline
+
+    def get_max_sequence_length(
+        self,
+        model_name: str,
+        *,
+        tokenizer: Any = None,
+    ) -> int | None:
+        """Return the sequence-length value resolved during the load phase."""
+        return self._max_sequence_length
 
 
 def _measure_phase(
@@ -401,13 +482,17 @@ def _measure_phase(
     started_tracing = not tracemalloc.is_tracing()
     if started_tracing:
         tracemalloc.start()
+    traced_monitor = _TracedMemoryMonitor()
+    traced_monitor.start()
     baseline_snapshot = tracemalloc.take_snapshot()
-    baseline_current, baseline_peak = tracemalloc.get_traced_memory()
+    baseline_current, _ = tracemalloc.get_traced_memory()
+    traced_monitor.reset(baseline_current)
     try:
         result = work()
         snapshot = tracemalloc.take_snapshot()
-        traced_current, traced_peak = tracemalloc.get_traced_memory()
+        traced_current, _ = tracemalloc.get_traced_memory()
     finally:
+        sampled_traced_peak = traced_monitor.stop()
         peak_rss_bytes = rss_monitor.stop()
         if started_tracing:
             tracemalloc.stop()
@@ -420,7 +505,7 @@ def _measure_phase(
     phase_current = max(int(traced_current - baseline_current), 0)
     retained_growth = sum(stat.size_bytes for stat in allocator_stats)
     phase_peak = max(
-        int(traced_peak - baseline_peak),
+        int(sampled_traced_peak - baseline_current),
         phase_current,
         retained_growth,
         0,
@@ -448,6 +533,8 @@ def _top_allocators(
         if stat.size_diff <= 0 or stat.count_diff <= 0:
             continue
         frame = stat.traceback[0] if stat.traceback else None
+        if frame is not None and _is_profiler_internal_source(frame.filename):
+            continue
         top.append(
             AllocatorStat(
                 file=frame.filename if frame is not None else "<unknown>",
@@ -461,12 +548,21 @@ def _top_allocators(
     return tuple(top)
 
 
+def _is_profiler_internal_source(filename: str) -> bool:
+    """Return whether an allocator frame belongs to profiler bookkeeping."""
+    try:
+        path = Path(filename).resolve(strict=False)
+    except OSError:
+        return False
+    return path == Path(__file__).resolve(strict=False) or path.name == "tracemalloc.py"
+
+
 class _RssMonitor:
     """Sample current RSS during one phase without retaining payload data."""
 
     def __init__(self, sampler: RssSampler) -> None:
         self._sampler = sampler
-        self._samples: list[int] = []
+        self._peak: int | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -485,7 +581,7 @@ class _RssMonitor:
         if self._thread is not None:
             self._thread.join(timeout=1.0)
         self._record()
-        return max(self._samples) if self._samples else None
+        return self._peak
 
     def _poll(self) -> None:
         while not self._stop.wait(_RSS_POLL_INTERVAL_SECONDS):
@@ -497,9 +593,53 @@ class _RssMonitor:
         except Exception:
             return None
         if value is not None:
-            self._samples.append(max(int(value), 0))
-            return self._samples[-1]
+            recorded = max(int(value), 0)
+            self._peak = recorded if self._peak is None else max(self._peak, recorded)
+            return recorded
         return None
+
+
+class _TracedMemoryMonitor:
+    """Sample current traced memory without mutating global tracer state."""
+
+    def __init__(self) -> None:
+        self._peak = 0
+        self._stop = threading.Event()
+        self._ready = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        self._record()
+        self._thread = threading.Thread(
+            target=self._poll,
+            name="openmed-traced-memory-monitor",
+            daemon=True,
+        )
+        self._thread.start()
+        self._ready.wait(timeout=1.0)
+
+    def reset(self, baseline: int) -> None:
+        """Reset this monitor's private peak after profiler setup."""
+        self._peak = max(int(baseline), 0)
+
+    def stop(self) -> int:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        self._record()
+        return self._peak
+
+    def _poll(self) -> None:
+        self._ready.set()
+        while not self._stop.wait(_TRACED_MEMORY_POLL_INTERVAL_SECONDS):
+            self._record()
+
+    def _record(self) -> None:
+        try:
+            current, _ = tracemalloc.get_traced_memory()
+        except RuntimeError:
+            return
+        self._peak = max(self._peak, int(current), 0)
 
 
 def _current_rss_bytes() -> int | None:
@@ -611,7 +751,10 @@ def _normalize_documents(
 
 def _model_name(model: Any) -> str:
     if isinstance(model, (str, Path)):
-        return str(model)
+        value = str(model)
+        if _is_local_model_reference(model, value):
+            return f"local-model:{_document_hash(_canonical_local_path(value))}"
+        return value
     name = getattr(model, "__name__", None)
     if name:
         return str(name)
@@ -621,6 +764,43 @@ def _model_name(model: Any) -> str:
 def _document_hash(document_id: str) -> str:
     digest = hashlib.sha256(document_id.encode("utf-8")).hexdigest()
     return f"sha256:{digest}"
+
+
+def _metadata_hash(metadata: Mapping[str, Any]) -> str:
+    """Return a stable fingerprint without persisting caller metadata values."""
+    try:
+        canonical = json.dumps(
+            metadata,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+            default=str,
+        )
+    except (TypeError, ValueError):
+        canonical = repr(metadata)
+    return _document_hash(canonical)
+
+
+def _is_local_model_reference(model: Any, value: str) -> bool:
+    if isinstance(model, Path):
+        return True
+    if value.startswith(("./", "../", "~/", ".\\", "..\\", "~\\")):
+        return True
+    try:
+        candidate = Path(value).expanduser()
+        if candidate.is_absolute() or candidate.exists():
+            return True
+    except OSError:
+        pass
+    return PureWindowsPath(value).is_absolute()
+
+
+def _canonical_local_path(value: str) -> str:
+    try:
+        return str(Path(value).expanduser().resolve(strict=False))
+    except OSError:
+        return value
 
 
 def _utc_now() -> str:
