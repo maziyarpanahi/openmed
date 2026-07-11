@@ -11,11 +11,17 @@ import pytest
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DOC_PATHS = (
+LANGUAGE_CLAIM_PATHS = (
     "README.md",
     "docs/anonymization.md",
     "docs/faq.md",
+    "docs/feature-map.md",
+    "docs/index.md",
     "docs/website/index.html",
+)
+STALE_LANGUAGE_COUNT_PATHS = LANGUAGE_CLAIM_PATHS + (
+    "docs/brand/social/_src/hf-card.html",
+    "docs/website/assets/script.js",
 )
 
 EXPECTED_LANGUAGE_CODES = sorted(SUPPORTED_LANGUAGES)
@@ -34,8 +40,11 @@ LANGUAGE_CLAIM_PATTERN = re.compile(
     rf"(?P<codes>{LANGUAGE_CODES_PATTERN})",
     flags=re.IGNORECASE,
 )
+_STALE_COUNT = r"(?:15|16|fifteen|sixteen)"
+_LANGUAGE_DESCRIPTOR = r"(?:(?:supported|model-backed|PII)[\s_-]+){0,3}languages?"
 STALE_PII_LANGUAGE_COUNT_PATTERN = re.compile(
-    r"\b(?:15|fifteen)\s+(?:supported\s+)?(?:PII\s+)?languages?\b",
+    rf"\b(?:{_STALE_COUNT}[\s_-]+{_LANGUAGE_DESCRIPTOR}|"
+    rf"{_LANGUAGE_DESCRIPTOR}[^A-Za-z0-9]{{0,48}}{_STALE_COUNT})\b",
     flags=re.IGNORECASE,
 )
 
@@ -60,7 +69,7 @@ def _assert_supported_language_claim_matches(name: str, text: str) -> None:
         assert codes == EXPECTED_LANGUAGE_CODES
 
 
-@pytest.mark.parametrize("relative_path", DOC_PATHS)
+@pytest.mark.parametrize("relative_path", LANGUAGE_CLAIM_PATHS)
 def test_documented_pii_language_claim_matches_supported_languages(
     relative_path: str,
 ) -> None:
@@ -68,12 +77,27 @@ def test_documented_pii_language_claim_matches_supported_languages(
     _assert_supported_language_claim_matches(relative_path, text)
 
 
-@pytest.mark.parametrize("relative_path", DOC_PATHS)
-def test_user_facing_docs_do_not_reintroduce_stale_15_language_claims(
+@pytest.mark.parametrize("relative_path", STALE_LANGUAGE_COUNT_PATHS)
+def test_user_facing_docs_do_not_reintroduce_pre_17_language_claims(
     relative_path: str,
 ) -> None:
-    text = _visible_text((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+    text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
     assert not STALE_PII_LANGUAGE_COUNT_PATTERN.search(text)
+
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "15 languages",
+        "fifteen supported PII languages",
+        "16 model-backed PII languages",
+        "sixteen supported languages",
+        "Model-backed PII languages | 16",
+        "15-pii-languages",
+    ),
+)
+def test_stale_language_count_guard_catches_pre_17_claims(claim: str) -> None:
+    assert STALE_PII_LANGUAGE_COUNT_PATTERN.search(claim)
 
 
 @pytest.mark.parametrize(
