@@ -1,19 +1,23 @@
-"""Static docstring-coverage checker for OpenMed's public API surface.
+"""Static function/class docstring checker for OpenMed's public API surface.
 
 Motivation
 ----------
-``pre-commit`` runs pydocstyle for docstring *style*, but nothing enforces
-docstring *coverage* on the public API. Because ``mkdocstrings`` autogenerates
-the API reference from docstrings, an undocumented public export (for example a
-new name added to ``openmed.__all__``) would silently ship an empty reference
-entry. This checker closes that gap with a focused, stdlib-only pass over the
-exported names.
+Functions and classes exported through ``openmed.__all__`` are part of the
+runtime public contract and should carry meaningful docstrings for interactive
+help, IDEs, and any API-reference page that explicitly includes them. This
+checker enforces that focused contract without imposing coverage requirements
+on private modules.
+
+Module-level data values cannot carry symbol-specific instance docstrings.
+They are therefore resolved and reported as an explicit inventory, but are not
+included in the function/class coverage percentage.
 
 Design
 ------
-The checker is deliberately **stdlib-only** (``ast`` plus path arithmetic) so it
-runs in CI without importing the runtime package or pulling in optional heavy
-dependencies (``transformers``, backend runtimes, and so on). It:
+The static checker and CLI are deliberately **stdlib-only** (``ast`` plus path
+arithmetic), so they can run without importing the runtime package or optional
+heavy dependencies. A separate pytest parity test imports ``openmed`` and
+compares the live runtime surface with this static inventory. The checker:
 
 1. Parses ``openmed/__init__.py`` to read ``__all__`` and the ``from .module
    import name`` bindings that back each exported name.
@@ -23,8 +27,8 @@ dependencies (``transformers``, backend runtimes, and so on). It:
    for a non-empty docstring via :func:`ast.get_docstring`.
 
 Only *docstringable* symbols (functions and classes) are scored. Module-level
-data constants (dicts, sets, strings, and similar) cannot carry a meaningful
-docstring and are reported separately rather than counted against coverage.
+data values (dicts, sets, strings, and similar) are resolved and reported
+separately rather than counted against coverage.
 
 Usage
 -----
@@ -48,13 +52,11 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_ROOT = REPO_ROOT / "openmed"
 PACKAGE_INIT = PACKAGE_ROOT / "__init__.py"
 
-# The default floor is the current measured coverage. It is intentionally set so
-# the gate passes today and can be ratcheted upward as coverage improves, rather
-# than breaking the build on day one.
+# Every exported function/class must remain documented.
 DEFAULT_MIN_COVERAGE = 100.0
 
-# Minimum docstring length (stripped) to count as documented. Guards against
-# placeholder one-word docstrings sneaking past the check.
+# Minimum stripped length used as a small guard against empty placeholder docs.
+# Docstring style and content quality remain review concerns.
 MIN_DOCSTRING_CHARS = 10
 
 
@@ -68,7 +70,8 @@ class SymbolReport:
             defined directly in ``openmed/__init__.py``.
         kind: One of ``"function"``, ``"class"``, or ``"data"``.
         documented: Whether the symbol carries a sufficiently long docstring.
-            Always ``True`` for ``"data"`` symbols, which are not scored.
+            Always ``True`` for inventoried ``"data"`` symbols, which are not
+            scored as docstringable objects.
         reason: Human-readable explanation when ``documented`` is ``False`` or
             when the symbol could not be resolved.
     """
@@ -106,6 +109,11 @@ class CoverageReport:
     def missing(self) -> List[SymbolReport]:
         """Return scored symbols that are missing a sufficient docstring."""
         return [s for s in self.scored if not s.documented]
+
+    @property
+    def data(self) -> List[SymbolReport]:
+        """Return resolved data exports kept as an explicit inventory."""
+        return [s for s in self.symbols if s.kind == "data"]
 
     @property
     def coverage(self) -> float:
@@ -295,8 +303,14 @@ def _resolve_symbol(name: str, module: str) -> SymbolReport:
             return _report_for_node(name, current_module, definitions[name])
 
         if name in _assigned_names(tree):
-            # Module-level data constant (dict/set/str/...); not docstringable.
-            return SymbolReport(name, current_module, "data", True)
+            # Module-level data value (dict/set/str/...); inventory only.
+            return SymbolReport(
+                name,
+                current_module,
+                "data",
+                True,
+                "data export (inventory only)",
+            )
 
         # A package ``__init__.py`` belongs to the package itself; a plain
         # module belongs to its parent package. Relative imports anchor here.
@@ -320,8 +334,14 @@ def _evaluate_symbol(
 ) -> SymbolReport:
     """Resolve one exported name and report its docstring status."""
     if name == "__version__":
-        # Dunder version string; not part of the documented API surface.
-        return SymbolReport(name, "openmed", "data", True)
+        # Dunder version string; inventory only, not a docstringable object.
+        return SymbolReport(
+            name,
+            "openmed",
+            "data",
+            True,
+            "data export (inventory only)",
+        )
 
     init_defs = _index_definitions(init_tree)
     # Names defined directly in openmed/__init__.py (e.g. analyze_text).
@@ -344,7 +364,7 @@ def measure_public_api_docstrings(
 
     Parses ``openmed/__init__.py`` and the modules backing every exported name,
     then reports docstring coverage for the docstringable symbols (functions and
-    classes). Data constants are listed but not scored.
+    classes). Data exports are resolved and inventoried but not scored.
 
     Args:
         min_coverage: The coverage floor (percentage) to gate against.
@@ -371,8 +391,10 @@ def format_report(report: CoverageReport) -> str:
     lines.append(f"Scored symbols (functions/classes): {len(report.scored)}")
     lines.append(f"Documented: {len(report.documented)}")
     lines.append(f"Missing:    {len(report.missing)}")
-    data_symbols = [s for s in report.symbols if s.kind == "data"]
-    lines.append(f"Data constants (not scored): {len(data_symbols)}")
+    lines.append(f"Data exports (inventory only): {len(report.data)}")
+    for symbol in report.data:
+        location = symbol.module or "openmed/__init__.py"
+        lines.append(f"  - {symbol.name} ({location})")
     lines.append(f"Coverage: {report.coverage:.1f}% (floor {report.min_coverage:.1f}%)")
     if report.missing:
         lines.append("")
