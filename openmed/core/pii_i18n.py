@@ -1451,9 +1451,9 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
     # British Columbia Personal Health Number (PHN): 10 digits beginning with 9
-    # (3-3-3 spacing after the leading 9), weighted mod-11. Health identifier.
+    # (4-3-3 spacing), weighted mod-11. Health identifier.
     PIIPattern(
-        r"\b9\d{2}[\s-]?\d{3}[\s-]?\d{3}\b",
+        r"\b9\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
         "national_id",
         priority=12,
         base_score=0.45,

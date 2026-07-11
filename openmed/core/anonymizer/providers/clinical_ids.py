@@ -1225,8 +1225,11 @@ class ThaiNationalIdProvider(BaseProvider):
 #     identifier).
 # ---------------------------------------------------------------------------
 
-# Ontario health-card version codes are always two uppercase letters.
-_ONTARIO_HEALTH_CARD_VERSION_RE = re.compile(r"^[A-Z]{2}$")
+# Ontario health-card numbers are ten digits, optionally grouped 4-3-3, with
+# an optional two-letter version code only at the end.
+_ONTARIO_HEALTH_CARD_RE = re.compile(
+    r"^(?P<number>\d{4}(?:[ -]?\d{3}){2})(?:[ -]?(?P<version>[A-Za-z]{2}))?$"
+)
 
 # British Columbia PHN weights applied to digits two through nine.
 _BC_PHN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3)
@@ -1235,8 +1238,11 @@ _BC_PHN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3)
 def _split_ontario_health_card(text: str) -> tuple[str, str]:
     """Return the ``(digits, version_code)`` parts of an Ontario health card."""
 
-    version = re.sub(r"[^A-Za-z]", "", text).upper()
-    digits = _digits_only(text)
+    match = _ONTARIO_HEALTH_CARD_RE.fullmatch(text.strip())
+    if match is None:
+        return "", ""
+    digits = _digits_only(match.group("number"))
+    version = (match.group("version") or "").upper()
     return digits, version
 
 
@@ -1292,9 +1298,6 @@ def validate_ontario_health_card(text: str) -> bool:
     digits, version = _split_ontario_health_card(text)
     if len(digits) != 10:
         return False
-    if version and not _ONTARIO_HEALTH_CARD_VERSION_RE.fullmatch(version):
-        return False
-
     body = [int(digit) for digit in digits[:-1]]
     return _luhn_check_digit(body) == int(digits[-1])
 

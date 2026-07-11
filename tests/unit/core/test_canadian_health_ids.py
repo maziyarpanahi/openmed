@@ -6,6 +6,8 @@ real Social Insurance Numbers or health-card numbers.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from faker import Faker
 
@@ -17,6 +19,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 )
 from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.pii import extract_pii
+from openmed.core.pii_i18n import get_patterns_for_language
+from openmed.core.safety_sweep import SAFETY_SWEEP_SOURCE, safety_sweep
 from openmed.processing.outputs import PredictionResult
 
 # Synthetic, Luhn-valid SIN with a non-zero province prefix.
@@ -58,6 +62,10 @@ def test_validate_ontario_health_card_rejects_corrupted_and_bad_version():
     assert not validate_ontario_health_card(f"{VALID_ONTARIO_CARD}-Q")
     # Three-letter version code is malformed.
     assert not validate_ontario_health_card(f"{VALID_ONTARIO_CARD}-QCX")
+    # Version letters are valid only as a suffix after the 10-digit number.
+    assert not validate_ontario_health_card(f"QC-{VALID_ONTARIO_CARD}")
+    assert not validate_ontario_health_card("6317-QC-048-459")
+    assert not validate_ontario_health_card("6317048QC459")
     assert not validate_ontario_health_card("631704845")  # too short
 
 
@@ -69,6 +77,39 @@ def test_validate_bc_phn_accepts_valid_and_rejects_corrupted():
     # PHNs always start with 9.
     assert not validate_bc_phn("1291417779")
     assert not validate_bc_phn("929141777")  # too short
+
+
+def test_bc_phn_locale_pattern_matches_valid_10_digit_number():
+    patterns = [
+        pattern
+        for pattern in get_patterns_for_language("en", locale="en_CA")
+        if pattern.validator is validate_bc_phn
+    ]
+    assert len(patterns) == 1
+
+    pattern = patterns[0]
+    for value in (VALID_BC_PHN, "9291 417 779", "9291-417-779"):
+        match = re.fullmatch(pattern.pattern, value, pattern.flags)
+        assert match is not None, value
+        assert pattern.validator(match.group())
+
+    assert re.fullmatch(pattern.pattern, "929 141 779", pattern.flags) is None
+
+
+def test_bc_phn_locale_pattern_is_used_by_safety_sweep():
+    text = "BC PHN 9291 417 779 was verified."
+    entities = safety_sweep(text, [], lang="en", locale="en_CA")
+
+    assert len(entities) == 1
+    entity = entities[0]
+    assert entity.text == "9291 417 779"
+    assert entity.label == "national_id"
+    assert entity.start == text.index(entity.text)
+    assert entity.end == entity.start + len(entity.text)
+    assert entity.metadata["source"] == SAFETY_SWEEP_SOURCE
+    assert entity.metadata["safety_sweep"]["pattern"] == (
+        r"\b9\d{3}[\s-]?\d{3}[\s-]?\d{3}\b"
+    )
 
 
 @pytest.mark.parametrize(
@@ -136,3 +177,33 @@ def test_extract_pii_en_ca_locale_yields_canadian_identifier_spans(monkeypatch):
             start,
             start + len(fragment),
         ) in spans, f"missing span for {fragment!r}"
+
+
+def test_extract_pii_en_ca_bc_phn_comes_from_validated_locale_pattern(monkeypatch):
+    text = "BC PHN 9291 417 779 was verified."
+
+    def fake_analyze_text(inference_text, **kwargs):
+        return PredictionResult(
+            text=inference_text,
+            entities=[],
+            model_name=kwargs["model_name"],
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    import openmed
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze_text)
+
+    result = extract_pii(
+        text,
+        model_name="fixture-pii-model",
+        lang="en",
+        locale="en_CA",
+    )
+
+    assert len(result.entities) == 1
+    entity = result.entities[0]
+    assert entity.text == "9291 417 779"
+    assert entity.label == "national_id"
+    assert entity.start == text.index(entity.text)
+    assert entity.end == entity.start + len(entity.text)
