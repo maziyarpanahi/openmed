@@ -28,6 +28,10 @@ EXPECTED_PATHS = {
 REST_RECIPES_PATH = Path(__file__).resolve().parents[3] / "docs/rest-recipes.md"
 JSON_FENCE_PATTERN = re.compile(r"```json\n(?P<payload>.*?)\n```", re.DOTALL)
 PYTHON_FENCE_PATTERN = re.compile(r"```python\n(?P<source>.*?)\n```", re.DOTALL)
+RECIPE_ENDPOINT_PATTERN = re.compile(
+    r"^## .+ — `(?P<method>GET|POST) (?P<path>/[^`]+)`$",
+    re.MULTILINE,
+)
 
 
 def _rest_recipe_json_examples() -> list[dict]:
@@ -36,6 +40,14 @@ def _rest_recipe_json_examples() -> list[dict]:
         json.loads(match.group("payload"))
         for match in JSON_FENCE_PATTERN.finditer(text)
     ]
+
+
+def _rest_recipe_operations() -> set[tuple[str, str]]:
+    text = REST_RECIPES_PATH.read_text(encoding="utf-8")
+    return {
+        (match.group("method").lower(), match.group("path"))
+        for match in RECIPE_ENDPOINT_PATTERN.finditer(text)
+    }
 
 
 def test_committed_openapi_spec_matches_exporter() -> None:
@@ -77,6 +89,31 @@ def test_rest_recipe_examples_are_parseable_and_current() -> None:
 
     error = next(example["error"] for example in examples if "error" in example)
     assert error["request_id"] == "recipe-validation-error"
+
+
+def test_rest_recipe_operations_match_current_openapi() -> None:
+    spec = json.loads(DEFAULT_OUTPUT_PATH.read_text(encoding="utf-8"))
+    operations = _rest_recipe_operations()
+    required = {
+        ("get", "/health"),
+        ("post", "/analyze"),
+        ("post", "/pii/extract"),
+        ("post", "/pii/deidentify"),
+    }
+
+    assert required <= operations
+    for method, path in operations:
+        assert path in spec["paths"]
+        assert method in spec["paths"][path]
+
+
+def test_rest_recipe_preserves_dependency_and_privacy_contracts() -> None:
+    text = REST_RECIPES_PATH.read_text(encoding="utf-8")
+
+    assert "uv pip install requests" in text
+    assert "Treat request and response payloads as PHI" in text
+    assert '"keep_mapping": true' not in text
+    assert "keep_mapping=True" not in text
 
 
 def test_rest_recipe_entity_spans_match_their_synthetic_text() -> None:
