@@ -1,7 +1,7 @@
 """Release gate harness for benchmark reports.
 
-The gate evaluates a candidate benchmark report against the section 6.4
-G1a-G9 release criteria, reads the last-green baseline store without mutating
+The gate evaluates a candidate benchmark report against the OpenMed release
+criteria, reads the last-green baseline store without mutating
 it, and emits a signed, reproducible gate report.
 """
 
@@ -33,7 +33,12 @@ from openmed.core.thresholds import (
     validate_threshold_matrix,
 )
 from openmed.eval.fairness import DEFAULT_ZERO_SHOT_LEAKAGE_FLOOR
-from openmed.eval.metrics import normalize_eval_spans
+from openmed.eval.metrics import (
+    CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    normalize_critical_finding_category,
+    normalize_eval_spans,
+)
 from openmed.eval.nano_cert import certify_measurements
 from openmed.eval.quant_delta import (
     COREML_RECALL_DELTA_LIMIT,
@@ -56,6 +61,7 @@ G2_V20_RECALL_FLOOR = 0.990
 G4_INT8_DELTA_LIMIT = INT8_RECALL_DELTA_LIMIT
 G4_INT4_DELTA_LIMIT = INT4_RECALL_DELTA_LIMIT
 G7_RECALL_DROP_LIMIT = 0.002
+G11_CRITICAL_RECALL_FLOOR = 0.999
 G9_STRICT_RE_F1_FLOOR = 0.850
 G9_RELAXED_RE_F1_FLOOR = 0.900
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
@@ -116,6 +122,12 @@ _CRITICAL_LABELS = frozenset(
     }
 )
 _G1_G2_LABELS = _G1A_LABELS | _G1B_LABELS | _G2_LABELS
+_G11_ZERO_MISS_CATEGORIES = frozenset(
+    {
+        CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+        CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    }
+)
 
 _TIER_ALIASES = {
     "nano": "tiny",
@@ -410,7 +422,7 @@ class GateReport:
 
 
 class ReleaseGate:
-    """Evaluate benchmark reports against the G1a-G9 release gates."""
+    """Evaluate benchmark reports against the OpenMed release gates."""
 
     def __init__(
         self,
@@ -552,6 +564,7 @@ class ReleaseGate:
         checks.append(self._g2_check(per_label_recall, recall_denominators))
         checks.append(_adversarial_recall_under_attack_check(metrics, metadata))
         checks.append(_g3_check(critical_leakage_count))
+        checks.append(_g11_critical_finding_recall_check(metrics, metadata))
         checks.append(_g4_check(quant_delta_result))
         checks.append(
             _g5_check(
@@ -1549,6 +1562,110 @@ def _g3_check(critical_leakage_count: int) -> GateCheck:
         ),
         details={"critical_leakage_count": critical_leakage_count},
     )
+
+
+def _g11_critical_finding_recall_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    metric = _first_mapping(
+        metadata.get("critical_finding_recall"),
+        metrics.get("critical_finding_recall"),
+        metadata.get("critical_recall"),
+        metrics.get("critical_recall"),
+    )
+    if not metric:
+        return GateCheck(
+            "G11",
+            True,
+            reason="not provided",
+            details={"floor": G11_CRITICAL_RECALL_FLOOR},
+        )
+
+    overall = _optional_float(
+        _first_value(metric.get("overall"), metric.get("recall"), metric.get("rate"))
+    )
+    total = _optional_int(metric.get("total"))
+    covered = _optional_int(_first_value(metric.get("covered"), metric.get("hits")))
+    by_category = _numeric_map(metric.get("by_category"))
+    missed_findings = _critical_finding_misses(metric)
+    if total == 0 and overall is None:
+        overall = 1.0
+    if total is None:
+        total = int(metric.get("denominator", 0) or 0)
+    if covered is None:
+        covered = int(metric.get("numerator", 0) or 0)
+    if overall is None:
+        return GateCheck(
+            "G11",
+            False,
+            reason="critical-finding recall metric is malformed",
+            details={"floor": G11_CRITICAL_RECALL_FLOOR},
+        )
+
+    recall_violations: dict[str, Any] = {}
+    if overall < G11_CRITICAL_RECALL_FLOOR:
+        recall_violations["overall"] = {
+            "observed": overall,
+            "floor": G11_CRITICAL_RECALL_FLOOR,
+        }
+    category_violations = {
+        category: {"observed": recall, "floor": G11_CRITICAL_RECALL_FLOOR}
+        for category, recall in by_category.items()
+        if recall < G11_CRITICAL_RECALL_FLOOR
+    }
+    if category_violations:
+        recall_violations["by_category"] = category_violations
+
+    zero_miss_findings = [
+        finding
+        for finding in missed_findings
+        if finding.get("category") in _G11_ZERO_MISS_CATEGORIES
+    ]
+    violations: dict[str, Any] = {}
+    if recall_violations:
+        violations["recall_below_floor"] = recall_violations
+    if zero_miss_findings:
+        violations["must_not_miss_findings"] = zero_miss_findings
+
+    return GateCheck(
+        "G11",
+        not violations,
+        reason="ok" if not violations else "critical-finding recall gate failed",
+        details={
+            "floor": G11_CRITICAL_RECALL_FLOOR,
+            "overall": overall,
+            "by_category": by_category,
+            "covered": covered,
+            "total": total,
+            "missed_findings": missed_findings,
+            "violations": violations,
+        },
+    )
+
+
+def _critical_finding_misses(metric: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw_misses = metric.get("missed_findings") or metric.get("misses") or []
+    if not isinstance(raw_misses, Sequence) or isinstance(raw_misses, (str, bytes)):
+        return []
+
+    misses: list[dict[str, Any]] = []
+    for item in raw_misses:
+        if not isinstance(item, Mapping):
+            continue
+        category = normalize_critical_finding_category(item.get("category", ""))
+        start = _optional_int(item.get("start"))
+        end = _optional_int(item.get("end"))
+        misses.append(
+            {
+                "category": category,
+                "fixture_id": str(item.get("fixture_id") or "unknown"),
+                "start": 0 if start is None else start,
+                "end": 0 if end is None else end,
+                "label": normalize_label(str(item.get("label") or "")),
+            }
+        )
+    return misses
 
 
 def _adversarial_recall_under_attack_check(
@@ -3272,6 +3389,7 @@ __all__ = [
     "G4_INT8_DELTA_LIMIT",
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
+    "G11_CRITICAL_RECALL_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
