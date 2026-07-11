@@ -101,7 +101,7 @@ class ErrorSpanExample:
         """Rebuild an example from a :meth:`to_dict` payload."""
         matched_start = payload.get("matched_start")
         matched_end = payload.get("matched_end")
-        return cls(
+        example = cls(
             kind=str(payload["kind"]),
             fixture_id=str(payload["fixture_id"]),
             label=str(payload["label"]),
@@ -123,6 +123,19 @@ class ErrorSpanExample:
                 else None
             ),
         )
+        if not example.kind or not example.fixture_id or not example.label:
+            raise ValueError("error examples require kind, fixture_id, and label")
+        if not (
+            0
+            <= example.context_start
+            <= example.start
+            <= example.end
+            <= example.context_end
+        ):
+            raise ValueError("error example offsets are inconsistent")
+        if not example.text_hash:
+            raise ValueError("error examples require a text_hash")
+        return example
 
 
 @dataclass(frozen=True)
@@ -161,25 +174,50 @@ class ErrorAnalysisReport:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ErrorAnalysisReport":
         """Rebuild a report from a :meth:`to_dict` payload."""
-        confusion = payload.get("confusion_matrix") or {}
+        confusion = _report_mapping(payload, "confusion_matrix")
         matrix = {
             str(label): {
-                str(column): int(value)
-                for column, value in (confusion.get(label) or {}).items()
+                str(column): _report_count(value, f"confusion_matrix.{label}.{column}")
+                for column, value in _report_mapping(
+                    confusion,
+                    label,
+                    context="confusion_matrix",
+                ).items()
             }
             for label in confusion
         }
+        try:
+            fixture_count = _report_count(payload["fixture_count"], "fixture_count")
+        except KeyError as exc:
+            raise ValueError("fixture_count is required") from exc
+        example_cap = _report_count(
+            payload.get("example_cap", DEFAULT_EXAMPLE_CAP),
+            "example_cap",
+        )
+        if fixture_count < 0 or example_cap < 0:
+            raise ValueError("fixture_count and example_cap must be non-negative")
+
+        metadata = payload.get("metadata")
+        if metadata is None:
+            metadata = {}
+        if not isinstance(metadata, Mapping):
+            raise ValueError("metadata must be an object")
+
         return cls(
             suite=str(payload["suite"]),
             model_name=str(payload["model_name"]),
             device=str(payload["device"]),
-            fixture_count=int(payload["fixture_count"]),
+            fixture_count=fixture_count,
             confusion_matrix=matrix,
-            false_negatives=_examples_from_dict(payload.get("false_negatives") or {}),
-            false_positives=_examples_from_dict(payload.get("false_positives") or {}),
-            example_cap=int(payload.get("example_cap", DEFAULT_EXAMPLE_CAP)),
+            false_negatives=_examples_from_dict(
+                _report_mapping(payload, "false_negatives")
+            ),
+            false_positives=_examples_from_dict(
+                _report_mapping(payload, "false_positives")
+            ),
+            example_cap=example_cap,
             generated_at=payload.get("generated_at"),
-            metadata=dict(payload.get("metadata") or {}),
+            metadata=dict(metadata),
         )
 
     @classmethod
@@ -1434,11 +1472,45 @@ def _examples_from_dict(
 ) -> dict[str, list[ErrorSpanExample]]:
     result = _empty_examples()
     for label, rows in payload.items():
-        bucket = result.setdefault(str(label), [])
-        for row in rows or ():
-            if isinstance(row, Mapping):
-                bucket.append(ErrorSpanExample.from_dict(row))
+        label_name = str(label)
+        if not isinstance(rows, Sequence) or isinstance(rows, (str, bytes)):
+            raise ValueError(f"error examples for {label_name} must be a list")
+        bucket = result.setdefault(label_name, [])
+        for index, row in enumerate(rows):
+            if not isinstance(row, Mapping):
+                raise ValueError(
+                    f"error example {label_name}[{index}] must be an object"
+                )
+            example = ErrorSpanExample.from_dict(row)
+            if example.label != label_name:
+                raise ValueError(
+                    f"error example {label_name}[{index}] has label {example.label}"
+                )
+            bucket.append(example)
     return result
+
+
+def _report_mapping(
+    payload: Mapping[str, Any],
+    key: Any,
+    *,
+    context: str = "report",
+) -> Mapping[str, Any]:
+    value = payload.get(key)
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{context}.{key} must be an object")
+    return value
+
+
+def _report_count(value: Any, path: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{path} must be a non-negative integer")
+    count = value
+    if count < 0:
+        raise ValueError(f"{path} must be a non-negative integer")
+    return count
 
 
 def _examples_markdown(
