@@ -7,6 +7,7 @@ deliberately fail) the published checksums; none correspond to a real person.
 from __future__ import annotations
 
 import random
+import re
 
 import pytest
 from faker import Faker
@@ -20,6 +21,7 @@ from openmed.core.anonymizer.providers.clinical_ids import (
 )
 from openmed.core.anonymizer.providers.registry_ids import get_national_id
 from openmed.core.pii import extract_pii
+from openmed.core.pii_i18n import LOCALE_PII_PATTERNS
 from openmed.processing.outputs import PredictionResult
 
 # Synthetic, checksum-valid fixtures (Services Australia / ATO published
@@ -71,6 +73,30 @@ class TestTfnChecksum:
     def test_rejects_wrong_length(self):
         assert not validate_australian_tfn("1234567")  # 7 digits
         assert not validate_australian_tfn("1234567890")  # 10 digits
+
+
+def test_en_au_patterns_accept_only_exact_valid_identifiers():
+    patterns = {pattern.validator: pattern for pattern in LOCALE_PII_PATTERNS["en_au"]}
+    medicare_pattern = patterns[validate_australian_medicare]
+    tfn_pattern = patterns[validate_australian_tfn]
+
+    def accepted(pattern, value):
+        match = re.fullmatch(pattern.pattern, value, pattern.flags)
+        return match is not None and pattern.validator(value)
+
+    assert accepted(medicare_pattern, VALID_MEDICARE_SPACED)
+    for impossible_shape in ("2123 45670 1 2", "2123 45670 1/2", "21234567012"):
+        assert (
+            re.search(
+                medicare_pattern.pattern,
+                impossible_shape,
+                medicare_pattern.flags,
+            )
+            is None
+        )
+    assert not accepted(medicare_pattern, "2123 45671 1")
+    assert accepted(tfn_pattern, "123 456 782")
+    assert not accepted(tfn_pattern, "123 456 783")
 
 
 class TestGenerators:
