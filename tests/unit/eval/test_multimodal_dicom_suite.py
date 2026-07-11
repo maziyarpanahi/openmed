@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import socket
 import types
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -175,6 +176,20 @@ def test_run_scores_clean_redaction_with_leakage_first_metrics(tmp_path) -> None
     assert report.metadata["license"] == CORPUS_LICENSE
     assert report.metadata["tcia_sampled"] is False
     assert report.metadata["requires_data_use_agreement"] is False
+
+
+def test_default_benchmark_path_makes_no_network_connection(
+    tmp_path, monkeypatch
+) -> None:
+    def reject_network(*_args, **_kwargs):
+        raise AssertionError("benchmark attempted an outbound network connection")
+
+    monkeypatch.setattr(socket.socket, "connect", reject_network)
+
+    report = run_multimodal_dicom(output_dir=tmp_path, seed=404, corpus_size=1)
+
+    assert report.metadata["offline"] is True
+    assert report.metrics["residual_phi_rate"] == 0.0
 
 
 def test_run_report_never_contains_raw_phi(tmp_path) -> None:
