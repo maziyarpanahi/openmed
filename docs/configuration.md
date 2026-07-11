@@ -41,6 +41,32 @@ export OPENMED_DEVICE=cuda:1
 export OPENMED_CACHE_DIR=/mnt/cache/openmed
 ```
 
+## PyTorch attention backends
+
+`torch_attention_backend="auto"` is the default. In OpenMed 1.8.1 and later,
+automatic mode leaves backend selection to Transformers so it can choose an
+implementation supported by both the installed PyTorch runtime and the model
+architecture.
+
+Set an explicit backend only when you have verified that the model supports it:
+
+```python
+from openmed.core import OpenMedConfig
+
+config = OpenMedConfig(torch_attention_backend="eager")
+```
+
+The equivalent environment override is:
+
+```bash
+export OPENMED_TORCH_ATTENTION_BACKEND=eager
+```
+
+Supported values are `auto`, `eager`, `sdpa`, and `flash_attention_2`. The
+`eager` implementation is the compatibility fallback. `sdpa` and
+`flash_attention_2` require support from the selected Transformers model in
+addition to compatible PyTorch and hardware.
+
 ## Local-only offline mode
 
 Set `OPENMED_OFFLINE=1` or instantiate `OpenMedConfig(local_only=True)` when
