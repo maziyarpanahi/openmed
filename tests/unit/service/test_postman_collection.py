@@ -103,6 +103,13 @@ def test_collection_is_valid_json_and_v21_schema() -> None:
     )
 
 
+def test_collection_description_tracks_openapi_without_version_literal() -> None:
+    description = _load_collection()["info"]["description"]
+
+    assert "docs/api/openapi.json" in description
+    assert re.search(r"\bOpenAPI\s+v?\d+\.\d+\.\d+\b", description) is None
+
+
 def test_collection_declares_base_url_variable() -> None:
     collection = _load_collection()
     variables = {var["key"]: var for var in collection.get("variable", [])}
