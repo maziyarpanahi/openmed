@@ -1225,10 +1225,19 @@ class ThaiNationalIdProvider(BaseProvider):
 #     identifier).
 # ---------------------------------------------------------------------------
 
-# Ontario health-card numbers are ten digits, optionally grouped 4-3-3, with
-# an optional two-letter version code only at the end.
+# SIN and BC PHN validators accept only their plain digit form or the canonical
+# consistently spaced/hyphenated grouping used on forms and cards.
+_CANADIAN_SIN_RE = re.compile(
+    r"^(?:\d{9}|\d{3}(?P<sin_sep>[ -])\d{3}(?P=sin_sep)\d{3})$"
+)
+_BC_PHN_RE = re.compile(r"^(?:9\d{9}|9\d{3}(?P<bc_sep>[ -])\d{3}(?P=bc_sep)\d{3})$")
+
+# Ontario health-card numbers start with 1-9, contain ten digits, and may be
+# grouped 4-3-3. The official HCV schema permits a one- or two-letter version
+# code only at the end.
 _ONTARIO_HEALTH_CARD_RE = re.compile(
-    r"^(?P<number>\d{4}(?:[ -]?\d{3}){2})(?:[ -]?(?P<version>[A-Za-z]{2}))?$"
+    r"^(?P<number>[1-9]\d{3}(?P<ontario_sep>[ -]?)\d{3}"
+    r"(?P=ontario_sep)\d{3})(?:[ -]?(?P<version>[A-Za-z]{1,2}))?$"
 )
 
 # British Columbia PHN weights applied to digits two through nine.
@@ -1259,7 +1268,10 @@ def validate_canadian_sin(text: str) -> bool:
         ``True`` when ``text`` is a Luhn-valid, non-zero-prefixed SIN.
     """
 
-    digits = _digits_only(text)
+    candidate = text.strip()
+    if _CANADIAN_SIN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
     if len(digits) != 9:
         return False
     if digits[0] == "0":
@@ -1283,8 +1295,8 @@ def validate_ontario_health_card(text: str) -> bool:
     """Validate an Ontario (OHIP) health-card number.
 
     The core is a ten-digit number carrying a Luhn (mod-10) check digit. An
-    optional two-letter version code may follow the ten digits; when present it
-    must be exactly two letters. Ontario health cards are health identifiers.
+    optional one- or two-letter version code may follow the ten digits. Ontario
+    health cards are health identifiers.
 
     Args:
         text: Candidate health card, optionally spaced or hyphenated and
@@ -1319,7 +1331,8 @@ def generate_ontario_health_card(
     """
 
     source = rng or random.Random()
-    body = [source.randint(0, 9) for _ in range(9)]
+    body = [source.randint(1, 9)]
+    body.extend(source.randint(0, 9) for _ in range(8))
     check_digit = _luhn_check_digit(body)
     number = "".join(str(digit) for digit in body) + str(check_digit)
     if not with_version:
@@ -1344,7 +1357,10 @@ def validate_bc_phn(text: str) -> bool:
         ``True`` when ``text`` is a valid, issued BC PHN.
     """
 
-    digits = _digits_only(text)
+    candidate = text.strip()
+    if _BC_PHN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
     if len(digits) != 10:
         return False
 
