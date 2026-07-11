@@ -1,7 +1,7 @@
 // Package openmed provides a dependency-light Go client for the OpenMed REST
-// service. It is built on the standard library net/http package and mirrors the
-// service request/response schemas published in the committed OpenAPI spec
-// (docs/api/openapi.json).
+// service. It is built on the standard library net/http package and tracks the
+// operations and request schemas published in the committed OpenAPI spec
+// (docs/api/openapi.json), with typed representations for stable responses.
 //
 // The client keeps enums (deidentification method, PII language, aggregation
 // strategy) as typed string constants so callers get compile-time help, and it
@@ -11,12 +11,14 @@
 package openmed
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,6 +26,21 @@ import (
 
 // DefaultBaseURL is the base URL assumed when none is provided.
 const DefaultBaseURL = "http://localhost:8080"
+
+// DefaultMaxResponseBodyBytes bounds buffered JSON responses. Streaming
+// responses are read incrementally and are not subject to this total limit.
+const DefaultMaxResponseBodyBytes int64 = 64 << 20
+
+// DefaultMaxStreamEventBytes bounds one NDJSON event returned by
+// /pii/extract/stream. The total stream remains unbounded and is consumed
+// incrementally.
+const DefaultMaxStreamEventBytes = 4 << 20
+
+const maxErrorBodyBytes int64 = 1 << 20
+
+// ErrResponseTooLarge is returned when a buffered success response exceeds the
+// configured response-body limit.
+var ErrResponseTooLarge = errors.New("openmed: response body exceeds configured limit")
 
 // Path templates for the endpoints that take a path parameter. The {job_id}
 // placeholder mirrors the OpenAPI path exactly and is substituted with the
@@ -184,6 +201,31 @@ type PrivacyGatewayRequest struct {
 	Lang                       PIILanguage   `json:"lang,omitempty"`
 	NormalizeAccents           *bool         `json:"normalize_accents,omitempty"`
 	KeepAlive                  any           `json:"keep_alive,omitempty"`
+}
+
+// PIIExtractStreamSpan is one entity span in a streaming PII event.
+type PIIExtractStreamSpan struct {
+	ID        string  `json:"id"`
+	Label     string  `json:"label"`
+	Start     int     `json:"start"`
+	End       int     `json:"end"`
+	ByteStart *int    `json:"byte_start"`
+	ByteEnd   *int    `json:"byte_end"`
+	Score     float64 `json:"score"`
+	Text      *string `json:"text,omitempty"`
+}
+
+// PIIExtractStreamEvent is one NDJSON object returned by
+// POST /pii/extract/stream.
+type PIIExtractStreamEvent struct {
+	Type        string                 `json:"type"`
+	EntityID    *string                `json:"entity_id,omitempty"`
+	Span        *PIIExtractStreamSpan  `json:"span,omitempty"`
+	Reason      *string                `json:"reason,omitempty"`
+	FinalSpans  []PIIExtractStreamSpan `json:"final_spans,omitempty"`
+	LatencyMS   *float64               `json:"latency_ms,omitempty"`
+	WindowChars *int                   `json:"window_chars,omitempty"`
+	Audit       JSONObject             `json:"audit"`
 }
 
 // ModelUnloadRequest is the request body for POST /models/unload. Provide a
@@ -524,15 +566,83 @@ func AsAPIError(err error) (*APIError, bool) {
 // Client is a REST client for the OpenMed de-identification service. The zero
 // value is not ready for use; construct one with New.
 type Client struct {
-	baseURL    string
-	httpClient *http.Client
+	baseURL              string
+	httpClient           *http.Client
+	maxResponseBodyBytes int64
+	maxStreamEventBytes  int
+}
+
+// PIIExtractStream incrementally decodes the NDJSON response from
+// /pii/extract/stream. Callers must close the stream, normally with defer.
+type PIIExtractStream struct {
+	body    io.ReadCloser
+	scanner *bufio.Scanner
+	event   PIIExtractStreamEvent
+	err     error
+	closed  bool
+}
+
+// Next advances to the next event. It returns false at EOF or after an error.
+func (s *PIIExtractStream) Next() bool {
+	if s == nil || s.closed || s.err != nil {
+		return false
+	}
+	if !s.scanner.Scan() {
+		if err := s.scanner.Err(); err != nil {
+			s.err = fmt.Errorf("openmed: read /pii/extract/stream event: %w", err)
+		}
+		_ = s.closeBody()
+		return false
+	}
+
+	var event PIIExtractStreamEvent
+	if err := json.Unmarshal(s.scanner.Bytes(), &event); err != nil {
+		s.err = fmt.Errorf("openmed: decode /pii/extract/stream event: %w", err)
+		_ = s.closeBody()
+		return false
+	}
+	s.event = event
+	return true
+}
+
+// Event returns the event decoded by the most recent successful Next call.
+func (s *PIIExtractStream) Event() PIIExtractStreamEvent {
+	if s == nil {
+		return PIIExtractStreamEvent{}
+	}
+	return s.event
+}
+
+// Err returns the first stream scanning or JSON decoding error, if any.
+func (s *PIIExtractStream) Err() error {
+	if s == nil {
+		return nil
+	}
+	return s.err
+}
+
+// Close closes the response body. It is safe to call more than once.
+func (s *PIIExtractStream) Close() error {
+	if s == nil {
+		return nil
+	}
+	return s.closeBody()
+}
+
+func (s *PIIExtractStream) closeBody() error {
+	if s.closed {
+		return nil
+	}
+	s.closed = true
+	return s.body.Close()
 }
 
 // Option configures a Client.
 type Option func(*Client)
 
-// WithHTTPClient sets a custom *http.Client (for timeouts, transports, or
-// test doubles). A nil client is ignored.
+// WithHTTPClient sets a custom *http.Client (for timeouts, transports, redirect
+// policy, or test doubles). A nil client is ignored. Unlike the secure default,
+// a supplied client may follow redirects according to its own CheckRedirect.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
 		if hc != nil {
@@ -541,8 +651,32 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
+// WithMaxResponseBodyBytes sets the maximum size of a buffered JSON success
+// response. Non-positive values are ignored. Streaming endpoint bodies are not
+// buffered and are governed by WithMaxStreamEventBytes instead.
+func WithMaxResponseBodyBytes(limit int64) Option {
+	return func(c *Client) {
+		if limit > 0 {
+			c.maxResponseBodyBytes = limit
+		}
+	}
+}
+
+// WithMaxStreamEventBytes sets the maximum size of one NDJSON event. The total
+// stream is consumed incrementally and is not capped. Non-positive values are
+// ignored.
+func WithMaxStreamEventBytes(limit int) Option {
+	return func(c *Client) {
+		if limit > 0 {
+			c.maxStreamEventBytes = limit
+		}
+	}
+}
+
 // New constructs a Client for the given base URL (for example
-// "http://localhost:8080"). If baseURL is empty, DefaultBaseURL is used.
+// "http://localhost:8080"). If baseURL is empty, DefaultBaseURL is used. The
+// default HTTP client does not follow redirects, preventing request bodies from
+// being forwarded to another origin.
 func New(baseURL string, opts ...Option) (*Client, error) {
 	trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if trimmed == "" {
@@ -552,9 +686,15 @@ func New(baseURL string, opts ...Option) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("openmed: invalid base URL %q: %w", baseURL, err)
 	}
-	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
 		return nil, fmt.Errorf(
 			"openmed: invalid base URL %q: expected an absolute HTTP(S) URL",
+			baseURL,
+		)
+	}
+	if parsed.User != nil {
+		return nil, fmt.Errorf(
+			"openmed: invalid base URL %q: user information is not supported",
 			baseURL,
 		)
 	}
@@ -564,9 +704,23 @@ func New(baseURL string, opts ...Option) (*Client, error) {
 			baseURL,
 		)
 	}
+	for _, segment := range strings.Split(parsed.Path, "/") {
+		if segment == "." || segment == ".." {
+			return nil, fmt.Errorf(
+				"openmed: invalid base URL %q: dot path segments are not supported",
+				baseURL,
+			)
+		}
+	}
 	c := &Client{
-		baseURL:    trimmed,
-		httpClient: http.DefaultClient,
+		baseURL: trimmed,
+		httpClient: &http.Client{
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		maxResponseBodyBytes: DefaultMaxResponseBodyBytes,
+		maxStreamEventBytes:  DefaultMaxStreamEventBytes,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -595,10 +749,10 @@ func (c *Client) ExtractPII(ctx context.Context, req PIIExtractRequest) (*PIIExt
 	return &out, nil
 }
 
-// ExtractPIIStream calls POST /pii/extract/stream and returns the raw
-// newline-delimited JSON (NDJSON) stream body. Each line is a JSON object.
-func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamRequest) (string, error) {
-	body, err := c.rawWithAccept(
+// ExtractPIIStream calls POST /pii/extract/stream and returns an incremental,
+// bounded-per-event NDJSON decoder. The caller must close the returned stream.
+func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamRequest) (*PIIExtractStream, error) {
+	resp, err := c.do(
 		ctx,
 		http.MethodPost,
 		"/pii/extract/stream",
@@ -606,9 +760,20 @@ func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamReque
 		"application/x-ndjson",
 	)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(body), nil
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, apiErrorFromResponse(resp)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	initialBufferSize := 64 << 10
+	if c.maxStreamEventBytes < initialBufferSize {
+		initialBufferSize = c.maxStreamEventBytes
+	}
+	scanner.Buffer(make([]byte, initialBufferSize), c.maxStreamEventBytes)
+	return &PIIExtractStream{body: resp.Body, scanner: scanner}, nil
 }
 
 // Deidentify calls POST /pii/deidentify.
@@ -699,8 +864,12 @@ func (c *Client) CreateJob(ctx context.Context, req DeidentifyJobRequest) (*JobR
 
 // GetJob calls GET /jobs/{job_id}.
 func (c *Client) GetJob(ctx context.Context, jobID string) (*JobResponse, error) {
+	path, err := fillJobID(pathGetJob, jobID)
+	if err != nil {
+		return nil, err
+	}
 	var out JobResponse
-	if err := c.get(ctx, fillJobID(pathGetJob, jobID), &out); err != nil {
+	if err := c.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -717,8 +886,12 @@ func (c *Client) StartSMARTBackendIngestion(ctx context.Context, req SMARTBacken
 
 // SMARTBackendIngestionStatus calls GET /fhir/smart-backend/ingestions/{job_id}.
 func (c *Client) SMARTBackendIngestionStatus(ctx context.Context, jobID string) (*SMARTBackendJobStatus, error) {
+	path, err := fillJobID(pathSMARTBackendIngestionStatus, jobID)
+	if err != nil {
+		return nil, err
+	}
 	var out SMARTBackendJobStatus
-	if err := c.get(ctx, fillJobID(pathSMARTBackendIngestionStatus, jobID), &out); err != nil {
+	if err := c.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -727,8 +900,12 @@ func (c *Client) SMARTBackendIngestionStatus(ctx context.Context, jobID string) 
 // SMARTBackendIngestionSummary calls
 // GET /fhir/smart-backend/ingestions/{job_id}/summary.
 func (c *Client) SMARTBackendIngestionSummary(ctx context.Context, jobID string) (*SMARTBackendIngestionSummary, error) {
+	path, err := fillJobID(pathSMARTBackendIngestionSummary, jobID)
+	if err != nil {
+		return nil, err
+	}
 	var out SMARTBackendIngestionSummary
-	if err := c.get(ctx, fillJobID(pathSMARTBackendIngestionSummary, jobID), &out); err != nil {
+	if err := c.get(ctx, path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -756,8 +933,11 @@ func (c *Client) post(ctx context.Context, path string, in, out any) error {
 
 // fillJobID substitutes the {job_id} placeholder in a path template with the
 // URL-escaped job identifier.
-func fillJobID(template, jobID string) string {
-	return strings.Replace(template, "{job_id}", url.PathEscape(jobID), 1)
+func fillJobID(template, jobID string) (string, error) {
+	if strings.TrimSpace(jobID) == "" || jobID == "." || jobID == ".." {
+		return "", errors.New("openmed: job ID must not be empty or a dot path segment")
+	}
+	return strings.Replace(template, "{job_id}", url.PathEscape(jobID), 1), nil
 }
 
 func decodeInto(path string, body []byte, out any) error {
@@ -782,6 +962,28 @@ func (c *Client) rawWithAccept(
 	in any,
 	accept string,
 ) ([]byte, error) {
+	resp, err := c.do(ctx, method, path, in, accept)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, apiErrorFromResponse(resp)
+	}
+	body, err := readBounded(resp.Body, c.maxResponseBodyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("openmed: read %s response: %w", path, err)
+	}
+	return body, nil
+}
+
+func (c *Client) do(
+	ctx context.Context,
+	method, path string,
+	in any,
+	accept string,
+) (*http.Response, error) {
 	var reader io.Reader
 	if in != nil {
 		encoded, err := json.Marshal(in)
@@ -804,33 +1006,50 @@ func (c *Client) rawWithAccept(
 	if err != nil {
 		return nil, fmt.Errorf("openmed: %s %s: %w", method, path, err)
 	}
-	defer resp.Body.Close()
+	return resp, nil
+}
 
-	body, err := io.ReadAll(resp.Body)
+func readBounded(reader io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
-		return nil, fmt.Errorf("openmed: read %s response: %w", path, err)
+		return nil, err
 	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, newAPIError(resp.StatusCode, body)
+	if int64(len(body)) > limit {
+		return nil, ErrResponseTooLarge
 	}
 	return body, nil
+}
+
+func apiErrorFromResponse(resp *http.Response) *APIError {
+	mediaType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" {
+		return newAPIError(resp.StatusCode, nil)
+	}
+	body, err := readBounded(resp.Body, maxErrorBodyBytes)
+	if err != nil {
+		body = nil
+	}
+	return newAPIError(resp.StatusCode, body)
 }
 
 func newAPIError(status int, body []byte) *APIError {
 	apiErr := &APIError{StatusCode: status}
 	var envelope ErrorEnvelope
-	if len(body) > 0 && json.Unmarshal(body, &envelope) == nil && envelope.Error.Code != "" {
+	if len(body) > 0 &&
+		json.Unmarshal(body, &envelope) == nil &&
+		envelope.Error.Code != "" &&
+		envelope.Error.Message != "" {
 		apiErr.Envelope = envelope
 		return apiErr
 	}
 	// Fall back to a synthetic envelope when the body is not a recognized
-	// service error (e.g. an upstream proxy error page).
+	// service error (for example, an upstream proxy error page). Never retain
+	// an unrecognized body: it may contain raw clinical text or credentials.
 	apiErr.Envelope = ErrorEnvelope{
 		Error: ErrorBody{
 			Code:    "http_error",
 			Message: fmt.Sprintf("request failed with status %d", status),
-			Details: string(body),
+			Details: nil,
 		},
 	}
 	return apiErr

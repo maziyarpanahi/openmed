@@ -20,23 +20,25 @@ SDK_SOURCE_PATH = SDK_ROOT / "client.go"
 SDK_README_PATH = SDK_ROOT / "README.md"
 SDK_GOMOD_PATH = SDK_ROOT / "go.mod"
 
-# Every OpenAPI path maps to exactly one exported Go client method.
-CLIENT_METHOD_BY_PATH = {
-    "/analyze": "Analyze",
-    "/fhir/smart-backend/ingestions": "StartSMARTBackendIngestion",
-    "/fhir/smart-backend/ingestions/{job_id}": "SMARTBackendIngestionStatus",
-    "/fhir/smart-backend/ingestions/{job_id}/summary": "SMARTBackendIngestionSummary",
-    "/health": "Health",
-    "/jobs": "CreateJob",
-    "/jobs/{job_id}": "GetJob",
-    "/livez": "Livez",
-    "/models/loaded": "LoadedModels",
-    "/models/unload": "UnloadModels",
-    "/pii/deidentify": "Deidentify",
-    "/pii/extract": "ExtractPII",
-    "/pii/extract/stream": "ExtractPIIStream",
-    "/privacy-gateway/complete": "PrivacyGateway",
-    "/readyz": "Readyz",
+# Every OpenAPI operation maps to exactly one exported Go client method.
+CLIENT_METHOD_BY_OPERATION = {
+    ("post", "/analyze"): "Analyze",
+    ("post", "/fhir/smart-backend/ingestions"): "StartSMARTBackendIngestion",
+    ("get", "/fhir/smart-backend/ingestions/{job_id}"): ("SMARTBackendIngestionStatus"),
+    ("get", "/fhir/smart-backend/ingestions/{job_id}/summary"): (
+        "SMARTBackendIngestionSummary"
+    ),
+    ("get", "/health"): "Health",
+    ("post", "/jobs"): "CreateJob",
+    ("get", "/jobs/{job_id}"): "GetJob",
+    ("get", "/livez"): "Livez",
+    ("get", "/models/loaded"): "LoadedModels",
+    ("post", "/models/unload"): "UnloadModels",
+    ("post", "/pii/deidentify"): "Deidentify",
+    ("post", "/pii/extract"): "ExtractPII",
+    ("post", "/pii/extract/stream"): "ExtractPIIStream",
+    ("post", "/privacy-gateway/complete"): "PrivacyGateway",
+    ("get", "/readyz"): "Readyz",
 }
 
 GO_REQUEST_STRUCT_BY_SCHEMA = {
@@ -57,15 +59,15 @@ def test_go_client_covers_openapi_paths_and_request_fields() -> None:
     spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
 
-    assert set(spec["paths"]) == set(CLIENT_METHOD_BY_PATH)
+    assert set(_openapi_operations(spec)) == set(CLIENT_METHOD_BY_OPERATION)
 
-    for path, method_name in CLIENT_METHOD_BY_PATH.items():
+    for (http_method, path), method_name in CLIENT_METHOD_BY_OPERATION.items():
         assert re.search(
             rf"^func \(c \*Client\) {re.escape(method_name)}\(", source, re.MULTILINE
-        ), f"{path} is missing Client.{method_name}()."
+        ), f"{http_method.upper()} {path} is missing Client.{method_name}()."
         assert f'"{path}"' in source, f"{path} is not called by the SDK."
 
-        operation = _first_operation(spec["paths"][path], spec)
+        operation = spec["paths"][path][http_method]
         request_schema = _request_schema(operation, spec)
         if request_schema is None:
             continue
@@ -93,6 +95,39 @@ def test_go_request_structs_match_openapi_components() -> None:
         )
 
 
+def test_go_request_requiredness_and_zero_defaults_match_openapi() -> None:
+    spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+
+    for schema_name, struct_name in GO_REQUEST_STRUCT_BY_SCHEMA.items():
+        schema = spec["components"]["schemas"][schema_name]
+        required = set(schema.get("required", ()))
+        fields = _go_struct_fields(source, struct_name)
+
+        for field_name, field in fields.items():
+            assert field["omitempty"] is (field_name not in required), (
+                f"Go {struct_name}.{field_name} requiredness differs from "
+                f"OpenAPI {schema_name}."
+            )
+
+        for field_name, property_schema in schema.get("properties", {}).items():
+            property_type = _schema_type(property_schema)
+            if property_type == "boolean" and property_schema.get("default") is True:
+                assert fields[field_name]["type"] == "*bool", (
+                    f"Go {struct_name}.{field_name} must be *bool so explicit false "
+                    "is not replaced by the OpenAPI true default."
+                )
+            if property_type not in {"integer", "number"}:
+                continue
+            default = property_schema.get("default")
+            minimum = property_schema.get("minimum")
+            if default not in (None, 0, 0.0) and minimum in (0, 0.0):
+                assert fields[field_name]["type"].startswith("*"), (
+                    f"Go {struct_name}.{field_name} must be a pointer so an "
+                    "explicit zero is not replaced by the OpenAPI default."
+                )
+
+
 def test_go_pii_languages_match_core_and_openapi() -> None:
     from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 
@@ -116,6 +151,41 @@ def test_go_pii_languages_match_core_and_openapi() -> None:
 
     assert go_languages == SUPPORTED_LANGUAGES
     assert openapi_language_sets == {frozenset(SUPPORTED_LANGUAGES)}
+
+
+def test_go_openapi_enum_constants_match() -> None:
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+    spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+
+    go_aggregation = set(
+        re.findall(
+            r'^\s*Aggregation\w+\s+AggregationStrategy\s*=\s*"([^"]+)"$',
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+    openapi_aggregation = set(
+        spec["components"]["schemas"]["AnalyzeRequest"]["properties"][
+            "aggregation_strategy"
+        ]["anyOf"][0]["enum"]
+    )
+    assert go_aggregation == openapi_aggregation
+
+    go_methods = set(
+        re.findall(
+            r'^\s*Method\w+\s+DeidentificationMethod\s*=\s*"([^"]+)"$',
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+    openapi_method_sets = {
+        frozenset(properties["method"]["enum"])
+        for schema in spec["components"]["schemas"].values()
+        if isinstance(schema, dict)
+        for properties in [schema.get("properties", {})]
+        if isinstance(properties.get("method"), dict) and "enum" in properties["method"]
+    }
+    assert openapi_method_sets == {frozenset(go_methods)}
 
 
 def test_go_module_has_no_external_dependencies() -> None:
@@ -143,7 +213,7 @@ def test_go_client_error_type_is_implemented_and_documented() -> None:
     assert "func (e *APIError) Error() string" in source
     assert "type ErrorEnvelope struct" in source
     assert "func AsAPIError(err error) (*APIError, bool)" in source
-    assert source.count("ctx context.Context") >= len(CLIENT_METHOD_BY_PATH)
+    assert source.count("ctx context.Context") >= len(CLIENT_METHOD_BY_OPERATION)
 
     assert "APIError" in readme
     assert "AsAPIError" in readme
@@ -152,12 +222,14 @@ def test_go_client_error_type_is_implemented_and_documented() -> None:
     assert "error.details" in readme
 
 
-def _first_operation(path_item: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
-    for method_name in ("get", "post", "put", "patch", "delete"):
-        operation = path_item.get(method_name)
-        if operation is not None:
-            return operation
-    raise AssertionError(f"No HTTP operation found in path item: {path_item}")
+def _openapi_operations(spec: dict[str, Any]) -> list[tuple[str, str]]:
+    methods = ("get", "post", "put", "patch", "delete")
+    return [
+        (method, path)
+        for path, path_item in spec["paths"].items()
+        for method in methods
+        if method in path_item
+    ]
 
 
 def _request_schema(
@@ -188,21 +260,36 @@ def _request_schema_name(operation: dict[str, Any]) -> str | None:
 
 
 def _go_struct_json_fields(source: str, struct_name: str) -> set[str]:
+    return set(_go_struct_fields(source, struct_name))
+
+
+def _go_struct_fields(source: str, struct_name: str) -> dict[str, dict[str, Any]]:
     match = re.search(
         rf"^type {re.escape(struct_name)} struct \{{(?P<body>.*?)^\}}$",
         source,
         flags=re.DOTALL | re.MULTILINE,
     )
     assert match is not None, f"Go request struct {struct_name} is missing."
-    return set(re.findall(r'`json:"([^",]+)', match.group("body")))
+    fields: dict[str, dict[str, Any]] = {}
+    for field_match in re.finditer(
+        r'^\s*\w+\s+(?P<type>\S+)\s+`json:"(?P<name>[^",]+)(?P<opts>[^"]*)"`',
+        match.group("body"),
+        flags=re.MULTILINE,
+    ):
+        options = {option for option in field_match.group("opts").split(",") if option}
+        fields[field_match.group("name")] = {
+            "type": field_match.group("type"),
+            "omitempty": "omitempty" in options,
+        }
+    return fields
 
 
 def _openapi_request_schema_names(spec: dict[str, Any]) -> set[str]:
     schema_names: set[str] = set()
     pending = [
         schema_name
-        for path_item in spec["paths"].values()
-        for operation in [_first_operation(path_item, spec)]
+        for method, path in _openapi_operations(spec)
+        for operation in [spec["paths"][path][method]]
         if (schema_name := _request_schema_name(operation)) is not None
     ]
 
@@ -214,6 +301,17 @@ def _openapi_request_schema_names(spec: dict[str, Any]) -> set[str]:
         schema = spec["components"]["schemas"][schema_name]
         pending.extend(_schema_references(schema))
     return schema_names
+
+
+def _schema_type(schema: dict[str, Any]) -> str | None:
+    schema_type = schema.get("type")
+    if isinstance(schema_type, str):
+        return schema_type
+    for candidate in schema.get("anyOf", ()):
+        candidate_type = candidate.get("type")
+        if candidate_type != "null":
+            return candidate_type
+    return None
 
 
 def _schema_references(value: Any) -> list[str]:
