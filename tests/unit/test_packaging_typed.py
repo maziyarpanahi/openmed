@@ -7,18 +7,13 @@ consumers:
   requires the marker to live inside the installed package), and
 * the hatch build ``include`` list still declares ``openmed/py.typed`` so the
   marker ships in the built wheel and sdist, and
-* the newer v1.6 public surfaces expose resolvable type hints (and, when a type
-  checker is available locally, type-check cleanly over just those modules).
-
-The type-check step is intentionally best-effort: it runs only when ``mypy`` or
-``pyright`` is importable and is skipped otherwise, so it never turns into a
-heavy new gate that the offline test matrix cannot satisfy.
+* the newer v1.6 public surfaces expose resolvable type hints and type-check
+  cleanly with the pinned development checker over just those modules.
 """
 
 from __future__ import annotations
 
 import importlib
-import importlib.util
 import inspect
 import subprocess
 import sys
@@ -95,40 +90,15 @@ def test_typed_modules_expose_resolvable_hints(module_name: str) -> None:
             pytest.fail(f"{module_name}.{name} has an unresolvable type hint: {exc}")
 
 
-def _available_type_checker() -> str | None:
-    for checker in ("mypy", "pyright"):
-        if importlib.util.find_spec(checker) is not None:
-            return checker
-    return None
-
-
 def test_scoped_modules_type_check_cleanly() -> None:
-    """Type-check the scoped v1.6 modules when a checker is installed.
-
-    Skips cleanly when neither ``mypy`` nor ``pyright`` is available so the
-    offline CI matrix (which ships neither) stays green; when a checker is
-    present locally it must pass over just these modules with no errors.
-    """
-    checker = _available_type_checker()
-    if checker is None:
-        pytest.skip("no mypy/pyright available; scoped type-check is best-effort")
+    """Type-check the scoped v1.6 modules with the pinned mypy dependency."""
 
     module_paths = [
         str(PACKAGE_ROOT.parent / f"{name.replace('.', '/')}.py")
         for name in TYPED_MODULES
     ]
 
-    if checker == "mypy":
-        cmd = [
-            sys.executable,
-            "-m",
-            "mypy",
-            "--ignore-missing-imports",
-            "--follow-imports=silent",
-            *module_paths,
-        ]
-    else:
-        cmd = [sys.executable, "-m", "pyright", *module_paths]
+    cmd = [sys.executable, "-m", "mypy", *module_paths]
 
     result = subprocess.run(  # noqa: S603 - fixed, non-user-supplied argv
         cmd,
@@ -138,6 +108,6 @@ def test_scoped_modules_type_check_cleanly() -> None:
         check=False,
     )
     assert result.returncode == 0, (
-        f"{checker} reported type errors on the scoped v1.6 modules:\n"
+        "mypy reported type errors on the scoped v1.6 modules:\n"
         f"{result.stdout}\n{result.stderr}"
     )
