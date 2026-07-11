@@ -1000,10 +1000,11 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     return False
 
 
-# Romanian CNP county codes: 1-46 for the 41 counties plus the six Bucharest
+# Romanian CNP county codes: 01-46 for the 41 counties plus Bucharest and its
 # sectors, 51-52 for Calarasi and Giurgiu, and 70 for pre-2005 residents
-# without a settled county (foreign residents / naturalised persons).
-_ROMANIAN_CNP_COUNTY_CODES: frozenset[int] = frozenset(set(range(1, 53)) | {70})
+# without a settled county (foreign residents / naturalised persons). Codes
+# 47-50 are unassigned and must not be accepted as a numeric range shortcut.
+_ROMANIAN_CNP_COUNTY_CODES: frozenset[int] = frozenset(set(range(1, 47)) | {51, 52, 70})
 
 # Documented CNP control-digit weights ("279146358279").
 _ROMANIAN_CNP_WEIGHTS: tuple[int, ...] = (2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9)
@@ -1031,23 +1032,25 @@ def validate_romanian_cnp(text: str) -> bool:
       2/4/6/8 female; 1/2 map to the 1900s, 3/4 to the 1800s, 5/6 to the
       2000s, and 7/8 to residents (defaulted here to the 1900s).
     - ``YYMMDD``: date of birth. The century is taken from ``S``.
-    - ``JJ``: county (judet) code, 01-52 for the counties and Bucharest
-      sectors, or 70 for pre-2005 residents without a settled county.
+    - ``JJ``: county (judet) code, 01-46 or 51-52, plus 70 for pre-2005
+      residents without a settled county. Unassigned codes 47-50 are invalid.
     - ``NNN``: non-zero sequence number.
     - ``C``: control digit, computed as the sum of the first twelve digits
       weighted by the documented constant ``279146358279`` taken modulo 11.
       A remainder of 10 maps to a control digit of 1.
 
     Args:
-        text: CNP string (may contain spaces or hyphens).
+        text: CNP string containing exactly 13 ASCII digits. Surrounding
+            whitespace is ignored, but internal separators are invalid.
 
     Returns:
         True if the CNP has a valid structure, birth date, county code, and
         control digit.
     """
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 13:
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{13}", digits) is None:
         return False
 
     numbers = [int(digit) for digit in digits]

@@ -265,8 +265,9 @@ def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():
         if line.strip()
     ]
 
-    assert len(rows) == 1
-    fixture = GoldenFixture.from_mapping(rows[0])
+    assert len(rows) == 2
+    fixtures = {row["id"]: GoldenFixture.from_mapping(row) for row in rows}
+    fixture = fixtures["golden-i18n-ro-clinical-pii"]
     assert fixture.language == "ro"
 
     gold_by_label = {span.label: span.text for span in fixture.gold_spans}
@@ -275,6 +276,18 @@ def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "010011"
     assert gold_by_label["STREET_ADDRESS"] == "Str. Mihai Eminescu 12"
     assert validate_romanian_cnp(gold_by_label["ID_NUM"])
+
+    diacritic_fixture = fixtures["golden-i18n-ro-diacritics"]
+    diacritic_by_label = {
+        span.label: span.text for span in diacritic_fixture.gold_spans
+    }
+    assert "Pacientă" in diacritic_fixture.text
+    assert "București" in diacritic_fixture.text
+    assert diacritic_by_label["DATE"] == "22 iulie 2005"
+    assert diacritic_by_label["PHONE"] == "0721 234 567"
+    assert diacritic_by_label["STREET_ADDRESS"] == "Șoseaua Ștefan cel Mare 15"
+    assert diacritic_by_label["ZIPCODE"] == "010101"
+    assert validate_romanian_cnp(diacritic_by_label["ID_NUM"])
 
 
 def test_malay_i18n_jsonl_fixture_offsets_and_checksum():
