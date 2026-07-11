@@ -62,9 +62,15 @@ def raise_offline_error(action: str) -> None:
 
 
 @contextmanager
-def network_blocked_if_offline(config: Any = None) -> Iterator[None]:
-    """Block outbound socket connections while local-only mode is active."""
-    if not configure_offline_mode(config):
+def network_blocked_if_offline(
+    config: Any = None,
+    *,
+    local_only: bool = False,
+) -> Iterator[None]:
+    """Block outbound sockets for configured or explicitly local-only work."""
+    if local_only:
+        enable_hf_offline_flags()
+    elif not configure_offline_mode(config):
         yield
         return
 
