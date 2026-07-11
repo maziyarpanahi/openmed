@@ -1,4 +1,4 @@
-"""Polars DataFrame helpers for OpenMed de-identification workflows."""
+"""Polars DataFrame helpers for OpenMed clinical table workflows."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ except ImportError as exc:  # pragma: no cover - exercised by packaging users
 
 Deidentifier = Callable[..., Any]
 RiskReporter = Callable[..., dict[str, Any]]
+ClinicalExtractor = Callable[..., Any]
 
 
 def deidentify_frame(
@@ -56,7 +57,7 @@ def deidentify_frame(
                 deidentify_kwargs,
             )
 
-    return pl.DataFrame(records, schema=frame.schema)
+    return pl.DataFrame(records).select(frame.columns)
 
 
 def risk_report(
@@ -90,6 +91,64 @@ def risk_report(
         _records_for_risk(frame, selected_columns),
         original=_records_for_risk(original, selected_columns),
         aux=_records_for_risk(aux, selected_columns),
+    )
+
+
+def extract_frame(
+    frame: Any,
+    column: str,
+    *,
+    extractor: ClinicalExtractor | None = None,
+    extractor_kwargs: dict[str, Any] | None = None,
+    systems: Sequence[str] | None = None,
+    top_k: int = 1,
+    warn_on_phi: bool = True,
+) -> Any:
+    """Return grounded clinical entity rows for one Polars text column."""
+
+    _ensure_polars_frame(frame)
+    _validate_columns(frame, column)
+    from openmed.interop.clinical_dataframe import (
+        FLAT_TABLE_COLUMNS,
+        extract_records,
+    )
+
+    rows = extract_records(
+        frame.to_dicts(),
+        column,
+        extractor=extractor,
+        extractor_kwargs=extractor_kwargs,
+        systems=systems,
+        top_k=top_k,
+        warn_on_phi=warn_on_phi,
+    )
+    if rows:
+        return pl.DataFrame(rows).select(list(FLAT_TABLE_COLUMNS))
+    return pl.DataFrame(
+        schema={column_name: pl.Utf8 for column_name in FLAT_TABLE_COLUMNS}
+    )
+
+
+def ground_frame(
+    frame: Any,
+    column: str,
+    *,
+    extractor: ClinicalExtractor | None = None,
+    extractor_kwargs: dict[str, Any] | None = None,
+    systems: Sequence[str] | None = None,
+    top_k: int = 1,
+    warn_on_phi: bool = True,
+) -> Any:
+    """Alias for :func:`extract_frame` emphasizing grounded rows."""
+
+    return extract_frame(
+        frame,
+        column,
+        extractor=extractor,
+        extractor_kwargs=extractor_kwargs,
+        systems=systems,
+        top_k=top_k,
+        warn_on_phi=warn_on_phi,
     )
 
 
@@ -144,6 +203,49 @@ def _register_namespace() -> None:
                 reporter=reporter,
             )
 
+        def extract(
+            self,
+            column: str,
+            *,
+            extractor: ClinicalExtractor | None = None,
+            extractor_kwargs: dict[str, Any] | None = None,
+            systems: Sequence[str] | None = None,
+            top_k: int = 1,
+            warn_on_phi: bool = True,
+        ) -> Any:
+            """Return grounded clinical entity rows for one text column."""
+
+            return extract_frame(
+                self._frame,
+                column,
+                extractor=extractor,
+                extractor_kwargs=extractor_kwargs,
+                systems=systems,
+                top_k=top_k,
+                warn_on_phi=warn_on_phi,
+            )
+
+        def ground(
+            self,
+            column: str,
+            *,
+            extractor: ClinicalExtractor | None = None,
+            extractor_kwargs: dict[str, Any] | None = None,
+            systems: Sequence[str] | None = None,
+            top_k: int = 1,
+            warn_on_phi: bool = True,
+        ) -> Any:
+            """Alias for :meth:`extract` emphasizing grounded rows."""
+
+            return self.extract(
+                column,
+                extractor=extractor,
+                extractor_kwargs=extractor_kwargs,
+                systems=systems,
+                top_k=top_k,
+                warn_on_phi=warn_on_phi,
+            )
+
 
 def _load_deidentifier() -> Deidentifier:
     from openmed.core.pii import deidentify
@@ -157,9 +259,28 @@ def _load_risk_report() -> RiskReporter:
     return openmed_risk_report
 
 
+def ensure_registered() -> None:
+    """Ensure helpers target the currently imported Polars module."""
+
+    global pl
+
+    import polars as current_pl
+
+    pl = current_pl
+    if not _namespace_registered():
+        _register_namespace()
+
+
 def _ensure_polars_frame(frame: Any) -> None:
     if not isinstance(frame, pl.DataFrame):
         raise TypeError("frame must be a polars.DataFrame")
+
+
+def _namespace_registered() -> bool:
+    try:
+        return hasattr(pl.DataFrame(), "openmed")
+    except Exception:
+        return False
 
 
 def _validate_columns(frame: Any, columns: Sequence[str] | str) -> tuple[str, ...]:
@@ -228,8 +349,12 @@ def _records_for_risk(
 _register_namespace()
 
 __all__ = [
+    "ClinicalExtractor",
     "Deidentifier",
     "RiskReporter",
     "deidentify_frame",
+    "ensure_registered",
+    "extract_frame",
+    "ground_frame",
     "risk_report",
 ]

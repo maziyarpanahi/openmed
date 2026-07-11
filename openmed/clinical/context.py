@@ -45,6 +45,8 @@ from openmed.clinical.lexicons import (
     ClinicalCueLexicon,
     clinical_context_lexicon_stats,
     get_clinical_cue_lexicon,
+    normalize_section_header,
+    normalized_section_header_aliases,
 )
 
 Negation = Literal["affirmed", "negated"]
@@ -234,6 +236,10 @@ _BACKWARD_CONTEXT_CUES = {
 }
 
 
+def _normalize_section_label(section: str) -> str:
+    return normalize_section_header(section)
+
+
 def _normalize_cue_text(text: str) -> str:
     return " ".join(text.casefold().split())
 
@@ -292,7 +298,7 @@ CANONICAL_SECTION_LABELS = {
     "plan": ("Plan",),
 }
 
-SECTION_LABEL_ALIASES = {
+_BASE_SECTION_LABEL_ALIASES = {
     "past medical history": "past_medical_history",
     "pmh": "past_medical_history",
     "medical history": "past_medical_history",
@@ -307,6 +313,11 @@ SECTION_LABEL_ALIASES = {
     "hpi": "history_of_present_illness",
     "assessment": "assessment",
     "plan": "plan",
+}
+
+SECTION_LABEL_ALIASES = {
+    **_BASE_SECTION_LABEL_ALIASES,
+    **normalized_section_header_aliases(),
 }
 
 SECTION_CONTEXT_PRIORS = {
@@ -702,11 +713,6 @@ def _text_parts(
             continue
         parts.append(modifier_text)
     return tuple(part for part in parts if part)
-
-
-def _normalize_section_label(section: str) -> str:
-    normalized = re.sub(r"[^a-z0-9]+", " ", section.casefold()).strip()
-    return re.sub(r"\s+", " ", normalized)
 
 
 def _section_text_of(obj: Any) -> str:
