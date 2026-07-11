@@ -1208,10 +1208,26 @@ def _apply_clinical_protection_to_result(
 
 def _context_window(
     text: str, start: int, end: int, *, size: int = 32
-) -> dict[str, str]:
+) -> dict[str, dict[str, int | str]]:
+    from .audit import hash_text
+
+    before_start = max(0, start - size)
+    after_end = min(len(text), end + size)
+    before = text[before_start:start]
+    after = text[end:after_end]
     return {
-        "before": text[max(0, start - size) : start],
-        "after": text[end : min(len(text), end + size)],
+        "before": {
+            "start": before_start,
+            "end": start,
+            "length": len(before),
+            "text_hash": hash_text(before),
+        },
+        "after": {
+            "start": end,
+            "end": after_end,
+            "length": len(after),
+            "text_hash": hash_text(after),
+        },
     }
 
 
