@@ -25,9 +25,7 @@ CLIENT_METHOD_BY_PATH = {
     "/analyze": "Analyze",
     "/fhir/smart-backend/ingestions": "StartSMARTBackendIngestion",
     "/fhir/smart-backend/ingestions/{job_id}": "SMARTBackendIngestionStatus",
-    "/fhir/smart-backend/ingestions/{job_id}/summary": (
-        "SMARTBackendIngestionSummary"
-    ),
+    "/fhir/smart-backend/ingestions/{job_id}/summary": "SMARTBackendIngestionSummary",
     "/health": "Health",
     "/jobs": "CreateJob",
     "/jobs/{job_id}": "GetJob",
@@ -39,6 +37,19 @@ CLIENT_METHOD_BY_PATH = {
     "/pii/extract/stream": "ExtractPIIStream",
     "/privacy-gateway/complete": "PrivacyGateway",
     "/readyz": "Readyz",
+}
+
+GO_REQUEST_STRUCT_BY_SCHEMA = {
+    "AnalyzeRequest": "AnalyzeRequest",
+    "DeidentifyJobDocument": "DeidentifyJobDocument",
+    "DeidentifyJobRequest": "DeidentifyJobRequest",
+    "JobWebhookRequest": "JobWebhookRequest",
+    "ModelUnloadRequest": "ModelUnloadRequest",
+    "PIIDeidentifyRequest": "PIIDeidentifyRequest",
+    "PIIExtractRequest": "PIIExtractRequest",
+    "PIIExtractStreamRequest": "PIIExtractStreamRequest",
+    "PrivacyGatewayRequest": "PrivacyGatewayRequest",
+    "SMARTBackendIngestionRequest": "SMARTBackendIngestionRequest",
 }
 
 
@@ -59,11 +70,52 @@ def test_go_client_covers_openapi_paths_and_request_fields() -> None:
         if request_schema is None:
             continue
 
-        for field_name in sorted(request_schema.get("properties", {})):
-            assert re.search(rf'`json:"{re.escape(field_name)}[",]', source), (
-                f"{field_name!r} from {path} is missing a matching "
-                f"json tag in the Go source."
-            )
+        schema_name = _request_schema_name(operation)
+        assert schema_name is not None
+        assert schema_name in GO_REQUEST_STRUCT_BY_SCHEMA
+
+
+def test_go_request_structs_match_openapi_components() -> None:
+    spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+
+    assert set(GO_REQUEST_STRUCT_BY_SCHEMA) == _openapi_request_schema_names(spec)
+
+    for schema_name, struct_name in GO_REQUEST_STRUCT_BY_SCHEMA.items():
+        openapi_fields = set(
+            spec["components"]["schemas"][schema_name].get("properties", {})
+        )
+        go_fields = _go_struct_json_fields(source, struct_name)
+        assert go_fields == openapi_fields, (
+            f"Go {struct_name} fields differ from OpenAPI {schema_name}: "
+            f"missing={sorted(openapi_fields - go_fields)}, "
+            f"extra={sorted(go_fields - openapi_fields)}"
+        )
+
+
+def test_go_pii_languages_match_core_and_openapi() -> None:
+    from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+    go_languages = set(
+        re.findall(
+            r'^\s*Lang[A-Z]{2}\s+PIILanguage\s*=\s*"([a-z]{2})"$',
+            source,
+            flags=re.MULTILINE,
+        )
+    )
+
+    spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+    openapi_language_sets = {
+        frozenset(properties["lang"]["enum"])
+        for schema in spec["components"]["schemas"].values()
+        if isinstance(schema, dict)
+        for properties in [schema.get("properties", {})]
+        if isinstance(properties.get("lang"), dict) and "enum" in properties["lang"]
+    }
+
+    assert go_languages == SUPPORTED_LANGUAGES
+    assert openapi_language_sets == {frozenset(SUPPORTED_LANGUAGES)}
 
 
 def test_go_module_has_no_external_dependencies() -> None:
@@ -123,3 +175,56 @@ def _request_schema(
 
     schema_name = ref.removeprefix("#/components/schemas/")
     return spec["components"]["schemas"][schema_name]
+
+
+def _request_schema_name(operation: dict[str, Any]) -> str | None:
+    request_body = operation.get("requestBody")
+    if request_body is None:
+        return None
+    ref = request_body["content"]["application/json"]["schema"].get("$ref")
+    if ref is None:
+        return None
+    return ref.removeprefix("#/components/schemas/")
+
+
+def _go_struct_json_fields(source: str, struct_name: str) -> set[str]:
+    match = re.search(
+        rf"^type {re.escape(struct_name)} struct \{{(?P<body>.*?)^\}}$",
+        source,
+        flags=re.DOTALL | re.MULTILINE,
+    )
+    assert match is not None, f"Go request struct {struct_name} is missing."
+    return set(re.findall(r'`json:"([^",]+)', match.group("body")))
+
+
+def _openapi_request_schema_names(spec: dict[str, Any]) -> set[str]:
+    schema_names: set[str] = set()
+    pending = [
+        schema_name
+        for path_item in spec["paths"].values()
+        for operation in [_first_operation(path_item, spec)]
+        if (schema_name := _request_schema_name(operation)) is not None
+    ]
+
+    while pending:
+        schema_name = pending.pop()
+        if schema_name in schema_names:
+            continue
+        schema_names.add(schema_name)
+        schema = spec["components"]["schemas"][schema_name]
+        pending.extend(_schema_references(schema))
+    return schema_names
+
+
+def _schema_references(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        references = []
+        ref = value.get("$ref")
+        if isinstance(ref, str):
+            references.append(ref.removeprefix("#/components/schemas/"))
+        for nested in value.values():
+            references.extend(_schema_references(nested))
+        return references
+    if isinstance(value, list):
+        return [reference for item in value for reference in _schema_references(item)]
+    return []
