@@ -1363,6 +1363,7 @@ def validate_bc_phn(text: str) -> bool:
     digits = _digits_only(candidate)
     if len(digits) != 10:
         return False
+
     numbers = [int(digit) for digit in digits]
     if numbers[0] != 9:
         return False
