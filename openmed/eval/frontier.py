@@ -19,8 +19,8 @@ Optimization sense
 - ``throughput`` (docs/sec) -- higher is better.
 - ``accuracy`` (F1 / recall, in ``[0, 1]``) -- higher is better.
 - ``leakage`` (leaked-character rate, in ``[0, 1]``) -- lower is better, so it is
-  compared as ``-leakage``. Leakage is optional; when omitted it is treated as a
-  neutral ``0.0`` and does not affect domination.
+  compared as ``-leakage``. Leakage evidence is required; an unmeasured variant
+  cannot appear safer than a measured one.
 
 A point *B* dominates a point *A* when *B* is at least as good as *A* on every
 objective and strictly better on at least one. Dominated points are off the
@@ -30,17 +30,10 @@ frontier; every point that nothing dominates is on the frontier.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
-
-# Objective directions. ``+1`` means larger is better, ``-1`` means smaller is
-# better. Leakage is the only "lower is better" axis.
-_OBJECTIVE_SENSE: dict[str, int] = {
-    "throughput": +1,
-    "accuracy": +1,
-    "leakage": -1,
-}
 
 # Default keys, in priority order, used to pull an accuracy scalar out of a
 # ``BenchmarkReport.metrics`` bundle. All are "higher is better".
@@ -70,8 +63,9 @@ class FrontierPoint:
         throughput: Documents processed per second (higher is better).
         accuracy: Quality metric such as span F1 or character recall in
             ``[0, 1]`` (higher is better).
-        leakage: Leaked-character rate in ``[0, 1]`` (lower is better). Defaults
-            to ``0.0``, which is neutral in domination checks.
+        leakage: Measured leaked-character rate in ``[0, 1]`` (lower is better).
+            This evidence is required so missing measurements cannot be treated
+            as perfect zero leakage.
         metadata: Optional provenance (model, threshold, quantization, batch,
             device, tier, source report ids). Never holds raw PHI.
     """
@@ -79,8 +73,30 @@ class FrontierPoint:
     label: str
     throughput: float
     accuracy: float
-    leakage: float = 0.0
+    leakage: float
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Validate and normalize a measured point at every construction path."""
+        object.__setattr__(self, "label", _coerce_label(self.label))
+        object.__setattr__(
+            self,
+            "throughput",
+            _coerce_nonnegative(self.throughput, field_name="throughput"),
+        )
+        object.__setattr__(
+            self,
+            "accuracy",
+            _coerce_unit_interval(self.accuracy, field_name="accuracy"),
+        )
+        object.__setattr__(
+            self,
+            "leakage",
+            _coerce_unit_interval(self.leakage, field_name="leakage"),
+        )
+        if not isinstance(self.metadata, Mapping):
+            raise ValueError("metadata must be a mapping")
+        object.__setattr__(self, "metadata", dict(self.metadata))
 
     def objectives(self) -> tuple[float, float, float]:
         """Return objectives as a maximization tuple ``(tput, acc, -leak)``."""
@@ -99,13 +115,20 @@ class FrontierPoint:
     @classmethod
     def from_mapping(cls, data: Mapping[str, Any]) -> "FrontierPoint":
         """Build a point from a JSON-compatible mapping."""
-        label = str(data.get("label") or data.get("variant") or data.get("system"))
-        throughput = _coerce_float(
+        raw_label = data.get("label")
+        if raw_label is None:
+            raw_label = data.get("variant")
+        if raw_label is None:
+            raw_label = data.get("system")
+        label = _coerce_label(raw_label)
+        throughput = _coerce_nonnegative(
             data.get("throughput", data.get("docs_per_second")),
             field_name="throughput",
         )
-        accuracy = _coerce_float(data.get("accuracy"), field_name="accuracy")
-        leakage = _coerce_float(data.get("leakage", 0.0), field_name="leakage")
+        accuracy = _coerce_unit_interval(data.get("accuracy"), field_name="accuracy")
+        if data.get("leakage") is None:
+            raise ValueError("leakage evidence is required")
+        leakage = _coerce_unit_interval(data.get("leakage"), field_name="leakage")
         metadata = data.get("metadata") or {}
         if not isinstance(metadata, Mapping):
             metadata = {"value": metadata}
@@ -291,7 +314,7 @@ def frontier_report(
     """Compute the throughput-versus-accuracy Pareto frontier over *points*.
 
     Each point carries a throughput (docs/sec, higher is better), an accuracy
-    metric (higher is better), and an optional leakage rate (lower is better).
+    metric (higher is better), and a measured leakage rate (lower is better).
     A point is *dominated* when another point is at least as good on every
     objective and strictly better on at least one; every point that nothing
     dominates is *on the frontier*.
@@ -323,6 +346,12 @@ def frontier_report(
         )
         for point in points
     ]
+
+    seen_labels: set[str] = set()
+    for point in resolved:
+        if point.label in seen_labels:
+            raise ValueError(f"duplicate point label: {point.label!r}")
+        seen_labels.add(point.label)
 
     entries: list[FrontierEntry] = []
     for index, candidate in enumerate(resolved):
@@ -378,12 +407,15 @@ def frontier_point_from_reports(
         A :class:`FrontierPoint` combining the two reports.
 
     Raises:
-        ValueError: If no accuracy scalar is found under *accuracy_keys*.
+        ValueError: If required evidence or a stable label is missing, or if a
+            measured value is invalid.
     """
-    throughput = _coerce_float(
+    throughput = _coerce_nonnegative(
         getattr(perf, "docs_per_second", None), field_name="docs_per_second"
     )
-    metrics = getattr(benchmark, "metrics", {}) or {}
+    metrics = getattr(benchmark, "metrics", None)
+    if not isinstance(metrics, Mapping):
+        raise ValueError("benchmark metrics must be a mapping")
 
     accuracy_value, accuracy_key = _first_metric(metrics, accuracy_keys)
     if accuracy_value is None:
@@ -392,17 +424,22 @@ def frontier_point_from_reports(
             f"{list(accuracy_keys)}"
         )
     leakage_value, leakage_key = _first_metric(metrics, leakage_keys)
+    if leakage_value is None:
+        raise ValueError(
+            "no leakage metric found in benchmark report under keys: "
+            f"{list(leakage_keys)}"
+        )
 
-    resolved_label = (
-        label
-        or getattr(benchmark, "model_name", None)
-        or getattr(perf, "model_name", None)
-        or "variant"
-    )
+    resolved_label = label
+    if resolved_label is None:
+        resolved_label = getattr(benchmark, "model_name", None)
+    if resolved_label is None:
+        resolved_label = getattr(perf, "model_name", None)
+    if resolved_label is None:
+        raise ValueError("label is required when reports have no model_name")
 
     metadata: dict[str, Any] = {"accuracy_key": accuracy_key}
-    if leakage_key is not None:
-        metadata["leakage_key"] = leakage_key
+    metadata["leakage_key"] = leakage_key
     for source, obj in (("perf", perf), ("benchmark", benchmark)):
         for attr in ("model_name", "device", "tier", "canonical_tier", "suite"):
             value = getattr(obj, attr, None)
@@ -410,10 +447,10 @@ def frontier_point_from_reports(
                 metadata[f"{source}_{attr}"] = value
 
     return FrontierPoint(
-        label=str(resolved_label),
+        label=resolved_label,
         throughput=throughput,
-        accuracy=float(accuracy_value),
-        leakage=float(leakage_value) if leakage_value is not None else 0.0,
+        accuracy=accuracy_value,
+        leakage=leakage_value,
         metadata=metadata,
     )
 
@@ -473,10 +510,41 @@ def _nested_get(mapping: Mapping[str, Any], dotted_key: str) -> Any:
 
 
 def _coerce_float(value: Any, *, field_name: str) -> float:
-    """Coerce *value* to ``float`` or raise a clear error."""
+    """Coerce *value* to a finite ``float`` or raise a clear error."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError(f"{field_name} must be a number, got {value!r}")
-    return float(value)
+    result = float(value)
+    if not math.isfinite(result):
+        raise ValueError(f"{field_name} must be finite, got {value!r}")
+    return result
+
+
+def _coerce_nonnegative(value: Any, *, field_name: str) -> float:
+    """Coerce a finite, non-negative measured value."""
+    result = _coerce_float(value, field_name=field_name)
+    if result < 0.0:
+        raise ValueError(f"{field_name} must be greater than or equal to 0")
+    return result
+
+
+def _coerce_unit_interval(value: Any, *, field_name: str) -> float:
+    """Coerce a finite metric in the closed unit interval."""
+    result = _coerce_float(value, field_name=field_name)
+    if not 0.0 <= result <= 1.0:
+        raise ValueError(f"{field_name} must be between 0 and 1")
+    return result
+
+
+def _coerce_label(value: Any) -> str:
+    """Return a non-empty stable label or reject ambiguous identifiers."""
+    if not isinstance(value, str):
+        raise ValueError("label must be a non-empty string")
+    label = value.strip()
+    if not label:
+        raise ValueError("label must be a non-empty string")
+    if "\n" in label or "\r" in label:
+        raise ValueError("label must not contain line breaks")
+    return label
 
 
 def _format_number(value: float) -> str:
