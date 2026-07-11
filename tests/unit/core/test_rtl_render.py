@@ -32,6 +32,8 @@ _LRM = "\u200e"  # Left-to-Right Mark
 _RLM = "\u200f"  # Right-to-Left Mark
 _RLE = "\u202b"  # Right-to-Left Embedding
 _PDF = "\u202c"  # Pop Directional Formatting
+_RLO = "\u202e"  # Right-to-Left Override
+_ZWJ = "\u200d"  # Zero Width Joiner (not a bidi control)
 
 # Synthetic redacted lines: masks/surrogates already substituted for PII.
 _ARABIC_WITH_SURROGATE = "المريض John Smith زار"
@@ -204,6 +206,19 @@ def test_span_accepts_mapping_and_object_forms():
         assert result.source_offsets == (span_tuple,)
 
 
+@pytest.mark.parametrize(
+    "span",
+    [
+        (7.9, 13),
+        (7, "13"),
+        (True, 13),
+    ],
+)
+def test_span_offsets_reject_lossy_non_integer_values(span):
+    with pytest.raises(ValueError, match="offset must be an integer"):
+        render_redacted(_ARABIC_WITH_MASK, [span])
+
+
 # --- Direction override ------------------------------------------------------
 
 
@@ -273,6 +288,42 @@ def test_span_out_of_range_rejected():
         render_redacted(_ARABIC_WITH_MASK, [(0, len(_ARABIC_WITH_MASK) + 1)])
 
 
+@pytest.mark.parametrize("control", [_PDI, _RLO, _RLM])
+def test_replacement_bidi_controls_are_rejected(control):
+    text = f"المريض [NA{control}ME] زار"
+    span = _span_of(text, f"[NA{control}ME]")
+
+    with pytest.raises(ValueError, match="bidi control"):
+        render_redacted(text, [span])
+
+
+def test_ltr_replacement_bidi_control_is_rejected_before_noop():
+    token = f"[NA{_PDI}ME]"
+    text = f"Patient {token} visited"
+
+    with pytest.raises(ValueError, match="bidi control"):
+        render_redacted(text, [_span_of(text, token)])
+
+
+def test_non_bidi_zero_width_character_is_preserved_inside_replacement():
+    token = f"علي{_ZWJ}رضا"
+    text = f"المريض {token} زار"
+    result = render_redacted(text, [_span_of(text, token)])
+
+    assert f"{_FSI}{token}{_PDI}" in result.text
+    assert strip_bidi_controls(result.text) == text
+
+
+def test_html_like_replacement_remains_plain_text_for_caller_to_escape():
+    token = "<b>[NAME]</b>"
+    text = f"المريض {token} زار"
+    result = render_redacted(text, [_span_of(text, token)])
+
+    assert f"{_FSI}{token}{_PDI}" in result.text
+    assert "&lt;" not in result.text
+    assert strip_bidi_controls(result.text) == text
+
+
 def test_non_string_text_rejected():
     with pytest.raises(TypeError):
         render_redacted(None)  # type: ignore[arg-type]
@@ -289,6 +340,14 @@ def test_strip_removes_isolates_and_recovers_replacement():
 def test_strip_removes_marks_and_embeddings():
     noisy = f"{_RLE}{_LRM}[ID]{_RLM}{_PDF}"
     assert strip_bidi_controls(noisy) == "[ID]"
+
+
+def test_strip_sanitizes_controls_that_predated_rendering():
+    text = f"المريض{_RLM} [NAME] زار"
+    result = render_redacted(text, [_span_of(text, "[NAME]")])
+
+    assert _RLM in result.text
+    assert strip_bidi_controls(result.text) == text.replace(_RLM, "")
 
 
 def test_strip_leaves_clean_text_unchanged():
@@ -327,6 +386,14 @@ def test_wrap_mask_ltr_is_noop():
 def test_wrap_mask_invalid_direction_rejected():
     with pytest.raises(ValueError):
         wrap_mask("[NAME]", direction="sideways")
+
+
+def test_wrap_mask_rejects_embedded_bidi_control():
+    with pytest.raises(ValueError, match="bidi control"):
+        wrap_mask(f"[NA{_PDI}ME]")
+
+    with pytest.raises(ValueError, match="bidi control"):
+        wrap_mask(f"[NA{_PDI}ME]", direction="ltr")
 
 
 def test_wrap_mask_non_string_direction_rejected():
