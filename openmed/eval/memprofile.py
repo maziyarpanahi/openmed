@@ -14,7 +14,12 @@ PHI.
 
 from __future__ import annotations
 
+import ctypes
+import hashlib
 import json
+import os
+import sys
+import threading
 import tracemalloc
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -24,8 +29,6 @@ from typing import Any, Callable, Mapping, Sequence
 from openmed.eval.metrics import ResourceMetrics, compute_resource_metrics
 from openmed.eval.perf import (
     PerfDocument,
-    _peak_rss_bytes,
-    default_perf_runner,
     load_perf_documents,
     synthetic_perf_runner,
 )
@@ -38,6 +41,7 @@ PROFILE_PHASES: tuple[str, ...] = (PHASE_LOAD, PHASE_FIRST_FORWARD, PHASE_STEADY
 
 SYNTHETIC_MEMPROFILE_MODEL_NAME = "synthetic-one-page-note-runner"
 DEFAULT_TOP_ALLOCATORS = 10
+_RSS_POLL_INTERVAL_SECONDS = 0.005
 
 #: A model loader takes the ``model`` handle and returns a runnable callable.
 ModelLoader = Callable[[Any], Callable[[PerfDocument], Any]]
@@ -87,6 +91,7 @@ class PhaseMemory:
     traced_current_bytes: int
     traced_peak_bytes: int
     top_allocators: tuple[AllocatorStat, ...]
+    tracemalloc_preexisting: bool = False
 
     @property
     def resources(self) -> ResourceMetrics:
@@ -108,8 +113,10 @@ class PhaseMemory:
             "peak_rss_bytes": self.peak_rss_bytes,
             "peak_rss_mib": self.resources.peak_rss_mib,
             "rss_delta_bytes": self.rss_delta_bytes,
+            "rss_semantics": "current-sampled",
             "traced_current_bytes": self.traced_current_bytes,
             "traced_peak_bytes": self.traced_peak_bytes,
+            "tracemalloc_preexisting": self.tracemalloc_preexisting,
             "top_allocators": [stat.to_dict() for stat in self.top_allocators],
         }
 
@@ -252,11 +259,11 @@ def profile_memory(
 
     ``model`` can be a local model path, a model identifier, or a callable. The
     ``loader`` is invoked once (measured as the ``load`` phase) and must return a
-    per-document callable; when omitted, the loader wraps
-    :func:`openmed.eval.perf.default_perf_runner` so a string identifier drives
-    the existing PII runtime and a callable model is used directly. The first
-    document runs under the ``first-forward`` phase and the remaining documents
-    (or a re-run of the single document) under the ``steady-state-batch`` phase.
+    per-document callable; when omitted, a string identifier is loaded through a
+    shared :class:`openmed.core.models.ModelLoader` before inference, while a
+    callable model is used directly. The first document runs under the
+    ``first-forward`` phase and the remaining documents (or a re-run of the
+    single document) under the ``steady-state-batch`` phase.
 
     Each phase captures a baseline RSS, a peak RSS via the shared resource-metric
     helpers, and a ``tracemalloc`` top-allocator snapshot. Only file/line
@@ -267,7 +274,8 @@ def profile_memory(
         model: Model path, identifier, or callable to profile.
         docs: Optional workload; defaults to the committed synthetic workload.
         loader: Optional loader returning a per-document callable.
-        rss_sampler: Optional RSS sampler (bytes); defaults to the process peak.
+        rss_sampler: Optional current-RSS sampler (bytes); defaults to a
+            platform-native process RSS sampler.
         top_allocators: Number of top allocator entries to keep per phase.
         generated_at: Optional ISO timestamp override for deterministic output.
         metadata: Optional extra metadata merged into the profile.
@@ -284,7 +292,7 @@ def profile_memory(
     if top_allocators < 1:
         raise ValueError("top_allocators must be at least 1")
 
-    sample_rss = rss_sampler or _peak_rss_bytes
+    sample_rss = rss_sampler or _current_rss_bytes
     load_model = loader or _default_loader
 
     phases: list[PhaseMemory] = []
@@ -326,7 +334,9 @@ def profile_memory(
     phases.append(steady_phase)
 
     profile_metadata = {
-        "document_ids": [document.document_id for document in documents],
+        "document_hashes": [
+            _document_hash(document.document_id) for document in documents
+        ],
         "top_allocators": top_allocators,
     }
     profile_metadata.update(metadata or {})
@@ -350,10 +360,30 @@ def synthetic_memprofile_loader(model: Any) -> Callable[[PerfDocument], Any]:
 
 
 def _default_loader(model: Any) -> Callable[[PerfDocument], Any]:
-    """Wrap the perf default runner as a per-document callable."""
+    """Load the model now and return a warmed per-document inference callable."""
+
+    if callable(model):
+        return lambda document: model(document.text)
+
+    from openmed.core.models import ModelLoader
+    from openmed.core.pii import extract_pii
+
+    model_name = str(model)
+    shared_loader = ModelLoader()
+    shared_loader.create_pipeline(
+        model_name,
+        task="token-classification",
+        aggregation_strategy="simple",
+        use_fast_tokenizer=True,
+    )
 
     def run_document(document: PerfDocument) -> Any:
-        return default_perf_runner(model, document, "cpu")
+        return extract_pii(
+            document.text,
+            model_name=model_name,
+            lang=document.language,
+            loader=shared_loader,
+        )
 
     return run_document
 
@@ -366,51 +396,199 @@ def _measure_phase(
     top_allocators: int,
 ) -> tuple[Any, PhaseMemory]:
     """Run *work* under tracemalloc and RSS sampling, returning its result."""
-    baseline_rss = sample_rss()
+    rss_monitor = _RssMonitor(sample_rss)
+    baseline_rss = rss_monitor.start()
     started_tracing = not tracemalloc.is_tracing()
     if started_tracing:
         tracemalloc.start()
-    else:
-        tracemalloc.clear_traces()
-    tracemalloc.reset_peak()
+    baseline_snapshot = tracemalloc.take_snapshot()
+    baseline_current, baseline_peak = tracemalloc.get_traced_memory()
     try:
         result = work()
         snapshot = tracemalloc.take_snapshot()
         traced_current, traced_peak = tracemalloc.get_traced_memory()
     finally:
+        peak_rss_bytes = rss_monitor.stop()
         if started_tracing:
             tracemalloc.stop()
 
-    peak_rss = sample_rss()
-    peak_rss_bytes = _max_optional(baseline_rss, peak_rss)
+    allocator_stats = _top_allocators(
+        snapshot,
+        baseline_snapshot,
+        top_allocators,
+    )
+    phase_current = max(int(traced_current - baseline_current), 0)
+    retained_growth = sum(stat.size_bytes for stat in allocator_stats)
+    phase_peak = max(
+        int(traced_peak - baseline_peak),
+        phase_current,
+        retained_growth,
+        0,
+    )
     return result, PhaseMemory(
         phase=phase,
         baseline_rss_bytes=baseline_rss,
         peak_rss_bytes=peak_rss_bytes,
-        traced_current_bytes=int(traced_current),
-        traced_peak_bytes=int(traced_peak),
-        top_allocators=_top_allocators(snapshot, top_allocators),
+        traced_current_bytes=phase_current,
+        traced_peak_bytes=phase_peak,
+        top_allocators=allocator_stats,
+        tracemalloc_preexisting=not started_tracing,
     )
 
 
 def _top_allocators(
     snapshot: tracemalloc.Snapshot,
+    baseline: tracemalloc.Snapshot,
     limit: int,
 ) -> tuple[AllocatorStat, ...]:
     """Return the top *limit* allocators as PHI-free provenance records."""
-    stats = snapshot.statistics("lineno")
+    stats = snapshot.compare_to(baseline, "lineno")
     top: list[AllocatorStat] = []
-    for stat in stats[:limit]:
+    for stat in stats:
+        if stat.size_diff <= 0 or stat.count_diff <= 0:
+            continue
         frame = stat.traceback[0] if stat.traceback else None
         top.append(
             AllocatorStat(
                 file=frame.filename if frame is not None else "<unknown>",
                 lineno=frame.lineno if frame is not None else 0,
-                size_bytes=int(stat.size),
-                count=int(stat.count),
+                size_bytes=int(stat.size_diff),
+                count=int(stat.count_diff),
             )
         )
+        if len(top) >= limit:
+            break
     return tuple(top)
+
+
+class _RssMonitor:
+    """Sample current RSS during one phase without retaining payload data."""
+
+    def __init__(self, sampler: RssSampler) -> None:
+        self._sampler = sampler
+        self._samples: list[int] = []
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> int | None:
+        baseline = self._record()
+        self._thread = threading.Thread(
+            target=self._poll,
+            name="openmed-rss-monitor",
+            daemon=True,
+        )
+        self._thread.start()
+        return baseline
+
+    def stop(self) -> int | None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=1.0)
+        self._record()
+        return max(self._samples) if self._samples else None
+
+    def _poll(self) -> None:
+        while not self._stop.wait(_RSS_POLL_INTERVAL_SECONDS):
+            self._record()
+
+    def _record(self) -> int | None:
+        try:
+            value = self._sampler()
+        except Exception:
+            return None
+        if value is not None:
+            self._samples.append(max(int(value), 0))
+            return self._samples[-1]
+        return None
+
+
+def _current_rss_bytes() -> int | None:
+    """Return current process resident memory using platform-native APIs."""
+
+    if sys.platform.startswith("linux"):
+        try:
+            resident_pages = int(
+                Path("/proc/self/statm").read_text(encoding="ascii").split()[1]
+            )
+            return resident_pages * int(os.sysconf("SC_PAGE_SIZE"))
+        except (IndexError, OSError, TypeError, ValueError):
+            return None
+    if sys.platform == "darwin":
+        return _darwin_current_rss_bytes()
+    if os.name == "nt":
+        return _windows_current_rss_bytes()
+    return None
+
+
+class _TimeValue(ctypes.Structure):
+    _fields_ = [("seconds", ctypes.c_int), ("microseconds", ctypes.c_int)]
+
+
+class _MachTaskBasicInfo(ctypes.Structure):
+    _fields_ = [
+        ("virtual_size", ctypes.c_uint64),
+        ("resident_size", ctypes.c_uint64),
+        ("resident_size_max", ctypes.c_uint64),
+        ("user_time", _TimeValue),
+        ("system_time", _TimeValue),
+        ("policy", ctypes.c_int),
+        ("suspend_count", ctypes.c_int),
+    ]
+
+
+def _darwin_current_rss_bytes() -> int | None:
+    try:
+        libc = ctypes.CDLL("/usr/lib/libSystem.B.dylib")
+        libc.mach_task_self.restype = ctypes.c_uint
+        libc.task_info.argtypes = (
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_uint),
+        )
+        info = _MachTaskBasicInfo()
+        count = ctypes.c_uint(
+            ctypes.sizeof(_MachTaskBasicInfo) // ctypes.sizeof(ctypes.c_uint)
+        )
+        status = libc.task_info(
+            libc.mach_task_self(),
+            20,
+            ctypes.byref(info),
+            ctypes.byref(count),
+        )
+        return int(info.resident_size) if status == 0 else None
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
+
+
+class _ProcessMemoryCounters(ctypes.Structure):
+    _fields_ = [
+        ("cb", ctypes.c_ulong),
+        ("page_fault_count", ctypes.c_ulong),
+        ("peak_working_set_size", ctypes.c_size_t),
+        ("working_set_size", ctypes.c_size_t),
+        ("quota_peak_paged_pool_usage", ctypes.c_size_t),
+        ("quota_paged_pool_usage", ctypes.c_size_t),
+        ("quota_peak_non_paged_pool_usage", ctypes.c_size_t),
+        ("quota_non_paged_pool_usage", ctypes.c_size_t),
+        ("pagefile_usage", ctypes.c_size_t),
+        ("peak_pagefile_usage", ctypes.c_size_t),
+    ]
+
+
+def _windows_current_rss_bytes() -> int | None:
+    try:
+        counters = _ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        process = ctypes.windll.kernel32.GetCurrentProcess()
+        ok = ctypes.windll.psapi.GetProcessMemoryInfo(
+            process,
+            ctypes.byref(counters),
+            counters.cb,
+        )
+        return int(counters.working_set_size) if ok else None
+    except (AttributeError, OSError, TypeError, ValueError):
+        return None
 
 
 def _normalize_documents(
@@ -440,9 +618,9 @@ def _model_name(model: Any) -> str:
     return model.__class__.__name__
 
 
-def _max_optional(*values: int | None) -> int | None:
-    present = [value for value in values if value is not None]
-    return max(present) if present else None
+def _document_hash(document_id: str) -> str:
+    digest = hashlib.sha256(document_id.encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
 
 
 def _utc_now() -> str:
