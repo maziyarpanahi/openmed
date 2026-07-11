@@ -1,7 +1,7 @@
 """Release gate harness for benchmark reports.
 
 The gate evaluates a candidate benchmark report against the section 6.4
-G1a-G8 release criteria, reads the last-green baseline store without mutating
+G1a-G9 release criteria, reads the last-green baseline store without mutating
 it, and emits a signed, reproducible gate report.
 """
 
@@ -56,6 +56,8 @@ G2_V20_RECALL_FLOOR = 0.990
 G4_INT8_DELTA_LIMIT = INT8_RECALL_DELTA_LIMIT
 G4_INT4_DELTA_LIMIT = INT4_RECALL_DELTA_LIMIT
 G7_RECALL_DROP_LIMIT = 0.002
+G9_STRICT_RE_F1_FLOOR = 0.850
+G9_RELAXED_RE_F1_FLOOR = 0.900
 RESIDUAL_LEAKAGE_SOFT_CEILING = 0.005
 
 _SIGNATURE_ALGORITHM = "HMAC-SHA256"
@@ -408,7 +410,7 @@ class GateReport:
 
 
 class ReleaseGate:
-    """Evaluate benchmark reports against the G1a-G8 release gates."""
+    """Evaluate benchmark reports against the G1a-G9 release gates."""
 
     def __init__(
         self,
@@ -571,6 +573,7 @@ class ReleaseGate:
         )
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        checks.append(_g9_relation_extraction_check(metrics, metadata))
         coreml_manifest = _coreml_conversion_manifest(metadata)
         if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
             "coreml"
@@ -1992,6 +1995,146 @@ def _g8_check(metadata: Mapping[str, Any]) -> GateCheck:
     )
 
 
+def _g9_relation_extraction_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    evidence = _relation_extraction_evidence(metrics, metadata)
+    required = bool(
+        metadata.get("relation_extraction_required")
+        or _normalise_dimension(str(metadata.get("task") or "")) == "relation"
+    )
+    if not evidence:
+        return GateCheck(
+            "G9",
+            not required,
+            reason=(
+                "relation extraction evidence is required"
+                if required
+                else "not applicable"
+            ),
+            details={"required": required},
+        )
+
+    strict = _mapping(
+        _first_value(evidence.get("strict"), metrics.get("strict_relation_f1"))
+    )
+    relaxed = _mapping(
+        _first_value(evidence.get("relaxed"), metrics.get("relaxed_relation_f1"))
+    )
+    strict_lower = _relation_ci_lower(strict)
+    relaxed_lower = _relation_ci_lower(relaxed)
+    violations: dict[str, Any] = {}
+    if strict_lower is None:
+        violations["strict_confidence_interval"] = "missing lower bound"
+    elif strict_lower < G9_STRICT_RE_F1_FLOOR:
+        violations["strict_relation_f1"] = {
+            "lower": strict_lower,
+            "floor": G9_STRICT_RE_F1_FLOOR,
+        }
+    if relaxed_lower is None:
+        violations["relaxed_confidence_interval"] = "missing lower bound"
+    elif relaxed_lower < G9_RELAXED_RE_F1_FLOOR:
+        violations["relaxed_relation_f1"] = {
+            "lower": relaxed_lower,
+            "floor": G9_RELAXED_RE_F1_FLOOR,
+        }
+
+    passed = not violations
+    return GateCheck(
+        "G9",
+        passed,
+        reason="ok" if passed else "relation extraction F1 lower CI below floor",
+        details={
+            "per_relation_type": _relation_type_summary(
+                _first_value(
+                    evidence.get("per_relation_type"),
+                    metrics.get("per_relation_type_re_f1"),
+                )
+            ),
+            "relaxed": _relation_metric_summary(relaxed),
+            "relaxed_floor": G9_RELAXED_RE_F1_FLOOR,
+            "strict": _relation_metric_summary(strict),
+            "strict_floor": G9_STRICT_RE_F1_FLOOR,
+            "violations": violations,
+        },
+    )
+
+
+def _relation_extraction_evidence(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> dict[str, Any]:
+    evidence = _first_mapping(
+        metrics.get("relation_extraction"),
+        metrics.get("relation_metrics"),
+        metadata.get("relation_extraction"),
+        metadata.get("relation_metrics"),
+    )
+    if evidence:
+        return evidence
+    strict = _first_mapping(metrics.get("strict_relation_f1"))
+    relaxed = _first_mapping(metrics.get("relaxed_relation_f1"))
+    per_type = _first_mapping(metrics.get("per_relation_type_re_f1"))
+    if strict or relaxed or per_type:
+        return {
+            "per_relation_type": per_type,
+            "relaxed": relaxed,
+            "strict": strict,
+        }
+    return {}
+
+
+def _relation_ci_lower(metric: Mapping[str, Any]) -> float | None:
+    interval = _first_mapping(
+        metric.get("confidence_interval"),
+        metric.get("confidence_intervals"),
+        metric.get("bootstrap"),
+        metric.get("ci"),
+    )
+    return _optional_float(
+        _first_value(
+            interval.get("lower"),
+            interval.get("lower_bound"),
+            metric.get("lower_confidence_bound"),
+            metric.get("lower_ci"),
+        )
+    )
+
+
+def _relation_metric_summary(metric: Mapping[str, Any]) -> dict[str, Any]:
+    interval = _first_mapping(
+        metric.get("confidence_interval"),
+        metric.get("confidence_intervals"),
+        metric.get("bootstrap"),
+        metric.get("ci"),
+    )
+    return {
+        "f1": _optional_float(metric.get("f1")),
+        "false_negatives": _optional_int(metric.get("false_negatives")),
+        "false_positives": _optional_int(metric.get("false_positives")),
+        "lower": _optional_float(interval.get("lower")),
+        "precision": _optional_float(metric.get("precision")),
+        "recall": _optional_float(metric.get("recall")),
+        "true_positives": _optional_int(metric.get("true_positives")),
+        "upper": _optional_float(interval.get("upper")),
+    }
+
+
+def _relation_type_summary(value: Any) -> dict[str, Any]:
+    per_type = _mapping(value)
+    summary: dict[str, Any] = {}
+    for relation_type, payload in sorted(per_type.items()):
+        metrics = _mapping(payload)
+        strict = _mapping(metrics.get("strict"))
+        relaxed = _mapping(metrics.get("relaxed"))
+        summary[str(relation_type)] = {
+            "relaxed_f1": _optional_float(relaxed.get("f1")),
+            "strict_f1": _optional_float(strict.get("f1")),
+        }
+    return summary
+
+
 def _zero_shot_language_leakage_check(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
@@ -3129,6 +3272,8 @@ __all__ = [
     "G4_INT8_DELTA_LIMIT",
     "G4_INT4_DELTA_LIMIT",
     "G7_RECALL_DROP_LIMIT",
+    "G9_STRICT_RE_F1_FLOOR",
+    "G9_RELAXED_RE_F1_FLOOR",
     "FLAKINESS_GATE",
     "RESIDUAL_LEAKAGE_SOFT_CEILING",
     "QUARANTINED",

@@ -61,7 +61,7 @@ it a docstring in the same pull request.
 
 1. Bump the version via `make bump-patch` (or `bump-minor` / `bump-major`). These commands update `openmed/__about__.py`.
 2. Run `python3 -m build` (or `make build`) to produce wheels and sdists.
-3. Confirm the PyPI Trusted Publisher setup in [PyPI Trusted Publishing](release/trusted-publishing.md), then publish by pushing a tag (`vX.Y.Z`) to trigger `.github/workflows/publish.yml`.
+3. Confirm the PyPI upload setup in [PyPI Publishing](release/trusted-publishing.md), then publish by pushing a tag (`vX.Y.Z`) to trigger `.github/workflows/publish.yml`.
 4. Update `CHANGELOG.md` with release notes before tagging.
 
 ## Documentation deploys
@@ -94,7 +94,7 @@ to publish outside CI, run `make docs-deploy`; it mirrors the workflow by buildi
 ## Governance references
 
 - [Release Streams & Channels](release/semver-and-channels.md) defines model artifact and library release cadence.
-- [PyPI Trusted Publishing](release/trusted-publishing.md) documents package publishing, attestations, and token retirement.
+- [PyPI Publishing](release/trusted-publishing.md) documents package publishing, provenance, and token handling.
 - [Generative Model Policy](generative-model-policy.md) defines approved and prohibited model-assisted workflows.
 
 Ported rule-set files must start with an upstream attribution header naming the
