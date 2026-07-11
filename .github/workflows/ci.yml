@@ -84,6 +84,10 @@ jobs:
       run: |
         uv run ruff format --check .
 
+    - name: Type-check annotated public modules
+      run: |
+        uv run mypy
+
   test:
     needs: [repo-policy, lint]
     runs-on: ${{ matrix.os }}
@@ -304,6 +308,21 @@ jobs:
     - name: Build package
       run: |
         uv run --with build python -m build
+
+    - name: Verify PEP 561 marker in built artifacts
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+        import tarfile
+        import zipfile
+
+        wheel = next(Path("dist").glob("*.whl"))
+        sdist = next(Path("dist").glob("*.tar.gz"))
+        with zipfile.ZipFile(wheel) as archive:
+            assert "openmed/py.typed" in archive.namelist()
+        with tarfile.open(sdist, "r:gz") as archive:
+            assert any(name.endswith("/openmed/py.typed") for name in archive.getnames())
+        PY
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v7

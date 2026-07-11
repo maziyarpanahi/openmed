@@ -8,12 +8,15 @@ import inspect
 import logging
 import unicodedata
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence, cast
 
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
 from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
+
+if TYPE_CHECKING:
+    from .pii import DeidentificationMethod
 
 STAGE_NAMES: tuple[str, ...] = (
     "normalize",
@@ -269,7 +272,7 @@ class Pipeline:
         from . import pii
 
         effective_method = pii._resolve_deidentification_method(
-            method,
+            cast("DeidentificationMethod", method),
             shift_dates,
             date_shift_days,
             patient_key=patient_key,
@@ -996,7 +999,7 @@ class Pipeline:
         text: str,
         pii_result: Any,
         *,
-        effective_method: str,
+        effective_method: DeidentificationMethod,
         keep_year: bool,
         date_shift_days: Optional[int],
         patient_key: Optional[str | bytes],
@@ -1559,7 +1562,7 @@ def _arbitration_trace_metadata(
             matrix=threshold_matrix,
         )
         if _span_identity(candidate) in winner_identities:
-            decision = {
+            decision: dict[str, Any] = {
                 "span": span_ref,
                 "outcome": "winner",
                 "rule": "selected",
