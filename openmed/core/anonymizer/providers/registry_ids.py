@@ -57,6 +57,8 @@ from .clinical_ids import (
     AadhaarProvider,
     AustralianMedicareProvider,
     AustralianTFNProvider,
+    BCPHNProvider,
+    CanadianSINProvider,
     DanishCPRProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
@@ -65,6 +67,7 @@ from .clinical_ids import (
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
     NPIProvider,
+    OntarioHealthCardProvider,
     PhilippinesIdProvider,
     PolishPeselProvider,
     RodneCisloProvider,
@@ -75,7 +78,10 @@ from .clinical_ids import (
     UKNINOProvider,
     validate_australian_medicare,
     validate_australian_tfn,
+    validate_bc_phn,
+    validate_canadian_sin,
     validate_npi,
+    validate_ontario_health_card,
 )
 
 NationalIdValidator = Callable[[str], bool]
@@ -396,6 +402,27 @@ def _register_builtin_specs() -> None:
         validate=validate_australian_tfn,
         faker_method="australian_tfn",
         faker_provider=AustralianTFNProvider,
+    )
+    _register_aliases(
+        ("en", "en_CA", "fr_CA", "ca"),
+        id_type="sin",
+        validate=validate_canadian_sin,
+        faker_method="canadian_sin",
+        faker_provider=CanadianSINProvider,
+    )
+    _register_aliases(
+        ("en", "en_CA", "fr_CA", "ca"),
+        id_type="on_health_card",
+        validate=validate_ontario_health_card,
+        faker_method="ontario_health_card",
+        faker_provider=OntarioHealthCardProvider,
+    )
+    _register_aliases(
+        ("en", "en_CA", "fr_CA", "ca"),
+        id_type="bc_phn",
+        validate=validate_bc_phn,
+        faker_method="bc_phn",
+        faker_provider=BCPHNProvider,
     )
 
 

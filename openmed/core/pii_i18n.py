@@ -3,12 +3,16 @@
 Language-specific data, validators, regex patterns, and fake data
 for multilingual PII detection and de-identification.
 
-Health identifiers (for HIPAA cross-map consumers): several validators here
-back numbers that are health identifiers in their jurisdiction. The Australian
-Medicare card number (:func:`validate_australian_medicare`) is a health
-identifier — it records enrolment in the Australian Medicare scheme — and is
-surfaced as a ``national_id`` span under the ``en_AU`` locale alongside the
-Tax File Number (:func:`validate_australian_tfn`).
+Health identifiers for HIPAA cross-map consumers:
+    Several national IDs surfaced here double as patient health identifiers and
+    should be treated as PHI. These include the UK NHS Number, the Australian
+    Medicare card number (:func:`validate_australian_medicare`), and the
+    Canadian provincial health-card numbers: the Ontario (OHIP) health card
+    (:func:`validate_ontario_health_card`) and the British Columbia Personal
+    Health Number (:func:`validate_bc_phn`). The Australian Tax File Number
+    (:func:`validate_australian_tfn`) and Canadian Social Insurance Number
+    (:func:`validate_canadian_sin`) are direct identifiers rather than health
+    identifiers, but are redacted alongside them in clinical text.
 """
 
 from __future__ import annotations
@@ -19,6 +23,9 @@ from typing import Dict, List, Optional, Set
 from .anonymizer.providers.clinical_ids import (
     validate_australian_medicare,
     validate_australian_tfn,
+    validate_bc_phn,
+    validate_canadian_sin,
+    validate_ontario_health_card,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
@@ -43,11 +50,12 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "tr",
     "id",
     "th",
+    "ko",
 }
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -65,6 +73,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "tr": "Turkish",
     "id": "Indonesian",
     "th": "Thai",
+    "ko": "Korean",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -83,6 +92,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "tr": "Turkish-",
     "id": "Indonesian-",
     "th": "Thai-",
+    "ko": "Korean-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -101,6 +111,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
     "id": "OpenMed/privacy-filter-multilingual",
     "th": "OpenMed/privacy-filter-multilingual",
+    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
 }
 
 
@@ -1214,6 +1225,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "พฤศจิกายน",
         "ธันวาคม",
     ],
+    "ko": [
+        "1\uc6d4",
+        "2\uc6d4",
+        "3\uc6d4",
+        "4\uc6d4",
+        "5\uc6d4",
+        "6\uc6d4",
+        "7\uc6d4",
+        "8\uc6d4",
+        "9\uc6d4",
+        "10\uc6d4",
+        "11\uc6d4",
+        "12\uc6d4",
+    ],
 }
 
 
@@ -1404,6 +1429,63 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_uk_nino,
         flags=re.IGNORECASE,
+    ),
+]
+
+_CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Ontario (OHIP) health card: 10 digits (4-3-3 spacing) plus an optional
+    # two-letter version code, Luhn-checked. Health identifier. Checked before
+    # the SIN so the longer 10-digit match wins.
+    PIIPattern(
+        r"\b\d{4}[\s-]?\d{3}[\s-]?\d{3}(?:[\s-]?[A-Za-z]{2})?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "health card",
+            "health card number",
+            "ohip",
+            "ohip number",
+            "ontario health",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_ontario_health_card,
+        flags=re.IGNORECASE,
+    ),
+    # British Columbia Personal Health Number (PHN): 10 digits beginning with 9
+    # (4-3-3 spacing), weighted mod-11. Health identifier.
+    PIIPattern(
+        r"\b9\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "phn",
+            "personal health number",
+            "bc phn",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_bc_phn,
+    ),
+    # Canadian Social Insurance Number (SIN): 9 digits (3-3-3 spacing), Luhn.
+    PIIPattern(
+        r"\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "sin",
+            "social insurance",
+            "social insurance number",
+            "numero d'assurance sociale",
+            "nas",
+        ],
+        context_boost=0.45,
+        validator=validate_canadian_sin,
     ),
 ]
 
@@ -2936,22 +3018,107 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
 
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
-    # RRN (13-digit Resident Registration Number)
+    # Korean dates: YYYY년 MM월 DD일
     PIIPattern(
-        r"\b\d{6}[-\s]?\d{7}\b",
+        r"\b\d{4}\s?\ub144\s?\d{1,2}\s?\uc6d4\s?\d{1,2}\s?\uc77c\b",
+        "date",
+        priority=9,
+        base_score=0.7,
+        context_words=[
+            "\uc0dd\ub144\uc6d4\uc77c",
+            "\ucd9c\uc0dd",
+            "\ud0dc\uc5b4\ub09c",
+            "\uc0dd\uc77c",
+            "\uc0ac\ub9dd",
+            "\uc0ac\ub9dd\uc77c",
+            "\uc785\uc6d0",
+            "\ud1f4\uc6d0",
+            "DOB",
+        ],
+        context_boost=0.25,
+    ),
+    # Korean dates: YYYY.MM.DD or YYYY-MM-DD or YYYY/MM/DD
+    PIIPattern(
+        r"\b\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\b",
+        "date",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "\uc0dd\ub144\uc6d4\uc77c",
+            "\ucd9c\uc0dd",
+            "\ud0dc\uc5b4\ub09c",
+            "\uc0dd\uc77c",
+            "DOB",
+            "\uc0ac\ub9dd",
+            "\uc0ac\ub9dd\uc77c",
+            "\uc785\uc6d0",
+            "\ud1f4\uc6d0",
+        ],
+        context_boost=0.3,
+    ),
+    # Korean phone numbers: mobile and landline
+    PIIPattern(
+        r"(?<!\d)(?:\+82[-\s]?)?0?(?:2|1[016789]|[3-6]\d)[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "\uc804\ud654",
+            "\uc804\ud654\ubc88\ud638",
+            "\ud734\ub300\ud3f0",
+            "\ud578\ub4dc\ud3f0",
+            "\uc5f0\ub77d\ucc98",
+            "\ud329\uc2a4",
+            "call",
+            "contact",
+        ],
+        context_boost=0.3,
+    ),
+    # Korean RRN (13-digit Resident Registration Number)
+    PIIPattern(
+        r"(?<!\d)\d{6}[-\s]?\d{7}(?!\d)",
         "national_id",
         priority=10,
         base_score=0.5,
         context_words=[
-            "주민등록번호",
-            "주민번호",
-            "등록번호",
+            "\uc8fc\ubbfc\ub4f1\ub85d\ubc88\ud638",
+            "\uc8fc\ubbfc\ubc88\ud638",
+            "\ub4f1\ub85d\ubc88\ud638",
             "rrn",
             "resident registration",
             "jumin",
         ],
         context_boost=0.4,
         validator=validate_korean_rrn,
+    ),
+    # Korean street addresses
+    PIIPattern(
+        r"(?<![\uac00-\ud7a30-9])(?:[\uac00-\ud7a3]{1,4}(?:\ud2b9\ubcc4\uc2dc|\uad11\uc5ed\uc2dc|\ud2b9\ubcc4\uc790\uce58\uc2dc|\ud2b9\ubcc4\uc790\uce58\ub3c4|\ub3c4|\uc2dc|\uad70|\uad6c)\s*)+[\uac00-\ud7a30-9]{1,5}(?:\ub85c|\uae38|\ub3d9)\s?\d+(?:-\d+)?(?!\d)",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\uc8fc\uc18c",
+            "\uac70\uc8fc",
+            "\uc790\ud0dd",
+            "\uc704\uce58",
+            "\uc18c\uc7ac\uc9c0",
+        ],
+        context_boost=0.25,
+    ),
+    # Korean postal code (5-digit)
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.15,
+        context_words=[
+            "\uc6b0\ud3b8\ubc88\ud638",
+            "\uc6b0\ud3b8",
+            "zip",
+            "postal",
+        ],
+        context_boost=0.55,
     ),
 ]
 
@@ -3398,6 +3565,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
     "en_au": _AU_ENGLISH_PII_PATTERNS,
+    "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
 }
 
 
@@ -3843,6 +4012,37 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bratislava", "Kosice", "Zilina"],
         "ZIPCODE": ["81101", "04001", "01001"],
+    },
+    "ko": {
+        "NAME": [
+            "\uae40\ubbfc\uc900",
+            "\uc774\uc11c\uc5f0",
+            "\ubc15\uc9c0\ud6c8",
+        ],
+        "FIRST_NAME": [
+            "\ubbfc\uc900",
+            "\uc11c\uc5f0",
+            "\uc9c0\ud6c8",
+        ],
+        "LAST_NAME": [
+            "\uae40",
+            "\uc774",
+            "\ubc15",
+        ],
+        "EMAIL": ["hwanja@example.co.kr", "contact@example.kr", "user@example.co.kr"],
+        "PHONE": ["010-1234-5678", "02-123-4567", "+82 10 9876 5432"],
+        "ID_NUM": ["000101-3123456", "991231-1123456", "MRN-123456"],
+        "STREET_ADDRESS": [
+            "\uc11c\uc6b8\ud2b9\ubcc4\uc2dc \ub9c8\ud3ec\uad6c \ub9c8\ud3ec\ub300\ub85c 25",
+            "\uc11c\uc6b8\ud2b9\ubcc4\uc2dc \uc6a9\uc0b0\uad6c \ub0a8\uc0b0\uacf5\uc6d0\uae38 105",
+            "\ubd80\uc0b0\uad11\uc5ed\uc2dc \ud574\uc6b4\ub300\uad6c \ud574\uc6b4\ub300\ud574\ubcc0\ub85c 45",
+        ],
+        "URL_PERSONAL": ["https://example.kr"],
+        "USERNAME": ["miinji88", "songgu_1990", "jiun_10"],
+        "DATE": ["2000-01-01", "2009/05/19", "2020-10-10"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["\uc11c\uc6b8", "\ubd80\uc0b0", "\uc778\ucc9c"],
+        "ZIPCODE": ["01007", "46007", "21307"],
     },
 }
 
