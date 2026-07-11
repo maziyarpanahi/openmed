@@ -37,9 +37,12 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/endocrinology.jsonl",
         "tests/fixtures/clinical/gastroenterology.jsonl",
         "tests/fixtures/clinical/genomic_variant.jsonl",
+        "tests/fixtures/clinical/immunization.jsonl",
         "tests/fixtures/clinical/nutrition_diet.jsonl",
     ):
         assert Path(fixture_path).exists()
         assert fixture_path in markdown
 
     assert "Not shipped" in markdown
+    assert "OM-138 FHIR Immunization exporter" in markdown
+    assert "VaccineLot to lotNumber" in markdown

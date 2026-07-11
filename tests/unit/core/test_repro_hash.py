@@ -1,0 +1,117 @@
+"""Tests for training reproducibility provenance hashes."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from pathlib import Path
+
+import pytest
+
+from openmed.core.repro_hash import (
+    ReproducibilityVerificationError,
+    build_training_provenance,
+    compute_environment_lock_digest,
+    compute_reproducibility_hash,
+    load_training_provenance,
+    verify_reproducibility,
+    write_training_provenance,
+)
+
+HASH_A = "sha256:" + "a" * 64
+HASH_B = "sha256:" + "b" * 64
+HASH_C = "sha256:" + "c" * 64
+
+
+def _provenance() -> dict[str, object]:
+    return build_training_provenance(
+        rng_seeds={"python": 13, "numpy": 21, "torch": 34},
+        data_manifest_hash=HASH_A,
+        recipe_config_hash=HASH_B,
+        env_lock_digest=HASH_C,
+        base_model="OpenMed/base-model",
+        base_model_revision="7b4f2ca",
+        git_sha="abc123",
+        repo_id="OpenMed/test-model",
+        checkpoint_id="checkpoint-001",
+    )
+
+
+def test_reproducibility_hash_folds_training_inputs() -> None:
+    base = compute_reproducibility_hash(
+        recipe={"config_hash": HASH_B},
+        data_manifest={"hash": HASH_A},
+        base_model={"id": "OpenMed/base-model", "revision": "7b4f2ca"},
+        git_sha="abc123",
+        rng_seeds={"python": 13, "numpy": 21},
+        recipe_config_hash=HASH_B,
+        env_lock_digest=HASH_C,
+    )
+    changed_seed = compute_reproducibility_hash(
+        recipe={"config_hash": HASH_B},
+        data_manifest={"hash": HASH_A},
+        base_model={"id": "OpenMed/base-model", "revision": "7b4f2ca"},
+        git_sha="abc123",
+        rng_seeds={"python": 13, "numpy": 22},
+        recipe_config_hash=HASH_B,
+        env_lock_digest=HASH_C,
+    )
+    changed_lock = compute_reproducibility_hash(
+        recipe={"config_hash": HASH_B},
+        data_manifest={"hash": HASH_A},
+        base_model={"id": "OpenMed/base-model", "revision": "7b4f2ca"},
+        git_sha="abc123",
+        rng_seeds={"python": 13, "numpy": 21},
+        recipe_config_hash=HASH_B,
+        env_lock_digest="sha256:" + "d" * 64,
+    )
+
+    assert base != changed_seed
+    assert base != changed_lock
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", base)
+
+
+def test_verify_reproducibility_rederives_recorded_hash_and_fails_drift() -> None:
+    provenance = _provenance()
+
+    assert verify_reproducibility(provenance) == provenance["reproducibility_hash"]
+
+    drifted = dict(provenance)
+    drifted["rng_seeds"] = {"python": 13, "numpy": 21, "torch": 35}
+    with pytest.raises(
+        ReproducibilityVerificationError,
+        match="does not match pinned training inputs",
+    ):
+        verify_reproducibility(drifted)
+
+
+@pytest.mark.parametrize(
+    "missing", ["rng_seeds", "data_manifest_hash", "env_lock_digest"]
+)
+def test_verify_reproducibility_fails_closed_when_required_fields_are_missing(
+    missing: str,
+) -> None:
+    provenance = _provenance()
+    provenance.pop(missing)
+
+    with pytest.raises(ReproducibilityVerificationError, match=missing):
+        verify_reproducibility(provenance)
+
+
+def test_write_training_provenance_persists_verified_json(tmp_path: Path) -> None:
+    provenance = _provenance()
+
+    path = write_training_provenance(tmp_path / "checkpoint", provenance)
+
+    assert path.name == "training_provenance.json"
+    assert load_training_provenance(path) == provenance
+    assert json.loads(path.read_text(encoding="utf-8")) == provenance
+
+
+def test_environment_lock_digest_matches_uv_lock_sha256(tmp_path: Path) -> None:
+    lock = tmp_path / "uv.lock"
+    lock.write_text('[[package]]\nname = "demo"\nversion = "1.0.0"\n')
+    expected = hashlib.sha256(lock.read_bytes()).hexdigest()
+
+    assert compute_environment_lock_digest(lock) == f"sha256:{expected}"

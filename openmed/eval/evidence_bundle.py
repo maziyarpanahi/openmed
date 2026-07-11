@@ -554,6 +554,7 @@ def _build_manifest(
             "tier": payload.get("tier"),
             "format": payload.get("format"),
             "decision": payload.get("decision"),
+            "gate_results": [dict(check) for check in _gate_checks(payload)],
             "repro_hash": payload.get("repro_hash"),
             "stability_summary": stability_summary,
         },
