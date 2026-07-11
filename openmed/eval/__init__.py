@@ -276,9 +276,9 @@ from openmed.eval.relation_metrics import (
 )
 from openmed.eval.release_gates import (
     FLAKINESS_GATE,
-    G11_CRITICAL_RECALL_FLOOR,
     G9_RELAXED_RE_F1_FLOOR,
     G9_STRICT_RE_F1_FLOOR,
+    G11_CRITICAL_RECALL_FLOOR,
     QUARANTINED,
     RELEASABLE,
     GateCheck,
