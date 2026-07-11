@@ -23,17 +23,19 @@ from openmed.eval.cache import build_report_key, hash_fixture_set, load_or_compu
 from openmed.eval.calibrate import load_calibration_thresholds
 from openmed.eval.metrics import (
     EvalSpan,
-    RelationTriple,
     compute_confidence_intervals,
     compute_latency_summary,
     compute_metrics_bundle,
-    compute_relation_confidence_intervals,
-    compute_relation_metrics_bundle,
     compute_resource_metrics,
     expected_calibration_error,
     normalize_eval_spans,
-    normalize_relation_triples,
     reliability_bins,
+)
+from openmed.eval.relation_metrics import (
+    EvalRelation,
+    compute_relation_confidence_intervals,
+    compute_relation_metrics_bundle,
+    normalize_eval_relations,
 )
 from openmed.eval.report import BenchmarkReport
 
@@ -101,7 +103,7 @@ class RelationFixtureResult:
     """Predicted relation triples and timing for one relation fixture."""
 
     fixture_id: str
-    predicted_relations: tuple[RelationTriple, ...]
+    predicted_relations: tuple[EvalRelation, ...]
     latency_ms: float
 
 
@@ -742,6 +744,8 @@ def run_relation_benchmark(
     ci_seed: int = 0,
 ) -> BenchmarkReport:
     """Run a relation-extraction model over DrugProt-style relation fixtures."""
+    if not fixtures:
+        raise ValueError("relation benchmark requires at least one fixture")
     _validate_unique_fixture_ids(fixtures)
     results: list[RelationFixtureResult] = []
     peak_rss_start = _peak_rss_bytes()
@@ -752,7 +756,15 @@ def run_relation_benchmark(
         started = time.perf_counter()
         raw_predictions = list(runner(fixture, model_name, device))
         latency_ms = (time.perf_counter() - started) * 1000.0
-        predicted_relations = normalize_relation_triples(raw_predictions)
+        predicted_relations = tuple(
+            normalize_eval_relations(
+                raw_predictions,
+                entity_spans=getattr(fixture, "entities", None),
+                fixture_id=fixture_id,
+                default_language=str(getattr(fixture, "language", "en")),
+                source_text=text,
+            )
+        )
         for relation in predicted_relations:
             _validate_relation_offsets(relation, text, fixture_id)
         results.append(
@@ -763,7 +775,7 @@ def run_relation_benchmark(
             )
         )
 
-    gold_relations, predicted_relations = _relation_corpus_coordinates(
+    gold_relations, predicted_relations = _relation_corpus_relations(
         fixtures,
         results,
     )
@@ -810,12 +822,7 @@ def run_relation_benchmark(
     report_metadata.setdefault("task", "relation")
     report_metadata.setdefault(
         "relation_types",
-        sorted(
-            {
-                relation.relation_type
-                for relation in normalize_relation_triples(gold_relations)
-            }
-        ),
+        sorted({relation.relation_type for relation in gold_relations}),
     )
     return BenchmarkReport(
         suite=suite,
@@ -1821,63 +1828,63 @@ def _corpus_coordinates(
     return gold, predicted, "\n".join(text_parts)
 
 
-def _relation_corpus_coordinates(
+def _relation_corpus_relations(
     fixtures: Sequence[Any],
     results: Sequence[RelationFixtureResult],
-) -> tuple[list[RelationTriple], list[RelationTriple]]:
+) -> tuple[list[EvalRelation], list[EvalRelation]]:
     result_by_id = {result.fixture_id: result for result in results}
-    gold: list[RelationTriple] = []
-    predicted: list[RelationTriple] = []
-    offset = 0
+    gold: list[EvalRelation] = []
+    predicted: list[EvalRelation] = []
     for fixture in fixtures:
         fixture_id = str(getattr(fixture, "fixture_id"))
         text = str(getattr(fixture, "text", ""))
         gold.extend(
-            _shift_relation_triples(
-                normalize_relation_triples(getattr(fixture, "relations", ())),
-                offset,
+            normalize_eval_relations(
+                getattr(fixture, "relations", ()),
+                entity_spans=getattr(fixture, "entities", None),
+                fixture_id=fixture_id,
+                default_language=str(getattr(fixture, "language", "en")),
+                source_text=text,
             )
         )
         result = result_by_id.get(fixture_id)
         if result is not None:
-            predicted.extend(
-                _shift_relation_triples(result.predicted_relations, offset)
-            )
-        offset += len(text) + 1
+            predicted.extend(result.predicted_relations)
     return gold, predicted
 
 
 def _per_document_relations(
     fixtures: Sequence[Any],
     results: Sequence[RelationFixtureResult],
-) -> list[tuple[tuple[RelationTriple, ...], tuple[RelationTriple, ...]]]:
+) -> list[tuple[tuple[EvalRelation, ...], tuple[EvalRelation, ...]]]:
     result_by_id = {result.fixture_id: result for result in results}
-    documents: list[tuple[tuple[RelationTriple, ...], tuple[RelationTriple, ...]]] = []
+    documents: list[tuple[tuple[EvalRelation, ...], tuple[EvalRelation, ...]]] = []
     for fixture in fixtures:
         fixture_id = str(getattr(fixture, "fixture_id"))
         result = result_by_id.get(fixture_id)
         documents.append(
             (
-                normalize_relation_triples(getattr(fixture, "relations", ())),
+                tuple(
+                    normalize_eval_relations(
+                        getattr(fixture, "relations", ()),
+                        entity_spans=getattr(fixture, "entities", None),
+                        fixture_id=fixture_id,
+                        default_language=str(getattr(fixture, "language", "en")),
+                        source_text=str(getattr(fixture, "text", "")),
+                    )
+                ),
                 result.predicted_relations if result is not None else (),
             )
         )
     return documents
 
 
-def _shift_relation_triples(
-    relations: Iterable[RelationTriple],
-    offset: int,
-) -> list[RelationTriple]:
-    return [relation.shifted(offset) for relation in relations]
-
-
 def _validate_relation_offsets(
-    relation: RelationTriple,
+    relation: EvalRelation,
     text: str,
     fixture_id: str,
 ) -> None:
-    for argument_name, argument in (("arg1", relation.arg1), ("arg2", relation.arg2)):
+    for argument_name, argument in (("head", relation.head), ("tail", relation.tail)):
         if (
             argument.start < 0
             or argument.end < argument.start
