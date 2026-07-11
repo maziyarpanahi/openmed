@@ -18,6 +18,7 @@ LANGUAGE_CLAIM_PATHS = (
     "docs/rest-recipes.md",
     "docs/feature-map.md",
     "docs/index.md",
+    "docs/troubleshooting.md",
     "docs/website/index.html",
 )
 STALE_LANGUAGE_COUNT_PATHS = LANGUAGE_CLAIM_PATHS + (
