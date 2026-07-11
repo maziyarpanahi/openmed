@@ -13,6 +13,7 @@ from openmed.eval.release_gates import (
     ReleaseGate,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.surrogate_quality import load_surrogate_quality_records
 
 SIGNING_KEY = "unit-release-key"
 
@@ -166,6 +167,49 @@ def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
 
+def _relation_metric(*, strict_lower: float, relaxed_lower: float) -> dict[str, object]:
+    strict = {
+        "confidence_interval": {
+            "lower": strict_lower,
+            "point": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+            "upper": 1.0,
+        },
+        "f1": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": max(strict_lower, release_gates.G9_STRICT_RE_F1_FLOOR),
+        "true_positives": 10,
+    }
+    relaxed = {
+        "confidence_interval": {
+            "lower": relaxed_lower,
+            "point": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+            "upper": 1.0,
+        },
+        "f1": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+        "false_negatives": 0,
+        "false_positives": 0,
+        "precision": 1.0,
+        "recall": max(relaxed_lower, release_gates.G9_RELAXED_RE_F1_FLOOR),
+        "true_positives": 10,
+    }
+    return {
+        "relation_extraction": {
+            "gold_relation_count": 10,
+            "per_relation_type": {
+                "INHIBITOR": {
+                    "relaxed": relaxed,
+                    "strict": strict,
+                }
+            },
+            "predicted_relation_count": 10,
+            "relaxed": relaxed,
+            "strict": strict,
+        }
+    }
+
+
 def test_release_gate_passes_and_emits_signed_section_64_report(
     tmp_path: Path,
     monkeypatch,
@@ -206,6 +250,111 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     restored = GateReport.from_json(result.to_json())
     assert restored.verify(SIGNING_KEY)
     assert restored.to_json() == result.to_json()
+
+
+def test_surrogate_quality_gate_requires_evidence_when_applicable(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"surrogate_quality_required": True},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, release_gates.SURROGATE_QUALITY_GATE)
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "surrogate-quality evidence is required"
+
+
+def test_surrogate_quality_gate_quarantines_bad_release_evidence(
+    tmp_path: Path,
+) -> None:
+    records: list[object] = list(load_surrogate_quality_records())
+    records.append(
+        {
+            "record_id": "sq-zh-release-regression",
+            "language": "zh",
+            "locale": "zh_CN",
+            "surrogates": {
+                "name": "John Doe",
+                "date_of_birth": "04/12/1990",
+                "national_id": "110105199004123416",
+            },
+            "expected": {
+                "birth_date": "1990-04-12",
+                "gender": "female",
+                "region_code": "110105",
+            },
+            "metadata": {
+                "synthetic": True,
+                "contains_real_phi": False,
+                "synthetic_source": "release_gate_regression",
+            },
+        }
+    )
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"surrogate_quality_required": True},
+            metric_updates={"surrogate_quality": {"records": records}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, release_gates.SURROGATE_QUALITY_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["failing_locales"] == {"zh": 0.5}
+
+
+def test_g9_relation_gate_fails_when_strict_lower_ci_below_floor(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"task": "relation"},
+            metric_updates=_relation_metric(
+                strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR - 0.001,
+                relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+            ),
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["strict_floor"] == release_gates.G9_STRICT_RE_F1_FLOOR
+    assert "strict_relation_f1" in check.details["violations"]
+
+
+def test_g9_relation_gate_passes_at_configured_lower_ci_floor(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"task": "relation"},
+            metric_updates=_relation_metric(
+                strict_lower=release_gates.G9_STRICT_RE_F1_FLOOR,
+                relaxed_lower=release_gates.G9_RELAXED_RE_F1_FLOOR,
+            ),
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G9")
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["per_relation_type"]["INHIBITOR"]["strict_f1"] == (
+        release_gates.G9_STRICT_RE_F1_FLOOR
+    )
 
 
 def test_gate_report_from_json_rejects_malformed_payload() -> None:
@@ -298,6 +447,105 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
 
     assert result.decision == QUARANTINED
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
+
+
+def test_extraction_reemission_critical_identifier_forces_quarantine(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_leakage_count": 0,
+                "extraction_reemission_leakage": {
+                    "overall": 1.0,
+                    "leaked_chars_by_label": {"SSN": 11},
+                    "total_chars_by_label": {"SSN": 11},
+                },
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == QUARANTINED
+    assert result.critical_leakage_count == 11
+    assert _check(result, "G3").passed is False
+
+
+def test_extraction_reemission_blocks_high_f1_at_zero_leakage_target(
+    tmp_path: Path,
+) -> None:
+    gate = ReleaseGate(
+        signing_key=SIGNING_KEY,
+        model_steward_config={"default_target_leakage": 0.0},
+    )
+    result = gate.evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_reemission_leakage": {
+                    "overall": 0.01,
+                    "leaked_chars_by_label": {"PERSON": 4},
+                    "total_chars_by_label": {"PERSON": 4},
+                },
+                "exact_span_f1": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+            },
+        ),
+        _baseline(),
+    )
+
+    g7 = _check(result, "G7")
+    assert result.decision == QUARANTINED
+    assert _check(result, "G3").passed is True
+    assert g7.passed is False
+    assert "target_leakage" in g7.details["violations"]
+
+
+def test_g11_quarantines_single_missed_drug_allergy(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_finding_recall": {
+                    "overall": 2 / 3,
+                    "by_category": {
+                        "critical_diagnosis": 1.0,
+                        "drug_allergy": 0.0,
+                        "critical_result": 1.0,
+                    },
+                    "covered": 2,
+                    "total": 3,
+                    "missed_findings": [
+                        {
+                            "category": "drug_allergy",
+                            "fixture_id": "golden-critical-findings-synthetic-en",
+                            "start": 71,
+                            "end": 81,
+                            "label": "MEDICATION",
+                        }
+                    ],
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G11")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["floor"] == release_gates.G11_CRITICAL_RECALL_FLOOR
+    assert check.details["missed_findings"] == [
+        {
+            "category": "drug_allergy",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert check.details["violations"]["must_not_miss_findings"][0]["fixture_id"] == (
+        "golden-critical-findings-synthetic-en"
+    )
 
 
 def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
