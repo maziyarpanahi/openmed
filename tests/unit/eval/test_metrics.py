@@ -131,6 +131,29 @@ def test_clean_extraction_output_has_zero_reemission_leakage():
     assert metrics["extraction_reemission_leakage"]["overall"] == 0.0
 
 
+def test_extraction_offsets_are_not_scanned_as_numeric_phi_surfaces():
+    text = "12 was recorded before a stable clinical observation."
+    gold = [{"start": 0, "end": 2, "label": "ID_NUM"}]
+    extraction = {
+        "facts": [
+            {
+                "value": "stable",
+                "evidence": {"start": 12, "end": 20},
+                "offsets": [30, 35],
+            }
+        ]
+    }
+
+    result = compute_extraction_reemission_leakage(
+        gold,
+        extraction,
+        source_text=text,
+    )
+
+    assert result.overall == 0.0
+    assert result.leaked_chars == 0
+
+
 def test_extraction_reemission_detects_non_latin_golden_fixture():
     fixture = non_latin_golden_fixtures()[0]
     span = next(

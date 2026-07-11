@@ -1984,6 +1984,7 @@ _OFFSET_PAIR_KEYS = (
     "char_offsets",
     "text_offsets",
 )
+_OFFSET_SCALAR_KEYS = (*_OFFSET_START_KEYS, *_OFFSET_END_KEYS)
 
 
 def _surface_index(gold: Sequence[EvalSpan]) -> list[tuple[int, str]]:
@@ -1995,25 +1996,37 @@ def _surface_index(gold: Sequence[EvalSpan]) -> list[tuple[int, str]]:
     return surfaces
 
 
-def _iter_extraction_text_values(value: Any) -> Iterable[str]:
+def _iter_extraction_text_values(
+    value: Any,
+    *,
+    field_name: str | None = None,
+) -> Iterable[str]:
     if value is None or isinstance(value, bool):
         return
     if isinstance(value, str):
+        if field_name in _OFFSET_SCALAR_KEYS:
+            return
         yield value
         return
     if isinstance(value, int):
+        if field_name in _OFFSET_SCALAR_KEYS:
+            return
         yield str(value)
         return
     if isinstance(value, Mapping):
         for key, nested in value.items():
-            if isinstance(key, str):
-                yield key
-            yield from _iter_extraction_text_values(nested)
+            nested_field = str(key).strip().casefold()
+            yield from _iter_extraction_text_values(
+                nested,
+                field_name=nested_field,
+            )
         return
     if isinstance(value, Sequence) and not isinstance(
         value,
         (bytes, bytearray, str),
     ):
+        if field_name in _OFFSET_PAIR_KEYS and _span_pair_from_value(value) is not None:
+            return
         for nested in value:
             yield from _iter_extraction_text_values(nested)
 
