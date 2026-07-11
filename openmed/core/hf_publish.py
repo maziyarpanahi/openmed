@@ -23,6 +23,7 @@ from openmed.eval.model_card_builder import (
     ModelCardBuilderError,
     build_model_card,
 )
+from openmed.eval.release_gates import RELEASABLE, GateReport
 from openmed.eval.report import read_reports, write_benchmark_cards, write_leaderboard
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ DEFAULT_ORG = "OpenMed"
 DEFAULT_TOKEN_ENV = "HF_WRITE_TOKEN"
 DEFAULT_MANIFEST_PATH = Path("models.jsonl")
 DEFAULT_MODEL_CARD_COMMIT_MESSAGE = "Update generated model card"
+DEFAULT_GATE_SIGNING_KEY_ENV = "OPENMED_RELEASE_GATE_KEY"
 
 _VERSION_SUFFIX_RE = re.compile(r"-v\d+(?=$|-)")
 _SAFE_REPO_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -242,6 +244,8 @@ def publish_artifact(
     smoke_status: str = "green",
     smoke_failure_reason: str | None = None,
     gate_report_path: str | Path | None = None,
+    gate_signing_key: bytes | str | None = None,
+    gate_signing_key_env: str = DEFAULT_GATE_SIGNING_KEY_ENV,
     calibration_report_path: str | Path | None = None,
     calibration_thresholds_path: str | Path | None = None,
     fairness_report_path: str | Path | None = None,
@@ -263,6 +267,16 @@ def publish_artifact(
     if not artifact_dir.exists():
         raise HfPublishError(f"artifact directory does not exist: {artifact_dir}")
 
+    verified_gate_report: GateReport | None = None
+    if gate_report_path is not None:
+        verified_gate_report = _load_verified_gate_report(
+            gate_report_path,
+            signing_key=_resolve_gate_signing_key(
+                gate_signing_key,
+                env_var=gate_signing_key_env,
+            ),
+        )
+
     token = token or read_hf_token(token_env)
     repo_id = repo_id or target_repo_id(
         source_model_id,
@@ -283,11 +297,11 @@ def publish_artifact(
         data_manifest=data_manifest,
         git_sha=resolved_git_sha,
     )
-    if gate_report_path is not None:
+    if verified_gate_report is not None:
         _write_verified_model_card(
             artifact_dir=artifact_dir,
             row=row,
-            gate_report_path=gate_report_path,
+            gate_report=verified_gate_report,
             calibration_report_path=calibration_report_path,
             calibration_thresholds_path=calibration_thresholds_path,
             fairness_report_path=fairness_report_path,
@@ -368,7 +382,7 @@ def _write_verified_model_card(
     *,
     artifact_dir: Path,
     row: dict[str, Any],
-    gate_report_path: str | Path,
+    gate_report: GateReport,
     calibration_report_path: str | Path | None,
     calibration_thresholds_path: str | Path | None,
     fairness_report_path: str | Path | None,
@@ -383,11 +397,13 @@ def _write_verified_model_card(
         if model_datasheet_path is not None
         else artifact_dir / MODEL_DATASHEET_FILENAME
     )
+    if datasheet_path.resolve() == readme_path.resolve():
+        raise HfPublishError("model datasheet path must not alias README.md")
 
     try:
         result = build_model_card(
             row,
-            gate_report_path,
+            gate_report,
             calibration_report=calibration_report_path,
             calibration_thresholds=calibration_thresholds_path,
             fairness_report=fairness_report_path,
@@ -417,6 +433,49 @@ def _write_verified_model_card(
                 "model_datasheet": datasheet_path,
             },
         )
+
+
+def _resolve_gate_signing_key(
+    signing_key: bytes | str | None,
+    *,
+    env_var: str,
+) -> bytes | str:
+    """Return an explicitly trusted, non-empty release-gate verification key."""
+    resolved = signing_key if signing_key is not None else os.environ.get(env_var)
+    if not isinstance(resolved, (bytes, str)) or not resolved:
+        raise HfPublishError(
+            "a trusted, non-empty release-gate signing key is required before "
+            f"publishing with gate evidence; pass gate_signing_key or set {env_var}"
+        )
+    return resolved
+
+
+def _load_verified_gate_report(
+    path: str | Path,
+    *,
+    signing_key: bytes | str,
+) -> GateReport:
+    """Load fail-closed gate evidence and require a releasable signed decision."""
+    gate_path = Path(path)
+    try:
+        report = GateReport.from_json(gate_path.read_text(encoding="utf-8"))
+    except (OSError, TypeError, ValueError) as exc:
+        raise HfPublishError("release-gate report could not be loaded safely") from exc
+
+    try:
+        verified = report.verify(signing_key)
+    except (TypeError, ValueError):
+        verified = False
+    if not verified:
+        raise HfPublishError(
+            "release-gate signature or reproducibility hash verification failed"
+        )
+    if report.decision != RELEASABLE:
+        raise HfPublishError(
+            "release-gate decision must be RELEASABLE before publishing; "
+            f"received {report.decision!r}"
+        )
+    return report
 
 
 def artifact_sha256(path: str | Path) -> str:
@@ -523,6 +582,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Signed release gate report used to build and verify the model card",
     )
     parser.add_argument(
+        "--gate-signing-key-env",
+        default=DEFAULT_GATE_SIGNING_KEY_ENV,
+        help=(
+            "Environment variable containing the trusted release-gate HMAC key "
+            f"(default: {DEFAULT_GATE_SIGNING_KEY_ENV})"
+        ),
+    )
+    parser.add_argument(
         "--calibration-report",
         default=None,
         help="Optional calibration report JSON included in the datasheet",
@@ -606,6 +673,7 @@ def main(argv: list[str] | None = None) -> None:
         smoke_status=args.smoke_status,
         smoke_failure_reason=args.smoke_failure_reason,
         gate_report_path=args.gate_report,
+        gate_signing_key_env=args.gate_signing_key_env,
         calibration_report_path=args.calibration_report,
         calibration_thresholds_path=args.calibration_thresholds,
         fairness_report_path=args.fairness_report,

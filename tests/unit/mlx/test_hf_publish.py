@@ -18,7 +18,9 @@ from openmed.core.hf_publish import (
     target_repo_id,
 )
 from openmed.core.repro_hash import build_training_provenance, write_training_provenance
-from openmed.eval.release_gates import RELEASABLE, GateCheck, GateReport
+from openmed.eval.release_gates import QUARANTINED, RELEASABLE, GateCheck, GateReport
+
+GATE_SIGNING_KEY = "unit-publish-key"
 
 
 class RepositoryNotFoundError(Exception):
@@ -173,9 +175,187 @@ def test_publish_artifact_blocks_stale_gate_card_before_hf_write(
             format_name="mlx-fp",
             api=fake_api,
             gate_report_path=_write_json(tmp_path / "gate-report.json", _gate_report()),
+            gate_signing_key=GATE_SIGNING_KEY,
             training_provenance_path=_write_training_provenance(tmp_path),
         )
 
+    assert fake_api.created == []
+    assert fake_api.uploaded == []
+
+
+def test_publish_artifact_requires_trusted_gate_key_before_any_write(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    before = _artifact_snapshot(artifact)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+    monkeypatch.delenv("OPENMED_RELEASE_GATE_KEY", raising=False)
+    outputs = _blocked_publish_outputs(tmp_path)
+
+    with pytest.raises(HfPublishError, match="trusted, non-empty"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+            format_name="mlx-fp",
+            api=fake_api,
+            gate_report_path=_write_json(tmp_path / "gate-report.json", _gate_report()),
+            training_provenance_path=_write_training_provenance(tmp_path),
+            **outputs,
+        )
+
+    _assert_publish_blocked_without_side_effects(
+        artifact,
+        before,
+        fake_api,
+        outputs,
+    )
+
+
+def test_publish_artifact_rejects_invalid_gate_signature_before_any_write(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    before = _artifact_snapshot(artifact)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+    outputs = _blocked_publish_outputs(tmp_path)
+
+    with pytest.raises(HfPublishError, match="signature or reproducibility hash"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+            format_name="mlx-fp",
+            api=fake_api,
+            gate_report_path=_write_json(tmp_path / "gate-report.json", _gate_report()),
+            gate_signing_key="wrong-key",
+            training_provenance_path=_write_training_provenance(tmp_path),
+            **outputs,
+        )
+
+    _assert_publish_blocked_without_side_effects(
+        artifact,
+        before,
+        fake_api,
+        outputs,
+    )
+
+
+def test_publish_artifact_rejects_tampered_gate_before_any_write(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    before = _artifact_snapshot(artifact)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+    outputs = _blocked_publish_outputs(tmp_path)
+    tampered = _gate_report()
+    tampered["critical_leakage_count"] = 1
+
+    with pytest.raises(HfPublishError, match="signature or reproducibility hash"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+            format_name="mlx-fp",
+            api=fake_api,
+            gate_report_path=_write_json(tmp_path / "gate-report.json", tampered),
+            gate_signing_key=GATE_SIGNING_KEY,
+            training_provenance_path=_write_training_provenance(tmp_path),
+            **outputs,
+        )
+
+    _assert_publish_blocked_without_side_effects(
+        artifact,
+        before,
+        fake_api,
+        outputs,
+    )
+
+
+def test_publish_artifact_rejects_quarantined_gate_before_any_write(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    before = _artifact_snapshot(artifact)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+    outputs = _blocked_publish_outputs(tmp_path)
+
+    with pytest.raises(HfPublishError, match="must be RELEASABLE"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+            format_name="mlx-fp",
+            api=fake_api,
+            gate_report_path=_write_json(
+                tmp_path / "gate-report.json",
+                _gate_report(decision=QUARANTINED),
+            ),
+            gate_signing_key=GATE_SIGNING_KEY,
+            training_provenance_path=_write_training_provenance(tmp_path),
+            **outputs,
+        )
+
+    _assert_publish_blocked_without_side_effects(
+        artifact,
+        before,
+        fake_api,
+        outputs,
+    )
+
+
+def test_publish_artifact_accepts_verified_releasable_gate(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    result = publish_artifact(
+        artifact_dir=artifact,
+        source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+        format_name="mlx-fp",
+        api=fake_api,
+        gate_report_path=_write_json(tmp_path / "gate-report.json", _gate_report()),
+        gate_signing_key=GATE_SIGNING_KEY,
+        training_provenance_path=_write_training_provenance(tmp_path),
+    )
+
+    assert result.skipped is False
+    assert (artifact / "README.md").exists()
+    assert (artifact / "model-datasheet.json").exists()
+    assert len(fake_api.created) == 1
+    assert len(fake_api.uploaded) == 1
+
+
+def test_publish_artifact_rejects_datasheet_alias_before_any_write(
+    tmp_path,
+    monkeypatch,
+):
+    artifact = _write_mlx_artifact(tmp_path)
+    before = _artifact_snapshot(artifact)
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    with pytest.raises(HfPublishError, match="must not alias README.md"):
+        publish_artifact(
+            artifact_dir=artifact,
+            source_model_id="OpenMed/OpenMed-PII-Tiny-44M",
+            format_name="mlx-fp",
+            api=fake_api,
+            gate_report_path=_write_json(tmp_path / "gate-report.json", _gate_report()),
+            gate_signing_key=GATE_SIGNING_KEY,
+            training_provenance_path=_write_training_provenance(tmp_path),
+            model_datasheet_path=artifact / "." / "README.md",
+        )
+
+    assert _artifact_snapshot(artifact) == before
+    assert fake_api.info_calls == []
     assert fake_api.created == []
     assert fake_api.uploaded == []
 
@@ -241,7 +421,7 @@ def test_conversion_modules_expose_publish_options():
     assert "publish_to_hub" in inspect.signature(convert_coreml).parameters
 
 
-def _gate_report() -> dict[str, object]:
+def _gate_report(*, decision: str = RELEASABLE) -> dict[str, object]:
     report = GateReport(
         repo_id="OpenMed/OpenMed-PII-Tiny-44M-v1-mlx",
         family="PII",
@@ -258,7 +438,7 @@ def _gate_report() -> dict[str, object]:
         ram_mb=128.0,
         eval_set_hash="sha256:eval",
         leakage_fixture_hash="sha256:leakage",
-        decision=RELEASABLE,
+        decision=decision,
         gate_results=(
             GateCheck(
                 "G5",
@@ -274,7 +454,7 @@ def _gate_report() -> dict[str, object]:
         policy="hipaa_safe_harbor",
         threshold_profile="strict",
         target_leakage_rate=0.005,
-    ).sign("unit-publish-key")
+    ).sign(GATE_SIGNING_KEY)
     return report.to_dict()
 
 
@@ -295,3 +475,33 @@ def _write_training_provenance(tmp_path: Path) -> Path:
 def _write_json(path: Path, payload: object) -> Path:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return path
+
+
+def _artifact_snapshot(path: Path) -> dict[str, bytes]:
+    return {
+        item.relative_to(path).as_posix(): item.read_bytes()
+        for item in sorted(path.rglob("*"))
+        if item.is_file()
+    }
+
+
+def _blocked_publish_outputs(tmp_path: Path) -> dict[str, Path]:
+    return {
+        "manifest_path": tmp_path / "blocked-models.jsonl",
+        "baseline_path": tmp_path / "blocked-baselines.json",
+        "model_datasheet_path": tmp_path / "blocked-datasheet.json",
+        "evidence_bundle_dir": tmp_path / "blocked-evidence",
+    }
+
+
+def _assert_publish_blocked_without_side_effects(
+    artifact: Path,
+    before: dict[str, bytes],
+    fake_api: FakeApi,
+    outputs: dict[str, Path],
+) -> None:
+    assert _artifact_snapshot(artifact) == before
+    assert all(not path.exists() for path in outputs.values())
+    assert fake_api.info_calls == []
+    assert fake_api.created == []
+    assert fake_api.uploaded == []
