@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 
 from openmed.core.pii import MissingOptionalDependencyError
-from openmed.core.pipeline import Pipeline
+from openmed.core.pipeline import Pipeline, _identity_text
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
@@ -59,6 +59,77 @@ def test_stage1_records_skipped_encoding_repair_when_ftfy_missing(monkeypatch):
     assert metadata["dependency"] == "ftfy"
     assert "missing optional dependency" in metadata["reason"]
     assert "pip install ftfy" in metadata["install"]
+
+
+def test_stage1_identity_repair_shortcut_preserves_normalized_output(monkeypatch):
+    # When encoding repair is unavailable the per-segment repair call is skipped
+    # as a latency optimisation; the normalized text and offset map must be
+    # identical to the legacy path that invokes an identity function per segment.
+    text = "Café  Zoë   Straße\tnaı̈ve"
+    metadata = {"feature": "encoding repair", "available": False, "skipped": True}
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        lambda: (_identity_text, metadata),
+    )
+    optimized = Pipeline().stage1_normalize(text)
+
+    def legacy_identity(segment):
+        return segment
+
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        lambda: (legacy_identity, metadata),
+    )
+    legacy_equivalent = Pipeline().stage1_normalize(text)
+
+    assert optimized == legacy_equivalent
+
+
+def test_stage1_applies_active_encoding_repair_per_segment(monkeypatch):
+    # When a real repairer is active it must still run on each non-whitespace
+    # segment (the optimisation only skips the identity no-op case).
+    calls = []
+
+    def fake_repairer():
+        def repair(segment):
+            calls.append(segment)
+            return segment.replace("�", "?")
+
+        return repair, {"feature": "encoding repair", "available": True}
+
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        fake_repairer,
+    )
+
+    document = Pipeline().stage1_normalize("A�B")
+
+    assert document.normalized_text == "A?B"
+    # Repairer invoked once per non-whitespace segment (three characters here).
+    assert calls == ["A", "�", "B"]
+
+
+def test_run_exposes_per_stage_latency_measurements():
+    result = Pipeline(
+        model_detector=lambda text, **kwargs: _empty_prediction(
+            text, model_name=kwargs["model_name"]
+        )
+    ).run("Patient note without identifiers.", method="mask")
+
+    for stage_name in Pipeline.stage_names:
+        assert result.stage_duration_ms(stage_name) >= 0.0
+
+    with pytest.raises(KeyError):
+        result.stage_duration_ms("nonexistent_stage")
+
+    # Durations are latency-only floats keyed by every stage name, and are kept
+    # off the reproducible audit record because wall-clock time is
+    # non-deterministic.
+    assert set(result.stage_durations_ms) == set(Pipeline.stage_names)
+    assert all(isinstance(value, float) for value in result.stage_durations_ms.values())
+    assert result.cascade_duration_ms is None
+    assert "stage_durations_ms" not in result.audit_record
+    assert "cascade_duration_ms" not in result.audit_record
 
 
 def test_stage3_records_unavailable_section_hook_metadata(monkeypatch):
