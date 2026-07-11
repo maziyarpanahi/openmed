@@ -1,8 +1,8 @@
 """Culture-aware CJK name-order and honorific handling for PERSON spans.
 
 East-Asian names (Japanese, Korean, Chinese) are written **family-name-first**
-and are frequently followed by a trailing honorific — Japanese ``さん``/``様``,
-Korean ``씨``/``님``, Chinese ``先生``/``女士`` — or a leading/trailing title.
+and are frequently followed by a trailing honorific or title — Japanese
+``さん``/``様``, Korean ``씨``/``님``, Chinese ``先生``/``女士``.
 The generic PERSON surrogate path is order- and honorific-agnostic, so a naive
 replacement can drop or mangle the honorific ("田中さん" -> "Smith") or fold it
 into the swapped name, which breaks both surrogate realism and span matching.
