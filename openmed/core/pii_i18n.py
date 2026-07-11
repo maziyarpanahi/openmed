@@ -5,12 +5,14 @@ for multilingual PII detection and de-identification.
 
 Health identifiers for HIPAA cross-map consumers:
     Several national IDs surfaced here double as patient health identifiers and
-    should be treated as PHI. These include the UK NHS Number and the Canadian
-    provincial health-card numbers: the Ontario (OHIP) health card
+    should be treated as PHI. These include the UK NHS Number, the Australian
+    Medicare card number (:func:`validate_australian_medicare`), and the
+    Canadian provincial health-card numbers: the Ontario (OHIP) health card
     (:func:`validate_ontario_health_card`) and the British Columbia Personal
-    Health Number (:func:`validate_bc_phn`). The Canadian Social Insurance
-    Number (:func:`validate_canadian_sin`) is a direct identifier rather than a
-    health identifier, but is redacted alongside them in Canadian clinical text.
+    Health Number (:func:`validate_bc_phn`). The Australian Tax File Number
+    (:func:`validate_australian_tfn`) and Canadian Social Insurance Number
+    (:func:`validate_canadian_sin`) are direct identifiers rather than health
+    identifiers, but are redacted alongside them in clinical text.
 """
 
 from __future__ import annotations
@@ -19,6 +21,8 @@ import re
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    validate_australian_medicare,
+    validate_australian_tfn,
     validate_bc_phn,
     validate_canadian_sin,
     validate_ontario_health_card,
@@ -1526,6 +1530,44 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.45,
         validator=validate_canadian_sin,
+    ),
+]
+
+
+_AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
+    # optional separate one-digit IRN. The main card's first eight digits carry
+    # a weighted mod-10 checksum; the full matched identifier is protected.
+    PIIPattern(
+        r"\b(?:[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+        r"(?:(?:[ ]*/[ ]*|[ -]?)[1-9])?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "medicare",
+            "medicare number",
+            "medicare card",
+            "medicare no",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_medicare,
+    ),
+    # Australian Tax File Number (TFN, exactly 9 digits, ``NNN NNN NNN``
+    # spacing; weighted mod-11 checksum).
+    PIIPattern(
+        r"\b(?:\d{9}|\d{3} \d{3} \d{3})\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "tfn",
+            "tax file number",
+            "tax file no",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_tfn,
     ),
 ]
 
@@ -3567,6 +3609,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_au": _AU_ENGLISH_PII_PATTERNS,
     "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
     "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
 }
