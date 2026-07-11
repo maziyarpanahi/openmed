@@ -163,6 +163,7 @@ from openmed.eval.golden import (
     write_hard_negative_fixture_pack,
 )
 from openmed.eval.harness import (
+    DEFAULT_SECTION_MULTILINGUAL_FIXTURE,
     BenchmarkFixture,
     BoundaryLeakageFinding,
     BoundaryLeakageResult,
@@ -173,12 +174,14 @@ from openmed.eval.harness import (
     SandboxViolation,
     TrainingEvalOverlapFinding,
     check_training_manifest_overlap,
+    load_section_multilingual_fixtures,
     run_benchmark,
     run_cross_lingual_transfer,
     run_cross_lingual_transfer_suite,
     run_federated_leakage_eval,
     run_multilingual_ner_scorecard,
     run_relation_benchmark,
+    run_section_multilingual_eval,
     run_suite,
 )
 from openmed.eval.history import (
@@ -251,6 +254,15 @@ from openmed.eval.metrics import (
     reliability_bins,
     weighted_coverage,
 )
+from openmed.eval.model_card_builder import (
+    MODEL_CARD_DATASHEET_SCHEMA_VERSION,
+    MODEL_DATASHEET_FILENAME,
+    ModelCardBuilderError,
+    ModelCardBuildResult,
+    build_model_card,
+    render_datasheet_markdown,
+    validate_model_card_consistency,
+)
 from openmed.eval.perf import (
     DEFAULT_PERF_WORKLOAD_PATH,
     SYNTHETIC_PERF_MODEL_NAME,
@@ -318,9 +330,11 @@ from openmed.eval.scorecard import (
 )
 from openmed.eval.section_recall import (
     UNSECTIONED_SECTION,
+    SectionDetectionMetrics,
     SectionRecallMetrics,
     SectionRecallReport,
     SectionSpan,
+    compute_section_detection_metrics,
     compute_section_recall,
 )
 from openmed.eval.suites.policy_compliance import (
@@ -409,6 +423,7 @@ __all__ = [
     "DEFAULT_PERF_WORKLOAD_PATH",
     "DEFAULT_PERTURBATIONS",
     "DEFAULT_QUARANTINE_STABILITY_WINDOW",
+    "DEFAULT_SECTION_MULTILINGUAL_FIXTURE",
     "DEFAULT_SURROGATE_QUALITY_FIXTURE",
     "DEFAULT_SURROGATE_QUALITY_LOCALES",
     "DEFAULT_SURROGATE_QUALITY_PASS_RATE",
@@ -461,8 +476,12 @@ __all__ = [
     "LeakageHeatmapTotal",
     "LocaleSurrogateQualityReport",
     "MODEL_CARD_ARTIFACT_ROLES",
+    "MODEL_CARD_DATASHEET_SCHEMA_VERSION",
     "MODEL_CARD_SCHEMA_VERSION",
+    "MODEL_DATASHEET_FILENAME",
     "ModelCardArtifact",
+    "ModelCardBuildResult",
+    "ModelCardBuilderError",
     "ModelCardClaim",
     "ModelCardProvenanceError",
     "ModelScorecard",
@@ -505,6 +524,7 @@ __all__ = [
     "TransferGapMetrics",
     "TransferMatrixCell",
     "TransferMatrixReport",
+    "SectionDetectionMetrics",
     "SectionRecallMetrics",
     "SectionRecallReport",
     "SectionSpan",
@@ -537,6 +557,7 @@ __all__ = [
     "build_all_dataset_cards",
     "build_dataset_card",
     "build_eval_model_card",
+    "build_model_card",
     "cache_path",
     "case_flip_perturbation",
     "character_typo_perturbation",
@@ -562,6 +583,7 @@ __all__ = [
     "compute_relaxed_relation_f1",
     "compute_relaxed_span_f1",
     "compute_resource_metrics",
+    "compute_section_detection_metrics",
     "compute_section_recall",
     "compute_strict_relation_f1",
     "compute_surrogate_consistency",
@@ -599,6 +621,7 @@ __all__ = [
     "load",
     "load_calibration_samples",
     "load_calibration_thresholds",
+    "load_section_multilingual_fixtures",
     "load_surrogate_quality_records",
     "load_perf_documents",
     "load_or_compute",
@@ -620,6 +643,7 @@ __all__ = [
     "render_dataset_card_markdown",
     "render_eval_model_card_markdown",
     "render_eval_model_datasheet_json",
+    "render_datasheet_markdown",
     "render_leakage_heatmap_markdown",
     "render_model_scorecard",
     "reliability_bins",
@@ -634,6 +658,7 @@ __all__ = [
     "run_relation_benchmark",
     "run_reid_attack",
     "run_reid_benchmark",
+    "run_section_multilingual_eval",
     "run_suite",
     "score_span_nonconformity",
     "select_risk_controlled_abstention_threshold",
@@ -646,6 +671,7 @@ __all__ = [
     "utility_loss_report",
     "weighted_coverage",
     "validate_eval_model_card_claims",
+    "validate_model_card_consistency",
     "verify_eval_model_card_artifacts",
     "whitespace_noise_perturbation",
     "write_calibration_artifacts",
