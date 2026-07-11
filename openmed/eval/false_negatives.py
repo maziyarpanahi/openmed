@@ -13,6 +13,7 @@ is safe to display by construction.
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -132,6 +133,17 @@ def load_fixture_texts(
     texts: dict[str, str] = {}
     for source in sources:
         for fixture in _coerce_fixture_sources(source):
+            if fixture.metadata.get("synthetic") is not True:
+                raise ValueError(
+                    f"fixture {fixture.fixture_id!r} must be explicitly marked synthetic"
+                )
+            if (
+                fixture.fixture_id in texts
+                and texts[fixture.fixture_id] != fixture.text
+            ):
+                raise ValueError(
+                    f"conflicting fixture text for id {fixture.fixture_id!r}"
+                )
             texts[fixture.fixture_id] = fixture.text
     return texts
 
@@ -219,7 +231,9 @@ def explore_false_negatives(
         groups=tuple(groups),
         label_filter=wanted_label,
         limit=limit,
-        has_text=bool(texts),
+        has_text=any(
+            record.span_text is not None for group in groups for record in group.records
+        ),
     )
 
 
@@ -232,8 +246,10 @@ def _record(
     context: str | None = None
     text = texts.get(example.fixture_id)
     if text is not None:
-        span_text = _slice(text, example.start, example.end)
-        context = _slice(text, example.context_start, example.context_end)
+        candidate = _slice(text, example.start, example.end)
+        if candidate is not None and _text_hash(candidate) == example.text_hash:
+            span_text = candidate
+            context = _slice(text, example.context_start, example.context_end)
     return FalseNegativeRecord(
         label=label,
         fixture_id=example.fixture_id,
@@ -251,6 +267,10 @@ def _slice(text: str, start: int, end: int) -> str | None:
     if 0 <= start <= end <= len(text):
         return text[start:end]
     return None
+
+
+def _text_hash(text: str) -> str:
+    return f"sha256:{hashlib.sha256(text.encode('utf-8')).hexdigest()}"
 
 
 def _coerce_fixture_sources(

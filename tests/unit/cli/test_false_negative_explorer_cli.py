@@ -10,8 +10,11 @@ from typing import Any
 import pytest
 
 from openmed.cli import main_module
-from openmed.eval.error_analysis import MISSED, error_report
-from openmed.eval.false_negatives import explore_false_negatives
+from openmed.eval.error_analysis import MISSED, ErrorAnalysisReport, error_report
+from openmed.eval.false_negatives import (
+    explore_false_negatives,
+    load_fixture_texts,
+)
 from openmed.eval.harness import BenchmarkFixture
 
 # Synthetic document with planted misses. All identifiers are fabricated.
@@ -48,7 +51,10 @@ def _build_report_and_fixtures(tmp_path: Path) -> tuple[Path, Path]:
             "text": FIXTURE_TEXT,
             "language": "en",
             "gold_spans": GOLD_SPANS,
-            "metadata": {"predicted_spans": PREDICTED_SPANS},
+            "metadata": {
+                "predicted_spans": PREDICTED_SPANS,
+                "synthetic": True,
+            },
         }
     )
     report = error_report(
@@ -71,6 +77,7 @@ def _build_report_and_fixtures(tmp_path: Path) -> tuple[Path, Path]:
                         "text": FIXTURE_TEXT,
                         "language": "en",
                         "gold_spans": GOLD_SPANS,
+                        "metadata": {"synthetic": True},
                     }
                 ]
             }
@@ -82,9 +89,6 @@ def _build_report_and_fixtures(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_explore_false_negatives_lists_only_planted_misses(tmp_path: Path) -> None:
     report_path, fixtures_path = _build_report_and_fixtures(tmp_path)
-    from openmed.eval.error_analysis import ErrorAnalysisReport
-    from openmed.eval.false_negatives import load_fixture_texts
-
     report = ErrorAnalysisReport.read_json(report_path)
     exploration = explore_false_negatives(
         report,
@@ -300,10 +304,79 @@ def test_false_negatives_cli_context_chars_trims_window(
     assert "555-0100" in record["context"]
 
 
+def test_false_negatives_cli_rejects_negative_context_chars(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report_path, fixtures_path = _build_report_and_fixtures(tmp_path)
+
+    result = main_module.main(
+        [
+            "benchmark",
+            "false-negatives",
+            str(report_path),
+            "--fixtures",
+            str(fixtures_path),
+            "--context-chars",
+            "-1",
+        ]
+    )
+
+    assert result == 1
+    assert "context-chars must be non-negative" in capsys.readouterr().err
+
+
+def test_exploration_only_reports_text_when_fixture_hash_matches(
+    tmp_path: Path,
+) -> None:
+    report_path, _ = _build_report_and_fixtures(tmp_path)
+    report = ErrorAnalysisReport.read_json(report_path)
+
+    exploration = explore_false_negatives(
+        report,
+        fixture_texts={"note-a": "x" * len(FIXTURE_TEXT)},
+    )
+
+    assert exploration.has_text is False
+    assert all(record.span_text is None for record in exploration.iter_records())
+
+
+def test_fixture_texts_require_explicit_synthetic_marker() -> None:
+    with pytest.raises(ValueError, match="explicitly marked synthetic"):
+        load_fixture_texts(
+            [
+                {
+                    "id": "unmarked",
+                    "text": "Patient Avery Morgan.",
+                    "gold_spans": [],
+                }
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "malformed"),
+    [
+        ("confusion_matrix", {"PERSON": []}),
+        ("false_negatives", {"PERSON": "not-a-list"}),
+        ("false_positives", {"PERSON": ["not-an-object"]}),
+    ],
+)
+def test_error_analysis_report_rejects_malformed_nested_payloads(
+    tmp_path: Path,
+    field: str,
+    malformed: object,
+) -> None:
+    report_path, _ = _build_report_and_fixtures(tmp_path)
+    payload = json.loads(report_path.read_text(encoding="utf-8"))
+    payload[field] = malformed
+
+    with pytest.raises(ValueError):
+        ErrorAnalysisReport.from_dict(payload)
+
+
 def test_error_analysis_report_round_trips_missed_examples(tmp_path: Path) -> None:
     report_path, _ = _build_report_and_fixtures(tmp_path)
-    from openmed.eval.error_analysis import ErrorAnalysisReport
-
     report = ErrorAnalysisReport.read_json(report_path)
     missed = [
         example

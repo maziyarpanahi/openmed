@@ -1945,6 +1945,11 @@ def _handle_benchmark_false_negatives(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Failed to read error-analysis report: {exc}\n")
         return 1
 
+    context_chars = getattr(args, "context_chars", None)
+    if context_chars is not None and context_chars < 0:
+        sys.stderr.write("context-chars must be non-negative\n")
+        return 1
+
     fixture_texts: dict[str, str] = {}
     if args.fixtures:
         try:
@@ -1964,7 +1969,6 @@ def _handle_benchmark_false_negatives(args: argparse.Namespace) -> int:
         sys.stderr.write(f"{exc}\n")
         return 1
 
-    context_chars = getattr(args, "context_chars", None)
     if args.json:
         payload = exploration.to_dict()
         if context_chars is not None:
