@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import socket
 from pathlib import Path
 from typing import Iterable
@@ -178,6 +179,60 @@ def test_leakage_guard_skips_eval_derived_rows_and_marks_provenance():
         assert item["metadata"]["synthetic_source"] == "translation_backtranslation"
         assert item["metadata"]["provenance"]["source_text_hash"]
         assert eval_text not in item["text"]
+
+
+def test_leakage_guard_normalizes_heldout_text_before_comparison():
+    seed = _seed_example()
+
+    seed_variant = "  patient   HAS diabetes AND takes METFORMIN.  "
+    assert (
+        augment_span_annotated_examples(
+            [seed],
+            heldout_eval_texts={seed_variant},
+            include_backtranslations=False,
+        )
+        == ()
+    )
+
+    translated_variant = "  रोगी   है मधुमेह और लेता है मेटफॉर्मिन.  "
+    assert (
+        augment_span_annotated_examples(
+            [seed],
+            target_languages=("hi",),
+            heldout_eval_texts={translated_variant},
+            include_backtranslations=False,
+        )
+        == ()
+    )
+
+
+def test_backtranslation_preserves_root_source_provenance():
+    seed = _seed_example()
+    augmented = augment_span_annotated_examples(
+        [seed],
+        target_languages=("hi",),
+        include_backtranslations=True,
+    )
+
+    translated = next(example for example in augmented if example.language == "hi")
+    backtranslated = next(
+        example
+        for example in augmented
+        if example.transform.startswith("backtranslation:")
+    )
+    root_hash = hashlib.sha256(str(seed["text"]).encode()).hexdigest()
+    intermediate_hash = hashlib.sha256(translated.text.encode()).hexdigest()
+
+    assert backtranslated.source_id == seed["id"]
+    assert backtranslated.source_language == seed["language"]
+    assert backtranslated.metadata["source_text_hash"] == root_hash
+    assert backtranslated.metadata["provenance"] == {
+        "source_id": seed["id"],
+        "source_language": seed["language"],
+        "source_text_hash": root_hash,
+        "transform": "backtranslation:en->hi->en",
+    }
+    assert root_hash != intermediate_hash
 
 
 def test_unrecoverable_translated_entity_span_is_dropped():
