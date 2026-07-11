@@ -19,6 +19,7 @@ active IPython shell is available to display it inline.
 from __future__ import annotations
 
 import html as html_mod
+import math
 from dataclasses import dataclass
 from typing import Any, List, Optional, Sequence, Set
 
@@ -45,17 +46,19 @@ def _coerce_float(value: Any) -> Optional[float]:
     """Return a built-in float for numeric-like values, else ``None``."""
     if value is None or isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
-        return float(value)
     if hasattr(value, "item"):
         try:
-            return float(value.item())
-        except (TypeError, ValueError):
-            return None
+            scalar = value.item()
+        except Exception:
+            scalar = value
+        else:
+            if scalar is not value:
+                value = scalar
     try:
-        return float(value)
-    except (TypeError, ValueError):
+        converted = float(value)
+    except (TypeError, ValueError, OverflowError):
         return None
+    return converted if math.isfinite(converted) else None
 
 
 def _coerce_int(value: Any) -> Optional[int]:
@@ -68,12 +71,19 @@ def _coerce_int(value: Any) -> Optional[int]:
         return int(value) if value.is_integer() else None
     if hasattr(value, "item"):
         try:
-            return _coerce_int(value.item())
-        except (TypeError, ValueError):
-            return None
+            scalar = value.item()
+        except Exception:
+            scalar = value
+        else:
+            if scalar is not value:
+                return _coerce_int(scalar)
     try:
-        return int(value)
-    except (TypeError, ValueError):
+        converted = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    try:
+        return converted if value == converted else None
+    except Exception:
         return None
 
 
@@ -148,8 +158,14 @@ def _resolve_text_and_spans(
 
     # Mapping-style payloads (e.g. AnalyzeResult.to_dict()).
     if isinstance(result, dict):
-        text = result.get("text") or result.get("original_text") or ""
-        raw = result.get("entities") or result.get("pii_entities") or []
+        if "text" in result or "entities" in result:
+            text = result.get("text")
+            raw = result.get("entities")
+        else:
+            text = result.get("original_text")
+            raw = result.get("pii_entities")
+        text = "" if text is None else text
+        raw = [] if raw is None else raw
         return str(text), list(raw)
 
     raise TypeError(
@@ -243,7 +259,7 @@ def _render_legend(labels: Sequence[str]) -> str:
             f'<span style="display:inline-block;width:12px;height:12px;'
             f"background:{color};border:1px solid rgba(0,0,0,0.15);"
             'border-radius:3px;margin-right:4px;"></span>'
-            f"{html_mod.escape(label)}</span>"
+            f'<bdi dir="auto">{html_mod.escape(label)}</bdi></span>'
         )
     return (
         '<div class="openmed-legend" '
@@ -262,7 +278,7 @@ def _render_text_layer(
     parts = [
         '<pre class="openmed-display-text openmed-display-layer" '
         f'data-layer="{layer_index}" aria-label="Annotation layer '
-        f'{layer_index + 1}" '
+        f'{layer_index + 1}" dir="auto" '
         'style="white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:inherit;">'
     ]
     cursor = 0
@@ -292,7 +308,8 @@ def _render_text_layer(
             'style="font-size:0.7em;font-weight:700;line-height:1;'
             "border-radius:0.35em;text-transform:uppercase;vertical-align:middle;"
             '">'
-            f" {label_esc}{html_mod.escape(score_suffix)}</span>"
+            f'<bdi dir="auto"> {label_esc}'
+            f"{html_mod.escape(score_suffix)}</bdi></span>"
             "</mark>"
         )
         cursor = span.end
@@ -372,7 +389,7 @@ def render_spans_html(
     if title:
         parts.append(
             '<div class="openmed-display-title" '
-            'style="font-weight:600;margin-bottom:6px;">'
+            'dir="auto" style="font-weight:600;margin-bottom:6px;">'
             f"{html_mod.escape(str(title))}</div>"
         )
 

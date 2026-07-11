@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import builtins
 import re
+from decimal import Decimal
+from fractions import Fraction
 from html.parser import HTMLParser
 
 import pytest
@@ -227,6 +229,21 @@ def test_render_preserves_newlines_and_indentation_semantically() -> None:
     assert _source_text_from_layer(bodies[0]) == text
 
 
+def test_mixed_direction_text_and_labels_use_semantic_bidi_isolation() -> None:
+    text = "السيد Jane Doe اتصل"
+    html = render_spans_html(
+        text,
+        [{"start": 6, "end": 14, "label": "PERSON", "score": 0.9}],
+        title="نتيجة OpenMed",
+    )
+
+    assert 'class="openmed-display-title" dir="auto"' in html
+    assert 'aria-label="Annotation layer 1" dir="auto"' in html
+    assert '<bdi dir="auto">PERSON</bdi>' in html
+    assert '<bdi dir="auto"> PERSON 0.90</bdi>' in html
+    assert _source_text_from_layer(_layer_bodies(html)[0]) == text
+
+
 def test_labels_are_inert_and_output_has_no_active_or_remote_content() -> None:
     label = '"><script src="https://invalid.test/x.js">bad()</script>'
 
@@ -325,15 +342,37 @@ def test_span_offsets_out_of_range_are_clamped_without_crash() -> None:
     assert _source_chars(html) == text
 
 
-def test_fractional_offsets_are_rejected_instead_of_silently_truncated() -> None:
+@pytest.mark.parametrize(
+    "fractional",
+    [1.5, Decimal("1.5"), Fraction(3, 2)],
+)
+def test_fractional_offsets_are_rejected_instead_of_silently_truncated(
+    fractional: object,
+) -> None:
     html = render_spans_html(
         "abcdef",
-        [{"start": 1.5, "end": 4, "label": "INVALID"}],
+        [{"start": fractional, "end": 4, "label": "INVALID"}],
         show_legend=False,
     )
 
     assert "<mark" not in html
     assert _source_chars(html) == "abcdef"
+
+
+@pytest.mark.parametrize(
+    "score",
+    [float("nan"), float("inf"), float("-inf"), Decimal("NaN")],
+)
+def test_non_finite_confidence_is_omitted(score: object) -> None:
+    html = render_spans_html(
+        "abcdef",
+        [{"start": 1, "end": 4, "label": "TEST", "score": score}],
+        show_legend=False,
+    )
+
+    assert 'title="TEST"' in html
+    assert " nan" not in html.lower()
+    assert " inf" not in html.lower()
 
 
 def test_empty_span_list_renders_plain_text() -> None:
@@ -451,6 +490,22 @@ def test_accepts_mapping_payload_from_to_dict() -> None:
     html = render_spans_html(payload)
     assert html.count("<mark") == 1
     assert "John Doe" in _visible_text(html)
+
+
+def test_mapping_shape_does_not_fall_through_from_empty_analyze_fields() -> None:
+    payload = {
+        "text": "",
+        "entities": [],
+        "original_text": "synthetic fallback must stay hidden",
+        "pii_entities": [
+            {"start": 0, "end": 9, "label": "PERSON", "score": 0.9},
+        ],
+    }
+
+    html = render_spans_html(payload, show_legend=False)
+
+    assert "<mark" not in html
+    assert "synthetic fallback" not in html
 
 
 def test_bio_prefixes_are_stripped_from_labels() -> None:
