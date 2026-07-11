@@ -26,8 +26,13 @@ All tracks assume a working install. The minimal setup is:
 curl -LsSf https://astral.sh/uv/install.sh | sh   # install uv (skip if present)
 uv venv --python 3.11
 source .venv/bin/activate
-uv pip install ".[hf]"                             # core + Hugging Face models
+uv pip install "openmed[hf]"                      # core + Hugging Face models
 ```
+
+The first model-backed call may download model artifacts. Clinical text is still
+processed locally; after warming the cache, use
+[local-only offline mode](configuration.md#local-only-offline-mode) to block
+outbound connections during inference.
 
 ---
 
@@ -71,7 +76,7 @@ from openmed import deidentify
 
 redacted = deidentify(note, method="mask")
 print(redacted.deidentified_text)
-# Patient [first_name] [last_name] (MRN [id]) called from [phone_number] on [date].
+# Detected spans are replaced with labels such as [first_name] and [phone_number].
 ```
 
 ### 3. Measure PHI leakage
@@ -93,7 +98,7 @@ predicted = [
 
 metrics = compute_leakage_rate(gold, predicted, source_text=note)
 print(f"Overall PHI leakage: {metrics.overall:.1%}")
-print("By label:", metrics.by_label)
+print(f"Missed phone leakage: {metrics.by_label['PHONE']:.1%}")
 ```
 
 **Next steps:** the full method matrix (`mask`, `remove`, `replace`, `hash`,
@@ -126,7 +131,7 @@ print(redacted.deidentified_text)
 Install the service extra and start the API:
 
 ```bash
-uv pip install -e ".[hf,service]"
+uv pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
@@ -158,15 +163,18 @@ Install the MCP extra and start the Model Context Protocol server. It exposes an
 over stdio, so agent frameworks can redact PHI as a tool call:
 
 ```bash
-uv pip install -e ".[hf,mcp]"
+uv pip install "openmed[hf,mcp]"
 python -m openmed.mcp.server                       # stdio transport (default)
 ```
 
-Prefer HTTP for a networked agent runtime:
+For a local agent runtime that connects over HTTP, keep the server on loopback:
 
 ```bash
 python -m openmed.mcp.server --transport streamable-http --host 127.0.0.1 --port 8081
 ```
+
+These service examples deliberately bind to loopback. Do not expose them to an
+untrusted network without an authenticated, TLS-terminating boundary.
 
 **Next steps:** health checks, model warm-pool controls, request batching, the
 privacy gateway, and the full endpoint reference are in
@@ -179,10 +187,11 @@ privacy gateway, and the full endpoint reference are in
 **Goal:** de-identify many files or dataset rows with progress reporting and an
 aggregate audit trail — no per-record boilerplate.
 
-### 1. Redact a directory of notes
+### 1. Process a directory of notes
 
 `BatchProcessor` reuses one warmed model across the batch and keeps going when a
-single record fails:
+single record fails. It returns de-identified text in memory and does not
+overwrite the source files:
 
 ```python
 from openmed import BatchProcessor
@@ -198,9 +207,11 @@ processor = BatchProcessor(
 
 result = processor.process_directory("/path/to/notes/", pattern="*.txt", recursive=True)
 
-print(f"Redacted {result.successful_items}/{result.total_items} files")
-for item in result.get_failed_results():
-    print(f"Failed: {item.id} - {item.error}")
+redacted_texts = [
+    item.result.deidentified_text for item in result.get_successful_results()
+]
+print(f"Processed {len(redacted_texts)}/{result.total_items} files")
+print(f"Failures: {result.failed_items}")
 ```
 
 ### 2. Redact specific columns of a dataset
