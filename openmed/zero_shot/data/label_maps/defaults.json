@@ -161,5 +161,14 @@
     "FluidStatus",
     "RenalReplacementAccess",
     "ElectrolyteDisturbance"
+  ],
+  "immunization": [
+    "VaccineName",
+    "DoseNumber",
+    "AdministrationRoute",
+    "AdministrationSite",
+    "VaccineLot",
+    "AdministrationDate",
+    "VaccineSeries"
   ]
 }
