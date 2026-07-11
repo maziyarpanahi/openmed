@@ -24,6 +24,7 @@ from openmed.core.pii_i18n import (
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_korean_rrn,
     validate_portuguese_cpf,
     validate_spanish_nie,
     validate_thai_national_id,
@@ -46,6 +47,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "tr",
     "id",
     "th",
+    "ko",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -214,6 +216,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". วันที่นัด ",
         ".",
     ),
+    "ko": (
+        "임상 기록: 환자 ",
+        " 생년월일 ",
+        ". 환자 등록번호 ",
+        ". 전화번호 ",
+        ". 주소 ",
+        ". 추적 관찰일 ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -230,6 +241,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "he": validate_israeli_teudat_zehut,
     "id": validate_indonesian_nik,
     "th": validate_thai_national_id,
+    "ko": validate_korean_rrn,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -246,6 +258,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "he": "pii_i18n.validate_israeli_teudat_zehut",
     "id": "pii_i18n.validate_indonesian_nik",
     "th": "pii_i18n.validate_thai_national_id",
+    "ko": "pii_i18n.validate_korean_rrn",
 }
 
 

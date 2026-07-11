@@ -34,12 +34,36 @@ OPTIONAL_ENRICHMENT_FIELDS = frozenset(
         "latency_ms",
         "peak_ram_mb",
         "recommended_tier",
+        "training_provenance",
     }
 )
 MANIFEST_FIELDS = REQUIRED_FIELDS | OPTIONAL_ENRICHMENT_FIELDS
 BENCHMARK_FIELDS = frozenset({"dataset", "micro_f1", "recall"})
 BENCHMARK_SUITE_FIELDS = frozenset(
     {"suite", "dataset", "micro_f1", "recall", "leakage"}
+)
+TRAINING_PROVENANCE_REQUIRED_FIELDS = frozenset(
+    {
+        "base_model_revision",
+        "data_manifest_hash",
+        "env_lock_digest",
+        "git_sha",
+        "recipe_config_hash",
+        "reproducibility_hash",
+        "rng_seeds",
+    }
+)
+TRAINING_PROVENANCE_OPTIONAL_FIELDS = frozenset(
+    {
+        "base_model",
+        "checkpoint_id",
+        "path",
+        "repo_id",
+        "schema_version",
+    }
+)
+TRAINING_PROVENANCE_FIELDS = (
+    TRAINING_PROVENANCE_REQUIRED_FIELDS | TRAINING_PROVENANCE_OPTIONAL_FIELDS
 )
 
 ALLOWED_TIERS = ("Tiny", "Small", "Base", "Medium", "Large", "XLarge")
@@ -284,6 +308,14 @@ def validate_manifest_row(row: Any, line_number: int) -> list[ManifestViolation]
                 )
             )
 
+    if "training_provenance" in row:
+        _validate_training_provenance(
+            violations,
+            line_number,
+            row["training_provenance"],
+            row.get("reproducibility_hash"),
+        )
+
     return violations
 
 
@@ -457,6 +489,113 @@ def _validate_number_map(
                     f"{field}.{device} must be a non-negative number",
                 )
             )
+
+
+def _validate_training_provenance(
+    violations: list[ManifestViolation],
+    line_number: int,
+    value: Any,
+    row_reproducibility_hash: Any,
+) -> None:
+    if not isinstance(value, Mapping):
+        violations.append(
+            ManifestViolation(line_number, "training_provenance must be an object")
+        )
+        return
+
+    fields = set(value)
+    for field in sorted(TRAINING_PROVENANCE_REQUIRED_FIELDS - fields):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"training_provenance missing required key: {field}",
+            )
+        )
+    for field in sorted(fields - TRAINING_PROVENANCE_FIELDS):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                f"training_provenance unexpected key: {field}",
+            )
+        )
+
+    for field in (
+        "data_manifest_hash",
+        "env_lock_digest",
+        "recipe_config_hash",
+        "reproducibility_hash",
+    ):
+        if field not in value:
+            continue
+        digest = value[field]
+        if not isinstance(digest, str) or not REPRODUCIBILITY_HASH_RE.fullmatch(digest):
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"training_provenance.{field} must match "
+                    "sha256:<64 lowercase hex characters>",
+                )
+            )
+
+    for field in (
+        "base_model",
+        "base_model_revision",
+        "checkpoint_id",
+        "git_sha",
+        "path",
+        "repo_id",
+        "schema_version",
+    ):
+        if field in value and (
+            not isinstance(value[field], str) or not value[field].strip()
+        ):
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    f"training_provenance.{field} must be a non-empty string",
+                )
+            )
+
+    seeds = value.get("rng_seeds")
+    if "rng_seeds" in value:
+        if not isinstance(seeds, Mapping) or not seeds:
+            violations.append(
+                ManifestViolation(
+                    line_number,
+                    "training_provenance.rng_seeds must be a non-empty object",
+                )
+            )
+        else:
+            for key, seed in seeds.items():
+                if not isinstance(key, str) or not key:
+                    violations.append(
+                        ManifestViolation(
+                            line_number,
+                            "training_provenance.rng_seeds keys must be "
+                            "non-empty strings",
+                        )
+                    )
+                if isinstance(seed, bool) or not isinstance(seed, int):
+                    violations.append(
+                        ManifestViolation(
+                            line_number,
+                            f"training_provenance.rng_seeds.{key} must be an integer",
+                        )
+                    )
+
+    provenance_hash = value.get("reproducibility_hash")
+    if (
+        isinstance(provenance_hash, str)
+        and isinstance(row_reproducibility_hash, str)
+        and provenance_hash != row_reproducibility_hash
+    ):
+        violations.append(
+            ManifestViolation(
+                line_number,
+                "training_provenance.reproducibility_hash must match "
+                "reproducibility_hash",
+            )
+        )
 
 
 def _validate_metric(
