@@ -388,6 +388,58 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
 
 
+def test_extraction_reemission_critical_identifier_forces_quarantine(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_leakage_count": 0,
+                "extraction_reemission_leakage": {
+                    "overall": 1.0,
+                    "leaked_chars_by_label": {"SSN": 11},
+                    "total_chars_by_label": {"SSN": 11},
+                },
+            },
+        ),
+        _baseline(),
+    )
+
+    assert result.decision == QUARANTINED
+    assert result.critical_leakage_count == 11
+    assert _check(result, "G3").passed is False
+
+
+def test_extraction_reemission_blocks_high_f1_at_zero_leakage_target(
+    tmp_path: Path,
+) -> None:
+    gate = ReleaseGate(
+        signing_key=SIGNING_KEY,
+        model_steward_config={"default_target_leakage": 0.0},
+    )
+    result = gate.evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "extraction_reemission_leakage": {
+                    "overall": 0.01,
+                    "leaked_chars_by_label": {"PERSON": 4},
+                    "total_chars_by_label": {"PERSON": 4},
+                },
+                "exact_span_f1": {"precision": 1.0, "recall": 1.0, "f1": 1.0},
+            },
+        ),
+        _baseline(),
+    )
+
+    g7 = _check(result, "G7")
+    assert result.decision == QUARANTINED
+    assert _check(result, "G3").passed is True
+    assert g7.passed is False
+    assert "target_leakage" in g7.details["violations"]
+
+
 def test_g11_quarantines_single_missed_drug_allergy(tmp_path: Path) -> None:
     result = _gate().evaluate(
         _report(
