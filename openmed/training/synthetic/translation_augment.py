@@ -207,8 +207,8 @@ def augment_span_annotated_examples(
 
     backend = translator or DictionaryTranslator()
     heldout_ids = {str(value) for value in heldout_eval_ids}
-    heldout_text_values = {str(value) for value in heldout_eval_texts}
-    heldout_hashes = {_text_hash(value) for value in heldout_text_values}
+    heldout_text_values = {_normalized_text(str(value)) for value in heldout_eval_texts}
+    heldout_hashes = {_normalized_text_hash(value) for value in heldout_text_values}
     augmented: list[TranslationAugmentedExample] = []
     seen: set[tuple[Any, ...]] = set()
 
@@ -257,6 +257,7 @@ def augment_span_annotated_examples(
                 ),
                 root_source_id=seed.example_id,
                 root_source_language=seed.language,
+                root_source_text_hash=_text_hash(seed.text),
             )
             if backtranslated is not None:
                 _append_if_trainable(
@@ -340,6 +341,7 @@ def _safe_translate_example(
     transform: str,
     root_source_id: str | None = None,
     root_source_language: str | None = None,
+    root_source_text_hash: str | None = None,
 ) -> TranslationAugmentedExample | None:
     try:
         translated_text = translator.translate(
@@ -362,15 +364,16 @@ def _safe_translate_example(
 
     source_id = root_source_id or seed.example_id
     source_language = root_source_language or seed.language
+    source_text_hash = root_source_text_hash or _text_hash(seed.text)
     metadata = {
         "contains_real_phi": bool(seed.metadata.get("contains_real_phi", False)),
         "provenance": {
             "source_id": source_id,
             "source_language": source_language,
-            "source_text_hash": _text_hash(seed.text),
+            "source_text_hash": source_text_hash,
             "transform": transform,
         },
-        "source_text_hash": _text_hash(seed.text),
+        "source_text_hash": source_text_hash,
     }
     example_id = _augmented_id(source_id, target_language, transform, translated_text)
     return TranslationAugmentedExample(
@@ -397,7 +400,11 @@ def _append_if_trainable(
 ) -> None:
     if drop_identical and _normalized_text(example.text) == _normalized_text(seed.text):
         return
-    if example.text in heldout_texts or _text_hash(example.text) in heldout_hashes:
+    normalized_text = _normalized_text(example.text)
+    if (
+        normalized_text in heldout_texts
+        or _normalized_text_hash(normalized_text) in heldout_hashes
+    ):
         return
     key = _dedupe_key(example)
     if key in seen:
@@ -417,9 +424,10 @@ def _is_eval_derived(
         return True
     if seed.example_id in heldout_ids:
         return True
-    if seed.text in heldout_texts:
+    normalized_text = _normalized_text(seed.text)
+    if normalized_text in heldout_texts:
         return True
-    return _text_hash(seed.text) in heldout_hashes
+    return _normalized_text_hash(normalized_text) in heldout_hashes
 
 
 def _dedupe_key(example: TranslationAugmentedExample) -> tuple[Any, ...]:
@@ -450,6 +458,10 @@ def _text_hash(text: str) -> str:
 
 def _normalized_text(text: str) -> str:
     return " ".join(text.casefold().split())
+
+
+def _normalized_text_hash(text: str) -> str:
+    return _text_hash(_normalized_text(text))
 
 
 def _replace_lexeme(text: str, source: str, target: str) -> str:
