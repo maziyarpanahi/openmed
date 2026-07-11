@@ -1472,11 +1472,12 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Ontario (OHIP) health card: 10 digits (4-3-3 spacing) plus an optional
-    # two-letter version code, Luhn-checked. Health identifier. Checked before
-    # the SIN so the longer 10-digit match wins.
+    # Ontario (OHIP) health card: 10 digits beginning with 1-9 (4-3-3 spacing)
+    # plus an optional one- or two-letter version code, Luhn-checked. Health
+    # identifier. Checked before the SIN so the longer 10-digit match wins.
     PIIPattern(
-        r"\b\d{4}[\s-]?\d{3}[\s-]?\d{3}(?:[\s-]?[A-Za-z]{2})?\b",
+        r"\b[1-9]\d{3}(?P<ohip_sep>[ -]?)\d{3}(?P=ohip_sep)\d{3}"
+        r"(?:[ -]?[A-Za-z]{1,2})?\b",
         "national_id",
         priority=12,
         base_score=0.45,
