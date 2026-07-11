@@ -19,7 +19,9 @@ invariants that must hold for any input:
 * **Determinism** — with a fixed seed and identical input, ``deidentify`` yields
   byte-identical output across runs.
 * **Re-identification inverse** — with a kept mapping, ``reidentify`` restores
-  every planted identifier.
+  the canonical original document exactly.
+* **Long and streaming inputs** — multi-kilobyte documents and identifiers split
+  across source chunks use the production offset-remap and carry-buffer paths.
 
 All identifiers are synthetic, generated locally. No real PHI is ever used. The
 model call (``openmed.analyze_text``) is mocked so the harness is offline,
@@ -43,6 +45,8 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from openmed.core.pii import deidentify, extract_pii, reidentify
+from openmed.core.pipeline import Pipeline
+from openmed.core.streaming import StreamingDeidentifier
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 # Ensure the bounded/nightly Hypothesis profile is registered even if this module
@@ -89,6 +93,9 @@ _FILLER_ALPHABET = st.sampled_from(
     ]
 )
 
+_LONG_FILLER = "Patient record 🧬 é ‍ 北京 مستشفى. "
+_STREAM_MAX_BUFFER = 96
+
 
 @st.composite
 def planted_documents(draw):
@@ -119,6 +126,34 @@ def planted_documents(draw):
 
     text = "".join(parts)
     return text, chosen
+
+
+@st.composite
+def long_planted_documents(draw):
+    """Generate a 4-KiB-plus synthetic document with one planted identifier."""
+    planted = draw(st.sampled_from(_PLANTED_IDENTIFIERS))
+    repeats = draw(st.integers(min_value=128, max_value=256))
+    insertion = draw(st.integers(min_value=1, max_value=repeats - 1))
+    parts = [_LONG_FILLER] * repeats
+    parts.insert(insertion, f"{planted[1]} ")
+    text = "".join(parts) + "end"
+    return text, [planted]
+
+
+@st.composite
+def chunk_boundary_documents(draw):
+    """Generate chunks whose boundary falls strictly inside an identifier."""
+    planted = draw(st.sampled_from(_PLANTED_IDENTIFIERS))
+    split = draw(st.integers(min_value=1, max_value=len(planted[1]) - 1))
+    prefix_repeats = draw(st.integers(min_value=8, max_value=16))
+    suffix_repeats = draw(st.integers(min_value=8, max_value=16))
+    prefix = "Synthetic clinical note without identifiers. " * prefix_repeats
+    prefix += "Contact "
+    suffix = " completed. " + "No identifier in this sentence. " * suffix_repeats
+    suffix += "end"
+    text = f"{prefix}{planted[1]}{suffix}"
+    chunks = (f"{prefix}{planted[1][:split]}", f"{planted[1][split:]}{suffix}")
+    return text, chunks, planted
 
 
 def _find_spans(query_text: str, planted: Sequence[tuple[str, str]]):
@@ -174,7 +209,7 @@ def _assert_span_invariants(entities, text: str) -> None:
         assert 0 <= start < end <= n, f"span [{start}:{end}] out of bounds for n={n}"
         # ``text[start:end]`` is well-defined for valid code-point indices; this
         # also guards against surrogate/astral index confusion.
-        _ = text[start:end]
+        assert text[start:end] == ent.text
         assert start >= prev_end, (
             f"overlapping spans: prev_end={prev_end} start={start}"
         )
@@ -305,8 +340,64 @@ def test_deidentify_keep_mapping_reidentify_inverse(doc):
         )
     assert result.mapping is not None
     restored = reidentify(result.deidentified_text, result.mapping)
-    for ent in result.pii_entities:
-        assert ent.text in restored
+    assert restored == result.original_text == text
+
+
+@given(doc=long_planted_documents())
+def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
+    """The real one-shot path handles multi-kilobyte normalized input exactly."""
+    text, planted = doc
+    assert len(text) >= 4096
+    with patch("openmed.analyze_text", _make_analyze_stub(planted)):
+        result = deidentify(
+            text,
+            method="mask",
+            model_name=_MODEL,
+            confidence_threshold=0.5,
+            use_safety_sweep=False,
+        )
+
+    assert result.original_text == text
+    _assert_span_invariants(result.pii_entities, result.original_text)
+    for _, value in planted:
+        assert value not in result.deidentified_text
+
+
+@given(case=chunk_boundary_documents())
+def test_streaming_chunk_boundary_matches_single_pass(case):
+    """A boundary inside an identifier is buffered and redacted as one span."""
+    text, chunks, planted = case
+    detector = _make_analyze_stub([planted])
+    single = Pipeline(
+        model_detector=detector,
+        confidence_threshold=0.5,
+        use_smart_merging=False,
+        use_safety_sweep=False,
+    ).run(text, method="mask")
+    streamer = StreamingDeidentifier(
+        pipeline=Pipeline(
+            model_detector=detector,
+            confidence_threshold=0.5,
+            use_smart_merging=False,
+            use_safety_sweep=False,
+        ),
+        method="mask",
+        max_buffer=_STREAM_MAX_BUFFER,
+    )
+
+    events = []
+    for chunk in chunks:
+        events.extend(streamer.feed(chunk))
+    events.extend(streamer.flush())
+
+    redacted = "".join(event.redacted_text for event in events)
+    assert redacted == single.redacted_text
+    assert planted[1] not in redacted
+    assert streamer.max_observed_buffer <= _STREAM_MAX_BUFFER
+    identifier_start = text.index(planted[1])
+    assert (identifier_start, identifier_start + len(planted[1])) in {
+        (span.start, span.end) for span in streamer.spans
+    }
 
 
 @given(text=st.text(min_size=0, max_size=400))
