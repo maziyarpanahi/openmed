@@ -17,10 +17,10 @@ Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pi
 ### Rich highlight widget in notebooks
 
 `openmed.processing.show()` renders a displaCy-style colored highlight of every
-detected span — with a per-label legend and confidence scores — directly in a
-Jupyter/IPython cell. Typed results render themselves automatically (they expose
-`_repr_html_`), so evaluating an `AnalyzeResult` or `DeidentificationResult` as the
-last line of a cell shows the widget:
+detected span — with a per-label legend and confidence scores — directly in an
+active Jupyter/IPython shell. Typed results render themselves automatically
+(they expose `_repr_html_`), so evaluating an `AnalyzeResult` or
+`DeidentificationResult` as the last line of a cell shows the widget:
 
 ```python
 from openmed import deidentify
@@ -29,8 +29,9 @@ from openmed import deidentify
 deidentify("Patient John Doe called from 555-123-4567.", method="mask")
 ```
 
-For explicit control, call `show()` (renders inline, or returns the HTML string
-outside a notebook) or `render_spans_html()` (always returns the HTML string):
+For explicit control, call `show()` (renders inline and returns `None` in an
+active IPython shell, or returns the HTML string elsewhere) or
+`render_spans_html()` (always returns the HTML string):
 
 ```python
 from openmed.processing import render_spans_html, show
@@ -41,17 +42,19 @@ spans = [
     {"start": 20, "end": 40, "label": "EMAIL", "score": 0.95},
 ]
 
-show(text, spans)  # in a notebook this displays the colored widget
+show(text, spans)  # active IPython: displays and returns None; otherwise HTML
 html = render_spans_html(text, spans)  # raw HTML is also available
 ```
 
 `show()` accepts an `AnalyzeResult`, a `DeidentificationResult`, or an explicit
 `(text, spans)` pair, where spans may be dicts, `EntityPrediction`/`PIIEntity`
 objects, or `OpenMedSpan` records. IPython is an optional, lazily imported
-dependency: rendering the HTML string never requires it, and `show()` degrades to
-returning the string when IPython is absent. The source text is always
-HTML-escaped, so brackets and ampersands in clinical notes cannot break the view.
-Recipe 5 in `Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end.
+dependency: rendering the HTML string never requires it, and merely having
+IPython installed does not trigger display outside an active shell. Overlapping
+annotations are placed on deterministic layers so every input span remains a
+complete highlight. The source text is always HTML-escaped, so brackets and
+ampersands in clinical notes cannot break the view. Recipe 5 in
+`Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end.
 
 ## Scripts & tools
 

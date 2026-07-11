@@ -12,15 +12,15 @@ public result surfaces returned by OpenMed helpers:
 - plain ``list[dict]`` span payloads (the legacy ``entities`` list)
 
 IPython is an *optional* dependency imported lazily: rendering the HTML string
-never requires IPython, and :func:`show` degrades to returning the HTML string
-when IPython is absent.
+never requires IPython, and :func:`show` returns the HTML string unless an
+active IPython shell is available to display it inline.
 """
 
 from __future__ import annotations
 
 import html as html_mod
 from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Set, Tuple
+from typing import Any, List, Optional, Sequence, Set
 
 from .outputs import OutputFormatter
 
@@ -120,7 +120,7 @@ def _span_from_object(obj: Any) -> Optional[NormalizedSpan]:
 def _resolve_text_and_spans(
     text_or_result: Any,
     spans: Optional[Sequence[Any]],
-) -> Tuple[str, List[Any]]:
+) -> tuple[str, List[Any]]:
     """Resolve the ``(text, raw_spans)`` pair from the supported call shapes.
 
     Supports:
@@ -162,22 +162,11 @@ def _label_color(label: str) -> str:
     return _COLOR_FORMATTER._get_entity_color(label)
 
 
-def _build_segments(
+def _clamp_spans(
     text_len: int,
     spans: Sequence[NormalizedSpan],
-) -> List[Tuple[int, int, Optional[NormalizedSpan]]]:
-    """Partition ``[0, text_len)`` into non-overlapping (start, end, span) parts.
-
-    The text is cut at every span boundary, producing a flat sequence of
-    segments that tile the whole string with no gaps and no dropped characters
-    — even when the input spans overlap or touch. Each covered segment carries
-    the highest-scoring span that covers it (ties resolved by the earlier
-    span), so overlaps render deterministically instead of corrupting offsets.
-    """
-    if not spans:
-        return [(0, text_len, None)]
-
-    # Clamp to the text bounds and drop empties defensively.
+) -> List[NormalizedSpan]:
+    """Clamp spans to ``text_len`` and discard spans with no visible text."""
     clamped: List[NormalizedSpan] = []
     for span in spans:
         start = max(0, min(span.start, text_len))
@@ -186,30 +175,39 @@ def _build_segments(
             clamped.append(
                 NormalizedSpan(start=start, end=end, label=span.label, score=span.score)
             )
+    return clamped
 
-    if not clamped:
-        return [(0, text_len, None)]
 
-    boundaries = {0, text_len}
-    for span in clamped:
-        boundaries.add(span.start)
-        boundaries.add(span.end)
-    ordered = sorted(boundaries)
+def _span_layers(
+    spans: Sequence[NormalizedSpan],
+) -> List[List[NormalizedSpan]]:
+    """Assign spans to deterministic non-overlapping annotation layers.
 
-    segments: List[Tuple[int, int, Optional[NormalizedSpan]]] = []
-    for seg_start, seg_end in zip(ordered, ordered[1:]):
-        if seg_end <= seg_start:
-            continue
-        covering: Optional[NormalizedSpan] = None
-        best_score = float("-inf")
-        for span in clamped:
-            if span.start <= seg_start and span.end >= seg_end:
-                score = span.score if span.score is not None else 0.0
-                if score > best_score:
-                    best_score = score
-                    covering = span
-        segments.append((seg_start, seg_end, covering))
-    return segments
+    Each input span appears exactly once. Nested, crossing, and duplicate spans
+    move to additional layers instead of being split, clipped, or discarded.
+    """
+    if not spans:
+        return [[]]
+
+    indexed = list(enumerate(spans))
+    ordered = sorted(
+        indexed,
+        key=lambda item: (item[1].start, -item[1].end, item[0]),
+    )
+    layers: List[List[NormalizedSpan]] = []
+    layer_ends: List[int] = []
+
+    for _, span in ordered:
+        for index, occupied_end in enumerate(layer_ends):
+            if span.start >= occupied_end:
+                layers[index].append(span)
+                layer_ends[index] = span.end
+                break
+        else:
+            layers.append([span])
+            layer_ends.append(span.end)
+
+    return layers
 
 
 def _score_suffix(score: Optional[float]) -> str:
@@ -239,6 +237,56 @@ def _render_legend(labels: Sequence[str]) -> str:
         '<div class="openmed-legend" '
         'style="margin-bottom:8px;line-height:1.6;">' + "".join(chips) + "</div>"
     )
+
+
+def _render_text_layer(
+    text: str,
+    spans: Sequence[NormalizedSpan],
+    *,
+    layer_index: int,
+    show_confidence: bool,
+) -> str:
+    """Render one non-overlapping annotation layer without losing source text."""
+    parts = [
+        '<div class="openmed-display-text openmed-display-layer" '
+        f'data-layer="{layer_index}" aria-label="Annotation layer '
+        f'{layer_index + 1}">'
+    ]
+    cursor = 0
+
+    for span in spans:
+        parts.append(html_mod.escape(text[cursor : span.start]))
+
+        chunk = html_mod.escape(text[span.start : span.end])
+        color = _label_color(span.label)
+        label_esc = html_mod.escape(span.label)
+        label_attr = html_mod.escape(span.label, quote=True)
+        score_suffix = _score_suffix(span.score) if show_confidence else ""
+        tooltip = label_attr
+        if show_confidence and span.score is not None:
+            tooltip = f"{label_attr}: {span.score:.3f}"
+
+        parts.append(
+            '<mark class="openmed-entity openmed-entity-'
+            f'{html_mod.escape(span.label.lower(), quote=True)}" '
+            f'data-start="{span.start}" data-end="{span.end}" '
+            f'data-label="{label_attr}" data-layer="{layer_index}" '
+            f'style="background:{color};padding:0.2em 0.35em;margin:0 0.15em;'
+            'border-radius:0.35em;line-height:1;" '
+            f'title="{tooltip}">'
+            f"{chunk}"
+            '<span class="openmed-entity-label" '
+            'style="font-size:0.7em;font-weight:700;line-height:1;'
+            "border-radius:0.35em;text-transform:uppercase;vertical-align:middle;"
+            'margin-left:0.35em;">'
+            f"{label_esc}{html_mod.escape(score_suffix)}</span>"
+            "</mark>"
+        )
+        cursor = span.end
+
+    parts.append(html_mod.escape(text[cursor:]))
+    parts.append("</div>")
+    return "".join(parts)
 
 
 def render_spans_html(
@@ -291,14 +339,14 @@ def render_spans_html(
         if span is not None:
             normalized.append(span)
 
-    text_len = len(text)
-    segments = _build_segments(text_len, normalized)
+    normalized = _clamp_spans(len(text), normalized)
+    layers = _span_layers(normalized)
 
     # Distinct labels in first-seen order for a stable legend.
     seen: Set[str] = set()
     ordered_labels: List[str] = []
-    for _, _, span in segments:
-        if span is not None and span.label not in seen:
+    for span in normalized:
+        if span.label not in seen:
             seen.add(span.label)
             ordered_labels.append(span.label)
 
@@ -318,33 +366,17 @@ def render_spans_html(
     if show_legend:
         parts.append(_render_legend(ordered_labels))
 
-    parts.append('<div class="openmed-display-text">')
-    for seg_start, seg_end, span in segments:
-        chunk = html_mod.escape(text[seg_start:seg_end])
-        if span is None:
-            parts.append(chunk)
-            continue
-
-        color = _label_color(span.label)
-        label_esc = html_mod.escape(span.label)
-        score_suffix = _score_suffix(span.score) if show_confidence else ""
-        tooltip = label_esc
-        if span.score is not None:
-            tooltip = f"{label_esc}: {span.score:.3f}"
-
+    parts.append(
+        '<div class="openmed-display-layers" style="display:grid;gap:0.35em;">'
+    )
+    for layer_index, layer in enumerate(layers):
         parts.append(
-            '<mark class="openmed-entity openmed-entity-'
-            f'{html_mod.escape(span.label.lower())}" '
-            f'style="background:{color};padding:0.2em 0.35em;margin:0 0.15em;'
-            'border-radius:0.35em;line-height:1;" '
-            f'title="{tooltip}">'
-            f"{chunk}"
-            '<span class="openmed-entity-label" '
-            'style="font-size:0.7em;font-weight:700;line-height:1;'
-            "border-radius:0.35em;text-transform:uppercase;vertical-align:middle;"
-            'margin-left:0.35em;">'
-            f"{label_esc}{html_mod.escape(score_suffix)}</span>"
-            "</mark>"
+            _render_text_layer(
+                text,
+                layer,
+                layer_index=layer_index,
+                show_confidence=show_confidence,
+            )
         )
     parts.append("</div></div>")
 
@@ -355,12 +387,13 @@ def show(
     text_or_result: Any,
     spans: Optional[Sequence[Any]] = None,
     **kwargs: Any,
-) -> str:
+) -> Optional[str]:
     """Display highlighted spans in a notebook, or return the HTML string.
 
-    In an IPython/Jupyter environment this renders the widget inline via
-    ``IPython.display.display``. Outside IPython — or when IPython is not
-    installed — it simply returns the HTML string without raising.
+    In an active IPython/Jupyter shell this renders the widget inline via
+    ``IPython.display.display`` and returns ``None`` so the cell does not emit
+    a second raw-string representation. Outside an active IPython shell — or
+    when IPython is not installed — it returns the HTML string without raising.
 
     Args:
         text_or_result: Source text or a supported result object (see
@@ -370,13 +403,20 @@ def show(
             ``show_legend``, ``show_confidence``).
 
     Returns:
-        The rendered HTML string in every case, so callers and tests can
-        inspect the output regardless of the runtime environment.
+        ``None`` after successful inline display; otherwise the rendered HTML
+        string so non-notebook callers can inspect or embed it.
     """
     html = render_spans_html(text_or_result, spans, **kwargs)
 
     try:  # IPython is an optional, lazily imported dependency.
+        import IPython
         from IPython.display import HTML, display
+    except Exception:
+        return html
+
+    try:
+        if IPython.get_ipython() is None:
+            return html
     except Exception:
         return html
 
@@ -385,4 +425,4 @@ def show(
     except Exception:
         # Any display failure must degrade gracefully to the raw string.
         return html
-    return html
+    return None

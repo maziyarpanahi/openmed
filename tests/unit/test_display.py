@@ -70,6 +70,16 @@ def _visible_text(html: str) -> str:
     return html_mod.unescape(re.sub(r"<[^>]+>", "", html))
 
 
+def _layer_bodies(html: str) -> list[str]:
+    """Return each complete annotation layer body in rendered order."""
+    return re.findall(
+        r'<div class="openmed-display-text openmed-display-layer"[^>]*>'
+        r"(.*?)</div>",
+        html,
+        flags=re.DOTALL,
+    )
+
+
 # --------------------------------------------------------------------------- #
 # render_spans_html — highlight elements, labels, colors
 # --------------------------------------------------------------------------- #
@@ -130,6 +140,8 @@ def test_show_confidence_false_omits_score_chip() -> None:
         show_confidence=False,
     )
     assert "0.88" not in html
+    assert "0.876" not in html
+    assert 'title="PERSON"' in html
     assert "PERSON" in html
 
 
@@ -167,13 +179,13 @@ def test_source_text_is_html_escaped_and_cannot_break_rendering() -> None:
     assert "&lt;b&gt;bold&lt;/b&gt;" in html
     assert "&amp;" in html
     # The visible text (tags stripped, entities unescaped) equals the source.
-    assert _visible_text(html.split("openmed-display-text", 1)[1]).count("<b>bold</b>")
+    assert _visible_text(_layer_bodies(html)[0]).count("<b>bold</b>")
 
 
 def test_escaped_source_roundtrips_to_original_characters() -> None:
     text = "a<b>&c\"d'e"
     spans = [{"start": 0, "end": 3, "label": "T"}]
-    body = render_spans_html(text, spans).split("openmed-display-text", 1)[1]
+    body = _layer_bodies(render_spans_html(text, spans))[0]
     # Everything after the legend/title: visible text minus the injected label.
     visible = _visible_text(body)
     for ch in text:
@@ -190,7 +202,9 @@ def _source_chars(html: str) -> str:
     source alphabet so the injected label text can be filtered out cleanly,
     leaving exactly the original characters the renderer emitted.
     """
-    body = html.split('class="openmed-display-text">', 1)[1]
+    bodies = _layer_bodies(html)
+    assert len(bodies) == 1
+    body = bodies[0]
     visible = _visible_text(body)
     # Injected label chips are uppercase ASCII letters; strip them out.
     return "".join(ch for ch in visible if not ("A" <= ch <= "Z"))
@@ -214,12 +228,22 @@ def test_overlapping_spans_preserve_all_characters() -> None:
         {"start": 3, "end": 10, "label": "HIGH", "score": 0.99},
     ]
     html = render_spans_html(text, spans, show_legend=False, show_confidence=False)
-    # Source is digits only; no character dropped or duplicated.
-    digits = "".join(ch for ch in _source_chars(html) if ch.isdigit())
-    assert digits == text
+    # Each complete source line survives in its own deterministic layer.
+    layer_bodies = _layer_bodies(html)
+    assert len(layer_bodies) == 2
+    for body in layer_bodies:
+        assert "".join(ch for ch in _visible_text(body) if ch.isdigit()) == text
 
-    # The higher-scoring span wins the contested [3,6) region deterministically.
-    assert "HIGH" in html
+    # Every input annotation remains one complete, independently inspectable mark.
+    marks = _marks(html)
+    assert len(marks) == len(spans)
+    assert [
+        (mark["data-start"], mark["data-end"], mark["data-label"], mark["_text"])
+        for mark in marks
+    ] == [
+        ("0", "6", "LOW", "012345LOW"),
+        ("3", "10", "HIGH", "3456789HIGH"),
+    ]
 
 
 def test_span_offsets_out_of_range_are_clamped_without_crash() -> None:
@@ -401,6 +425,31 @@ def test_show_returns_html_string_when_ipython_absent(
     assert show(result) == expected
 
 
+def test_show_returns_html_when_ipython_is_installed_but_inactive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Importable IPython alone must not trigger notebook display side effects."""
+    import sys
+    import types
+
+    displayed: list[object] = []
+    fake_ipython = types.ModuleType("IPython")
+    fake_display = types.ModuleType("IPython.display")
+    fake_ipython.get_ipython = lambda: None  # type: ignore[attr-defined]
+    fake_display.HTML = lambda data: data  # type: ignore[attr-defined]
+    fake_display.display = displayed.append  # type: ignore[attr-defined]
+
+    monkeypatch.setitem(sys.modules, "IPython", fake_ipython)
+    monkeypatch.setitem(sys.modules, "IPython.display", fake_display)
+
+    text = "Patient John Doe."
+    spans = [{"start": 8, "end": 16, "label": "PERSON", "score": 0.9}]
+    expected = render_spans_html(text, spans)
+
+    assert show(text, spans) == expected
+    assert displayed == []
+
+
 def test_show_uses_ipython_display_when_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -423,15 +472,20 @@ def test_show_uses_ipython_display_when_present(
     fake_display.HTML = _HTML  # type: ignore[attr-defined]
     fake_display.display = _display  # type: ignore[attr-defined]
     fake_ipython.display = fake_display  # type: ignore[attr-defined]
+    fake_ipython.get_ipython = lambda: object()  # type: ignore[attr-defined]
 
     monkeypatch.setitem(sys.modules, "IPython", fake_ipython)
     monkeypatch.setitem(sys.modules, "IPython.display", fake_display)
 
-    html = show(
-        "Patient John Doe.",
-        [{"start": 8, "end": 16, "label": "PERSON", "score": 0.9}],
+    text = "Patient John Doe."
+    spans = [{"start": 8, "end": 16, "label": "PERSON", "score": 0.9}]
+    expected = render_spans_html(text, spans)
+
+    result = show(
+        text,
+        spans,
     )
-    assert isinstance(html, str)
+    assert result is None
     assert len(displayed) == 1
     assert isinstance(displayed[0], _HTML)
-    assert displayed[0].data == html
+    assert displayed[0].data == expected
