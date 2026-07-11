@@ -6,7 +6,7 @@ from datetime import datetime
 import pytest
 
 from openmed.core.pii import MissingOptionalDependencyError
-from openmed.core.pipeline import Pipeline, _iter_normalization_segments
+from openmed.core.pipeline import Pipeline, _identity_text
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 
@@ -61,22 +61,28 @@ def test_stage1_records_skipped_encoding_repair_when_ftfy_missing(monkeypatch):
     assert "pip install ftfy" in metadata["install"]
 
 
-def test_stage1_identity_repair_shortcut_preserves_normalized_output():
+def test_stage1_identity_repair_shortcut_preserves_normalized_output(monkeypatch):
     # When encoding repair is unavailable the per-segment repair call is skipped
     # as a latency optimisation; the normalized text and offset map must be
-    # identical to a plain NFC normalisation of each segment (OM-364).
+    # identical to the legacy path that invokes an identity function per segment.
     text = "Café  Zoë   Straße\tnaı̈ve"
-    document = Pipeline().stage1_normalize(text)
-
-    expected = []
-    for start, end, segment, is_whitespace in _iter_normalization_segments(text):
-        expected.append(" " if is_whitespace else unicodedata.normalize("NFC", segment))
-    expected_text = "".join(part for part in expected if part)
-
-    assert document.normalized_text == expected_text
-    assert len(document.offset_map.normalized_to_original) == len(
-        document.normalized_text
+    metadata = {"feature": "encoding repair", "available": False, "skipped": True}
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        lambda: (_identity_text, metadata),
     )
+    optimized = Pipeline().stage1_normalize(text)
+
+    def legacy_identity(segment):
+        return segment
+
+    monkeypatch.setattr(
+        "openmed.core.pipeline._encoding_repairer",
+        lambda: (legacy_identity, metadata),
+    )
+    legacy_equivalent = Pipeline().stage1_normalize(text)
+
+    assert optimized == legacy_equivalent
 
 
 def test_stage1_applies_active_encoding_repair_per_segment(monkeypatch):

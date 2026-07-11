@@ -27,8 +27,8 @@ from openmed.core.pipeline import STAGE_NAMES, Pipeline
 from openmed.processing.outputs import EntityPrediction, PredictionResult
 
 # One synthetic clinical block. Contains only fabricated identifiers so the
-# corpus never carries real PHI. The phone number and MRN are deterministic
-# anchors used to assert length-invariant correctness.
+# corpus never carries real PHI. The phone number is the deterministic anchor
+# used to assert length-invariant correctness.
 _SYNTHETIC_BLOCK = (
     "Assessment: the patient remains clinically stable on the current regimen. "
     "Vitals are within normal limits and no acute distress was noted today. "
