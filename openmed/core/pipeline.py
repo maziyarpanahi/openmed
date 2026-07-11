@@ -6,10 +6,10 @@ import copy
 import importlib
 import inspect
 import logging
-import time
 import unicodedata
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
+from time import perf_counter
 from typing import Any, Callable, Iterator, Mapping, Optional, Sequence
 
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
@@ -149,6 +149,7 @@ class PipelineResult:
     audit_record: Mapping[str, Any]
     deidentification_result: Any = None
     stage_durations_ms: Mapping[str, float] = field(default_factory=dict)
+    cascade_duration_ms: float | None = None
 
     def stage(self, name: str) -> PipelineStageResult:
         for result in self.stage_results:
@@ -160,8 +161,14 @@ class PipelineResult:
         """Return the measured wall-clock duration of ``name`` in milliseconds.
 
         Durations are latency-only measurements: they never carry document text
-        and are safe to log. They are deliberately kept off the reproducible
+        and are safe for transient metrics or logs. They cover only work
+        explicitly attributed to that stage, not cross-stage orchestration or
+        audit serialization. They are deliberately kept off the reproducible
         audit record because wall-clock time is non-deterministic.
+
+        In cascade mode, the router spans detection stages 4--6 and its total
+        duration is therefore reported separately as ``cascade_duration_ms``;
+        it is not charged to any one stage.
         """
         if name not in self.stage_durations_ms:
             raise KeyError(name)
@@ -198,10 +205,15 @@ class Pipeline:
     * Stage 7 (arbitration) sorts and sweeps candidates in ``O(m log m)``.
 
     The pipeline is therefore expected to scale roughly linearly with note
-    length. ``run`` measures per-stage wall-clock latency (see
-    :meth:`PipelineResult.stage_duration_ms`); the latency-scaling regression
-    tests in ``tests/unit/core/test_pipeline_latency.py`` guard against a
-    regression that reintroduces super-linear behaviour.
+    length. ``run`` measures explicitly attributed per-stage wall-clock work
+    (see :meth:`PipelineResult.stage_duration_ms`). Cross-stage setup, span
+    remapping, and audit serialization are excluded. When a cascade router is
+    configured, its shared detector/router work spans stages 4--6 and is
+    reported separately as :attr:`PipelineResult.cascade_duration_ms`; those
+    stage keys measure only their cascade-output projection and registered-hook
+    work. The latency-scaling regression tests in
+    ``tests/unit/core/test_pipeline_latency.py`` guard against a regression that
+    reintroduces super-linear behaviour.
     """
 
     stage_names = STAGE_NAMES
@@ -312,7 +324,10 @@ class Pipeline:
             date_shift_max_days=date_shift_max_days,
             date_shift_secret=date_shift_secret,
         )
-        stage_durations_ms: dict[str, float] = {}
+        stage_durations_ms: dict[str, float] = {
+            stage_name: 0.0 for stage_name in STAGE_NAMES
+        }
+        cascade_duration_ms: float | None = None
         original_text = text.strip()
         with _stage_timer(stage_durations_ms, STAGE_NAMES[0]):
             normalized = self.stage1_normalize(original_text)
@@ -358,6 +373,7 @@ class Pipeline:
 
         cascade_driven = self.cascade_router is not None
         if cascade_driven:
+            cascade_started = perf_counter()
             cascade_result = self.cascade_router.run(
                 normalized.normalized_text,
                 context=context,
@@ -365,75 +381,107 @@ class Pipeline:
                 language=route.lang,
                 policy_profile=self.policy_profile,
             )
-            deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
-            model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
-            clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
-            deterministic_spans = (
-                *deterministic_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[3],
-                ),
-            )
-            model_spans = (
-                *model_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[4],
-                ),
-            )
-            clinical_spans = (
-                *clinical_spans,
-                *self._registered_detector_spans(
-                    normalized.normalized_text,
-                    context,
-                    pipeline_stage=STAGE_NAMES[5],
-                ),
-            )
-            deterministic_spans = _stamp_span_sections(
-                deterministic_spans,
-                context.section_metadata,
-            )
-            model_spans = _stamp_span_sections(
-                model_spans,
-                context.section_metadata,
-            )
-            clinical_spans = _stamp_span_sections(
-                clinical_spans,
-                context.section_metadata,
-            )
+            cascade_duration_ms = (perf_counter() - cascade_started) * 1000.0
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
+                deterministic_spans = _cascade_stage_spans(cascade_result, {"R0"})
+                deterministic_spans = (
+                    *deterministic_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[3],
+                    ),
+                )
+                deterministic_spans = _stamp_span_sections(
+                    deterministic_spans,
+                    context.section_metadata,
+                )
+                cascade_metadata = {
+                    "cascade_mode": cascade_result.mode,
+                    "routes": [
+                        {
+                            "route": stage.route,
+                            "name": stage.name,
+                            "reason": stage.reason,
+                            "span_count": len(stage.spans),
+                        }
+                        for stage in cascade_result.stage_results
+                    ],
+                    "timing_scope": (
+                        "R0 output projection and registered hooks only; shared "
+                        "cascade router time is reported separately"
+                    ),
+                }
+                stage_results.append(
+                    PipelineStageResult(
+                        4,
+                        STAGE_NAMES[3],
+                        spans=deterministic_spans,
+                        metadata=cascade_metadata,
+                    )
+                )
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[4]):
+                model_spans = _cascade_stage_spans(cascade_result, {"R1", "R2"})
+                model_spans = (
+                    *model_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[4],
+                    ),
+                )
+                model_spans = _stamp_span_sections(
+                    model_spans,
+                    context.section_metadata,
+                )
+                stage_results.append(
+                    PipelineStageResult(
+                        5,
+                        STAGE_NAMES[4],
+                        spans=model_spans,
+                        metadata={
+                            "timing_scope": (
+                                "R1/R2 output projection and registered hooks only; "
+                                "shared cascade router time is reported separately"
+                            )
+                        },
+                    )
+                )
+
+            with _stage_timer(stage_durations_ms, STAGE_NAMES[5]):
+                clinical_spans = _cascade_stage_spans(cascade_result, {"R3", "R4"})
+                clinical_spans = (
+                    *clinical_spans,
+                    *self._registered_detector_spans(
+                        normalized.normalized_text,
+                        context,
+                        pipeline_stage=STAGE_NAMES[5],
+                    ),
+                )
+                clinical_spans = _stamp_span_sections(
+                    clinical_spans,
+                    context.section_metadata,
+                )
+                stage_results.append(
+                    PipelineStageResult(
+                        6,
+                        STAGE_NAMES[5],
+                        spans=clinical_spans,
+                        metadata={
+                            "timing_scope": (
+                                "R3/R4 output projection and registered hooks only; "
+                                "shared cascade router time is reported separately"
+                            )
+                        },
+                    )
+                )
+
             pii_result = _prediction_result_from_spans(
                 normalized.normalized_text,
                 cascade_result.spans,
                 model_name="cascade",
-            )
-            cascade_metadata = {
-                "cascade_mode": cascade_result.mode,
-                "routes": [
-                    {
-                        "route": stage.route,
-                        "name": stage.name,
-                        "reason": stage.reason,
-                        "span_count": len(stage.spans),
-                    }
-                    for stage in cascade_result.stage_results
-                ],
-            }
-            stage_results.append(
-                PipelineStageResult(
-                    4,
-                    STAGE_NAMES[3],
-                    spans=deterministic_spans,
-                    metadata=cascade_metadata,
-                )
-            )
-            stage_results.append(
-                PipelineStageResult(5, STAGE_NAMES[4], spans=model_spans)
-            )
-            stage_results.append(
-                PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
         else:
             with _stage_timer(stage_durations_ms, STAGE_NAMES[3]):
@@ -682,6 +730,7 @@ class Pipeline:
             audit_record=audit_record,
             deidentification_result=deidentified,
             stage_durations_ms=dict(stage_durations_ms),
+            cascade_duration_ms=cascade_duration_ms,
         )
 
     def stage1_normalize(self, text: str) -> NormalizedDocument:
@@ -1263,8 +1312,8 @@ class Pipeline:
     ) -> Mapping[str, Any]:
         # The audit record is reproducible: it carries only offsets, hashes,
         # counts, and provenance -- never wall-clock timings, which are
-        # non-deterministic. Per-stage latency lives on
-        # ``PipelineResult.stage_durations_ms`` instead.
+        # non-deterministic. Per-stage and shared cascade latency live only on
+        # ``PipelineResult.stage_durations_ms`` and ``cascade_duration_ms``.
         record = {
             "doc_id": context.doc_id,
             "language": context.route.lang,
@@ -1305,13 +1354,14 @@ def _stage_timer(
     """Record the wall-clock duration of a pipeline stage in milliseconds.
 
     The recorded value is a latency measurement only; it carries no document
-    text and is safe to persist in audit records or logs.
+    text and may be used for transient metrics or logs. It is deliberately not
+    persisted in the reproducible pipeline audit record.
     """
-    start = time.perf_counter()
+    start = perf_counter()
     try:
         yield
     finally:
-        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        elapsed_ms = (perf_counter() - start) * 1000.0
         durations_ms[stage_name] = durations_ms.get(stage_name, 0.0) + elapsed_ms
 
 
