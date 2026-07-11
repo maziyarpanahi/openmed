@@ -29,6 +29,11 @@ from openmed.eval.datasets.i2b2 import (
     i2b2_suite_metadata,
     load_i2b2_deid,
 )
+from openmed.eval.datasets.multilingual_ner import (
+    MULTILINGUAL_NER,
+    load_multilingual_ner_fixtures,
+    multilingual_ner_suite_metadata,
+)
 from openmed.eval.golden import load_benchmark_fixtures
 from openmed.eval.harness import BenchmarkFixture
 from openmed.eval.suites.policy_compliance import (
@@ -62,6 +67,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     DRUGPROT,
     POLICY_COMPLIANCE,
     BIOMEDICAL_NER,
+    MULTILINGUAL_NER,
 )
 
 
@@ -93,6 +99,9 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
         return load_policy_compliance_fixtures(**kwargs)
     if suite == BIOMEDICAL_NER:
         return load_biomedical_ner_fixtures(**kwargs)
+    if suite == MULTILINGUAL_NER:
+        paths = kwargs.pop("paths", kwargs.pop("path", None))
+        return load_multilingual_ner_fixtures(paths=paths, **kwargs)
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
 
 
@@ -112,6 +121,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return policy_compliance_metadata(**kwargs)
     if suite == BIOMEDICAL_NER:
         return biomedical_ner_suite_metadata(**kwargs)
+    if suite == MULTILINGUAL_NER:
+        return multilingual_ner_suite_metadata(**kwargs)
     return {"suite": suite}
 
 
@@ -123,6 +134,7 @@ __all__ = [
     "DRUGPROT",
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
+    "MULTILINGUAL_NER",
     "RELATIONS",
     "RelationFixture",
     "RelationTrap",
@@ -139,8 +151,10 @@ __all__ = [
     "load_i2b2_deid",
     "i2b2_suite_metadata",
     "biomedical_ner_suite_metadata",
+    "multilingual_ner_suite_metadata",
     "load_drugprot_fixtures",
     "load_biomedical_ner_fixtures",
+    "load_multilingual_ner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
     "shield_suite_metadata",
