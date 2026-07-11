@@ -10,9 +10,9 @@ boundaries, and a catalog of leakage-bypass abuse cases with their mitigations
 and known gaps — lives in the
 [redactor threat model](docs/security/threat-model.md). Mitigated abuse classes
 are backed by synthetic regression tests
-(`tests/unit/security/test_redactor_leakage_bypass.py`). Actionable details for
-suspected or unmitigated bypasses remain private until a coordinated fix and
-disclosure are ready.
+(`tests/unit/security/test_redactor_leakage_bypass.py`). The current public docs
+and tests intentionally omit actionable reproduction details for unmitigated
+bypasses. Report new findings through the vulnerability-reporting process below.
 
 ## Reporting a vulnerability
 

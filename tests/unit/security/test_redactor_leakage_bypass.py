@@ -3,9 +3,9 @@
 This suite is the executable half of the redactor threat model in
 ``docs/security/threat-model.md``. The tests drive mitigated abuse classes
 through the *real* OpenMed de-identification surfaces and assert the identifier
-is caught. Known, unmitigated bypass details are intentionally excluded from
-public tests and tracked through the private disclosure process in
-``SECURITY.md`` until a coordinated fix is ready.
+is caught. The current public tests intentionally omit actionable reproductions
+for known, unmitigated classes and route future findings through
+``SECURITY.md``.
 
 Hard rules honored here:
 
@@ -24,7 +24,9 @@ Hard rules honored here:
 
 from __future__ import annotations
 
+import ast
 import warnings
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -53,6 +55,44 @@ SYNTHETIC_PHONE = "415-555-2671"
 
 ZERO_WIDTH_JOINER = "‍"
 CYRILLIC_SMALL_E = "е"  # confusable with Latin 'e'
+
+ROOT = Path(__file__).resolve().parents[3]
+PUBLIC_THREAT_DOCS = (
+    ROOT / "SECURITY.md",
+    ROOT / "docs/security/threat-model.md",
+)
+ABUSE_SUITE_PATH = Path(__file__)
+
+
+def test_public_threat_material_uses_current_artifact_wording():
+    """Public wording must describe current omissions without a history claim."""
+    material = {
+        path: path.read_text(encoding="utf-8")
+        for path in (*PUBLIC_THREAT_DOCS, ABUSE_SUITE_PATH)
+    }
+    combined = "\n".join(material.values()).casefold()
+
+    inaccurate_claims = (
+        "remain " + "private until",
+        "stay " + "private under",
+        "tracked " + "privately",
+        "privately " + "tracked",
+        "remain in " + "private advisories",
+        "private disclosure " + "process",
+    )
+    for claim in inaccurate_claims:
+        assert claim not in combined
+
+    for path in PUBLIC_THREAT_DOCS:
+        lowered = material[path].casefold()
+        assert "current public" in lowered
+        assert "intentionally omit" in lowered
+
+    suite_docstring = ast.get_docstring(ast.parse(material[ABUSE_SUITE_PATH]))
+    assert suite_docstring is not None
+    assert "current public tests intentionally omit" in suite_docstring
+    assert "SECURITY.md" in suite_docstring
+    assert "SECURITY.md" in material[ROOT / "docs/security/threat-model.md"]
 
 
 def _swept_labels(entities) -> set[str]:
@@ -133,10 +173,10 @@ def test_ac01_zero_width_chars_are_all_stripped_offset_preserving():
     assert 0 <= start <= end <= len(text)
 
 
-# AC-02 is a known, unmitigated separator-mutation class. Its actionable
-# reproduction is intentionally tracked through GitHub Private Vulnerability
-# Reporting rather than published in this regression suite. A public regression
-# should land with the coordinated fix and advisory.
+# AC-02 is a known, unmitigated separator-mutation class. The current public
+# regression suite intentionally omits its actionable reproduction and routes
+# future findings through SECURITY.md. A public regression should land with the
+# coordinated fix and disclosure.
 
 
 # --- AC-03: unicode confusable / mixed-script obfuscation ---------------------
