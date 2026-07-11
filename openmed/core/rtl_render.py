@@ -155,8 +155,11 @@ def _span_offsets(span: SpanLike, text_len: int) -> tuple[int, int]:
     """Extract ``(start, end)`` offsets from a span-like value.
 
     Accepts ``(start, end)`` / ``(start, end, ...)`` sequences, mappings with
-    ``start``/``end`` keys, and objects exposing ``start``/``end`` attributes
-    (for example :class:`~openmed.core.pii.PIIEntity`).
+    ``start``/``end`` keys, and objects exposing ``start``/``end`` attributes.
+    Every offset must index the already-redacted ``text`` passed to
+    :func:`render_redacted`. In particular, ``PIIEntity`` offsets index the
+    original input and must not be passed through without remapping them to the
+    rendered replacement positions.
     """
 
     if isinstance(span, Mapping):
@@ -191,11 +194,13 @@ def _normalize_spans(spans: Sequence[SpanLike], text_len: int) -> list[tuple[int
     ordered: list[tuple[int, int]] = []
     previous_end = -1
     for start, end in offsets:
+        if start == end:
+            # Zero-width spans carry no replacement text to isolate. Ignore
+            # them before overlap checks, including when they sit inside a
+            # non-empty replacement span.
+            continue
         if start < previous_end:
             raise ValueError("spans must not overlap")
-        if start == end:
-            # Zero-width spans carry no replacement text to isolate.
-            continue
         ordered.append((start, end))
         previous_end = end
     return ordered
@@ -223,10 +228,12 @@ def render_redacted(
         spans: The spans covering each injected replacement, expressed as
             offsets into ``text``. Each item may be an ``(start, end)`` tuple,
             a mapping with ``start``/``end`` keys, or an object with
-            ``start``/``end`` attributes (such as a de-identification entity).
-            Overlapping spans are rejected; zero-width spans are ignored. When
-            omitted or empty, no spans are wrapped but the base direction is
-            still reported.
+            ``start``/``end`` attributes. These must be replacement offsets in
+            the already-redacted ``text``; offsets from the original document
+            (including ``DeidentificationResult.pii_entities`` offsets) must be
+            remapped first. Overlapping spans are rejected; zero-width spans
+            are ignored. When omitted or empty, no spans are wrapped but the
+            base direction is still reported.
         direction: ``"auto"`` (default) detects the base direction from the
             dominant script. Pass ``"rtl"`` or ``"ltr"`` to force it.
 
