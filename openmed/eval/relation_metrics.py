@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Any, Iterable, Mapping
 
@@ -79,6 +79,13 @@ def normalize_eval_relation(
 ) -> EvalRelation:
     """Normalize a relation-like mapping or object for scoring."""
     if isinstance(relation, EvalRelation):
+        if fixture_id and relation.fixture_id and relation.fixture_id != fixture_id:
+            raise ValueError(
+                "relation fixture_id does not match the containing fixture: "
+                f"{relation.fixture_id!r} != {fixture_id!r}"
+            )
+        if fixture_id and not relation.fixture_id:
+            return replace(relation, fixture_id=fixture_id)
         return relation
 
     data = relation if isinstance(relation, Mapping) else vars(relation)
@@ -96,7 +103,13 @@ def normalize_eval_relation(
         _read_value(data, "scope", "level") or metadata.get("scope")
     )
     relation_id = str(_read_value(data, "id", "relation_id") or "")
-    fixture = str(_read_value(data, "fixture_id") or fixture_id)
+    supplied_fixture = str(_read_value(data, "fixture_id") or "")
+    if fixture_id and supplied_fixture and supplied_fixture != fixture_id:
+        raise ValueError(
+            "relation fixture_id does not match the containing fixture: "
+            f"{supplied_fixture!r} != {fixture_id!r}"
+        )
+    fixture = supplied_fixture or fixture_id
 
     return EvalRelation(
         relation_type=relation_type,
@@ -286,6 +299,8 @@ def _relation_matches(
     *,
     match: str,
 ) -> bool:
+    if gold.fixture_id != predicted.fixture_id:
+        return False
     if gold.relation_type != predicted.relation_type:
         return False
     if match == MATCH_STRICT:
