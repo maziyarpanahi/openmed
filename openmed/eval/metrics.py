@@ -1957,6 +1957,39 @@ def _percentile(values: Sequence[float], percentile: int | float) -> float:
     return values[index]
 
 
+def relation_assertion_consistency(
+    predicted: Iterable[tuple[Any, str]],
+    gold: Iterable[tuple[Any, str]],
+) -> ConsistencyMetric:
+    """Score how consistently predicted relation-assertion tags match the gold.
+
+    Each input is a sequence of ``(relation_key, status)`` pairs. The score is
+    the fraction of gold relations whose predicted status matches; every
+    mismatch is recorded as a violation keyed by the relation.
+    """
+
+    predicted_by_key = {key: status for key, status in predicted}
+    gold_by_key = {key: status for key, status in gold}
+
+    consistent = 0
+    violations: dict[str, list[str]] = {}
+    for key, gold_status in gold_by_key.items():
+        predicted_status = predicted_by_key.get(key)
+        if predicted_status == gold_status:
+            consistent += 1
+        else:
+            violations[str(key)] = [f"expected {gold_status}, got {predicted_status}"]
+
+    total = len(gold_by_key)
+    score = 1.0 if total == 0 else consistent / total
+    return ConsistencyMetric(
+        score=score,
+        consistent=consistent,
+        total=total,
+        violations=violations,
+    )
+
+
 __all__ = [
     "ABSTENTION_ROUTE_ACCEPT",
     "ABSTENTION_ROUTE_REDACT",
@@ -2002,4 +2035,5 @@ __all__ = [
     "abstention_route",
     "apply_abstention_policy",
     "bootstrap_abstention_residual_risk",
+    "relation_assertion_consistency",
 ]

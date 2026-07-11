@@ -478,7 +478,13 @@ def test_chunk_boundary_fixture_crosses_max_length_window_and_keeps_global_offse
 
 
 def test_checksum_fixture_has_valid_gold_ids_and_invalid_hard_negatives():
-    fixture = _one("checksum_ids")
+    matches = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.fixture_id == "golden-checksum-valid-invalid-identifiers"
+    ]
+    assert len(matches) == 1
+    fixture = matches[0]
     gold_by_type = {
         span.metadata["identifier_type"]: span.text for span in fixture.gold_spans
     }

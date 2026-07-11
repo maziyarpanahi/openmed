@@ -1,5 +1,5 @@
 /* =============================================================================
-   OpenMed website — interactions.
+   OpenMed website: interactions.
    Theme toggle · animated PHI demo · tabbed code playground · FAQ · copy.
    ============================================================================= */
 

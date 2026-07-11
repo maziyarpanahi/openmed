@@ -20,7 +20,7 @@ import urllib.request
 import zipfile
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from xml.etree import ElementTree
@@ -32,6 +32,18 @@ RESTRICTED_VOCAB_SYSTEMS = ("umls", "snomed")
 DEFAULT_CACHE_DIR = Path("~/.cache/openmed/grounding")
 SUPPORTED_DATA_SUFFIXES = {".csv", ".jsonl", ".obo", ".rrf", ".tsv", ".txt", ".xml"}
 _CHECKSUM_RE = re.compile(r"\b[a-fA-F0-9]{64}\b")
+_LANGUAGE_ALIAS_KEY_RE = re.compile(
+    r"^(?:(?:aliases?|synonyms?|alt_labels?)_"
+    r"([a-z]{2,3}(?:[-_][a-z0-9]{2,8})*)|"
+    r"([a-z]{2,3}(?:[-_][a-z0-9]{2,8})*)_"
+    r"(?:aliases?|synonyms?|alt_labels?))$"
+)
+_LANGUAGE_ALIAS_MAP_KEYS = (
+    "language_aliases",
+    "aliases_by_language",
+    "localized_aliases",
+    "multilingual_aliases",
+)
 
 _SYSTEM_ALIASES = {
     "rxnorm": "rxnorm",
@@ -109,7 +121,16 @@ class VocabConcept:
     code: str
     preferred_term: str
     synonyms: tuple[str, ...] = ()
+    language_aliases: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     source: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "synonyms", _unique_text_values(self.synonyms))
+        object.__setattr__(
+            self,
+            "language_aliases",
+            _normalize_language_aliases(self.language_aliases),
+        )
 
     @property
     def aliases(self) -> tuple[str, ...]:
@@ -121,6 +142,15 @@ class VocabConcept:
                 values.append(value)
         return tuple(values)
 
+    def aliases_for_language(self, language: object | None = None) -> tuple[str, ...]:
+        """Return aliases for ``language``, falling back to English aliases."""
+
+        normalized = normalize_language(language)
+        if normalized == "en":
+            return self.aliases
+        aliases = self.language_aliases.get(normalized, ())
+        return aliases or self.aliases
+
 
 class VocabularyIndex:
     """Mapping-like alias index for one vocabulary system."""
@@ -129,12 +159,25 @@ class VocabularyIndex:
         self.system = _normalize_system(system)
         self._concepts = tuple(concepts)
         alias_map: dict[str, list[VocabConcept]] = defaultdict(list)
+        language_maps: dict[str, dict[str, list[VocabConcept]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         for concept in self._concepts:
             for alias in concept.aliases:
                 normalized = normalize_alias(alias)
                 if normalized:
                     alias_map[normalized].append(concept)
+                    language_maps["en"][normalized].append(concept)
+            for language, aliases in concept.language_aliases.items():
+                for alias in aliases:
+                    normalized = normalize_alias(alias)
+                    if normalized:
+                        language_maps[language][normalized].append(concept)
         self._alias_map = {key: tuple(value) for key, value in alias_map.items()}
+        self._language_alias_maps = {
+            language: {key: tuple(value) for key, value in aliases.items()}
+            for language, aliases in language_maps.items()
+        }
 
     @property
     def concepts(self) -> tuple[VocabConcept, ...]:
@@ -148,27 +191,46 @@ class VocabularyIndex:
 
         return tuple(self._alias_map)
 
+    def aliases_for_language(self, language: object | None = None) -> tuple[str, ...]:
+        """Normalized aliases available for ``language`` with English fallback."""
+
+        return tuple(self._alias_map_for_language(language))
+
     @property
     def concept_count(self) -> int:
         """Number of concepts in the index."""
 
         return len(self._concepts)
 
-    def lookup(self, alias: object) -> VocabConcept | None:
+    def lookup(
+        self, alias: object, *, language: object | None = None
+    ) -> VocabConcept | None:
         """Return the first concept matching an alias, if present."""
 
-        matches = self.lookup_all(alias)
+        matches = self.lookup_all(alias, language=language)
         return matches[0] if matches else None
 
-    def lookup_all(self, alias: object) -> tuple[VocabConcept, ...]:
+    def lookup_all(
+        self, alias: object, *, language: object | None = None
+    ) -> tuple[VocabConcept, ...]:
         """Return all concepts matching an alias."""
 
-        return self._alias_map.get(normalize_alias(alias), ())
+        normalized_alias = normalize_alias(alias)
+        if not normalized_alias:
+            return ()
+        alias_map = self._alias_map_for_language(language)
+        matches = alias_map.get(normalized_alias, ())
+        if matches:
+            return matches
+        source_language = normalize_language(language)
+        if source_language != "en":
+            return self._alias_map.get(normalized_alias, ())
+        return ()
 
-    def code_for(self, alias: object) -> str | None:
+    def code_for(self, alias: object, *, language: object | None = None) -> str | None:
         """Return the first code matching an alias, if present."""
 
-        concept = self.lookup(alias)
+        concept = self.lookup(alias, language=language)
         return concept.code if concept else None
 
     def fuzzy_lookup(
@@ -177,6 +239,7 @@ class VocabularyIndex:
         *,
         limit: int = 5,
         score_cutoff: float = 80.0,
+        language: object | None = None,
     ) -> tuple[tuple[VocabConcept, float], ...]:
         """Return approximate alias matches using the ``grounding`` extra."""
 
@@ -190,10 +253,11 @@ class VocabularyIndex:
         normalized = normalize_alias(alias)
         if not normalized:
             return ()
+        alias_map = self._alias_map_for_language(language)
 
         matches = process.extract(
             normalized,
-            self._alias_map.keys(),
+            alias_map.keys(),
             scorer=fuzz.WRatio,
             limit=limit,
             score_cutoff=score_cutoff,
@@ -201,17 +265,30 @@ class VocabularyIndex:
         results: list[tuple[VocabConcept, float]] = []
         seen: set[tuple[str, str]] = set()
         for matched_alias, score, _ in matches:
-            for concept in self._alias_map[matched_alias]:
+            for concept in alias_map[matched_alias]:
                 key = (concept.system, concept.code)
                 if key not in seen:
                     results.append((concept, float(score)))
                     seen.add(key)
+        if not results and normalize_language(language) != "en":
+            return self.fuzzy_lookup(
+                alias,
+                limit=limit,
+                score_cutoff=score_cutoff,
+                language="en",
+            )
         return tuple(results)
 
-    def get(self, alias: object, default: str | None = None) -> str | None:
+    def get(
+        self,
+        alias: object,
+        default: str | None = None,
+        *,
+        language: object | None = None,
+    ) -> str | None:
         """Return the first code matching an alias or ``default``."""
 
-        return self.code_for(alias) or default
+        return self.code_for(alias, language=language) or default
 
     def __contains__(self, alias: object) -> bool:
         return normalize_alias(alias) in self._alias_map
@@ -224,6 +301,14 @@ class VocabularyIndex:
 
     def __len__(self) -> int:
         return len(self._alias_map)
+
+    def _alias_map_for_language(
+        self, language: object | None = None
+    ) -> Mapping[str, tuple[VocabConcept, ...]]:
+        source_language = normalize_language(language)
+        if source_language == "en":
+            return self._alias_map
+        return self._language_alias_maps.get(source_language) or self._alias_map
 
 
 DEFAULT_VOCAB_SOURCES: Mapping[str, VocabSource] = {
@@ -359,6 +444,18 @@ def normalize_alias(value: object) -> str:
     text = re.sub(r"[\u2010-\u2015\u2212]", "-", text)
     text = re.sub(r"\s+", " ", text.casefold()).strip()
     return text
+
+
+def normalize_language(value: object | None, *, default: str = "en") -> str:
+    """Normalize a source-language tag for alias selection."""
+
+    if value in (None, ""):
+        return default
+    text = unicodedata.normalize("NFKC", str(value)).strip().casefold()
+    text = text.replace("_", "-")
+    text = re.sub(r"[^a-z0-9-]+", "", text)
+    language = text.split("-", 1)[0]
+    return language or default
 
 
 def _normalize_system(system: str) -> str:
@@ -703,6 +800,9 @@ def _concept_from_mapping(
     source: str,
 ) -> VocabConcept | None:
     normalized_row = {str(key).strip().lower(): value for key, value in row.items()}
+    row_system = _first_value(normalized_row, "system", "vocabulary", "code_system")
+    if row_system and _normalize_system(str(row_system)) != system:
+        return None
     code = _first_value(
         normalized_row,
         "code",
@@ -728,11 +828,13 @@ def _concept_from_mapping(
     synonyms = _split_synonyms(
         _first_value(normalized_row, "synonyms", "aliases", "alias", "alt_labels")
     )
+    language_aliases = _language_aliases_from_mapping(normalized_row)
     return VocabConcept(
         system=system,
         code=str(code).strip(),
         preferred_term=str(preferred).strip(),
         synonyms=synonyms,
+        language_aliases=language_aliases,
         source=source,
     )
 
@@ -755,6 +857,68 @@ def _split_synonyms(value: Any) -> tuple[str, ...]:
     else:
         values = [str(value)]
     return tuple(item.strip() for item in values if item and item.strip())
+
+
+def _language_aliases_from_mapping(
+    row: Mapping[str, Any],
+) -> dict[str, tuple[str, ...]]:
+    aliases: dict[str, list[str]] = defaultdict(list)
+    for key in _LANGUAGE_ALIAS_MAP_KEYS:
+        value = row.get(key)
+        if isinstance(value, str):
+            value = _parse_json_mapping(value)
+        if isinstance(value, Mapping):
+            for language, language_values in value.items():
+                aliases[normalize_language(language)].extend(
+                    _split_synonyms(language_values)
+                )
+
+    for key, value in row.items():
+        match = _LANGUAGE_ALIAS_KEY_RE.match(key)
+        if not match:
+            continue
+        language = normalize_language(match.group(1) or match.group(2))
+        aliases[language].extend(_split_synonyms(value))
+
+    return {
+        language: _unique_text_values(values)
+        for language, values in aliases.items()
+        if _unique_text_values(values)
+    }
+
+
+def _parse_json_mapping(value: str) -> Mapping[str, Any] | None:
+    stripped = value.strip()
+    if not stripped.startswith("{"):
+        return None
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, Mapping) else None
+
+
+def _normalize_language_aliases(
+    aliases: Mapping[str, Sequence[str] | str],
+) -> dict[str, tuple[str, ...]]:
+    normalized: dict[str, tuple[str, ...]] = {}
+    for language, values in aliases.items():
+        normalized_values = _unique_text_values(_split_synonyms(values))
+        if normalized_values:
+            normalized[normalize_language(language)] = normalized_values
+    return normalized
+
+
+def _unique_text_values(values: Iterable[object]) -> tuple[str, ...]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return tuple(result)
 
 
 def _strip_xml_namespace(tag: str) -> str:
