@@ -14,7 +14,7 @@ helm upgrade --install openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --create-namespace \
   --set image.repository=ghcr.io/maziyarpanahi/openmed \
-  --set image.tag=1.7.0
+  --set image.tag=v1.8.1
 ```
 
 The default chart creates:
@@ -36,7 +36,7 @@ Upgrade by changing values and running the same release name:
 helm upgrade openmed-service deploy/helm/openmed-service \
   --namespace openmed \
   --set image.repository=ghcr.io/maziyarpanahi/openmed \
-  --set image.tag=1.7.1
+  --set image.tag=v1.8.1
 ```
 
 The chart does not create an Ingress or autoscaling object. Add those in
@@ -77,7 +77,7 @@ extraEnv:
 | --- | --- | --- |
 | `replicaCount` | `1` | Number of service pods. |
 | `image.repository` | `openmed` | Container image repository. |
-| `image.tag` | `1.7.0` | Container image tag. Empty uses `Chart.appVersion`. |
+| `image.tag` | `1.8.1` | Container image tag. Empty uses `Chart.appVersion`. |
 | `image.pullPolicy` | `IfNotPresent` | Kubernetes image pull policy. |
 | `imagePullSecrets` | `[]` | Pull secrets for private image registries. |
 | `nameOverride` | `""` | Short name override. |
