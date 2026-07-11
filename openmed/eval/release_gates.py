@@ -587,6 +587,7 @@ class ReleaseGate:
         )
         checks.append(_membership_leakage_check(metrics, metadata))
         checks.append(_g8_check(metadata))
+        checks.append(_surrogate_quality_release_check(metrics, metadata))
         checks.append(_g9_relation_extraction_check(metrics, metadata))
         coreml_manifest = _coreml_conversion_manifest(metadata)
         if coreml_manifest or _normalise_dimension(identity["format"]).startswith(
@@ -808,7 +809,13 @@ def evaluate_surrogate_quality_gate(
     )
 
     if isinstance(report, SurrogateQualityReport):
-        quality_report = report
+        quality_report = SurrogateQualityReport(
+            locale_reports=report.locale_reports,
+            required_locales=report.required_locales,
+            min_pass_rate=(
+                report.min_pass_rate if min_pass_rate is None else min_pass_rate
+            ),
+        )
     elif report is not None:
         quality_report = evaluate_surrogate_quality(
             report.get("records") if isinstance(report, Mapping) else report,
@@ -857,6 +864,68 @@ def evaluate_surrogate_quality_gate(
         SURROGATE_QUALITY_GATE,
         quality_report.passed,
         reason=reason,
+        details=details,
+    )
+
+
+def _surrogate_quality_release_check(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> GateCheck:
+    from openmed.eval.surrogate_quality import DEFAULT_SURROGATE_QUALITY_PASS_RATE
+
+    evidence = _first_value(
+        metrics.get("surrogate_quality"),
+        metadata.get("surrogate_quality"),
+    )
+    required = bool(
+        metrics.get("surrogate_quality_required")
+        or metadata.get("surrogate_quality_required")
+    )
+    if evidence is None:
+        return GateCheck(
+            SURROGATE_QUALITY_GATE,
+            not required,
+            reason=(
+                "surrogate-quality evidence is required"
+                if required
+                else "not applicable"
+            ),
+            details={"required": required},
+        )
+
+    if isinstance(evidence, Mapping) and not (
+        evidence.get("records") is not None or evidence.get("fixture_path")
+    ):
+        return GateCheck(
+            SURROGATE_QUALITY_GATE,
+            False,
+            reason="surrogate-quality evidence is malformed",
+            details={
+                "error": "evidence must include records or fixture_path",
+                "required": required,
+            },
+        )
+
+    try:
+        check = evaluate_surrogate_quality_gate(
+            evidence,
+            min_pass_rate=DEFAULT_SURROGATE_QUALITY_PASS_RATE,
+        )
+    except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
+        return GateCheck(
+            SURROGATE_QUALITY_GATE,
+            False,
+            reason="surrogate-quality evidence is invalid",
+            details={"error": str(exc), "required": required},
+        )
+
+    details = dict(check.details)
+    details["required"] = required
+    return GateCheck(
+        SURROGATE_QUALITY_GATE,
+        check.passed,
+        reason=check.reason,
         details=details,
     )
 

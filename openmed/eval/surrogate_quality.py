@@ -82,6 +82,10 @@ class SurrogateQualityRecord:
         """Build a record from a JSON-compatible mapping."""
 
         metadata = dict(payload.get("metadata") or {})
+        if metadata.get("synthetic") is not True:
+            raise ValueError(
+                "surrogate-quality fixtures must be explicitly marked synthetic"
+            )
         if metadata.get("contains_real_phi"):
             raise ValueError("surrogate-quality fixtures must not contain real PHI")
         surrogates = {
