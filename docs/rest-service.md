@@ -50,6 +50,30 @@ Keep this loopback bind for local use. Before exposing the service on a network,
 configure [authentication](serving/authentication.md), TLS at the ingress or
 reverse proxy, and an exact trusted-host allowlist.
 
+## Postman Collection
+
+A ready-to-import [Postman collection](api/openmed.postman_collection.json)
+(`docs/api/openmed.postman_collection.json`) ships with one example request per
+endpoint group so you can exercise the API without writing any client code.
+Import it into Postman (or any tool that reads the Postman v2.1 schema), then set
+the `base_url` collection variable to your server (it defaults to
+`http://127.0.0.1:8080`, matching the Python client's safe loopback default).
+Use an `https://` base URL for every non-loopback deployment; never send
+credentials or clinical data over plaintext HTTP. For an authenticated
+deployment, configure
+collection-level authorization in Postman or add either an `X-API-Key` header or
+an `Authorization: Bearer <token>` header. The collection intentionally stores
+no credentials. Every example body uses synthetic clinical text only — no real
+PHI. Keep those bodies synthetic because real patient text can persist in
+Postman history, console output, shared workspaces, exports, or screenshots.
+
+Before polling, copy the identifier returned by the async-job or SMART-ingestion
+POST request into `job_id`. The SMART request leaves
+`{{smart_private_key_pem}}` unresolved on purpose. Define it only in a secure
+local-client environment; in Postman, the secure variable can be backed by
+Local Vault. Escape PEM newlines as `\n` for the JSON body, and never replace
+the reference with a real key in a saved or exported collection.
+
 ## Python Client
 
 The service extra includes the typed sync client and its `httpx` dependency:
