@@ -19,8 +19,12 @@ When the identifier is an existing local path, OpenMed asks the underlying loade
 missing tokenizer, config, or weight files fail locally instead of downloading from the model hub. See
 [Loading from a local path](analyze-text.md#loading-from-a-local-path).
 
-Do not rely on an `OPENMED_OFFLINE` switch in the current package. That dedicated offline guard is tracked separately;
-today, local model paths and pre-seeded caches are the supported offline controls.
+After warming the configured cache, set `OPENMED_OFFLINE=1` or use
+`OpenMedConfig(local_only=True)`. OpenMed then enables the Hugging Face
+cache-only flags, passes `local_files_only=True` to Hub-backed loaders, and
+blocks outbound sockets during inference and de-identification. See
+[Local-only offline mode](configuration.md#local-only-offline-mode) and the
+[offline troubleshooting entry](troubleshooting.md#running-offline-air-gapped-or-offlinemodeerror-on-inference).
 
 ### Which package extras should I install?
 

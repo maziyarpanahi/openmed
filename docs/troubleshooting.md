@@ -96,7 +96,7 @@ to purpose-built extras. The message always names the exact install command.
 | Zero-shot GLiNER NER | `gliner` | `pip install "openmed[gliner]"` |
 | REST service | `service` | `pip install "openmed[service]"` |
 | MCP server | `mcp` | `pip install "openmed[mcp]"` |
-| CLI (rich + typer) | `cli` | `pip install "openmed[cli]"` |
+| Optional Typer/Rich CLI | `cli` | `pip install "openmed[cli]"` |
 | Apple Silicon MLX runtime | `mlx` | `pip install "openmed[mlx]"` |
 | Core ML packaging | `coreml` | `pip install "openmed[coreml]"` |
 | ONNX Runtime | `onnx` | `pip install "openmed[onnx]"` |
@@ -150,8 +150,9 @@ The wrapped error is whatever `transformers`/`huggingface_hub` raised — a conn
 a gated repo, an HTTP 404 for a wrong id, or a proxy/TLS failure.
 
 **Cause.** OpenMed downloads model artifacts on first use and caches them under `~/.cache/openmed` (override
-with `cache_dir` or `OPENMED_CACHE_DIR`). Failures are almost always network reachability, a proxy, or a
-private/gated repo needing a token.
+with `OpenMedConfig(cache_dir="...")`). Failures are almost always network reachability, a proxy, or a
+private/gated repo needing a token. Service container deployments also expose `OPENMED_CACHE_DIR` for their
+mounted model cache.
 
 **Fix.**
 
@@ -171,7 +172,7 @@ private/gated repo needing a token.
 - **Private or gated model.** Provide a token so the Hub authorizes the download:
 
   ```bash
-  export HF_TOKEN=hf_xxx   # or HUGGINGFACE_HUB_TOKEN
+  export HF_TOKEN=hf_xxx
   ```
 
   `openmed doctor` reports `WARN hf_token: present=False` when no token is set.
@@ -213,7 +214,7 @@ reach the network after the model was loaded — usually because the required fi
 
 ```bash
 # 1. Download once with network available (populates ~/.cache/openmed)
-python -c "from openmed.core import ModelLoader; ModelLoader().load_model('OpenMed/…')"
+python -c "from openmed.core import ModelLoader; ModelLoader().load_model('disease_detection_superclinical')"
 
 # 2. Then run strictly local
 export OPENMED_OFFLINE=1
@@ -222,7 +223,7 @@ export OPENMED_OFFLINE=1
 ```python
 from openmed.core import OpenMedConfig
 
-config = OpenMedConfig(local_only=True, cache_dir="~/.cache/openmed")
+config = OpenMedConfig(local_only=True)  # defaults to ~/.cache/openmed
 ```
 
 You can also skip the Hub entirely by passing a **local directory** as `model_name`/`model_id`; OpenMed then
@@ -248,9 +249,10 @@ new pipeline per document multiplies resident memory.
   [ModelLoader & Pipelines](model-loader.md).
 - **Batch** repeated work through the batch processor rather than looping one call at a time — see
   [Batch Processing](batch-processing.md).
-- **Long inputs are chunked and truncated by default.** `analyze_text` truncates to the model's max length
-  (`truncation=True`) unless you opt out. Pass an explicit `max_length` to bound per-request memory, or set
-  `truncation=False` only when you have verified the input fits.
+- **Long inputs use sentence windows and tokenizer limits by default.** `analyze_text` enables sentence
+  detection and groups sentences into bounded windows, while the tokenizer uses the model's maximum length
+  (`truncation=True`). A single oversized sentence can still be truncated. Pass an explicit `max_length` to
+  bound per-request memory, or set `truncation=False` only when you have verified the input fits.
 - **In the REST service**, bound the working set: `OPENMED_SERVICE_MAX_RESIDENT_MODELS` (LRU eviction),
   `OPENMED_SERVICE_MODEL_MEMORY_BUDGET_BYTES`, and `OPENMED_SERVICE_MAX_TEXT_LENGTH` (defaults to 1,000,000
   characters; requests above it are rejected). Use the model-lifecycle endpoints to unload models. See
@@ -267,8 +269,8 @@ StreamingBufferError: carry-over buffer exceeded max_buffer before any prefix co
 **Cause.** The carry-over buffer that keeps entity spans intact across chunk boundaries grew past `max_buffer`
 before a safe prefix could be emitted — typically a very long unbroken run of text.
 
-**Fix.** Increase `max_buffer` for that stream so the boundary can be resolved, or feed larger chunks so
-safe cut points appear sooner.
+**Fix.** Increase `max_buffer` above the longest identifier or unsplittable text run the stream must retain.
+Changing the source chunk size alone does not make an overlong unsafe tail safe to emit.
 
 ---
 
@@ -278,8 +280,9 @@ safe cut points appear sooner.
 
 **Symptom.** You want to control which device inference runs on, or a GPU is not being used.
 
-**Cause.** CPU is the default, safe baseline. Device selection is explicit via config or environment; GPU/MLX
-are opt-in and require the matching hardware and dependencies.
+**Cause.** The PyTorch device default is `"auto"`: OpenMed probes MPS, then CUDA, then falls back to CPU.
+Explicit config or environment values override that choice; MLX is a separate backend and requires Apple
+Silicon plus the matching dependencies.
 
 **Fix.** Select the device through `OpenMedConfig` or environment variables:
 
@@ -295,19 +298,21 @@ export OPENMED_DEVICE=cuda:1                  # legacy alias
 export OPENMED_TORCH_DEVICE=cuda:1           # PyTorch backend device
 ```
 
-The PyTorch backend auto-detection order is **MPS → CUDA → CPU** when the device is `"auto"`. `"gpu"` is
-normalized to `"cuda"`. If you request `device="cuda"` on a host without CUDA, PyTorch raises its standard
-device error (for example `AssertionError: Torch not compiled with CUDA enabled` or
-`RuntimeError: No CUDA GPUs are available`) — fall back to `device="cpu"` or install a CUDA-enabled PyTorch
-build. See [Configuration & Validation](configuration.md#cache-device-tips).
+Set only one of those variables when possible; `OPENMED_TORCH_DEVICE` takes precedence over the legacy
+`OPENMED_DEVICE`. The auto-detection order is **MPS → CUDA → CPU**, and `"gpu"` is normalized to `"cuda"`.
+If you request `device="cuda"` on a host without CUDA, PyTorch raises its standard device error (for example
+`AssertionError: Torch not compiled with CUDA enabled` or `RuntimeError: No CUDA GPUs are available`) — fall
+back to `device="cpu"` or install a CUDA-enabled PyTorch build. See
+[Configuration & Validation](configuration.md#cache-device-tips).
 
 ### Apple Silicon: MLX vs. Torch MPS
 
 **Symptom.** You are on an Apple-Silicon Mac and want acceleration, or an MLX-only artifact fails on a
 non-Apple host.
 
-**Cause.** MLX runs only on Apple Silicon. On other hosts, MLX-only artifacts fall back to the upstream
-PyTorch model. MLX language-model features additionally require `mlx-lm`:
+**Cause.** MLX runs only on Apple Silicon. On other hosts, supported MLX token-classification artifacts fall
+back to their upstream PyTorch model. MLX language-model features do not have that fallback and require
+`mlx-lm`:
 
 ```text
 ImportError: mlx-lm is required for OpenMed MLX language models. Install with: pip install openmed[mlx]
@@ -346,7 +351,8 @@ explicitly with the validation helper:
 ```python
 from openmed.utils.validation import validate_input
 
-text = validate_input(user_supplied_text, max_length=2000, allow_empty=False, strip=True)
+# validate_input strips surrounding whitespace automatically.
+text = validate_input(user_supplied_text, max_length=2000, allow_empty=False)
 ```
 
 ### `ValueError: Unsupported language '…'`
@@ -354,11 +360,12 @@ text = validate_input(user_supplied_text, max_length=2000, allow_empty=False, st
 **Symptom.** A PII call with an unrecognized `lang` raises:
 
 ```text
-ValueError: Unsupported language 'xx'. Supported: ['ar', 'de', 'en', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja', 'nl', 'pt', 'te', 'th', 'tr']
+ValueError: Unsupported language 'xx'. Supported: ['ar', 'de', 'en', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pt', 'ro', 'te', 'th', 'tr']
 ```
 
-**Cause.** PII extraction and de-identification support **15 language codes**. Passing anything outside that
-set (or a mistyped code) raises this error.
+**Cause.** PII extraction and de-identification support **17 supported PII language codes: ar, de, en, es,
+fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr**. Passing anything outside that set (or a mistyped
+code) raises this error.
 
 **Fix.** Use one of the supported codes with `extract_pii(..., lang="<code>")`. Clinical NER coverage depends
 on the selected registry model — check each model's `languages` in the
@@ -387,9 +394,10 @@ print(result.deidentified_text)   # read output from .deidentified_text (not .te
 
 !!! warning "Common de-identification gotchas"
     - Read results from `result.deidentified_text`, **not** `result.text`.
-    - `mask`, `remove`, and one-way `hash` are irreversible; `replace` emits synthetic surrogates and is not
-      reversible unless you store your own mapping; `shift_dates` is reversible only by whoever knows the
-      offset.
+    - Redacted output is not reversible by itself. For an authorized reversible workflow, pass
+      `keep_mapping=True` and restore with `reidentify(result.deidentified_text, result.mapping)`. The mapping
+      contains raw identifiers and must be protected as PHI. Date shifts can also be reversed by someone who
+      knows the offset.
     - `date_shift_days` requires `method="shift_dates"` (otherwise
       `ValueError: date_shift_days requires method='shift_dates'`), and `patient_key` requires
       `date_shift_secret` (`ValueError: patient_key requires date_shift_secret`).
@@ -440,22 +448,26 @@ python -m openmed.mcp.server --transport streamable-http --host 127.0.0.1 --port
 The HTTP transport reads `OPENMED_MCP_HOST` (default `127.0.0.1`), `OPENMED_MCP_PORT` (default `8081`),
 `OPENMED_MCP_PATH` (default `/mcp`), and `OPENMED_MCP_TRANSPORT` (default `stdio`).
 
-### CLI reports `Typer/Rich not installed`
+### The optional Typer CLI reports `Typer/Rich not installed`
 
-**Symptom.** A CLI command raises:
+**Symptom.** Starting the optional Typer interface with `python -m openmed.cli.typer_app` raises:
 
 ```text
 RuntimeError: Typer/Rich not installed. Install with `pip install .[cli]` or `pip install typer rich`.
 ```
 
-**Cause.** The rich terminal UI depends on `rich` and `typer`, which live in the `cli` extra.
+**Cause.** The optional rich terminal UI depends on `rich` and `typer`, which live in the `cli` extra. The
+standard `openmed` command uses `argparse` and does not need this extra.
 
 **Fix.**
 
 ```bash
 pip install "openmed[cli]"
-openmed --help          # analyze, batch, deid, pii, audit, risk, models, config, doctor, …
+python -m openmed.cli.typer_app --help
 ```
+
+Use `openmed --help` for the standard CLI (`analyze`, `batch`, `deid`, `pii`, `audit`, `risk`, `models`,
+`config`, `doctor`, and more).
 
 ---
 
