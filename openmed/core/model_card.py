@@ -69,6 +69,9 @@ def render_model_card(row: dict[str, Any]) -> str:
     distillation_lines = _distillation_block(row)
     if distillation_lines:
         lines.extend(["", "## Distillation Evidence", "", *distillation_lines])
+    training_provenance_lines = _training_provenance_block(row)
+    if training_provenance_lines:
+        lines.extend(["", "## Training Provenance", "", *training_provenance_lines])
     return "\n".join(lines) + "\n"
 
 
@@ -214,6 +217,33 @@ def _distillation_payload(row: dict[str, Any]) -> dict[str, Any]:
     if isinstance(evidence, dict) and isinstance(evidence.get("distillation"), dict):
         return evidence["distillation"]
     return {}
+
+
+def _training_provenance_block(row: dict[str, Any]) -> list[str]:
+    payload = row.get("training_provenance")
+    if not isinstance(payload, dict):
+        return []
+
+    seeds = payload.get("rng_seeds")
+    seed_text = "Not reported"
+    if isinstance(seeds, dict) and seeds:
+        seed_text = ", ".join(
+            f"`{str(key)}`={value}" for key, value in sorted(seeds.items())
+        )
+
+    lines = [
+        "| Field | Value |",
+        "|---|---|",
+        f"| Provenance file | `{_string(payload.get('path'), 'training_provenance.json')}` |",
+        f"| Base model revision | `{_string(payload.get('base_model_revision'), 'Not reported')}` |",
+        f"| Git SHA | `{_string(payload.get('git_sha'), 'Not reported')}` |",
+        f"| RNG seeds | {seed_text} |",
+        f"| Data manifest hash | `{_string(payload.get('data_manifest_hash'), 'Not reported')}` |",
+        f"| Recipe config hash | `{_string(payload.get('recipe_config_hash'), 'Not reported')}` |",
+        f"| Environment lock digest | `{_string(payload.get('env_lock_digest'), 'Not reported')}` |",
+        f"| Provenance reproducibility hash | `{_string(payload.get('reproducibility_hash'), 'Not reported')}` |",
+    ]
+    return lines
 
 
 def _gate_status(value: Any) -> str:
