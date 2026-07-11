@@ -27,6 +27,18 @@ from openmed.utils.validation import validate_model_name
 
 RuntimeProvider = Callable[[], ServiceRuntime]
 
+
+def _safe_int_env(name: str, default: int) -> int:
+    """Read an environment variable as an int, falling back to *default* on error."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 MCP_INSTRUCTIONS = (
     "OpenMed exposes local clinical NLP, PII extraction, and de-identification "
     "tools. Use synthetic examples for tests and docs. Only send real PHI to "
@@ -532,7 +544,7 @@ def create_mcp_server(
         instructions=MCP_INSTRUCTIONS,
         website_url="https://openmed.life/docs/",
         host=host or os.getenv("OPENMED_MCP_HOST", "127.0.0.1"),
-        port=port or int(os.getenv("OPENMED_MCP_PORT", "8081")),
+        port=port or _safe_int_env("OPENMED_MCP_PORT", 8081),
         streamable_http_path=streamable_http_path,
         stateless_http=True,
         json_response=True,
@@ -559,7 +571,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--port",
         type=int,
-        default=int(os.getenv("OPENMED_MCP_PORT", "8081")),
+        default=_safe_int_env("OPENMED_MCP_PORT", 8081),
         help="Port for streamable HTTP transport.",
     )
     parser.add_argument(

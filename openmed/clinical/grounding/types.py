@@ -18,3 +18,4 @@ class Candidate:
     code: str
     display: str
     score: float
+    source_language: str = "en"
