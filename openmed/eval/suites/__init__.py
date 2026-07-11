@@ -43,6 +43,7 @@ from openmed.eval.suites.shield import (
 )
 
 GOLDEN = "golden"
+GROUNDING_CALIBRATION = "grounding_calibration"
 N2C2 = "n2c2"
 
 DEFAULT_SUITES: tuple[str, ...] = (
@@ -54,12 +55,13 @@ DEFAULT_SUITES: tuple[str, ...] = (
     POLICY_COMPLIANCE,
     BIOMEDICAL_NER,
 )
+SUPPORTED_SUITES: tuple[str, ...] = DEFAULT_SUITES + (GROUNDING_CALIBRATION,)
 
 
 def validate_suite_name(name: str) -> str:
     """Return *name* if it is one of the scaffolded benchmark suites."""
-    if name not in DEFAULT_SUITES:
-        allowed = ", ".join(DEFAULT_SUITES)
+    if name not in SUPPORTED_SUITES:
+        allowed = ", ".join(SUPPORTED_SUITES)
         raise ValueError(
             f"unknown benchmark suite {name!r}; expected one of: {allowed}"
         )
@@ -71,6 +73,13 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     suite = validate_suite_name(name)
     if suite == GOLDEN:
         return load_benchmark_fixtures(kwargs.get("path"))
+    if suite == GROUNDING_CALIBRATION:
+        from openmed.eval.suites.grounding_calibration import load_grounding_gold
+
+        path = kwargs.get("path", kwargs.get("gold_path"))
+        if path is None:
+            raise ValueError("grounding calibration suite requires path or gold_path")
+        return list(load_grounding_gold(path))
     if suite == I2B2:
         return load_i2b2_deid(
             path=kwargs.get("path"),
@@ -103,11 +112,18 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return policy_compliance_metadata(**kwargs)
     if suite == BIOMEDICAL_NER:
         return biomedical_ner_suite_metadata(**kwargs)
+    if suite == GROUNDING_CALIBRATION:
+        from openmed.eval.suites.grounding_calibration import (
+            grounding_calibration_metadata,
+        )
+
+        return grounding_calibration_metadata(**kwargs)
     return {"suite": suite}
 
 
 __all__ = [
     "GOLDEN",
+    "GROUNDING_CALIBRATION",
     "I2B2",
     "N2C2",
     "SHIELD",
@@ -119,6 +135,7 @@ __all__ = [
     "ComparatorMatrixRow",
     "ComparatorUnavailable",
     "DEFAULT_SUITES",
+    "SUPPORTED_SUITES",
     "validate_suite_name",
     "load_benchmark_fixtures",
     "load_suite_fixtures",

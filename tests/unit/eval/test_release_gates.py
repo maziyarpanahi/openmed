@@ -162,6 +162,30 @@ def _conformal_report(*, coverage: float = 0.95) -> dict[str, object]:
     }
 
 
+def _grounding_report(*, accuracy: float = 0.90, coverage: float = 0.72):
+    return {
+        "schema_version": 1,
+        "artifact_type": "openmed.grounding.calibration.report",
+        "minimum_accuracy": 0.85,
+        "minimum_coverage": 0.70,
+        "vocabularies": {
+            "RXNORM": {
+                "operating_point": {
+                    "system": "RXNORM",
+                    "threshold": 0.80,
+                    "accuracy": accuracy,
+                    "coverage": coverage,
+                    "accepted_count": int(coverage * 100),
+                    "total_count": 100,
+                    "passed": accuracy >= 0.85 and coverage >= 0.70,
+                },
+                "reliability_diagram": [],
+                "coverage_accuracy_curve": [],
+            }
+        },
+    }
+
+
 def _check(report, gate_name: str):
     return next(check for check in report.gate_results if check.gate == gate_name)
 
@@ -317,6 +341,56 @@ def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
     assert result.decision == QUARANTINED
     assert check.passed is False
     assert check.details["violations"]["SSN:en"]["coverage"] == pytest.approx(0.80)
+
+
+def test_grounding_coverage_gate_accepts_documented_operating_point(
+    tmp_path: Path,
+) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metadata_updates={"grounding_calibration": _grounding_report()},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is True
+    assert check.details["vocabularies"]["RXNORM"]["coverage"] == pytest.approx(0.72)
+
+
+def test_grounding_coverage_gate_blocks_accuracy_below_coverage_target(
+    tmp_path: Path,
+) -> None:
+    result = _gate().preview(
+        _report(
+            tmp_path,
+            metadata_updates={
+                "grounding_calibration": _grounding_report(
+                    accuracy=0.84,
+                    coverage=0.72,
+                )
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is False
+    assert "RXNORM" in check.details["violations"]
+
+
+def test_required_grounding_coverage_gate_fails_closed_when_missing(
+    tmp_path: Path,
+) -> None:
+    result = _gate().preview(
+        _report(tmp_path, metadata_updates={"require_grounding_coverage": True}),
+        _baseline(),
+    )
+
+    check = _check(result, "grounding_coverage")
+    assert check.passed is False
+    assert check.reason == "grounding calibration report is required"
 
 
 def test_g4_blocks_only_the_offending_quantized_format(tmp_path: Path) -> None:
