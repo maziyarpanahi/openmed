@@ -1142,6 +1142,51 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     )
     mobile_parser.set_defaults(handler=_handle_benchmark_mobile)
 
+    false_negatives_parser = benchmark_sub.add_parser(
+        "false-negatives",
+        help="Explore missed gold PHI spans from an error-analysis report.",
+    )
+    false_negatives_parser.add_argument(
+        "report",
+        type=Path,
+        help="Path to an error-analysis report JSON produced by the eval harness.",
+    )
+    false_negatives_parser.add_argument(
+        "--fixtures",
+        action="append",
+        type=Path,
+        default=None,
+        metavar="PATH",
+        help=(
+            "Optional synthetic gold fixture file(s) used to render span text and "
+            "surrounding context. Without them only offsets, labels, and hashes "
+            "are shown. Repeat to combine multiple fixture files."
+        ),
+    )
+    false_negatives_parser.add_argument(
+        "--label",
+        default=None,
+        help="Only show missed spans for this label (case-insensitive).",
+    )
+    false_negatives_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Cap the total number of missed spans shown.",
+    )
+    false_negatives_parser.add_argument(
+        "--context-chars",
+        type=int,
+        default=None,
+        help="Trim rendered context windows to this many characters around a span.",
+    )
+    false_negatives_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON records instead of a table.",
+    )
+    false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
+
 
 def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     """Register evaluation commands with the CLI parser."""
@@ -1882,6 +1927,146 @@ def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
         payload = {"reports": [report.to_dict() for report in reports]}
         sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return 0
+
+
+def _handle_benchmark_false_negatives(args: argparse.Namespace) -> int:
+    from openmed.eval.error_analysis import ErrorAnalysisReport
+    from openmed.eval.false_negatives import (
+        explore_false_negatives,
+        load_fixture_texts,
+    )
+
+    try:
+        report = ErrorAnalysisReport.read_json(args.report)
+    except FileNotFoundError:
+        sys.stderr.write(f"Report not found: {args.report}\n")
+        return 1
+    except (ValueError, KeyError, json.JSONDecodeError) as exc:
+        sys.stderr.write(f"Failed to read error-analysis report: {exc}\n")
+        return 1
+
+    context_chars = getattr(args, "context_chars", None)
+    if context_chars is not None and context_chars < 0:
+        sys.stderr.write("context-chars must be non-negative\n")
+        return 1
+
+    fixture_texts: dict[str, str] = {}
+    if args.fixtures:
+        try:
+            fixture_texts = load_fixture_texts(args.fixtures)
+        except (OSError, ValueError) as exc:
+            sys.stderr.write(f"Failed to load fixtures: {exc}\n")
+            return 1
+
+    try:
+        exploration = explore_false_negatives(
+            report,
+            fixture_texts=fixture_texts,
+            label=args.label,
+            limit=args.limit,
+        )
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+
+    if args.json:
+        payload = exploration.to_dict()
+        if context_chars is not None:
+            for group in payload["groups"]:
+                for record in group["records"]:
+                    _trim_record_context(record, context_chars)
+        sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        return 0
+
+    sys.stdout.write(_render_false_negatives_table(exploration, context_chars))
+    return 0
+
+
+def _render_false_negatives_table(
+    exploration: Any,
+    context_chars: int | None,
+) -> str:
+    lines = [
+        f"# False Negatives: {exploration.suite}",
+        "",
+        f"Model: {exploration.model_name}  Device: {exploration.device}",
+        (
+            f"Missed gold spans: {exploration.total_missed}  "
+            f"Stored examples: {exploration.available}  Shown: {exploration.shown}"
+        ),
+    ]
+    if exploration.label_filter is not None:
+        lines.append(f"Label filter: {exploration.label_filter}")
+    if exploration.limit is not None:
+        lines.append(f"Limit: {exploration.limit}")
+    if exploration.examples_truncated:
+        lines.append(
+            "Stored examples are capped by the report "
+            f"(example cap: {exploration.example_cap} per label)."
+        )
+    if exploration.shown and not exploration.has_text:
+        lines.append(
+            "Verified synthetic fixture text unavailable: showing offsets, "
+            "labels, and hashes only."
+        )
+
+    if not exploration.groups:
+        lines.append("")
+        lines.append("No missed gold spans found.")
+        return "\n".join(lines) + "\n"
+
+    for group in exploration.groups:
+        lines.append("")
+        lines.append(f"## {group.label} ({group.count})")
+        lines.append(f"Stored examples: {group.available}  Shown: {len(group.records)}")
+        if not group.records:
+            if group.available:
+                lines.append("- No stored example shown under the current limit.")
+            else:
+                lines.append("- No missed-span example is stored for this label.")
+        for record in group.records:
+            span = f"{record.fixture_id} [{record.start}:{record.end}]"
+            if record.span_text is not None:
+                span += f" {record.span_text!r}"
+            lines.append(f"- {span}")
+            if record.context is not None:
+                context = record.context
+                if context_chars is not None:
+                    context = _center_context(record, context_chars)
+                lines.append(f"    context: {context!r}")
+            else:
+                lines.append(f"    hash: {record.text_hash}")
+    return "\n".join(lines) + "\n"
+
+
+def _center_context(record: Any, context_chars: int) -> str:
+    context = record.context or ""
+    if context_chars < 0 or len(context) <= context_chars:
+        return context
+    span_offset = max(record.start - record.context_start, 0)
+    span_length = max(record.end - record.start, 0)
+    center = span_offset + span_length // 2
+    half = context_chars // 2
+    start = max(0, center - half)
+    end = min(len(context), start + context_chars)
+    start = max(0, end - context_chars)
+    return context[start:end]
+
+
+def _trim_record_context(record: dict[str, Any], context_chars: int) -> None:
+    context = record.get("context")
+    if not isinstance(context, str) or context_chars < 0:
+        return
+    if len(context) <= context_chars:
+        return
+    span_offset = max(int(record["start"]) - int(record["context_start"]), 0)
+    span_length = max(int(record["end"]) - int(record["start"]), 0)
+    center = span_offset + span_length // 2
+    half = context_chars // 2
+    start = max(0, center - half)
+    end = min(len(context), start + context_chars)
+    start = max(0, end - context_chars)
+    record["context"] = context[start:end]
 
 
 def _write_json_payload(payload: Any, output_path: Path | None) -> int:
