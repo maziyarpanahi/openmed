@@ -51,3 +51,64 @@ expected output, hard-negative candidate metadata, and language coverage. The
 JSON and JSONL files are also compatible with
 `openmed.eval.harness.load_fixtures`; golden-specific expected output remains
 available through each fixture's metadata.
+
+## Relation Gold Fixtures
+
+`fixtures/relation_gold.jsonl` contains synthetic-only relation extraction
+fixtures for `openmed.eval.suites.relations`. Each JSONL row uses schema
+version `1` and this shape:
+
+```json
+{
+  "id": "relation-sentence-treatment",
+  "schema_version": 1,
+  "language": "en",
+  "text": "Aspirin treats fever in note one.",
+  "entities": [
+    {
+      "id": "e-medication",
+      "start": 0,
+      "end": 7,
+      "label": "MEDICATION",
+      "text": "Aspirin"
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel-aspirin-fever",
+      "type": "treats",
+      "head": "e-medication",
+      "tail": "e-fever",
+      "scope": "sentence"
+    }
+  ],
+  "traps": [
+    {
+      "id": "trap-assertion-negation",
+      "kind": "assertion",
+      "relation_ids": ["rel-pneumonia-denied"],
+      "zero_tolerance": true
+    }
+  ],
+  "metadata": {
+    "synthetic": true,
+    "category": "relation_gold",
+    "schema_version": 1
+  }
+}
+```
+
+Required fields:
+
+- `entities`: canonical-label spans with unique ids and character offsets into
+  `text`. Relation arguments reference these ids.
+- `relations`: directed relation records with unique ids, `type`, `head`,
+  `tail`, and a `scope` of `sentence` or `document`.
+- `traps`: optional zero-tolerance assertion or temporal traps that reference
+  relation ids and are carried into the score payload for release-gate wiring.
+- `metadata.synthetic`: must be `true`; relation gold must not contain DUA,
+  production, or real patient data.
+
+The relation loader validates schema version, unique fixture/entity/relation
+ids, argument references, offsets, canonical entity labels, relation scopes,
+and trap metadata.
