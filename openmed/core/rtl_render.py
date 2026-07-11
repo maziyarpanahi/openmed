@@ -19,11 +19,17 @@ Script detection is delegated to :mod:`openmed.core.script_detect`.
 The returned value is plain text, not HTML. Web consumers should assign it to
 a text node (for example, ``textContent``) or HTML-escape it before inserting
 it into markup.
+
+Only the declared replacement spans are validated. Pre-existing bidi controls
+elsewhere in ``text`` are preserved; callers that accept hostile source
+controls should sanitize the source and recompute replacement offsets before
+rendering.
 """
 
 from __future__ import annotations
 
 import operator
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Union
@@ -223,11 +229,16 @@ def _normalize_spans(spans: Sequence[SpanLike], text_len: int) -> list[tuple[int
     return ordered
 
 
-def _validate_replacement_controls(replacement: str) -> None:
-    """Reject controls that could terminate or visually spoof an isolate."""
+def _validate_replacement_text(replacement: str) -> None:
+    """Reject characters that could terminate or visually spoof an isolate."""
 
     if any(char in BIDI_CONTROL_CHARS for char in replacement):
         raise ValueError("replacement text must not contain bidi control characters")
+    if any(unicodedata.bidirectional(char) == "B" for char in replacement):
+        # UAX #9 rule X8 terminates every isolate at a paragraph boundary. A
+        # PDI emitted after such a boundary would therefore be unmatched and
+        # could not protect the remainder of the replacement.
+        raise ValueError("replacement text must not contain paragraph separators")
 
 
 # --- Public rendering API ----------------------------------------------------
@@ -251,6 +262,9 @@ def render_redacted(
             substituted). This is *not* the original document. The value is
             treated as plain text and is not HTML-escaped; web consumers must
             use a text node or escape it before inserting it into markup.
+            Pre-existing bidi controls outside declared replacement spans are
+            preserved; sanitize hostile source text and recompute offsets
+            before calling this helper.
         spans: The spans covering each injected replacement, expressed as
             offsets into ``text``. Each item may be an ``(start, end)`` tuple,
             a mapping with ``start``/``end`` keys, or an object with
@@ -271,7 +285,8 @@ def render_redacted(
         TypeError: If ``text`` or ``direction`` is not a string.
         ValueError: If ``direction`` is invalid, offsets are not exact
             integers, spans overlap or fall outside ``text``, or a replacement
-            contains a bidi control that could break its isolate.
+            contains a bidi control or paragraph separator that could break
+            its isolate.
     """
 
     if not isinstance(text, str):
@@ -289,7 +304,7 @@ def render_redacted(
     span_offsets = _normalize_spans(list(spans or ()), len(text))
 
     for start, end in span_offsets:
-        _validate_replacement_controls(text[start:end])
+        _validate_replacement_text(text[start:end])
 
     # Pure-LTR path (or an RTL document with nothing to wrap): return the input
     # unchanged so existing output stays byte-for-byte identical.
@@ -338,13 +353,13 @@ def wrap_mask(mask: str, direction: str = _AUTO) -> str:
     Raises:
         TypeError: If ``mask`` or ``direction`` is not a string.
         ValueError: If ``direction`` is invalid or ``mask`` contains a bidi
-            control that could break its isolate.
+            control or paragraph separator that could break its isolate.
     """
 
     if not isinstance(mask, str):
         raise TypeError("mask must be a string")
     direction = _normalize_direction(direction)
-    _validate_replacement_controls(mask)
+    _validate_replacement_text(mask)
     if direction == _LTR:
         return mask
     return f"{FSI}{mask}{PDI}"

@@ -9,6 +9,8 @@ lossless strip round-trip.
 
 from __future__ import annotations
 
+from decimal import Decimal
+from fractions import Fraction
 from pathlib import Path
 
 import pytest
@@ -32,8 +34,18 @@ _LRM = "\u200e"  # Left-to-Right Mark
 _RLM = "\u200f"  # Right-to-Left Mark
 _RLE = "\u202b"  # Right-to-Left Embedding
 _PDF = "\u202c"  # Pop Directional Formatting
-_RLO = "\u202e"  # Right-to-Left Override
 _ZWJ = "\u200d"  # Zero Width Joiner (not a bidi control)
+
+_EXPECTED_BIDI_CONTROLS = frozenset(
+    {
+        "\u061c",
+        "\u200e",
+        "\u200f",
+        *(chr(codepoint) for codepoint in range(0x202A, 0x202F)),
+        *(chr(codepoint) for codepoint in range(0x2066, 0x206A)),
+    }
+)
+_PARAGRAPH_SEPARATORS = ("\n", "\r", "\x1c", "\x1d", "\x1e", "\x85", "\u2029")
 
 # Synthetic redacted lines: masks/surrogates already substituted for PII.
 _ARABIC_WITH_SURROGATE = "المريض John Smith زار"
@@ -79,6 +91,10 @@ def test_contains_rtl_detects_arabic_run():
 def test_source_contains_no_literal_bidi_controls():
     source = Path(rtl_render.__file__).read_text(encoding="utf-8")
     assert BIDI_CONTROL_CHARS.isdisjoint(source)
+
+
+def test_bidi_control_set_matches_unicode_bidi_control_property():
+    assert BIDI_CONTROL_CHARS == _EXPECTED_BIDI_CONTROLS
 
 
 # --- Arabic line with an injected Latin surrogate ----------------------------
@@ -210,8 +226,14 @@ def test_span_accepts_mapping_and_object_forms():
     "span",
     [
         (7.9, 13),
+        (7.0, 13),
         (7, "13"),
         (True, 13),
+        (7, False),
+        (Decimal(7), 13),
+        (7, Decimal(13)),
+        (Fraction(7, 1), 13),
+        (7, Fraction(13, 1)),
     ],
 )
 def test_span_offsets_reject_lossy_non_integer_values(span):
@@ -288,7 +310,7 @@ def test_span_out_of_range_rejected():
         render_redacted(_ARABIC_WITH_MASK, [(0, len(_ARABIC_WITH_MASK) + 1)])
 
 
-@pytest.mark.parametrize("control", [_PDI, _RLO, _RLM])
+@pytest.mark.parametrize("control", sorted(_EXPECTED_BIDI_CONTROLS))
 def test_replacement_bidi_controls_are_rejected(control):
     text = f"المريض [NA{control}ME] زار"
     span = _span_of(text, f"[NA{control}ME]")
@@ -303,6 +325,32 @@ def test_ltr_replacement_bidi_control_is_rejected_before_noop():
 
     with pytest.raises(ValueError, match="bidi control"):
         render_redacted(text, [_span_of(text, token)])
+
+
+@pytest.mark.parametrize("separator", _PARAGRAPH_SEPARATORS)
+def test_replacement_paragraph_separators_are_rejected(separator):
+    token = f"[NA{separator}ME]"
+    text = f"المريض {token} زار"
+
+    with pytest.raises(ValueError, match="paragraph separator"):
+        render_redacted(text, [_span_of(text, token)])
+
+
+def test_ltr_replacement_paragraph_separator_is_rejected_before_noop():
+    token = "[NA\nME]"
+    text = f"Patient {token} visited"
+
+    with pytest.raises(ValueError, match="paragraph separator"):
+        render_redacted(text, [_span_of(text, token)])
+
+
+@pytest.mark.parametrize("separator", _PARAGRAPH_SEPARATORS)
+def test_wrap_mask_rejects_paragraph_separators(separator):
+    with pytest.raises(ValueError, match="paragraph separator"):
+        wrap_mask(f"[NA{separator}ME]")
+
+    with pytest.raises(ValueError, match="paragraph separator"):
+        wrap_mask(f"[NA{separator}ME]", direction="ltr")
 
 
 def test_non_bidi_zero_width_character_is_preserved_inside_replacement():
