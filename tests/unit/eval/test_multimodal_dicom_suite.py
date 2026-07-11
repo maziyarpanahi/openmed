@@ -10,6 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import types
+from dataclasses import replace
+from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -176,6 +179,8 @@ def test_run_scores_clean_redaction_with_leakage_first_metrics(tmp_path) -> None
 
 def test_run_report_never_contains_raw_phi(tmp_path) -> None:
     cases = generate_synthetic_dicom_corpus(tmp_path, seed=555, corpus_size=3)
+    sensitive_case_id = cases[0].header_phi["PatientID"]
+    cases[0] = replace(cases[0], case_id=sensitive_case_id)
     report = run_multimodal_dicom(cases=cases, system_name="unit-test-system")
 
     serialized = json.dumps(report.to_dict(), sort_keys=True)
@@ -185,6 +190,11 @@ def test_run_report_never_contains_raw_phi(tmp_path) -> None:
             assert word.text not in serialized
         for value in case.header_phi.values():
             assert str(value) not in serialized
+    assert "case_ids" not in report.metadata
+    assert (
+        report.metadata["case_id_sha256"][0]
+        == hashlib.sha256(sensitive_case_id.encode()).hexdigest()
+    )
 
 
 def test_run_scores_one_combined_pixel_and_header_artifact(tmp_path) -> None:
@@ -192,6 +202,12 @@ def test_run_scores_one_combined_pixel_and_header_artifact(tmp_path) -> None:
     import pydicom
 
     case = generate_synthetic_dicom_corpus(tmp_path, seed=77, corpus_size=1)[0]
+    source_dataset = pydicom.dcmread(case.path)
+    source_uids = {
+        keyword: str(getattr(source_dataset, keyword))
+        for keyword in ("SOPInstanceUID", "StudyInstanceUID", "SeriesInstanceUID")
+    }
+    assert any(element.tag.is_private for element in source_dataset.iterall())
     report = run_multimodal_dicom(cases=[case])
 
     final_path = case.path.with_name(f"{case.path.stem}.redacted.dcm")
@@ -207,6 +223,19 @@ def test_run_scores_one_combined_pixel_and_header_artifact(tmp_path) -> None:
     for word in case.pixel_words:
         x0, y0, x1, y1 = word.bbox
         assert not np.any(pixels[y0:y1, x0:x1])
+
+    assert not any(element.tag.is_private for element in final_dataset.iterall())
+    assert (
+        final_dataset.SOPInstanceUID
+        == final_dataset.file_meta.MediaStorageSOPInstanceUID
+    )
+    for keyword, original_uid in source_uids.items():
+        assert str(getattr(final_dataset, keyword)) != original_uid
+    expected_study_date = (
+        datetime.strptime(case.header_phi["StudyDate"], "%Y%m%d") + timedelta(days=17)
+    ).strftime("%Y%m%d")
+    assert str(final_dataset.StudyDate) == expected_study_date
+    assert str(final_dataset.PatientBirthDate) == ""
 
     assert report.metadata["artifact_pipeline"] == (
         "pixel-redaction-then-header-deidentification"
@@ -226,6 +255,120 @@ def test_report_round_trips_through_report_format(tmp_path) -> None:
     # Report renders to the harness's Markdown/JSON surfaces.
     assert "## Metrics" in report.to_markdown()
     assert json.loads(report.to_json())["suite"] == MULTIMODAL_DICOM
+
+
+def test_header_score_finds_phi_anywhere_when_header_stage_regresses(
+    tmp_path, monkeypatch
+) -> None:
+    import shutil
+
+    import pydicom
+    from pydicom.dataset import Dataset
+    from pydicom.sequence import Sequence
+
+    import openmed.multimodal as multimodal
+
+    case = generate_synthetic_dicom_corpus(tmp_path, seed=707, corpus_size=1)[0]
+    dataset = pydicom.dcmread(case.path)
+    referenced_study = Dataset()
+    referenced_study.StudyDescription = case.header_phi["PatientID"]
+    dataset.ReferencedStudySequence = Sequence([referenced_study])
+    dataset.save_as(case.path, enforce_file_format=True)
+    case = _refresh_source_hash(case)
+
+    def leaky_header_stage(path, *, policy):
+        shutil.copyfile(path, policy.output_path)
+
+    monkeypatch.setattr(multimodal, "deidentify_dicom_headers", leaky_header_stage)
+
+    report = run_multimodal_dicom(cases=[case])
+    final_path = case.path.with_name(f"{case.path.stem}.redacted.dcm")
+    final_dataset = pydicom.dcmread(final_path)
+
+    assert (
+        str(final_dataset.ReferencedStudySequence[0].StudyDescription)
+        == case.header_phi["PatientID"]
+    )
+    assert any(element.tag.is_private for element in final_dataset.iterall())
+    assert report.metrics["header_residual_phi_rate"] == 1.0
+    assert report.metrics["header_residual_identifier_count"] == 4
+    assert report.metrics["pixel_residual_phi_rate"] == 0.0
+    assert report.metrics["residual_phi_rate"] > 0.0
+
+
+def test_compressed_rle_pixel_data_is_normalized_and_redacted(tmp_path) -> None:
+    import numpy as np
+    import pydicom
+    from pydicom.uid import ExplicitVRLittleEndian, RLELossless
+
+    case = generate_synthetic_dicom_corpus(tmp_path, seed=808, corpus_size=1)[0]
+    dataset = pydicom.dcmread(case.path)
+    dataset.compress(RLELossless)
+    dataset.save_as(case.path, enforce_file_format=True)
+    case = _refresh_source_hash(case)
+
+    report = run_multimodal_dicom(cases=[case])
+    final_path = case.path.with_name(f"{case.path.stem}.redacted.dcm")
+    final_dataset = pydicom.dcmread(final_path)
+
+    assert final_dataset.file_meta.TransferSyntaxUID == ExplicitVRLittleEndian
+    assert report.metrics["residual_phi_rate"] == 0.0
+    pixels = np.asarray(final_dataset.pixel_array)
+    for word in case.pixel_words:
+        x0, y0, x1, y1 = word.bbox
+        assert not np.any(pixels[y0:y1, x0:x1])
+
+
+def test_implicit_vr_little_endian_is_preserved_and_redacted(tmp_path) -> None:
+    import pydicom
+    from pydicom.uid import ImplicitVRLittleEndian
+
+    case = generate_synthetic_dicom_corpus(tmp_path, seed=818, corpus_size=1)[0]
+    dataset = pydicom.dcmread(case.path)
+    dataset.file_meta.TransferSyntaxUID = ImplicitVRLittleEndian
+    pydicom.dcmwrite(
+        case.path,
+        dataset,
+        implicit_vr=True,
+        little_endian=True,
+        enforce_file_format=True,
+    )
+    case = _refresh_source_hash(case)
+
+    report = run_multimodal_dicom(cases=[case])
+    final_path = case.path.with_name(f"{case.path.stem}.redacted.dcm")
+    final_dataset = pydicom.dcmread(final_path)
+
+    assert final_dataset.file_meta.TransferSyntaxUID == ImplicitVRLittleEndian
+    assert report.metrics["residual_phi_rate"] == 0.0
+
+
+def test_malformed_or_tampered_cases_fail_without_output_artifacts(tmp_path) -> None:
+    case = generate_synthetic_dicom_corpus(tmp_path, seed=909, corpus_size=1)[0]
+    case.path.write_bytes(b"not-a-dicom")
+    malformed = _refresh_source_hash(case)
+
+    with pytest.raises(ValueError, match="readable DICOM"):
+        run_multimodal_dicom(cases=[malformed])
+
+    assert not case.path.with_name(f"{case.path.stem}.pixel-stage.dcm").exists()
+    assert not case.path.with_name(f"{case.path.stem}.redacted.dcm").exists()
+
+    valid = generate_synthetic_dicom_corpus(
+        tmp_path / "valid", seed=910, corpus_size=1
+    )[0]
+    valid.path.write_bytes(valid.path.read_bytes() + b"tampered")
+    with pytest.raises(ValueError, match="hash does not match truth"):
+        run_multimodal_dicom(cases=[valid])
+
+
+def test_supplied_cases_must_retain_synthetic_provenance(tmp_path) -> None:
+    case = generate_synthetic_dicom_corpus(tmp_path, seed=1001, corpus_size=1)[0]
+    metadata = dict(case.metadata)
+    metadata["license"] = "unverified-external-data"
+
+    with pytest.raises(ValueError, match="required synthetic provenance"):
+        run_multimodal_dicom(cases=[replace(case, metadata=metadata)])
 
 
 def test_partial_bbox_overlap_does_not_count_as_fully_redacted(
@@ -307,6 +450,47 @@ def test_load_fixtures_via_registry_and_direct(tmp_path) -> None:
     assert metadata == multimodal_dicom_metadata(seed=88, corpus_size=2)
 
 
+def test_default_fixture_temp_directory_is_cleaned(monkeypatch, tmp_path) -> None:
+    import tempfile
+
+    import openmed.eval.suites.multimodal_dicom as dicom_suite
+
+    real_temporary_directory = tempfile.TemporaryDirectory
+
+    def local_temporary_directory(*, prefix):
+        return real_temporary_directory(prefix=prefix, dir=tmp_path)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", local_temporary_directory)
+    with pytest.raises(ValueError, match="positive integer"):
+        load_multimodal_dicom_fixtures(seed=111, corpus_size=0)
+    assert not list(tmp_path.iterdir())
+
+    fixtures = load_multimodal_dicom_fixtures(seed=111, corpus_size=1)
+    dicom_path = Path(fixtures[0].metadata["dicom_path"])
+    assert dicom_path.exists()
+
+    dicom_suite._cleanup_fixture_temp_dirs()
+
+    assert not dicom_path.exists()
+
+
+def test_optional_pydicom_dependency_error_is_named(monkeypatch) -> None:
+    import openmed.eval.suites.multimodal_dicom as dicom_suite
+    from openmed.multimodal.exceptions import MissingDependencyError
+
+    real_import_module = dicom_suite.importlib.import_module
+
+    def import_without_pydicom(name):
+        if name == "pydicom":
+            raise ImportError("missing")
+        return real_import_module(name)
+
+    monkeypatch.setattr(dicom_suite.importlib, "import_module", import_without_pydicom)
+
+    with pytest.raises(MissingDependencyError, match="pydicom"):
+        dicom_suite._import_pydicom()
+
+
 def test_generate_rejects_non_positive_corpus_size(tmp_path) -> None:
     with pytest.raises(ValueError):
         generate_synthetic_dicom_corpus(tmp_path, corpus_size=0)
@@ -326,3 +510,9 @@ def test_default_report_system_name_is_not_used_as_pii_checkpoint(tmp_path) -> N
     assert report.metadata["system_name"] == DEFAULT_SYSTEM_NAME
     assert report.metadata["pii_model_name"] == get_default_pii_model("en")
     assert report.metadata["pii_model_name"] != DEFAULT_SYSTEM_NAME
+
+
+def _refresh_source_hash(case: SyntheticDicomCase) -> SyntheticDicomCase:
+    metadata = dict(case.metadata)
+    metadata["source_dicom_sha256"] = hashlib.sha256(case.path.read_bytes()).hexdigest()
+    return replace(case, metadata=metadata)
