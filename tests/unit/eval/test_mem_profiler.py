@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import time
+import tracemalloc
 
 import pytest
 
 from openmed.cli import main_module
+from openmed.eval import memprofile as memprofile_module
 from openmed.eval.memprofile import (
     PROFILE_PHASES,
     AllocatorStat,
@@ -122,6 +125,7 @@ def test_profile_memory_output_contains_no_document_text() -> None:
     assert secret not in serialized
     assert "ACME-12345" not in serialized
     assert "555-66-7777" not in serialized
+    assert "note-secret" not in serialized
 
 
 def test_profile_memory_defaults_to_committed_synthetic_workload() -> None:
@@ -135,7 +139,84 @@ def test_profile_memory_defaults_to_committed_synthetic_workload() -> None:
     assert profile.document_count >= 1
     assert tuple(phase.phase for phase in profile.phases) == PROFILE_PHASES
     # The default workload runs offline without any heavy model download.
-    assert profile.metadata["document_ids"]
+    assert profile.metadata["document_hashes"]
+    assert all(
+        value.startswith("sha256:") for value in profile.metadata["document_hashes"]
+    )
+
+
+def test_default_loader_constructs_model_during_load_phase(monkeypatch) -> None:
+    events: list[str] = []
+
+    class FakeLoader:
+        def create_pipeline(self, model_name, **kwargs):
+            events.append(f"load:{model_name}")
+            return object()
+
+    def fake_extract(text, *, model_name, lang, loader):
+        events.append(f"forward:{model_name}:{lang}:{text}")
+        assert isinstance(loader, FakeLoader)
+        return []
+
+    monkeypatch.setattr("openmed.core.models.ModelLoader", FakeLoader)
+    monkeypatch.setattr("openmed.core.pii.extract_pii", fake_extract)
+
+    runnable = memprofile_module._default_loader("fixture-model")
+    assert events == ["load:fixture-model"]
+
+    runnable(PerfDocument("note-a", "Synthetic note.", language="en"))
+    assert events[-1].startswith("forward:fixture-model:en:")
+
+
+def test_measure_phase_samples_phase_local_current_rss() -> None:
+    values = iter((100, 140, 120))
+    last = 120
+
+    def sample() -> int:
+        nonlocal last
+        try:
+            last = next(values)
+        except StopIteration:
+            pass
+        return last
+
+    def work() -> bytearray:
+        result = bytearray(4096)
+        time.sleep(0.02)
+        return result
+
+    _, phase = memprofile_module._measure_phase(
+        "fixture",
+        work,
+        sample_rss=sample,
+        top_allocators=5,
+    )
+
+    assert phase.baseline_rss_bytes == 100
+    assert phase.peak_rss_bytes == 140
+    assert phase.rss_delta_bytes == 40
+    assert phase.to_dict()["rss_semantics"] == "current-sampled"
+
+
+def test_profile_memory_preserves_preexisting_tracemalloc_state() -> None:
+    tracemalloc.start()
+    try:
+        sentinel = bytearray(8192)
+        assert tracemalloc.get_object_traceback(sentinel) is not None
+
+        profile = profile_memory(
+            "mock-model",
+            docs=["Synthetic note."],
+            loader=_mock_loader,
+            rss_sampler=lambda: 100 * MIB,
+            generated_at="2026-07-05T00:00:00Z",
+        )
+
+        assert tracemalloc.is_tracing()
+        assert tracemalloc.get_object_traceback(sentinel) is not None
+        assert all(phase.tracemalloc_preexisting for phase in profile.phases)
+    finally:
+        tracemalloc.stop()
 
 
 def test_profile_memory_rejects_non_callable_loader_result() -> None:

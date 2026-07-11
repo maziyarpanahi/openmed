@@ -2136,6 +2136,7 @@ def _trim_record_context(record: dict[str, Any], context_chars: int) -> None:
     start = max(0, end - context_chars)
     record["context"] = context[start:end]
 
+
 def _write_json_payload(payload: Any, output_path: Path | None) -> int:
     output = json.dumps(payload, indent=2, sort_keys=True)
     if output_path:
