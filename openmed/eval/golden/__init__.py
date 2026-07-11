@@ -18,7 +18,9 @@ from .hard_negatives import (
 )
 from .loader import (
     GOLDEN_CATEGORIES,
+    AnnotationRelation,
     GoldenFixture,
+    MultiAnnotatorGoldDocument,
     benchmark_fixture_languages,
     benchmark_fixtures_by_language,
     fixture_languages,
@@ -26,14 +28,20 @@ from .loader import (
     fixtures_by_language,
     list_fixture_paths,
     load_benchmark_fixtures,
+    load_brat_multi_annotator_document,
     load_golden_fixtures,
+    load_label_studio_multi_annotator_export,
+    parse_brat_multi_annotator,
+    parse_label_studio_multi_annotator_export,
 )
 
 __all__ = [
+    "AnnotationRelation",
     "GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
     "HARD_NEGATIVE_PACK_VERSION",
     "GoldenFixture",
+    "MultiAnnotatorGoldDocument",
     "benchmark_fixture_languages",
     "benchmark_fixtures_by_language",
     "HardNegativeCandidate",
@@ -48,10 +56,14 @@ __all__ = [
     "hard_negative_difficulty_report",
     "iter_synthetic_corpus_shard",
     "list_fixture_paths",
+    "load_brat_multi_annotator_document",
     "load_benchmark_fixtures",
     "load_golden_fixtures",
+    "load_label_studio_multi_annotator_export",
     "mine_hard_negative_candidates",
     "near_duplicate_retention_rate",
+    "parse_brat_multi_annotator",
+    "parse_label_studio_multi_annotator_export",
     "stratified_hard_negative_sample",
     "write_hard_negative_fixture_pack",
 ]
