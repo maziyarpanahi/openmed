@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import random
 import re
+from datetime import date
 from typing import Sequence
 
 from faker.providers import BaseProvider
@@ -1221,28 +1222,39 @@ class ThaiNationalIdProvider(BaseProvider):
 def generate_romanian_cnp(*, rng: random.Random | None = None) -> str:
     """Generate a Romanian CNP that passes :func:`validate_romanian_cnp`.
 
-    Builds a 13-digit ``S YY MM DD JJ NNN C`` identifier for a random birth
-    date and county code, then appends the documented ``279146358279`` weighted
-    modulo-11 control digit (a remainder of 10 maps to control digit 1).
+    Builds a 13-digit ``S YY MM DD JJ NNN C`` identifier for a random,
+    non-future birth date and location code, then appends the documented
+    ``279146358279`` weighted modulo-11 control digit (a remainder of 10 maps
+    to control digit 1).
     """
-    import calendar
-
     source = rng or random.Random()
 
-    # Century/gender code -> century start.
-    century_by_code = {1: 1900, 2: 1900, 3: 1800, 4: 1800, 5: 2000, 6: 2000}
-    gender_code = source.choice(tuple(century_by_code))
-    century = century_by_code[gender_code]
+    today = date.today()
+    documented_ranges = {
+        1: (date(1900, 1, 1), date(1999, 12, 31)),
+        2: (date(1900, 1, 1), date(1999, 12, 31)),
+        3: (date(1800, 1, 1), date(1899, 12, 31)),
+        4: (date(1800, 1, 1), date(1899, 12, 31)),
+        5: (date(2000, 1, 1), date(2099, 12, 31)),
+        6: (date(2000, 1, 1), date(2099, 12, 31)),
+    }
+    available_ranges = {
+        code: (start, min(end, today))
+        for code, (start, end) in documented_ranges.items()
+        if start <= today
+    }
+    gender_code = source.choice(tuple(available_ranges))
+    start, end = available_ranges[gender_code]
+    birth_date = date.fromordinal(source.randint(start.toordinal(), end.toordinal()))
 
-    year = century + source.randint(0, 99)
-    month = source.randint(1, 12)
-    day = source.randint(1, calendar.monthrange(year, month)[1])
-
-    # County (judet) codes 01-46, sectors 51-52, or 70 for residents.
+    # Legacy county/sector codes 01-46 and 51-52, or current SIIEASC code 70.
     county = source.choice(tuple(range(1, 47)) + (51, 52, 70))
     serial = source.randint(1, 999)  # non-zero sequence number
 
-    body = f"{gender_code}{year % 100:02d}{month:02d}{day:02d}{county:02d}{serial:03d}"
+    body = (
+        f"{gender_code}{birth_date.year % 100:02d}{birth_date.month:02d}"
+        f"{birth_date.day:02d}{county:02d}{serial:03d}"
+    )
     weights = (2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9)
     total = sum(weight * int(digit) for weight, digit in zip(weights, body))
     control = total % 11
