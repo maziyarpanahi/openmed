@@ -13,10 +13,14 @@ import pytest
 
 from openmed.core.labels import (
     CANONICAL_LABELS,
+    CKD_STAGE,
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
+    DIALYSIS_MODALITY,
     GENE_SYMBOL,
     PROTEIN_CHANGE,
+    RENAL_FUNCTION_MEASURE,
+    URINE_FINDING,
     VARIANT_DESCRIPTOR,
     ZYGOSITY,
     normalize_label,
@@ -31,6 +35,10 @@ NEW_LABELS = (
     PROTEIN_CHANGE,
     ZYGOSITY,
     CLINICAL_SIGNIFICANCE,
+    CKD_STAGE,
+    DIALYSIS_MODALITY,
+    RENAL_FUNCTION_MEASURE,
+    URINE_FINDING,
 )
 FIXTURE = (
     Path(__file__).resolve().parents[2]
