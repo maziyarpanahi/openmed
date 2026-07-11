@@ -67,6 +67,31 @@ def test_typescript_client_package_is_dependency_light_and_strict() -> None:
     assert "src/**/*.ts" in tsconfig["include"]
 
 
+def test_typescript_pii_languages_match_core_and_openapi() -> None:
+    from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r"export type PIILanguage =(?P<body>.*?);",
+        source,
+        flags=re.DOTALL,
+    )
+    assert match is not None
+    typescript_languages = set(re.findall(r'\|\s*"([a-z]{2})"', match.group("body")))
+
+    spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+    openapi_language_sets = {
+        frozenset(properties["lang"]["enum"])
+        for schema in spec["components"]["schemas"].values()
+        if isinstance(schema, dict)
+        for properties in [schema.get("properties", {})]
+        if isinstance(properties.get("lang"), dict) and "enum" in properties["lang"]
+    }
+
+    assert typescript_languages == SUPPORTED_LANGUAGES
+    assert openapi_language_sets == {frozenset(SUPPORTED_LANGUAGES)}
+
+
 def test_typescript_client_error_mapping_is_implemented_and_documented() -> None:
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
     readme = SDK_README_PATH.read_text(encoding="utf-8")

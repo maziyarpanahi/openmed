@@ -74,6 +74,11 @@ def test_format_hint_covers_every_wired_language() -> None:
         assert hint.number == LOCALE_NUMBER_SEP[lang]
 
 
+def test_korean_full_language_pack_is_wired_not_backlog() -> None:
+    assert "ko" in WIRED_LOCALES
+    assert "ko" not in BACKLOG_LOCALES
+
+
 def test_format_hint_covers_backlog_language_pack_locales() -> None:
     assert WIRED_LOCALES <= set(LOCALE_DATE_ORDER)
     assert BACKLOG_LOCALES <= set(LOCALE_DATE_ORDER)
