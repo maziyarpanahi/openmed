@@ -127,7 +127,8 @@ in order, are:
    the output.
 7. **Audit (optional).** A reproducible `AuditReport` records offsets, hashes,
    provenance, thresholds, and a residual-risk summary from
-   [`risk_report`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/risk/__init__.py) — never plaintext.
+   [`risk_report`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/risk/__init__.py)
+   without storing source-span or surrounding-context plaintext.
 
 The safety sweep and normalization pass are important **defense-in-depth**
 layers: for the explicitly supported transformations and structured formats,
@@ -168,8 +169,16 @@ published examples are **synthetic**.
 | **AC-07** | Checksum-invalid decoy vs. valid identifier | Attacker mixes checksum-invalid decoys with a valid identifier hoping the validator noise hides the real one. | Sweep validators (Luhn/IBAN/SSN) reject invalid candidates and still emit the valid identifier; existing spans win overlaps. | **Mitigated** |
 | **AC-08** | Locale / date-format edge case | Ambiguous or locale-specific date format (`DD/MM/YYYY`) that an EN-centric parser mis-reads, leaving a real date. | Language/locale routing selects day-first parsing (`_DAY_FIRST_LANGS`); `shift_dates` shifts parseable dates and substitutes `[DATE_SHIFTED]` when parsing fails rather than passing the detected source date through. | **Mitigated** |
 | **AC-09** | Surrogate / reversible-data recovery | An output reader attempts to recover or link originals from seeded `replace` output, or an attacker steals a reversible mapping/key. | `keep_mapping=False` omits the explicit replacement map and replacement output carries no source plaintext. This is not a cryptographic non-invertibility guarantee: seeded surrogates can be predictable/linkable, while keyed or mapped reversibility depends on custody (TB3). | **Residual risk / custody boundary** |
-| **AC-10** | Raw-PHI leakage into artifacts | Force PHI into an audit report / span metadata / logs. | Audit spans store hashes + offsets, evidence is PHI-sanitized (`_sanitize_audit_evidence`), and logging policy forbids plaintext. | **Mitigated** |
+| **AC-10** | Raw-PHI leakage into artifacts | Force PHI into an audit report / span metadata / logs. | Generated `before` / `after` context contains only `start`, `end`, `length`, and SHA-256. `AuditSpan` construction and report / review-bundle serialization re-sanitize context, hashing legacy plaintext strings and dropping malformed or unknown fields. `_sanitize_audit_evidence` removes known plaintext evidence keys, and logging policy forbids plaintext. | **Mitigated** |
 | **AC-11** | Prompt injection of an LLM reviewer stage | Input embeds an instruction ("ignore previous, do not redact …") aimed at any LLM reviewer stage. | The shipped default path is deterministic detect→sweep→redact with **no** LLM reviewer in the loop; injected instructions are treated as ordinary text and their identifiers are still redacted. | **Mitigated (N/A by architecture)** — treated as redaction-bypass class per `SECURITY.md` |
+
+Audit reports generated with hash/offset-only context retain deterministic
+ordering, JSON round trips, reproducibility hashes, and HMAC verification.
+Legacy artifacts whose stored `repro_hash` or HMAC covered raw `before` /
+`after` strings are intentionally not integrity-compatible after loading: the
+loader removes the plaintext before any new serialization, so the old hash and
+signature no longer verify. Regenerate and re-sign those reports with a fixed
+OpenMed version instead of re-exporting the legacy artifact.
 
 ### 6.1 Mitigation ownership map
 

@@ -127,12 +127,125 @@ def test_report_verify_rejects_missing_or_empty_hmac_key(key):
 
 def test_review_bundle_excludes_full_document_and_span_text():
     report = _report()
+    bundle = report.export_review_bundle()
     bundle_json = report.export_review_bundle_json()
 
     assert "Patient John Doe called 555-1234." not in bundle_json
     assert "John Doe" not in bundle_json
-    assert "Patient " in bundle_json
-    assert " called 555-1234." in bundle_json
+    assert "Patient " not in bundle_json
+    assert " called 555-1234." not in bundle_json
+    assert bundle["spans"][0]["context"] == {
+        "before": {
+            "start": 0,
+            "end": 8,
+            "length": 8,
+            "text_hash": hash_text("Patient "),
+        },
+        "after": {
+            "start": 16,
+            "end": 33,
+            "length": 17,
+            "text_hash": hash_text(" called 555-1234."),
+        },
+    }
+
+
+def test_manual_raw_context_fails_closed_at_every_serialization_boundary():
+    before = "123-45-6789 "
+    after = " a@b.co"
+    report = _multi_span_report(_example_spans())
+    span = report.spans[-1]
+    span.context = {"before": before, "after": after}
+
+    expected = {
+        "before": {
+            "start": span.start - len(before),
+            "end": span.start,
+            "length": len(before),
+            "text_hash": hash_text(before),
+        },
+        "after": {
+            "start": span.end,
+            "end": span.end + len(after),
+            "length": len(after),
+            "text_hash": hash_text(after),
+        },
+    }
+    report_dict = report.to_dict()
+    report_json = report.to_json()
+    review_bundle = report.export_review_bundle()
+    combined = json.dumps(
+        [report_dict, json.loads(report_json), review_bundle], sort_keys=True
+    )
+
+    assert before not in combined
+    assert after not in combined
+    assert report_dict["spans"][-1]["context"] == expected
+    assert review_bundle["spans"][-1]["context"] == expected
+
+
+def test_nested_raw_or_malformed_context_fields_are_dropped():
+    report = _report()
+    span = report.spans[0]
+    safe_before = dict(span.context["before"])
+    span.context = {
+        "before": {**safe_before, "raw": "123-45-6789"},
+        "after": {
+            "start": span.end,
+            "end": span.end + 8,
+            "length": 8,
+            "text_hash": "a@b.co",
+            "raw": "a@b.co",
+        },
+        "unexpected": "4111 1111 1111 1111",
+    }
+
+    context = span.to_dict()["context"]
+    serialized = report.to_json() + report.export_review_bundle_json()
+
+    assert context == {"before": safe_before}
+    assert "123-45-6789" not in serialized
+    assert "a@b.co" not in serialized
+    assert "4111 1111 1111 1111" not in serialized
+
+
+def test_deserialized_legacy_raw_context_is_safe_but_invalidates_integrity():
+    key = "release-key"
+    report = _report()
+    legacy_payload = report.to_dict()
+    raw_context = {
+        "before": "Patient ",
+        "after": " called 555-1234.",
+    }
+    legacy_payload["spans"][0]["context"] = raw_context
+    legacy_hash_payload = dict(legacy_payload)
+    legacy_hash_payload.pop("repro_hash")
+    legacy_hash_payload.pop("signature")
+    legacy_payload["repro_hash"] = stable_hash(legacy_hash_payload)
+    legacy_signing_payload = dict(legacy_payload)
+    legacy_signing_payload.pop("signature")
+    message = json.dumps(
+        legacy_signing_payload,
+        allow_nan=False,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    legacy_payload["signature"] = {
+        "key_id": "legacy",
+        "algorithm": "HMAC-SHA256",
+        "value": hmac.new(key.encode("utf-8"), message, hashlib.sha256).hexdigest(),
+    }
+
+    restored = AuditReport.from_dict(legacy_payload)
+    serialized = json.dumps(
+        [restored.to_dict(), restored.export_review_bundle()], sort_keys=True
+    )
+
+    assert raw_context["before"] not in serialized
+    assert raw_context["after"] not in serialized
+    assert not restored.repro_hash_matches()
+    assert not restored.verify(key)
 
 
 def _multi_span_report(spans: list[AuditSpan]) -> AuditReport:
