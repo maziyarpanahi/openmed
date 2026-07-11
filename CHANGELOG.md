@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   postcode, and address patterns, checksum-valid local surrogates, synthetic
   golden coverage, service and training wiring, and the manifest-backed Korean
   default model (#262).
+- Added an offline immunization zero-shot domain with FHIR-aligned display
+  labels, canonical policy metadata, synthetic per-label fixture coverage, and
+  generated OM-138 exporter-alignment documentation (#897).
 
 ## [1.8.1] - 2026-07-10
 
