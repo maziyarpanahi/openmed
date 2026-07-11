@@ -145,6 +145,15 @@ from openmed.eval.flaky import (
     detect_flaky_eval,
     detect_gate_suite_flakiness,
 )
+from openmed.eval.frontier import (
+    DEFAULT_ACCURACY_KEYS,
+    DEFAULT_LEAKAGE_KEYS,
+    FrontierEntry,
+    FrontierPoint,
+    FrontierReport,
+    frontier_point_from_reports,
+    frontier_report,
+)
 from openmed.eval.golden import (
     HARD_NEGATIVE_CATEGORY,
     HARD_NEGATIVE_PACK_VERSION,
@@ -449,6 +458,13 @@ __all__ = [
     "FlakyReport",
     "FixtureResult",
     "FixtureCoverageReport",
+    "FrontierEntry",
+    "FrontierPoint",
+    "FrontierReport",
+    "frontier_point_from_reports",
+    "frontier_report",
+    "DEFAULT_ACCURACY_KEYS",
+    "DEFAULT_LEAKAGE_KEYS",
     "G9_RELAXED_RE_F1_FLOOR",
     "G9_STRICT_RE_F1_FLOOR",
     "GOLDEN_EDGE_CASE_CATEGORIES",
