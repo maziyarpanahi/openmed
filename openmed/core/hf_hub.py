@@ -185,12 +185,12 @@ def list_cached_models(
         ImportError: If the optional ``[hf]`` extra is not installed.
     """
 
-    scan_cache_dir = _import_scan_cache_dir()
+    scan_cache_dir, cache_not_found = _import_scan_cache_dir()
     prefix = f"{org}/"
 
     try:
         cache_info = scan_cache_dir(cache_dir) if cache_dir else scan_cache_dir()
-    except FileNotFoundError:
+    except (FileNotFoundError, cache_not_found):
         return []
 
     cached: List[CachedModel] = []
@@ -250,12 +250,12 @@ def _import_snapshot_download() -> Any:
     return snapshot_download
 
 
-def _import_scan_cache_dir() -> Any:
+def _import_scan_cache_dir() -> tuple[Any, type[Exception]]:
     try:
-        from huggingface_hub import scan_cache_dir
+        from huggingface_hub import CacheNotFound, scan_cache_dir
     except ImportError as exc:
         raise ImportError(_HF_INSTALL_HINT) from exc
-    return scan_cache_dir
+    return scan_cache_dir, CacheNotFound
 
 
 def _as_optional_float(value: Any) -> Optional[float]:
