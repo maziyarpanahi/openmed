@@ -57,6 +57,17 @@ class _MarkCollector(HTMLParser):
             self._text_parts.append(data)
 
 
+class _TagCollector(HTMLParser):
+    """Collect parsed tags and attribute names for active-content checks."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.tags: list[tuple[str, set[str]]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.tags.append((tag, {name for name, _ in attrs}))
+
+
 def _marks(html: str) -> list[dict[str, str]]:
     parser = _MarkCollector()
     parser.feed(html)
@@ -73,11 +84,22 @@ def _visible_text(html: str) -> str:
 def _layer_bodies(html: str) -> list[str]:
     """Return each complete annotation layer body in rendered order."""
     return re.findall(
-        r'<div class="openmed-display-text openmed-display-layer"[^>]*>'
-        r"(.*?)</div>",
+        r'<pre class="openmed-display-text openmed-display-layer"[^>]*>'
+        r"(.*?)</pre>",
         html,
         flags=re.DOTALL,
     )
+
+
+def _source_text_from_layer(body: str) -> str:
+    """Recover source text while excluding the renderer's annotation chips."""
+    without_labels = re.sub(
+        r'<span class="openmed-entity-label"[^>]*>.*?</span>',
+        "",
+        body,
+        flags=re.DOTALL,
+    )
+    return _visible_text(without_labels)
 
 
 # --------------------------------------------------------------------------- #
@@ -192,6 +214,43 @@ def test_escaped_source_roundtrips_to_original_characters() -> None:
         assert ch in visible
 
 
+def test_render_preserves_newlines_and_indentation_semantically() -> None:
+    text = "Line one\n  Patient Jane Doe\nLine three"
+    spans = [{"start": 11, "end": 27, "label": "PERSON", "score": 0.9}]
+
+    html = render_spans_html(text, spans, show_legend=False)
+    bodies = _layer_bodies(html)
+
+    assert '<pre class="openmed-display-text openmed-display-layer"' in html
+    assert "white-space:pre-wrap" in html
+    assert len(bodies) == 1
+    assert _source_text_from_layer(bodies[0]) == text
+
+
+def test_labels_are_inert_and_output_has_no_active_or_remote_content() -> None:
+    label = '"><script src="https://invalid.test/x.js">bad()</script>'
+
+    html = render_spans_html(
+        "safe text",
+        [{"start": 0, "end": 4, "label": label, "score": 0.5}],
+        title="<img src=x onerror=bad()>",
+    )
+    marks = _marks(html)
+    tags = _TagCollector()
+    tags.feed(html)
+
+    assert len(marks) == 1
+    assert marks[0]["data-label"] == label
+    assert marks[0]["class"].startswith("openmed-entity openmed-entity-")
+    assert "<script" not in html.lower()
+    assert "<img" not in html.lower()
+    assert "<link" not in html.lower()
+    assert all(tag not in {"script", "img", "link"} for tag, _ in tags.tags)
+    assert all(not ({"src", "href"} & attrs) for _, attrs in tags.tags)
+    assert "url(" not in html.lower()
+    assert "&lt;script" in html
+
+
 # --------------------------------------------------------------------------- #
 # Overlapping and adjacent spans — no dropped characters
 # --------------------------------------------------------------------------- #
@@ -204,10 +263,7 @@ def _source_chars(html: str) -> str:
     """
     bodies = _layer_bodies(html)
     assert len(bodies) == 1
-    body = bodies[0]
-    visible = _visible_text(body)
-    # Injected label chips are uppercase ASCII letters; strip them out.
-    return "".join(ch for ch in visible if not ("A" <= ch <= "Z"))
+    return _source_text_from_layer(bodies[0])
 
 
 def test_adjacent_spans_preserve_all_characters() -> None:
@@ -232,7 +288,7 @@ def test_overlapping_spans_preserve_all_characters() -> None:
     layer_bodies = _layer_bodies(html)
     assert len(layer_bodies) == 2
     for body in layer_bodies:
-        assert "".join(ch for ch in _visible_text(body) if ch.isdigit()) == text
+        assert _source_text_from_layer(body) == text
 
     # Every input annotation remains one complete, independently inspectable mark.
     marks = _marks(html)
@@ -241,9 +297,25 @@ def test_overlapping_spans_preserve_all_characters() -> None:
         (mark["data-start"], mark["data-end"], mark["data-label"], mark["_text"])
         for mark in marks
     ] == [
-        ("0", "6", "LOW", "012345LOW"),
-        ("3", "10", "HIGH", "3456789HIGH"),
+        ("0", "6", "LOW", "012345 LOW"),
+        ("3", "10", "HIGH", "3456789 HIGH"),
     ]
+
+
+def test_duplicate_spans_render_once_each_on_deterministic_layers() -> None:
+    text = "Jane Roe"
+    spans = [
+        {"start": 0, "end": 8, "label": "PERSON", "score": 0.9},
+        {"start": 0, "end": 8, "label": "DUPLICATE", "score": 0.8},
+    ]
+
+    first = render_spans_html(text, spans, show_legend=False)
+    second = render_spans_html(text, spans, show_legend=False)
+
+    assert first == second
+    assert len(_marks(first)) == 2
+    assert len(_layer_bodies(first)) == 2
+    assert all(_source_text_from_layer(body) == text for body in _layer_bodies(first))
 
 
 def test_span_offsets_out_of_range_are_clamped_without_crash() -> None:
@@ -251,6 +323,17 @@ def test_span_offsets_out_of_range_are_clamped_without_crash() -> None:
     spans = [{"start": 2, "end": 999, "label": "OOR", "score": 0.7}]
     html = render_spans_html(text, spans, show_legend=False, show_confidence=False)
     assert _source_chars(html) == text
+
+
+def test_fractional_offsets_are_rejected_instead_of_silently_truncated() -> None:
+    html = render_spans_html(
+        "abcdef",
+        [{"start": 1.5, "end": 4, "label": "INVALID"}],
+        show_legend=False,
+    )
+
+    assert "<mark" not in html
+    assert _source_chars(html) == "abcdef"
 
 
 def test_empty_span_list_renders_plain_text() -> None:
@@ -329,6 +412,7 @@ def test_analyze_result_repr_html_matches_render() -> None:
     assert "<mark" in html
     assert "PERSON" in html
     assert "unit-test-model" in html
+    assert "0.95" not in html
 
 
 def test_deidentification_result_repr_html_highlights_original_text() -> None:
@@ -354,6 +438,7 @@ def test_deidentification_result_repr_html_highlights_original_text() -> None:
     assert "<mark" in html
     assert "PERSON" in html
     assert "John Doe" in _visible_text(html)
+    assert "0.97" not in html
 
 
 def test_accepts_mapping_payload_from_to_dict() -> None:

@@ -64,9 +64,11 @@ def _coerce_int(value: Any) -> Optional[int]:
         return None
     if isinstance(value, int):
         return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
     if hasattr(value, "item"):
         try:
-            return int(value.item())
+            return _coerce_int(value.item())
         except (TypeError, ValueError):
             return None
     try:
@@ -162,6 +164,16 @@ def _label_color(label: str) -> str:
     return _COLOR_FORMATTER._get_entity_color(label)
 
 
+def _label_class_token(label: str) -> str:
+    """Return a conservative CSS class token derived from ``label``."""
+    token = "".join(
+        char if char.isascii() and (char.isalnum() or char in "-_") else "-"
+        for char in label.lower()
+    )
+    token = "-".join(part for part in token.split("-") if part)
+    return token or "entity"
+
+
 def _clamp_spans(
     text_len: int,
     spans: Sequence[NormalizedSpan],
@@ -235,7 +247,7 @@ def _render_legend(labels: Sequence[str]) -> str:
         )
     return (
         '<div class="openmed-legend" '
-        'style="margin-bottom:8px;line-height:1.6;">' + "".join(chips) + "</div>"
+        'style="margin-bottom:8px;line-height:1.6;">' + " ".join(chips) + "</div>"
     )
 
 
@@ -248,9 +260,10 @@ def _render_text_layer(
 ) -> str:
     """Render one non-overlapping annotation layer without losing source text."""
     parts = [
-        '<div class="openmed-display-text openmed-display-layer" '
+        '<pre class="openmed-display-text openmed-display-layer" '
         f'data-layer="{layer_index}" aria-label="Annotation layer '
-        f'{layer_index + 1}">'
+        f'{layer_index + 1}" '
+        'style="white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font:inherit;">'
     ]
     cursor = 0
 
@@ -268,7 +281,7 @@ def _render_text_layer(
 
         parts.append(
             '<mark class="openmed-entity openmed-entity-'
-            f'{html_mod.escape(span.label.lower(), quote=True)}" '
+            f'{_label_class_token(span.label)}" '
             f'data-start="{span.start}" data-end="{span.end}" '
             f'data-label="{label_attr}" data-layer="{layer_index}" '
             f'style="background:{color};padding:0.2em 0.35em;margin:0 0.15em;'
@@ -278,14 +291,14 @@ def _render_text_layer(
             '<span class="openmed-entity-label" '
             'style="font-size:0.7em;font-weight:700;line-height:1;'
             "border-radius:0.35em;text-transform:uppercase;vertical-align:middle;"
-            'margin-left:0.35em;">'
-            f"{label_esc}{html_mod.escape(score_suffix)}</span>"
+            '">'
+            f" {label_esc}{html_mod.escape(score_suffix)}</span>"
             "</mark>"
         )
         cursor = span.end
 
     parts.append(html_mod.escape(text[cursor:]))
-    parts.append("</div>")
+    parts.append("</pre>")
     return "".join(parts)
 
 
