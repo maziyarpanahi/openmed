@@ -15,10 +15,15 @@ unchanged so existing de-identification behaviour is unaffected.
 The helpers here are stdlib-only, local-first, and never inspect or store
 plaintext identifiers beyond the replacement tokens they are asked to wrap.
 Script detection is delegated to :mod:`openmed.core.script_detect`.
+
+The returned value is plain text, not HTML. Web consumers should assign it to
+a text node (for example, ``textContent``) or HTML-escape it before inserting
+it into markup.
 """
 
 from __future__ import annotations
 
+import operator
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Union
@@ -121,7 +126,8 @@ class RenderedRedaction:
     Attributes:
         text: The rendered output. Identical to the input for LTR documents;
             for RTL/mixed documents each replacement span is wrapped in
-            ``FSI ... PDI`` isolates.
+            ``FSI ... PDI`` isolates. This is plain text and is not
+            HTML-escaped.
         base_direction: ``"rtl"`` or ``"ltr"`` for the document as a whole, so a
             downstream renderer can set ``dir=rtl`` on its container.
         isolated: Whether any isolates were inserted (always ``False`` for the
@@ -151,6 +157,17 @@ class RenderedRedaction:
 SpanLike = Union[Sequence[int], Mapping[str, Any], Any]
 
 
+def _integer_offset(value: Any, name: str) -> int:
+    """Return an exact integer offset without accepting lossy coercions."""
+
+    if isinstance(value, bool):
+        raise ValueError(f"span {name} offset must be an integer")
+    try:
+        return operator.index(value)
+    except TypeError as exc:
+        raise ValueError(f"span {name} offset must be an integer") from exc
+
+
 def _span_offsets(span: SpanLike, text_len: int) -> tuple[int, int]:
     """Extract ``(start, end)`` offsets from a span-like value.
 
@@ -176,8 +193,8 @@ def _span_offsets(span: SpanLike, text_len: int) -> tuple[int, int]:
     if start is None or end is None:
         raise ValueError("span must provide integer start and end offsets")
 
-    start = int(start)
-    end = int(end)
+    start = _integer_offset(start, "start")
+    end = _integer_offset(end, "end")
     if start < 0 or end < start:
         raise ValueError("span offsets must be non-negative with end >= start")
     if end > text_len:
@@ -206,6 +223,13 @@ def _normalize_spans(spans: Sequence[SpanLike], text_len: int) -> list[tuple[int
     return ordered
 
 
+def _validate_replacement_controls(replacement: str) -> None:
+    """Reject controls that could terminate or visually spoof an isolate."""
+
+    if any(char in BIDI_CONTROL_CHARS for char in replacement):
+        raise ValueError("replacement text must not contain bidi control characters")
+
+
 # --- Public rendering API ----------------------------------------------------
 
 
@@ -224,7 +248,9 @@ def render_redacted(
 
     Args:
         text: The de-identified output text (masks/surrogates already
-            substituted). This is *not* the original document.
+            substituted). This is *not* the original document. The value is
+            treated as plain text and is not HTML-escaped; web consumers must
+            use a text node or escape it before inserting it into markup.
         spans: The spans covering each injected replacement, expressed as
             offsets into ``text``. Each item may be an ``(start, end)`` tuple,
             a mapping with ``start``/``end`` keys, or an object with
@@ -243,8 +269,9 @@ def render_redacted(
 
     Raises:
         TypeError: If ``text`` or ``direction`` is not a string.
-        ValueError: If ``direction`` is invalid or spans overlap or fall
-            outside ``text``.
+        ValueError: If ``direction`` is invalid, offsets are not exact
+            integers, spans overlap or fall outside ``text``, or a replacement
+            contains a bidi control that could break its isolate.
     """
 
     if not isinstance(text, str):
@@ -260,6 +287,9 @@ def render_redacted(
         reported = direction
 
     span_offsets = _normalize_spans(list(spans or ()), len(text))
+
+    for start, end in span_offsets:
+        _validate_replacement_controls(text[start:end])
 
     # Pure-LTR path (or an RTL document with nothing to wrap): return the input
     # unchanged so existing output stays byte-for-byte identical.
@@ -307,12 +337,14 @@ def wrap_mask(mask: str, direction: str = _AUTO) -> str:
 
     Raises:
         TypeError: If ``mask`` or ``direction`` is not a string.
-        ValueError: If ``direction`` is invalid.
+        ValueError: If ``direction`` is invalid or ``mask`` contains a bidi
+            control that could break its isolate.
     """
 
     if not isinstance(mask, str):
         raise TypeError("mask must be a string")
     direction = _normalize_direction(direction)
+    _validate_replacement_controls(mask)
     if direction == _LTR:
         return mask
     return f"{FSI}{mask}{PDI}"
@@ -321,9 +353,12 @@ def wrap_mask(mask: str, direction: str = _AUTO) -> str:
 def strip_bidi_controls(text: str) -> str:
     """Remove bidi isolate/embedding/override controls and directional marks.
 
-    This is the inverse of the isolation applied by :func:`render_redacted`: it
-    recovers the plain replacement text for consumers that cannot interpret
-    bidi controls (logs, exact-match comparisons, downstream tokenizers).
+    For source text without pre-existing bidi controls, this is the lossless
+    inverse of the isolation applied by :func:`render_redacted`. The helper is
+    intentionally also a sanitizer: it removes *all* recognized controls, so
+    source controls that predated rendering are removed as well. It recovers
+    plain replacement text for consumers that cannot interpret bidi controls
+    (logs, exact-match comparisons, downstream tokenizers).
 
     Args:
         text: Text that may contain bidi control characters.
