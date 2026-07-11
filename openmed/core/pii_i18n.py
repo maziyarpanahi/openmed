@@ -1491,11 +1491,10 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Australian Medicare card number (10 digits, ``NNNN NNNNN N`` with an
-    # optional trailing issue / reference digit; weighted mod-10 checksum on
-    # the first eight digits guards it).
+    # Australian Medicare card number (exactly 10 digits, ``NNNN NNNNN N``;
+    # weighted mod-10 checksum on the first eight digits guards it).
     PIIPattern(
-        r"\b\d{4}\s?\d{5}\s?\d(?:\s?/?\s?\d)?\b",
+        r"\b\d{4}\s?\d{5}\s?\d\b(?!\s?/?\s?\d)",
         "national_id",
         priority=12,
         base_score=0.45,
