@@ -1415,18 +1415,26 @@ class BCPHNProvider(BaseProvider):
 
 # ---------------------------------------------------------------------------
 # Australian Medicare card number (10 digits, weighted checksum + issue digit)
-# and Tax File Number (TFN, 8-9 digit weighted mod-11)
+# and Tax File Number (TFN, 9-digit weighted mod-11)
 # ---------------------------------------------------------------------------
 
 # Weights applied to the first eight Medicare digits before the mod-10 check
-# digit (the ninth digit). The tenth digit is the issue / reference number and
-# is not part of the checksum.
+# digit (the ninth digit). The tenth digit is the card issue number and is not
+# part of the checksum; a person's separate IRN may follow the full card number.
 _MEDICARE_WEIGHTS: Sequence[int] = (1, 3, 7, 9, 1, 3, 7, 9)
 
-# ATO Tax File Number weighting factors. Modern TFNs are nine digits; the
-# legacy eight-digit form is still encountered in historical records.
+# ATO Tax File Number weighting factors for the published nine-digit format.
 _TFN_WEIGHTS_9: Sequence[int] = (1, 4, 3, 7, 5, 8, 6, 9, 10)
-_TFN_WEIGHTS_8: Sequence[int] = (10, 7, 8, 4, 6, 3, 5, 1)
+
+# Medicare accepts the 10-digit card in plain or printed 4-5-1 grouping. A
+# separate one-digit Individual Reference Number (IRN) may follow contiguously,
+# after a space/hyphen, or after a slash. TFNs accept only their plain or
+# canonically spaced 3-3-3 form.
+_AUSTRALIAN_MEDICARE_RE = re.compile(
+    r"^(?P<card>[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+    r"(?:(?:[ ]*/[ ]*|[ -]?)(?P<irn>[1-9]))?$"
+)
+_AUSTRALIAN_TFN_RE = re.compile(r"^(?:\d{9}|\d{3} \d{3} \d{3})$")
 
 
 def validate_australian_medicare(text: str) -> bool:
@@ -1434,26 +1442,27 @@ def validate_australian_medicare(text: str) -> bool:
 
     Medicare card numbers are ten digits. The first eight digits are weighted
     by ``1, 3, 7, 9, 1, 3, 7, 9`` and summed modulo 10; that remainder must
-    equal the ninth digit (the check digit). The tenth digit is the card's
-    issue / reference number and does not participate in the checksum. The
-    leading digit is constrained to ``2``-``6`` by Services Australia's
-    published numbering scheme.
+    equal the ninth digit (the check digit). The tenth digit is the card issue
+    number and does not participate in the checksum. A separate one-digit
+    Individual Reference Number (IRN) may follow the card number. The leading
+    digit is constrained to ``2``-``6`` by Services Australia's published
+    numbering scheme.
 
     This is a health identifier under HIPAA cross-mapping: it identifies an
     individual's enrolment in the Australian Medicare scheme.
 
     Args:
-        text: Medicare number, with or without spaces (``NNNN NNNNN N``).
+        text: Medicare card number, with or without printed spaces
+            (``NNNN NNNNN N``), optionally followed by a one-digit IRN.
 
     Returns:
         True when the value has a valid Medicare shape and checksum.
     """
 
-    digits = _digits_only(text)
-    if len(digits) != 10:
+    match = _AUSTRALIAN_MEDICARE_RE.fullmatch(text.strip())
+    if match is None:
         return False
-    if digits[0] not in "23456":
-        return False
+    digits = _digits_only(match.group("card"))
 
     numbers = [int(digit) for digit in digits]
     total = sum(weight * value for weight, value in zip(_MEDICARE_WEIGHTS, numbers[:8]))
@@ -1476,24 +1485,19 @@ def generate_australian_medicare(*, rng: random.Random | None = None) -> str:
 
 
 def _tfn_checksum_ok(digits: str) -> bool:
-    numbers = [int(digit) for digit in digits]
-    if len(numbers) == 9:
-        weights = _TFN_WEIGHTS_9
-    elif len(numbers) == 8:
-        weights = _TFN_WEIGHTS_8
-    else:
+    if len(digits) != 9 or digits == "000000000":
         return False
-    total = sum(weight * value for weight, value in zip(weights, numbers))
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(_TFN_WEIGHTS_9, numbers))
     return total % 11 == 0
 
 
 def validate_australian_tfn(text: str) -> bool:
     """Validate an Australian Tax File Number (TFN).
 
-    A TFN is eight or nine digits guarded by a weighted modulus-11 checksum.
-    Nine-digit numbers use the weights ``1, 4, 3, 7, 5, 8, 6, 9, 10`` and
-    eight-digit numbers use ``10, 7, 8, 4, 6, 3, 5, 1``; the weighted sum must
-    be divisible by 11.
+    A TFN is nine digits guarded by a weighted modulus-11 checksum. The weights
+    are ``1, 4, 3, 7, 5, 8, 6, 9, 10`` and the weighted sum must be divisible
+    by 11. The all-zero value is not a valid issued TFN.
 
     Args:
         text: TFN string, with or without spaces (``NNN NNN NNN``).
@@ -1502,9 +1506,10 @@ def validate_australian_tfn(text: str) -> bool:
         True when the value has a valid TFN length and checksum.
     """
 
-    digits = _digits_only(text)
-    if len(digits) not in (8, 9):
+    candidate = text.strip()
+    if _AUSTRALIAN_TFN_RE.fullmatch(candidate) is None:
         return False
+    digits = _digits_only(candidate)
     return _tfn_checksum_ok(digits)
 
 
