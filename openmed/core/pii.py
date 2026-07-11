@@ -701,6 +701,16 @@ def _apply_pii_smart_merging(
             start=e["start"],
             end=e["end"],
             confidence=e["score"],
+            metadata=(
+                {
+                    "semantic_merge": {
+                        "source_labels": list(e.get("source_labels", ())),
+                        "mixed_label_union": bool(e.get("mixed_label_union", False)),
+                    }
+                }
+                if e.get("source_labels")
+                else None
+            ),
         )
         for e in merged_dicts
     ]
@@ -1198,10 +1208,26 @@ def _apply_clinical_protection_to_result(
 
 def _context_window(
     text: str, start: int, end: int, *, size: int = 32
-) -> dict[str, str]:
+) -> dict[str, dict[str, int | str]]:
+    from .audit import hash_text
+
+    before_start = max(0, start - size)
+    after_end = min(len(text), end + size)
+    before = text[before_start:start]
+    after = text[end:after_end]
     return {
-        "before": text[max(0, start - size) : start],
-        "after": text[end : min(len(text), end + size)],
+        "before": {
+            "start": before_start,
+            "end": start,
+            "length": len(before),
+            "text_hash": hash_text(before),
+        },
+        "after": {
+            "start": end,
+            "end": after_end,
+            "length": len(after),
+            "text_hash": hash_text(after),
+        },
     }
 
 
@@ -1637,12 +1663,21 @@ def _entity_redaction_method(
     return fallback
 
 
+def _is_mixed_label_union(entity: PIIEntity) -> bool:
+    """Return whether smart merging joined distinct semantic label families."""
+    metadata = entity.metadata or {}
+    semantic_merge = metadata.get("semantic_merge")
+    return isinstance(semantic_merge, Mapping) and bool(
+        semantic_merge.get("mixed_label_union", False)
+    )
+
+
 def _format_preserve_uses_mask_fallback(
     entity: PIIEntity,
     anonymizer: Optional["Anonymizer"],
     lang: str,
 ) -> bool:
-    if anonymizer is None:
+    if anonymizer is None or _is_mixed_label_union(entity):
         return True
     return not anonymizer.can_format_preserve(
         entity.original_text or entity.text,
@@ -2015,14 +2050,21 @@ def _redact_entity(
     elif method == "replace":
         if anonymizer is not None:
             original = entity.original_text or entity.text
+            surrogate_label = (
+                "OTHER" if _is_mixed_label_union(entity) else entity.entity_type
+            )
             if surrogate_vault is not None:
-                label = entity.canonical_label or entity.entity_type
+                label = (
+                    "OTHER"
+                    if _is_mixed_label_union(entity)
+                    else entity.canonical_label or entity.entity_type
+                )
 
                 def _create_surrogate(attempt: int) -> str:
                     source = original if attempt == 0 else f"{original}|{attempt}"
                     return anonymizer.surrogate(
                         source,
-                        entity.entity_type,
+                        surrogate_label,
                         lang=lang,
                     )
 
@@ -2034,12 +2076,14 @@ def _redact_entity(
                 )
             return anonymizer.surrogate(
                 original,
-                entity.entity_type,
+                surrogate_label,
                 lang=lang,
             )
         return _generate_fake_pii(entity.entity_type, lang=lang)
 
     elif method == "format_preserve":
+        if _is_mixed_label_union(entity):
+            return _mask_placeholder(entity)
         if anonymizer is not None:
             surrogate = anonymizer.format_preserving_surrogate(
                 entity.original_text or entity.text,
@@ -2058,6 +2102,8 @@ def _redact_entity(
 
     elif method == "shift_dates":
         # Shift dates by offset
+        if _is_mixed_label_union(entity):
+            return _mask_placeholder(entity)
         if _is_date_entity(entity, lang) and date_shift_days is not None:
             return _shift_date(
                 entity.text,
