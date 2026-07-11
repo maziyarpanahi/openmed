@@ -481,6 +481,96 @@ class TestMultilingualPatterns:
         assert merged[0]["start"] == 5
         assert merged[0]["end"] == 15
 
+    def test_semantic_submatch_never_shrinks_model_span(self):
+        """A regex submatch cannot discard part of a model-detected identifier."""
+        text = "MRN-ZZ-90210-777"
+        entities = [
+            {
+                "entity_type": "ID",
+                "score": 0.99,
+                "start": 0,
+                "end": len(text),
+                "word": text,
+            }
+        ]
+        postcode = PIIPattern(
+            r"\b90210\b",
+            "postcode",
+            priority=10,
+            base_score=0.8,
+        )
+
+        merged = merge_entities_with_semantic_units(
+            entities,
+            text,
+            patterns=[postcode],
+            prefer_model_labels=True,
+        )
+
+        assert len(merged) == 1
+        assert merged[0]["start"] == 0
+        assert merged[0]["end"] == len(text)
+        assert merged[0]["word"] == text
+
+    def test_transitive_semantic_expansions_preserve_full_union(self):
+        """Two semantic units sharing a model span become one safe union."""
+        text = "111xxx222"
+        entities = [
+            {
+                "entity_type": "ID",
+                "score": 0.99,
+                "start": 2,
+                "end": 7,
+                "word": text[2:7],
+            }
+        ]
+        patterns = [
+            PIIPattern(r"111", "first", priority=10, base_score=0.8),
+            PIIPattern(r"222", "second", priority=9, base_score=0.8),
+        ]
+
+        merged = merge_entities_with_semantic_units(
+            entities,
+            text,
+            patterns=patterns,
+            prefer_model_labels=True,
+        )
+
+        assert len(merged) == 1
+        assert merged[0]["start"] == 0
+        assert merged[0]["end"] == len(text)
+        assert merged[0]["word"] == text
+
+    def test_heterogeneous_semantic_union_is_marked_for_safe_redaction(self):
+        """A greedy semantic match spanning two model labels must be explicit."""
+        text = "Patientzzq-sentinel@fuzz.invalidPatientZzyxx Qwerty"
+        email = "zzq-sentinel@fuzz.invalid"
+        name = "Zzyxx Qwerty"
+        entities = [
+            {
+                "entity_type": "EMAIL",
+                "score": 0.99,
+                "start": text.index(email),
+                "end": text.index(email) + len(email),
+                "word": email,
+            },
+            {
+                "entity_type": "NAME",
+                "score": 0.99,
+                "start": text.index(name),
+                "end": text.index(name) + len(name),
+                "word": name,
+            },
+        ]
+
+        merged = merge_entities_with_semantic_units(entities, text)
+
+        assert len(merged) == 1
+        assert merged[0]["start"] <= text.index(email)
+        assert merged[0]["end"] >= text.index(name) + len(name)
+        assert merged[0]["mixed_label_union"] is True
+        assert set(merged[0]["source_labels"]) >= {"EMAIL", "NAME", "email"}
+
     def test_dutch_bsn_pattern(self):
         """Test Dutch BSN pattern detection."""
         from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS
