@@ -37,9 +37,11 @@ def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     assert "python -m build" in content
     assert "twine check dist/*" in content
     assert "actions/attest@v4" in content
+    assert "continue-on-error: true" in content
     assert "subject-checksums: release-artifact-digests.txt" in content
     assert "release-artifact-digests.txt" in content
     assert 'gh attestation verify "$artifact"' in content
+    assert "steps.attest-distributions.outcome == 'success'" in content
     assert "--predicate-type https://slsa.dev/provenance/v1" in content
     assert ".github/workflows/provenance.yml" in content
     assert '--source-digest "$GITHUB_SHA"' in content
