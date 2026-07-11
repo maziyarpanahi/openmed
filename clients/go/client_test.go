@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,11 +72,11 @@ func (r *countingReadCloser) Read(p []byte) (int, error) {
 func (r *countingReadCloser) Close() error { return nil }
 
 func TestNewNormalizesBaseURL(t *testing.T) {
-	client, err := openmed.New("http://example.com:8080///")
+	client, err := openmed.New("https://example.com:8080///")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if got := client.BaseURL(); got != "http://example.com:8080" {
+	if got := client.BaseURL(); got != "https://example.com:8080" {
 		t.Fatalf("BaseURL = %q, want trailing slashes trimmed", got)
 	}
 }
@@ -104,6 +105,67 @@ func TestNewRejectsNonHTTPBaseURLs(t *testing.T) {
 				t.Fatalf("New(%q) succeeded, want an error", baseURL)
 			}
 		})
+	}
+}
+
+func TestNewRequiresHTTPSForNonLoopbackHosts(t *testing.T) {
+	for _, baseURL := range []string{
+		"http://example.com:8080",
+		"http://openmed.internal:8080",
+		"http://0.0.0.0:8080",
+		"http://[::]:8080",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			if _, err := openmed.New(baseURL); err == nil {
+				t.Fatalf("New(%q) succeeded without an insecure-HTTP opt-in", baseURL)
+			}
+		})
+	}
+
+	for _, baseURL := range []string{
+		"http://localhost:8080",
+		"http://LOCALHOST.:8080",
+		"http://127.0.0.1:8080",
+		"http://127.42.0.1:8080",
+		"http://[::1]:8080",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			if _, err := openmed.New(baseURL); err != nil {
+				t.Fatalf("New(%q): %v", baseURL, err)
+			}
+		})
+	}
+
+	client, err := openmed.New(
+		"http://openmed.internal:8080",
+		openmed.WithInsecureHTTP(),
+	)
+	if err != nil {
+		t.Fatalf("New with explicit insecure HTTP: %v", err)
+	}
+	if got := client.BaseURL(); got != "http://openmed.internal:8080" {
+		t.Fatalf("BaseURL = %q", got)
+	}
+}
+
+func TestNewValidationErrorsDoNotExposeBaseURLSecrets(t *testing.T) {
+	tests := []struct {
+		baseURL string
+		secret  string
+	}{
+		{"http://user:synthetic-password@example.com", "synthetic-password"},
+		{"http://example.com?token=synthetic-query-token", "synthetic-query-token"},
+		{"://synthetic-malformed-secret", "synthetic-malformed-secret"},
+		{"http://example.com/synthetic-path-secret", "synthetic-path-secret"},
+	}
+	for _, test := range tests {
+		_, err := openmed.New(test.baseURL)
+		if err == nil {
+			t.Fatalf("New(%q) unexpectedly succeeded", test.baseURL)
+		}
+		if strings.Contains(err.Error(), test.secret) {
+			t.Fatalf("validation error exposed secret %q: %v", test.secret, err)
+		}
 	}
 }
 
@@ -153,6 +215,69 @@ func TestDefaultClientDoesNotForwardClinicalTextAcrossRedirects(t *testing.T) {
 	}
 }
 
+func TestCustomClientWithoutPolicyDoesNotForwardClinicalTextAcrossRedirects(t *testing.T) {
+	redirectTargetCalled := false
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirectTargetCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	httpClient := &http.Client{Timeout: time.Second}
+	client, err := openmed.New(
+		redirector.URL,
+		openmed.WithHTTPClient(httpClient),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = client.Deidentify(context.Background(), openmed.PIIDeidentifyRequest{
+		Text: "synthetic patient Maria Garcia, MRN 12345",
+	})
+	apiErr, ok := openmed.AsAPIError(err)
+	if !ok || apiErr.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("Deidentify error = %v, want a 307 APIError", err)
+	}
+	if redirectTargetCalled {
+		t.Fatal("custom client with a nil policy forwarded clinical text")
+	}
+	if httpClient.CheckRedirect != nil {
+		t.Fatal("WithHTTPClient mutated the caller's client")
+	}
+}
+
+func TestCustomClientPreservesExplicitRedirectPolicy(t *testing.T) {
+	policyCalled := false
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/elsewhere", http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	httpClient := &http.Client{
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			policyCalled = true
+			return http.ErrUseLastResponse
+		},
+	}
+	client, err := openmed.New(redirector.URL, openmed.WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = client.Health(context.Background())
+	apiErr, ok := openmed.AsAPIError(err)
+	if !ok || apiErr.StatusCode != http.StatusTemporaryRedirect {
+		t.Fatalf("Health error = %v, want a 307 APIError", err)
+	}
+	if !policyCalled {
+		t.Fatal("explicit redirect policy was not used")
+	}
+}
+
 func TestWithHTTPClient(t *testing.T) {
 	called := false
 	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -173,6 +298,28 @@ func TestWithHTTPClient(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("custom HTTP client was not used")
+	}
+}
+
+func TestTransportErrorsDoNotExposeBasePathsOrJobIDs(t *testing.T) {
+	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return nil, errors.New("synthetic dial failure")
+	})}
+	client, err := openmed.New(
+		"https://openmed.invalid/synthetic-base-secret",
+		openmed.WithHTTPClient(httpClient),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = client.GetJob(context.Background(), "synthetic-patient-job-id")
+	if err == nil {
+		t.Fatal("GetJob unexpectedly succeeded")
+	}
+	for _, secret := range []string{"synthetic-base-secret", "synthetic-patient-job-id"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Fatalf("transport error exposed %q: %v", secret, err)
+		}
 	}
 }
 
@@ -256,7 +403,11 @@ func TestEndpointMethodsAndPaths(t *testing.T) {
 				if r.Method != test.method || r.URL.EscapedPath() != test.path {
 					t.Fatalf("request = %s %s, want %s %s", r.Method, r.URL.EscapedPath(), test.method, test.path)
 				}
-				w.Header().Set("Content-Type", "application/json")
+				contentType := "application/json"
+				if test.path == "/pii/extract/stream" {
+					contentType = "application/x-ndjson"
+				}
+				w.Header().Set("Content-Type", contentType)
 				_, _ = io.WriteString(w, "{}")
 			})
 			if err := test.call(client); err != nil {
@@ -475,6 +626,68 @@ func TestExtractPIIStreamBoundsEachEvent(t *testing.T) {
 	}
 }
 
+func TestExtractPIIStreamRejectsNonNDJSONSuccess(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"error":{"code":"proxy_error"}}`)
+	})
+
+	stream, err := client.ExtractPIIStream(
+		context.Background(),
+		openmed.PIIExtractStreamRequest{Text: "synthetic note"},
+	)
+	if err == nil || !strings.Contains(err.Error(), "non-NDJSON") {
+		t.Fatalf("ExtractPIIStream error = %v, want a non-NDJSON error", err)
+	}
+	if stream != nil {
+		t.Fatal("non-NDJSON response returned a stream")
+	}
+}
+
+func TestExtractPIIStreamRejectsNonObjectEvent(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson; charset=utf-8")
+		_, _ = io.WriteString(w, "null\n")
+	})
+
+	stream, err := client.ExtractPIIStream(
+		context.Background(),
+		openmed.PIIExtractStreamRequest{Text: "synthetic note"},
+	)
+	if err != nil {
+		t.Fatalf("ExtractPIIStream: %v", err)
+	}
+	defer stream.Close()
+	if stream.Next() {
+		t.Fatal("null event unexpectedly decoded")
+	}
+	if err := stream.Err(); err == nil || !strings.Contains(err.Error(), "not a JSON object") {
+		t.Fatalf("stream error = %v, want a JSON-object error", err)
+	}
+}
+
+func TestExtractPIIStreamRejectsObjectWithoutEventType(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = io.WriteString(w, `{"error":{"message":"synthetic upstream body"}}`+"\n")
+	})
+
+	stream, err := client.ExtractPIIStream(
+		context.Background(),
+		openmed.PIIExtractStreamRequest{Text: "synthetic note"},
+	)
+	if err != nil {
+		t.Fatalf("ExtractPIIStream: %v", err)
+	}
+	defer stream.Close()
+	if stream.Next() {
+		t.Fatal("object without an event type unexpectedly decoded")
+	}
+	if err := stream.Err(); err == nil || !strings.Contains(err.Error(), "has no type") {
+		t.Fatalf("stream error = %v, want a missing-type error", err)
+	}
+}
+
 func TestDeidentify(t *testing.T) {
 	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/pii/deidentify" {
@@ -626,8 +839,33 @@ func TestAPIErrorEnvelope(t *testing.T) {
 	if apiErr.Envelope.Error.RequestID != "req-1" {
 		t.Fatalf("RequestID = %q, want req-1", apiErr.Envelope.Error.RequestID)
 	}
-	if got := apiErr.Error(); !strings.Contains(got, "validation_error") {
-		t.Fatalf("Error() = %q, want the service error code", got)
+	if got := apiErr.Error(); !strings.Contains(got, "422") ||
+		strings.Contains(got, "validation_error") ||
+		strings.Contains(got, "Text must not be blank") {
+		t.Fatalf("Error() = %q, want a PHI-safe status-only summary", got)
+	}
+}
+
+func TestAPIErrorDefaultStringOmitsEnvelopeMessageAndDetails(t *testing.T) {
+	const sensitive = "synthetic patient Maria Garcia, MRN 12345"
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = io.WriteString(w, `{"error":{"code":"validation_error","message":"`+sensitive+`","details":"`+sensitive+`"}}`)
+	})
+
+	_, err := client.Deidentify(context.Background(), openmed.PIIDeidentifyRequest{
+		Text: "synthetic note",
+	})
+	apiErr, ok := openmed.AsAPIError(err)
+	if !ok {
+		t.Fatalf("expected *APIError, got %T", err)
+	}
+	if apiErr.Envelope.Error.Message != sensitive || apiErr.Details() != sensitive {
+		t.Fatal("typed APIError did not preserve the explicit service envelope")
+	}
+	if strings.Contains(apiErr.Error(), sensitive) {
+		t.Fatal("default APIError string exposed service message or details")
 	}
 }
 
@@ -740,6 +978,45 @@ func TestBufferedResponseBodyIsBounded(t *testing.T) {
 	}
 	if _, err := limited.Health(context.Background()); !errors.Is(err, openmed.ErrResponseTooLarge) {
 		t.Fatalf("Health error = %v, want ErrResponseTooLarge", err)
+	}
+}
+
+func TestMaximumResponseLimitDoesNotOverflow(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"ok","service":"openmed"}`)
+	})
+	unbounded, err := openmed.New(
+		client.BaseURL(),
+		openmed.WithMaxResponseBodyBytes(math.MaxInt64),
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	response, err := unbounded.Health(context.Background())
+	if err != nil {
+		t.Fatalf("Health: %v", err)
+	}
+	if response.Status != "ok" {
+		t.Fatalf("Health status = %q, want ok", response.Status)
+	}
+}
+
+func TestTypedResponsesRequireJSONObject(t *testing.T) {
+	for _, body := range []string{"", "null", "[]", `"ok"`} {
+		t.Run(body, func(t *testing.T) {
+			client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, body)
+			})
+			response, err := client.Health(context.Background())
+			if err == nil || !strings.Contains(err.Error(), "not a JSON object") {
+				t.Fatalf("Health error = %v, want a JSON-object error", err)
+			}
+			if response != nil {
+				t.Fatalf("Health response = %+v, want nil", response)
+			}
+		})
 	}
 }
 

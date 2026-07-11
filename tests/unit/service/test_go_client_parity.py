@@ -54,10 +54,20 @@ GO_REQUEST_STRUCT_BY_SCHEMA = {
     "SMARTBackendIngestionRequest": "SMARTBackendIngestionRequest",
 }
 
+GO_NAMED_STRING_TYPE_BY_FIELD = {
+    "aggregation_strategy": "AggregationStrategy",
+    "lang": "PIILanguage",
+    "method": "DeidentificationMethod",
+    "policy": "PrivacyPolicy",
+}
+
 
 def test_go_client_covers_openapi_paths_and_request_fields() -> None:
     spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+    string_constants = dict(
+        re.findall(r'^\s*(\w+)\s*=\s*"([^"]+)"$', source, re.MULTILINE)
+    )
 
     assert set(_openapi_operations(spec)) == set(CLIENT_METHOD_BY_OPERATION)
 
@@ -65,7 +75,18 @@ def test_go_client_covers_openapi_paths_and_request_fields() -> None:
         assert re.search(
             rf"^func \(c \*Client\) {re.escape(method_name)}\(", source, re.MULTILINE
         ), f"{http_method.upper()} {path} is missing Client.{method_name}()."
-        assert f'"{path}"' in source, f"{path} is not called by the SDK."
+        method_body = _go_client_method_body(source, method_name)
+        verb_markers = {
+            "get": ("c.get(", "http.MethodGet"),
+            "post": ("c.post(", "http.MethodPost"),
+        }
+        assert any(marker in method_body for marker in verb_markers[http_method]), (
+            f"Client.{method_name} does not issue {http_method.upper()}."
+        )
+        assert f'"{path}"' in method_body or any(
+            constant_name in method_body and constant_value == path
+            for constant_name, constant_value in string_constants.items()
+        ), f"Client.{method_name} does not call {path}."
 
         operation = spec["paths"][path][http_method]
         request_schema = _request_schema(operation, spec)
@@ -95,6 +116,27 @@ def test_go_request_structs_match_openapi_components() -> None:
         )
 
 
+def test_go_request_field_types_match_openapi() -> None:
+    spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
+    source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
+
+    for schema_name, struct_name in GO_REQUEST_STRUCT_BY_SCHEMA.items():
+        schema = spec["components"]["schemas"][schema_name]
+        fields = _go_struct_fields(source, struct_name)
+        for field_name, property_schema in schema.get("properties", {}).items():
+            go_type = fields[field_name]["type"]
+            assert _go_type_matches_schema(go_type, property_schema), (
+                f"Go {struct_name}.{field_name} type {go_type!r} differs from "
+                f"OpenAPI {schema_name}.{field_name}."
+            )
+            expected_named_type = GO_NAMED_STRING_TYPE_BY_FIELD.get(field_name)
+            if expected_named_type is not None:
+                assert go_type.removeprefix("*") == expected_named_type, (
+                    f"Go {struct_name}.{field_name} must use "
+                    f"{expected_named_type}, not {go_type}."
+                )
+
+
 def test_go_request_requiredness_and_zero_defaults_match_openapi() -> None:
     spec = json.loads(OPENAPI_PATH.read_text(encoding="utf-8"))
     source = SDK_SOURCE_PATH.read_text(encoding="utf-8")
@@ -112,19 +154,27 @@ def test_go_request_requiredness_and_zero_defaults_match_openapi() -> None:
 
         for field_name, property_schema in schema.get("properties", {}).items():
             property_type = _schema_type(property_schema)
-            if property_type == "boolean" and property_schema.get("default") is True:
+            is_optional = field_name not in required
+            if (
+                is_optional
+                and property_type == "boolean"
+                and property_schema.get("default") is not False
+            ):
                 assert fields[field_name]["type"] == "*bool", (
                     f"Go {struct_name}.{field_name} must be *bool so explicit false "
-                    "is not replaced by the OpenAPI true default."
+                    "is distinguishable from omission."
                 )
             if property_type not in {"integer", "number"}:
                 continue
-            default = property_schema.get("default")
-            minimum = property_schema.get("minimum")
-            if default not in (None, 0, 0.0) and minimum in (0, 0.0):
+            default_is_zero = property_schema.get("default") in (0, 0.0)
+            if (
+                is_optional
+                and _schema_accepts_zero(property_schema)
+                and not default_is_zero
+            ):
                 assert fields[field_name]["type"].startswith("*"), (
                     f"Go {struct_name}.{field_name} must be a pointer so an "
-                    "explicit zero is not replaced by the OpenAPI default."
+                    "explicit zero is distinguishable from omission."
                 )
 
 
@@ -232,6 +282,25 @@ def _openapi_operations(spec: dict[str, Any]) -> list[tuple[str, str]]:
     ]
 
 
+def _go_client_method_body(source: str, method_name: str) -> str:
+    signature = re.search(
+        rf"^func \(c \*Client\) {re.escape(method_name)}\(.*?\) .*?\{{",
+        source,
+        flags=re.DOTALL | re.MULTILINE,
+    )
+    assert signature is not None, f"Go client method {method_name} is missing."
+    opening_brace = signature.end() - 1
+    depth = 0
+    for index in range(opening_brace, len(source)):
+        if source[index] == "{":
+            depth += 1
+        elif source[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening_brace + 1 : index]
+    raise AssertionError(f"Go client method {method_name} has an unclosed body.")
+
+
 def _request_schema(
     operation: dict[str, Any], spec: dict[str, Any]
 ) -> dict[str, Any] | None:
@@ -312,6 +381,65 @@ def _schema_type(schema: dict[str, Any]) -> str | None:
         if candidate_type != "null":
             return candidate_type
     return None
+
+
+def _go_type_matches_schema(go_type: str, schema: dict[str, Any]) -> bool:
+    base_go_type = go_type.removeprefix("*")
+    variants = [
+        variant
+        for variant in schema.get("anyOf", [schema])
+        if variant.get("type") != "null"
+    ]
+    if len(variants) > 1:
+        return base_go_type == "any"
+    if not variants:
+        return False
+
+    active = variants[0]
+    ref = active.get("$ref")
+    if isinstance(ref, str):
+        return base_go_type == ref.removeprefix("#/components/schemas/")
+
+    schema_type = active.get("type")
+    if schema_type == "array":
+        return base_go_type.startswith("[]") and _go_type_matches_schema(
+            base_go_type[2:], active["items"]
+        )
+
+    go_types_by_schema_type = {
+        "boolean": {"bool"},
+        "integer": {"int"},
+        "number": {"float64"},
+        "string": {
+            "string",
+            "AggregationStrategy",
+            "DeidentificationMethod",
+            "PIILanguage",
+            "PrivacyPolicy",
+        },
+    }
+    return base_go_type in go_types_by_schema_type.get(schema_type, set())
+
+
+def _schema_accepts_zero(schema: dict[str, Any]) -> bool:
+    variants = [
+        variant
+        for variant in schema.get("anyOf", [schema])
+        if variant.get("type") in {"integer", "number"}
+    ]
+    if len(variants) != 1:
+        return False
+    active = variants[0]
+    minimum = active.get("minimum")
+    maximum = active.get("maximum")
+    exclusive_minimum = active.get("exclusiveMinimum")
+    exclusive_maximum = active.get("exclusiveMaximum")
+    return (
+        (minimum is None or minimum <= 0)
+        and (maximum is None or maximum >= 0)
+        and (exclusive_minimum is None or exclusive_minimum < 0)
+        and (exclusive_maximum is None or exclusive_maximum > 0)
+    )
 
 
 def _schema_references(value: Any) -> list[str]:

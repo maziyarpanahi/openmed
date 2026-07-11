@@ -13,8 +13,9 @@ spec (`docs/api/openapi.json`).
 - A `context.Context` on every call for cancellation and deadlines.
 - Non-2xx responses surfaced as a typed `*APIError` carrying the service error
   envelope (`code`, `message`, `details`, `request_id`).
-- Bounded buffered responses, bounded stream events, and redirects disabled by
-  default so clinical text is not silently forwarded to another origin.
+- Bounded buffered responses, bounded stream events, redirects disabled by
+  default, and HTTPS required for non-loopback hosts so clinical text and
+  service credentials are not silently exposed in transit.
 
 ## Install
 
@@ -120,6 +121,12 @@ hc := &http.Client{Timeout: 30 * time.Second}
 client, err := openmed.New("http://localhost:8080", openmed.WithHTTPClient(hc))
 ```
 
+The SDK copies the supplied client's public configuration without copying its
+internal synchronization state. If `CheckRedirect` is nil, redirects remain
+disabled. A non-nil redirect policy is treated as an explicit override; take
+particular care with 307/308 responses because Go may resend POST bodies that
+contain clinical text or service credentials.
+
 ### Streaming and batch jobs
 
 ```go
@@ -141,6 +148,7 @@ if err := stream.Err(); err != nil {
 }
 
 // Submit a batch de-identification job and poll it.
+// Document IDs are echoed by the service, so keep them free of PHI.
 job, err := client.CreateJob(ctx, openmed.DeidentifyJobRequest{
 	Documents: []openmed.DeidentifyJobDocument{{ID: "note-1", Text: note}},
 	Method:    openmed.MethodMask,
@@ -157,6 +165,11 @@ proxy returns an empty, oversized, wrongly typed, or malformed body, the client
 returns a synthetic `http_error` with nil details and does not retain that body;
 the body may contain raw clinical text or credentials.
 
+The default `error` string contains only the HTTP status. It deliberately omits
+the service message and details so routine error logging does not copy possible
+clinical text. Inspect the typed envelope explicitly only where that data can be
+handled safely.
+
 ```go
 _, err := client.Deidentify(ctx, openmed.PIIDeidentifyRequest{
 	Text:   "   ",
@@ -165,22 +178,28 @@ _, err := client.Deidentify(ctx, openmed.PIIDeidentifyRequest{
 if apiErr, ok := openmed.AsAPIError(err); ok {
 	fmt.Println("status:", apiErr.StatusCode)
 	fmt.Println("code:", apiErr.Code())
-	fmt.Println("message:", apiErr.Envelope.Error.Message)
-	fmt.Println("details:", apiErr.Details())
+	fmt.Println("request ID:", apiErr.Envelope.Error.RequestID)
+	// Inspect Message and Details only inside a PHI-approved handling path.
 }
 ```
 
-## Response limits and redirects
+## Transport safety and response limits
 
 Buffered JSON success responses are limited to 64 MiB by default. Configure a
 different positive limit with `WithMaxResponseBodyBytes`. The NDJSON endpoint is
 not buffered as a whole; each decoded event is limited to 4 MiB by default and
 can be configured with `WithMaxStreamEventBytes`.
 
-The default HTTP client does not follow redirects. This prevents POST bodies
-containing clinical text from being forwarded to a redirect target. A custom
-client supplied with `WithHTTPClient` uses that client's redirect policy, so set
-`CheckRedirect` deliberately if you provide one.
+Cleartext HTTP is accepted for loopback hosts such as `localhost`, `127.0.0.1`,
+and `::1`. Non-loopback services must use HTTPS. If transport security is
+provided outside the application on a trusted, isolated network, callers can
+make the cleartext exception explicit with `WithInsecureHTTP()`; never use that
+option across an untrusted network.
+
+Redirects are disabled by default, including when a custom `*http.Client` has a
+nil `CheckRedirect`. This prevents POST bodies containing clinical text or a
+SMART private key from being forwarded to a redirect target. Only provide a
+non-nil redirect policy when that forwarding behavior is deliberate.
 
 ## Endpoint coverage
 
