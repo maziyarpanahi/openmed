@@ -17,10 +17,10 @@ register.
 It is deliberately paired with an executable abuse-case suite,
 [`tests/unit/security/test_redactor_leakage_bypass.py`](https://github.com/maziyarpanahi/openmed/blob/master/tests/unit/security/test_redactor_leakage_bypass.py),
 which drives mitigated abuse classes through the real de-identification surfaces
-on **synthetic identifiers only** and asserts that each is caught. The public
-catalog describes known gaps only at the threat-class level; actionable
-reproductions for unmitigated bypasses are handled through the private disclosure
-process in `SECURITY.md` until a coordinated fix is ready.
+on **synthetic identifiers only** and asserts that each is caught. The current
+public catalog describes known gaps only at the threat-class level and
+intentionally omits actionable reproductions for unmitigated bypasses. Future
+reports should follow the vulnerability-reporting process in `SECURITY.md`.
 
 - Scope: the OpenMed library de-identification path (detection, normalization,
   arbitration, redaction, surrogate/date-shift, audit). Hosted endpoints and
@@ -152,14 +152,15 @@ model-free and offline.
 ## 6. Abuse-case catalog
 
 Each abuse case records the vector class, attacker goal, mitigation (or gap), and
-status. Mitigated classes are referenced by the public test suite. Actionable
-details for unmitigated classes stay private under `SECURITY.md`. **AC** ids are
-stable, and all published examples are **synthetic**.
+status. Mitigated classes are referenced by the public test suite. The current
+public catalog intentionally omits actionable details for unmitigated classes
+and directs future reports to `SECURITY.md`. **AC** ids are stable, and all
+published examples are **synthetic**.
 
 | ID | Abuse case | Vector | Mitigation | Status |
 |---|---|---|---|---|
 | **AC-01** | Zero-width / whitespace split identifier | Zero-width joiners or stray spaces inside an SSN/card/email so the ML token and the regex both break. | `normalize_for_pii_detection` strips zero-width controls; whitespace variants are matched by sweep regexes; smart-merge reunites ML fragments. Then `safety_sweep` recovers. | **Mitigated** |
-| **AC-02** | Uncanonicalized separator mutation | Some visible separator mutations can disrupt structured-identifier matching. Actionable forms and reproductions are withheld from the public document under `SECURITY.md`. | No complete deterministic mitigation is claimed. The class is tracked privately; the ML detector may add defense in depth but is not treated as a guaranteed control. | **Known gap — privately tracked** |
+| **AC-02** | Uncanonicalized separator mutation | Some visible separator mutations can disrupt structured-identifier matching. The current document intentionally omits actionable forms and reproduction details and routes future reports through `SECURITY.md`. | No complete deterministic mitigation is claimed. The ML detector may add defense in depth but is not treated as a guaranteed control. | **Known gap** |
 | **AC-03** | Unicode confusable / mixed-script obfuscation | Greek/Cyrillic/full-width lookalikes substituted into an identifier (`janе.doe@…` with a Cyrillic `е`). | Confusable folding maps lookalikes to Latin before detection; mixed-script is flagged in metadata; spans remap to the original. | **Mitigated** |
 | **AC-04** | Full-width digit encoding | Identifier written with full-width digits (`４１１１ …`) to dodge ASCII-digit regexes. | Full-width forms (U+FF01–FF5E) are folded to ASCII in `normalize_for_pii_detection` before the sweep. | **Mitigated** |
 | **AC-05** | Combining-mark obfuscation | Standalone combining diacritics layered over identifier characters. | Category-`Mn` combining marks are stripped offset-preservingly before detection. | **Mitigated** |
@@ -184,9 +185,9 @@ stable, and all published examples are **synthetic**.
 
 - **AC-02 — uncanonicalized separator mutation.** Some visible separator
   transformations fall outside the normalization and deterministic-pattern
-  contracts. This remains a residual leakage class. In accordance with
-  `SECURITY.md`, exploit-level details and reproductions are tracked privately
-  until a coordinated remediation and disclosure are ready.
+  contracts. This remains a residual leakage class. The current document
+  intentionally omits exploit details; report new findings through the
+  vulnerability-reporting process in `SECURITY.md`.
 
 ## 7. Residual-leakage risks
 
@@ -222,10 +223,10 @@ The abuse-case catalog is executable. Run:
 
 Mitigated `AC-*` classes drive synthetic attempts through the real
 de-identification surfaces (`safety_sweep`, `normalize_for_pii_detection`, and
-`deidentify` with a mocked detector) and assert the identifier is caught. Known,
-unmitigated classes are recorded publicly only at a non-actionable level; their
-reproductions remain in private advisories. A public regression should land with
-the coordinated fix and disclosure, not before it.
+`deidentify` with a mocked detector) and assert the identifier is caught. The
+current public regression suite intentionally omits reproductions for known,
+unmitigated classes and routes future reports through `SECURITY.md`. A public
+regression should land with the coordinated fix and disclosure, not before it.
 
 Report a suspected new bypass **privately** via
 [`SECURITY.md`](https://github.com/maziyarpanahi/openmed/blob/master/SECURITY.md) with a synthetic reproduction — never a public
