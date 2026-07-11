@@ -10,6 +10,7 @@ import unicodedata
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from .budget import RequestBudget, coerce_budget
 from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
 from .labels import hipaa_class_for, normalize_label, policy_label_for
 from .pii_entity_merger import PII_PATTERNS, PIIPattern
@@ -265,6 +266,7 @@ class Pipeline:
         doc_id: str | None = None,
         audit: bool = False,
         explain: bool = False,
+        budget: Optional[RequestBudget] = None,
     ) -> PipelineResult:
         from . import pii
 
@@ -277,13 +279,32 @@ class Pipeline:
             date_shift_secret=date_shift_secret,
         )
         original_text = text.strip()
+
+        # Per-request budget: optional and cooperative. When no budget is
+        # supplied ``budget_clock`` is ``None`` and every checkpoint below is a
+        # no-op, preserving the historical unlimited behavior exactly.
+        resolved_budget = coerce_budget(budget)
+        budget_clock = resolved_budget.start() if resolved_budget is not None else None
+        if budget_clock is not None:
+            # Input-size guard runs before any model inference.
+            budget_clock.check_input_length(
+                len(original_text),
+                checkpoint="pipeline.input_guard",
+            )
+
         normalized = self.stage1_normalize(original_text)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage1_normalize")
         route = self.stage2_language_script(normalized.normalized_text)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage2_language_script")
         resolved_doc_id = doc_id or hmac_text_hash(
             normalized.normalized_text,
             self.hmac_secret,
         )
         section_metadata = self.stage3_doc_type_section(normalized.normalized_text)
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage3_doc_type_section")
         context = PipelineContext(
             doc_id=resolved_doc_id,
             original_text=normalized.original_text,
@@ -408,6 +429,8 @@ class Pipeline:
                 PipelineStageResult(4, STAGE_NAMES[3], spans=deterministic_spans)
             )
 
+            if budget_clock is not None:
+                budget_clock.check("pipeline.stage5_fast_pii_model")
             pii_result = self.stage5_fast_pii_model(normalized.normalized_text, route)
             self._apply_calibration_thresholds(pii_result, route)
             model_spans = self._entities_to_spans(
@@ -444,6 +467,8 @@ class Pipeline:
                 PipelineStageResult(6, STAGE_NAMES[5], spans=clinical_spans)
             )
 
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage7_arbitration")
         arbitration_candidates = (*deterministic_spans, *model_spans, *clinical_spans)
         merged_spans = self.stage7_arbitration(
             arbitration_candidates,
@@ -502,6 +527,8 @@ class Pipeline:
             )
         )
 
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage8_policy_actions")
         policy_spans = self.stage8_policy_actions(
             merged_spans,
             context,
@@ -541,6 +568,8 @@ class Pipeline:
                 ],
             )
 
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage9_safety_sweep")
         sweep_spans, sweep_metadata = self.stage9_safety_sweep(
             normalized.normalized_text,
             pii_result,
@@ -563,6 +592,8 @@ class Pipeline:
             normalized,
             self.hmac_secret,
         )
+        if budget_clock is not None:
+            budget_clock.check("pipeline.stage10_emit")
         deidentified = self.stage10_emit(
             normalized.original_text,
             emission_pii_result,
