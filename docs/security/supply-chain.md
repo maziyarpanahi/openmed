@@ -33,12 +33,13 @@ image labels, and digest verification.
 
 ## PyPI provenance
 
-Tagged library releases use PyPI Trusted Publishing instead of a stored PyPI
-API token. The publish workflow uploads distributions with Sigstore
-attestations, giving each wheel and source distribution signed provenance from
-the release workflow identity. See the
-[PyPI Trusted Publishing](../release/trusted-publishing.md) guide for the PyPI
-configuration and token-retirement checklist.
+Tagged library releases build and check the wheel and source distribution
+before uploading to PyPI, and attempt to generate repository-level SLSA
+provenance evidence in the same release path. The current PyPI upload uses the
+project-scoped `PYPI_API_TOKEN` GitHub secret until the PyPI trusted publisher
+is configured for this workflow. See the
+[PyPI Publishing](../release/trusted-publishing.md) guide for the upload
+contract and migration checklist.
 
 ## Container image signatures
 
