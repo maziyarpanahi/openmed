@@ -1,0 +1,1 @@
+{"id":"cantemist-smoke-1","language":"es","split":"smoke","text":"Informe sintetico: carcinoma benigno localizado.","spans":[{"start":19,"end":36,"label":"MORPHOLOGY_NEOPLASM","text":"carcinoma benigno"}],"metadata":{"synthetic":true}}

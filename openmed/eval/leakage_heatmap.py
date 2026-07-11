@@ -10,7 +10,12 @@ from typing import Any
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval.metrics import (
+    _contains_surface,  # noqa: PLC2701
     _covered_char_count,  # noqa: PLC2701
+    _iter_extraction_offsets,  # noqa: PLC2701
+    _iter_extraction_text_values,  # noqa: PLC2701
+    _merged_interval_length,  # noqa: PLC2701
+    _surface_index,  # noqa: PLC2701
     normalize_eval_spans,
 )
 
@@ -257,7 +262,58 @@ def compute_leakage_heatmap(
         default_device=default_device,
         source_text=source_text,
     )
+    leaked_lengths = [
+        max(span.length - _covered_char_count(span, predicted), 0) for span in gold
+    ]
+    return _heatmap_from_leaked_lengths(gold, leaked_lengths, worst_n=worst_n)
 
+
+def compute_extraction_reemission_heatmap(
+    gold_spans: Iterable[Any],
+    extraction_outputs: Any,
+    *,
+    worst_n: int = 10,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> LeakageHeatmap:
+    """Compute a PHI-free heatmap for extraction or grounding re-emissions."""
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    leaked_intervals: defaultdict[int, list[tuple[int, int]]] = defaultdict(list)
+    surfaces = _surface_index(gold)
+
+    for text in _iter_extraction_text_values(extraction_outputs):
+        folded = text.casefold()
+        for span_index, surface in surfaces:
+            if _contains_surface(folded, surface):
+                span = gold[span_index]
+                leaked_intervals[span_index].append((span.start, span.end))
+
+    for start, end in _iter_extraction_offsets(extraction_outputs):
+        for span_index, span in enumerate(gold):
+            overlap_start = max(start, span.start)
+            overlap_end = min(end, span.end)
+            if overlap_start < overlap_end:
+                leaked_intervals[span_index].append((overlap_start, overlap_end))
+
+    leaked_lengths = [
+        _merged_interval_length(leaked_intervals.get(index, ()))
+        for index, _span in enumerate(gold)
+    ]
+    return _heatmap_from_leaked_lengths(gold, leaked_lengths, worst_n=worst_n)
+
+
+def _heatmap_from_leaked_lengths(
+    gold: Iterable[Any],
+    leaked_lengths: Iterable[int],
+    *,
+    worst_n: int,
+) -> LeakageHeatmap:
     leaked_by_cell: defaultdict[tuple[str, str], int] = defaultdict(int)
     total_by_cell: defaultdict[tuple[str, str], int] = defaultdict(int)
     leaked_by_label: defaultdict[str, int] = defaultdict(int)
@@ -267,9 +323,8 @@ def compute_leakage_heatmap(
 
     total_chars = 0
     leaked_chars = 0
-    for span in gold:
-        covered = _covered_char_count(span, predicted)
-        leaked = max(span.length - covered, 0)
+    for span, raw_leaked in zip(gold, leaked_lengths):
+        leaked = min(max(int(raw_leaked), 0), span.length)
         key = (span.label, span.language)
 
         leaked_by_cell[key] += leaked
