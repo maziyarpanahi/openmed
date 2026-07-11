@@ -300,6 +300,65 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
 
 
+def test_g10_faithfulness_gate_passes_grounded_outputs(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "faithfulness": {
+                    "by_fact_type": {
+                        "diagnosis": {
+                            "rate": 0.0,
+                            "total": 1,
+                            "ungrounded": 0,
+                        }
+                    },
+                    "total_facts": 1,
+                    "ungrounded_fact_rate": 0.0,
+                    "ungrounded_facts": 0,
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert result.decision == RELEASABLE
+    assert check.passed is True
+    assert check.details["ungrounded_fact_rate"] == pytest.approx(0.0)
+
+
+def test_g10_faithfulness_gate_quarantines_fabricated_facts(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "faithfulness": {
+                    "by_fact_type": {
+                        "diagnosis": {
+                            "rate": 0.5,
+                            "total": 2,
+                            "ungrounded": 1,
+                        }
+                    },
+                    "total_facts": 2,
+                    "ungrounded_fact_rate": 0.5,
+                    "ungrounded_facts": 1,
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G10")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "ungrounded-fact rate exceeds hard ceiling"
+    assert check.details["violations"]["ungrounded_fact_rate"]["observed"] == 0.5
+
+
 def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
     tmp_path: Path,
 ) -> None:
