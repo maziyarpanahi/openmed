@@ -43,6 +43,7 @@ _NON_DEID_FIXTURE_NAMES = frozenset(
         "grounding_crosslingual.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
+        "surrogate_multilingual.jsonl",
     }
 )
 
