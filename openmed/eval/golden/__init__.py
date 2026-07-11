@@ -17,6 +17,7 @@ from .hard_negatives import (
     write_hard_negative_fixture_pack,
 )
 from .loader import (
+    CRITICAL_FINDINGS_CATEGORY,
     GOLDEN_CATEGORIES,
     GoldenFixture,
     benchmark_fixture_languages,
@@ -27,9 +28,11 @@ from .loader import (
     list_fixture_paths,
     load_benchmark_fixtures,
     load_golden_fixtures,
+    non_latin_golden_fixtures,
 )
 
 __all__ = [
+    "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
     "HARD_NEGATIVE_PACK_VERSION",
@@ -51,6 +54,7 @@ __all__ = [
     "load_benchmark_fixtures",
     "load_golden_fixtures",
     "mine_hard_negative_candidates",
+    "non_latin_golden_fixtures",
     "near_duplicate_retention_rate",
     "stratified_hard_negative_sample",
     "write_hard_negative_fixture_pack",
