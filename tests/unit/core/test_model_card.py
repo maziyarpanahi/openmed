@@ -125,6 +125,31 @@ def test_render_model_card_includes_distillation_evidence_when_present():
     assert "| EMAIL | 0.9900 | 0.9700 | -0.0200 | yes |" in card
 
 
+def test_render_model_card_includes_training_provenance_when_present():
+    row = {
+        **_fixture_row(),
+        "training_provenance": {
+            "base_model_revision": "7b4f2ca",
+            "data_manifest_hash": "sha256:" + "a" * 64,
+            "env_lock_digest": "sha256:" + "b" * 64,
+            "git_sha": "abc123",
+            "path": "checkpoints/model/training_provenance.json",
+            "recipe_config_hash": "sha256:" + "c" * 64,
+            "reproducibility_hash": _fixture_row()["reproducibility_hash"],
+            "rng_seeds": {"numpy": 21, "python": 13, "torch": 34},
+        },
+    }
+
+    card = render_model_card(row)
+
+    assert "## Training Provenance" in card
+    assert "| Provenance file | `checkpoints/model/training_provenance.json` |" in card
+    assert "| Base model revision | `7b4f2ca` |" in card
+    assert "| RNG seeds | `numpy`=21, `python`=13, `torch`=34 |" in card
+    assert "| Data manifest hash | `sha256:" in card
+    assert "| Provenance reproducibility hash | `" in card
+
+
 def test_publish_model_card_uploads_rendered_readme():
     row = _fixture_row()
     captured: dict[str, object] = {}
