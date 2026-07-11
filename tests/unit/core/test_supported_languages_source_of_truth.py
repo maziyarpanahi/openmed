@@ -15,6 +15,7 @@ DOC_PATHS = (
     "README.md",
     "docs/anonymization.md",
     "docs/faq.md",
+    "docs/troubleshooting.md",
     "docs/website/index.html",
 )
 
