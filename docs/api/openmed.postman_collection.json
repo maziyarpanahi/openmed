@@ -2,13 +2,13 @@
   "info": {
     "_postman_id": "0f7a1c2e-4d3b-4a1e-9c6f-2b8d5e7a1c00",
     "name": "OpenMed REST API",
-    "description": "Importable Postman collection for the OpenMed REST service, validated against the committed `docs/api/openapi.json` contract.\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://localhost:8080`). Start the service with `uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. For an authenticated deployment, configure collection-level authorization in Postman or add either an `X-API-Key` header or an `Authorization: Bearer <token>` header. The collection does not store credential variables.\n\nSee docs/rest-service.md for the full endpoint reference.",
+    "description": "Importable Postman collection for the OpenMed REST service, validated against the committed `docs/api/openapi.json` contract.\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://127.0.0.1:8080`). Start the service with `uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. For an authenticated deployment, configure collection-level authorization in Postman or add either an `X-API-Key` header or an `Authorization: Bearer <token>` header. The collection does not store credential values.\n\nThe SMART ingestion request deliberately references the unresolved `{{smart_private_key_pem}}` local-client variable. Keep its value outside the collection (for example, in a secure Postman environment variable backed by Local Vault), escape embedded PEM newlines as `\\n` for the JSON request body, and never replace the reference with key material in a saved collection.\n\nSee docs/rest-service.md for the full endpoint reference.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:8080",
+      "value": "http://127.0.0.1:8080",
       "type": "string",
       "description": "Base URL of the running OpenMed REST service."
     },
@@ -16,7 +16,7 @@
       "key": "job_id",
       "value": "00000000-0000-0000-0000-000000000000",
       "type": "string",
-      "description": "Placeholder job identifier for async job and SMART backend ingestion status lookups."
+      "description": "Placeholder identifier returned by the async-job or SMART-ingestion POST request you are polling."
     }
   ],
   "item": [
@@ -451,7 +451,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fhir_base_url\": \"https://fhir.example.org\",\n  \"token_url\": \"https://fhir.example.org/oauth/token\",\n  \"client_id\": \"example-backend-client\",\n  \"private_key_pem\": \"-----BEGIN PRIVATE KEY-----\\nSYNTHETIC-PLACEHOLDER-KEY\\n-----END PRIVATE KEY-----\",\n  \"output_dir\": \"/tmp/openmed-smart-export\",\n  \"scope\": \"system/*.read\",\n  \"export_path\": \"$export\",\n  \"policy\": \"hipaa_safe_harbor\",\n  \"method\": \"replace\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"lang\": \"en\",\n  \"confidence_threshold\": 0.7,\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true\n}",
+              "raw": "{\n  \"fhir_base_url\": \"https://fhir.example.org\",\n  \"token_url\": \"https://fhir.example.org/oauth/token\",\n  \"client_id\": \"example-backend-client\",\n  \"private_key_pem\": \"{{smart_private_key_pem}}\",\n  \"output_dir\": \"./openmed-smart-export\",\n  \"scope\": \"system/*.read\",\n  \"export_path\": \"$export\",\n  \"policy\": \"hipaa_safe_harbor\",\n  \"method\": \"replace\",\n  \"model_name\": \"OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1\",\n  \"lang\": \"en\",\n  \"confidence_threshold\": 0.7,\n  \"use_safety_sweep\": true,\n  \"use_smart_merging\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -469,7 +469,7 @@
                 "ingestions"
               ]
             },
-            "description": "Kick off a SMART backend-services bulk export ingestion. Uses a synthetic placeholder private key."
+            "description": "Kick off a SMART backend-services bulk export ingestion. Before sending, define smart_private_key_pem only in a secure local-client environment (Postman can back it with Local Vault) and escape PEM newlines as \\n for the JSON body; never save a real key in the collection."
           },
           "response": []
         },
