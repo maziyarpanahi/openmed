@@ -87,6 +87,11 @@
     "NUTRITION_TARGET": "mask",
     "FEEDING_ROUTE": "mask",
     "NUTRITIONAL_STATUS": "mask",
+    "VACCINE_NAME": "mask",
+    "DOSE_NUMBER": "mask",
+    "ADMINISTRATION_ROUTE": "mask",
+    "VACCINE_LOT": "mask",
+    "VACCINE_SERIES": "mask",
     "GENE_SYMBOL": "mask",
     "VARIANT_DESCRIPTOR": "mask",
     "PROTEIN_CHANGE": "mask",
@@ -100,6 +105,10 @@
     "GI_SYMPTOM": "mask",
     "GI_SCORE": "mask",
     "POLYP_DESCRIPTOR": "mask",
+    "CKD_STAGE": "mask",
+    "DIALYSIS_MODALITY": "mask",
+    "RENAL_FUNCTION_MEASURE": "mask",
+    "URINE_FINDING": "mask",
     "OTHER": "mask"
   }
 }
