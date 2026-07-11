@@ -23,6 +23,7 @@ from openmed.core.pii_i18n import (
 )
 from openmed.eval import harness
 from openmed.eval.golden import (
+    CRITICAL_FINDINGS_CATEGORY,
     GOLDEN_CATEGORIES,
     HARD_NEGATIVE_CATEGORY,
     GoldenFixture,
@@ -33,7 +34,10 @@ from openmed.eval.golden import (
     load_benchmark_fixtures,
     load_golden_fixtures,
 )
-from openmed.eval.metrics import compute_date_shift_consistency
+from openmed.eval.metrics import (
+    CRITICAL_FINDING_CATEGORIES,
+    compute_date_shift_consistency,
+)
 
 EXPANDED_MULTILINGUAL_LANGUAGES = ("ar", "ja", "tr")
 
@@ -144,6 +148,28 @@ def test_golden_json_files_are_harness_loadable():
     benchmark_fixtures = load_benchmark_fixtures()
     assert len(benchmark_fixtures) == len(load_golden_fixtures())
     assert all(item.metadata["category"] for item in benchmark_fixtures)
+
+
+def test_critical_finding_fixture_is_synthetic_and_disclaimer_marked():
+    fixtures = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.category == CRITICAL_FINDINGS_CATEGORY
+    ]
+
+    assert fixtures
+    categories = set()
+    for fixture in fixtures:
+        disclaimer = fixture.metadata["medical_device_disclaimer"].lower()
+        assert fixture.metadata["synthetic"] is True
+        assert "assistive safety probe" in disclaimer
+        assert "not clinical ground truth" in disclaimer
+        for span in fixture.gold_spans:
+            assert span.metadata["critical_finding"] is True
+            assert span.metadata["fixture_id"] == fixture.fixture_id
+            categories.add(span.metadata["critical_finding_category"])
+
+    assert categories == set(CRITICAL_FINDING_CATEGORIES)
 
 
 def test_hard_negative_fixtures_are_synthetic_zero_span_non_phi():
@@ -478,7 +504,13 @@ def test_chunk_boundary_fixture_crosses_max_length_window_and_keeps_global_offse
 
 
 def test_checksum_fixture_has_valid_gold_ids_and_invalid_hard_negatives():
-    fixture = _one("checksum_ids")
+    matches = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.fixture_id == "golden-checksum-valid-invalid-identifiers"
+    ]
+    assert len(matches) == 1
+    fixture = matches[0]
     gold_by_type = {
         span.metadata["identifier_type"]: span.text for span in fixture.gold_spans
     }
