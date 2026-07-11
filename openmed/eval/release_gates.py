@@ -2760,38 +2760,73 @@ def _critical_leakage_count(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
 ) -> int:
-    direct = _first_value(
+    counts: list[int] = []
+    for value in (
         metadata.get("critical_leakage_count"),
         metrics.get("critical_leakage_count"),
-        _nested(metrics, "leakage", "critical_leakage_count"),
-    )
-    parsed = _optional_int(direct)
-    if parsed is not None:
-        return parsed
+    ):
+        parsed = _optional_int(value)
+        if parsed is not None:
+            counts.append(parsed)
 
-    leaked_by_label = _float_map(_nested(metrics, "leakage", "leaked_chars_by_label"))
-    return int(
-        sum(
-            value
-            for label, value in leaked_by_label.items()
-            if label in _CRITICAL_LABELS
+    for payload in _leakage_payloads(metrics, metadata):
+        parsed = _optional_int(payload.get("critical_leakage_count"))
+        if parsed is not None:
+            counts.append(parsed)
+        leaked_by_label = _float_map(payload.get("leaked_chars_by_label"))
+        counts.append(
+            int(
+                sum(
+                    value
+                    for label, value in leaked_by_label.items()
+                    if label in _CRITICAL_LABELS
+                )
+            )
         )
-    )
+
+    return max(counts) if counts else 0
 
 
 def _residual_leakage_rate(
     metrics: Mapping[str, Any],
     metadata: Mapping[str, Any],
 ) -> float:
-    value = _first_value(
+    values: list[float] = []
+    for value in (
         metadata.get("residual_leakage_rate"),
         metrics.get("residual_leakage_rate"),
         metrics.get("federated_boundary_leakage_rate"),
         _nested(metrics, "boundary_leakage", "rate"),
-        _nested(metrics, "leakage", "overall"),
-    )
-    parsed = _optional_float(value)
-    return 1.0 if parsed is None else parsed
+    ):
+        parsed = _optional_float(value)
+        if parsed is not None:
+            values.append(parsed)
+
+    for payload in _leakage_payloads(metrics, metadata):
+        parsed = _optional_float(
+            _first_value(payload.get("overall"), payload.get("rate"))
+        )
+        if parsed is not None:
+            values.append(parsed)
+
+    return max(values) if values else 1.0
+
+
+def _leakage_payloads(
+    metrics: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    payloads: list[dict[str, Any]] = []
+    for source in (metrics, metadata):
+        for key in (
+            "leakage",
+            "extraction_reemission_leakage",
+            "grounding_reemission_leakage",
+        ):
+            payload = _mapping(source.get(key))
+            if payload:
+                payloads.append(payload)
+    return tuple(payloads)
 
 
 def _precomputed_quant_recall_delta(
