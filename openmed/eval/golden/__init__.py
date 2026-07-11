@@ -17,6 +17,7 @@ from .hard_negatives import (
     write_hard_negative_fixture_pack,
 )
 from .loader import (
+    CRITICAL_FINDINGS_CATEGORY,
     GOLDEN_CATEGORIES,
     GoldenFixture,
     benchmark_fixture_languages,
@@ -30,6 +31,7 @@ from .loader import (
 )
 
 __all__ = [
+    "CRITICAL_FINDINGS_CATEGORY",
     "GOLDEN_CATEGORIES",
     "HARD_NEGATIVE_CATEGORY",
     "HARD_NEGATIVE_PACK_VERSION",
