@@ -1214,6 +1214,207 @@ class ThaiNationalIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Canadian Social Insurance Number and provincial health-card numbers
+#
+# These identify Canadian residents and patients:
+#   - SIN: nine-digit Social Insurance Number with a Luhn (mod-10) check.
+#   - Ontario health card: ten-digit number with a Luhn check, optionally
+#     suffixed by a two-letter version code (a health identifier).
+#   - British Columbia Personal Health Number (PHN): ten digits beginning
+#     with ``9`` and validated with a weighted modulus-11 check (a health
+#     identifier).
+# ---------------------------------------------------------------------------
+
+# SIN and BC PHN validators accept only their plain digit form or the canonical
+# consistently spaced/hyphenated grouping used on forms and cards.
+_CANADIAN_SIN_RE = re.compile(
+    r"^(?:\d{9}|\d{3}(?P<sin_sep>[ -])\d{3}(?P=sin_sep)\d{3})$"
+)
+_BC_PHN_RE = re.compile(r"^(?:9\d{9}|9\d{3}(?P<bc_sep>[ -])\d{3}(?P=bc_sep)\d{3})$")
+
+# Ontario health-card numbers start with 1-9, contain ten digits, and may be
+# grouped 4-3-3. The official HCV schema permits a one- or two-letter version
+# code only at the end.
+_ONTARIO_HEALTH_CARD_RE = re.compile(
+    r"^(?P<number>[1-9]\d{3}(?P<ontario_sep>[ -]?)\d{3}"
+    r"(?P=ontario_sep)\d{3})(?:[ -]?(?P<version>[A-Za-z]{1,2}))?$"
+)
+
+# British Columbia PHN weights applied to digits two through nine.
+_BC_PHN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3)
+
+
+def _split_ontario_health_card(text: str) -> tuple[str, str]:
+    """Return the ``(digits, version_code)`` parts of an Ontario health card."""
+
+    match = _ONTARIO_HEALTH_CARD_RE.fullmatch(text.strip())
+    if match is None:
+        return "", ""
+    digits = _digits_only(match.group("number"))
+    version = (match.group("version") or "").upper()
+    return digits, version
+
+
+def validate_canadian_sin(text: str) -> bool:
+    """Validate a nine-digit Canadian Social Insurance Number (SIN).
+
+    The SIN carries a Luhn (mod-10) check digit over all nine digits. A SIN
+    starting with ``0`` is not assigned to a person, so it is rejected.
+
+    Args:
+        text: Candidate SIN, optionally spaced or hyphenated (``NNN-NNN-NNN``).
+
+    Returns:
+        ``True`` when ``text`` is a Luhn-valid, non-zero-prefixed SIN.
+    """
+
+    candidate = text.strip()
+    if _CANADIAN_SIN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
+    if len(digits) != 9:
+        return False
+    if digits[0] == "0":
+        return False
+
+    body = [int(digit) for digit in digits[:-1]]
+    return _luhn_check_digit(body) == int(digits[-1])
+
+
+def generate_canadian_sin(*, rng: random.Random | None = None) -> str:
+    """Generate a Canadian SIN accepted by :func:`validate_canadian_sin`."""
+
+    source = rng or random.Random()
+    body = [source.randint(1, 9)]
+    body.extend(source.randint(0, 9) for _ in range(7))
+    check_digit = _luhn_check_digit(body)
+    return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+def validate_ontario_health_card(text: str) -> bool:
+    """Validate an Ontario (OHIP) health-card number.
+
+    The core is a ten-digit number carrying a Luhn (mod-10) check digit. An
+    optional one- or two-letter version code may follow the ten digits. Ontario
+    health cards are health identifiers.
+
+    Args:
+        text: Candidate health card, optionally spaced or hyphenated and
+            optionally suffixed by a two-letter version code.
+
+    Returns:
+        ``True`` when the ten-digit core is Luhn-valid and any version code is
+        well formed.
+    """
+
+    digits, version = _split_ontario_health_card(text)
+    if len(digits) != 10:
+        return False
+    body = [int(digit) for digit in digits[:-1]]
+    return _luhn_check_digit(body) == int(digits[-1])
+
+
+def generate_ontario_health_card(
+    *,
+    rng: random.Random | None = None,
+    with_version: bool = True,
+) -> str:
+    """Generate an Ontario health card accepted by the validator.
+
+    Args:
+        rng: Optional deterministic random source.
+        with_version: When ``True``, append a synthetic two-letter version code.
+
+    Returns:
+        A ten-digit Luhn-valid Ontario health-card number, optionally suffixed
+        with a two-letter version code.
+    """
+
+    source = rng or random.Random()
+    body = [source.randint(1, 9)]
+    body.extend(source.randint(0, 9) for _ in range(8))
+    check_digit = _luhn_check_digit(body)
+    number = "".join(str(digit) for digit in body) + str(check_digit)
+    if not with_version:
+        return number
+    letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    version = source.choice(letters) + source.choice(letters)
+    return f"{number}-{version}"
+
+
+def validate_bc_phn(text: str) -> bool:
+    """Validate a British Columbia Personal Health Number (PHN).
+
+    The PHN is ten digits beginning with ``9``. Digits two through nine are
+    weighted by ``(2, 4, 8, 5, 10, 9, 7, 3)``; the check digit is
+    ``11 - (sum mod 11)``. A remainder that yields a check of ``10`` or ``11``
+    marks an unissued number and is rejected. BC PHNs are health identifiers.
+
+    Args:
+        text: Candidate PHN, optionally spaced or hyphenated.
+
+    Returns:
+        ``True`` when ``text`` is a valid, issued BC PHN.
+    """
+
+    candidate = text.strip()
+    if _BC_PHN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
+    if len(digits) != 10:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    if numbers[0] != 9:
+        return False
+
+    total = sum(weight * value for weight, value in zip(_BC_PHN_WEIGHTS, numbers[1:9]))
+    check = 11 - (total % 11)
+    if check in (10, 11):
+        return False
+
+    return numbers[9] == check
+
+
+def generate_bc_phn(*, rng: random.Random | None = None) -> str:
+    """Generate a BC PHN accepted by :func:`validate_bc_phn`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body_digits = [source.randint(0, 9) for _ in range(8)]
+        total = sum(
+            weight * value for weight, value in zip(_BC_PHN_WEIGHTS, body_digits)
+        )
+        check = 11 - (total % 11)
+        if check in (10, 11):
+            continue
+        return "9" + "".join(str(digit) for digit in body_digits) + str(check)
+
+    return "9999999998"
+
+
+class CanadianSINProvider(BaseProvider):
+    """Generates valid nine-digit Canadian Social Insurance Numbers."""
+
+    def canadian_sin(self) -> str:
+        return generate_canadian_sin(rng=self.generator.random)
+
+
+class OntarioHealthCardProvider(BaseProvider):
+    """Generates valid Ontario health-card numbers with a version code."""
+
+    def ontario_health_card(self) -> str:
+        return generate_ontario_health_card(rng=self.generator.random)
+
+
+class BCPHNProvider(BaseProvider):
+    """Generates valid British Columbia Personal Health Numbers."""
+
+    def bc_phn(self) -> str:
+        return generate_bc_phn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
@@ -1240,6 +1441,8 @@ def register_clinical_providers(faker) -> None:
 
 __all__ = [
     "AadhaarProvider",
+    "BCPHNProvider",
+    "CanadianSINProvider",
     "DanishCPRProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
@@ -1259,9 +1462,12 @@ __all__ = [
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
+    "generate_bc_phn",
     "generate_bic",
+    "generate_canadian_sin",
     "generate_danish_cpr",
     "generate_iban",
+    "generate_ontario_health_card",
     "generate_indonesian_nik",
     "generate_teudat_zehut",
     "generate_korean_rrn",
@@ -1279,10 +1485,13 @@ __all__ = [
     "generate_uk_nhs_number",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "validate_bc_phn",
     "validate_bic",
+    "validate_canadian_sin",
     "validate_iban",
     "validate_luhn",
     "validate_npi",
+    "validate_ontario_health_card",
     "validate_phone_us",
     "validate_ssn",
     "validate_uk_nhs_number",
