@@ -28,6 +28,7 @@ PIILanguage = Literal[
     "he",
     "id",
     "th",
+    "ko",
 ]
 
 _DEFAULT_PII_MODEL = "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1"
