@@ -541,6 +541,36 @@ class TestMultilingualPatterns:
         assert merged[0]["end"] == len(text)
         assert merged[0]["word"] == text
 
+    def test_heterogeneous_semantic_union_is_marked_for_safe_redaction(self):
+        """A greedy semantic match spanning two model labels must be explicit."""
+        text = "Patientzzq-sentinel@fuzz.invalidPatientZzyxx Qwerty"
+        email = "zzq-sentinel@fuzz.invalid"
+        name = "Zzyxx Qwerty"
+        entities = [
+            {
+                "entity_type": "EMAIL",
+                "score": 0.99,
+                "start": text.index(email),
+                "end": text.index(email) + len(email),
+                "word": email,
+            },
+            {
+                "entity_type": "NAME",
+                "score": 0.99,
+                "start": text.index(name),
+                "end": text.index(name) + len(name),
+                "word": name,
+            },
+        ]
+
+        merged = merge_entities_with_semantic_units(entities, text)
+
+        assert len(merged) == 1
+        assert merged[0]["start"] <= text.index(email)
+        assert merged[0]["end"] >= text.index(name) + len(name)
+        assert merged[0]["mixed_label_union"] is True
+        assert set(merged[0]["source_labels"]) >= {"EMAIL", "NAME", "email"}
+
     def test_dutch_bsn_pattern(self):
         """Test Dutch BSN pattern detection."""
         from openmed.core.pii_i18n import LANGUAGE_PII_PATTERNS

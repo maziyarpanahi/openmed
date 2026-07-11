@@ -816,6 +816,16 @@ def merge_entities_with_semantic_units(
                         else unit_type
                     )
 
+            source_labels = sorted(
+                {
+                    str(unit_type),
+                    *(str(entity["entity_type"]) for entity in overlapping_entities),
+                }
+            )
+            mixed_label_union = (
+                len({normalize_label(label) for label in source_labels}) > 1
+            )
+
             # Combine model confidence with pattern confidence.
             # When pattern validation failed, heavily discount the pattern
             # contribution to avoid high-confidence invalid entities.
@@ -849,6 +859,8 @@ def merge_entities_with_semantic_units(
                     "end": merged_end,
                     "word": text[merged_start:merged_end],
                     "merged_from": len(overlapping),
+                    "source_labels": source_labels,
+                    "mixed_label_union": mixed_label_union,
                 }
             )
 
@@ -864,6 +876,8 @@ def merge_entities_with_semantic_units(
                     "end": unit_end,
                     "word": text[unit_start:unit_end],
                     "merged_from": 0,
+                    "source_labels": [str(unit_type)],
+                    "mixed_label_union": False,
                 }
             )
 
@@ -922,6 +936,17 @@ def _coalesce_overlapping_merged_entities(
                 str(entity.get("entity_type", "")),
             ),
         )
+        source_labels = sorted(
+            {
+                str(label)
+                for entity in cluster
+                for label in entity.get(
+                    "source_labels",
+                    [entity.get("entity_type", "")],
+                )
+                if label
+            }
+        )
         result.append(
             {
                 "entity_type": winner["entity_type"],
@@ -932,6 +957,11 @@ def _coalesce_overlapping_merged_entities(
                 "merged_from": sum(
                     max(int(entity.get("merged_from", 1)), 1) for entity in cluster
                 ),
+                "source_labels": source_labels,
+                "mixed_label_union": len(
+                    {normalize_label(label) for label in source_labels}
+                )
+                > 1,
             }
         )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -51,6 +52,18 @@ def test_explicit_unknown_hypothesis_profile_fails_closed(
         fuzz_conftest._load_selected_profile()
 
 
+@pytest.mark.parametrize("profile", ["default", ""])
+def test_explicit_non_harness_profile_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    profile: str,
+) -> None:
+    """Only the two audited fuzz profiles may be selected through the environment."""
+    monkeypatch.setenv("HYPOTHESIS_PROFILE", profile)
+
+    with pytest.raises(InvalidArgument, match="Unsupported HYPOTHESIS_PROFILE"):
+        fuzz_conftest._load_selected_profile()
+
+
 def test_unset_hypothesis_profile_uses_bounded_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -59,3 +72,20 @@ def test_unset_hypothesis_profile_uses_bounded_default(
     fuzz_conftest._load_selected_profile()
 
     assert settings.get_current_profile_name() == "fuzz-default"
+
+
+def test_fuzz_profile_budgets_are_registered_exactly() -> None:
+    """Lock the bounded/default and exploratory/nightly settings to their contract."""
+    fuzz_conftest._register_profiles()
+    bounded = settings.get_profile("fuzz-default")
+    nightly = settings.get_profile("fuzz-nightly")
+
+    assert bounded.max_examples == 40
+    assert bounded.deadline == timedelta(milliseconds=400)
+    assert bounded.derandomize is True
+    assert bounded.database is None
+
+    assert nightly.max_examples == 1000
+    assert nightly.deadline == timedelta(milliseconds=1000)
+    assert nightly.derandomize is False
+    assert nightly.max_examples >= bounded.max_examples * 10
