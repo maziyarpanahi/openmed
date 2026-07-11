@@ -173,6 +173,24 @@ def test_prefix_and_suffix_preserved_around_isolates():
     assert result.text == f"{prefix}{_FSI}[NAME]{_PDI}{suffix}"
 
 
+def test_length_changing_replacement_uses_rendered_offsets_only():
+    original = "المريض John Smith زار"
+    redacted = "المريض [NAME] زار"
+    original_span = _span_of(original, "John Smith")
+    rendered_span = _span_of(redacted, "[NAME]")
+    assert original_span != rendered_span
+
+    result = render_redacted(redacted, [rendered_span])
+
+    isolated = result.text.split(_FSI, 1)[1].split(_PDI, 1)[0]
+    assert isolated == "[NAME]"
+    assert result.text.endswith(" زار")
+    assert result.text == (
+        f"{redacted[: rendered_span[0]]}{_FSI}[NAME]{_PDI}"
+        f"{redacted[rendered_span[1] :]}"
+    )
+
+
 def test_span_accepts_mapping_and_object_forms():
     span_tuple = _span_of(_HEBREW_WITH_MASK, "[PERSON]")
     mapping_span = {"start": span_tuple[0], "end": span_tuple[1]}
@@ -231,6 +249,18 @@ def test_zero_width_span_is_ignored():
     result = render_redacted(_ARABIC_WITH_MASK, [(3, 3)])
     assert result.isolated is False
     assert result.text == _ARABIC_WITH_MASK
+
+
+def test_zero_width_span_nested_inside_replacement_is_ignored():
+    name_span = _span_of(_ARABIC_WITH_MASK, "[NAME]")
+    nested_zero_width = (name_span[0] + 1, name_span[0] + 1)
+
+    result = render_redacted(_ARABIC_WITH_MASK, [name_span, nested_zero_width])
+
+    assert result.text.count(_FSI) == 1
+    assert result.text.count(_PDI) == 1
+    assert result.source_offsets == (name_span,)
+    assert strip_bidi_controls(result.text) == _ARABIC_WITH_MASK
 
 
 def test_overlapping_spans_rejected():
