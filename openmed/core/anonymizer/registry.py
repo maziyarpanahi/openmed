@@ -14,7 +14,6 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 
 from __future__ import annotations
 
-import random
 from typing import Callable, Dict
 
 from .. import labels as L
@@ -210,35 +209,10 @@ def _gen_id_num(faker, original, *, locale):
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
-    if locale == "ko_KR":
-        return _generate_korean_rrn_surrogate()
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         return getattr(faker, method)()
     return preserve_id_pattern(original, rng=faker.random)
-
-
-def _generate_korean_rrn_surrogate() -> str:
-    """Generate a checksum-valid Korean RRN surrogate.
-
-    Faker's ko_KR ssn() uses random digit templates (ssn_formats) without
-    computing the mod-11 checksum, unlike fr_FR which calls calculate_checksum().
-    This produces invalid RRNs that fail validate_korean_rrn(). This function
-    generates a properly validated surrogate instead.
-    """
-
-    yy = random.randint(0, 99)
-    mm = random.randint(1, 12)
-    dd = random.randint(1, 28)
-    s = random.randint(1, 4)
-    serial = random.randint(0, 99999)  # ← 5 digits, not 6
-
-    first12 = f"{yy:02d}{mm:02d}{dd:02d}{s}{serial:05d}"  # ← :05d not :06d
-    weights = [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5]
-    total = sum(int(d) * w for d, w in zip(first12, weights))
-    check = (11 - (total % 11)) % 10
-
-    return f"{first12[:6]}-{first12[6:]}{check}"
 
 
 def _gen_ssn(faker, original, *, locale):

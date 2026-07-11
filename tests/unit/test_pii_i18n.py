@@ -114,7 +114,10 @@ class TestConstants:
         assert "Turkish" in DEFAULT_PII_MODELS["tr"]
         assert DEFAULT_PII_MODELS["id"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["th"] == "OpenMed/privacy-filter-multilingual"
-        assert "Korean" in DEFAULT_PII_MODELS["ko"]
+        assert (
+            DEFAULT_PII_MODELS["ko"]
+            == "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1"
+        )
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -2408,27 +2411,49 @@ class TestKoreanLocaleAndFixture:
         for label, start, end, value in actual:
             assert text[start:end] == value, label
 
-        # ── checksum fixture ──────────────────────────────────────────────
-        row2 = next(r for r in rows if r["id"] == "golden-checksum-ko-rrn")
-        assert row2["language"] == "ko"
-        assert row2["metadata"]["synthetic"] is True
-        assert row2["metadata"]["category"] == "checksum_ids"
-
-        text2 = row2["text"]
-        expected2 = {
-            ("ID_NUM", 18, 32, "940315-1234567"),
+        labels = {
+            "date": "DATE",
+            "national_id": "ID_NUM",
+            "phone_number": "PHONE",
+            "postcode": "ZIPCODE",
+            "street_address": "STREET_ADDRESS",
         }
-        actual2 = {
-            (span["label"], span["start"], span["end"], span["text"])
-            for span in row2["gold_spans"]
-        }
-        assert actual2 == expected2
-        for label, start, end, value in actual2:
-            assert text2[start:end] == value, label
+        observed = set()
+        for pattern in LANGUAGE_PII_PATTERNS["ko"]:
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add(
+                    (
+                        labels[pattern.entity_type],
+                        match.start(),
+                        match.end(),
+                        value,
+                    )
+                )
 
-        # hard negative must not appear in gold_spans
-        gold_texts = [s["text"] for s in row2["gold_spans"]]
-        assert "940315-1234568" not in gold_texts
+        assert expected <= observed
+
+        checksum_row = next(r for r in rows if r["id"] == "golden-checksum-ko-rrn")
+        assert checksum_row["language"] == "ko"
+        assert checksum_row["metadata"]["synthetic"] is True
+        assert checksum_row["metadata"]["category"] == "checksum_ids"
+
+        checksum_text = checksum_row["text"]
+        checksum_span = checksum_row["gold_spans"][0]
+        assert (
+            checksum_text[checksum_span["start"] : checksum_span["end"]]
+            == (checksum_span["text"])
+        )
+        assert validate_korean_rrn(checksum_span["text"])
+
+        hard_negative = checksum_row["metadata"]["hard_negatives"][0]
+        assert (
+            checksum_text[hard_negative["start"] : hard_negative["end"]]
+            == (hard_negative["text"])
+        )
+        assert not validate_korean_rrn(hard_negative["text"])
 
 
 if __name__ == "__main__":
