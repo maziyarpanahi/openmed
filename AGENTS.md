@@ -36,6 +36,28 @@ Pytest discovers `test_*.py` and `*_test.py`. Mark external or end-to-end cases 
 
 For privacy, aggregate F1 is not enough. Add tests or fixtures for direct-identifier recall, critical leakage, span integrity, deterministic safety sweeps, date shifting, surrogate consistency, multilingual IDs, and quantized-model recall deltas when touching those paths. Committed golden data must be synthetic; DUA datasets are eval-only and never committed.
 
+## PyPI Release Publishing Guardrails
+
+The `openmed` PyPI release is tag-driven through `.github/workflows/publish.yml`.
+Before changing that workflow, read `docs/release/trusted-publishing.md` and
+run `tests/unit/test_publish_workflow_version.py` plus
+`tests/unit/release/test_provenance_workflow.py`.
+
+The `PYPI_API_TOKEN` secret is scoped to the GitHub `pypi` environment. Do not
+remove the publish job's `environment: pypi` block unless the secret is moved
+and the release tests/docs are updated in the same change. Do not switch back
+to tokenless Trusted Publishing unless the PyPI `openmed` project is already
+configured with a matching trusted publisher for owner `maziyarpanahi`,
+repository `openmed`, workflow `publish.yml`, and environment `pypi`.
+
+If `pypa/gh-action-pypi-publish` runs without a non-empty `password`, it falls
+back to Trusted Publishing and fails with `invalid-publisher` when the PyPI
+publisher is missing. Treat that as a release-blocking configuration regression,
+not as a transient PyPI outage. GitHub OIDC/SLSA attestation outages are
+separate: the release workflow may make provenance evidence best-effort, but
+package build, version checks, `twine check`, artifact upload, and PyPI publish
+must still pass before a release is considered done.
+
 ## Commit & Pull Request Guidelines
 
 Recent history uses concise imperative commits, often with prefixes such as `fix:`. Keep commits and PRs focused on the requested change. Use the repo-owner Git identity. Do not include assistant/tool/vendor names, co-author trailers, generation footers, or worker attribution in issue text, branch names, commit messages, PR titles, PR bodies, or labels. In particular, never use `codex` or `claude` in branch names, PR titles, PR bodies, issue titles, issue bodies, labels, or other repository metadata. Do not assign issues or PRs unless explicitly asked.

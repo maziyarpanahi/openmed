@@ -35,7 +35,8 @@ LANGUAGE_CLAIM_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 STALE_PII_LANGUAGE_COUNT_PATTERN = re.compile(
-    r"\b(?:16|sixteen)\s+(?:supported\s+)?(?:PII\s+)?languages?\b",
+    r"\b(?:15|16|fifteen|sixteen)\s+(?:supported\s+)?"
+    r"(?:model-backed\s+)?(?:PII\s+)?languages?\b",
     flags=re.IGNORECASE,
 )
 
@@ -69,11 +70,24 @@ def test_documented_pii_language_claim_matches_supported_languages(
 
 
 @pytest.mark.parametrize("relative_path", DOC_PATHS)
-def test_user_facing_docs_do_not_reintroduce_stale_16_language_claims(
+def test_user_facing_docs_do_not_reintroduce_pre_17_language_claims(
     relative_path: str,
 ) -> None:
     text = _visible_text((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
     assert not STALE_PII_LANGUAGE_COUNT_PATTERN.search(text)
+
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "15 languages",
+        "fifteen supported PII languages",
+        "16 model-backed PII languages",
+        "sixteen supported languages",
+    ),
+)
+def test_stale_language_count_guard_catches_pre_17_claims(claim: str) -> None:
+    assert STALE_PII_LANGUAGE_COUNT_PATTERN.search(claim)
 
 
 @pytest.mark.parametrize(

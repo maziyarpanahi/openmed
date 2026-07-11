@@ -45,6 +45,7 @@ from openmed.core.pii_i18n import (
     validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
+    validate_romanian_cnp,
     validate_spanish_dni,
     validate_spanish_nie,
     validate_thai_national_id,
@@ -55,6 +56,10 @@ from openmed.core.pii_i18n import (
 
 from .clinical_ids import (
     AadhaarProvider,
+    AustralianMedicareProvider,
+    AustralianTFNProvider,
+    BCPHNProvider,
+    CanadianSINProvider,
     DanishCPRProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
@@ -63,15 +68,22 @@ from .clinical_ids import (
     LatvianPersonasKodsProvider,
     MalaysianMyKadProvider,
     NPIProvider,
+    OntarioHealthCardProvider,
     PhilippinesIdProvider,
     PolishPeselProvider,
     RodneCisloProvider,
+    RomanianCNPProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
+    validate_australian_medicare,
+    validate_australian_tfn,
+    validate_bc_phn,
+    validate_canadian_sin,
     validate_npi,
+    validate_ontario_health_card,
 )
 
 NationalIdValidator = Callable[[str], bool]
@@ -341,6 +353,13 @@ def _register_builtin_specs() -> None:
         faker_provider=RodneCisloProvider,
     )
     _register_aliases(
+        ("ro", "ro_RO"),
+        id_type="cnp",
+        validate=validate_romanian_cnp,
+        faker_method="romanian_cnp",
+        faker_provider=RomanianCNPProvider,
+    )
+    _register_aliases(
         ("pt", "pt_BR"),
         id_type="cpf",
         validate=validate_portuguese_cpf,
@@ -378,6 +397,41 @@ def _register_builtin_specs() -> None:
         validate=validate_uk_nino,
         faker_method="nino",
         faker_provider=UKNINOProvider,
+    )
+    _register_aliases(
+        ("en", "en_AU", "au"),
+        id_type="medicare",
+        validate=validate_australian_medicare,
+        faker_method="australian_medicare",
+        faker_provider=AustralianMedicareProvider,
+    )
+    _register_aliases(
+        ("en", "en_AU", "au"),
+        id_type="tfn",
+        validate=validate_australian_tfn,
+        faker_method="australian_tfn",
+        faker_provider=AustralianTFNProvider,
+    )
+    _register_aliases(
+        ("en", "en_CA", "fr_CA", "ca"),
+        id_type="sin",
+        validate=validate_canadian_sin,
+        faker_method="canadian_sin",
+        faker_provider=CanadianSINProvider,
+    )
+    _register_aliases(
+        ("en", "en_CA", "fr_CA", "ca"),
+        id_type="on_health_card",
+        validate=validate_ontario_health_card,
+        faker_method="ontario_health_card",
+        faker_provider=OntarioHealthCardProvider,
+    )
+    _register_aliases(
+        ("en", "en_CA", "fr_CA", "ca"),
+        id_type="bc_phn",
+        validate=validate_bc_phn,
+        faker_method="bc_phn",
+        faker_provider=BCPHNProvider,
     )
 
 

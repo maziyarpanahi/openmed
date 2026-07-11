@@ -2,6 +2,17 @@
 
 Language-specific data, validators, regex patterns, and fake data
 for multilingual PII detection and de-identification.
+
+Health identifiers for HIPAA cross-map consumers:
+    Several national IDs surfaced here double as patient health identifiers and
+    should be treated as PHI. These include the UK NHS Number, the Australian
+    Medicare card number (:func:`validate_australian_medicare`), and the
+    Canadian provincial health-card numbers: the Ontario (OHIP) health card
+    (:func:`validate_ontario_health_card`) and the British Columbia Personal
+    Health Number (:func:`validate_bc_phn`). The Australian Tax File Number
+    (:func:`validate_australian_tfn`) and Canadian Social Insurance Number
+    (:func:`validate_canadian_sin`) are direct identifiers rather than health
+    identifiers, but are redacted alongside them in clinical text.
 """
 
 from __future__ import annotations
@@ -10,6 +21,11 @@ import re
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    validate_australian_medicare,
+    validate_australian_tfn,
+    validate_bc_phn,
+    validate_canadian_sin,
+    validate_ontario_health_card,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
@@ -34,11 +50,13 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "tr",
     "id",
     "th",
+    "ko",
+    "ro",
 }
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "ko", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -56,6 +74,8 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "tr": "Turkish",
     "id": "Indonesian",
     "th": "Thai",
+    "ko": "Korean",
+    "ro": "Romanian",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -74,6 +94,8 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "tr": "Turkish-",
     "id": "Indonesian-",
     "th": "Thai-",
+    "ko": "Korean-",
+    "ro": "Romanian-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -92,6 +114,8 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "tr": "OpenMed/OpenMed-PII-Turkish-SuperClinical-Small-44M-v1",
     "id": "OpenMed/privacy-filter-multilingual",
     "th": "OpenMed/privacy-filter-multilingual",
+    "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "ro": "OpenMed/privacy-filter-multilingual",
 }
 
 
@@ -976,6 +1000,105 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     return False
 
 
+# Romanian CNP county codes: 01-46 for the 41 counties plus Bucharest and its
+# sectors, 51-52 for Calarasi and Giurgiu, and 70 for pre-2005 residents
+# without a settled county (foreign residents / naturalised persons). Codes
+# 47-50 are unassigned and must not be accepted as a numeric range shortcut.
+_ROMANIAN_CNP_COUNTY_CODES: frozenset[int] = frozenset(set(range(1, 47)) | {51, 52, 70})
+
+# Documented CNP control-digit weights ("279146358279").
+_ROMANIAN_CNP_WEIGHTS: tuple[int, ...] = (2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9)
+
+# CNP first digit (S) encodes century and gender.
+_ROMANIAN_CNP_CENTURY: Dict[int, int] = {
+    1: 1900,  # male, 1900-1999
+    2: 1900,  # female, 1900-1999
+    3: 1800,  # male, 1800-1899
+    4: 1800,  # female, 1800-1899
+    5: 2000,  # male, 2000-2099
+    6: 2000,  # female, 2000-2099
+    7: 1900,  # male resident, disambiguated by issue date (default 1900s)
+    8: 1900,  # female resident
+}
+
+
+def validate_romanian_cnp(text: str) -> bool:
+    """Validate a Romanian CNP (Cod Numeric Personal).
+
+    The CNP is a 13-digit national identifier with the layout
+    ``S YY MM DD JJ NNN C``:
+
+    - ``S``: century and gender code (1-8). Codes 1/3/5/7 are male and
+      2/4/6/8 female; 1/2 map to the 1900s, 3/4 to the 1800s, 5/6 to the
+      2000s, and 7/8 to residents (defaulted here to the 1900s).
+    - ``YYMMDD``: date of birth. The century is taken from ``S``.
+    - ``JJ``: county (judet) code, 01-46 or 51-52, plus 70 for pre-2005
+      residents without a settled county. Unassigned codes 47-50 are invalid.
+    - ``NNN``: non-zero sequence number.
+    - ``C``: control digit, computed as the sum of the first twelve digits
+      weighted by the documented constant ``279146358279`` taken modulo 11.
+      A remainder of 10 maps to a control digit of 1.
+
+    Args:
+        text: CNP string containing exactly 13 ASCII digits. Surrounding
+            whitespace is ignored, but internal separators are invalid.
+
+    Returns:
+        True if the CNP has a valid structure, birth date, county code, and
+        control digit.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{13}", digits) is None:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+
+    # --- century/gender code ---
+    gender_code = numbers[0]
+    if gender_code not in _ROMANIAN_CNP_CENTURY:
+        return False
+    century = _ROMANIAN_CNP_CENTURY[gender_code]
+
+    # --- embedded birth date ---
+    year = century + numbers[1] * 10 + numbers[2]
+    month = numbers[3] * 10 + numbers[4]
+    day = numbers[5] * 10 + numbers[6]
+
+    if month < 1 or month > 12:
+        return False
+    if day < 1 or day > 31:
+        return False
+
+    import calendar
+
+    try:
+        max_day = calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+    if day > max_day:
+        return False
+
+    # --- county code ---
+    county = numbers[7] * 10 + numbers[8]
+    if county not in _ROMANIAN_CNP_COUNTY_CODES:
+        return False
+
+    # --- non-zero sequence number ---
+    serial = numbers[9] * 100 + numbers[10] * 10 + numbers[11]
+    if serial == 0:
+        return False
+
+    # --- control digit ---
+    total = sum(w * n for w, n in zip(_ROMANIAN_CNP_WEIGHTS, numbers[:12]))
+    control = total % 11
+    if control == 10:
+        control = 1
+
+    return numbers[12] == control
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -1205,6 +1328,34 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "พฤศจิกายน",
         "ธันวาคม",
     ],
+    "ko": [
+        "1\uc6d4",
+        "2\uc6d4",
+        "3\uc6d4",
+        "4\uc6d4",
+        "5\uc6d4",
+        "6\uc6d4",
+        "7\uc6d4",
+        "8\uc6d4",
+        "9\uc6d4",
+        "10\uc6d4",
+        "11\uc6d4",
+        "12\uc6d4",
+    ],
+    "ro": [
+        "ianuarie",
+        "februarie",
+        "martie",
+        "aprilie",
+        "mai",
+        "iunie",
+        "iulie",
+        "august",
+        "septembrie",
+        "octombrie",
+        "noiembrie",
+        "decembrie",
+    ],
 }
 
 
@@ -1395,6 +1546,99 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_uk_nino,
         flags=re.IGNORECASE,
+    ),
+]
+
+_CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Ontario (OHIP) health card: 10 digits (4-3-3 spacing) plus an optional
+    # two-letter version code, Luhn-checked. Health identifier. Checked before
+    # the SIN so the longer 10-digit match wins.
+    PIIPattern(
+        r"\b\d{4}[\s-]?\d{3}[\s-]?\d{3}(?:[\s-]?[A-Za-z]{2})?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "health card",
+            "health card number",
+            "ohip",
+            "ohip number",
+            "ontario health",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_ontario_health_card,
+        flags=re.IGNORECASE,
+    ),
+    # British Columbia Personal Health Number (PHN): 10 digits beginning with 9
+    # (4-3-3 spacing), weighted mod-11. Health identifier.
+    PIIPattern(
+        r"\b9\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "phn",
+            "personal health number",
+            "bc phn",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_bc_phn,
+    ),
+    # Canadian Social Insurance Number (SIN): 9 digits (3-3-3 spacing), Luhn.
+    PIIPattern(
+        r"\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "sin",
+            "social insurance",
+            "social insurance number",
+            "numero d'assurance sociale",
+            "nas",
+        ],
+        context_boost=0.45,
+        validator=validate_canadian_sin,
+    ),
+]
+
+
+_AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Australian Medicare card number (exactly 10 digits, ``NNNN NNNNN N``;
+    # weighted mod-10 checksum on the first eight digits guards it).
+    PIIPattern(
+        r"\b\d{4}\s?\d{5}\s?\d\b(?!\s?/?\s?\d)",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "medicare",
+            "medicare number",
+            "medicare card",
+            "medicare no",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_medicare,
+    ),
+    # Australian Tax File Number (TFN, 8-9 digits, ``NNN NNN NNN`` spacing;
+    # weighted mod-11 checksum).
+    PIIPattern(
+        r"\b\d{3}\s?\d{3}\s?\d{2,3}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "tfn",
+            "tax file number",
+            "tax file no",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_tfn,
     ),
 ]
 
@@ -2890,22 +3134,107 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
 
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
-    # RRN (13-digit Resident Registration Number)
+    # Korean dates: YYYY년 MM월 DD일
     PIIPattern(
-        r"\b\d{6}[-\s]?\d{7}\b",
+        r"\b\d{4}\s?\ub144\s?\d{1,2}\s?\uc6d4\s?\d{1,2}\s?\uc77c\b",
+        "date",
+        priority=9,
+        base_score=0.7,
+        context_words=[
+            "\uc0dd\ub144\uc6d4\uc77c",
+            "\ucd9c\uc0dd",
+            "\ud0dc\uc5b4\ub09c",
+            "\uc0dd\uc77c",
+            "\uc0ac\ub9dd",
+            "\uc0ac\ub9dd\uc77c",
+            "\uc785\uc6d0",
+            "\ud1f4\uc6d0",
+            "DOB",
+        ],
+        context_boost=0.25,
+    ),
+    # Korean dates: YYYY.MM.DD or YYYY-MM-DD or YYYY/MM/DD
+    PIIPattern(
+        r"\b\d{4}[.\-/]\d{1,2}[.\-/]\d{1,2}\b",
+        "date",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "\uc0dd\ub144\uc6d4\uc77c",
+            "\ucd9c\uc0dd",
+            "\ud0dc\uc5b4\ub09c",
+            "\uc0dd\uc77c",
+            "DOB",
+            "\uc0ac\ub9dd",
+            "\uc0ac\ub9dd\uc77c",
+            "\uc785\uc6d0",
+            "\ud1f4\uc6d0",
+        ],
+        context_boost=0.3,
+    ),
+    # Korean phone numbers: mobile and landline
+    PIIPattern(
+        r"(?<!\d)(?:\+82[-\s]?)?0?(?:2|1[016789]|[3-6]\d)[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "\uc804\ud654",
+            "\uc804\ud654\ubc88\ud638",
+            "\ud734\ub300\ud3f0",
+            "\ud578\ub4dc\ud3f0",
+            "\uc5f0\ub77d\ucc98",
+            "\ud329\uc2a4",
+            "call",
+            "contact",
+        ],
+        context_boost=0.3,
+    ),
+    # Korean RRN (13-digit Resident Registration Number)
+    PIIPattern(
+        r"(?<!\d)\d{6}[-\s]?\d{7}(?!\d)",
         "national_id",
         priority=10,
         base_score=0.5,
         context_words=[
-            "주민등록번호",
-            "주민번호",
-            "등록번호",
+            "\uc8fc\ubbfc\ub4f1\ub85d\ubc88\ud638",
+            "\uc8fc\ubbfc\ubc88\ud638",
+            "\ub4f1\ub85d\ubc88\ud638",
             "rrn",
             "resident registration",
             "jumin",
         ],
         context_boost=0.4,
         validator=validate_korean_rrn,
+    ),
+    # Korean street addresses
+    PIIPattern(
+        r"(?<![\uac00-\ud7a30-9])(?:[\uac00-\ud7a3]{1,4}(?:\ud2b9\ubcc4\uc2dc|\uad11\uc5ed\uc2dc|\ud2b9\ubcc4\uc790\uce58\uc2dc|\ud2b9\ubcc4\uc790\uce58\ub3c4|\ub3c4|\uc2dc|\uad70|\uad6c)\s*)+[\uac00-\ud7a30-9]{1,5}(?:\ub85c|\uae38|\ub3d9)\s?\d+(?:-\d+)?(?!\d)",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "\uc8fc\uc18c",
+            "\uac70\uc8fc",
+            "\uc790\ud0dd",
+            "\uc704\uce58",
+            "\uc18c\uc7ac\uc9c0",
+        ],
+        context_boost=0.25,
+    ),
+    # Korean postal code (5-digit)
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.15,
+        context_words=[
+            "\uc6b0\ud3b8\ubc88\ud638",
+            "\uc6b0\ud3b8",
+            "zip",
+            "postal",
+        ],
+        context_boost=0.55,
     ),
 ]
 
@@ -3215,6 +3544,118 @@ _DANISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_ROMANIAN_MONTH_PATTERN = (
+    r"ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|"
+    r"septembrie|octombrie|noiembrie|decembrie"
+)
+
+_ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Romanian dates DD.MM.YYYY (also tolerate / or - separators).
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "data",
+            "nascut",
+            "născut",
+            "nascuta",
+            "născută",
+            "data nasterii",
+            "data nașterii",
+            "internat",
+            "externat",
+            "decedat",
+        ],
+        context_boost=0.3,
+    ),
+    # Romanian dates with month names ("12 martie 1985").
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_ROMANIAN_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "data",
+            "nascut",
+            "născut",
+            "nascuta",
+            "născută",
+            "data nasterii",
+            "data nașterii",
+            "internat",
+            "externat",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Romanian mobile / landline numbers: +40 or national 0 prefix.
+    PIIPattern(
+        r"(?<!\w)(?:\+40[\s.-]?|0)7\d{2}[\s.-]?\d{3}[\s.-]?\d{3}\b"
+        r"|(?<!\w)(?:\+40[\s.-]?|0)\d{2}[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telefon",
+            "tel",
+            "mobil",
+            "contact",
+            "gsm",
+        ],
+        context_boost=0.35,
+    ),
+    # CNP (13-digit Cod Numeric Personal), guarded by the checksum validator.
+    PIIPattern(
+        r"\b\d{13}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "cnp",
+            "cod numeric personal",
+            "cnp:",
+            "act de identitate",
+            "buletin",
+            "carte de identitate",
+        ],
+        context_boost=0.4,
+        validator=validate_romanian_cnp,
+    ),
+    # Romanian street addresses ("Str. Mihai Eminescu 12").
+    PIIPattern(
+        r"\b(?:Str\.?|Strada|Bd\.?|Bdul|Bulevardul|Calea|Aleea|"
+        r"[SȘ]oseaua|Splaiul|Pia[țt]a|Intrarea)\s+"
+        r"[A-ZĂÂÎȘȚ][A-Za-zĂÂÎȘȚăâîșț0-9 .'-]{1,60}\s+"
+        r"(?:nr\.?\s*)?\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adresa",
+            "adresă",
+            "domiciliu",
+            "strada",
+            "resedinta",
+            "reședința",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Romanian postal codes: six contiguous digits.
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["cod postal", "cod poștal", "cp", "adresa", "adresă"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
     r"m[aá]j(?:a)?|j[uú]n(?:a)?|j[uú]l(?:a)?|august(?:a)?|"
@@ -3347,10 +3788,14 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
+    "ro": _ROMANIAN_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_au": _AU_ENGLISH_PII_PATTERNS,
+    "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
 }
 
 
@@ -3796,6 +4241,57 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bratislava", "Kosice", "Zilina"],
         "ZIPCODE": ["81101", "04001", "01001"],
+    },
+    "ko": {
+        "NAME": [
+            "\uae40\ubbfc\uc900",
+            "\uc774\uc11c\uc5f0",
+            "\ubc15\uc9c0\ud6c8",
+        ],
+        "FIRST_NAME": [
+            "\ubbfc\uc900",
+            "\uc11c\uc5f0",
+            "\uc9c0\ud6c8",
+        ],
+        "LAST_NAME": [
+            "\uae40",
+            "\uc774",
+            "\ubc15",
+        ],
+        "EMAIL": ["hwanja@example.co.kr", "contact@example.kr", "user@example.co.kr"],
+        "PHONE": ["010-1234-5678", "02-123-4567", "+82 10 9876 5432"],
+        "ID_NUM": ["000101-3123456", "991231-1123456", "MRN-123456"],
+        "STREET_ADDRESS": [
+            "\uc11c\uc6b8\ud2b9\ubcc4\uc2dc \ub9c8\ud3ec\uad6c \ub9c8\ud3ec\ub300\ub85c 25",
+            "\uc11c\uc6b8\ud2b9\ubcc4\uc2dc \uc6a9\uc0b0\uad6c \ub0a8\uc0b0\uacf5\uc6d0\uae38 105",
+            "\ubd80\uc0b0\uad11\uc5ed\uc2dc \ud574\uc6b4\ub300\uad6c \ud574\uc6b4\ub300\ud574\ubcc0\ub85c 45",
+        ],
+        "URL_PERSONAL": ["https://example.kr"],
+        "USERNAME": ["miinji88", "songgu_1990", "jiun_10"],
+        "DATE": ["2000-01-01", "2009/05/19", "2020-10-10"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["\uc11c\uc6b8", "\ubd80\uc0b0", "\uc778\ucc9c"],
+        "ZIPCODE": ["01007", "46007", "21307"],
+    },
+    "ro": {
+        "NAME": [
+            "Ana Popescu",
+            "Ion Ionescu",
+            "Maria Dumitru",
+            "Andrei Popa",
+        ],
+        "FIRST_NAME": ["Ana", "Ion", "Maria", "Andrei"],
+        "LAST_NAME": ["Popescu", "Ionescu", "Dumitru", "Popa"],
+        "EMAIL": ["pacient@exemplu.ro", "contact@exemplu.org"],
+        "PHONE": ["+40 721 234 567", "0721 234 567", "+40 21 123 4567"],
+        "ID_NUM": ["1800101400181", "2990312072589"],
+        "STREET_ADDRESS": ["Str. Mihai Eminescu 12", "Bd. Unirii 45"],
+        "URL_PERSONAL": ["https://exemplu.ro"],
+        "USERNAME": ["pacient123", "utilizator456"],
+        "DATE": ["01.01.2000", "12 martie 1985"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
+        "ZIPCODE": ["010011", "400001", "300001"],
     },
 }
 

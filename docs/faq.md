@@ -33,6 +33,39 @@ Use the smallest extra that matches your runtime:
 Start with the [Quick Start](getting-started.md), then use
 [Configuration & Validation](configuration.md) for cache paths, device selection, profiles, and environment overrides.
 
+### Why does a DeBERTa model say that scaled dot-product attention is unsupported?
+
+OpenMed 1.7.0 and 1.8.0 could select PyTorch scaled dot-product attention
+(`sdpa`) from runtime availability alone, even when the Transformers model
+architecture did not support it. This affected DeBERTa-v2 token-classification
+models and could occur on NVIDIA, AMD, or CPU environments.
+
+Upgrade to OpenMed 1.8.1 or later. Automatic attention selection is
+architecture-safe in those releases. For an environment temporarily pinned to
+an affected release, select the universally compatible eager implementation
+before starting Python:
+
+=== "Linux/macOS"
+
+    ```bash
+    export OPENMED_TORCH_ATTENTION_BACKEND=eager
+    ```
+
+=== "Windows PowerShell"
+
+    ```powershell
+    $env:OPENMED_TORCH_ATTENTION_BACKEND="eager"
+    ```
+
+=== "Windows Command Prompt"
+
+    ```bat
+    set OPENMED_TORCH_ATTENTION_BACKEND=eager
+    ```
+
+See [PyTorch attention backends](configuration.md#pytorch-attention-backends)
+for the configuration API and explicit backend options.
+
 ## Models and Languages
 
 ### Which model should I use?
@@ -46,10 +79,13 @@ model argument. Override `model_name` only when you need a specific checkpoint, 
 
 ### Which languages are supported?
 
-PII extraction and de-identification support **15 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr`.
+PII extraction and de-identification support **17 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, and `tr`.
+These are the model-backed PII language allow-list.
+Validator-backed national-ID coverage is broader for specific ID-only locales,
+including Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 The README keeps a short multilingual example set in
-[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-15-languages).
+[Multilingual PII](https://github.com/maziyarpanahi/openmed#multilingual-pii-17-model-backed-languages).
 
 Clinical NER coverage depends on the selected registry model. Check each model's `languages`, `entity_types`, and
 specialization in the [Model Registry](model-registry.md) before putting it behind an API or batch job.
