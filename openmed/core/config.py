@@ -210,6 +210,7 @@ class OpenMedConfig:
             "load_in_4bit",
             "bnb_4bit_use_double_quant",
             "local_only",
+            "cjk_width_convention",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
