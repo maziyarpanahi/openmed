@@ -247,7 +247,7 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
             continue
 
         schema = _request_body_schema(spec, operation)
-        assert endpoint.request_fields <= set(schema["properties"])
+        assert endpoint.request_fields == set(schema["properties"])
 
 
 def test_client_pii_language_literal_matches_core() -> None:

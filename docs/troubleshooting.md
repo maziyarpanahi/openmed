@@ -7,8 +7,8 @@ rather than an error, start with the [FAQ](faq.md); if you are setting up for th
 
 !!! tip "Run the built-in doctor first"
     Before digging in, run the offline environment check. It reports your Python version and architecture,
-    which optional extras are importable, whether an `HF_TOKEN` is present, and whether offline mode is
-    active — with a remediation `Hint:` on anything that is not ready.
+    which selected runtime extras are importable, whether an `HF_TOKEN` is present, and whether offline mode
+    is active — with a remediation `Hint:` on anything that is not ready.
 
     ```bash
     openmed doctor          # human-readable check list
@@ -18,11 +18,11 @@ rather than an error, start with the [FAQ](faq.md); if you are setting up for th
     Sample output:
 
     ```text
-    PASS  python_version: 3.11.9
-    PASS  python_arch: arm64
-    WARN  hf: transformers not installed
+    PASS python_version: 3.11.9
+    PASS python_arch: arm64
+    WARN hf: transformers not installed
           Hint: Install with: pip install transformers
-    PASS  openmed_offline: 0
+    PASS openmed_offline: 0
     ```
 
 ---
@@ -388,6 +388,7 @@ value is rejected.
 ```python
 from openmed import deidentify
 
+# Synthetic example only; do not paste real patient text into documentation or issues.
 result = deidentify("Patient John Doe, DOB 01/15/1970", method="mask")
 print(result.deidentified_text)   # read output from .deidentified_text (not .text)
 ```
@@ -418,13 +419,15 @@ print(result.deidentified_text)   # read output from .deidentified_text (not .te
 
 ```bash
 pip install "openmed[service]"
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 Tune behavior with `OPENMED_SERVICE_*` variables, e.g. `OPENMED_PROFILE=dev`,
 `OPENMED_SERVICE_PRELOAD_MODELS`, `OPENMED_SERVICE_MAX_TEXT_LENGTH`, and
 `OPENMED_SERVICE_TRUSTED_HOSTS` (defaults to loopback only). See [REST Service](rest-service.md),
 [REST Authentication](serving/authentication.md), and [REST Tracing](serving/tracing.md).
+Keep the loopback bind for local troubleshooting. Before exposing the service on a network, configure
+authentication, TLS at the ingress or reverse proxy, and an exact trusted-host allowlist.
 
 ### MCP server fails to start
 
@@ -479,4 +482,6 @@ Use `openmed --help` for the standard CLI (`analyze`, `batch`, `deid`, `pii`, `a
   environment overrides.
 - If you believe you found a bug, open an issue at
   [maziyarpanahi/openmed](https://github.com/maziyarpanahi/openmed/issues) with the error text, the command
-  you ran, and your OpenMed version (`openmed doctor` reports it).
+  you ran, and your OpenMed version (`openmed doctor` reports it). Use only synthetic text in reproductions,
+  and remove patient content, reversible mappings, access tokens, credentials, and private model URLs from
+  commands, tracebacks, logs, and screenshots before sharing them.

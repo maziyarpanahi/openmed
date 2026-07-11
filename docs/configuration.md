@@ -5,40 +5,47 @@ guard APIs against malformed inputs.
 
 ## OpenMedConfig sources
 
-`OpenMedConfig` reads values in the following order:
+Construct `OpenMedConfig` directly for explicit in-process settings, or load a
+flat TOML file with `load_config_from_file()`. When no path is passed, the
+loader checks `OPENMED_CONFIG` and then
+`~/.config/openmed/config.toml` (or the matching XDG config directory).
 
-1. Explicit keyword arguments when you instantiate it.
-2. Environment variables prefixed with `OPENMED_`.
-3. YAML file passed via `OPENMED_CONFIG_FILE` (or `openmed_config=` argument).
-4. Sensible defaults (CPU device, `~/.cache/openmed`, unauthenticated Hugging Face access).
+Environment controls are field-specific rather than a generic mapping from
+every `OPENMED_*` name. For example, `HF_TOKEN`, `OPENMED_OFFLINE`,
+`OPENMED_PROFILE`, and `OPENMED_TORCH_ATTENTION_BACKEND` are supported. When
+the device preference is unset or `"auto"`, `OPENMED_TORCH_DEVICE` (or the
+legacy `OPENMED_DEVICE`) is checked before automatic **MPS → CUDA → CPU**
+selection. Set the model cache with `cache_dir=` or the TOML `cache_dir` key;
+`OPENMED_CACHE_DIR` is used by selected deployment and data tooling and is not
+a generic `OpenMedConfig` override.
 
 ```python
 from pathlib import Path
-from openmed.core import ModelLoader, OpenMedConfig
+from openmed.core import ModelLoader
+from openmed.core.config import load_config_from_file
 
-config = OpenMedConfig.from_file(Path.home() / ".config/openmed/config.yaml")
+config = load_config_from_file(Path.home() / ".config/openmed/config.toml")
 loader = ModelLoader(config=config)
 ner = loader.create_pipeline("disease_detection_superclinical", aggregation_strategy="simple")
 entities = ner("Dapagliflozin added for HFpEF symptom relief.")
 ```
 
-### Minimal YAML file
+### Minimal TOML file
 
-```yaml title="~/.config/openmed/config.yaml"
-default_org: OpenMed
-device: cuda
-cache_dir: ~/.cache/openmed
-hf_token: ${HF_TOKEN}  # optional
-pipeline:
-  aggregation_strategy: simple
-  return_all_scores: false
+```toml title="~/.config/openmed/config.toml"
+default_org = "OpenMed"
+device = "cuda"
+cache_dir = "/mnt/cache/openmed"
+torch_attention_backend = "auto"
 ```
 
-Environment variables override YAML values, making it easy to swap devices or cache directories in CI/CD:
+Runtime environment controls can select the config path, provide Hub
+credentials, or choose a device when the loaded config leaves it automatic:
 
 ```bash
-export OPENMED_DEVICE=cuda:1
-export OPENMED_CACHE_DIR=/mnt/cache/openmed
+export OPENMED_CONFIG=/etc/openmed/config.toml
+export HF_TOKEN=hf_xxx
+export OPENMED_TORCH_DEVICE=cuda:1
 ```
 
 ## PyTorch attention backends
@@ -106,7 +113,6 @@ text = validate_input(
     user_supplied_text,
     max_length=2000,
     allow_empty=False,
-    strip=True,
 )
 model_id = validate_model_name("disease_detection_superclinical")
 ```
