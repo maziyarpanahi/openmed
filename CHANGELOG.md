@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an offline immunization zero-shot domain with FHIR-aligned display
   labels, canonical policy metadata, synthetic per-label fixture coverage, and
   generated OM-138 exporter-alignment documentation (#897).
+- Added region-qualified Arabic Faker locales (`ar-SA`, `ar-AE`, `ar-JO`,
+  `ar-PS`, and explicit `ar-EG`) so Gulf and Levant text receives in-region
+  surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
+  installed Faker fall back to `ar_EG` with a one-time warning, and
+  `list_regional_locales('ar')` enumerates the supported tags (#483).
 
 ## [1.8.1] - 2026-07-10
 
@@ -408,13 +413,14 @@ changed, with no deleted or renamed files detected in the release range.
   - `OpenMed/privacy-filter-multilingual` — PyTorch / Transformers (CPU + CUDA).
   - `OpenMed/privacy-filter-multilingual-mlx` — MLX full-precision (Apple Silicon).
   - `OpenMed/privacy-filter-multilingual-mlx-8bit` — MLX 8-bit quantized (Apple Silicon and OpenMedKit demos).
-  These artifacts use the OpenAI Privacy Filter architecture and officially support 16 languages through the OpenMed multilingual PII corpus.
+    These artifacts use the OpenAI Privacy Filter architecture and officially support 16 languages through the OpenMed multilingual PII corpus.
 - **Python MLX routing for multilingual Privacy Filter artifacts**:
   - `_MLX_MODEL_MAP` entries for the full and 8-bit multilingual MLX repo IDs.
   - `privacy-filter-multilingual` and `multilingual-privacy-filter` MLX family aliases, both resolving to the existing OpenAI Privacy Filter model class and BIOES decoder.
   - Family-aware Torch fallback so multilingual MLX model names substitute `OpenMed/privacy-filter-multilingual` on non-MLX hosts instead of the OpenAI baseline.
 - **Multilingual Privacy Filter Studio** in `examples/privacy_filter_multilingual_studio/`, a web demo comparing the OpenAI baseline, OpenAI Nemotron Privacy Filter, and OpenMed Multilingual Privacy Filter with English, French, and Arabic examples.
 - **OpenMed Scan Demo multilingual mode** with `OpenMed/privacy-filter-multilingual-mlx-8bit`, a three-engine picker, EN/FR/AR sample buttons, and new French/Arabic scanned demo documents for screenshot-ready flows.
+
 ### Changed
 
 - Privacy Filter docs and README now describe three Privacy Filter families and label the multilingual model as **OpenMed Multilingual Privacy Filter**.
@@ -466,7 +472,7 @@ changed, with no deleted or renamed files detected in the release range.
   - `OpenMed/privacy-filter-nemotron` — PyTorch / Transformers (CPU + CUDA).
   - `OpenMed/privacy-filter-nemotron-mlx` — MLX full-precision (Apple Silicon).
   - `OpenMed/privacy-filter-nemotron-mlx-8bit` — MLX 8-bit quantized (Apple Silicon).
-  These checkpoints **are** the OpenAI Privacy Filter architecture (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`) fine-tuned on the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1). They reuse `OpenAIPrivacyFilterForTokenClassification` and `PrivacyFilterMLXPipeline` unchanged — no new architecture code needed.
+    These checkpoints **are** the OpenAI Privacy Filter architecture (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`) fine-tuned on the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1). They reuse `OpenAIPrivacyFilterForTokenClassification` and `PrivacyFilterMLXPipeline` unchanged — no new architecture code needed.
 - **`_MLX_MODEL_MAP` entries** for the two new Nemotron MLX repo IDs in `openmed.mlx.inference`.
 - **Aliases for the new family in `_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES`** (`privacy-filter-nemotron`, `nemotron-privacy-filter`) — both resolve to the existing `openai-privacy-filter` family so a Nemotron-fine-tune MLX artifact can ship with either family identifier in its manifest and still dispatch correctly.
 - **Family-aware Torch fallback** in `openmed.core.backends`:
