@@ -220,7 +220,7 @@ class LocaleFormatHint:
 
 
 WIRED_LOCALES: Final = frozenset(
-    {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "tr"}
+    {"en", "fr", "de", "it", "es", "nl", "hi", "te", "pt", "ar", "ja", "ko", "tr"}
 )
 BACKLOG_LOCALES: Final = frozenset(
     {
@@ -231,7 +231,6 @@ BACKLOG_LOCALES: Final = frozenset(
         "fa",
         "he",
         "id",
-        "ko",
         "ms",
         "no",
         "pl",
@@ -259,6 +258,7 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "pt": "dmy",
     "ar": "dmy",
     "ja": "ymd",
+    "ko": "ymd",
     "tr": "dmy",
     # Backlog and national-ID-only locales.
     "bn": "dmy",
@@ -268,7 +268,6 @@ LOCALE_DATE_ORDER: Final[Mapping[str, DateOrder]] = {
     "fa": "ymd",
     "he": "dmy",
     "id": "dmy",
-    "ko": "ymd",
     "ms": "dmy",
     "no": "dmy",
     "pl": "dmy",
@@ -309,6 +308,7 @@ LOCALE_NUMBER_SEP: Final[Mapping[str, NumberSeparators]] = {
     "pt": _COMMA_DECIMAL_DOT_GROUPS,
     "ar": _ARABIC_NUMBER_SEPARATORS,
     "ja": _DOT_DECIMAL_COMMA_GROUPS,
+    "ko": _DOT_DECIMAL_COMMA_GROUPS,
     "tr": _COMMA_DECIMAL_DOT_GROUPS,
     # Backlog and national-ID-only locales.
     "bn": _DOT_DECIMAL_COMMA_GROUPS,
@@ -318,7 +318,6 @@ LOCALE_NUMBER_SEP: Final[Mapping[str, NumberSeparators]] = {
     "fa": _ARABIC_NUMBER_SEPARATORS,
     "he": _DOT_DECIMAL_COMMA_GROUPS,
     "id": _COMMA_DECIMAL_DOT_GROUPS,
-    "ko": _DOT_DECIMAL_COMMA_GROUPS,
     "ms": _DOT_DECIMAL_COMMA_GROUPS,
     "no": _COMMA_DECIMAL_SPACE_GROUPS,
     "pl": _COMMA_DECIMAL_SPACE_GROUPS,
