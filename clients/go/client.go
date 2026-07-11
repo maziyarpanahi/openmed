@@ -18,7 +18,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -449,8 +451,9 @@ type SMARTBackendJobStatus struct {
 	Error     *string                       `json:"error"`
 }
 
-// JobDocumentMetadata describes one document in a job response. Only offsets and
-// hashes are surfaced; no plaintext PHI is returned.
+// JobDocumentMetadata describes one document in a job response. Document text
+// is represented by its length and hash. ID echoes the caller-supplied
+// identifier, so callers should keep document identifiers free of PHI.
 type JobDocumentMetadata struct {
 	ID       string `json:"id"`
 	Length   int    `json:"length"`
@@ -458,7 +461,7 @@ type JobDocumentMetadata struct {
 }
 
 // JobSpan is a detected span in a job response, carrying offsets and a hash
-// instead of plaintext.
+// instead of plaintext. DocumentID echoes the caller-supplied document ID.
 type JobSpan struct {
 	DocumentID string   `json:"document_id"`
 	Start      int      `json:"start"`
@@ -536,12 +539,11 @@ type APIError struct {
 	Envelope   ErrorEnvelope
 }
 
-// Error implements the error interface.
+// Error implements the error interface with a status-only summary. Service
+// messages and details remain available on Envelope but are omitted here so
+// routine error logging does not copy possible clinical text.
 func (e *APIError) Error() string {
-	return fmt.Sprintf(
-		"openmed: request failed with status %d (%s): %s",
-		e.StatusCode, e.Envelope.Error.Code, e.Envelope.Error.Message,
-	)
+	return fmt.Sprintf("openmed: request failed with status %d", e.StatusCode)
 }
 
 // Code returns the service error code from the envelope.
@@ -570,6 +572,7 @@ type Client struct {
 	httpClient           *http.Client
 	maxResponseBodyBytes int64
 	maxStreamEventBytes  int
+	allowInsecureHTTP    bool
 }
 
 // PIIExtractStream incrementally decodes the NDJSON response from
@@ -596,8 +599,17 @@ func (s *PIIExtractStream) Next() bool {
 	}
 
 	var event PIIExtractStreamEvent
-	if err := json.Unmarshal(s.scanner.Bytes(), &event); err != nil {
-		s.err = fmt.Errorf("openmed: decode /pii/extract/stream event: %w", err)
+	if err := decodeJSONObject(
+		"/pii/extract/stream event",
+		s.scanner.Bytes(),
+		&event,
+	); err != nil {
+		s.err = err
+		_ = s.closeBody()
+		return false
+	}
+	if strings.TrimSpace(event.Type) == "" {
+		s.err = errors.New("openmed: /pii/extract/stream event has no type")
 		_ = s.closeBody()
 		return false
 	}
@@ -641,13 +653,33 @@ func (s *PIIExtractStream) closeBody() error {
 type Option func(*Client)
 
 // WithHTTPClient sets a custom *http.Client (for timeouts, transports, redirect
-// policy, or test doubles). A nil client is ignored. Unlike the secure default,
-// a supplied client may follow redirects according to its own CheckRedirect.
+// policy, or test doubles). A nil client is ignored. The configuration is
+// copied without copying the client's internal synchronization state. When the
+// supplied client has no CheckRedirect policy, redirects remain disabled. A
+// non-nil policy is treated as an explicit override.
 func WithHTTPClient(hc *http.Client) Option {
 	return func(c *Client) {
 		if hc != nil {
-			c.httpClient = hc
+			cloned := &http.Client{
+				Transport:     hc.Transport,
+				CheckRedirect: hc.CheckRedirect,
+				Jar:           hc.Jar,
+				Timeout:       hc.Timeout,
+			}
+			if cloned.CheckRedirect == nil {
+				cloned.CheckRedirect = refuseRedirect
+			}
+			c.httpClient = cloned
 		}
+	}
+}
+
+// WithInsecureHTTP explicitly permits cleartext HTTP for a non-loopback base
+// URL. Prefer HTTPS. This option is intended only for trusted, isolated
+// networks where transport security is provided outside the application.
+func WithInsecureHTTP() Option {
+	return func(c *Client) {
+		c.allowInsecureHTTP = true
 	}
 }
 
@@ -674,9 +706,10 @@ func WithMaxStreamEventBytes(limit int) Option {
 }
 
 // New constructs a Client for the given base URL (for example
-// "http://localhost:8080"). If baseURL is empty, DefaultBaseURL is used. The
-// default HTTP client does not follow redirects, preventing request bodies from
-// being forwarded to another origin.
+// "http://localhost:8080"). If baseURL is empty, DefaultBaseURL is used.
+// Cleartext HTTP is accepted for loopback hosts only unless WithInsecureHTTP is
+// passed. Redirects are disabled unless a custom client supplies an explicit
+// CheckRedirect policy.
 func New(baseURL string, opts ...Option) (*Client, error) {
 	trimmed := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if trimmed == "" {
@@ -684,48 +717,67 @@ func New(baseURL string, opts ...Option) (*Client, error) {
 	}
 	parsed, err := url.ParseRequestURI(trimmed)
 	if err != nil {
-		return nil, fmt.Errorf("openmed: invalid base URL %q: %w", baseURL, err)
+		return nil, errors.New("openmed: invalid base URL: malformed URL")
 	}
 	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Hostname() == "" {
-		return nil, fmt.Errorf(
-			"openmed: invalid base URL %q: expected an absolute HTTP(S) URL",
-			baseURL,
+		return nil, errors.New(
+			"openmed: invalid base URL: expected an absolute HTTP(S) URL",
 		)
 	}
 	if parsed.User != nil {
-		return nil, fmt.Errorf(
-			"openmed: invalid base URL %q: user information is not supported",
-			baseURL,
+		return nil, errors.New(
+			"openmed: invalid base URL: user information is not supported",
 		)
 	}
 	if parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
-		return nil, fmt.Errorf(
-			"openmed: invalid base URL %q: query parameters and fragments are not supported",
-			baseURL,
+		return nil, errors.New(
+			"openmed: invalid base URL: query parameters and fragments are not supported",
 		)
 	}
 	for _, segment := range strings.Split(parsed.Path, "/") {
 		if segment == "." || segment == ".." {
-			return nil, fmt.Errorf(
-				"openmed: invalid base URL %q: dot path segments are not supported",
-				baseURL,
+			return nil, errors.New(
+				"openmed: invalid base URL: dot path segments are not supported",
 			)
 		}
 	}
 	c := &Client{
 		baseURL: trimmed,
 		httpClient: &http.Client{
-			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+			CheckRedirect: refuseRedirect,
 		},
 		maxResponseBodyBytes: DefaultMaxResponseBodyBytes,
 		maxStreamEventBytes:  DefaultMaxStreamEventBytes,
 	}
 	for _, opt := range opts {
-		opt(c)
+		if opt != nil {
+			opt(c)
+		}
+	}
+	if parsed.Scheme == "http" &&
+		!isLoopbackHost(parsed.Hostname()) &&
+		!c.allowInsecureHTTP {
+		return nil, errors.New(
+			"openmed: invalid base URL: use HTTPS for non-loopback hosts or explicitly pass WithInsecureHTTP",
+		)
 	}
 	return c, nil
+}
+
+func refuseRedirect(_ *http.Request, _ []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
+func isLoopbackHost(host string) bool {
+	normalized := strings.TrimSuffix(strings.ToLower(host), ".")
+	if normalized == "localhost" {
+		return true
+	}
+	if zone := strings.LastIndexByte(normalized, '%'); zone >= 0 {
+		normalized = normalized[:zone]
+	}
+	ip := net.ParseIP(normalized)
+	return ip != nil && ip.IsLoopback()
 }
 
 // BaseURL returns the normalized base URL the client targets.
@@ -765,6 +817,12 @@ func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamReque
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		defer resp.Body.Close()
 		return nil, apiErrorFromResponse(resp)
+	}
+	if !isNDJSONContentType(resp.Header.Get("Content-Type")) {
+		_ = resp.Body.Close()
+		return nil, errors.New(
+			"openmed: /pii/extract/stream returned a non-NDJSON response",
+		)
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -828,11 +886,11 @@ func (c *Client) LoadedModels(ctx context.Context) (*LoadedModelsResponse, error
 		return nil, err
 	}
 	var out LoadedModelsResponse
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("openmed: decode /models/loaded response: %w", err)
+	if err := decodeInto("/models/loaded", body, &out); err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(body, &out.Raw); err != nil {
-		return nil, fmt.Errorf("openmed: decode /models/loaded response: %w", err)
+	if err := decodeInto("/models/loaded", body, &out.Raw); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -844,11 +902,11 @@ func (c *Client) UnloadModels(ctx context.Context, req ModelUnloadRequest) (*Mod
 		return nil, err
 	}
 	var out ModelUnloadResponse
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("openmed: decode /models/unload response: %w", err)
+	if err := decodeInto("/models/unload", body, &out); err != nil {
+		return nil, err
 	}
-	if err := json.Unmarshal(body, &out.Raw); err != nil {
-		return nil, fmt.Errorf("openmed: decode /models/unload response: %w", err)
+	if err := decodeInto("/models/unload", body, &out.Raw); err != nil {
+		return nil, err
 	}
 	return &out, nil
 }
@@ -941,11 +999,19 @@ func fillJobID(template, jobID string) (string, error) {
 }
 
 func decodeInto(path string, body []byte, out any) error {
-	if out == nil || len(body) == 0 {
+	if out == nil {
 		return nil
 	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("openmed: decode %s response: %w", path, err)
+	return decodeJSONObject(endpointLabel(path)+" response", body, out)
+}
+
+func decodeJSONObject(label string, body []byte, out any) error {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return fmt.Errorf("openmed: %s is not a JSON object", label)
+	}
+	if err := json.Unmarshal(trimmed, out); err != nil {
+		return fmt.Errorf("openmed: decode %s: %w", label, err)
 	}
 	return nil
 }
@@ -973,7 +1039,11 @@ func (c *Client) rawWithAccept(
 	}
 	body, err := readBounded(resp.Body, c.maxResponseBodyBytes)
 	if err != nil {
-		return nil, fmt.Errorf("openmed: read %s response: %w", path, err)
+		return nil, fmt.Errorf(
+			"openmed: read %s response: %w",
+			endpointLabel(path),
+			err,
+		)
 	}
 	return body, nil
 }
@@ -984,18 +1054,19 @@ func (c *Client) do(
 	in any,
 	accept string,
 ) (*http.Response, error) {
+	label := endpointLabel(path)
 	var reader io.Reader
 	if in != nil {
 		encoded, err := json.Marshal(in)
 		if err != nil {
-			return nil, fmt.Errorf("openmed: encode %s request: %w", path, err)
+			return nil, fmt.Errorf("openmed: encode %s request: %w", label, err)
 		}
 		reader = bytes.NewReader(encoded)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, reader)
 	if err != nil {
-		return nil, fmt.Errorf("openmed: build %s request: %w", path, err)
+		return nil, fmt.Errorf("openmed: build %s request", label)
 	}
 	req.Header.Set("Accept", accept)
 	if in != nil {
@@ -1004,12 +1075,41 @@ func (c *Client) do(
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("openmed: %s %s: %w", method, path, err)
+		return nil, fmt.Errorf(
+			"openmed: %s %s: %w",
+			method,
+			label,
+			transportErrorCause(err),
+		)
 	}
 	return resp, nil
 }
 
+func endpointLabel(path string) string {
+	if strings.HasPrefix(path, "/jobs/") {
+		return pathGetJob
+	}
+	if strings.HasPrefix(path, "/fhir/smart-backend/ingestions/") {
+		if strings.HasSuffix(path, "/summary") {
+			return pathSMARTBackendIngestionSummary
+		}
+		return pathSMARTBackendIngestionStatus
+	}
+	return path
+}
+
+func transportErrorCause(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && urlErr.Err != nil {
+		return urlErr.Err
+	}
+	return err
+}
+
 func readBounded(reader io.Reader, limit int64) ([]byte, error) {
+	if limit == math.MaxInt64 {
+		return io.ReadAll(reader)
+	}
 	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
 		return nil, err
@@ -1030,6 +1130,14 @@ func apiErrorFromResponse(resp *http.Response) *APIError {
 		body = nil
 	}
 	return newAPIError(resp.StatusCode, body)
+}
+
+func isNDJSONContentType(value string) bool {
+	mediaType, _, err := mime.ParseMediaType(value)
+	if err != nil {
+		return false
+	}
+	return mediaType == "application/x-ndjson" || mediaType == "application/ndjson"
 }
 
 func newAPIError(status int, body []byte) *APIError {
