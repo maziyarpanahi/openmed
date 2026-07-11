@@ -87,6 +87,38 @@ def _build_report_and_fixtures(tmp_path: Path) -> tuple[Path, Path]:
     return report_path, fixtures_path
 
 
+def _build_capped_report(
+    label_counts: dict[str, int], *, example_cap: int
+) -> ErrorAnalysisReport:
+    fixtures = []
+    for label, count in label_counts.items():
+        for index in range(count):
+            text = f"synthetic-{label}-{index}"
+            fixtures.append(
+                BenchmarkFixture.from_mapping(
+                    {
+                        "id": f"{label.lower()}-{index}",
+                        "text": text,
+                        "gold_spans": [
+                            {
+                                "start": 0,
+                                "end": len(text),
+                                "label": label,
+                                "text": text,
+                            }
+                        ],
+                        "metadata": {"synthetic": True},
+                    }
+                )
+            )
+    return error_report(
+        "synthetic-model",
+        fixtures,
+        runner=lambda fixture, model, device: [],
+        example_cap=example_cap,
+    )
+
+
 def test_explore_false_negatives_lists_only_planted_misses(tmp_path: Path) -> None:
     report_path, fixtures_path = _build_report_and_fixtures(tmp_path)
     report = ErrorAnalysisReport.read_json(report_path)
@@ -158,7 +190,9 @@ def test_false_negatives_cli_json_emits_valid_records(
     assert payload["suite"] == "golden"
     assert payload["model_name"] == "synthetic-model"
     assert payload["total_missed"] == 3
+    assert payload["available"] == 3
     assert payload["shown"] == 3
+    assert payload["examples_truncated"] is False
 
     records = [rec for group in payload["groups"] for rec in group["records"]]
     assert len(records) == 3
@@ -228,6 +262,63 @@ def test_false_negatives_cli_honors_limit(
     assert payload["shown"] == 1
     records = [rec for group in payload["groups"] for rec in group["records"]]
     assert len(records) == 1
+
+
+def test_explorer_uses_canonical_counts_beyond_the_example_cap() -> None:
+    report = _build_capped_report({"PERSON": 7}, example_cap=5)
+
+    exploration = explore_false_negatives(report)
+
+    assert report.confusion_matrix["PERSON"][MISSED] == 7
+    assert exploration.total_missed == 7
+    assert exploration.available == 5
+    assert exploration.shown == 5
+    assert exploration.examples_truncated is True
+    assert len(exploration.groups) == 1
+    group = exploration.groups[0]
+    assert group.label == "PERSON"
+    assert group.count == 7
+    assert group.available == 5
+    assert len(group.records) == 5
+
+    payload = exploration.to_dict()
+    assert payload["total_missed"] == 7
+    assert payload["available"] == 5
+    assert payload["example_cap"] == 5
+    assert payload["examples_truncated"] is True
+    assert payload["groups"][0]["count"] == 7
+    assert payload["groups"][0]["available"] == 5
+    assert payload["groups"][0]["shown"] == 5
+
+
+def test_explorer_orders_labels_by_canonical_miss_frequency() -> None:
+    report = _build_capped_report({"DATE": 6, "PHONE": 7}, example_cap=2)
+
+    exploration = explore_false_negatives(report)
+
+    # Both labels have two stored examples, so ordering by the bounded sample
+    # would put DATE first. Canonical confusion-matrix counts put PHONE first.
+    assert [group.label for group in exploration.groups] == ["PHONE", "DATE"]
+    assert [group.count for group in exploration.groups] == [7, 6]
+    assert [group.available for group in exploration.groups] == [2, 2]
+
+
+def test_false_negatives_cli_discloses_capped_examples(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = _build_capped_report({"PERSON": 7}, example_cap=5)
+    report_path = tmp_path / "capped-report.json"
+    report.write_json(report_path)
+
+    result = main_module.main(["benchmark", "false-negatives", str(report_path)])
+
+    assert result == 0
+    output = capsys.readouterr().out
+    assert "Missed gold spans: 7  Stored examples: 5  Shown: 5" in output
+    assert "Stored examples are capped by the report" in output
+    assert "## PERSON (7)" in output
+    assert "Stored examples: 5  Shown: 5" in output
 
 
 def test_false_negatives_cli_without_fixtures_hides_raw_text(
