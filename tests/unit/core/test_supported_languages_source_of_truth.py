@@ -15,6 +15,7 @@ LANGUAGE_CLAIM_PATHS = (
     "README.md",
     "docs/anonymization.md",
     "docs/faq.md",
+    "docs/rest-recipes.md",
     "docs/feature-map.md",
     "docs/index.md",
     "docs/troubleshooting.md",

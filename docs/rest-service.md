@@ -29,6 +29,9 @@ optional startup preload, bounded warm-pool residency, model keep-alive
 controls, optional no-PHI OpenTelemetry tracing, and a consistent application
 error envelope.
 
+For ready-to-run `curl` and Python `requests` snippets covering the common
+calls, see the task-oriented [REST API Recipes](rest-recipes.md) page.
+
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
 
