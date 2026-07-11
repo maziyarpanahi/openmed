@@ -25,13 +25,12 @@ local-first pipeline.
 ## Maven Central Publishing
 
 OpenMedKit publishes from `.github/workflows/android-publish.yml` on `v*` tags or
-manual dispatch only. The workflow builds a signed Central Portal bundle from the
-Gradle `release` Maven publication and uploads it to Sonatype after the required
-Android checks have passed.
-
-The release commit must already have successful check runs named
-`Build & Test Android OpenMedKit` and `Android AAR size and cold-start gate`.
-Missing or failing checks block the upload.
+manual dispatch only. Tag releases skip Android publication when the Android
+artifact inputs have not changed since the previous release. When publication is
+needed, the workflow assembles the library, runs its unit tests, builds a signed
+Central Portal bundle from the Gradle `release` Maven publication, and uploads it
+to Sonatype. Manual dispatch always runs the full validated publication path after
+the explicit upload confirmation.
 
 Required repository secrets:
 
