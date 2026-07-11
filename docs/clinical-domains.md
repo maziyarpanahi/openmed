@@ -236,3 +236,17 @@
 | FluidStatus | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
 | RenalReplacementAccess | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
 | ElectrolyteDisturbance | OTHER | CLINICAL_CONCEPT | low | SNOMED, ICD-10-CM, HPO, RxNorm, LOINC | tests/fixtures/clinical/nephrology_renal.jsonl |
+
+## Immunization
+
+**Alignment:** The display labels are shaped for the planned OM-138 FHIR Immunization exporter: VaccineName maps to vaccineCode, DoseNumber to protocolApplied.doseNumber[x], AdministrationRoute to route, AdministrationSite to site, VaccineLot to lotNumber, AdministrationDate to occurrence[x], and VaccineSeries to protocolApplied.series. This is extraction metadata only; it does not create exporter, recommendation, dosing, or scheduling logic.
+
+| Label | Canonical Label | Category | Risk Level | System Hints | Fixture Path |
+| --- | --- | --- | --- | --- | --- |
+| VaccineName | VACCINE_NAME | CLINICAL_CONCEPT | low | RxNorm, SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| DoseNumber | DOSE_NUMBER | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| AdministrationRoute | ADMINISTRATION_ROUTE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| AdministrationSite | BODY_SITE | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| VaccineLot | VACCINE_LOT | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
+| AdministrationDate | DATE | QUASI_IDENTIFIER | medium | None | tests/fixtures/clinical/immunization.jsonl |
+| VaccineSeries | VACCINE_SERIES | CLINICAL_CONCEPT | low | SNOMED | tests/fixtures/clinical/immunization.jsonl |
