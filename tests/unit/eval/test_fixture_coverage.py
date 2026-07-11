@@ -8,7 +8,11 @@ from collections import Counter
 from openmed.core.labels import CANONICAL_LABELS
 from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
 from openmed.eval import FixtureCoverageReport, fixture_coverage_report
-from openmed.eval.golden import GOLDEN_CATEGORIES, load_golden_fixtures
+from openmed.eval.golden import (
+    GOLDEN_CATEGORIES,
+    HARD_NEGATIVE_CATEGORY,
+    load_golden_fixtures,
+)
 
 
 def test_fixture_coverage_report_lists_committed_fixture_gaps() -> None:
@@ -32,6 +36,10 @@ def test_fixture_coverage_report_lists_committed_fixture_gaps() -> None:
     }
     assert report.category_counts["multilingual"] >= len(SUPPORTED_LANGUAGES)
     assert report.category_counts["policy_profile_actions"] == 2
+    assert report.category_counts[HARD_NEGATIVE_CATEGORY] >= 1
+    assert report.hard_negative_fixture_count >= 1
+    assert report.hard_negative_candidate_count >= report.hard_negative_fixture_count
+    assert {"DATE", "ID_NUM", "PERSON"} <= set(report.hard_negative_labels)
 
     assert "PERSON" in report.covered_labels
     assert "ID_NUM" in report.covered_labels
@@ -61,6 +69,12 @@ def test_fixture_coverage_to_dict_is_stable_and_aggregate_only() -> None:
     assert payload["labels"]["covered"] == list(report.covered_labels)
     assert payload["languages"]["missing"] == []
     assert payload["categories"]["missing"] == []
+    assert payload["hard_negatives"]["fixture_count"] == (
+        report.hard_negative_fixture_count
+    )
+    assert payload["hard_negatives"]["candidate_count"] == (
+        report.hard_negative_candidate_count
+    )
 
     serialized = json.dumps(payload, sort_keys=True)
     assert "golden-" not in serialized
@@ -82,5 +96,8 @@ def test_fixture_coverage_markdown_is_byte_stable_and_aggregate_only() -> None:
         in markdown
     )
     assert "| `policy_profile_actions` | 2 | covered |" in markdown
+    assert "| Fixtures | " in markdown
+    assert "| Candidates | " in markdown
+    assert "| `0.75-1.00` | " in markdown
     assert "golden-" not in markdown
     assert "Synthetic" not in markdown

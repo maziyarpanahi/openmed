@@ -12,26 +12,40 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - REST Tracing: serving/tracing.md
+      - Serving Resilience: serving/resilience.md
+      - Hardened Service Image: deploy/hardened-image.md
+      - Async REST Jobs & Webhooks: serving/async-jobs.md
+      - gRPC Service: serving/grpc.md
+      - REST Authentication: serving/authentication.md
+      - Helm Deployment: deploy/helm.md
       - Multi-Arch Containers: deploy/multi-arch.md
       - ModelLoader & Pipelines: model-loader.md
       - Model Registry: model-registry.md
       - Model Manifest: model-manifest.md
       - Advanced NER & Output Formatting: output-formatting.md
       - Clinical Context & Extraction Depth: clinical/context-and-extraction.md
+      - Medication Sig Parser: clinical/sig-parser.md
       - Medical Tokenizer: medical-tokenizer.md
       - Configuration & Validation: configuration.md
       - Configuration Profiles: profiles.md
       - Batch Processing: batch-processing.md
       - Performance Profiling: profiling.md
+      - Zero-shot NER How-to: zero-shot-howto.md
       - Zero-shot Toolkit: zero-shot-ner.md
       - Examples & Copy/Paste Recipes: examples.md
+      - Document Adapter Provenance: document-adapter-provenance.md
+      - EPUB Extraction: multimodal/epub-extraction.md
       - Testing & QA: testing.md
       - Eval Harness & Metrics: eval-harness.md
+      - Experiencer Refinement: clinical/experiencer-refinement.md
+      - OpenVINO Runtime: runtimes/openvino.md
       - Device Tiers & SLOs: tiers.md
       - AWQ Export: export-awq.md
       - GPTQ Export: export-gptq.md
@@ -41,6 +55,9 @@ nav:
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
+      - Columnar Redactor: integrations/columnar-redactor.md
+      - Lakehouse Table Redaction: integrations/lakehouse-redaction.md
+      - Dask DataFrame De-identification: integrations/dask.md
       - DuckDB De-identification UDFs: duckdb-deidentification.md
       - spaCy Pipeline Component: spacy-component.md
       - HL7 v2 De-identification: hl7v2-deidentification.md
@@ -53,9 +70,12 @@ nav:
       - Torch MPS Performance: performance-mps.md
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
+      - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
+      - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
       - Onboarding: onboarding.md
@@ -64,29 +84,39 @@ nav:
       - Security & Disclosure: security/disclosure-policy.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
+      - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
       - Software Bill of Materials: security/sbom.md
+      - SLSA Build Provenance: supply-chain/provenance.md
+      - Container Image SBOM: supply-chain/sbom.md
+      - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
-      - PyPI Trusted Publishing: release/trusted-publishing.md
+      - PyPI Publishing: release/trusted-publishing.md
+      - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md
       - API Reference: api-reference.md
 
+extra_css:
+  - stylesheets/openmed-brand.css
+
 theme:
   name: material
   language: en
+  logo: assets/openmed-mark.svg
+  favicon: assets/openmed-favicon.svg
   font:
-    text: Inter
+    text: Inter Tight
     code: JetBrains Mono
   palette:
     - scheme: default
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: deep purple
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode

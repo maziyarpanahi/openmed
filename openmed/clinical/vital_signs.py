@@ -6,6 +6,8 @@ import math
 import re
 from typing import Literal, TypedDict
 
+from .units import MeasurementNormalization, normalize_to
+
 VitalKind = Literal[
     "blood_pressure",
     "heart_rate",
@@ -178,6 +180,16 @@ def structure_vital_sign(text: object) -> VitalSignResult:
     return empty_vital_sign_result()
 
 
+def normalize_vital_measurement(
+    value: object,
+    unit: object,
+    target_unit: object,
+) -> MeasurementNormalization:
+    """Normalize a captured vital-sign value with explicit unit provenance."""
+
+    return normalize_to(value, unit, target_unit)
+
+
 __all__ = [
     "VITAL_SIGNS_ADVISORY",
     "VitalKind",
@@ -186,5 +198,6 @@ __all__ = [
     "VitalSignNumber",
     "VitalSignResult",
     "empty_vital_sign_result",
+    "normalize_vital_measurement",
     "structure_vital_sign",
 ]

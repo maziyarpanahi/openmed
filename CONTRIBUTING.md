@@ -21,6 +21,10 @@ uv pip install -e ".[dev]"      # editable install with test + lint deps
 pre-commit install              # auto-format staged files on commit
 ```
 
+The pre-commit hooks also run the Gitleaks secret scanner on staged changes.
+See [Secret Scanning](docs/security/secret-scanning.md) for local use, CI
+behavior, and baseline maintenance.
+
 ## Run the checks before opening a PR
 
 ```bash

@@ -36,14 +36,13 @@ if TYPE_CHECKING:
 from ..processing.tokenizer_cache import get_tokenizer_with_loader
 from .config import get_config
 from .model_registry import (
-    OPENMED_MODELS,
+    ModelInfo as RegistryModelInfo,
+)
+from .model_registry import (
     get_all_models,
     get_model_info,
     get_model_suggestions,
     get_models_by_category,
-)
-from .model_registry import (
-    ModelInfo as RegistryModelInfo,
 )
 from .offline import configure_offline_mode, is_local_only
 
@@ -181,7 +180,8 @@ class ModelLoader:
 
             # Load model
             model_kwargs = {**pretrained_kwargs, **load_kwargs}
-            model_kwargs["attn_implementation"] = attn_implementation
+            if attn_implementation is not None:
+                model_kwargs["attn_implementation"] = attn_implementation
             if quantization_config is not None:
                 model_kwargs["quantization_config"] = quantization_config
             model_uses_quantization = (
@@ -501,7 +501,9 @@ class ModelLoader:
             apply_mps_tuning()
         return resolved_device
 
-    def _resolve_attn_implementation(self, prefer: Optional[str] = None) -> str:
+    def _resolve_attn_implementation(
+        self, prefer: Optional[str] = None
+    ) -> Optional[str]:
         """Resolve a safe Transformers attention backend for PyTorch loading."""
         from openmed.torch.attention import select_attn_implementation
 
@@ -520,10 +522,11 @@ class ModelLoader:
             "attn_implementation",
             attention_preference,
         )
-        model_kwargs["attn_implementation"] = self._resolve_attn_implementation(
-            attention_preference
-        )
-        pipeline_kwargs["model_kwargs"] = model_kwargs
+        attn_implementation = self._resolve_attn_implementation(attention_preference)
+        if attn_implementation is not None:
+            model_kwargs["attn_implementation"] = attn_implementation
+        if model_kwargs:
+            pipeline_kwargs["model_kwargs"] = model_kwargs
 
     def get_registry_info(self, model_key: str) -> Optional[RegistryModelInfo]:
         """Get information from model registry."""

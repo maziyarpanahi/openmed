@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping
 
 from openmed.core.labels import CANONICAL_LABELS, normalize_label
 from openmed.eval.harness import BenchmarkFixture

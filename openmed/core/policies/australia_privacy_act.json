@@ -89,7 +89,26 @@
     "VACCINE_NAME": "keep",
     "DOSE_NUMBER": "keep",
     "ADMINISTRATION_ROUTE": "keep",
+    "VACCINE_LOT": "keep",
     "VACCINE_SERIES": "keep",
+    "GENE_SYMBOL": "keep",
+    "VARIANT_DESCRIPTOR": "keep",
+    "PROTEIN_CHANGE": "keep",
+    "ZYGOSITY": "keep",
+    "CLINICAL_SIGNIFICANCE": "keep",
+    "GLYCEMIC_MEASURE": "keep",
+    "THYROID_MEASURE": "keep",
+    "HORMONE_LEVEL": "keep",
+    "INSULIN_REGIMEN": "keep",
+    "ENDOSCOPIC_FINDING": "keep",
+    "GI_SYMPTOM": "keep",
+    "GI_SCORE": "keep",
+    "POLYP_DESCRIPTOR": "keep",
+    "CKD_STAGE": "mask",
+    "DIALYSIS_MODALITY": "mask",
+    "RENAL_FUNCTION_MEASURE": "mask",
+    "URINE_FINDING": "mask",
+
     "OTHER": "keep"
   }
 }

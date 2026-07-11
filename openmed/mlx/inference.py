@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 import re
 from bisect import bisect_left, bisect_right
 from pathlib import Path
@@ -18,14 +17,12 @@ from typing import Any, Dict, List, Optional, Sequence
 from openmed.core.decoding import (
     SpanEdge,
     SpanNode,
-    TokenLabelInfo,
     build_label_info,
     decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
     trim_span_whitespace,
     viterbi_decode,
-    zero_viterbi_biases,
 )
 from openmed.mlx.artifact import (
     MANIFEST_FILENAME,
@@ -34,6 +31,7 @@ from openmed.mlx.artifact import (
     read_manifest,
     resolve_tokenizer_reference,
 )
+from openmed.processing.advanced_ner import stream_token_classifier
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
 
 logger = logging.getLogger(__name__)
@@ -194,6 +192,11 @@ class MLXTokenClassificationPipeline:
             return [self._predict_single(item) for item in text]
 
         return self._predict_single(text)
+
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental token-classification events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
 
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
         """Run token classification for a single input string."""
@@ -420,6 +423,11 @@ class PrivacyFilterMLXPipeline:
         if isinstance(text, (list, tuple)):
             return self._predict_batch(list(text))
         return self._predict_single(text)
+
+    async def stream(self, chunks: Any, **kwargs: Any):
+        """Yield incremental privacy-filter events for text chunks."""
+        async for event in stream_token_classifier(self, chunks, **kwargs):
+            yield event
 
     def _predict_single(self, text: str) -> List[Dict[str, Any]]:
         token_ids = [
@@ -1223,6 +1231,25 @@ def _resolve_mlx_model(
 
     convert(full_model_id, output_dir, cache_dir=cache_dir)
     return str(output_dir), full_model_id
+
+
+def create_mlx_language_model(
+    model_name: str,
+    *,
+    config: Any = None,
+    draft_model_name: str | None = None,
+    metrics: Any = None,
+) -> Any:
+    """Create an MLX-LM language-model runner with optional draft decoding."""
+
+    from openmed.mlx.lm import OpenMedMLXLanguageModel
+
+    return OpenMedMLXLanguageModel(
+        model_name=model_name,
+        config=config,
+        draft_model_name=draft_model_name,
+        metrics=metrics,
+    )
 
 
 def create_mlx_pipeline(

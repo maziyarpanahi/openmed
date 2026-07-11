@@ -41,11 +41,23 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="duckdb",
         description="DuckDB scalar UDFs for in-query de-identification",
     ),
+    "function_tools": AdapterSpec(
+        name="function_tools",
+        module="openmed.interop.function_tools",
+        extra="",
+        description="Generic function-calling and tool-use schema adapters",
+    ),
     "langchain": AdapterSpec(
         name="langchain",
         module="openmed.interop.langchain",
         extra="langchain",
         description="LangChain redaction runnable adapter",
+    ),
+    "llamaindex": AdapterSpec(
+        name="llamaindex",
+        module="openmed.interop.llamaindex",
+        extra="llamaindex",
+        description="LlamaIndex FunctionTool adapter",
     ),
     "pandas": AdapterSpec(
         name="pandas",
@@ -89,6 +101,26 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="spacy",
         description="spaCy pipeline component for OpenMed PII spans",
     ),
+    "cdm_etl": AdapterSpec(
+        name="cdm_etl",
+        module="openmed.interop.cdm_etl",
+        extra="",
+        description="Deterministic clinical note to CDM-style ETL helpers",
+    ),
+    "omop": AdapterSpec(
+        name="omop",
+        module="openmed.interop.omop",
+        extra="",
+        description="OMOP CDM loader for grounded clinical note spans",
+    ),
+}
+
+_GATEWAY_EXPORTS: Final[dict[str, str]] = {
+    "PrivacyGateway": "PrivacyGateway",
+    "PrivacyGatewayConfig": "PrivacyGatewayConfig",
+    "RedactionMapping": "RedactionMapping",
+    "assert_redacted": "assert_redacted",
+    "restore_text": "restore_text",
 }
 
 
@@ -125,20 +157,67 @@ def adapter_tool_definitions(name: str) -> tuple[dict[str, Any], ...]:
     return render_adapter_tool_definitions(spec.name)
 
 
+def to_function_tools() -> tuple[dict[str, Any], ...]:
+    """Return generic function-calling tool definitions."""
+
+    from openmed.interop.function_tools import to_function_tools as _render
+
+    return _render()
+
+
+def to_tool_use_tools() -> tuple[dict[str, Any], ...]:
+    """Return generic tool-use input-schema definitions."""
+
+    from openmed.interop.function_tools import to_tool_use_tools as _render
+
+    return _render()
+
+
+def get_langchain_tools() -> tuple[Any, ...]:
+    """Return LangChain tool objects for every OpenMed registry tool."""
+
+    from openmed.interop.langchain import get_langchain_tools as _render
+
+    return _render()
+
+
+def get_llamaindex_tools() -> tuple[Any, ...]:
+    """Return LlamaIndex tool objects for every OpenMed registry tool."""
+
+    from openmed.interop.llamaindex import get_llamaindex_tools as _render
+
+    return _render()
+
+
 def _normalize_adapter_name(name: str) -> str:
     return str(name or "").strip().lower().replace("-", "_")
 
 
-def __getattr__(name: str) -> ModuleType:
+def __getattr__(name: str) -> Any:
     if name in _ADAPTERS:
         return get_adapter(name)
+    if name == "gateway":
+        return import_module("openmed.interop.gateway")
+    if name in _GATEWAY_EXPORTS:
+        module = import_module("openmed.interop.gateway")
+        return getattr(module, _GATEWAY_EXPORTS[name])
     raise AttributeError(name)
 
 
 __all__ = [
     "AdapterSpec",
+    "PrivacyGateway",
+    "PrivacyGatewayConfig",
+    "RedactionMapping",
     "adapter_tool_definitions",
     "adapter_spec",
+    "assert_redacted",
     "available_adapters",
+    "gateway",
     "get_adapter",
+    "get_langchain_tools",
+    "get_llamaindex_tools",
+    "restore_text",
+    "to_function_tools",
+    "to_tool_use_tools",
 ]

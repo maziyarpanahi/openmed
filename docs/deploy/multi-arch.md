@@ -66,4 +66,5 @@ CI validates each architecture by importing `openmed` inside the built image and
 running a synthetic de-identification path. Pull request runs build and smoke-test
 both architectures without publishing. Pushes to `master`, version tags, and
 manual dispatches publish manifest-list tags after the per-architecture smoke
-checks pass.
+checks pass. Published image digests are signed and attested by the follow-up
+[Container Image Signing](../supply-chain/image-signing.md) workflow.

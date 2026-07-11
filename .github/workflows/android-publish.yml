@@ -1,0 +1,173 @@
+# Tags matching v* build and publish the OpenMedKit Android AAR to Maven Central.
+# Required repository secrets:
+# - ANDROID_SIGNING_KEY: ASCII-armored GPG private key for Maven artifact signing.
+# - ANDROID_SIGNING_KEY_PASSWORD: passphrase for ANDROID_SIGNING_KEY.
+# - SONATYPE_USERNAME: Central Portal user-token username.
+# - SONATYPE_PASSWORD: Central Portal user-token password.
+name: Android Publish (OpenMedKit)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to publish, without a leading v.
+        required: true
+      confirm_upload:
+        description: Type upload to confirm Central Portal upload.
+        required: true
+        default: "no"
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Verify Android release guards
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      publish_android: ${{ steps.android_changes.outputs.publish_android }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release version
+        id: release
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+            if [ "${{ inputs.confirm_upload }}" != "upload" ]; then
+              echo "::error title=Manual confirmation required::Set confirm_upload to upload."
+              exit 1
+            fi
+          fi
+
+          if [ -z "$VERSION" ]; then
+            echo "::error title=Missing version::Release version is required."
+            exit 1
+          fi
+          if [[ "$VERSION" == *SNAPSHOT* ]]; then
+            echo "::error title=Invalid version::SNAPSHOT versions cannot be published."
+            exit 1
+          fi
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9][A-Za-z0-9.-]*)?$ ]]; then
+            echo "::error title=Invalid version::Expected a version like 1.8.0 or 1.8.0-rc.1."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Detect Android artifact changes
+        id: android_changes
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "publish_android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${GITHUB_SHA}^" 2>/dev/null || true)
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "publish_android=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --quiet "$PREVIOUS_TAG" "$GITHUB_SHA" -- \
+            android/ models.jsonl scripts/android/build_android_catalog.py \
+            ':(exclude,glob)android/**/*.md'; then
+            echo "publish_android=false" >> "$GITHUB_OUTPUT"
+            echo "No Android artifact changes since $PREVIOUS_TAG; skipping publication."
+          else
+            echo "publish_android=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    name: Build signed Central Portal bundle
+    needs: guard
+    if: needs.guard.outputs.publish_android == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '11'
+          cache: gradle
+          cache-dependency-path: |
+            android/*.gradle*
+            android/gradle.properties
+            android/gradle/libs.versions.toml
+            android/gradle/wrapper/gradle-wrapper.properties
+            android/**/build.gradle*
+
+      - name: Run Android CI commands
+        working-directory: android
+        run: |
+          ./gradlew :openmedkit:assembleDebug :openmedkit:testDebugUnitTest --stacktrace
+
+      - name: Build signed Maven Central bundle
+        working-directory: android
+        env:
+          ORG_GRADLE_PROJECT_openmedAndroidVersion: ${{ needs.guard.outputs.version }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          ./gradlew :openmedkit:bundleCentralPortalPublication --stacktrace
+
+      - name: Upload Central Portal bundle artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: openmedkit-central-portal-bundle
+          path: android/openmedkit/build/central-portal/openmedkit-${{ needs.guard.outputs.version }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Upload to Central Portal
+    needs: [guard, build]
+    if: needs.guard.outputs.publish_android == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: maven-central
+      url: https://central.sonatype.com/publishing
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download Central Portal bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: openmedkit-central-portal-bundle
+          path: dist/
+
+      - name: Upload deployment bundle
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          RELEASE_VERSION: ${{ needs.guard.outputs.version }}
+        run: |
+          if [ -z "$SONATYPE_USERNAME" ] || [ -z "$SONATYPE_PASSWORD" ]; then
+            echo "::error title=Missing Central Portal credentials::Configure SONATYPE_USERNAME and SONATYPE_PASSWORD."
+            exit 1
+          fi
+
+          token=$(printf '%s:%s' "$SONATYPE_USERNAME" "$SONATYPE_PASSWORD" | base64 | tr -d '\n')
+          deployment_id=$(curl --fail --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${token}" \
+            --form "bundle=@dist/openmedkit-${RELEASE_VERSION}.zip;type=application/octet-stream" \
+            "https://central.sonatype.com/api/v1/publisher/upload?name=openmedkit-${RELEASE_VERSION}&publishingType=AUTOMATIC")
+
+          echo "Central Portal deployment ${deployment_id} accepted for OpenMedKit ${RELEASE_VERSION}."

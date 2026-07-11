@@ -18,7 +18,9 @@ from openmed.core.labels import (
     BODY_SITE,
     BUILDING_NUMBER,
     CANONICAL_LABELS,
+    CKD_STAGE,
     CLINICAL_CONCEPT,
+    CLINICAL_SIGNIFICANCE,
     CONDITION,
     CREDIT_CARD,
     CREDIT_CARD_ISSUER,
@@ -26,17 +28,24 @@ from openmed.core.labels import (
     CVV,
     DATE,
     DATE_OF_BIRTH,
+    DIALYSIS_MODALITY,
     DIET_TYPE,
     DOSE_NUMBER,
     EMAIL,
+    ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
     EYE_COLOR,
     FEEDING_ROUTE,
     FIRST_NAME,
     GENDER,
+    GENE_SYMBOL,
+    GI_SCORE,
+    GI_SYMPTOM,
+    GLYCEMIC_MEASURE,
     GPS_COORDINATES,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
+    HORMONE_LEVEL,
     IBAN,
     ID_NUM,
     ID_SUBTYPE_MRN,
@@ -44,6 +53,7 @@ from openmed.core.labels import (
     ID_SUBTYPE_NPI,
     ID_SUBTYPES,
     IMEI,
+    INSULIN_REGIMEN,
     IP_ADDRESS,
     JOB_DEPARTMENT,
     JOB_TITLE,
@@ -66,20 +76,28 @@ from openmed.core.labels import (
     PERSON,
     PHONE,
     PIN,
+    POLYP_DESCRIPTOR,
     PREFIX,
     PROCEDURE,
+    PROTEIN_CHANGE,
+    RENAL_FUNCTION_MEASURE,
     SSN,
     STREET_ADDRESS,
     SUSCEPTIBILITY,
+    THYROID_MEASURE,
     TIME,
+    URINE_FINDING,
     URL,
     USER_AGENT,
     USERNAME,
+    VACCINE_LOT,
     VACCINE_NAME,
     VACCINE_SERIES,
+    VARIANT_DESCRIPTOR,
     VEHICLE_REGISTRATION,
     VIN,
     ZIPCODE,
+    ZYGOSITY,
     hipaa_class_for,
     id_subtype_for,
     normalize_label,
@@ -490,6 +508,94 @@ class TestAnesthesiaConceptLabels:
             assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
 
 
+class TestEndocrinologyConceptLabels:
+    """Endocrinology canonical labels and representative aliases for issue #895."""
+
+    NEW_LABELS = (
+        GLYCEMIC_MEASURE,
+        THYROID_MEASURE,
+        HORMONE_LEVEL,
+        INSULIN_REGIMEN,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("glycemic measure", GLYCEMIC_MEASURE),
+            ("HbA1c", GLYCEMIC_MEASURE),
+            ("glucose", GLYCEMIC_MEASURE),
+            ("thyroid function measure", THYROID_MEASURE),
+            ("TSH", THYROID_MEASURE),
+            ("hormone level", HORMONE_LEVEL),
+            ("cortisol", HORMONE_LEVEL),
+            ("insulin regimen", INSULIN_REGIMEN),
+            ("basal-bolus", INSULIN_REGIMEN),
+            ("insulin pump", INSULIN_REGIMEN),
+            ("glargine", INSULIN_REGIMEN),
+            ("metabolic finding", CONDITION),
+            ("endocrine gland", BODY_SITE),
+        ],
+    )
+    def test_endocrinology_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_endocrinology_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_endocrinology_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
+class TestGastroenterologyConceptLabels:
+    """Gastroenterology canonical labels and aliases for issue #894."""
+
+    NEW_LABELS = (
+        ENDOSCOPIC_FINDING,
+        GI_SYMPTOM,
+        GI_SCORE,
+        POLYP_DESCRIPTOR,
+    )
+
+    @pytest.mark.parametrize(
+        "alias,expected",
+        [
+            ("endoscopic finding", ENDOSCOPIC_FINDING),
+            ("endoscopy finding", ENDOSCOPIC_FINDING),
+            ("colonoscopy", ENDOSCOPIC_FINDING),
+            ("GI symptom", GI_SYMPTOM),
+            ("abdominal pain", GI_SYMPTOM),
+            ("cramping", GI_SYMPTOM),
+            ("GI score", GI_SCORE),
+            ("bowel prep quality", GI_SCORE),
+            ("Boston bowel prep", GI_SCORE),
+            ("Bristol stool", GI_SCORE),
+            ("Mayo score", GI_SCORE),
+            ("polyp descriptor", POLYP_DESCRIPTOR),
+            ("lesion morphology", POLYP_DESCRIPTOR),
+            ("sessile polyp", POLYP_DESCRIPTOR),
+            ("biopsy site", BODY_SITE),
+        ],
+    )
+    def test_gastroenterology_aliases_resolve(self, alias, expected):
+        assert normalize_label(alias) == expected
+
+    def test_gastroenterology_labels_round_trip(self):
+        for label in self.NEW_LABELS:
+            assert normalize_label(label) == label
+
+    def test_gastroenterology_labels_have_complete_metadata(self):
+        for label in self.NEW_LABELS:
+            assert label in CANONICAL_LABELS
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+            assert system_hints_for(label)
+            assert hipaa_class_for(label) in HIPAA_SAFE_HARBOR_CLASSES
+
+
 class TestClinicalLabelsAreAdditive:
     """The clinical additions must not disturb the existing PII taxonomy."""
 
@@ -568,8 +674,26 @@ class TestClinicalLabelsAreAdditive:
             NUTRITIONAL_STATUS,
             VACCINE_NAME,
             VACCINE_SERIES,
+            VACCINE_LOT,
             DOSE_NUMBER,
             ADMINISTRATION_ROUTE,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+            GLYCEMIC_MEASURE,
+            THYROID_MEASURE,
+            HORMONE_LEVEL,
+            INSULIN_REGIMEN,
+            ENDOSCOPIC_FINDING,
+            GI_SYMPTOM,
+            GI_SCORE,
+            POLYP_DESCRIPTOR,
+            CKD_STAGE,
+            DIALYSIS_MODALITY,
+            RENAL_FUNCTION_MEASURE,
+            URINE_FINDING,
         }
     )
 

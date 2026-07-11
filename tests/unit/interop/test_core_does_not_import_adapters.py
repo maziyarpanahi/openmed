@@ -15,6 +15,7 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "pyDeid",
     "pydeid",
     "gliner",
+    "llama_index",
     "spacy",
 )
 
@@ -47,10 +48,14 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
 
     assert available_adapters() == (
         "cda",
+        "cdm_etl",
         "duckdb",
+        "function_tools",
         "gliner_biomed",
         "hl7v2",
         "langchain",
+        "llamaindex",
+        "omop",
         "pandas",
         "philter",
         "polars",
@@ -59,9 +64,13 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "spacy",
     )
     assert adapter_spec("cda").extra == "core"
+    assert adapter_spec("cdm_etl").extra == ""
     assert adapter_spec("duckdb").extra == "duckdb"
     assert adapter_spec("hl7v2").extra == ""
+    assert adapter_spec("function_tools").extra == ""
     assert adapter_spec("langchain").extra == "langchain"
+    assert adapter_spec("llamaindex").extra == "llamaindex"
+    assert adapter_spec("omop").extra == ""
     assert adapter_spec("pandas").extra == "pandas"
     assert adapter_spec("presidio").extra == "presidio"
     assert adapter_spec("philter").extra == "philter"
