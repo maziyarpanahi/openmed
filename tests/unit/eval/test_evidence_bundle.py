@@ -116,6 +116,33 @@ def test_complete_evidence_bundle_hashes_artifacts_and_covers_g1_g8(
     assert (tmp_path / "bundle" / eval_entry["bundle_path"]).is_file()
 
 
+def test_evidence_bundle_embeds_g9_relation_f1_details(tmp_path: Path) -> None:
+    artifacts = _complete_artifacts(tmp_path)
+    report = _gate_report(artifacts)
+    report.gate_results = (
+        *report.gate_results,
+        GateCheck(
+            "G9",
+            True,
+            details={
+                "per_relation_type": {"INHIBITOR": {"strict_f1": 0.91}},
+                "relaxed": {"f1": 0.95, "lower": 0.94},
+                "strict": {"f1": 0.91, "lower": 0.90},
+            },
+        ),
+    )
+
+    result = bundle_gate_evidence(report, tmp_path / "bundle")
+
+    g9 = next(
+        check
+        for check in result.manifest["gate_report"]["gate_results"]
+        if check["gate"] == "G9"
+    )
+    assert g9["details"]["strict"]["lower"] == 0.90
+    assert g9["details"]["per_relation_type"]["INHIBITOR"]["strict_f1"] == 0.91
+
+
 def test_missing_required_artifact_is_manifested_with_affected_gate(
     tmp_path: Path,
 ) -> None:
