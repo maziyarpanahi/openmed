@@ -12,6 +12,11 @@ contract and configuration knobs; use this page to make a successful call fast.
 All examples use **synthetic data only**. Never paste real patient text into a
 shared terminal, shell history, or issue tracker.
 
+Model-backed responses can echo the request text and detected entity text.
+Treat request and response payloads as PHI in real deployments: do not put them
+in application logs, telemetry, caches, or unencrypted artifacts. The examples
+print fields only because every value shown here is synthetic.
+
 ## Start the service
 
 Install the service extra and start Uvicorn:
@@ -20,6 +25,18 @@ Install the service extra and start Uvicorn:
 uv pip install -e ".[hf,service]"
 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
+
+The standalone Python snippets below use `requests`, which is intentionally not
+a server dependency. Install it explicitly in the client environment:
+
+```bash
+uv pip install requests
+```
+
+The first model-backed request downloads model weights unless they are already
+cached. After download, inference stays local. For an air-gapped deployment,
+pre-seed the cache and follow the
+[local-only offline configuration](configuration.md#local-only-offline-mode).
 
 Or run the packaged container with Docker Compose (maps port `8080`, persists the
 Hugging Face cache in a named volume). See
@@ -101,7 +118,7 @@ payload = {
     "model_name": "disease_detection_superclinical",
     "confidence_threshold": 0.5,
 }
-response = requests.post(f"{BASE_URL}/analyze", json=payload, timeout=60)
+response = requests.post(f"{BASE_URL}/analyze", json=payload, timeout=300)
 response.raise_for_status()
 result = response.json()
 for entity in result["entities"]:
@@ -167,7 +184,7 @@ payload = {
     "lang": "en",
     "use_smart_merging": True,
 }
-response = requests.post(f"{BASE_URL}/pii/extract", json=payload, timeout=60)
+response = requests.post(f"{BASE_URL}/pii/extract", json=payload, timeout=300)
 response.raise_for_status()
 for entity in response.json()["entities"]:
     print(entity["label"], entity["start"], entity["end"], entity["text"])
@@ -237,9 +254,10 @@ timings vary by hardware):
 ## De-identify text — `POST /pii/deidentify`
 
 Redact detected PII. `method` is one of `mask`, `remove`, `replace`, `hash`, or
-`shift_dates` (default `mask`). Set `keep_mapping: true` to receive a
-placeholder-to-original `mapping` for reversible workflows. `confidence_threshold`
-defaults to `0.7`.
+`shift_dates` (default `mask`). `keep_mapping` defaults to `false` and is
+intentionally omitted here. Enabling it returns original identifiers in a
+placeholder-to-original mapping and should be reserved for controlled,
+reversible workflows. `confidence_threshold` defaults to `0.7`.
 
 ```bash
 curl -sS -X POST "$OPENMED_URL/pii/deidentify" \
@@ -247,8 +265,7 @@ curl -sS -X POST "$OPENMED_URL/pii/deidentify" \
   -d '{
     "text": "Call 555-0147 to confirm the appointment.",
     "method": "mask",
-    "lang": "en",
-    "keep_mapping": true
+    "lang": "en"
   }'
 ```
 
@@ -257,18 +274,16 @@ payload = {
     "text": "Call 555-0147 to confirm the appointment.",
     "method": "mask",
     "lang": "en",
-    "keep_mapping": True,
 }
-response = requests.post(f"{BASE_URL}/pii/deidentify", json=payload, timeout=60)
+response = requests.post(f"{BASE_URL}/pii/deidentify", json=payload, timeout=300)
 response.raise_for_status()
 result = response.json()
 print(result["deidentified_text"])
 print("redacted:", result["num_entities_redacted"])
 ```
 
-Representative abridged response (`deidentify(...).to_dict()`; the `mapping`
-field appears only when `keep_mapping=true` and mapping data exists, while
-scores, timings, and nested provenance metadata vary by runtime):
+Representative abridged response (`deidentify(...).to_dict()`; scores, timings,
+and nested provenance metadata vary by runtime):
 
 ```json
 {
@@ -311,8 +326,7 @@ scores, timings, and nested provenance metadata vary by runtime):
       "spans_added": 0
     }
   },
-  "audit_report": null,
-  "mapping": {"[phone_number]": "555-0147"}
+  "audit_report": null
 }
 ```
 
@@ -436,8 +450,9 @@ the validation error envelope described below.
 
 ## Handling errors
 
-Every non-2xx response uses one JSON envelope, so a single handler covers
-validation, bad-request, timeout, and internal errors:
+After a request passes the configured host and CORS allowlists, application
+endpoint errors use one JSON envelope, so a single handler covers validation,
+bad-request, timeout, and internal errors:
 
 ```json
 {
@@ -504,7 +519,7 @@ manual status checks above:
 ```python
 from openmed.service.client import OpenMedAPIError, OpenMedClient
 
-with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
+with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
     analysis = client.analyze(
         "Patient started imatinib for CML.",
         model_name="disease_detection_superclinical",
@@ -517,7 +532,6 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
     redacted = client.deidentify(
         "Patient Jordan Ramirez was admitted on 2026-01-02.",
         method="mask",
-        keep_mapping=True,
     )
     loaded = client.loaded_models()
 
