@@ -154,7 +154,7 @@ def test_manual_raw_context_fails_closed_at_every_serialization_boundary():
     before = "123-45-6789 "
     after = " a@b.co"
     report = _multi_span_report(_example_spans())
-    span = report.spans[-1]
+    span = report.spans[1]
     span.context = {"before": before, "after": after}
 
     expected = {
@@ -180,8 +180,8 @@ def test_manual_raw_context_fails_closed_at_every_serialization_boundary():
 
     assert before not in combined
     assert after not in combined
-    assert report_dict["spans"][-1]["context"] == expected
-    assert review_bundle["spans"][-1]["context"] == expected
+    assert report_dict["spans"][1]["context"] == expected
+    assert review_bundle["spans"][1]["context"] == expected
 
 
 def test_nested_raw_or_malformed_context_fields_are_dropped():
@@ -207,6 +207,116 @@ def test_nested_raw_or_malformed_context_fields_are_dropped():
     assert "123-45-6789" not in serialized
     assert "a@b.co" not in serialized
     assert "4111 1111 1111 1111" not in serialized
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("start", "0"),
+        ("start", 0.0),
+        ("start", False),
+        ("start", -1),
+        ("end", "8"),
+        ("end", 8.0),
+        ("end", False),
+        ("length", "8"),
+        ("length", 8.0),
+        ("length", False),
+        ("length", 7),
+        ("text_hash", "sha256:not-a-digest"),
+    ],
+)
+def test_context_descriptor_validation_rejects_malformed_fields(field, value):
+    report = _report()
+    span = report.spans[0]
+    descriptor = dict(span.context["before"])
+    descriptor[field] = value
+    span.context = {"before": descriptor}
+
+    assert span.to_dict()["context"] == {}
+    assert report.to_dict()["spans"][0]["context"] == {}
+    assert report.export_review_bundle()["spans"][0]["context"] == {}
+
+
+def test_context_descriptor_outside_document_is_dropped_by_report_sinks():
+    report = _report()
+    span = report.spans[0]
+    after = "x" * (report.document_length - span.end + 1)
+    span.context = {
+        "after": {
+            "start": span.end,
+            "end": report.document_length + 1,
+            "length": len(after),
+            "text_hash": hash_text(after),
+        }
+    }
+
+    # A standalone span cannot know the enclosing document bound.
+    assert span.to_dict()["context"]["after"]["end"] == report.document_length + 1
+    assert report.to_dict()["spans"][0]["context"] == {}
+    assert report.export_review_bundle()["spans"][0]["context"] == {}
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("start", "8", "start"),
+        ("start", 8.0, "start"),
+        ("start", True, "start"),
+        ("start", -1, "start"),
+        ("end", "16", "end"),
+        ("end", 16.0, "end"),
+        ("end", True, "end"),
+        ("end", -1, "end"),
+    ],
+)
+def test_deserialized_span_offsets_must_be_non_negative_integers(
+    field,
+    value,
+    error,
+):
+    payload = _report().to_dict()
+    payload["spans"][0][field] = value
+
+    with pytest.raises(ValueError, match=f"audit span {error}"):
+        AuditReport.from_dict(payload)
+
+
+@pytest.mark.parametrize("value", ["33", 33.0, True, -1])
+def test_deserialized_document_length_must_be_a_non_negative_integer(value):
+    payload = _report().to_dict()
+    payload["document_length"] = value
+
+    with pytest.raises(ValueError, match="document_length"):
+        AuditReport.from_dict(payload)
+
+
+@pytest.mark.parametrize(("start", "end"), [(16, 8), (8, 34)])
+def test_deserialized_span_bounds_must_be_ordered_and_within_document(start, end):
+    payload = _report().to_dict()
+    payload["spans"][0]["start"] = start
+    payload["spans"][0]["end"] = end
+
+    with pytest.raises(ValueError, match="audit span (end|offsets)"):
+        AuditReport.from_dict(payload)
+
+
+def test_mutated_span_offsets_fail_closed_at_serialization_boundaries():
+    report = _report()
+    report.spans[0].start = "8"
+    report.spans[0].context = {"before": "123-45-6789"}
+
+    with pytest.raises(ValueError, match="audit span start"):
+        report.spans[0].to_dict()
+    with pytest.raises(ValueError, match="audit span start"):
+        report.to_dict()
+    with pytest.raises(ValueError, match="audit span start"):
+        report.export_review_bundle()
+
+
+def test_report_from_json_rejects_non_object_payload():
+    with pytest.raises(ValueError, match="must contain an object"):
+        AuditReport.from_json("[]")
 
 
 def test_deserialized_legacy_raw_context_is_safe_but_invalidates_integrity():
