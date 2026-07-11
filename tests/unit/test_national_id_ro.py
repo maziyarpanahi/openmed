@@ -79,18 +79,35 @@ class TestValidateRomanianCnp:
         cnp = _cnp_from_body("181301040018")
         assert validate_romanian_cnp(cnp) is False
 
-    def test_rejects_invalid_county_code(self):
-        # County 99 is outside the 01-52 / 70 range.
-        cnp = _cnp_from_body("180010199018")
+    @pytest.mark.parametrize("county", [0, 47, 48, 49, 50, 53, 99])
+    def test_rejects_unassigned_county_codes(self, county):
+        cnp = _cnp_from_body(f"1800101{county:02d}018")
         assert validate_romanian_cnp(cnp) is False
+
+    @pytest.mark.parametrize("county", [1, 40, 46, 51, 52, 70])
+    def test_accepts_assigned_county_codes(self, county):
+        cnp = _cnp_from_body(f"1800101{county:02d}018")
+        assert validate_romanian_cnp(cnp) is True
 
     def test_rejects_zero_serial(self):
         cnp = _cnp_from_body("180010140000")
         assert validate_romanian_cnp(cnp) is False
 
-    def test_accepts_spaces_and_hyphens(self):
-        assert validate_romanian_cnp("1 800101 400181") is True
-        assert validate_romanian_cnp("1-800101-400181") is True
+    @pytest.mark.parametrize(
+        "candidate",
+        [
+            "1 800101 400181",
+            "1-800101-400181",
+            "1.800101.400181",
+            "1/800101/400181",
+            "1x800101x400181",
+        ],
+    )
+    def test_rejects_internal_separators(self, candidate):
+        assert validate_romanian_cnp(candidate) is False
+
+    def test_ignores_surrounding_whitespace_only(self):
+        assert validate_romanian_cnp("  1800101400181\n") is True
 
     def test_non_digit_input(self):
         assert validate_romanian_cnp("abcdefghijklm") is False
