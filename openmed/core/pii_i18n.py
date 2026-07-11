@@ -2,6 +2,17 @@
 
 Language-specific data, validators, regex patterns, and fake data
 for multilingual PII detection and de-identification.
+
+Health identifiers for HIPAA cross-map consumers:
+    Several national IDs surfaced here double as patient health identifiers and
+    should be treated as PHI. These include the UK NHS Number, the Australian
+    Medicare card number (:func:`validate_australian_medicare`), and the
+    Canadian provincial health-card numbers: the Ontario (OHIP) health card
+    (:func:`validate_ontario_health_card`) and the British Columbia Personal
+    Health Number (:func:`validate_bc_phn`). The Australian Tax File Number
+    (:func:`validate_australian_tfn`) and Canadian Social Insurance Number
+    (:func:`validate_canadian_sin`) are direct identifiers rather than health
+    identifiers, but are redacted alongside them in clinical text.
 """
 
 from __future__ import annotations
@@ -10,6 +21,11 @@ import re
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    validate_australian_medicare,
+    validate_australian_tfn,
+    validate_bc_phn,
+    validate_canadian_sin,
+    validate_ontario_health_card,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
@@ -368,6 +384,49 @@ def validate_aadhaar(text: str) -> bool:
     for i, digit in enumerate(reversed(digits)):
         c = _VERHOEFF_D[c][_VERHOEFF_P[i % 8][int(digit)]]
     return c == 0
+
+
+_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+_CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Validate a mainland China 18-digit resident identity card number.
+
+    The second-generation resident identity card stores a six-digit address
+    code, an eight-digit Gregorian birth date, a three-digit sequence, and a
+    MOD 11-2 checksum digit. OpenMed validates only these offline structural
+    and checksum properties; it does not bundle or query a region registry.
+    """
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+        return False
+
+    if cleaned[:6] == "000000":
+        return False
+
+    try:
+        year = int(cleaned[6:10])
+        month = int(cleaned[10:12])
+        day = int(cleaned[12:14])
+    except ValueError:
+        return False
+
+    import calendar
+
+    if month < 1 or month > 12 or day < 1:
+        return False
+    try:
+        if day > calendar.monthrange(year, month)[1]:
+            return False
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+    total = sum(
+        int(digit) * weight
+        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
 
 
 def validate_portuguese_cpf(text: str) -> bool:
@@ -1413,6 +1472,102 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_uk_nino,
         flags=re.IGNORECASE,
+    ),
+]
+
+_CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Ontario (OHIP) health card: 10 digits beginning with 1-9 (4-3-3 spacing)
+    # plus an optional one- or two-letter version code, Luhn-checked. Health
+    # identifier. Checked before the SIN so the longer 10-digit match wins.
+    PIIPattern(
+        r"\b[1-9]\d{3}(?P<ohip_sep>[ -]?)\d{3}(?P=ohip_sep)\d{3}"
+        r"(?:[ -]?[A-Za-z]{1,2})?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "health card",
+            "health card number",
+            "ohip",
+            "ohip number",
+            "ontario health",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_ontario_health_card,
+        flags=re.IGNORECASE,
+    ),
+    # British Columbia Personal Health Number (PHN): 10 digits beginning with 9
+    # (4-3-3 spacing), weighted mod-11. Health identifier.
+    PIIPattern(
+        r"\b9\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "phn",
+            "personal health number",
+            "bc phn",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_bc_phn,
+    ),
+    # Canadian Social Insurance Number (SIN): 9 digits (3-3-3 spacing), Luhn.
+    PIIPattern(
+        r"\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "sin",
+            "social insurance",
+            "social insurance number",
+            "numero d'assurance sociale",
+            "nas",
+        ],
+        context_boost=0.45,
+        validator=validate_canadian_sin,
+    ),
+]
+
+
+_AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
+    # optional separate one-digit IRN. The main card's first eight digits carry
+    # a weighted mod-10 checksum; the full matched identifier is protected.
+    PIIPattern(
+        r"\b(?:[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+        r"(?:(?:[ ]*/[ ]*|[ -]?)[1-9])?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "medicare",
+            "medicare number",
+            "medicare card",
+            "medicare no",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_medicare,
+    ),
+    # Australian Tax File Number (TFN, exactly 9 digits, ``NNN NNN NNN``
+    # spacing; weighted mod-11 checksum).
+    PIIPattern(
+        r"\b(?:\d{9}|\d{3} \d{3} \d{3})\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "tfn",
+            "tax file number",
+            "tax file no",
+        ],
+        context_boost=0.45,
+        validator=validate_australian_tfn,
     ),
 ]
 
@@ -3454,6 +3609,9 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_au": _AU_ENGLISH_PII_PATTERNS,
+    "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
 }
 
 

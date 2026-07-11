@@ -165,6 +165,26 @@ def test_to_dataframe_returns_dataframe_with_fixed_schema():
     assert frame.to_dict("records")[0]["entity_label"] == "condition"
 
 
+def test_flatten_entities_accepts_grounding_candidates():
+    from openmed.clinical.grounding import Candidate
+
+    rows = flatten_entities(
+        [
+            {
+                "label": "medication",
+                "text": "metformin",
+                "start": 5,
+                "end": 14,
+                "candidates": (Candidate("RXNORM", "6809", "Metformin", 1.0),),
+            }
+        ]
+    )
+
+    assert rows[0]["system"] == "RXNORM"
+    assert rows[0]["code"] == "6809"
+    assert rows[0]["display"] == "Metformin"
+
+
 def test_importing_flat_table_does_not_import_pandas(monkeypatch):
     real_import = builtins.__import__
 
