@@ -26,8 +26,8 @@ schema and returns `404` unless metrics are enabled.
 
 The service includes stricter request validation, shared model/pipeline reuse,
 optional startup preload, bounded warm-pool residency, model keep-alive
-controls, optional no-PHI OpenTelemetry tracing, and a unified non-2xx error
-envelope.
+controls, optional no-PHI OpenTelemetry tracing, and a consistent application
+error envelope.
 
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
@@ -67,7 +67,7 @@ logs, or screenshots.
 ```python
 from openmed.service.client import OpenMedAPIError, OpenMedClient
 
-with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
+with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
     result = client.analyze(
         "Patient started imatinib for CML.",
         model_name="disease_detection_superclinical",
@@ -76,7 +76,6 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
     redacted = client.deidentify(
         "Paciente: Maria Garcia",
         method="mask",
-        keep_mapping=True,
     )
     llm = client.privacy_gateway(
         "Patient Maria Garcia called 555-0100.",
@@ -342,7 +341,10 @@ names, counts, labels, lengths, and durations. See
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
 - OpenTelemetry tracing is opt-in, honors incoming trace context, and exports only no-PHI span attributes when configured.
-- Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
+- Application endpoint errors and invalid Host headers use one JSON envelope
+  across validation, bad-request, timeout, and internal errors. A CORS
+  preflight rejected by Starlette's middleware can instead use its native
+  plain-text response.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
 ## Endpoints
@@ -533,7 +535,12 @@ Successful response shape:
 
 ## Error Envelope
 
-All non-2xx responses use this shape:
+Application endpoint errors and invalid Host headers use this shape:
+
+A CORS preflight is handled before the endpoint. If Starlette rejects its
+origin, method, or requested headers, the response can be plain text rather
+than this JSON envelope. Clients should check the status and content type before
+decoding an error body.
 
 ```json
 {
@@ -588,7 +595,7 @@ docker build -t openmed:local .
 Run:
 
 ```bash
-docker run --rm -p 8080:8080 \
+docker run --rm -p 127.0.0.1:8080:8080 \
   -e OPENMED_PROFILE=prod \
   -e OPENMED_SERVICE_KEEP_ALIVE=10m \
   -e OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
@@ -601,10 +608,17 @@ docker run --rm -p 8080:8080 \
 ### Docker Compose
 
 Use the provided `docker-compose.yml` to build and start the service with a
-single command. The Compose setup maps port **8080**, sets
-`OPENMED_PROFILE=prod`, and persists the Hugging Face cache in a named volume.
-`OPENMED_CACHE_DIR` points inside that mounted cache so service model downloads
-are reused across restarts.
+single command. The Compose setup publishes host port **8080**, sets
+`OPENMED_PROFILE=prod`, and persists the standard Hugging Face cache directory
+in a named volume so downloads placed in that cache are reused across restarts.
+`OPENMED_CACHE_DIR` is also passed through for data and deployment workflows
+that explicitly read it; it is not a generic `OpenMedConfig.cache_dir`
+override.
+
+The checked-in Compose port mapping listens on the host's interfaces. Treat it
+as network exposure: for local-only troubleshooting, change the mapping to
+`127.0.0.1:8080:8080`. Before intentional network exposure, configure
+authentication, TLS, and the trusted-host allowlist.
 
 ```bash
 docker compose up -d

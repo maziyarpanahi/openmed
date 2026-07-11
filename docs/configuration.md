@@ -118,7 +118,9 @@ model_id = validate_model_name("disease_detection_superclinical")
 ```
 
 - `validate_input` trims whitespace, enforces max lengths, and raises informative errors for API clients.
-- `validate_model_name` normalizes registry aliases and protects service endpoints from arbitrary HF IDs.
+- `validate_model_name` trims the value and accepts an existing local path, a
+  bare model name, or one `org/model` identifier. It validates syntax; it does
+  not enforce a model allowlist or resolve a registry alias.
 
 ## Logging and tracing
 
@@ -126,16 +128,21 @@ model_id = validate_model_name("disease_detection_superclinical")
 from openmed.utils import setup_logging
 from openmed.core import ModelLoader
 
-setup_logging(level="INFO", json=True)
+setup_logging(level="INFO", include_timestamp=True)
 loader = ModelLoader()
 ```
 
-- Use JSON output with your log shipper or disable it during notebooks.
-- Combine with `OPENMED_DISABLE_WARNINGS=1` when you want the quietest possible inference loop.
+- `setup_logging` configures standard Python logging. Add structured logging in
+  the host application when needed; OpenMed does not expose a `json=` option.
+- Keep raw clinical text, entity values, model outputs, access tokens, and
+  reversible mappings out of log records and tracing attributes.
 
 ## Cache & device tips
 
-- **CPU-only teams**: keep `device="cpu"` and rely on HF caching. PyTorch installs stay optional unless you add the
-  `gliner` extra.
-- **GPU nodes**: set `device="cuda"` and optionally `torch_dtype=float16` inside `OpenMedConfig.pipeline`.
+- **CPU-only teams**: keep `device="cpu"`, install a CPU-compatible PyTorch
+  runtime for Hugging Face inference, and rely on the configured model cache.
+- **GPU nodes**: set `device="cuda"` (or a concrete index such as `"cuda:1"`).
+  Pass backend-specific model-loading options to `ModelLoader.create_pipeline`
+  only after verifying the selected model and hardware support them;
+  `OpenMedConfig` has no `pipeline` field.
 - **Shared runners**: point `cache_dir` at an ephemeral volume per job to avoid artifacts leaking between builds.

@@ -1,21 +1,25 @@
 # Troubleshooting & Common Errors
 
-This page maps the concrete failures you are most likely to hit — **symptom → cause → fix** — with the
-exact error strings OpenMed raises and the commands that resolve them. If your problem is conceptual
-rather than an error, start with the [FAQ](faq.md); if you are setting up for the first time, see the
-[Quick Start](getting-started.md) and [Configuration & Validation](configuration.md).
+This page maps the concrete failures you are most likely to hit — **symptom →
+cause → fix**. It quotes exact OpenMed-owned error strings and gives the command
+or configuration change for each case; wrapped operating-system, network, and
+third-party errors can vary. If your problem is conceptual rather than an
+error, start with the [FAQ](faq.md); if you are setting up for the first time,
+see the [Quick Start](getting-started.md) and
+[Configuration & Validation](configuration.md).
 
 !!! tip "Run the built-in doctor first"
     Before digging in, run the offline environment check. It reports your Python version and architecture,
     which selected runtime extras are importable, whether an `HF_TOKEN` is present, and whether offline mode
-    is active — with a remediation `Hint:` on anything that is not ready.
+    is active. Dependency, token, Python-version, and architecture checks that need action include a
+    remediation `Hint:`.
 
     ```bash
     openmed doctor          # human-readable check list
     openmed doctor --json   # machine-readable; non-zero exit on any FAIL
     ```
 
-    Sample output:
+    Abridged sample output:
 
     ```text
     PASS python_version: 3.11.9
@@ -43,8 +47,10 @@ with a missing `transformers` import, or you see:
 ImportError: HuggingFace transformers is required. Install with: pip install transformers
 ```
 
-**Cause.** The core install does not pull in the Hugging Face runtime. The transformers/tokenizers/accelerate
-stack lives in the `hf` extra.
+**Cause.** The core install does not pull in the Hugging Face runtime. The
+Transformers/tokenizers/accelerate stack lives in the `hf` extra. The extra
+does not choose a PyTorch build for you; install the CPU, CUDA, or MPS build
+that matches your platform separately.
 
 **Fix.**
 
@@ -67,9 +73,13 @@ Related backend errors:
 - `RuntimeError: Backend 'mlx' is not available. Install its dependencies first.` — you selected a backend
   explicitly but its dependencies are not importable on this machine.
 
-**Cause.** No inference backend is importable. `hf` is the portable default; `mlx` is the Apple-Silicon path.
+**Cause.** No inference backend is importable. `hf` is the portable backend
+after a compatible PyTorch runtime is installed; `mlx` is the Apple-Silicon
+path.
 
-**Fix.** Install at least one backend (`hf` works everywhere):
+**Fix.** Install at least one backend. For `hf`, first follow the PyTorch
+installation instructions for your CPU/GPU platform, then install the OpenMed
+extra:
 
 ```bash
 pip install "openmed[hf]"     # portable PyTorch/Transformers backend
@@ -84,8 +94,10 @@ pip install "openmed[mlx]"    # Apple Silicon MLX backend
 Optional dependency 'pdfplumber' is required for this operation. Install with: pip install "openmed[multimodal]".
 ```
 
-**Cause.** OpenMed defers document/image intake, zero-shot NER, framework bridges, exporters, and connectors
-to purpose-built extras. The message always names the exact install command.
+**Cause.** OpenMed defers document/image intake, zero-shot NER, framework
+bridges, exporters, and connectors to purpose-built extras. Dependency errors
+include a remediation hint; the package-install commands below work from a
+published OpenMed installation.
 
 **Fix.** Install the extra the message names. Common ones:
 
@@ -149,10 +161,13 @@ ValueError: Could not load model OpenMed/…: <underlying Hub / network error>
 The wrapped error is whatever `transformers`/`huggingface_hub` raised — a connection timeout, an HTTP 401 on
 a gated repo, an HTTP 404 for a wrong id, or a proxy/TLS failure.
 
-**Cause.** OpenMed downloads model artifacts on first use and caches them under `~/.cache/openmed` (override
-with `OpenMedConfig(cache_dir="...")`). Failures are almost always network reachability, a proxy, or a
-private/gated repo needing a token. Service container deployments also expose `OPENMED_CACHE_DIR` for their
-mounted model cache.
+**Cause.** OpenMed downloads model artifacts on first use and keeps them in a
+local cache. Component-loading paths use `OpenMedConfig.cache_dir` (default
+`~/.cache/openmed`); direct Hugging Face operations can also use the standard
+Hub cache controlled by `HF_HOME` / `HF_HUB_CACHE`. `OPENMED_CACHE_DIR` is read
+by selected data and deployment tooling, not as a generic `OpenMedConfig`
+override. Failures are usually network reachability, a proxy, or a
+private/gated repo needing a token.
 
 **Fix.**
 
@@ -185,13 +200,18 @@ mounted model cache.
 **Symptom.** The first `analyze_text` / `extract_pii` / `deidentify` call takes noticeably longer than later
 calls.
 
-**Cause.** First use downloads model artifacts, then loads weights and the tokenizer into memory. Subsequent
-calls reuse the warm, cached pipeline.
+**Cause.** First use downloads model artifacts, then loads weights and the
+tokenizer into memory. Model files remain in the filesystem cache. In-memory
+weights and pipelines are reused only when calls share a `ModelLoader` (or run
+through the shared REST runtime); separate top-level convenience calls can load
+them again.
 
 **Fix.** Warm the cache and reuse loaders rather than paying the cost per call:
 
-- Pre-download once so later runs hit the cache: instantiate a `ModelLoader` (or run any single request) on a
-  machine with network before going offline.
+- Pre-download once so later runs hit the cache: call `ModelLoader.load_model()`
+  (as in the offline example below) or run a model-backed request on a machine
+  with network before going offline. Constructing `ModelLoader()` by itself does
+  not download a model.
 - Reuse one `ModelLoader`/pipeline instead of constructing a new one per document — see
   [ModelLoader & Pipelines](model-loader.md).
 - In the REST service, pre-load models at startup with `OPENMED_SERVICE_PRELOAD_MODELS` and keep them resident
@@ -221,9 +241,10 @@ export OPENMED_OFFLINE=1
 ```
 
 ```python
-from openmed.core import OpenMedConfig
+from openmed.core import ModelLoader, OpenMedConfig
 
 config = OpenMedConfig(local_only=True)  # defaults to ~/.cache/openmed
+loader = ModelLoader(config=config)
 ```
 
 You can also skip the Hub entirely by passing a **local directory** as `model_name`/`model_id`; OpenMed then
@@ -453,10 +474,11 @@ The HTTP transport reads `OPENMED_MCP_HOST` (default `127.0.0.1`), `OPENMED_MCP_
 
 ### The optional Typer CLI reports `Typer/Rich not installed`
 
-**Symptom.** Starting the optional Typer interface with `python -m openmed.cli.typer_app` raises:
+**Symptom.** Starting the optional Typer interface with
+`python -m openmed.cli.typer_app` prints:
 
 ```text
-RuntimeError: Typer/Rich not installed. Install with `pip install .[cli]` or `pip install typer rich`.
+[red]Typer/Rich not installed. Install with `pip install .[cli]` or `pip install typer rich`.[/red]
 ```
 
 **Cause.** The optional rich terminal UI depends on `rich` and `typer`, which live in the `cli` extra. The

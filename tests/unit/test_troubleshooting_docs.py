@@ -51,11 +51,19 @@ def test_troubleshooting_guide_is_published_and_cross_linked() -> None:
 def test_documented_install_extras_are_declared_in_pyproject() -> None:
     guide = GUIDE.read_text(encoding="utf-8")
     with PYPROJECT.open("rb") as handle:
-        declared = set(_toml.load(handle)["project"]["optional-dependencies"])
+        optional_dependencies = _toml.load(handle)["project"]["optional-dependencies"]
+    declared = set(optional_dependencies)
 
     documented = _documented_extras(guide)
     assert REQUIRED_EXTRAS <= documented
     assert documented <= declared
+
+    hf_dependencies = {
+        re.split(r"[<>=!~;\s\[]", requirement, maxsplit=1)[0].lower()
+        for requirement in optional_dependencies["hf"]
+    }
+    if "torch" not in hf_dependencies:
+        assert "compatible PyTorch runtime" in guide
 
 
 def test_rest_troubleshooting_uses_the_client_port_and_safe_local_bind() -> None:
@@ -103,10 +111,35 @@ def test_support_examples_require_synthetic_phi_safe_reproductions() -> None:
     assert "All patient-like content in the examples below is synthetic" in rest_guide
     assert "reversible mappings" in guide
     assert "access tokens" in guide
+    assert "keep_mapping=True" not in rest_guide
+    assert "timeout=300.0" in rest_guide
+
+
+def test_troubleshooting_describes_real_loader_and_middleware_lifecycles() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+    rest_guide = REST_GUIDE.read_text(encoding="utf-8")
+    normalized_guide = re.sub(r"\s+", " ", guide)
+
+    assert (
+        "Constructing `ModelLoader()` by itself does not download" in normalized_guide
+    )
+    assert "separate top-level convenience calls can load" in normalized_guide
+    assert "CORS preflight" in rest_guide
+    assert "All non-2xx responses use this shape" not in rest_guide
+
+
+def test_container_guidance_distinguishes_host_bind_and_cache_controls() -> None:
+    rest_guide = REST_GUIDE.read_text(encoding="utf-8")
+    normalized = re.sub(r"\s+", " ", rest_guide)
+
+    assert "docker run --rm -p 127.0.0.1:8080:8080" in rest_guide
+    assert "change the mapping to `127.0.0.1:8080:8080`" in normalized
+    assert "not a generic `OpenMedConfig.cache_dir` override" in normalized
 
 
 def test_linked_configuration_examples_use_the_real_public_surface() -> None:
     configuration = CONFIGURATION.read_text(encoding="utf-8")
+    normalized = re.sub(r"\s+", " ", configuration)
 
     assert "load_config_from_file" in configuration
     assert "OPENMED_CONFIG" in configuration
@@ -116,3 +149,7 @@ def test_linked_configuration_examples_use_the_real_public_surface() -> None:
     assert "OPENMED_CONFIG_FILE" not in configuration
     assert "config.yaml" not in configuration
     assert "strip=True" not in configuration
+    assert "json=True" not in configuration
+    assert "OPENMED_DISABLE_WARNINGS" not in configuration
+    assert "`OpenMedConfig` has no `pipeline` field" in configuration
+    assert "does not enforce a model allowlist" in normalized
