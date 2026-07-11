@@ -370,7 +370,9 @@ def test_normalized_span_is_public() -> None:
 def test_show_returns_html_string_when_ipython_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``show`` must return the HTML string without raising if IPython is gone."""
+    """``show`` renders a typed result without raising if IPython is gone."""
+    from openmed.core.results import AnalyzeResult
+
     real_import = builtins.__import__
 
     def _blocked_import(name: str, *args: object, **kwargs: object):
@@ -380,13 +382,23 @@ def test_show_returns_html_string_when_ipython_absent(
 
     monkeypatch.setattr(builtins, "__import__", _blocked_import)
 
-    result = show(
-        "Patient John Doe.",
-        [{"start": 8, "end": 16, "label": "PERSON", "score": 0.9}],
+    result = AnalyzeResult(
+        text="Patient John Doe.",
+        entities=[
+            EntityPrediction(
+                text="John Doe",
+                label="PERSON",
+                confidence=0.9,
+                start=8,
+                end=16,
+            )
+        ],
+        model="unit-test-model",
+        timestamp="2026-01-01T00:00:00",
     )
-    assert isinstance(result, str)
-    assert "PERSON" in result
-    assert "John Doe" in result
+    expected = render_spans_html(result)
+
+    assert show(result) == expected
 
 
 def test_show_uses_ipython_display_when_present(
@@ -422,4 +434,4 @@ def test_show_uses_ipython_display_when_present(
     assert isinstance(html, str)
     assert len(displayed) == 1
     assert isinstance(displayed[0], _HTML)
-    assert "PERSON" in displayed[0].data
+    assert displayed[0].data == html
