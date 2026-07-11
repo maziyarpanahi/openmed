@@ -22,7 +22,7 @@ import pytest
 import yaml
 from jsonschema import Draft202012Validator
 
-from openmed.service.client import OpenMedClient
+from openmed.service.client import CLIENT_ENDPOINTS, OpenMedClient
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 COLLECTION_FILE = BASE_DIR / "docs" / "api" / "openmed.postman_collection.json"
@@ -140,6 +140,17 @@ def _iter_string_values(value: Any) -> Iterator[str]:
             yield from _iter_string_values(nested)
 
 
+def _iter_mapping_nodes(value: Any) -> Iterator[dict]:
+    """Yield every mapping in an arbitrarily nested collection document."""
+    if isinstance(value, dict):
+        yield value
+        for nested in value.values():
+            yield from _iter_mapping_nodes(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            yield from _iter_mapping_nodes(nested)
+
+
 def test_collection_is_valid_json_and_v21_schema() -> None:
     collection = _load_collection()
     assert collection["info"]["schema"] == (
@@ -155,6 +166,9 @@ def test_collection_description_tracks_openapi_without_version_literal() -> None
     assert _client_default_base_url() in description
     assert "--host 127.0.0.1" in description
     assert "0.0.0.0" not in description
+    assert "`https://` base URL" in description
+    assert "plaintext HTTP" in description
+    assert "Postman history" in description
 
 
 def test_collection_declares_base_url_variable() -> None:
@@ -172,6 +186,9 @@ def test_rest_docs_link_collection_and_explain_runtime_variables() -> None:
     assert "`job_id`" in docs
     assert "`{{smart_private_key_pem}}`" in docs
     assert "never" in docs and "real key" in docs
+    assert "`https://` base URL" in docs
+    assert "plaintext HTTP" in docs
+    assert "Postman history" in docs
 
 
 def test_base_url_matches_deployment_runtime_port() -> None:
@@ -241,6 +258,15 @@ def test_collection_methods_match_openapi_operations() -> None:
     assert _request_operations() == _openapi_operations()
 
 
+def test_collection_covers_every_typed_client_operation() -> None:
+    client_operations = {
+        (endpoint.method.lower(), endpoint.path)
+        for endpoint in CLIENT_ENDPOINTS.values()
+    }
+
+    assert client_operations <= _request_operations()
+
+
 def test_collection_has_exactly_one_request_per_openapi_operation() -> None:
     collection = _load_collection()
     operation_counts = Counter(
@@ -263,6 +289,55 @@ def test_collection_requests_are_well_formed() -> None:
         if body and body.get("mode") == "raw":
             # Raw JSON bodies must themselves parse.
             json.loads(body["raw"])
+
+
+def test_structured_urls_match_raw_urls_and_openapi_parameters() -> None:
+    collection = _load_collection()
+    spec = _load_openapi()
+
+    for request_item in _iter_requests(collection.get("item", [])):
+        request = request_item["request"]
+        method, path = _request_operation(request_item)
+        url = request["url"]
+        segments = url["path"]
+        assert url["host"] == ["{{base_url}}"]
+        assert url["raw"] == "{{base_url}}/" + "/".join(segments)
+
+        path_item = spec["paths"][path]
+        parameters = [
+            *path_item.get("parameters", []),
+            *path_item[method].get("parameters", []),
+        ]
+        declared_path_parameters = {
+            parameter["name"] for parameter in parameters if parameter["in"] == "path"
+        }
+        assert all(
+            parameter.get("required") is True
+            for parameter in parameters
+            if parameter["in"] == "path"
+        )
+        actual_path_parameters = {
+            match.group(1)
+            for segment in segments
+            if (match := re.fullmatch(r"\{\{(\w+)\}\}", segment))
+        }
+        assert actual_path_parameters == declared_path_parameters
+
+        declared_query_parameters = {
+            parameter["name"] for parameter in parameters if parameter["in"] == "query"
+        }
+        required_query_parameters = {
+            parameter["name"]
+            for parameter in parameters
+            if parameter["in"] == "query" and parameter.get("required")
+        }
+        active_query_parameters = {
+            parameter["key"]
+            for parameter in url.get("query", [])
+            if not parameter.get("disabled", False)
+        }
+        assert required_query_parameters <= active_query_parameters
+        assert active_query_parameters <= declared_query_parameters
 
 
 def test_request_bodies_match_openapi_schemas_and_content_types() -> None:
@@ -323,18 +398,31 @@ def test_explicit_example_defaults_match_openapi_defaults() -> None:
                 )
 
 
-def test_stream_request_accepts_ndjson() -> None:
+def test_accept_headers_match_json_and_ndjson_response_handling() -> None:
     collection = _load_collection()
-    stream_item = next(
-        request_item
-        for request_item in _iter_requests(collection.get("item", []))
-        if _request_operation(request_item) == ("post", "/pii/extract/stream")
-    )
-    headers = {
-        header["key"].lower(): header["value"]
-        for header in stream_item["request"].get("header", [])
-    }
-    assert headers["accept"] == "application/x-ndjson"
+    for request_item in _iter_requests(collection.get("item", [])):
+        headers = {
+            header["key"].lower(): header["value"]
+            for header in request_item["request"].get("header", [])
+        }
+        expected = (
+            "application/x-ndjson"
+            if _request_operation(request_item) == ("post", "/pii/extract/stream")
+            else "application/json"
+        )
+        assert headers["accept"] == expected
+
+
+def test_collection_has_no_scripts_or_saved_response_data() -> None:
+    collection = _load_collection()
+
+    for node in _iter_mapping_nodes(collection):
+        assert not node.get("event"), (
+            "portable collection must not execute or log data through scripts"
+        )
+
+    for request_item in _iter_requests(collection.get("item", [])):
+        assert request_item.get("response", []) == []
 
 
 # Tokens that would indicate a real-PHI leak slipped into an example body.
