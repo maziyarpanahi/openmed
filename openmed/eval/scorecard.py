@@ -209,11 +209,12 @@ class ModelScorecard:
             "## Device Tiers",
             "",
             (
-                "| Device Tier | Targeted | Reports | Fixtures | Recall | Leakage Rate | "
-                "Strict RE-F1 | Relaxed RE-F1 | Per-Type RE-F1 | "
-                "Latency p50/p95 ms | Peak RSS MB | Model Size MB |"
+                "| Device Tier | Targeted | Reports | Fixtures | Recall | "
+                "Critical Finding Recall | Leakage Rate | Strict RE-F1 | "
+                "Relaxed RE-F1 | Per-Type RE-F1 | Latency p50/p95 ms | "
+                "Peak RSS MB | Model Size MB |"
             ),
-            "|---|---|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|",
+            "|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|",
         ]
         for row in payload["device_tiers"]:
             lines.append(
@@ -223,6 +224,7 @@ class ModelScorecard:
                 f"{row['report_count']} | "
                 f"{row['fixture_count']} | "
                 f"{_format_percent_or_placeholder(row['recall'], self.placeholder)} | "
+                f"{_format_percent_or_placeholder(row['critical_finding_recall'], self.placeholder)} | "
                 f"{_format_percent_or_placeholder(row['leakage_rate'], self.placeholder)} | "
                 f"{_format_percent_or_placeholder(row['relation_strict_f1'], self.placeholder)} | "
                 f"{_format_percent_or_placeholder(row['relation_relaxed_f1'], self.placeholder)} | "
@@ -256,6 +258,7 @@ class ModelScorecard:
         return {
             "device_tier": device,
             "fixture_count": sum(report.fixture_count for report in reports),
+            "critical_finding_recall": _aggregate_critical_finding_recall(reports),
             "leakage_rate": _aggregate_leakage(reports),
             "latency_p50_ms": _aggregate_latency(reports, "p50_ms"),
             "latency_p95_ms": _aggregate_latency(reports, "p95_ms"),
@@ -338,6 +341,30 @@ def _aggregate_recall(reports: Sequence[BenchmarkReport]) -> float | None:
             "recall_slices.overall",
             "exact_span_f1.recall",
         ),
+    )
+
+
+def _aggregate_critical_finding_recall(
+    reports: Sequence[BenchmarkReport],
+) -> float | None:
+    covered = 0.0
+    total = 0.0
+    saw_denominator = False
+    for report in reports:
+        metrics = _plain(report.metrics)
+        raw_covered = _number_at(metrics, "critical_finding_recall.covered")
+        raw_total = _number_at(metrics, "critical_finding_recall.total")
+        if raw_covered is None or raw_total is None:
+            continue
+        saw_denominator = True
+        covered += raw_covered
+        total += raw_total
+    if saw_denominator:
+        return covered / total if total > 0 else None
+    return _aggregate_rate(
+        reports,
+        numerator_denominator_keys=(),
+        value_keys=("critical_finding_recall.overall",),
     )
 
 

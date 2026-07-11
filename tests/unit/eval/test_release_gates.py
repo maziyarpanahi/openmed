@@ -388,6 +388,53 @@ def test_critical_leakage_forces_non_releasable(tmp_path: Path) -> None:
     assert _check(result, "G3").reason == "critical leakage must be exactly zero"
 
 
+def test_g11_quarantines_single_missed_drug_allergy(tmp_path: Path) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metric_updates={
+                "critical_finding_recall": {
+                    "overall": 2 / 3,
+                    "by_category": {
+                        "critical_diagnosis": 1.0,
+                        "drug_allergy": 0.0,
+                        "critical_result": 1.0,
+                    },
+                    "covered": 2,
+                    "total": 3,
+                    "missed_findings": [
+                        {
+                            "category": "drug_allergy",
+                            "fixture_id": "golden-critical-findings-synthetic-en",
+                            "start": 71,
+                            "end": 81,
+                            "label": "MEDICATION",
+                        }
+                    ],
+                }
+            },
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, "G11")
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.details["floor"] == release_gates.G11_CRITICAL_RECALL_FLOOR
+    assert check.details["missed_findings"] == [
+        {
+            "category": "drug_allergy",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "start": 71,
+            "end": 81,
+            "label": "MEDICATION",
+        }
+    ]
+    assert check.details["violations"]["must_not_miss_findings"][0]["fixture_id"] == (
+        "golden-critical-findings-synthetic-en"
+    )
+
+
 def test_conformal_coverage_gate_quarantines_shifted_critical_labels(
     tmp_path: Path,
 ) -> None:
