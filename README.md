@@ -1,37 +1,37 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed — local-first healthcare AI" width="400" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed · on-device clinical AI · 1,500+ models" width="400" />
 
-<h2>Local-first healthcare AI that never leaves the device</h2>
+<h2>Your Data. Your Model. Your Hardware.</h2>
 
 <a href="https://trendshift.io/repositories/40195?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-40195" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/40195" alt="maziyarpanahi%2Fopenmed | Trendshift" width="250" height="55"/></a>
 
-<p><b>Turn clinical text into structured insight with one line of code.</b><br/>
-Entity extraction, PII de-identification, and 1,000+ specialized medical models that run entirely on
-your own hardware — from a one-liner in Python to native Swift and Kotlin apps,
-REST/gRPC services, React Native, and browser token classification through
-Transformers.js/WebGPU.
+<p><b>Turn clinical text into structured, de-identified insight, with nothing uploaded.</b><br/>
+OpenMed extracts biomedical entities and removes 55+ PHI types entirely on the
+hardware you control, so your data never leaves the device. The same 1,500+ open models run from a
+phone to a GPU server, fully offline: iOS, iPadOS, and Android via OpenMedKit, React Native,
+plain CPUs, Apple Silicon, NVIDIA GPUs, the browser, and REST/gRPC services.
 No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
 </p>
 
 <p>
-  <a href="swift/OpenMedKit"><img alt="Swift — OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
-  <a href="docs/mlx-backend.md"><img alt="Apple Silicon — MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="docs/export-transformersjs.md"><img alt="Browser — Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
+  <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
+  <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="docs/export-transformersjs.md"><img alt="Browser: Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
   <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
 </p>
 
 <p>
-  <b>1,000+ models</b> &nbsp;·&nbsp; <b>15 model-backed PII languages</b> &nbsp;·&nbsp; <b>247 PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>1,500+ models</b> &nbsp;·&nbsp; <b>15 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -57,12 +57,12 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 
 ## See it in action
 
-OpenMed runs **entirely on the device** — clinical text never leaves it. Here it is on iPhone, fully offline:
+OpenMed runs **entirely on the device**; clinical text never leaves it. Here it is on iPhone, fully offline:
 
 <div align="center">
-  <img src="docs/brand/openmed-ios-scan.png" alt="OpenMed Scan on iPhone — on-device PII de-identification and clinical extraction via OpenMedKit" width="840" />
+  <img src="docs/brand/openmed-ios-scan.png" alt="OpenMed Scan on iPhone · on-device PII de-identification and clinical extraction via OpenMedKit" width="840" />
   <br/>
-  <sub><b>On iPhone via <a href="swift/OpenMedKit">OpenMedKit</a></b> — scan a clinical note, de-identify it, and extract clinical signals, all locally with Apple MLX. Nothing is uploaded.</sub>
+  <sub><b>On iPhone via <a href="swift/OpenMedKit">OpenMedKit</a></b>: scan a clinical note, de-identify it, and extract clinical signals, all locally with Apple MLX. Nothing is uploaded.</sub>
 </div>
 
 <br/>
@@ -70,7 +70,7 @@ OpenMed runs **entirely on the device** — clinical text never leaves it. Here 
 <div align="center">
   <img src="docs/brand/openmed-pii-demo.gif" alt="OpenMed redacting PII from a clinical discharge document in real time" width="760" />
   <br/>
-  <sub><b>Real-time PII de-identification</b> — the Nemotron Privacy Filter redacting names, addresses, IDs, and billing data from a clinical discharge packet, entirely on-device. <i>(All values shown are synthetic.)</i></sub>
+  <sub><b>Real-time PII de-identification</b>: the Nemotron Privacy Filter redacting names, addresses, IDs, and billing data from a clinical discharge packet, entirely on-device. <i>(All values shown are synthetic.)</i></sub>
 </div>
 
 ---
@@ -91,7 +91,7 @@ for entity in result.entities:
 # DRUG         imatinib                     0.95
 ```
 
-A state-of-the-art clinical NER model running locally — no API key, no network call.
+A state-of-the-art clinical NER model running locally: no API key, no network call.
 
 ---
 
@@ -102,32 +102,32 @@ A state-of-the-art clinical NER model running locally — no API key, no network
 | Runs on your device / servers         |            ✅            |           ❌           |
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
-| Specialized medical models            |          1,000+          |        Limited         |
+| Specialized medical models            |          1,500+          |        Limited         |
 | Model-backed PII languages            |            15            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
 | Browser/WebGPU token classification   | ✅ via Transformers.js   |         Varies         |
-| Vendor lock-in                        |    None — Apache-2.0     |          Yes           |
+| Vendor lock-in                        |    None (Apache-2.0)    |          Yes           |
 
-- **Specialized models** — 1,000+ curated biomedical & clinical models, many outperforming proprietary stacks.
-- **HIPAA-aware de-identification** — all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
-- **Runs everywhere** — CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, Android/Kotlin, React Native, REST/gRPC services, and browser/WebGPU bundles via Transformers.js.
-- **One-line deployment** — Python API, Dockerized REST service, or batch pipelines.
-- **Zero lock-in** — Apache-2.0, your infrastructure, your data.
+- **Specialized models**: 1,500+ curated biomedical & clinical models, many outperforming proprietary stacks.
+- **HIPAA-aware de-identification**: all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
+- **Runs everywhere**: CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, Android/Kotlin, React Native, REST/gRPC services, and browser/WebGPU bundles via Transformers.js.
+- **One-line deployment**: Python API, Dockerized REST service, or batch pipelines.
+- **Zero lock-in**: Apache-2.0, your infrastructure, your data.
 
 ---
 
-## On-device on Apple — Swift, MLX & iOS
+## On-device on Apple: Swift, MLX & iOS
 
 OpenMed is built to run where your data already lives. On Apple hardware it accelerates with **MLX**,
-and it ships straight into iPhone, iPad, and Mac apps through **[OpenMedKit](swift/OpenMedKit)** — so
+and it ships straight into iPhone, iPad, and Mac apps through **[OpenMedKit](swift/OpenMedKit)**: so
 PII detection and clinical extraction happen fully offline, on the device.
 
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.8.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.8.1"),
 ]
 ```
 
@@ -135,15 +135,15 @@ Expected result: Swift Package Manager resolves OpenMedKit and makes
 `import OpenMedKit` available to your app target.
 
 - **MLX runtime** for PII token classification, the Privacy Filter family, experimental GLiNER-family zero-shot tasks, and Python MLX-LM text generation with Laneformer; includes a CoreML fallback path for supported token-classification artifacts.
-- **One model name, every platform** — MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
+- **One model name, every platform**: MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
 - **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
 
 Guides: [MLX backend](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML export](docs/coreml-export.md)
 
 <div align="center">
-  <img src="docs/brand/openmed-mlx-speedup.png" alt="MLX vs CPU latency on Apple Silicon — 24 to 33 times faster" width="840" />
+  <img src="docs/brand/openmed-mlx-speedup.png" alt="MLX vs CPU latency on Apple Silicon: 24 to 33 times faster" width="840" />
   <br/>
-  <sub><b>MLX on Apple Silicon: 24–33× faster than CPU PyTorch</b> for the Privacy Filter — median latency per inference step, lower is better.</sub>
+  <sub><b>MLX on Apple Silicon: 24–33× faster than CPU PyTorch</b> for the Privacy Filter: median latency per inference step, lower is better.</sub>
 </div>
 
 ---
@@ -330,7 +330,7 @@ the Hugging Face Hub or any external model provider.
 
 ## Models
 
-A curated registry of specialized medical NER models — browse the [full catalog](https://openmed.life/docs/model-registry).
+A curated registry of specialized medical NER models; browse the [full catalog](https://openmed.life/docs/model-registry).
 
 | Model | Specialization | Entity types | Size |
 |-------|----------------|--------------|------|
@@ -377,19 +377,19 @@ Patient: John Doe, DOB: 07/14/1970, SSN: 123-45-6789
 - **Batch and streaming PII**: extract or de-identify across many documents with `BatchProcessor(operation="extract_pii" | "deidentify", batch_size=16)` or incremental streaming helpers.
 
 <div align="center">
-  <img src="docs/assets/pii-batch-benchmark.png" alt="Batch PII processing throughput — up to 3.3x on CPU and 2.2x on MLX" width="840" />
+  <img src="docs/assets/pii-batch-benchmark.png" alt="Batch PII processing throughput: up to 3.3x on CPU and 2.2x on MLX" width="840" />
   <br/>
-  <sub><b>Batch processing</b> — up to <b>3.3×</b> higher throughput on CPU and <b>2.2×</b> on MLX vs. one document at a time.</sub>
+  <sub><b>Batch processing</b>: up to <b>3.3×</b> higher throughput on CPU and <b>2.2×</b> on MLX vs. one document at a time.</sub>
 </div>
 
 [Complete PII notebook](examples/notebooks/PII_Detection_Complete_Guide.ipynb) · [Smart merging](docs/pii-smart-merging.md) · [Anonymization quickstart](docs/anonymization.md#quickstart-choosing-a-method)
 
 <details>
-<summary><b>Privacy Filter family</b> — three model families on the OpenAI Privacy Filter architecture</summary>
+<summary><b>Privacy Filter family</b>: three model families on the OpenAI Privacy Filter architecture</summary>
 
 <br/>
 
-Same model code (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), different training data. All route through the **same** `extract_pii()` / `deidentify()` API — only `model_name=` changes.
+Same model code (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), different training data. All route through the **same** `extract_pii()` / `deidentify()` API; only `model_name=` changes.
 `openai/privacy-filter` is a Hugging Face model identifier for local weights;
 using it here does not call the OpenAI API.
 
@@ -418,7 +418,7 @@ Example output:
 [('NAME', 'Sarah Connor'), ('DATE', '03/15/1985'), ('ID', '4471882')]
 ```
 
-On non-Apple-Silicon hosts, MLX model names are automatically substituted with the matching PyTorch checkpoint (with a one-time warning) — ship one model name, run anywhere. See [Privacy Filter architecture & backend routing](docs/anonymization.md#privacy-filter-family).
+On non-Apple-Silicon hosts, MLX model names are automatically substituted with the matching PyTorch checkpoint (with a one-time warning): ship one model name, run anywhere. See [Privacy Filter architecture & backend routing](docs/anonymization.md#privacy-filter-family).
 
 </details>
 
@@ -427,7 +427,7 @@ On non-Apple-Silicon hosts, MLX model names are automatically substituted with t
 ## Multilingual PII (15 model-backed languages)
 
 Extraction and de-identification support **15 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr` — **247 PII checkpoints** total.
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `nl`, `pt`, `te`, `th`, and `tr`, with **600+ PII checkpoints** in total.
 These are the model-backed PII language allow-list.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Korean, Latvian, Slovak, Malay, Filipino, and
@@ -486,8 +486,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.8.0 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.8.0
+docker build -t openmed:1.8.1 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.8.1
 ```
 
 Example output:
@@ -560,7 +560,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 
 <img src="docs/brand/openmed-mascot-icon.png" alt="OpenMed mascot" width="104" align="left" />
 
-OpenMed's guardian is a fluffy Persian cat styled as a tiny **Avicenna (Ibn Sina)** — the great Persian
+OpenMed's guardian is a fluffy Persian cat styled as a tiny **Avicenna (Ibn Sina)**: the great Persian
 physician whose *Canon of Medicine* was the world's standard medical text for some 600 years. He keeps
 watch over the open book of medical knowledge, in a palette built around Persian turquoise (*fīrūza*):
 a local-first guardian for your most private data.
@@ -571,18 +571,18 @@ a local-first guardian for your most private data.
 
 ## Contributing
 
-Contributions welcome — bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
+Contributions welcome: bug reports, feature requests, and PRs alike. Please read the [Contributing guide](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md) first.
 
 - [Open an issue](https://github.com/maziyarpanahi/openmed/issues)
 - [Contributing guide](CONTRIBUTING.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Security policy](SECURITY.md)
-- **Translations welcome** — help complete the other-language READMEs linked in the switcher at the top.
+- **Translations welcome**: help complete the other-language READMEs linked in the switcher at the top.
 
 ---
 
 ## Security
 
 Found a vulnerability? OpenMed redacts PHI, so a **redaction bypass or PHI/PII
-leak is a security issue** — please report it **privately**, never as a public
+leak is a security issue**: please report it **privately**, never as a public
 issue. See **[SECURITY.md](SECURITY.md)** for the responsible-disclosure policy
 and the [private reporting form](https://github.com/maziyarpanahi/openmed/security/advisories/new).
 Never include real patient data in a report.
@@ -591,7 +591,7 @@ Never include real patient data in a report.
 
 ## Credits
 
-OpenMed builds on excellent open-source work — particular thanks to **OpenAI** (the [Privacy Filter](https://huggingface.co/openai/privacy-filter) architecture), **NVIDIA** (the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)), **Hugging Face** (`transformers`, Transformers.js & the model ecosystem), **Apple** ([MLX](https://github.com/ml-explore/mlx)), and the **[Faker](https://faker.readthedocs.io/)** maintainers.
+OpenMed builds on excellent open-source work: particular thanks to **OpenAI** (the [Privacy Filter](https://huggingface.co/openai/privacy-filter) architecture), **NVIDIA** (the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1)), **Hugging Face** (`transformers`, Transformers.js & the model ecosystem), **Apple** ([MLX](https://github.com/ml-explore/mlx)), and the **[Faker](https://faker.readthedocs.io/)** maintainers.
 
 ## License
 

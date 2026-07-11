@@ -12,6 +12,7 @@ WORKFLOWS_DIR = ROOT / ".github" / "workflows"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PROVENANCE_WORKFLOW = ROOT / ".github" / "workflows" / "provenance.yml"
 IMAGE_SBOM_WORKFLOW = ROOT / ".github" / "workflows" / "sbom-image.yml"
+ANDROID_PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "android-publish.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 
 
@@ -123,3 +124,19 @@ def test_image_sbom_release_path_attaches_artifact_and_labels_image():
     assert (
         "org.opencontainers.image.sbom.digest=${{ steps.sbom_digest.outputs.digest }}"
     ) in workflow
+
+
+def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():
+    workflow = ANDROID_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "fetch-depth: 0" in workflow
+    assert "Detect Android artifact changes" in workflow
+    assert 'git describe --tags --abbrev=0 "${GITHUB_SHA}^"' in workflow
+    assert "android/ models.jsonl scripts/android/build_android_catalog.py" in workflow
+    assert "':(exclude,glob)android/**/*.md'" in workflow
+    assert 'echo "publish_android=false"' in workflow
+    assert workflow.count("if: needs.guard.outputs.publish_android == 'true'") == 2
+    assert ":openmedkit:assembleDebug" in workflow
+    assert ":openmedkit:testDebugUnitTest" in workflow
+    assert "check-runs" not in workflow
+    assert "Android AAR size and cold-start gate" not in workflow
