@@ -107,6 +107,12 @@ _ADAPTERS: Final[dict[str, AdapterSpec]] = {
         extra="",
         description="Deterministic clinical note to CDM-style ETL helpers",
     ),
+    "omop": AdapterSpec(
+        name="omop",
+        module="openmed.interop.omop",
+        extra="",
+        description="OMOP CDM loader for grounded clinical note spans",
+    ),
 }
 
 _GATEWAY_EXPORTS: Final[dict[str, str]] = {

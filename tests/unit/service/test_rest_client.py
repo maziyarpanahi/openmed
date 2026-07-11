@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any
+from typing import Any, get_args
 
 import httpx
 import pytest
@@ -16,6 +16,7 @@ from openmed.service.client import (
     CLIENT_ENDPOINTS,
     OpenMedAPIError,
     OpenMedClient,
+    PIILanguage,
 )
 
 LOOPBACK_BASE_URL = "http://127.0.0.1"
@@ -247,6 +248,12 @@ def test_client_endpoint_metadata_matches_committed_openapi_spec() -> None:
 
         schema = _request_body_schema(spec, operation)
         assert endpoint.request_fields <= set(schema["properties"])
+
+
+def test_client_pii_language_literal_matches_core() -> None:
+    from openmed.core.pii_i18n import SUPPORTED_LANGUAGES
+
+    assert set(get_args(PIILanguage)) == SUPPORTED_LANGUAGES
 
 
 def _request_body_schema(
