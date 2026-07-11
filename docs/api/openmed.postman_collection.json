@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "0f7a1c2e-4d3b-4a1e-9c6f-2b8d5e7a1c00",
     "name": "OpenMed REST API",
-    "description": "Importable Postman collection for the OpenMed REST service (OpenAPI 1.7.0).\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://localhost:8080`). Start the service with `uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. For an authenticated deployment, configure collection-level authorization in Postman or add either an `X-API-Key` header or an `Authorization: Bearer <token>` header. The collection does not store credential variables.\n\nSee docs/rest-service.md for the full endpoint reference.",
+    "description": "Importable Postman collection for the OpenMed REST service, validated against the committed `docs/api/openapi.json` contract.\n\nEvery request targets the local dev server via the `{{base_url}}` collection variable (defaults to `http://localhost:8080`). Start the service with `uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080`.\n\nAll example request bodies use SYNTHETIC clinical text only — no real PHI. For an authenticated deployment, configure collection-level authorization in Postman or add either an `X-API-Key` header or an `Authorization: Bearer <token>` header. The collection does not store credential variables.\n\nSee docs/rest-service.md for the full endpoint reference.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
