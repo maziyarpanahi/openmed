@@ -25,7 +25,6 @@ jobs:
       url: https://pypi.org/p/openmed
     permissions:
       contents: read
-      id-token: write
 
     steps:
       - name: Download distributions
@@ -37,7 +36,8 @@ jobs:
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@v1.14.0
         with:
-          attestations: true
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
 
   sbom:
     name: Generate release SBOM

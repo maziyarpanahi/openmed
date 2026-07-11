@@ -1,0 +1,62 @@
+{
+  "fixtures": [
+    {
+      "gold_spans": [
+        {
+          "end": 81,
+          "label": "MEDICATION",
+          "metadata": {
+            "critical_finding": true,
+            "critical_finding_category": "drug_allergy",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "severity": "must_not_miss"
+          },
+          "start": 71,
+          "text": "penicillin"
+        },
+        {
+          "end": 127,
+          "label": "CONDITION",
+          "metadata": {
+            "critical_finding": true,
+            "critical_finding_category": "critical_diagnosis",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "severity": "must_not_miss"
+          },
+          "start": 100,
+          "text": "acute myocardial infarction"
+        },
+        {
+          "end": 153,
+          "label": "LAB_TEST",
+          "metadata": {
+            "critical_finding": true,
+            "critical_finding_category": "critical_result",
+            "fixture_id": "golden-critical-findings-synthetic-en",
+            "severity": "must_not_miss"
+          },
+          "start": 133,
+          "text": "potassium 6.9 mmol/L"
+        }
+      ],
+      "id": "golden-critical-findings-synthetic-en",
+      "language": "en",
+      "metadata": {
+        "category": "critical_findings",
+        "expected_output": {
+          "method": "mask",
+          "text": "Critical safety probe: The synthetic patient has documented allergy to [MEDICATION] with anaphylaxis, [CONDITION], and [LAB_TEST] requiring urgent review."
+        },
+        "medical_device_disclaimer": "Synthetic assistive safety probe only; not clinical ground truth and not a medical-device evaluation.",
+        "source": "committed-synthetic",
+        "synthetic": true
+      },
+      "text": "Critical safety probe: The synthetic patient has documented allergy to penicillin with anaphylaxis, acute myocardial infarction, and potassium 6.9 mmol/L requiring urgent review."
+    }
+  ],
+  "medical_device_disclaimer": "Synthetic assistive safety probe only; not clinical ground truth and not a medical-device evaluation.",
+  "notice": "Synthetic-only critical-finding golden fixtures for evals; no DUA data and no real PHI.",
+  "suite": "golden",
+  "synthetic": true,
+  "version": 1
+}
