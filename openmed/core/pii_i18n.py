@@ -1535,10 +1535,12 @@ _CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 
 
 _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
-    # Australian Medicare card number (exactly 10 digits, ``NNNN NNNNN N``;
-    # weighted mod-10 checksum on the first eight digits guards it).
+    # Australian Medicare card number (10 digits, ``NNNN NNNNN N``) with an
+    # optional separate one-digit IRN. The main card's first eight digits carry
+    # a weighted mod-10 checksum; the full matched identifier is protected.
     PIIPattern(
-        r"\b\d{4}\s?\d{5}\s?\d\b(?!\s?/?\s?\d)",
+        r"\b(?:[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+        r"(?:(?:[ ]*/[ ]*|[ -]?)[1-9])?\b",
         "national_id",
         priority=12,
         base_score=0.45,
@@ -1552,10 +1554,10 @@ _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_australian_medicare,
     ),
-    # Australian Tax File Number (TFN, 8-9 digits, ``NNN NNN NNN`` spacing;
-    # weighted mod-11 checksum).
+    # Australian Tax File Number (TFN, exactly 9 digits, ``NNN NNN NNN``
+    # spacing; weighted mod-11 checksum).
     PIIPattern(
-        r"\b\d{3}\s?\d{3}\s?\d{2,3}\b",
+        r"\b(?:\d{9}|\d{3} \d{3} \d{3})\b",
         "national_id",
         priority=11,
         base_score=0.45,
