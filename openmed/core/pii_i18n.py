@@ -2,6 +2,15 @@
 
 Language-specific data, validators, regex patterns, and fake data
 for multilingual PII detection and de-identification.
+
+Health identifiers for HIPAA cross-map consumers:
+    Several national IDs surfaced here double as patient health identifiers and
+    should be treated as PHI. These include the UK NHS Number and the Canadian
+    provincial health-card numbers: the Ontario (OHIP) health card
+    (:func:`validate_ontario_health_card`) and the British Columbia Personal
+    Health Number (:func:`validate_bc_phn`). The Canadian Social Insurance
+    Number (:func:`validate_canadian_sin`) is a direct identifier rather than a
+    health identifier, but is redacted alongside them in Canadian clinical text.
 """
 
 from __future__ import annotations
@@ -10,6 +19,9 @@ import re
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
+    validate_bc_phn,
+    validate_canadian_sin,
+    validate_ontario_health_card,
     validate_uk_nhs_number,
     validate_uk_nino,
 )
@@ -1456,6 +1468,64 @@ _UK_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.45,
         validator=validate_uk_nino,
         flags=re.IGNORECASE,
+    ),
+]
+
+_CANADIAN_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
+    # Ontario (OHIP) health card: 10 digits beginning with 1-9 (4-3-3 spacing)
+    # plus an optional one- or two-letter version code, Luhn-checked. Health
+    # identifier. Checked before the SIN so the longer 10-digit match wins.
+    PIIPattern(
+        r"\b[1-9]\d{3}(?P<ohip_sep>[ -]?)\d{3}(?P=ohip_sep)\d{3}"
+        r"(?:[ -]?[A-Za-z]{1,2})?\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "health card",
+            "health card number",
+            "ohip",
+            "ohip number",
+            "ontario health",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_ontario_health_card,
+        flags=re.IGNORECASE,
+    ),
+    # British Columbia Personal Health Number (PHN): 10 digits beginning with 9
+    # (4-3-3 spacing), weighted mod-11. Health identifier.
+    PIIPattern(
+        r"\b9\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=12,
+        base_score=0.45,
+        context_words=[
+            "phn",
+            "personal health number",
+            "bc phn",
+            "health number",
+            "health identifier",
+        ],
+        context_boost=0.45,
+        validator=validate_bc_phn,
+    ),
+    # Canadian Social Insurance Number (SIN): 9 digits (3-3-3 spacing), Luhn.
+    PIIPattern(
+        r"\b\d{3}[\s-]?\d{3}[\s-]?\d{3}\b",
+        "national_id",
+        priority=11,
+        base_score=0.45,
+        context_words=[
+            "sin",
+            "social insurance",
+            "social insurance number",
+            "numero d'assurance sociale",
+            "nas",
+        ],
+        context_boost=0.45,
+        validator=validate_canadian_sin,
     ),
 ]
 
@@ -3497,6 +3567,8 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "en_gb": _UK_ENGLISH_PII_PATTERNS,
+    "en_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
+    "fr_ca": _CANADIAN_ENGLISH_PII_PATTERNS,
 }
 
 
