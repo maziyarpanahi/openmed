@@ -146,6 +146,7 @@ class _MarkParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.marks: list[dict[str, str]] = []
+        self.layers: list[dict[str, str]] = []
         self._active: dict[str, str] | None = None
 
     def handle_starttag(
@@ -153,8 +154,11 @@ class _MarkParser(HTMLParser):
         tag: str,
         attrs: list[tuple[str, str | None]],
     ) -> None:
+        attributes = {key: value or "" for key, value in attrs}
+        if tag == "pre" and attributes.get("class") == "openmed-span-layer":
+            self.layers.append(attributes)
         if tag == "mark":
-            self._active = {key: value or "" for key, value in attrs}
+            self._active = attributes
             self._active["text"] = ""
             self.marks.append(self._active)
 
@@ -174,6 +178,13 @@ def test_widget_renders_span_offsets_labels_and_codes_in_dom():
     parser = _MarkParser()
     parser.feed(html)
 
+    assert parser.layers == [
+        {
+            "class": "openmed-span-layer",
+            "data-layer": "0",
+            "aria-label": "Annotation layer 1",
+        }
+    ]
     assert parser.marks == [
         {
             "class": "openmed-span",
@@ -199,6 +210,62 @@ def test_widget_renders_span_offsets_labels_and_codes_in_dom():
         },
     ]
     assert render_span_html(NOTE, rows) == html
+
+
+def test_widget_preserves_nested_and_crossing_spans_in_dom():
+    text = "alpha beta gamma"
+    rows = [
+        {
+            "start": 0,
+            "end": 10,
+            "entity_label": "condition",
+            "code": "A",
+            "display": "Alpha beta",
+        },
+        {
+            "start": 6,
+            "end": 16,
+            "entity_label": "procedure",
+            "code": "B",
+            "display": "Beta gamma",
+        },
+        {
+            "start": 6,
+            "end": 10,
+            "entity_label": "finding",
+            "code": "C",
+            "display": "Beta",
+        },
+    ]
+
+    parser = _MarkParser()
+    parser.feed(render_span_html(text, rows))
+
+    assert [layer["data-layer"] for layer in parser.layers] == ["0", "1", "2"]
+    assert [
+        (
+            mark["data-start"],
+            mark["data-end"],
+            mark["data-label"],
+            mark["data-code"],
+            mark["text"],
+        )
+        for mark in parser.marks
+    ] == [
+        ("0", "10", "condition", "A", "alpha beta"),
+        ("6", "16", "procedure", "B", "beta gamma"),
+        ("6", "10", "finding", "C", "beta"),
+    ]
+
+
+def test_widget_preserves_note_when_there_are_no_spans():
+    parser = _MarkParser()
+    html = render_span_html("No <entities> found.", [])
+    parser.feed(html)
+
+    assert [layer["data-layer"] for layer in parser.layers] == ["0"]
+    assert parser.marks == []
+    assert "No &lt;entities&gt; found." in html
 
 
 def test_accessors_widget_and_duckdb_do_not_open_sockets_or_log_raw_phi(
