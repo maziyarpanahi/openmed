@@ -78,6 +78,7 @@ nav:
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
+      - Troubleshooting & Common Errors: troubleshooting.md
       - Onboarding: onboarding.md
       - Contributing & Releases: contributing.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
