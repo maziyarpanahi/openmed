@@ -31,6 +31,7 @@ from openmed.core.pii_i18n import (
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
     validate_philhealth_pin,
@@ -68,10 +69,11 @@ class TestConstants:
             "tr",
             "id",
             "th",
+            "ko",
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "ko", "lv", "sk", "ms", "tl", "da"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "lv", "sk", "ms", "tl", "da"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -92,6 +94,7 @@ class TestConstants:
         assert LANGUAGE_MODEL_PREFIX["tr"] == "Turkish-"
         assert LANGUAGE_MODEL_PREFIX["id"] == "Indonesian-"
         assert LANGUAGE_MODEL_PREFIX["th"] == "Thai-"
+        assert LANGUAGE_MODEL_PREFIX["ko"] == "Korean-"
 
     def test_default_pii_models_all_languages(self):
         assert set(DEFAULT_PII_MODELS.keys()) == SUPPORTED_LANGUAGES
@@ -111,6 +114,10 @@ class TestConstants:
         assert "Turkish" in DEFAULT_PII_MODELS["tr"]
         assert DEFAULT_PII_MODELS["id"] == "OpenMed/privacy-filter-multilingual"
         assert DEFAULT_PII_MODELS["th"] == "OpenMed/privacy-filter-multilingual"
+        assert (
+            DEFAULT_PII_MODELS["ko"]
+            == "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1"
+        )
         # English has no language prefix
         assert "French" not in DEFAULT_PII_MODELS["en"]
         assert "German" not in DEFAULT_PII_MODELS["en"]
@@ -503,6 +510,25 @@ class TestValidateTurkishTCKN:
         assert validate_turkish_tckn("1000000014") is False
 
 
+# -------------------------------------------------------------------
+# Korean RRN Validator Tests
+# -------------------------------------------------------------------
+class TestValidateKoreanRRN:
+    """Tests for validate_korean_rrn()."""
+
+    def test_valid_rrn(self):
+        assert validate_korean_rrn("940315-1234567") is True
+
+    def test_valid_rrn_without_hyphen(self):
+        assert validate_korean_rrn("9403151234567") is True
+
+    def test_invalid_rrn_wrong_checksum(self):
+        assert validate_korean_rrn("940315-1234568") is False
+
+    def test_invalid_rrn_wrong_length(self):
+        assert validate_korean_rrn("940315-123456") is False
+
+
 class TestValidateIsraeliTeudatZehut:
     """Tests for validate_israeli_teudat_zehut()."""
 
@@ -808,6 +834,10 @@ class TestLanguagePIIPatterns:
     def test_danish_patterns_exist(self):
         assert "da" in LANGUAGE_PII_PATTERNS
         assert len(LANGUAGE_PII_PATTERNS["da"]) > 0
+
+    def test_korean_patterns_exist(self):
+        assert "ko" in LANGUAGE_PII_PATTERNS
+        assert len(LANGUAGE_PII_PATTERNS["ko"]) > 0
 
     def test_all_patterns_are_pii_pattern(self):
         for lang, patterns in LANGUAGE_PII_PATTERNS.items():
@@ -1615,6 +1645,156 @@ class TestLanguagePIIPatterns:
 
         assert expected <= observed
 
+    ### Korean language specific PII Pattern test
+
+    # ── Date patterns ──────────────────────────────────────────────────────
+
+    def test_korean_date_native_format(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "date"]
+        texts = ["1994년 3월 15일", "2000년 1월 1일", "1985년 12월 31일"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean date pattern should match '{text}'"
+
+    def test_korean_date_numeric_dot(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "date"]
+        texts = ["1994.03.15", "2000.1.1"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean numeric date pattern should match '{text}'"
+
+    def test_korean_date_numeric_hyphen(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "date"]
+        texts = ["1994-03-15", "2000-1-1"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean hyphen date pattern should match '{text}'"
+
+    def test_korean_date_numeric_slash(self):
+        patterns = [p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "date"]
+        texts = ["1994/03/15", "2000/1/1"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean slash date pattern should match '{text}'"
+
+    # ── Phone patterns ─────────────────────────────────────────────────────
+
+    def test_korean_phone_mobile(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "phone_number"
+        ]
+        texts = ["010-1234-5678", "010 1234 5678", "01012345678"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean mobile phone pattern should match '{text}'"
+
+    def test_korean_phone_plus82(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "phone_number"
+        ]
+        texts = ["+82-10-1234-5678", "+82 10 1234 5678"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean +82 phone pattern should match '{text}'"
+
+    def test_korean_phone_landline(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "phone_number"
+        ]
+        texts = ["02-1234-5678", "031-123-4567"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean landline pattern should match '{text}'"
+
+    # ── RRN / National ID patterns ─────────────────────────────────────────
+
+    def test_korean_rrn_with_hyphen(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "national_id"
+        ]
+        text = "940315-1234567"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Korean RRN pattern should match '{text}'"
+
+    def test_korean_rrn_without_hyphen(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "national_id"
+        ]
+        text = "9403151234567"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Korean RRN without hyphen should match '{text}'"
+
+    def test_korean_rrn_validator_wired(self):
+        # validator=validate_korean_rrn must be set on the national_id pattern
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "national_id"
+        ]
+        assert len(patterns) >= 1
+        assert any(p.validator is not None for p in patterns), (
+            "Korean national_id pattern must have a validator wired"
+        )
+
+    def test_korean_rrn_invalid_checksum_rejected(self):
+        from openmed.core.pii_i18n import validate_korean_rrn
+
+        assert validate_korean_rrn("940315-1234568") is False
+
+    # ── Street address patterns ────────────────────────────────────────────
+
+    def test_korean_street_address_ro(self):
+        # 로 (ro) = road suffix
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "street_address"
+        ]
+        text = "서울시 강남구 테헤란로 123"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Korean street address pattern should match '{text}'"
+
+    def test_korean_street_address_gil(self):
+        # 길 (gil) = street/alley suffix
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "street_address"
+        ]
+        text = "부산시 해운대구 해운대길 45"
+        matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Korean gil address pattern should match '{text}'"
+
+    def test_korean_street_address_dong(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "street_address"
+        ]
+        text = "서울특별시 강남구 역삼동 123-45"
+        matched = any(re.fullmatch(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Korean dong address pattern should match '{text}'"
+
+    def test_korean_street_address_dong_requires_administrative_context(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "street_address"
+        ]
+        text = "역삼동 123-45"
+        matched = any(re.fullmatch(p.pattern, text, p.flags) for p in patterns)
+        assert not matched, "A standalone dong and number must not match an address"
+
+    # ── Postcode patterns ──────────────────────────────────────────────────
+
+    def test_korean_postcode(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "postcode"
+        ]
+        texts = ["06292", "12345", "00100"]
+        for text in texts:
+            matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
+            assert matched, f"Korean postcode pattern should match '{text}'"
+
+    def test_korean_postcode_not_six_digits(self):
+        # 6-digit numbers should not match the 5-digit postcode pattern
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "postcode"
+        ]
+        text = "123456"
+        matched = any(re.fullmatch(p.pattern, text, p.flags) for p in patterns)
+        assert not matched, "Korean postcode pattern should not match 6-digit number"
+
 
 # ---------------------------------------------------------------------------
 # get_patterns_for_language Tests
@@ -1735,6 +1915,12 @@ class TestGetPatternsForLanguage:
         base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
         lang_count = len(LANGUAGE_PII_PATTERNS["da"])
         assert len(da_patterns) == base_count + lang_count
+
+    def test_korean_includes_base_and_language(self):
+        ko_patterns = get_patterns_for_language("ko")
+        base_count = len(PII_PATTERNS) + len(MRZ_PII_PATTERNS)
+        lang_count = len(LANGUAGE_PII_PATTERNS["ko"])
+        assert len(ko_patterns) == base_count + lang_count
 
     def test_unsupported_language_raises(self):
         with pytest.raises(ValueError, match="Unsupported language"):
@@ -1901,6 +2087,17 @@ class TestLanguageFakeData:
     def test_danish_phones_have_country_code(self):
         phones = LANGUAGE_FAKE_DATA["da"]["PHONE"]
         assert any("+45" in p or len(re.sub(r"[^0-9]", "", p)) == 8 for p in phones)
+
+    # Korean fake data test
+    def test_korean_names_are_korean(self):
+        names = LANGUAGE_FAKE_DATA["ko"]["NAME"]
+        assert any("김" in n or "이" in n or "박" in n for n in names)
+
+    def test_korean_phones_have_country_code_or_local(self):
+        phones = LANGUAGE_FAKE_DATA["ko"]["PHONE"]
+        assert any(
+            "+82" in p or p.startswith("010") or p.startswith("02") for p in phones
+        )
 
 
 class TestIndonesianLocaleAndFixture:
@@ -2187,6 +2384,92 @@ class TestSlovakLocaleAndFixture:
         assert actual == expected
         for label, start, end, value in actual:
             assert text[start:end] == value, label
+
+
+class TestKoreanLocaleAndFixture:
+    """Tests for Korean locale and golden fixture wiring."""
+
+    def test_locale_and_surrogate_rrn_round_trip(self):
+        assert LANG_TO_LOCALE["ko"] == "ko_KR"
+        anon = Anonymizer(lang="ko", consistent=True, seed=42)
+        surrogate = anon.surrogate("940315-1234567", "national_id")
+        assert validate_korean_rrn(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/ko.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 2
+
+        # ── clinical fixture ──────────────────────────────────────────────
+        row = next(r for r in rows if r["id"] == "golden-multilingual-ko-clinical")
+        assert row["language"] == "ko"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            ("DATE", 8, 20, "1994년 3월 15일"),
+            ("PHONE", 34, 47, "010-1234-5678"),
+            ("ID_NUM", 58, 72, "940315-1234567"),
+            ("ZIPCODE", 81, 86, "06292"),
+            ("STREET_ADDRESS", 93, 109, "서울시 강남구 테헤란로 123"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+        labels = {
+            "date": "DATE",
+            "national_id": "ID_NUM",
+            "phone_number": "PHONE",
+            "postcode": "ZIPCODE",
+            "street_address": "STREET_ADDRESS",
+        }
+        observed = set()
+        for pattern in LANGUAGE_PII_PATTERNS["ko"]:
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add(
+                    (
+                        labels[pattern.entity_type],
+                        match.start(),
+                        match.end(),
+                        value,
+                    )
+                )
+
+        assert expected <= observed
+
+        checksum_row = next(r for r in rows if r["id"] == "golden-checksum-ko-rrn")
+        assert checksum_row["language"] == "ko"
+        assert checksum_row["metadata"]["synthetic"] is True
+        assert checksum_row["metadata"]["category"] == "checksum_ids"
+
+        checksum_text = checksum_row["text"]
+        checksum_span = checksum_row["gold_spans"][0]
+        assert (
+            checksum_text[checksum_span["start"] : checksum_span["end"]]
+            == (checksum_span["text"])
+        )
+        assert validate_korean_rrn(checksum_span["text"])
+
+        hard_negative = checksum_row["metadata"]["hard_negatives"][0]
+        assert (
+            checksum_text[hard_negative["start"] : hard_negative["end"]]
+            == (hard_negative["text"])
+        )
+        assert not validate_korean_rrn(hard_negative["text"])
 
 
 if __name__ == "__main__":

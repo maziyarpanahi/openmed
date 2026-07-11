@@ -15,6 +15,7 @@ from .vocab import (
     VocabularyIndex,
     VocabularyNotFoundError,
     get_index,
+    normalize_language,
 )
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "available_linkers",
     "get_index",
     "get_linker",
+    "normalize_language",
     "register_linker",
 ]
