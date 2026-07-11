@@ -170,19 +170,24 @@ class TestSurrogateIntegration:
         assert surrogate and surrogate != "田中"
 
     @pytest.mark.parametrize("lang", ["en", "fr", "de"])
-    def test_western_person_output_unchanged(self, lang):
-        # Honorific machinery must not touch en/fr/de PERSON replacement:
-        # the surrogate equals exactly what the plain generator would emit.
-        seeded = Anonymizer(lang=lang, consistent=True, seed=99)
-        got = seeded.surrogate("John Smith", "PERSON")
+    def test_western_person_output_unchanged(self, lang, monkeypatch):
+        # Prove the non-CJK path passes the original value through to the
+        # existing generator and returns its output without CJK post-processing.
+        calls = []
 
-        baseline = Anonymizer(lang=lang, consistent=True, seed=99)
-        expected = baseline.surrogate("John Smith", "PERSON")
+        def baseline_generator(_faker, original, *, locale):
+            calls.append((original, locale))
+            return "baseline-western-surrogate"
 
-        assert got == expected
-        # And no CJK honorific leaked onto the tail.
-        for hon in HONORIFICS.get("ja", []) + HONORIFICS.get("zh", []):
-            assert not got.endswith(hon)
+        monkeypatch.setitem(LABEL_GENERATORS, "PERSON", baseline_generator)
+
+        got = Anonymizer(lang=lang, consistent=True, seed=99).surrogate(
+            "John Smith", "PERSON"
+        )
+
+        assert got == "baseline-western-surrogate"
+        assert len(calls) == 1
+        assert calls[0][0] == "John Smith"
 
     def test_non_person_cjk_label_is_not_honorific_stripped(self):
         # A non-PERSON label ending in what looks like an honorific must be
