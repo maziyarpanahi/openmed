@@ -195,6 +195,7 @@
               "tr",
               "id",
               "th",
+              "ko",
               "ro"
             ],
             "title": "Lang",
@@ -415,6 +416,7 @@
               "tr",
               "id",
               "th",
+              "ko",
               "ro"
             ],
             "title": "Lang",
@@ -537,6 +539,7 @@
               "tr",
               "id",
               "th",
+              "ko",
               "ro"
             ],
             "title": "Lang",
@@ -632,6 +635,7 @@
               "tr",
               "id",
               "th",
+              "ko",
               "ro"
             ],
             "title": "Lang",
@@ -747,6 +751,7 @@
               "tr",
               "id",
               "th",
+              "ko",
               "ro"
             ],
             "title": "Lang",
@@ -870,6 +875,7 @@
               "tr",
               "id",
               "th",
+              "ko",
               "ro"
             ],
             "title": "Lang",
@@ -1016,7 +1022,7 @@
   "info": {
     "description": "Hardened REST API for OpenMed text analysis and PII workflows.",
     "title": "OpenMed REST API",
-    "version": "1.7.0"
+    "version": "1.8.1"
   },
   "openapi": "3.1.0",
   "paths": {

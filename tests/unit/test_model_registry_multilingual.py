@@ -108,7 +108,7 @@ class TestHelperFunctions:
         assert model_id == DEFAULT_PII_MODELS[lang]
 
     def test_get_default_pii_model_unsupported(self):
-        result = get_default_pii_model("ko")
+        result = get_default_pii_model("xx")
         assert result is None
 
     def test_get_pii_models_returns_model_info(self):

@@ -115,6 +115,13 @@ NUTRITION_TARGET: Final = "NUTRITION_TARGET"
 FEEDING_ROUTE: Final = "FEEDING_ROUTE"
 NUTRITIONAL_STATUS: Final = "NUTRITIONAL_STATUS"
 
+#: Immunization and vaccine-administration concepts (issue #897)
+VACCINE_NAME: Final = "VACCINE_NAME"
+DOSE_NUMBER: Final = "DOSE_NUMBER"
+ADMINISTRATION_ROUTE: Final = "ADMINISTRATION_ROUTE"
+VACCINE_LOT: Final = "VACCINE_LOT"
+VACCINE_SERIES: Final = "VACCINE_SERIES"
+
 #: Clinical-genomics variant-mention concepts (issue #906)
 GENE_SYMBOL: Final = "GENE_SYMBOL"
 VARIANT_DESCRIPTOR: Final = "VARIANT_DESCRIPTOR"
@@ -133,6 +140,12 @@ ENDOSCOPIC_FINDING: Final = "ENDOSCOPIC_FINDING"
 GI_SYMPTOM: Final = "GI_SYMPTOM"
 GI_SCORE: Final = "GI_SCORE"
 POLYP_DESCRIPTOR: Final = "POLYP_DESCRIPTOR"
+
+#: Nephrology and renal concepts (issue #892)
+CKD_STAGE: Final = "CKD_STAGE"
+DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
+RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
+URINE_FINDING: Final = "URINE_FINDING"
 
 #: Catch-all
 OTHER: Final = "OTHER"
@@ -223,7 +236,16 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         NUTRITION_TARGET,
         FEEDING_ROUTE,
         NUTRITIONAL_STATUS,
+        VACCINE_NAME,
+        DOSE_NUMBER,
+        ADMINISTRATION_ROUTE,
+        VACCINE_LOT,
+        VACCINE_SERIES,
         GENE_SYMBOL,
+        CKD_STAGE,
+        DIALYSIS_MODALITY,
+        RENAL_FUNCTION_MEASURE,
+        URINE_FINDING,
         VARIANT_DESCRIPTOR,
         PROTEIN_CHANGE,
         ZYGOSITY,
@@ -414,6 +436,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     NUTRITION_TARGET: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     FEEDING_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     NUTRITIONAL_STATUS: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    # Immunization and vaccine-administration concepts (issue #897)
+    VACCINE_NAME: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (RXNORM, SNOMED)),
+    DOSE_NUMBER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    ADMINISTRATION_ROUTE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VACCINE_LOT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
+    VACCINE_SERIES: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     # Clinical genomics
     GENE_SYMBOL: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
     VARIANT_DESCRIPTOR: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (SNOMED,)),
@@ -434,6 +462,15 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
     POLYP_DESCRIPTOR: _label_metadata(
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
+    # Nephrology and renal concepts (issue #892)
+    CKD_STAGE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    DIALYSIS_MODALITY: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    RENAL_FUNCTION_MEASURE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -516,6 +553,12 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     NUTRITION_TARGET: HIPAA_UNIQUE_IDENTIFIER,
     FEEDING_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
     NUTRITIONAL_STATUS: HIPAA_UNIQUE_IDENTIFIER,
+    # Immunization and vaccine-administration concepts
+    VACCINE_NAME: HIPAA_UNIQUE_IDENTIFIER,
+    DOSE_NUMBER: HIPAA_UNIQUE_IDENTIFIER,
+    ADMINISTRATION_ROUTE: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_LOT: HIPAA_UNIQUE_IDENTIFIER,
+    VACCINE_SERIES: HIPAA_UNIQUE_IDENTIFIER,
     # Clinical genomics
     GENE_SYMBOL: HIPAA_UNIQUE_IDENTIFIER,
     VARIANT_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
@@ -532,6 +575,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     GI_SYMPTOM: HIPAA_UNIQUE_IDENTIFIER,
     GI_SCORE: HIPAA_UNIQUE_IDENTIFIER,
     POLYP_DESCRIPTOR: HIPAA_UNIQUE_IDENTIFIER,
+    # Nephrology concepts
+    CKD_STAGE: HIPAA_UNIQUE_IDENTIFIER,
+    DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
+    RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -759,6 +807,21 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "nutritiontarget": NUTRITION_TARGET,
     "feedingroute": FEEDING_ROUTE,
     "nutritionalstatus": NUTRITIONAL_STATUS,
+    # Immunization and Vaccine Administration concepts
+    "vaccinename": VACCINE_NAME,
+    "vaccine": VACCINE_NAME,
+    "vaccinationname": VACCINE_NAME,
+    "vaccination": VACCINE_NAME,
+    "dosenumber": DOSE_NUMBER,
+    "dose": DOSE_NUMBER,
+    "administrationroute": ADMINISTRATION_ROUTE,
+    "vaccineroute": ADMINISTRATION_ROUTE,
+    "vaccinelot": VACCINE_LOT,
+    "vaccinelotnumber": VACCINE_LOT,
+    "vaccineseries": VACCINE_SERIES,
+    "vaccinationseries": VACCINE_SERIES,
+    "administrationdate": DATE,
+    "administrationsite": BODY_SITE,
     # Clinical genomics
     "gene": GENE_SYMBOL,
     "genesymbol": GENE_SYMBOL,
@@ -814,6 +877,17 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "sessilepolyp": POLYP_DESCRIPTOR,
     "pedunculatedpolyp": POLYP_DESCRIPTOR,
     "biopsysite": BODY_SITE,
+    # Nephrology concepts
+    "ckdstage": CKD_STAGE,
+    "dialysis": DIALYSIS_MODALITY,
+    "dialysismodality": DIALYSIS_MODALITY,
+    "renalfunctionmeasure": RENAL_FUNCTION_MEASURE,
+    "renalfunction": RENAL_FUNCTION_MEASURE,
+    "egfr": RENAL_FUNCTION_MEASURE,
+    "creatinine": RENAL_FUNCTION_MEASURE,
+    "urinefinding": URINE_FINDING,
+    "proteinuria": URINE_FINDING,
+    "hematuria": URINE_FINDING,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
@@ -1029,6 +1103,11 @@ __all__ = [
     "NUTRITION_TARGET",
     "FEEDING_ROUTE",
     "NUTRITIONAL_STATUS",
+    "VACCINE_NAME",
+    "DOSE_NUMBER",
+    "ADMINISTRATION_ROUTE",
+    "VACCINE_LOT",
+    "VACCINE_SERIES",
     "GENE_SYMBOL",
     "VARIANT_DESCRIPTOR",
     "PROTEIN_CHANGE",
@@ -1043,4 +1122,8 @@ __all__ = [
     "GI_SCORE",
     "POLYP_DESCRIPTOR",
     "OTHER",
+    "CKD_STAGE",
+    "DIALYSIS_MODALITY",
+    "RENAL_FUNCTION_MEASURE",
+    "URINE_FINDING",
 ]
