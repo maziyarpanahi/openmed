@@ -31,6 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
+      uv_lock_sha256: ${{ steps.digest.outputs.uv_lock_sha256 }}
 
     steps:
       - uses: actions/checkout@v7
@@ -159,6 +160,7 @@ jobs:
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as gh:
               gh.write(f"digest={digest}\n")
+              gh.write(f"uv_lock_sha256=sha256:{lock_hash}\n")
           PYEOF
 
       - name: Upload reproducibility digest artifact
@@ -256,6 +258,7 @@ jobs:
         run: |
           echo "Lock gate passed."
           echo "Reproducibility digest: ${{ needs.lock-integrity.outputs.digest }}"
+          echo "uv.lock sha256: ${{ needs.lock-integrity.outputs.uv_lock_sha256 }}"
           echo ""
           echo "This confirms:"
           echo "  - Every transitive dependency is pinned to an exact version."

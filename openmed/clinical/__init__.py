@@ -44,6 +44,7 @@ from .context import (
     assert_context_axes,
     canonical_section_label,
     canonical_section_name,
+    clinical_context_lexicon_stats,
     reconcile_temporality_with_interval,
     resolve_negation,
     resolve_span_context,
@@ -89,6 +90,16 @@ from .events import (
     extract_lab_trend_events,
     extract_medication_change_events,
     score_event_frame_corpus,
+)
+from .experiencer import (
+    EXPERIENCER_REFINED_VALUES,
+    EXPERIENCER_REFINEMENT_ADVISORY,
+    OTHER_EXPERIENCER,
+    Experiencer,
+    ExperiencerAssignment,
+    RefinedExperiencerAssertion,
+    refine_experiencer,
+    resolve_experiencer,
 )
 from .lab_values import (
     LAB_FLAG_ADVISORY,
@@ -162,6 +173,13 @@ from .severity_laterality import (
     SeverityScale,
     extract_severity_laterality,
 )
+from .sig_parser import (
+    SIG_PARSER_ADVISORY,
+    Sig,
+    SpanSig,
+    parse_sig,
+    parse_sigs,
+)
 from .status_vocab import (
     CURRENT,
     FORMER,
@@ -229,6 +247,7 @@ __all__ = [
     "ContextCueCategory",
     "ContextCueDirection",
     "ModifierHit",
+    "clinical_context_lexicon_stats",
     "scan_context_cues",
     "resolve_negation",
     "apply_section_context",
@@ -354,6 +373,11 @@ __all__ = [
     "normalize_frequency",
     "normalize_duration",
     "normalize_medication_attribute",
+    "SIG_PARSER_ADVISORY",
+    "Sig",
+    "SpanSig",
+    "parse_sig",
+    "parse_sigs",
     "MedicationAttributeType",
     "MedicationRelation",
     "MedicationRelationGroup",
@@ -404,4 +428,12 @@ __all__ = [
     "NegationScope",
     "detect_negation_scopes",
     "negated_spans",
+    "OTHER_EXPERIENCER",
+    "Experiencer",
+    "EXPERIENCER_REFINED_VALUES",
+    "EXPERIENCER_REFINEMENT_ADVISORY",
+    "ExperiencerAssignment",
+    "RefinedExperiencerAssertion",
+    "resolve_experiencer",
+    "refine_experiencer",
 ]

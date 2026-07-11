@@ -7,17 +7,21 @@ attestation.
 
 ## Release coverage
 
-- Python wheel and source distribution files are built, attested, and verified
-  by the reusable `.github/workflows/provenance.yml` job before the PyPI upload
-  job starts.
+- Python wheel and source distribution files are built and checked by the
+  reusable `.github/workflows/provenance.yml` job before the PyPI upload job
+  starts. The job also attempts to generate and verify SLSA provenance, and
+  uploads that evidence when GitHub OIDC attestation services are available.
 - The GHCR manifest list is built by `.github/workflows/container-multiarch.yml`
   and attested by digest after the image is pushed.
-- The workflows verify the `https://slsa.dev/provenance/v1` predicate, source
-  commit, source ref, and signer workflow before release jobs can pass.
+- When attestation succeeds, the workflows verify the
+  `https://slsa.dev/provenance/v1` predicate, source commit, source ref, and
+  signer workflow before uploading provenance evidence.
 
-The PyPI publish action still emits PyPI/Sigstore attestations for uploaded
-distributions. The SLSA provenance workflow adds a repository-level attestation
-and a digest manifest that downstream users can verify with the GitHub CLI.
+The PyPI publish action currently uploads with the project-scoped PyPI API
+token, so PyPI-native Sigstore attestations are disabled. When GitHub OIDC
+attestation succeeds, the SLSA provenance workflow provides the
+repository-level attestation and digest manifest that downstream users can
+verify with the GitHub CLI.
 
 ## Online verification
 
@@ -25,9 +29,9 @@ Download the artifact you plan to use, then verify it against the OpenMed
 repository and the expected release tag:
 
 ```bash
-VERSION=v1.8.0
+VERSION=v1.8.1
 COMMIT=<release-commit-sha>
-ARTIFACT=openmed-1.8.0-py3-none-any.whl
+ARTIFACT=openmed-1.8.1-py3-none-any.whl
 
 sha256sum "$ARTIFACT"
 gh attestation verify "$ARTIFACT" \
@@ -39,13 +43,13 @@ gh attestation verify "$ARTIFACT" \
 ```
 
 Use the same command for the source distribution by setting `ARTIFACT` to the
-downloaded `openmed-1.8.0.tar.gz` file.
+downloaded `openmed-1.8.1.tar.gz` file.
 
 For the container image, verify the manifest-list digest rather than a mutable
 tag:
 
 ```bash
-VERSION=v1.8.0
+VERSION=v1.8.1
 COMMIT=<release-commit-sha>
 IMAGE=ghcr.io/maziyarpanahi/openmed:$VERSION
 DIGEST="$(docker buildx imagetools inspect "$IMAGE" --format '{{ .Manifest.Digest }}')"
@@ -64,7 +68,7 @@ Offline verification needs the artifact, the attestation bundle, and the
 trusted root material. Fetch the bundle and roots while online:
 
 ```bash
-ARTIFACT=openmed-1.8.0-py3-none-any.whl
+ARTIFACT=openmed-1.8.1-py3-none-any.whl
 
 gh attestation download "$ARTIFACT" \
   --repo maziyarpanahi/openmed \
@@ -78,9 +82,9 @@ Move the artifact, `artifact.sha256`, `trusted_root.jsonl`, and the downloaded
 first, then verify the bundle:
 
 ```bash
-VERSION=v1.8.0
+VERSION=v1.8.1
 COMMIT=<release-commit-sha>
-ARTIFACT=openmed-1.8.0-py3-none-any.whl
+ARTIFACT=openmed-1.8.1-py3-none-any.whl
 BUNDLE=<downloaded-sha256-bundle>.jsonl
 
 sha256sum --check artifact.sha256
@@ -97,7 +101,7 @@ gh attestation verify "$ARTIFACT" \
 For the container image, download the attestation bundle while online:
 
 ```bash
-VERSION=v1.8.0
+VERSION=v1.8.1
 IMAGE=ghcr.io/maziyarpanahi/openmed:$VERSION
 DIGEST="$(docker buildx imagetools inspect "$IMAGE" --format '{{ .Manifest.Digest }}')"
 
@@ -113,7 +117,7 @@ In the offline environment, verify the downloaded OCI bundle against the pinned
 digest:
 
 ```bash
-VERSION=v1.8.0
+VERSION=v1.8.1
 COMMIT=<release-commit-sha>
 DIGEST=sha256:<manifest-list-digest>
 BUNDLE=<downloaded-sha256-bundle>.jsonl
