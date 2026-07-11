@@ -6,12 +6,14 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	openmed "github.com/maziyarpanahi/openmed/clients/go"
 )
 
 func ptrFloat(v float64) *float64 { return &v }
+func ptrInt(v int) *int           { return &v }
 
 // newServer returns a test server whose handler asserts the request and writes
 // the provided response, plus a client pointed at it.
@@ -37,6 +39,12 @@ func decodeBody(t *testing.T, r *http.Request, out any) {
 	}
 }
 
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
+
 func TestNewNormalizesBaseURL(t *testing.T) {
 	client, err := openmed.New("http://example.com:8080///")
 	if err != nil {
@@ -50,6 +58,151 @@ func TestNewNormalizesBaseURL(t *testing.T) {
 func TestNewRejectsInvalidBaseURL(t *testing.T) {
 	if _, err := openmed.New("://not-a-url"); err == nil {
 		t.Fatal("expected an error for an invalid base URL")
+	}
+}
+
+func TestNewRejectsNonHTTPBaseURLs(t *testing.T) {
+	for _, baseURL := range []string{
+		"localhost:8080",
+		"/relative",
+		"ftp://example.com",
+		"http:///missing-host",
+		"http://example.com?token=secret",
+		"http://example.com#fragment",
+	} {
+		t.Run(baseURL, func(t *testing.T) {
+			if _, err := openmed.New(baseURL); err == nil {
+				t.Fatalf("New(%q) succeeded, want an error", baseURL)
+			}
+		})
+	}
+}
+
+func TestNewPreservesBasePath(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/openmed/health" {
+			t.Fatalf("path = %q, want /openmed/health", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"status":"ok","service":"openmed"}`)
+	})
+
+	client, err := openmed.New(client.BaseURL() + "/openmed/")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := client.Health(context.Background()); err != nil {
+		t.Fatalf("Health: %v", err)
+	}
+}
+
+func TestWithHTTPClient(t *testing.T) {
+	called := false
+	httpClient := &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		called = true
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"status":"ok","service":"openmed"}`)),
+			Request:    req,
+		}, nil
+	})}
+	client, err := openmed.New("https://openmed.invalid", openmed.WithHTTPClient(httpClient))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if _, err := client.Health(context.Background()); err != nil {
+		t.Fatalf("Health: %v", err)
+	}
+	if !called {
+		t.Fatal("custom HTTP client was not used")
+	}
+}
+
+func TestEndpointMethodsAndPaths(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		call   func(*openmed.Client) error
+	}{
+		{"Analyze", http.MethodPost, "/analyze", func(c *openmed.Client) error {
+			_, err := c.Analyze(context.Background(), openmed.AnalyzeRequest{Text: "note"})
+			return err
+		}},
+		{"ExtractPII", http.MethodPost, "/pii/extract", func(c *openmed.Client) error {
+			_, err := c.ExtractPII(context.Background(), openmed.PIIExtractRequest{Text: "note"})
+			return err
+		}},
+		{"ExtractPIIStream", http.MethodPost, "/pii/extract/stream", func(c *openmed.Client) error {
+			_, err := c.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{Text: "note"})
+			return err
+		}},
+		{"Deidentify", http.MethodPost, "/pii/deidentify", func(c *openmed.Client) error {
+			_, err := c.Deidentify(context.Background(), openmed.PIIDeidentifyRequest{Text: "note"})
+			return err
+		}},
+		{"PrivacyGateway", http.MethodPost, "/privacy-gateway/complete", func(c *openmed.Client) error {
+			_, err := c.PrivacyGateway(context.Background(), openmed.PrivacyGatewayRequest{Text: "note"})
+			return err
+		}},
+		{"Health", http.MethodGet, "/health", func(c *openmed.Client) error {
+			_, err := c.Health(context.Background())
+			return err
+		}},
+		{"Livez", http.MethodGet, "/livez", func(c *openmed.Client) error {
+			_, err := c.Livez(context.Background())
+			return err
+		}},
+		{"Readyz", http.MethodGet, "/readyz", func(c *openmed.Client) error {
+			_, err := c.Readyz(context.Background())
+			return err
+		}},
+		{"LoadedModels", http.MethodGet, "/models/loaded", func(c *openmed.Client) error {
+			_, err := c.LoadedModels(context.Background())
+			return err
+		}},
+		{"UnloadModels", http.MethodPost, "/models/unload", func(c *openmed.Client) error {
+			_, err := c.UnloadModels(context.Background(), openmed.ModelUnloadRequest{All: true})
+			return err
+		}},
+		{"CreateJob", http.MethodPost, "/jobs", func(c *openmed.Client) error {
+			_, err := c.CreateJob(context.Background(), openmed.DeidentifyJobRequest{
+				Documents: []openmed.DeidentifyJobDocument{{Text: "note"}},
+			})
+			return err
+		}},
+		{"GetJob", http.MethodGet, "/jobs/job%2F1", func(c *openmed.Client) error {
+			_, err := c.GetJob(context.Background(), "job/1")
+			return err
+		}},
+		{"StartSMARTBackendIngestion", http.MethodPost, "/fhir/smart-backend/ingestions", func(c *openmed.Client) error {
+			_, err := c.StartSMARTBackendIngestion(context.Background(), openmed.SMARTBackendIngestionRequest{})
+			return err
+		}},
+		{"SMARTBackendIngestionStatus", http.MethodGet, "/fhir/smart-backend/ingestions/job%2F1", func(c *openmed.Client) error {
+			_, err := c.SMARTBackendIngestionStatus(context.Background(), "job/1")
+			return err
+		}},
+		{"SMARTBackendIngestionSummary", http.MethodGet, "/fhir/smart-backend/ingestions/job%2F1/summary", func(c *openmed.Client) error {
+			_, err := c.SMARTBackendIngestionSummary(context.Background(), "job/1")
+			return err
+		}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != test.method || r.URL.EscapedPath() != test.path {
+					t.Fatalf("request = %s %s, want %s %s", r.Method, r.URL.EscapedPath(), test.method, test.path)
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, "{}")
+			})
+			if err := test.call(client); err != nil {
+				t.Fatalf("call failed: %v", err)
+			}
+		})
 	}
 }
 
@@ -140,6 +293,9 @@ func TestExtractPIIStream(t *testing.T) {
 	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/pii/extract/stream" {
 			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if accept := r.Header.Get("Accept"); accept != "application/x-ndjson" {
+			t.Fatalf("Accept = %q, want application/x-ndjson", accept)
 		}
 		w.Header().Set("Content-Type", "application/x-ndjson")
 		_, _ = io.WriteString(w, ndjson)
@@ -308,6 +464,9 @@ func TestAPIErrorEnvelope(t *testing.T) {
 	if apiErr.Envelope.Error.RequestID != "req-1" {
 		t.Fatalf("RequestID = %q, want req-1", apiErr.Envelope.Error.RequestID)
 	}
+	if got := apiErr.Error(); !strings.Contains(got, "validation_error") {
+		t.Fatalf("Error() = %q, want the service error code", got)
+	}
 }
 
 func TestAPIErrorNonEnvelopeFallback(t *testing.T) {
@@ -357,5 +516,105 @@ func TestGetJobEscapesPath(t *testing.T) {
 	}
 	if resp.Status != openmed.JobDone {
 		t.Fatalf("Status = %q, want done", resp.Status)
+	}
+}
+
+func TestCreateJobSupportsFractionalWebhookBackoff(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/jobs" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var req openmed.DeidentifyJobRequest
+		decodeBody(t, r, &req)
+		if req.Webhook == nil || req.Webhook.BackoffSeconds == nil || *req.Webhook.BackoffSeconds != 0.25 {
+			t.Fatalf("Webhook = %+v, want a 0.25-second backoff", req.Webhook)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{
+			"id":"job-1",
+			"status":"queued",
+			"webhook":{
+				"configured":true,
+				"url_hash":"sha256",
+				"max_attempts":3,
+				"backoff_seconds":0.25
+			}
+		}`)
+	})
+
+	resp, err := client.CreateJob(context.Background(), openmed.DeidentifyJobRequest{
+		Documents: []openmed.DeidentifyJobDocument{{Text: "synthetic note"}},
+		Webhook: &openmed.JobWebhookRequest{
+			URL:            "https://example.com/callback",
+			Secret:         "synthetic-secret",
+			MaxAttempts:    3,
+			BackoffSeconds: ptrFloat(0.25),
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateJob: %v", err)
+	}
+	if resp.Webhook == nil || resp.Webhook.BackoffSeconds != 0.25 {
+		t.Fatalf("Webhook = %+v, want a 0.25-second backoff", resp.Webhook)
+	}
+}
+
+func TestOptionalZeroValuesAreSent(t *testing.T) {
+	client, _ := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/pii/extract/stream":
+			var req openmed.PIIExtractStreamRequest
+			decodeBody(t, r, &req)
+			if req.TokenizerContextChars == nil || *req.TokenizerContextChars != 0 {
+				t.Fatalf("TokenizerContextChars = %v, want explicit zero", req.TokenizerContextChars)
+			}
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = io.WriteString(w, "{\"event\":\"done\"}\n")
+		case "/fhir/smart-backend/ingestions":
+			var req openmed.SMARTBackendIngestionRequest
+			decodeBody(t, r, &req)
+			if req.PollIntervalSeconds == nil || *req.PollIntervalSeconds != 0 {
+				t.Fatalf("PollIntervalSeconds = %v, want explicit zero", req.PollIntervalSeconds)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"job_id":"job-1","status":"queued"}`)
+		case "/jobs":
+			var req openmed.DeidentifyJobRequest
+			decodeBody(t, r, &req)
+			if req.Webhook == nil || req.Webhook.BackoffSeconds == nil || *req.Webhook.BackoffSeconds != 0 {
+				t.Fatalf("Webhook = %+v, want an explicit zero-second backoff", req.Webhook)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"id":"job-1","status":"queued"}`)
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	})
+
+	if _, err := client.ExtractPIIStream(context.Background(), openmed.PIIExtractStreamRequest{
+		Text:                  "synthetic note",
+		TokenizerContextChars: ptrInt(0),
+	}); err != nil {
+		t.Fatalf("ExtractPIIStream: %v", err)
+	}
+	if _, err := client.StartSMARTBackendIngestion(context.Background(), openmed.SMARTBackendIngestionRequest{
+		FHIRBaseURL:         "https://fhir.example.com",
+		TokenURL:            "https://fhir.example.com/token",
+		ClientID:            "client-id",
+		PrivateKeyPEM:       "synthetic-key",
+		OutputDir:           "/tmp/openmed-output",
+		PollIntervalSeconds: ptrFloat(0),
+	}); err != nil {
+		t.Fatalf("StartSMARTBackendIngestion: %v", err)
+	}
+	if _, err := client.CreateJob(context.Background(), openmed.DeidentifyJobRequest{
+		Documents: []openmed.DeidentifyJobDocument{{Text: "synthetic note"}},
+		Webhook: &openmed.JobWebhookRequest{
+			URL:            "https://example.com/callback",
+			Secret:         "synthetic-secret",
+			BackoffSeconds: ptrFloat(0),
+		},
+	}); err != nil {
+		t.Fatalf("CreateJob: %v", err)
 	}
 }

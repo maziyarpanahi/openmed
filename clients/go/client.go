@@ -66,6 +66,8 @@ const (
 	LangTR PIILanguage = "tr"
 	LangID PIILanguage = "id"
 	LangTH PIILanguage = "th"
+	LangKO PIILanguage = "ko"
+	LangRO PIILanguage = "ro"
 )
 
 // DeidentificationMethod selects how detected PII spans are transformed by the
@@ -147,7 +149,7 @@ type PIIExtractStreamRequest struct {
 	KeepAlive             any         `json:"keep_alive,omitempty"`
 	ChunkSize             int         `json:"chunk_size,omitempty"`
 	WindowChars           int         `json:"window_chars,omitempty"`
-	TokenizerContextChars int         `json:"tokenizer_context_chars,omitempty"`
+	TokenizerContextChars *int        `json:"tokenizer_context_chars,omitempty"`
 	MaxEntityChars        int         `json:"max_entity_chars,omitempty"`
 	IncludeText           *bool       `json:"include_text,omitempty"`
 }
@@ -200,10 +202,10 @@ type DeidentifyJobDocument struct {
 
 // JobWebhookRequest configures an optional completion webhook for a job.
 type JobWebhookRequest struct {
-	URL            string `json:"url"`
-	Secret         string `json:"secret"`
-	MaxAttempts    int    `json:"max_attempts,omitempty"`
-	BackoffSeconds int    `json:"backoff_seconds,omitempty"`
+	URL            string   `json:"url"`
+	Secret         string   `json:"secret"`
+	MaxAttempts    int      `json:"max_attempts,omitempty"`
+	BackoffSeconds *float64 `json:"backoff_seconds,omitempty"`
 }
 
 // DeidentifyJobRequest is the request body for POST /jobs.
@@ -238,7 +240,7 @@ type SMARTBackendIngestionRequest struct {
 	Scope                 string                 `json:"scope,omitempty"`
 	ExportPath            string                 `json:"export_path,omitempty"`
 	MaxInflightDownloads  int                    `json:"max_inflight_downloads,omitempty"`
-	PollIntervalSeconds   float64                `json:"poll_interval_seconds,omitempty"`
+	PollIntervalSeconds   *float64               `json:"poll_interval_seconds,omitempty"`
 	RequestTimeoutSeconds float64                `json:"request_timeout_seconds,omitempty"`
 	Policy                PrivacyPolicy          `json:"policy,omitempty"`
 	Method                DeidentificationMethod `json:"method,omitempty"`
@@ -426,10 +428,10 @@ type JobSpan struct {
 
 // JobWebhookMetadata reports webhook configuration on a job.
 type JobWebhookMetadata struct {
-	Configured     bool   `json:"configured"`
-	URLHash        string `json:"url_hash"`
-	MaxAttempts    int    `json:"max_attempts"`
-	BackoffSeconds int    `json:"backoff_seconds"`
+	Configured     bool    `json:"configured"`
+	URLHash        string  `json:"url_hash"`
+	MaxAttempts    int     `json:"max_attempts"`
+	BackoffSeconds float64 `json:"backoff_seconds"`
 }
 
 // JobWebhookDelivery reports the outcome of a webhook delivery attempt.
@@ -546,8 +548,21 @@ func New(baseURL string, opts ...Option) (*Client, error) {
 	if trimmed == "" {
 		trimmed = DefaultBaseURL
 	}
-	if _, err := url.ParseRequestURI(trimmed); err != nil {
+	parsed, err := url.ParseRequestURI(trimmed)
+	if err != nil {
 		return nil, fmt.Errorf("openmed: invalid base URL %q: %w", baseURL, err)
+	}
+	if (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		return nil, fmt.Errorf(
+			"openmed: invalid base URL %q: expected an absolute HTTP(S) URL",
+			baseURL,
+		)
+	}
+	if parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+		return nil, fmt.Errorf(
+			"openmed: invalid base URL %q: query parameters and fragments are not supported",
+			baseURL,
+		)
 	}
 	c := &Client{
 		baseURL:    trimmed,
@@ -583,7 +598,13 @@ func (c *Client) ExtractPII(ctx context.Context, req PIIExtractRequest) (*PIIExt
 // ExtractPIIStream calls POST /pii/extract/stream and returns the raw
 // newline-delimited JSON (NDJSON) stream body. Each line is a JSON object.
 func (c *Client) ExtractPIIStream(ctx context.Context, req PIIExtractStreamRequest) (string, error) {
-	body, err := c.raw(ctx, http.MethodPost, "/pii/extract/stream", req)
+	body, err := c.rawWithAccept(
+		ctx,
+		http.MethodPost,
+		"/pii/extract/stream",
+		req,
+		"application/x-ndjson",
+	)
 	if err != nil {
 		return "", err
 	}
@@ -752,6 +773,15 @@ func decodeInto(path string, body []byte, out any) error {
 // raw issues a request and returns the response body for 2xx responses, or an
 // *APIError for any non-2xx response.
 func (c *Client) raw(ctx context.Context, method, path string, in any) ([]byte, error) {
+	return c.rawWithAccept(ctx, method, path, in, "application/json")
+}
+
+func (c *Client) rawWithAccept(
+	ctx context.Context,
+	method, path string,
+	in any,
+	accept string,
+) ([]byte, error) {
 	var reader io.Reader
 	if in != nil {
 		encoded, err := json.Marshal(in)
@@ -765,7 +795,7 @@ func (c *Client) raw(ctx context.Context, method, path string, in any) ([]byte, 
 	if err != nil {
 		return nil, fmt.Errorf("openmed: build %s request: %w", path, err)
 	}
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
