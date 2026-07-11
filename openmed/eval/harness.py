@@ -7,11 +7,13 @@ import hmac
 import inspect
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
+from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Mapping, Sequence
@@ -24,8 +26,10 @@ from openmed.eval.calibrate import load_calibration_thresholds
 from openmed.eval.metrics import (
     EvalSpan,
     compute_confidence_intervals,
+    compute_exact_span_f1,
     compute_latency_summary,
     compute_metrics_bundle,
+    compute_relaxed_span_f1,
     compute_resource_metrics,
     expected_calibration_error,
     normalize_eval_spans,
@@ -169,6 +173,30 @@ class BoundaryLeakageResult:
                 str(key): int(value)
                 for key, value in sorted(self.emitted_bytes_by_sink.items())
             },
+        }
+
+
+@dataclass(frozen=True)
+class TrainingEvalOverlapFinding:
+    """PHI-free evidence that an eval fixture overlaps a training manifest."""
+
+    fixture_id: str
+    benchmark: str
+    language: str
+    split: str
+    overlap_key: str
+    manifest_row_hash: str
+    manifest_line: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "benchmark": self.benchmark,
+            "fixture_id": self.fixture_id,
+            "language": self.language,
+            "manifest_line": int(self.manifest_line),
+            "manifest_row_hash": self.manifest_row_hash,
+            "overlap_key": self.overlap_key,
+            "split": self.split,
         }
 
 
@@ -1109,6 +1137,148 @@ def run_suite(
     return report
 
 
+def run_multilingual_ner_scorecard(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    suite: str = "multilingual-clinical-ner",
+    model_name: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    min_exact_span_f1: float = 0.85,
+    training_manifest_path: str | Path | None = None,
+) -> BenchmarkReport:
+    """Run multilingual clinical NER fixtures and emit sliced F1 scorecards.
+
+    The scorecard groups fixtures by benchmark and language, then computes
+    exact and relaxed span F1 using the shared metrics module. When a training
+    manifest is supplied, the report includes a PHI-free overlap check and the
+    gate fails if any eval fixture appears in the training inputs.
+    """
+
+    if not fixtures:
+        raise ValueError("multilingual NER scorecard requires at least one fixture")
+    _validate_unique_fixture_ids(fixtures)
+    model_runner = runner or _shared_default_model_runner()
+    results = _run_fixture_predictions(
+        fixtures,
+        model_runner=model_runner,
+        model_name=model_name,
+        device=device,
+    )
+    by_benchmark_language = _multilingual_group_rows(
+        fixtures,
+        results,
+        group_keys=("benchmark", "language"),
+    )
+    per_benchmark = _multilingual_group_rows(
+        fixtures,
+        results,
+        group_keys=("benchmark",),
+    )
+    per_language = _multilingual_group_rows(
+        fixtures,
+        results,
+        group_keys=("language",),
+    )
+    overlap_findings = (
+        check_training_manifest_overlap(fixtures, training_manifest_path)
+        if training_manifest_path is not None
+        else ()
+    )
+    gate_failures = _multilingual_gate_failures(
+        by_benchmark_language,
+        min_exact_span_f1=min_exact_span_f1,
+        overlap_findings=overlap_findings,
+    )
+    report_metadata = dict(metadata or {})
+    report_metadata.setdefault(
+        "fixture_ids", [fixture.fixture_id for fixture in fixtures]
+    )
+    report_metadata.setdefault(
+        "unmapped_labels", _unmapped_labels_by_benchmark(fixtures)
+    )
+    metrics = {
+        "gate": {
+            "failures": gate_failures,
+            "min_exact_span_f1": min_exact_span_f1,
+            "passed": not gate_failures,
+        },
+        "per_benchmark": per_benchmark,
+        "per_benchmark_language": by_benchmark_language,
+        "per_language": per_language,
+        "scorecard": by_benchmark_language,
+        "train_eval_overlap": {
+            "finding_count": len(overlap_findings),
+            "findings": [finding.to_dict() for finding in overlap_findings],
+            "manifest_path_hash": (
+                _hash_path(training_manifest_path)
+                if training_manifest_path is not None
+                else None
+            ),
+            "passed": not overlap_findings,
+        },
+        "unmapped_labels": _unmapped_labels_by_benchmark(fixtures),
+    }
+    return BenchmarkReport(
+        suite=suite,
+        model_name=model_name,
+        device=device,
+        fixture_count=len(fixtures),
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata=report_metadata,
+    )
+
+
+def check_training_manifest_overlap(
+    fixtures: Sequence[BenchmarkFixture],
+    manifest_path: str | Path,
+) -> tuple[TrainingEvalOverlapFinding, ...]:
+    """Flag PHI-free train/eval overlap against a JSON or JSONL manifest.
+
+    The checker compares text hashes and hashed record identifiers. Raw text,
+    spans, and manifest paths are not returned.
+    """
+
+    rows = _load_manifest_rows(manifest_path)
+    manifest_keys: dict[str, tuple[int, str]] = {}
+    for line_number, row in rows:
+        row_hash = _manifest_row_hash(row, line_number)
+        for key in _manifest_overlap_keys(row):
+            manifest_keys.setdefault(key, (line_number, row_hash))
+
+    findings: list[TrainingEvalOverlapFinding] = []
+    seen: set[tuple[str, str]] = set()
+    for fixture in fixtures:
+        benchmark = str(
+            fixture.metadata.get("benchmark") or fixture.metadata.get("dataset") or ""
+        )
+        split = str(fixture.metadata.get("split") or "")
+        for key in _fixture_overlap_keys(fixture):
+            match = manifest_keys.get(key)
+            if match is None:
+                continue
+            dedupe_key = (fixture.fixture_id, key)
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            line_number, row_hash = match
+            findings.append(
+                TrainingEvalOverlapFinding(
+                    fixture_id=fixture.fixture_id,
+                    benchmark=benchmark,
+                    language=fixture.language,
+                    split=split,
+                    overlap_key=key,
+                    manifest_row_hash=row_hash,
+                    manifest_line=line_number,
+                )
+            )
+    return tuple(findings)
+
+
 def run_cross_lingual_transfer(
     fixtures: Sequence[BenchmarkFixture],
     *,
@@ -1281,6 +1451,254 @@ def _coerce_federated_spec(
     if isinstance(detector, FederatedDetectorSpec):
         return detector
     return FederatedDetectorSpec(script_path=detector)
+
+
+def _run_fixture_predictions(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    model_runner: ModelRunner,
+    model_name: str,
+    device: str,
+) -> list[FixtureResult]:
+    results: list[FixtureResult] = []
+    for fixture in fixtures:
+        started = time.perf_counter()
+        raw_predictions = list(model_runner(fixture, model_name, device))
+        latency_ms = (time.perf_counter() - started) * 1000.0
+        predicted_spans = tuple(
+            normalize_eval_spans(
+                raw_predictions,
+                default_language=fixture.language,
+                default_device=device,
+                source_text=fixture.text,
+            )
+        )
+        validate_entity_spans(
+            [span.to_entity() for span in predicted_spans],
+            fixture.text,
+        )
+        results.append(
+            FixtureResult(
+                fixture_id=fixture.fixture_id,
+                predicted_spans=predicted_spans,
+                latency_ms=latency_ms,
+            )
+        )
+    return results
+
+
+def _multilingual_group_rows(
+    fixtures: Sequence[BenchmarkFixture],
+    results: Sequence[FixtureResult],
+    *,
+    group_keys: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, ...], list[BenchmarkFixture]] = defaultdict(list)
+    for fixture in fixtures:
+        grouped[_fixture_group_key(fixture, group_keys)].append(fixture)
+
+    result_by_id = {result.fixture_id: result for result in results}
+    rows: list[dict[str, Any]] = []
+    for key in sorted(grouped):
+        group_fixtures = grouped[key]
+        group_results = [
+            result_by_id[fixture.fixture_id]
+            for fixture in group_fixtures
+            if fixture.fixture_id in result_by_id
+        ]
+        gold, predicted, text = _corpus_coordinates(group_fixtures, group_results)
+        exact = compute_exact_span_f1(gold, predicted, source_text=text)
+        relaxed = compute_relaxed_span_f1(gold, predicted, source_text=text)
+        row = {
+            "exact_span_f1": exact.to_dict(),
+            "fixture_count": len(group_fixtures),
+            "precision": exact.precision,
+            "recall": exact.recall,
+            "relaxed_span_f1": relaxed.to_dict(),
+            "span_count": sum(len(fixture.gold_spans) for fixture in group_fixtures),
+        }
+        for name, value in zip(group_keys, key, strict=True):
+            row[name] = value
+        rows.append(row)
+    return rows
+
+
+def _fixture_group_key(
+    fixture: BenchmarkFixture,
+    group_keys: tuple[str, ...],
+) -> tuple[str, ...]:
+    values: list[str] = []
+    for key in group_keys:
+        if key == "benchmark":
+            values.append(
+                str(
+                    fixture.metadata.get("benchmark")
+                    or fixture.metadata.get("dataset")
+                    or "unknown"
+                )
+            )
+        elif key == "language":
+            values.append(str(fixture.language))
+        else:
+            values.append(str(fixture.metadata.get(key) or "unknown"))
+    return tuple(values)
+
+
+def _multilingual_gate_failures(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    min_exact_span_f1: float,
+    overlap_findings: Sequence[TrainingEvalOverlapFinding],
+) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    for row in rows:
+        exact = row.get("exact_span_f1")
+        f1 = exact.get("f1") if isinstance(exact, Mapping) else None
+        if f1 is not None and float(f1) < min_exact_span_f1:
+            failures.append(
+                {
+                    "benchmark": row.get("benchmark"),
+                    "f1": float(f1),
+                    "language": row.get("language"),
+                    "reason": "exact_span_f1_below_threshold",
+                    "threshold": min_exact_span_f1,
+                }
+            )
+    if overlap_findings:
+        failures.append(
+            {
+                "finding_count": len(overlap_findings),
+                "reason": "train_eval_overlap",
+            }
+        )
+    return failures
+
+
+def _unmapped_labels_by_benchmark(
+    fixtures: Sequence[BenchmarkFixture],
+) -> dict[str, list[str]]:
+    labels: defaultdict[str, set[str]] = defaultdict(set)
+    for fixture in fixtures:
+        benchmark = str(
+            fixture.metadata.get("benchmark") or fixture.metadata.get("dataset") or ""
+        )
+        metadata_labels = fixture.metadata.get("unmapped_labels") or ()
+        if isinstance(metadata_labels, str):
+            labels[benchmark].add(metadata_labels)
+        else:
+            labels[benchmark].update(str(label) for label in metadata_labels)
+        for span in fixture.gold_spans:
+            if span.metadata.get("unmapped_label"):
+                labels[benchmark].add(str(span.metadata.get("source_label") or ""))
+    return {
+        benchmark: sorted(label for label in values if label)
+        for benchmark, values in sorted(labels.items())
+        if values
+    }
+
+
+def _load_manifest_rows(path: str | Path) -> list[tuple[int, Mapping[str, Any]]]:
+    manifest_path = Path(path)
+    if manifest_path.suffix.lower() in {".jsonl", ".ndjson"}:
+        rows: list[tuple[int, Mapping[str, Any]]] = []
+        for line_number, line in enumerate(
+            manifest_path.read_text(encoding="utf-8").splitlines(),
+            start=1,
+        ):
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            if isinstance(payload, Mapping):
+                rows.append((line_number, payload))
+        return rows
+
+    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if isinstance(raw, Mapping):
+        values = (
+            raw.get("records")
+            or raw.get("documents")
+            or raw.get("rows")
+            or raw.get("examples")
+            or [raw]
+        )
+    else:
+        values = raw
+    if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
+        raise ValueError(f"training manifest must contain row objects: {path}")
+    return [
+        (index, row)
+        for index, row in enumerate(values, start=1)
+        if isinstance(row, Mapping)
+    ]
+
+
+def _manifest_overlap_keys(row: Mapping[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    for key in (
+        "content_hash",
+        "document_hash",
+        "sha256",
+        "source_hash",
+        "text_hash",
+    ):
+        value = row.get(key)
+        if isinstance(value, str) and value.strip():
+            keys.add(_hash_key(value))
+    text = row.get("text") or row.get("document_text") or row.get("note_text")
+    if isinstance(text, str) and text:
+        keys.add(_hash_text(text))
+    for key in ("fixture_id", "id", "record_id", "source_record_id"):
+        value = row.get(key)
+        if value is not None:
+            keys.add(_id_key(str(value)))
+    return keys
+
+
+def _fixture_overlap_keys(fixture: BenchmarkFixture) -> set[str]:
+    keys = {_hash_text(fixture.text), _id_key(fixture.fixture_id)}
+    text_hash = fixture.metadata.get("text_hash")
+    if isinstance(text_hash, str) and text_hash.strip():
+        keys.add(_hash_key(text_hash))
+    for key in ("source_record_id", "record_id", "document_id"):
+        value = fixture.metadata.get(key)
+        if value is not None:
+            keys.add(_id_key(str(value)))
+    return keys
+
+
+def _manifest_row_hash(row: Mapping[str, Any], line_number: int) -> str:
+    stable_row = {
+        str(key): value
+        for key, value in row.items()
+        if str(key).lower()
+        not in {"text", "document_text", "note", "note_text", "raw_text"}
+    }
+    if not stable_row:
+        stable_row = {"line": line_number}
+    return _hash_bytes(
+        json.dumps(stable_row, sort_keys=True, default=str).encode("utf-8")
+    )
+
+
+def _hash_key(value: str) -> str:
+    cleaned = value.strip().lower()
+    if cleaned.startswith("sha256:"):
+        return cleaned
+    if re.fullmatch(r"[0-9a-f]{64}", cleaned):
+        return f"sha256:{cleaned}"
+    return _hash_text(value)
+
+
+def _hash_text(value: str) -> str:
+    return _hash_bytes(value.encode("utf-8"))
+
+
+def _id_key(value: str) -> str:
+    return "id:" + _hash_text(value)
+
+
+def _hash_path(path: str | Path) -> str:
+    return _hash_bytes(str(Path(path).expanduser().resolve()).encode("utf-8"))
 
 
 def _run_federated_fixture(
@@ -2184,6 +2602,8 @@ __all__ = [
     "FixtureResult",
     "RelationFixtureResult",
     "SandboxViolation",
+    "TrainingEvalOverlapFinding",
+    "check_training_manifest_overlap",
     "load_fixtures",
     "default_model_runner",
     "run_federated_leakage_eval",
@@ -2191,5 +2611,6 @@ __all__ = [
     "run_relation_benchmark",
     "run_cross_lingual_transfer",
     "run_cross_lingual_transfer_suite",
+    "run_multilingual_ner_scorecard",
     "run_suite",
 ]
