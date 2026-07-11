@@ -35,6 +35,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
+from openmed.core.audit import stable_hash
+
 # Default keys, in priority order, used to pull an accuracy scalar out of a
 # ``BenchmarkReport.metrics`` bundle. All are "higher is better".
 DEFAULT_ACCURACY_KEYS: tuple[str, ...] = (
@@ -52,6 +54,23 @@ DEFAULT_LEAKAGE_KEYS: tuple[str, ...] = (
     "leakage",
 )
 
+_CONFIGURATION_ID_KEYS: tuple[str, ...] = (
+    "configuration_id",
+    "config_id",
+    "config_hash",
+)
+_SAFE_METADATA_METRIC_KEYS = frozenset({"accuracy_key", "leakage_key"})
+_SAFE_METADATA_HASH_KEYS = frozenset(
+    {
+        "additional_metadata_hash",
+        "benchmark_evidence_hash",
+        "configuration_hash",
+        "device_hash",
+        "model_hash",
+        "perf_evidence_hash",
+    }
+)
+
 
 @dataclass(frozen=True)
 class FrontierPoint:
@@ -63,17 +82,21 @@ class FrontierPoint:
         throughput: Documents processed per second (higher is better).
         accuracy: Quality metric such as span F1 or character recall in
             ``[0, 1]`` (higher is better).
+        accuracy_metric: Stable metric key defining what ``accuracy`` measures.
+            All points in one frontier must use exactly the same key.
         leakage: Measured leaked-character rate in ``[0, 1]`` (lower is better).
             This evidence is required so missing measurements cannot be treated
             as perfect zero leakage.
-        metadata: Optional provenance (model, threshold, quantization, batch,
-            device, tier, source report ids). Never holds raw PHI.
+        metadata: Optional provenance. Arbitrary metadata is represented only by
+            a deterministic hash; the allow-listed report-join provenance fields
+            contain metric keys or SHA-256 digests and never raw PHI.
     """
 
     label: str
     throughput: float
     accuracy: float
     leakage: float
+    accuracy_metric: str = "accuracy"
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -91,12 +114,15 @@ class FrontierPoint:
         )
         object.__setattr__(
             self,
+            "accuracy_metric",
+            _coerce_metric_key(self.accuracy_metric, field_name="accuracy_metric"),
+        )
+        object.__setattr__(
+            self,
             "leakage",
             _coerce_unit_interval(self.leakage, field_name="leakage"),
         )
-        if not isinstance(self.metadata, Mapping):
-            raise ValueError("metadata must be a mapping")
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        object.__setattr__(self, "metadata", _protect_metadata(self.metadata))
 
     def objectives(self) -> tuple[float, float, float]:
         """Return objectives as a maximization tuple ``(tput, acc, -leak)``."""
@@ -106,6 +132,7 @@ class FrontierPoint:
         """Return a JSON-serializable point dictionary with stable keys."""
         return {
             "accuracy": self.accuracy,
+            "accuracy_metric": self.accuracy_metric,
             "label": self.label,
             "leakage": self.leakage,
             "metadata": dict(self.metadata),
@@ -126,6 +153,9 @@ class FrontierPoint:
             field_name="throughput",
         )
         accuracy = _coerce_unit_interval(data.get("accuracy"), field_name="accuracy")
+        accuracy_metric = _coerce_metric_key(
+            data.get("accuracy_metric", "accuracy"), field_name="accuracy_metric"
+        )
         if data.get("leakage") is None:
             raise ValueError("leakage evidence is required")
         leakage = _coerce_unit_interval(data.get("leakage"), field_name="leakage")
@@ -137,6 +167,7 @@ class FrontierPoint:
             throughput=throughput,
             accuracy=accuracy,
             leakage=leakage,
+            accuracy_metric=accuracy_metric,
             metadata=dict(metadata),
         )
 
@@ -166,6 +197,15 @@ class FrontierReport:
     accuracy_metric: str = "accuracy"
     generated_at: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Normalize the metric identifier and protect report metadata."""
+        object.__setattr__(
+            self,
+            "accuracy_metric",
+            _coerce_metric_key(self.accuracy_metric, field_name="accuracy_metric"),
+        )
+        object.__setattr__(self, "metadata", _protect_metadata(self.metadata))
 
     @property
     def frontier(self) -> list[FrontierEntry]:
@@ -266,13 +306,13 @@ class FrontierReport:
             "",
             "| Field | Value |",
             "|---|---|",
-            f"| Accuracy Metric | `{self.accuracy_metric}` |",
+            f"| Accuracy Metric | {_markdown_code(self.accuracy_metric)} |",
             f"| Points | {len(self.entries)} |",
             f"| On Frontier | {len(self.frontier)} |",
             f"| Dominated | {len(self.dominated)} |",
         ]
         if self.generated_at is not None:
-            lines.append(f"| Generated At | `{self.generated_at}` |")
+            lines.append(f"| Generated At | {_markdown_code(self.generated_at)} |")
 
         lines.extend(
             [
@@ -287,9 +327,12 @@ class FrontierReport:
         for entry in self.entries:
             point = entry.point
             status = "yes" if entry.on_frontier else "no"
-            dominated_by = f"`{entry.dominated_by}`" if entry.dominated_by else ""
+            dominated_by = (
+                _markdown_code(entry.dominated_by) if entry.dominated_by else ""
+            )
             lines.append(
-                f"| `{point.label}` | {_format_number(point.throughput)} | "
+                f"| {_markdown_code(point.label)} | "
+                f"{_format_number(point.throughput)} | "
                 f"{_format_number(point.accuracy)} | "
                 f"{_format_number(point.leakage)} | {status} | {dominated_by} |"
             )
@@ -307,7 +350,7 @@ class FrontierReport:
 def frontier_report(
     points: Iterable[FrontierPoint | Mapping[str, Any]],
     *,
-    accuracy_metric: str = "accuracy",
+    accuracy_metric: str | None = None,
     generated_at: str | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> FrontierReport:
@@ -329,8 +372,9 @@ def frontier_report(
         points: Measured configuration points, either :class:`FrontierPoint`
             instances or JSON-compatible mappings (see
             :meth:`FrontierPoint.from_mapping`).
-        accuracy_metric: Human-readable name of the accuracy axis, recorded in
-            the report and used as the chart's y-axis label.
+        accuracy_metric: Exact metric key for the accuracy axis. When omitted,
+            it is inferred from the points. An explicit value must match every
+            point, preventing unlike metrics from being compared.
         generated_at: Optional ISO-8601 timestamp for the report.
         metadata: Optional report-level provenance.
 
@@ -353,6 +397,24 @@ def frontier_report(
             raise ValueError(f"duplicate point label: {point.label!r}")
         seen_labels.add(point.label)
 
+    point_metrics = {point.accuracy_metric for point in resolved}
+    if len(point_metrics) > 1:
+        raise ValueError(
+            "cannot compare unlike accuracy metrics: "
+            f"{', '.join(sorted(point_metrics))}"
+        )
+    inferred_metric = next(iter(point_metrics), "accuracy")
+    resolved_metric = (
+        inferred_metric
+        if accuracy_metric is None
+        else _coerce_metric_key(accuracy_metric, field_name="accuracy_metric")
+    )
+    if point_metrics and resolved_metric != inferred_metric:
+        raise ValueError(
+            "accuracy_metric does not match point metric: "
+            f"{resolved_metric!r} != {inferred_metric!r}"
+        )
+
     entries: list[FrontierEntry] = []
     for index, candidate in enumerate(resolved):
         dominators = [
@@ -374,9 +436,9 @@ def frontier_report(
 
     return FrontierReport(
         entries=entries,
-        accuracy_metric=accuracy_metric,
+        accuracy_metric=resolved_metric,
         generated_at=generated_at,
-        metadata=dict(metadata or {}),
+        metadata=metadata or {},
     )
 
 
@@ -396,9 +458,12 @@ def frontier_point_from_reports(
     is re-measured; this only reshapes numbers the harness already produced.
 
     Args:
-        perf: A ``PerfReport`` (or any object exposing ``docs_per_second``).
-        benchmark: A ``BenchmarkReport`` (or any object exposing a ``metrics``
-            mapping).
+        perf: A ``PerfReport`` (or compatible object) that identifies its model,
+            device, and configuration and exposes ``docs_per_second``.
+        benchmark: A ``BenchmarkReport`` (or compatible object) identifying the
+            same model, device, and configuration and exposing a ``metrics``
+            mapping. Configuration identity may be an attribute or a metadata
+            value named ``configuration_id``, ``config_id``, or ``config_hash``.
         label: Variant label; defaults to the benchmark/perf ``model_name``.
         accuracy_keys: Dotted metric keys tried in order for the accuracy scalar.
         leakage_keys: Dotted metric keys tried in order for the leakage scalar.
@@ -407,8 +472,8 @@ def frontier_point_from_reports(
         A :class:`FrontierPoint` combining the two reports.
 
     Raises:
-        ValueError: If required evidence or a stable label is missing, or if a
-            measured value is invalid.
+        ValueError: If report identity or required evidence is missing or
+            mismatched, a stable label is missing, or a measured value is invalid.
     """
     throughput = _coerce_nonnegative(
         getattr(perf, "docs_per_second", None), field_name="docs_per_second"
@@ -430,29 +495,118 @@ def frontier_point_from_reports(
             f"{list(leakage_keys)}"
         )
 
+    perf_identity = _report_identity(perf, source="perf")
+    benchmark_identity = _report_identity(benchmark, source="benchmark")
+    identity_fields = ("model_name", "device", "configuration_id")
+    mismatches = [
+        field_name
+        for field_name in identity_fields
+        if perf_identity[field_name] != benchmark_identity[field_name]
+    ]
+    if mismatches:
+        raise ValueError(
+            f"perf and benchmark report identity mismatch for: {', '.join(mismatches)}"
+        )
+
     resolved_label = label
     if resolved_label is None:
-        resolved_label = getattr(benchmark, "model_name", None)
-    if resolved_label is None:
-        resolved_label = getattr(perf, "model_name", None)
-    if resolved_label is None:
-        raise ValueError("label is required when reports have no model_name")
+        resolved_label = benchmark_identity["model_name"]
 
-    metadata: dict[str, Any] = {"accuracy_key": accuracy_key}
-    metadata["leakage_key"] = leakage_key
-    for source, obj in (("perf", perf), ("benchmark", benchmark)):
-        for attr in ("model_name", "device", "tier", "canonical_tier", "suite"):
-            value = getattr(obj, attr, None)
-            if value is not None:
-                metadata[f"{source}_{attr}"] = value
+    resolved_accuracy_key = _coerce_metric_key(accuracy_key, field_name="accuracy_key")
+    resolved_leakage_key = _coerce_metric_key(leakage_key, field_name="leakage_key")
+    identity = {field_name: perf_identity[field_name] for field_name in identity_fields}
+    metadata: dict[str, Any] = {
+        "accuracy_key": resolved_accuracy_key,
+        "benchmark_evidence_hash": stable_hash(
+            {
+                **identity,
+                "accuracy": accuracy_value,
+                "accuracy_key": resolved_accuracy_key,
+                "leakage": leakage_value,
+                "leakage_key": resolved_leakage_key,
+            }
+        ),
+        "configuration_hash": stable_hash(
+            {"configuration_id": identity["configuration_id"]}
+        ),
+        "device_hash": stable_hash({"device": identity["device"]}),
+        "leakage_key": resolved_leakage_key,
+        "model_hash": stable_hash({"model_name": identity["model_name"]}),
+        "perf_evidence_hash": stable_hash({**identity, "docs_per_second": throughput}),
+    }
 
     return FrontierPoint(
         label=resolved_label,
         throughput=throughput,
         accuracy=accuracy_value,
         leakage=leakage_value,
+        accuracy_metric=resolved_accuracy_key,
         metadata=metadata,
     )
+
+
+def _report_identity(report: Any, *, source: str) -> dict[str, str]:
+    """Return the complete identity required to join measured reports."""
+    model_name = _required_identity_value(
+        getattr(report, "model_name", None),
+        field_name=f"{source}.model_name",
+    )
+    device = _required_identity_value(
+        getattr(report, "device", None),
+        field_name=f"{source}.device",
+    )
+    configuration_id = _report_configuration_id(report, source=source)
+    return {
+        "configuration_id": configuration_id,
+        "device": device,
+        "model_name": model_name,
+    }
+
+
+def _report_configuration_id(report: Any, *, source: str) -> str:
+    """Resolve one unambiguous configuration id from a report."""
+    candidates: list[str] = []
+    for key in _CONFIGURATION_ID_KEYS:
+        value = getattr(report, key, None)
+        if value is not None:
+            candidates.append(
+                _required_identity_value(value, field_name=f"{source}.{key}")
+            )
+
+    metadata = getattr(report, "metadata", {})
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, Mapping):
+        raise ValueError(f"{source}.metadata must be a mapping")
+    for key in _CONFIGURATION_ID_KEYS:
+        value = metadata.get(key)
+        if value is not None:
+            candidates.append(
+                _required_identity_value(
+                    value,
+                    field_name=f"{source}.metadata.{key}",
+                )
+            )
+
+    unique = set(candidates)
+    if not unique:
+        raise ValueError(
+            f"{source} report requires configuration identity under one of: "
+            f"{', '.join(_CONFIGURATION_ID_KEYS)}"
+        )
+    if len(unique) > 1:
+        raise ValueError(f"{source} report has conflicting configuration identities")
+    return unique.pop()
+
+
+def _required_identity_value(value: Any, *, field_name: str) -> str:
+    """Return a non-empty report identity value without normalizing semantics."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} must be a non-empty string")
+    result = value.strip()
+    if "\n" in result or "\r" in result:
+        raise ValueError(f"{field_name} must not contain line breaks")
+    return result
 
 
 def _dominates(better: FrontierPoint, worse: FrontierPoint) -> bool:
@@ -545,6 +699,97 @@ def _coerce_label(value: Any) -> str:
     if "\n" in label or "\r" in label:
         raise ValueError("label must not contain line breaks")
     return label
+
+
+def _coerce_metric_key(value: Any, *, field_name: str) -> str:
+    """Return a conservative metric identifier safe for report serialization."""
+    if not isinstance(value, str):
+        raise ValueError(f"{field_name} must be a non-empty metric key")
+    key = value.strip()
+    allowed = frozenset(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+    )
+    if not key or len(key) > 128 or any(char not in allowed for char in key):
+        raise ValueError(
+            f"{field_name} must use only letters, numbers, '.', '_', or '-'"
+        )
+    return key
+
+
+def _protect_metadata(metadata: Mapping[str, Any]) -> dict[str, Any]:
+    """Allow-list safe provenance and hash every other metadata field."""
+    if not isinstance(metadata, Mapping):
+        raise ValueError("metadata must be a mapping")
+
+    protected: dict[str, Any] = {}
+    additional: dict[str, Any] = {}
+    for key, value in metadata.items():
+        if not isinstance(key, str):
+            raise ValueError("metadata keys must be strings")
+        if key in _SAFE_METADATA_METRIC_KEYS:
+            protected[key] = _coerce_metric_key(value, field_name=f"metadata.{key}")
+        elif key in _SAFE_METADATA_HASH_KEYS:
+            protected[key] = _coerce_sha256(value, field_name=f"metadata.{key}")
+        else:
+            additional[key] = _json_hash_material(value, path=f"metadata.{key}")
+
+    if additional:
+        previous_hash = protected.pop("additional_metadata_hash", None)
+        material: dict[str, Any] = {"metadata": additional}
+        if previous_hash is not None:
+            material["previous_hash"] = previous_hash
+        protected["additional_metadata_hash"] = stable_hash(material)
+    return protected
+
+
+def _json_hash_material(value: Any, *, path: str) -> Any:
+    """Validate and normalize metadata into deterministic JSON hash material."""
+    if value is None or isinstance(value, (bool, int, str)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{path} must contain only finite JSON values")
+        return value
+    if isinstance(value, Mapping):
+        result: dict[str, Any] = {}
+        for key, child in value.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{path} keys must be strings")
+            result[key] = _json_hash_material(child, path=f"{path}.{key}")
+        return result
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [
+            _json_hash_material(child, path=f"{path}[{index}]")
+            for index, child in enumerate(value)
+        ]
+    raise ValueError(f"{path} must be JSON-serializable")
+
+
+def _coerce_sha256(value: Any, *, field_name: str) -> str:
+    """Require a canonical SHA-256 digest for safe provenance metadata."""
+    if not isinstance(value, str) or not value.startswith("sha256:"):
+        raise ValueError(f"{field_name} must be a SHA-256 digest")
+    digest = value.removeprefix("sha256:")
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        raise ValueError(f"{field_name} must be a SHA-256 digest")
+    return value
+
+
+def _markdown_code(value: Any) -> str:
+    """Render one table-safe inline-code span, including pipes and backticks."""
+    text = str(value).replace("\r", " ").replace("\n", " ").replace("|", r"\|")
+    longest_run = 0
+    current_run = 0
+    for char in text:
+        if char == "`":
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+    fence = "`" * (longest_run + 1)
+    if text.startswith(("`", " ")) or text.endswith(("`", " ")):
+        text = f" {text} "
+    return f"{fence}{text}{fence}"
 
 
 def _format_number(value: float) -> str:
