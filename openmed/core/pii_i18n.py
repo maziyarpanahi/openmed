@@ -382,6 +382,49 @@ def validate_aadhaar(text: str) -> bool:
     return c == 0
 
 
+_CHINESE_RESIDENT_ID_WEIGHTS = (7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2)
+_CHINESE_RESIDENT_ID_CHECK_DIGITS = "10X98765432"
+
+
+def validate_chinese_resident_identity_card(text: str) -> bool:
+    """Validate a mainland China 18-digit resident identity card number.
+
+    The second-generation resident identity card stores a six-digit address
+    code, an eight-digit Gregorian birth date, a three-digit sequence, and a
+    MOD 11-2 checksum digit. OpenMed validates only these offline structural
+    and checksum properties; it does not bundle or query a region registry.
+    """
+    cleaned = re.sub(r"[\s-]", "", text).upper()
+    if re.fullmatch(r"\d{17}[\dX]", cleaned) is None:
+        return False
+
+    if cleaned[:6] == "000000":
+        return False
+
+    try:
+        year = int(cleaned[6:10])
+        month = int(cleaned[10:12])
+        day = int(cleaned[12:14])
+    except ValueError:
+        return False
+
+    import calendar
+
+    if month < 1 or month > 12 or day < 1:
+        return False
+    try:
+        if day > calendar.monthrange(year, month)[1]:
+            return False
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+    total = sum(
+        int(digit) * weight
+        for digit, weight in zip(cleaned[:17], _CHINESE_RESIDENT_ID_WEIGHTS)
+    )
+    return cleaned[-1] == _CHINESE_RESIDENT_ID_CHECK_DIGITS[total % 11]
+
+
 def validate_portuguese_cpf(text: str) -> bool:
     """Validate Brazilian CPF number.
 
