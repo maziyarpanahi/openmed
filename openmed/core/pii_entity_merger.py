@@ -826,14 +826,28 @@ def merge_entities_with_semantic_units(
                 # Unvalidated: 90% model, 10% pattern
                 final_confidence = (0.9 * model_avg_confidence) + (0.1 * unit_score)
 
+            # Semantic patterns may expand a fragmented model span, but they
+            # must never shrink away any text the model already classified as
+            # PII. Use the union of the regex unit and every overlapping model
+            # entity so a narrower semantic submatch (for example a postcode
+            # inside an MRN) cannot create a raw-identifier leak.
+            merged_start = min(
+                unit_start,
+                *(int(entity["start"]) for entity in overlapping_entities),
+            )
+            merged_end = max(
+                unit_end,
+                *(int(entity["end"]) for entity in overlapping_entities),
+            )
+
             # Create merged entity
             merged.append(
                 {
                     "entity_type": final_label,
                     "score": final_confidence,
-                    "start": unit_start,
-                    "end": unit_end,
-                    "word": text[unit_start:unit_end],
+                    "start": merged_start,
+                    "end": merged_end,
+                    "word": text[merged_start:merged_end],
                     "merged_from": len(overlapping),
                 }
             )
@@ -858,9 +872,70 @@ def merge_entities_with_semantic_units(
         if i not in used_entities:
             merged.append(entity)
 
-    # Sort by start position
-    merged.sort(key=lambda x: x["start"])
-    return merged
+    return _coalesce_overlapping_merged_entities(merged, text)
+
+
+def _coalesce_overlapping_merged_entities(
+    entities: List[Dict[str, Any]],
+    text: str,
+) -> List[Dict[str, Any]]:
+    """Union transitive overlaps without losing any detected source text.
+
+    Separate, non-overlapping semantic units can both overlap the same wider
+    model span. After semantic expansion that produces overlapping output
+    entities; simply choosing one would discard model-detected text. Collapse
+    each transitive overlap cluster to its full union before downstream
+    arbitration so every contributing detection remains covered.
+    """
+    if not entities:
+        return []
+
+    ordered = sorted(entities, key=lambda entity: (entity["start"], entity["end"]))
+    clusters: List[List[Dict[str, Any]]] = []
+    current = [ordered[0]]
+    current_end = int(ordered[0]["end"])
+    for entity in ordered[1:]:
+        start = int(entity["start"])
+        end = int(entity["end"])
+        if start < current_end:
+            current.append(entity)
+            current_end = max(current_end, end)
+            continue
+        clusters.append(current)
+        current = [entity]
+        current_end = end
+    clusters.append(current)
+
+    result: List[Dict[str, Any]] = []
+    for cluster in clusters:
+        if len(cluster) == 1:
+            result.append(cluster[0])
+            continue
+
+        start = min(int(entity["start"]) for entity in cluster)
+        end = max(int(entity["end"]) for entity in cluster)
+        winner = max(
+            cluster,
+            key=lambda entity: (
+                int(entity["end"]) - int(entity["start"]),
+                float(entity.get("score", 0.0)),
+                str(entity.get("entity_type", "")),
+            ),
+        )
+        result.append(
+            {
+                "entity_type": winner["entity_type"],
+                "score": max(float(entity.get("score", 0.0)) for entity in cluster),
+                "start": start,
+                "end": end,
+                "word": text[start:end],
+                "merged_from": sum(
+                    max(int(entity.get("merged_from", 1)), 1) for entity in cluster
+                ),
+            }
+        )
+
+    return result
 
 
 def normalize_label(label: str) -> str:

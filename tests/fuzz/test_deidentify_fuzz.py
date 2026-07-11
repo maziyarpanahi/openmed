@@ -216,6 +216,22 @@ def _assert_span_invariants(entities, text: str) -> None:
         prev_end = end
 
 
+def _assert_planted_spans_covered(
+    entities, text: str, planted: Sequence[tuple[str, str]]
+) -> None:
+    """Assert every planted identifier is covered by a retained entity span."""
+    for _, value in planted:
+        start = text.index(value)
+        end = start + len(value)
+        assert any(
+            entity.start is not None
+            and entity.end is not None
+            and entity.start <= start
+            and entity.end >= end
+            for entity in entities
+        ), f"planted identifier {value!r} was not covered by a retained span"
+
+
 @given(doc=planted_documents())
 def test_deidentify_mask_invariants(doc):
     """Masking arbitrary planted documents preserves every structural invariant
@@ -235,11 +251,16 @@ def test_deidentify_mask_invariants(doc):
     assert isinstance(result.deidentified_text, str)
 
     _assert_span_invariants(result.pii_entities, result.original_text)
+    _assert_planted_spans_covered(
+        result.pii_entities,
+        result.original_text,
+        planted,
+    )
 
     # Leakage-first invariant: no planted identifier survives verbatim.
-    for ent in result.pii_entities:
-        assert ent.text not in result.deidentified_text, (
-            f"raw identifier {ent.text!r} leaked into masked output"
+    for _, value in planted:
+        assert value not in result.deidentified_text, (
+            f"raw identifier {value!r} leaked into masked output"
         )
 
 
@@ -255,6 +276,7 @@ def test_extract_pii_span_invariants(doc):
             confidence_threshold=0.5,
         )
     _assert_span_invariants(result.entities, result.text)
+    _assert_planted_spans_covered(result.entities, result.text, planted)
     for ent in result.entities:
         assert result.text[ent.start : ent.end] == ent.text
 
@@ -339,6 +361,17 @@ def test_deidentify_keep_mapping_reidentify_inverse(doc):
             use_safety_sweep=False,
         )
     assert result.mapping is not None
+    _assert_planted_spans_covered(
+        result.pii_entities,
+        result.original_text,
+        planted,
+    )
+    mapped_values = tuple(result.mapping.values())
+    for _, value in planted:
+        assert value not in result.deidentified_text
+        assert any(value in mapped_value for mapped_value in mapped_values), (
+            f"planted identifier {value!r} was not covered by the reversible mapping"
+        )
     restored = reidentify(result.deidentified_text, result.mapping)
     assert restored == result.original_text == text
 
@@ -359,6 +392,11 @@ def test_deidentify_long_input_preserves_offsets_and_never_leaks(doc):
 
     assert result.original_text == text
     _assert_span_invariants(result.pii_entities, result.original_text)
+    _assert_planted_spans_covered(
+        result.pii_entities,
+        result.original_text,
+        planted,
+    )
     for _, value in planted:
         assert value not in result.deidentified_text
 
