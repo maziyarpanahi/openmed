@@ -59,6 +59,61 @@ def test_loaders_parse_synthetic_smoke_fixtures() -> None:
             assert span.metadata["unmapped_label"] is False
 
 
+def test_cmeee_parses_native_inclusive_offsets() -> None:
+    result = load_cmeee(_path(CMEEE), allow_repo_path=True)
+    record = result.records[0]
+
+    assert [(span.start, span.end) for span in record.spans] == [(6, 8), (10, 14)]
+    assert [span.source_label for span in record.spans] == ["dis", "dru"]
+    assert [span.text for span in record.spans] == ["肺炎", "阿莫西林"]
+
+
+def test_cmeee_rejects_native_entity_offset_mismatch(tmp_path: Path) -> None:
+    payload = {
+        "id": "cmeee-mismatch",
+        "text": "肺炎与胃炎",
+        "entities": [{"start_idx": 3, "end_idx": 4, "type": "dis", "entity": "肺炎"}],
+    }
+    path = tmp_path / "cmeee.json"
+    path.write_text(json.dumps([payload]), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="span text mismatch"):
+        load_cmeee(path)
+
+
+def test_cmeee_rejects_incomplete_native_offsets(tmp_path: Path) -> None:
+    payload = {
+        "id": "cmeee-incomplete",
+        "text": "肺炎",
+        "entities": [{"start_idx": 0, "type": "dis", "entity": "肺炎"}],
+    }
+    path = tmp_path / "cmeee.jsonl"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="integer start_idx and end_idx"):
+        load_cmeee(path)
+
+
+def test_generic_loader_rejects_mismatched_duplicate_mention(tmp_path: Path) -> None:
+    payload = {
+        "id": "pharmaconer-ambiguous",
+        "text": "aspirin then aspirin",
+        "spans": [
+            {
+                "start": 1,
+                "end": 8,
+                "label": "medication",
+                "text": "aspirin",
+            }
+        ],
+    }
+    path = tmp_path / "pharmaconer.jsonl"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="span text mismatch"):
+        load_pharmaconer(path)
+
+
 def test_loaders_require_explicit_external_paths() -> None:
     for loader in _loaders().values():
         with pytest.raises(MultilingualNerCorpusRequired, match="explicit local"):
