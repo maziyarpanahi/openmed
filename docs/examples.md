@@ -56,6 +56,14 @@ complete highlight. The source text is always HTML-escaped, so brackets and
 ampersands in clinical notes cannot break the view. Recipe 5 in
 `Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end.
 
+The widget intentionally renders its source text, and notebook outputs can be
+stored inside the `.ipynb` file. Use only authorized or synthetic text, clear
+outputs before sharing a notebook, and pass `show_confidence=False` when scores
+should not be persisted. Automatic rich representations suppress confidence
+scores by default. The generated fragment is script-free and makes no network
+requests; semantic `pre`/`mark` elements preserve readable text when a strict
+content-security policy blocks the optional inline styling.
+
 ## Scripts & tools
 
 | Path | What it does |

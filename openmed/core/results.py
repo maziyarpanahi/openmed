@@ -94,11 +94,16 @@ class AnalyzeResult(Mapping[str, Any]):
         """Render a highlighted-span HTML view for Jupyter/IPython notebooks.
 
         IPython calls this automatically to display the result inline. The
-        helper is imported lazily so importing this module never requires the
-        display dependencies.
+        implicit representation suppresses confidence values; callers can opt
+        into them explicitly with :func:`openmed.processing.show`. The helper is
+        imported lazily so importing this module never requires display
+        dependencies.
         """
         from ..processing.display import render_spans_html
 
         return render_spans_html(
-            self.text, self.entities, title=f"analyze_text · {self.model}"
+            self.text,
+            self.entities,
+            title=f"analyze_text · {self.model}",
+            show_confidence=False,
         )
