@@ -18,6 +18,7 @@ Health identifiers for HIPAA cross-map consumers:
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Dict, List, Optional, Set
 
 from .anonymizer.providers.clinical_ids import (
@@ -51,6 +52,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
     "id",
     "th",
     "ko",
+    "ro",
 }
 
 # Languages with validator-backed national-ID coverage but no bundled default
@@ -74,6 +76,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "id": "Indonesian",
     "th": "Thai",
     "ko": "Korean",
+    "ro": "Romanian",
 }
 
 LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
@@ -93,6 +96,7 @@ LANGUAGE_MODEL_PREFIX: Dict[str, str] = {
     "id": "Indonesian-",
     "th": "Thai-",
     "ko": "Korean-",
+    "ro": "Romanian-",
 }
 
 DEFAULT_PII_MODELS: Dict[str, str] = {
@@ -112,6 +116,7 @@ DEFAULT_PII_MODELS: Dict[str, str] = {
     "id": "OpenMed/privacy-filter-multilingual",
     "th": "OpenMed/privacy-filter-multilingual",
     "ko": "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1",
+    "ro": "OpenMed/privacy-filter-multilingual",
 }
 
 
@@ -1039,6 +1044,96 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     return False
 
 
+# Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
+# Bucharest, and its sectors; 51-52 cover Calarasi and Giurgiu. Current SIIEASC
+# issuance uses 70 nationwide. Codes 47-50 are unassigned and must not be
+# accepted as a numeric range shortcut.
+_ROMANIAN_CNP_COUNTY_CODES: frozenset[int] = frozenset(set(range(1, 47)) | {51, 52, 70})
+
+# Documented CNP control-digit weights ("279146358279").
+_ROMANIAN_CNP_WEIGHTS: tuple[int, ...] = (2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9)
+
+# CNP first digit (S) encodes century and gender.
+_ROMANIAN_CNP_CENTURY: Dict[int, int] = {
+    1: 1900,  # male, 1900-1999
+    2: 1900,  # female, 1900-1999
+    3: 1800,  # male, 1800-1899
+    4: 1800,  # female, 1800-1899
+    5: 2000,  # male, 2000-2099
+    6: 2000,  # female, 2000-2099
+}
+
+
+def validate_romanian_cnp(text: str) -> bool:
+    """Validate a Romanian CNP (Cod Numeric Personal).
+
+    The CNP is a 13-digit national identifier with the layout
+    ``S YY MM DD JJ NNN C``:
+
+    - ``S``: documented century and gender code (1-6). Codes 1/3/5 are male
+      and 2/4/6 female; 1/2 map to the 1900s, 3/4 to the 1800s, and 5/6 to
+      the 2000s.
+    - ``YYMMDD``: non-future date of birth. The century is taken from ``S``.
+    - ``JJ``: legacy county/sector code 01-46 or 51-52, or the current
+      nationwide SIIEASC sequence code 70. Unassigned codes 47-50 are invalid.
+    - ``NNN``: non-zero sequence number.
+    - ``C``: control digit, computed as the sum of the first twelve digits
+      weighted by the documented constant ``279146358279`` taken modulo 11.
+      A remainder of 10 maps to a control digit of 1.
+
+    Args:
+        text: CNP string containing exactly 13 ASCII digits. Surrounding
+            whitespace is ignored, but internal separators are invalid.
+
+    Returns:
+        True if the CNP has a valid structure, birth date, county code, and
+        control digit.
+    """
+    if not isinstance(text, str):
+        return False
+    digits = text.strip()
+    if re.fullmatch(r"[0-9]{13}", digits) is None:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+
+    # --- century/gender code ---
+    gender_code = numbers[0]
+    if gender_code not in _ROMANIAN_CNP_CENTURY:
+        return False
+    century = _ROMANIAN_CNP_CENTURY[gender_code]
+
+    # --- embedded birth date ---
+    year = century + numbers[1] * 10 + numbers[2]
+    month = numbers[3] * 10 + numbers[4]
+    day = numbers[5] * 10 + numbers[6]
+
+    try:
+        birth_date = date(year, month, day)
+    except ValueError:
+        return False
+    if birth_date > date.today():
+        return False
+
+    # --- county code ---
+    county = numbers[7] * 10 + numbers[8]
+    if county not in _ROMANIAN_CNP_COUNTY_CODES:
+        return False
+
+    # --- non-zero sequence number ---
+    serial = numbers[9] * 100 + numbers[10] * 10 + numbers[11]
+    if serial == 0:
+        return False
+
+    # --- control digit ---
+    total = sum(w * n for w, n in zip(_ROMANIAN_CNP_WEIGHTS, numbers[:12]))
+    control = total % 11
+    if control == 10:
+        control = 1
+
+    return numbers[12] == control
+
+
 # ---------------------------------------------------------------------------
 # Language-specific month names (for date parsing/formatting)
 # ---------------------------------------------------------------------------
@@ -1281,6 +1376,20 @@ LANGUAGE_MONTH_NAMES: Dict[str, List[str]] = {
         "10\uc6d4",
         "11\uc6d4",
         "12\uc6d4",
+    ],
+    "ro": [
+        "ianuarie",
+        "februarie",
+        "martie",
+        "aprilie",
+        "mai",
+        "iunie",
+        "iulie",
+        "august",
+        "septembrie",
+        "octombrie",
+        "noiembrie",
+        "decembrie",
     ],
 }
 
@@ -3473,6 +3582,134 @@ _DANISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_ROMANIAN_MONTH_PATTERN = (
+    r"ianuarie|februarie|martie|aprilie|mai|iunie|iulie|august|"
+    r"septembrie|octombrie|noiembrie|decembrie"
+)
+
+_ROMANIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Romanian dates DD.MM.YYYY (also tolerate / or - separators).
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "data",
+            "nascut",
+            "născut",
+            "nascuta",
+            "născută",
+            "data nasterii",
+            "data nașterii",
+            "internat",
+            "externat",
+            "decedat",
+        ],
+        context_boost=0.3,
+    ),
+    # Romanian dates with month names ("12 martie 1985").
+    PIIPattern(
+        rf"\b\d{{1,2}}\s+(?:{_ROMANIAN_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "data",
+            "nascut",
+            "născut",
+            "nascuta",
+            "născută",
+            "data nasterii",
+            "data nașterii",
+            "internat",
+            "externat",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Romanian mobile / landline numbers: +40 or national 0 prefix.
+    PIIPattern(
+        r"(?<!\w)(?:\+40[\s.-]?|0)7\d{2}[\s.-]?\d{3}[\s.-]?\d{3}\b"
+        r"|(?<!\w)(?:\+40[\s.-]?|0)\d{2}[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telefon",
+            "tel",
+            "mobil",
+            "contact",
+            "gsm",
+        ],
+        context_boost=0.35,
+    ),
+    # CNP (13-digit Cod Numeric Personal), guarded by the checksum validator.
+    PIIPattern(
+        r"\b\d{13}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "cnp",
+            "cod numeric personal",
+            "cnp:",
+            "act de identitate",
+            "buletin",
+            "carte de identitate",
+        ],
+        context_boost=0.4,
+        validator=validate_romanian_cnp,
+    ),
+    # Romanian street addresses ("Str. Mihai Eminescu 12"). Accept modern
+    # comma-below, legacy cedilla, and decomposed combining-mark spellings.
+    PIIPattern(
+        r"\b(?:Str\.?|Strada|Bd\.?|Bdul|Bulevardul|Calea|Aleea|"
+        r"(?:[SȘŞ]|S[\u0326\u0327])oseaua|Splaiul|"
+        r"Pia(?:[TȚŢ]|T[\u0326\u0327])a|Intrarea)\s+"
+        r"[^\W\d_](?:[\u0300-\u036f])?"
+        r"(?:[^\W_]|[\u0300-\u036f .'-]){1,60}\s+"
+        r"(?:nr\.?\s*)?\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adresa",
+            "adresă",
+            "domiciliu",
+            "strada",
+            "resedinta",
+            "reședința",
+            "reşedinţa",
+            "res\u0326edint\u0326a",
+            "res\u0327edint\u0327a",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Romanian postal codes: six contiguous digits.
+    PIIPattern(
+        r"(?<!\d)\d{6}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "cod postal",
+            "cod poștal",
+            "cod poştal",
+            "cod pos\u0326tal",
+            "cod pos\u0327tal",
+            "cp",
+            "adresa",
+            "adresă",
+            "adresa\u0306",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+    ),
+]
+
+
 _SLOVAK_MONTH_PATTERN = (
     r"janu[aá]r(?:a)?|febru[aá]r(?:a)?|marec|marca|apr[ií]l(?:a)?|"
     r"m[aá]j(?:a)?|j[uú]n(?:a)?|j[uú]l(?:a)?|august(?:a)?|"
@@ -3605,6 +3842,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
+    "ro": _ROMANIAN_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -4088,6 +4326,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["\uc11c\uc6b8", "\ubd80\uc0b0", "\uc778\ucc9c"],
         "ZIPCODE": ["01007", "46007", "21307"],
+    },
+    "ro": {
+        "NAME": [
+            "Ana Popescu",
+            "Ion Ionescu",
+            "Maria Dumitru",
+            "Andrei Popa",
+        ],
+        "FIRST_NAME": ["Ana", "Ion", "Maria", "Andrei"],
+        "LAST_NAME": ["Popescu", "Ionescu", "Dumitru", "Popa"],
+        "EMAIL": ["pacient@exemplu.ro", "contact@exemplu.org"],
+        "PHONE": ["+40 721 234 567", "0721 234 567", "+40 21 123 4567"],
+        "ID_NUM": ["1800101400181", "2990312072589"],
+        "STREET_ADDRESS": ["Str. Mihai Eminescu 12", "Bd. Unirii 45"],
+        "URL_PERSONAL": ["https://exemplu.ro"],
+        "USERNAME": ["pacient123", "utilizator456"],
+        "DATE": ["01.01.2000", "12 martie 1985"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
+        "ZIPCODE": ["010011", "400001", "300001"],
     },
 }
 

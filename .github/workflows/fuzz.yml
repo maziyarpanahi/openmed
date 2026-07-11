@@ -1,0 +1,43 @@
+name: Fuzz
+
+on:
+  schedule:
+    # Nightly heavier property-based fuzz sweep (03:17 UTC).
+    - cron: "17 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-nightly:
+    # Keep the expensive profile out of push and pull-request workflows. The
+    # bounded profile still runs with the ordinary test suite in CI.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.11"
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
+    - name: Install dependencies
+      run: |
+        uv sync --frozen --extra dev --python 3.11
+
+    - name: Run nightly fuzz sweep
+      env:
+        HYPOTHESIS_PROFILE: fuzz-nightly
+      run: |
+        uv run pytest tests/fuzz -q -m fuzz
