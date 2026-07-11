@@ -32,6 +32,33 @@ CRITICAL_ABSTENTION_LABELS = frozenset(
         "BIC",
     }
 )
+CRITICAL_FINDING_CATEGORY_DIAGNOSIS = "critical_diagnosis"
+CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY = "drug_allergy"
+CRITICAL_FINDING_CATEGORY_RESULT = "critical_result"
+CRITICAL_FINDING_CATEGORIES: tuple[str, ...] = (
+    CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    CRITICAL_FINDING_CATEGORY_RESULT,
+)
+_CRITICAL_FINDING_CATEGORY_ALIASES = {
+    "diagnosis": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "critical_diagnosis": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "condition": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "critical_condition": CRITICAL_FINDING_CATEGORY_DIAGNOSIS,
+    "allergy": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    "drug_allergy": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    "medication_allergy": CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY,
+    "result": CRITICAL_FINDING_CATEGORY_RESULT,
+    "critical_result": CRITICAL_FINDING_CATEGORY_RESULT,
+    "lab_result": CRITICAL_FINDING_CATEGORY_RESULT,
+    "critical_lab": CRITICAL_FINDING_CATEGORY_RESULT,
+}
+_CRITICAL_FINDING_CATEGORY_KEYS = (
+    "critical_finding_category",
+    "critical_category",
+    "critical_finding_type",
+)
+_CRITICAL_FINDING_MARKER_KEYS = ("critical_finding", "critical", "must_not_miss")
 
 
 @dataclass(frozen=True)
@@ -247,6 +274,56 @@ class RecallSlices:
             "by_device": self.by_device,
             "covered_chars": self.covered_chars,
             "total_chars": self.total_chars,
+        }
+
+    def __getitem__(self, key: str) -> Any:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class CriticalFindingMiss:
+    """PHI-free detail for one missed critical clinical finding."""
+
+    category: str
+    fixture_id: str
+    start: int
+    end: int
+    label: str
+
+    def to_dict(self) -> dict[str, int | str]:
+        return {
+            "category": self.category,
+            "fixture_id": self.fixture_id,
+            "start": int(self.start),
+            "end": int(self.end),
+            "label": self.label,
+        }
+
+    def __getitem__(self, key: str) -> int | str:
+        return self.to_dict()[key]
+
+
+@dataclass(frozen=True)
+class CriticalFindingRecallMetrics:
+    """Span recall over gold spans marked as critical clinical findings."""
+
+    overall: float
+    by_category: dict[str, float]
+    covered: int
+    total: int
+    covered_by_category: dict[str, int]
+    total_by_category: dict[str, int]
+    missed_findings: tuple[CriticalFindingMiss, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "overall": self.overall,
+            "by_category": self.by_category,
+            "covered": int(self.covered),
+            "total": int(self.total),
+            "covered_by_category": self.covered_by_category,
+            "total_by_category": self.total_by_category,
+            "missed_findings": [finding.to_dict() for finding in self.missed_findings],
         }
 
     def __getitem__(self, key: str) -> Any:
@@ -549,6 +626,65 @@ def compute_leakage_rate(
         source_text=source_text,
     )
 
+    leaked_lengths: list[int] = []
+    for span in gold:
+        covered = _covered_char_count(span, predicted)
+        leaked_lengths.append(max(span.length - covered, 0))
+
+    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+
+
+def compute_extraction_reemission_leakage(
+    gold_spans: Iterable[Any],
+    extraction_outputs: Any,
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> LeakageMetrics:
+    """Compute PHI re-emission leakage from extraction or grounding output.
+
+    The scanner walks arbitrary nested extraction payloads, including fact
+    values, concept text, evidence spans, and FHIR-style resources. A gold PHI
+    span is counted as leaked when its surface form is re-emitted in an output
+    field or when an explicit output offset overlaps that gold span. Counts use
+    the same character-weighted numerator and denominator as
+    :func:`compute_leakage_rate`.
+    """
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    leaked_intervals: defaultdict[int, list[tuple[int, int]]] = defaultdict(list)
+    surface_index = _surface_index(gold)
+
+    for text in _iter_extraction_text_values(extraction_outputs):
+        folded = text.casefold()
+        for span_index, surface in surface_index:
+            if _contains_surface(folded, surface):
+                span = gold[span_index]
+                leaked_intervals[span_index].append((span.start, span.end))
+
+    for start, end in _iter_extraction_offsets(extraction_outputs):
+        for span_index, span in enumerate(gold):
+            overlap_start = max(start, span.start)
+            overlap_end = min(end, span.end)
+            if overlap_start < overlap_end:
+                leaked_intervals[span_index].append((overlap_start, overlap_end))
+
+    leaked_lengths = [
+        _merged_interval_length(leaked_intervals.get(index, ()))
+        for index, _span in enumerate(gold)
+    ]
+    return _leakage_metrics_from_lengths(gold, leaked_lengths)
+
+
+def _leakage_metrics_from_lengths(
+    gold: Sequence[EvalSpan],
+    leaked_lengths: Sequence[int],
+) -> LeakageMetrics:
     leaked_by_label: defaultdict[str, int] = defaultdict(int)
     total_by_label: defaultdict[str, int] = defaultdict(int)
     leaked_by_language: defaultdict[str, int] = defaultdict(int)
@@ -558,9 +694,8 @@ def compute_leakage_rate(
 
     total_chars = 0
     leaked_chars = 0
-    for span in gold:
-        covered = _covered_char_count(span, predicted)
-        leaked = max(span.length - covered, 0)
+    for span, raw_leaked in zip(gold, leaked_lengths):
+        leaked = min(max(int(raw_leaked), 0), span.length)
         total_chars += span.length
         leaked_chars += leaked
         total_by_label[span.label] += span.length
@@ -681,6 +816,122 @@ def compute_recall_slices(
         by_device=_rate_map(device_keys, covered_by_device, total_by_device, 1.0),
         covered_chars=covered_chars,
         total_chars=total_chars,
+    )
+
+
+def normalize_critical_finding_category(value: Any) -> str:
+    """Return a stable critical-finding category identifier."""
+    normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    return _CRITICAL_FINDING_CATEGORY_ALIASES.get(normalized, normalized)
+
+
+def critical_finding_category(span: Any) -> str | None:
+    """Return the critical-finding category for *span*, if it is marked critical."""
+    if isinstance(span, EvalSpan):
+        data: Mapping[str, Any] = {}
+        metadata = span.metadata
+    elif isinstance(span, Mapping):
+        data = span
+        metadata = _read_mapping(data, "metadata") or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {}
+    else:
+        data = vars(span)
+        metadata = _read_mapping(data, "metadata") or {}
+        if not isinstance(metadata, Mapping):
+            metadata = {}
+
+    raw_category = _first_present_value(
+        *(metadata.get(key) for key in _CRITICAL_FINDING_CATEGORY_KEYS),
+        *(data.get(key) for key in _CRITICAL_FINDING_CATEGORY_KEYS),
+    )
+    marked = any(
+        _truthy(_first_present_value(metadata.get(key), data.get(key)))
+        for key in _CRITICAL_FINDING_MARKER_KEYS
+    )
+    if raw_category is None:
+        return None
+    category = normalize_critical_finding_category(raw_category)
+    if category in CRITICAL_FINDING_CATEGORIES and (
+        marked or bool(str(raw_category).strip())
+    ):
+        return category
+    return None
+
+
+def compute_critical_finding_recall(
+    gold_spans: Iterable[Any],
+    predicted_spans: Iterable[Any],
+    *,
+    default_language: str = "en",
+    default_device: str = "cpu",
+    source_text: str | None = None,
+) -> CriticalFindingRecallMetrics:
+    """Compute span recall over gold spans marked as critical findings.
+
+    The metric keeps the output PHI-free by reporting only the missed finding's
+    category, fixture id, canonical label, and offsets.
+    """
+    gold = normalize_eval_spans(
+        gold_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+    predicted = normalize_eval_spans(
+        predicted_spans,
+        default_language=default_language,
+        default_device=default_device,
+        source_text=source_text,
+    )
+
+    covered_by_category: defaultdict[str, int] = defaultdict(int)
+    total_by_category: defaultdict[str, int] = defaultdict(int)
+    missed: list[CriticalFindingMiss] = []
+    covered = 0
+    total = 0
+
+    for span in gold:
+        category = critical_finding_category(span)
+        if category is None:
+            continue
+        total += 1
+        total_by_category[category] += 1
+        found = any(
+            _label_aware_overlap(span, predicted_span) for predicted_span in predicted
+        )
+        if found:
+            covered += 1
+            covered_by_category[category] += 1
+            continue
+        missed.append(
+            CriticalFindingMiss(
+                category=category,
+                fixture_id=_fixture_id_for_span(span),
+                start=span.start,
+                end=span.end,
+                label=span.label,
+            )
+        )
+
+    category_keys = _slice_keys(
+        CRITICAL_FINDING_CATEGORIES,
+        total_by_category,
+        covered_by_category,
+    )
+    return CriticalFindingRecallMetrics(
+        overall=_safe_rate(covered, total, zero_denominator=1.0),
+        by_category=_rate_map(
+            category_keys,
+            covered_by_category,
+            total_by_category,
+            1.0,
+        ),
+        covered=covered,
+        total=total,
+        covered_by_category=_count_map(category_keys, covered_by_category),
+        total_by_category=_count_map(category_keys, total_by_category),
+        missed_findings=tuple(missed),
     )
 
 
@@ -1277,6 +1528,7 @@ def compute_metrics_bundle(
     gold_spans: Iterable[Any],
     predicted_spans: Iterable[Any],
     *,
+    extraction_outputs: Any | None = None,
     latencies_ms: Sequence[int | float] = (),
     cold_start_ms: float | None = None,
     peak_rss_bytes: int | None = None,
@@ -1322,6 +1574,13 @@ def compute_metrics_bundle(
             default_device=default_device,
             source_text=source_text,
         ).to_dict(),
+        "critical_finding_recall": compute_critical_finding_recall(
+            gold_spans,
+            predicted_spans,
+            default_language=default_language,
+            default_device=default_device,
+            source_text=source_text,
+        ).to_dict(),
         "exact_span_f1": compute_exact_span_f1(
             gold_spans,
             predicted_spans,
@@ -1353,6 +1612,16 @@ def compute_metrics_bundle(
             model_size_bytes=model_size_bytes,
         ).to_dict(),
     }
+    if extraction_outputs is not None:
+        metrics["extraction_reemission_leakage"] = (
+            compute_extraction_reemission_leakage(
+                gold_spans,
+                extraction_outputs,
+                default_language=default_language,
+                default_device=default_device,
+                source_text=source_text,
+            ).to_dict()
+        )
     if abstention_thresholds is not None:
         metrics["abstention"] = compute_abstention_metrics(
             gold_spans,
@@ -1868,6 +2137,31 @@ def _label_aware_overlap(gold_span: EvalSpan, pred_span: EvalSpan) -> bool:
     return bool(overlaps)
 
 
+def _first_present_value(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _fixture_id_for_span(span: EvalSpan) -> str:
+    for key in ("fixture_id", "fixture", "source_fixture_id", "id"):
+        value = span.metadata.get(key)
+        if value is not None and str(value).strip():
+            return str(value)
+    return "unknown"
+
+
 def _overlap_len(a: EvalSpan, b: EvalSpan) -> int:
     if not _label_aware_overlap(a, b):
         return 0
@@ -1884,6 +2178,171 @@ def _covered_char_count(gold_span: EvalSpan, predicted: Sequence[EvalSpan]) -> i
         if start < end:
             intervals.append((start, end))
     return _merged_interval_length(intervals)
+
+
+_OFFSET_START_KEYS = (
+    "start",
+    "span_start",
+    "offset_start",
+    "start_offset",
+    "char_start",
+    "text_start",
+    "source_start",
+    "begin",
+)
+_OFFSET_END_KEYS = (
+    "end",
+    "span_end",
+    "offset_end",
+    "end_offset",
+    "char_end",
+    "text_end",
+    "source_end",
+    "stop",
+)
+_OFFSET_PAIR_KEYS = (
+    "offset",
+    "offsets",
+    "span",
+    "source_span",
+    "evidence_span",
+    "char_offsets",
+    "text_offsets",
+)
+_OFFSET_SCALAR_KEYS = (*_OFFSET_START_KEYS, *_OFFSET_END_KEYS)
+
+
+def _surface_index(gold: Sequence[EvalSpan]) -> list[tuple[int, str]]:
+    surfaces: list[tuple[int, str]] = []
+    for index, span in enumerate(gold):
+        surface = span.text.strip().casefold()
+        if surface:
+            surfaces.append((index, surface))
+    return surfaces
+
+
+def _iter_extraction_text_values(
+    value: Any,
+    *,
+    field_name: str | None = None,
+) -> Iterable[str]:
+    if value is None or isinstance(value, bool):
+        return
+    if isinstance(value, str):
+        if field_name in _OFFSET_SCALAR_KEYS:
+            return
+        yield value
+        return
+    if isinstance(value, int):
+        if field_name in _OFFSET_SCALAR_KEYS:
+            return
+        yield str(value)
+        return
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            nested_field = str(key).strip().casefold()
+            yield from _iter_extraction_text_values(
+                nested,
+                field_name=nested_field,
+            )
+        return
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, str),
+    ):
+        if field_name in _OFFSET_PAIR_KEYS and _span_pair_from_value(value) is not None:
+            return
+        for nested in value:
+            yield from _iter_extraction_text_values(nested)
+
+
+def _iter_extraction_offsets(value: Any) -> Iterable[tuple[int, int]]:
+    if isinstance(value, Mapping):
+        pair = _span_pair_from_mapping(value)
+        if pair is not None:
+            yield pair
+        for key in _OFFSET_PAIR_KEYS:
+            nested_pair = _span_pair_from_value(value.get(key))
+            if nested_pair is not None:
+                yield nested_pair
+        for nested in value.values():
+            yield from _iter_extraction_offsets(nested)
+        return
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, str),
+    ):
+        for nested in value:
+            yield from _iter_extraction_offsets(nested)
+
+
+def _span_pair_from_mapping(value: Mapping[str, Any]) -> tuple[int, int] | None:
+    start = _first_int_for_keys(value, _OFFSET_START_KEYS)
+    end = _first_int_for_keys(value, _OFFSET_END_KEYS)
+    if start is None or end is None or end <= start:
+        return None
+    return start, end
+
+
+def _span_pair_from_value(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, Mapping):
+        return _span_pair_from_mapping(value)
+    if isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, str),
+    ):
+        if len(value) < 2:
+            return None
+        start = _coerce_int(value[0])
+        end = _coerce_int(value[1])
+        if start is not None and end is not None and end > start:
+            return start, end
+    return None
+
+
+def _first_int_for_keys(
+    value: Mapping[str, Any],
+    keys: Sequence[str],
+) -> int | None:
+    for key in keys:
+        parsed = _coerce_int(value.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _contains_surface(text: str, surface: str) -> bool:
+    if not surface:
+        return False
+    start = text.find(surface)
+    while start != -1:
+        end = start + len(surface)
+        if _surface_boundaries_match(text, start, end, surface):
+            return True
+        start = text.find(surface, start + 1)
+    return False
+
+
+def _surface_boundaries_match(
+    text: str,
+    start: int,
+    end: int,
+    surface: str,
+) -> bool:
+    if surface[0].isalnum() and start > 0 and text[start - 1].isalnum():
+        return False
+    if surface[-1].isalnum() and end < len(text) and text[end].isalnum():
+        return False
+    return True
 
 
 def _merged_interval_length(intervals: Sequence[tuple[int, int]]) -> int:
@@ -1995,9 +2454,15 @@ __all__ = [
     "ABSTENTION_ROUTE_REDACT",
     "ABSTENTION_ROUTE_REVIEW",
     "CRITICAL_ABSTENTION_LABELS",
+    "CRITICAL_FINDING_CATEGORIES",
+    "CRITICAL_FINDING_CATEGORY_DIAGNOSIS",
+    "CRITICAL_FINDING_CATEGORY_DRUG_ALLERGY",
+    "CRITICAL_FINDING_CATEGORY_RESULT",
     "DEVICE_TIERS",
     "AbstentionDecision",
     "AbstentionMetrics",
+    "CriticalFindingMiss",
+    "CriticalFindingRecallMetrics",
     "EvalSpan",
     "RateMetric",
     "F1Metrics",
@@ -2012,8 +2477,10 @@ __all__ = [
     "CoverageGap",
     "normalize_eval_span",
     "normalize_eval_spans",
+    "compute_extraction_reemission_leakage",
     "compute_leakage_rate",
     "compute_character_recall",
+    "compute_critical_finding_recall",
     "compute_recall_slices",
     "compute_exact_span_f1",
     "compute_relaxed_span_f1",
@@ -2032,6 +2499,8 @@ __all__ = [
     "bootstrap_ci",
     "paired_significance",
     "compute_confidence_intervals",
+    "critical_finding_category",
+    "normalize_critical_finding_category",
     "abstention_route",
     "apply_abstention_policy",
     "bootstrap_abstention_residual_risk",
