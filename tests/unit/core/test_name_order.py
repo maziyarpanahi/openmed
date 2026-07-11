@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from openmed.core.anonymizer import Anonymizer
+from openmed.core.anonymizer import LABEL_GENERATORS, Anonymizer
 from openmed.core.name_order import (
     CJK_LANGUAGES,
     HONORIFICS,
@@ -41,6 +41,7 @@ class TestSplitName:
             ("田中 太郎さん", "ja", ("田中", "太郎", "さん")),
             ("鈴木 花子様", "ja", ("鈴木", "花子", "様")),
             ("山本 一郎先生", "ja", ("山本", "一郎", "先生")),
+            ("田中 太郎 さん", "ja", ("田中", "太郎", "さん")),
             ("田中 太郎", "ja", ("田中", "太郎", "")),
             # Korean: contiguous, single-char family name first.
             ("김민준씨", "ko", ("김", "민준", "씨")),
@@ -70,6 +71,9 @@ class TestSplitName:
     def test_empty_input(self):
         assert split_name("", "ja") == ("", "", "")
 
+    def test_honorific_only_has_no_invented_name(self):
+        assert split_name(" さん", "ja") == ("", "", "さん")
+
 
 class TestNormalizePersonSpan:
     """normalize_person_span() peels the honorific for later re-attachment."""
@@ -83,6 +87,9 @@ class TestNormalizePersonSpan:
             ("이순신님", "ko", ("이순신", "님")),
             ("王伟先生", "zh", ("王伟", "先生")),
             ("李娜女士", "zh", ("李娜", "女士")),
+            ("田中 さん", "ja", ("田中", " さん")),
+            ("김민준 씨", "ko", ("김민준", " 씨")),
+            ("王伟 先生", "zh", ("王伟", " 先生")),
         ],
     )
     def test_honorific_separated(self, span, lang, expected):
@@ -94,6 +101,9 @@ class TestNormalizePersonSpan:
     @pytest.mark.parametrize("lang", ["en", "fr", "de"])
     def test_non_cjk_returns_empty_honorific(self, lang):
         assert normalize_person_span("Smith", lang) == ("Smith", "")
+
+    def test_honorific_only_preserves_the_full_suffix(self):
+        assert normalize_person_span(" さん", "ja") == ("", " さん")
 
 
 class TestHonorificsMap:
@@ -191,3 +201,38 @@ class TestSurrogateIntegration:
             "佐藤", "PERSON"
         )
         assert with_hon == f"{bare}さん"
+
+    @pytest.mark.parametrize(
+        "lang, bare_name, spaced_name, suffix",
+        [
+            ("ja", "田中", "田中 さん", " さん"),
+            ("ko", "김민준", "김민준 씨", " 씨"),
+            ("zh", "王伟", "王伟 先生", " 先生"),
+        ],
+    )
+    def test_separator_whitespace_survives_replacement(
+        self, lang, bare_name, spaced_name, suffix
+    ):
+        bare = Anonymizer(lang=lang, consistent=True, seed=34).surrogate(
+            bare_name, "PERSON"
+        )
+        spaced = Anonymizer(lang=lang, consistent=True, seed=34).surrogate(
+            spaced_name, "PERSON"
+        )
+
+        assert spaced == f"{bare}{suffix}"
+
+    def test_generator_fallback_preserves_honorific_suffix(self, monkeypatch):
+        def fail_generator(*_args, **_kwargs):
+            raise RuntimeError("synthetic generator failure")
+
+        monkeypatch.setitem(LABEL_GENERATORS, "PERSON", fail_generator)
+        with pytest.warns(RuntimeWarning, match="Anonymizer fallback"):
+            surrogate = Anonymizer(lang="ja").surrogate("田中 さん", "PERSON")
+
+        assert surrogate == "[PERSON] さん"
+
+    def test_honorific_only_uses_safe_fallback_without_dropping_suffix(self):
+        surrogate = Anonymizer(lang="ja").surrogate(" さん", "PERSON")
+
+        assert surrogate == "[PERSON] さん"

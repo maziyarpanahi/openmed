@@ -185,12 +185,16 @@ class Anonymizer:
         # the name is swapped while the honorific is re-attached verbatim.
         # Only ja/ko/zh PERSON spans take this path; all other languages and
         # labels are unaffected. See ``openmed.core.name_order`` (OM-291).
-        honorific = ""
+        honorific_suffix = ""
         seed_value = original
         generator_input = original
         if canonical == L.PERSON and effective_lang in CJK_LANGUAGES:
-            core_name, honorific = normalize_person_span(original, effective_lang)
-            if honorific:
+            core_name, honorific_suffix = normalize_person_span(
+                original, effective_lang
+            )
+            if honorific_suffix:
+                if not core_name:
+                    return f"[{label}]{honorific_suffix}"
                 # Seed on the bare name so a name with and without an honorific
                 # map to the same core surrogate in deterministic mode.
                 seed_value = core_name
@@ -202,7 +206,8 @@ class Anonymizer:
 
         generator = LABEL_GENERATORS.get(canonical, LABEL_GENERATORS["OTHER"])
         try:
-            return f"{generator(faker, generator_input, locale=effective_locale)}{honorific}"
+            generated = generator(faker, generator_input, locale=effective_locale)
+            return f"{generated}{honorific_suffix}"
         except Exception as exc:  # noqa: BLE001 — never let a single label kill the doc
             warnings.warn(
                 f"Anonymizer fallback for label {label!r} (canonical "
@@ -210,7 +215,7 @@ class Anonymizer:
                 RuntimeWarning,
                 stacklevel=2,
             )
-            return f"[{label}]"
+            return f"[{label}]{honorific_suffix}"
 
     def can_format_preserve(
         self,
