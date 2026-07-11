@@ -30,8 +30,8 @@ def test_planted_dominated_point_is_flagged_with_its_dominator() -> None:
     # "slow-bad" is worse than "fast-good" on both throughput and accuracy,
     # so it must be dominated and record the dominator's label.
     points = [
-        FrontierPoint(label="fast-good", throughput=100.0, accuracy=0.90),
-        FrontierPoint(label="slow-bad", throughput=40.0, accuracy=0.70),
+        FrontierPoint(label="fast-good", throughput=100.0, accuracy=0.90, leakage=0.0),
+        FrontierPoint(label="slow-bad", throughput=40.0, accuracy=0.70, leakage=0.0),
     ]
 
     report = frontier_report(points)
@@ -50,10 +50,10 @@ def test_non_dominated_points_form_the_frontier() -> None:
     # three are non-dominated. The fourth point is strictly worse than the
     # fast, low-accuracy corner and must fall off.
     points = [
-        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80),
-        FrontierPoint(label="balanced", throughput=120.0, accuracy=0.90),
-        FrontierPoint(label="accurate", throughput=60.0, accuracy=0.97),
-        FrontierPoint(label="dominated", throughput=100.0, accuracy=0.75),
+        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80, leakage=0.0),
+        FrontierPoint(label="balanced", throughput=120.0, accuracy=0.90, leakage=0.0),
+        FrontierPoint(label="accurate", throughput=60.0, accuracy=0.97, leakage=0.0),
+        FrontierPoint(label="dominated", throughput=100.0, accuracy=0.75, leakage=0.0),
     ]
 
     report = frontier_report(points)
@@ -68,7 +68,9 @@ def test_non_dominated_points_form_the_frontier() -> None:
 
 
 def test_single_point_input_is_always_on_the_frontier() -> None:
-    report = frontier_report([FrontierPoint("solo", throughput=10.0, accuracy=0.5)])
+    report = frontier_report(
+        [FrontierPoint("solo", throughput=10.0, accuracy=0.5, leakage=0.0)]
+    )
 
     assert report.point_count == 1
     assert report.frontier_count == 1
@@ -89,8 +91,8 @@ def test_empty_input_yields_an_empty_frontier() -> None:
 def test_identical_points_tie_and_both_stay_on_the_frontier() -> None:
     # Equal objectives => neither dominates the other; both remain.
     points = [
-        FrontierPoint(label="twin-a", throughput=50.0, accuracy=0.8),
-        FrontierPoint(label="twin-b", throughput=50.0, accuracy=0.8),
+        FrontierPoint(label="twin-a", throughput=50.0, accuracy=0.8, leakage=0.0),
+        FrontierPoint(label="twin-b", throughput=50.0, accuracy=0.8, leakage=0.0),
     ]
 
     report = frontier_report(points)
@@ -102,8 +104,18 @@ def test_identical_points_tie_and_both_stay_on_the_frontier() -> None:
 def test_equal_throughput_higher_accuracy_dominates_the_tie_break_axis() -> None:
     # Same speed, but one is strictly more accurate -> it dominates.
     points = [
-        FrontierPoint(label="same-speed-better", throughput=80.0, accuracy=0.95),
-        FrontierPoint(label="same-speed-worse", throughput=80.0, accuracy=0.85),
+        FrontierPoint(
+            label="same-speed-better",
+            throughput=80.0,
+            accuracy=0.95,
+            leakage=0.0,
+        ),
+        FrontierPoint(
+            label="same-speed-worse",
+            throughput=80.0,
+            accuracy=0.85,
+            leakage=0.0,
+        ),
     ]
 
     report = frontier_report(points)
@@ -144,7 +156,12 @@ def test_lower_leakage_keeps_a_slower_variant_on_the_frontier() -> None:
 def test_report_order_matches_input_order() -> None:
     labels = ["c", "a", "b", "d"]
     points = [
-        FrontierPoint(label=label, throughput=float(index + 1), accuracy=0.5)
+        FrontierPoint(
+            label=label,
+            throughput=float(index + 1),
+            accuracy=0.5,
+            leakage=0.0,
+        )
         for index, label in enumerate(labels)
     ]
 
@@ -154,9 +171,13 @@ def test_report_order_matches_input_order() -> None:
 
 
 def test_dominator_selection_is_deterministic_regardless_of_input_order() -> None:
-    weak = FrontierPoint(label="weak", throughput=10.0, accuracy=0.10)
-    strong_a = FrontierPoint(label="strong-a", throughput=100.0, accuracy=0.90)
-    strong_b = FrontierPoint(label="strong-b", throughput=100.0, accuracy=0.90)
+    weak = FrontierPoint(label="weak", throughput=10.0, accuracy=0.10, leakage=0.0)
+    strong_a = FrontierPoint(
+        label="strong-a", throughput=100.0, accuracy=0.90, leakage=0.0
+    )
+    strong_b = FrontierPoint(
+        label="strong-b", throughput=100.0, accuracy=0.90, leakage=0.0
+    )
 
     forward = frontier_report([weak, strong_a, strong_b])
     reverse = frontier_report([strong_b, strong_a, weak])
@@ -170,8 +191,18 @@ def test_dominator_selection_is_deterministic_regardless_of_input_order() -> Non
 def test_mapping_inputs_are_accepted() -> None:
     report = frontier_report(
         [
-            {"label": "m1", "throughput": 100.0, "accuracy": 0.9},
-            {"variant": "m2", "docs_per_second": 40.0, "accuracy": 0.7},
+            {
+                "label": "m1",
+                "throughput": 100.0,
+                "accuracy": 0.9,
+                "leakage": 0.0,
+            },
+            {
+                "variant": "m2",
+                "docs_per_second": 40.0,
+                "accuracy": 0.7,
+                "leakage": 0.0,
+            },
         ]
     )
 
@@ -218,8 +249,8 @@ def test_json_serialization_is_deterministic_and_round_trips_shape() -> None:
 
 def test_markdown_lists_every_configuration_with_status() -> None:
     points = [
-        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80),
-        FrontierPoint(label="dominated", throughput=100.0, accuracy=0.70),
+        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80, leakage=0.0),
+        FrontierPoint(label="dominated", throughput=100.0, accuracy=0.70, leakage=0.0),
     ]
 
     report = frontier_report(points, generated_at="2026-07-05T00:00:00Z")
@@ -237,9 +268,9 @@ def test_markdown_lists_every_configuration_with_status() -> None:
 
 def test_chart_data_splits_frontier_and_dominated_series() -> None:
     points = [
-        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80),
-        FrontierPoint(label="accurate", throughput=60.0, accuracy=0.97),
-        FrontierPoint(label="dominated", throughput=50.0, accuracy=0.70),
+        FrontierPoint(label="fast", throughput=200.0, accuracy=0.80, leakage=0.0),
+        FrontierPoint(label="accurate", throughput=60.0, accuracy=0.97, leakage=0.0),
+        FrontierPoint(label="dominated", throughput=50.0, accuracy=0.70, leakage=0.0),
     ]
 
     chart = frontier_report(points).chart_data()
@@ -255,9 +286,97 @@ def test_chart_data_splits_frontier_and_dominated_series() -> None:
 
 def test_invalid_point_values_are_rejected() -> None:
     with pytest.raises(ValueError):
-        FrontierPoint.from_mapping({"label": "x", "throughput": "fast", "accuracy": 1})
+        FrontierPoint.from_mapping(
+            {"label": "x", "throughput": "fast", "accuracy": 1, "leakage": 0}
+        )
     with pytest.raises(ValueError):
-        FrontierPoint.from_mapping({"label": "x", "throughput": 1.0, "accuracy": None})
+        FrontierPoint.from_mapping(
+            {"label": "x", "throughput": 1.0, "accuracy": None, "leakage": 0}
+        )
+
+
+@pytest.mark.parametrize("label", [None, "", "   ", 7, "line\nbreak"])
+def test_missing_or_invalid_labels_are_rejected(label: object) -> None:
+    with pytest.raises(ValueError, match="label"):
+        FrontierPoint.from_mapping(
+            {"label": label, "throughput": 1.0, "accuracy": 0.9, "leakage": 0.0}
+        )
+
+
+def test_duplicate_labels_are_rejected_after_normalization() -> None:
+    points = [
+        FrontierPoint("same", throughput=1.0, accuracy=0.9, leakage=0.0),
+        FrontierPoint(" same ", throughput=2.0, accuracy=0.8, leakage=0.0),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate point label: 'same'"):
+        frontier_report(points)
+
+
+def test_mapping_requires_measured_leakage() -> None:
+    with pytest.raises(ValueError, match="leakage evidence is required"):
+        FrontierPoint.from_mapping(
+            {"label": "unmeasured", "throughput": 1.0, "accuracy": 0.9}
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("throughput", float("nan")),
+        ("throughput", float("inf")),
+        ("accuracy", float("nan")),
+        ("accuracy", float("inf")),
+        ("leakage", float("nan")),
+        ("leakage", float("inf")),
+    ],
+)
+def test_non_finite_metrics_are_rejected(field: str, value: float) -> None:
+    point: dict[str, object] = {
+        "label": "invalid",
+        "throughput": 1.0,
+        "accuracy": 0.9,
+        "leakage": 0.0,
+    }
+    point[field] = value
+
+    with pytest.raises(ValueError, match=rf"{field} must be finite"):
+        FrontierPoint.from_mapping(point)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("throughput", -0.01, "throughput must be greater than or equal to 0"),
+        ("accuracy", -0.01, "accuracy must be between 0 and 1"),
+        ("accuracy", 1.01, "accuracy must be between 0 and 1"),
+        ("leakage", -0.01, "leakage must be between 0 and 1"),
+        ("leakage", 1.01, "leakage must be between 0 and 1"),
+    ],
+)
+def test_out_of_range_metrics_are_rejected(
+    field: str, value: float, message: str
+) -> None:
+    point: dict[str, object] = {
+        "label": "invalid",
+        "throughput": 1.0,
+        "accuracy": 0.9,
+        "leakage": 0.0,
+    }
+    point[field] = value
+
+    with pytest.raises(ValueError, match=message):
+        FrontierPoint.from_mapping(point)
+
+
+def test_direct_point_construction_uses_the_same_validation() -> None:
+    with pytest.raises(ValueError, match="accuracy must be finite"):
+        FrontierPoint("invalid", throughput=1.0, accuracy=float("nan"), leakage=0.0)
+
+    point = FrontierPoint("limits", throughput=0, accuracy=0, leakage=1)
+    assert point.throughput == 0.0
+    assert point.accuracy == 0.0
+    assert point.leakage == 1.0
 
 
 # --- Assembling points from existing PerfReport / BenchmarkReport outputs -----
@@ -266,7 +385,7 @@ def test_invalid_point_values_are_rejected() -> None:
 class _FakePerfReport:
     """Minimal stand-in exposing the PerfReport surface the frontier reads."""
 
-    def __init__(self, model_name: str, docs_per_second: float) -> None:
+    def __init__(self, model_name: str | None, docs_per_second: float) -> None:
         self.model_name = model_name
         self.docs_per_second = docs_per_second
         self.device = "cpu"
@@ -277,7 +396,7 @@ class _FakePerfReport:
 class _FakeBenchmarkReport:
     """Minimal stand-in exposing the BenchmarkReport surface the frontier reads."""
 
-    def __init__(self, model_name: str, f1: float, leakage: float) -> None:
+    def __init__(self, model_name: str | None, f1: float, leakage: float) -> None:
         self.model_name = model_name
         self.suite = "phi-en"
         self.device = "cpu"
@@ -330,4 +449,42 @@ def test_frontier_point_from_reports_requires_an_accuracy_metric() -> None:
     benchmark.metrics = {"latency": {"p50_ms": 1.0}}  # no accuracy key present
 
     with pytest.raises(ValueError, match="no accuracy metric"):
+        frontier_point_from_reports(perf, benchmark)
+
+
+def test_frontier_point_from_reports_requires_a_leakage_metric() -> None:
+    perf = _FakePerfReport("m", docs_per_second=10.0)
+    benchmark = _FakeBenchmarkReport("m", f1=0.5, leakage=0.0)
+    benchmark.metrics = {"exact_span_f1": {"f1": 0.5}}
+
+    with pytest.raises(ValueError, match="no leakage metric"):
+        frontier_point_from_reports(perf, benchmark)
+
+
+@pytest.mark.parametrize(
+    ("docs_per_second", "f1", "leakage", "message"),
+    [
+        (float("nan"), 0.9, 0.0, "docs_per_second must be finite"),
+        (10.0, 1.1, 0.0, "accuracy must be between 0 and 1"),
+        (10.0, 0.9, -0.1, "leakage must be between 0 and 1"),
+    ],
+)
+def test_frontier_point_from_reports_rejects_invalid_metrics(
+    docs_per_second: float,
+    f1: float,
+    leakage: float,
+    message: str,
+) -> None:
+    perf = _FakePerfReport("m", docs_per_second=docs_per_second)
+    benchmark = _FakeBenchmarkReport("m", f1=f1, leakage=leakage)
+
+    with pytest.raises(ValueError, match=message):
+        frontier_point_from_reports(perf, benchmark)
+
+
+def test_frontier_point_from_reports_requires_a_stable_label() -> None:
+    perf = _FakePerfReport(None, docs_per_second=10.0)
+    benchmark = _FakeBenchmarkReport(None, f1=0.9, leakage=0.0)
+
+    with pytest.raises(ValueError, match="label is required"):
         frontier_point_from_reports(perf, benchmark)
