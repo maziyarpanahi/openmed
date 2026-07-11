@@ -10,8 +10,9 @@ Two profiles keep CI fast by default while allowing a heavier scheduled run:
 
 Selection order:
 
-1. If ``HYPOTHESIS_PROFILE`` is set, that profile is loaded (so developers and
-   the nightly job can override).
+1. If ``HYPOTHESIS_PROFILE`` is set, that exact profile is loaded (so
+   developers and the nightly job can override). Unknown explicit profiles
+   fail closed instead of silently reducing the fuzz budget.
 2. Otherwise ``fuzz-default`` is loaded.
 
 The profiles are registered at import time and are idempotent, so importing the
@@ -70,11 +71,8 @@ def _load_selected_profile() -> None:
     if settings is None:
         return
     _register_profiles()
-    profile = os.environ.get("HYPOTHESIS_PROFILE", _DEFAULT_PROFILE)
-    try:
-        settings.load_profile(profile)
-    except Exception:  # pragma: no cover - fall back to the bounded profile.
-        settings.load_profile(_DEFAULT_PROFILE)
+    profile = os.environ.get("HYPOTHESIS_PROFILE")
+    settings.load_profile(profile if profile is not None else _DEFAULT_PROFILE)
 
 
 # Register + load at import so the settings apply to every test in this package.

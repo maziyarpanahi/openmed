@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import yaml
+from hypothesis import settings
+from hypothesis.errors import InvalidArgument
+
+from tests.fuzz import conftest as fuzz_conftest
 
 ROOT = Path(__file__).resolve().parents[3]
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
@@ -35,3 +40,22 @@ def test_expensive_fuzz_profile_has_a_dedicated_event_gate():
 
     assert set(ci["on"]) == {"push", "pull_request"}
     assert "fuzz-nightly" not in ci["jobs"]
+
+
+def test_explicit_unknown_hypothesis_profile_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HYPOTHESIS_PROFILE", "not-a-real-profile")
+
+    with pytest.raises(InvalidArgument, match="not-a-real-profile"):
+        fuzz_conftest._load_selected_profile()
+
+
+def test_unset_hypothesis_profile_uses_bounded_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HYPOTHESIS_PROFILE", raising=False)
+
+    fuzz_conftest._load_selected_profile()
+
+    assert settings.get_current_profile_name() == "fuzz-default"
