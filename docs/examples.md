@@ -35,14 +35,14 @@ outside a notebook) or `render_spans_html()` (always returns the HTML string):
 ```python
 from openmed.processing import render_spans_html, show
 
-html = render_spans_html(
-    "Contact Jane Roe at jane.roe@example.com.",
-    [
-        {"start": 8, "end": 16, "label": "PERSON", "score": 0.98},
-        {"start": 20, "end": 40, "label": "EMAIL", "score": 0.95},
-    ],
-)
-show(html)  # in a notebook this displays the colored widget
+text = "Contact Jane Roe at jane.roe@example.com."
+spans = [
+    {"start": 8, "end": 16, "label": "PERSON", "score": 0.98},
+    {"start": 20, "end": 40, "label": "EMAIL", "score": 0.95},
+]
+
+show(text, spans)  # in a notebook this displays the colored widget
+html = render_spans_html(text, spans)  # raw HTML is also available
 ```
 
 `show()` accepts an `AnalyzeResult`, a `DeidentificationResult`, or an explicit
