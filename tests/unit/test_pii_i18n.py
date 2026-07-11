@@ -1759,6 +1759,22 @@ class TestLanguagePIIPatterns:
         matched = any(re.search(p.pattern, text, p.flags) for p in patterns)
         assert matched, f"Korean gil address pattern should match '{text}'"
 
+    def test_korean_street_address_dong(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "street_address"
+        ]
+        text = "서울특별시 강남구 역삼동 123-45"
+        matched = any(re.fullmatch(p.pattern, text, p.flags) for p in patterns)
+        assert matched, f"Korean dong address pattern should match '{text}'"
+
+    def test_korean_street_address_dong_requires_administrative_context(self):
+        patterns = [
+            p for p in LANGUAGE_PII_PATTERNS["ko"] if p.entity_type == "street_address"
+        ]
+        text = "역삼동 123-45"
+        matched = any(re.fullmatch(p.pattern, text, p.flags) for p in patterns)
+        assert not matched, "A standalone dong and number must not match an address"
+
     # ── Postcode patterns ──────────────────────────────────────────────────
 
     def test_korean_postcode(self):
