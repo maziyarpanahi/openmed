@@ -20,9 +20,11 @@ from openmed.core.pii_i18n import (
     validate_philhealth_pin,
     validate_philsys_psn,
     validate_portuguese_cpf,
+    validate_romanian_cnp,
 )
 from openmed.eval import harness
 from openmed.eval.golden import (
+    CRITICAL_FINDINGS_CATEGORY,
     GOLDEN_CATEGORIES,
     HARD_NEGATIVE_CATEGORY,
     GoldenFixture,
@@ -33,7 +35,10 @@ from openmed.eval.golden import (
     load_benchmark_fixtures,
     load_golden_fixtures,
 )
-from openmed.eval.metrics import compute_date_shift_consistency
+from openmed.eval.metrics import (
+    CRITICAL_FINDING_CATEGORIES,
+    compute_date_shift_consistency,
+)
 
 EXPANDED_MULTILINGUAL_LANGUAGES = ("ar", "ja", "tr")
 
@@ -146,6 +151,28 @@ def test_golden_json_files_are_harness_loadable():
     assert all(item.metadata["category"] for item in benchmark_fixtures)
 
 
+def test_critical_finding_fixture_is_synthetic_and_disclaimer_marked():
+    fixtures = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.category == CRITICAL_FINDINGS_CATEGORY
+    ]
+
+    assert fixtures
+    categories = set()
+    for fixture in fixtures:
+        disclaimer = fixture.metadata["medical_device_disclaimer"].lower()
+        assert fixture.metadata["synthetic"] is True
+        assert "assistive safety probe" in disclaimer
+        assert "not clinical ground truth" in disclaimer
+        for span in fixture.gold_spans:
+            assert span.metadata["critical_finding"] is True
+            assert span.metadata["fixture_id"] == fixture.fixture_id
+            categories.add(span.metadata["critical_finding_category"])
+
+    assert categories == set(CRITICAL_FINDING_CATEGORIES)
+
+
 def test_hard_negative_fixtures_are_synthetic_zero_span_non_phi():
     fixtures = [
         fixture
@@ -228,6 +255,39 @@ def test_slovak_i18n_jsonl_fixture_offsets_and_checksum():
     assert gold_by_label["ZIPCODE"] == "81101"
     assert gold_by_label["STREET_ADDRESS"] == "Hlavna ulica 12"
     assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
+
+
+def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/ro.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 2
+    fixtures = {row["id"]: GoldenFixture.from_mapping(row) for row in rows}
+    fixture = fixtures["golden-i18n-ro-clinical-pii"]
+    assert fixture.language == "ro"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "12 martie 1985"
+    assert gold_by_label["PHONE"] == "+40 721 234 567"
+    assert gold_by_label["ZIPCODE"] == "010011"
+    assert gold_by_label["STREET_ADDRESS"] == "Str. Mihai Eminescu 12"
+    assert validate_romanian_cnp(gold_by_label["ID_NUM"])
+
+    diacritic_fixture = fixtures["golden-i18n-ro-diacritics"]
+    diacritic_by_label = {
+        span.label: span.text for span in diacritic_fixture.gold_spans
+    }
+    assert "Pacientă" in diacritic_fixture.text
+    assert "București" in diacritic_fixture.text
+    assert diacritic_by_label["DATE"] == "22 iulie 2005"
+    assert diacritic_by_label["PHONE"] == "0721 234 567"
+    assert diacritic_by_label["STREET_ADDRESS"] == "Șoseaua Ștefan cel Mare 15"
+    assert diacritic_by_label["ZIPCODE"] == "010101"
+    assert validate_romanian_cnp(diacritic_by_label["ID_NUM"])
 
 
 def test_malay_i18n_jsonl_fixture_offsets_and_checksum():
@@ -478,7 +538,13 @@ def test_chunk_boundary_fixture_crosses_max_length_window_and_keeps_global_offse
 
 
 def test_checksum_fixture_has_valid_gold_ids_and_invalid_hard_negatives():
-    fixture = _one("checksum_ids")
+    matches = [
+        fixture
+        for fixture in load_golden_fixtures()
+        if fixture.fixture_id == "golden-checksum-valid-invalid-identifiers"
+    ]
+    assert len(matches) == 1
+    fixture = matches[0]
     gold_by_type = {
         span.metadata["identifier_type"]: span.text for span in fixture.gold_spans
     }
