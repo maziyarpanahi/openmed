@@ -1677,6 +1677,8 @@ class TestLanguagePIIPatterns:
         ]
         samples = [
             "Șoseaua Ștefan cel Mare 15",
+            "Şoseaua Ştefan cel Mare 15",
+            "S\u0326oseaua S\u0326tefan cel Mare 15",
             "Str. Gheorghe Doja 7",
             "Bulevardul Dacia 100",
             "Calea Moșilor 24",
