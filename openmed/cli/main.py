@@ -180,6 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
     _add_benchmark_command(subparsers)
+    _add_profile_command(subparsers)
     _add_eval_command(subparsers)
     _add_models_command(subparsers)
     _add_config_command(subparsers)
@@ -1188,6 +1189,46 @@ def _add_benchmark_command(subparsers: argparse._SubParsersAction) -> None:
     false_negatives_parser.set_defaults(handler=_handle_benchmark_false_negatives)
 
 
+def _add_profile_command(subparsers: argparse._SubParsersAction) -> None:
+    """Register inference-path profiling commands with the CLI parser."""
+    profile_parser = subparsers.add_parser(
+        "profile", help="Profile the inference path."
+    )
+    profile_sub = profile_parser.add_subparsers(dest="profile_command")
+
+    memory_parser = profile_sub.add_parser(
+        "memory",
+        help="Profile inference-path memory across load and inference phases.",
+    )
+    memory_parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Model id or local path. When omitted, the committed synthetic "
+            "one-page-note workload runner is profiled offline."
+        ),
+    )
+    memory_parser.add_argument(
+        "--top-allocators",
+        type=int,
+        default=None,
+        help="Number of top allocators to report per phase (default: 10).",
+    )
+    memory_parser.add_argument(
+        "--format",
+        choices=("json", "markdown"),
+        default="json",
+        help="Output format for the memory profile (default: json).",
+    )
+    memory_parser.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Write the profile to this file instead of stdout.",
+    )
+    memory_parser.set_defaults(handler=_handle_profile_memory)
+
+
 def _add_eval_command(subparsers: argparse._SubParsersAction) -> None:
     """Register evaluation commands with the CLI parser."""
     eval_parser = subparsers.add_parser("eval", help="Run evaluation tools.")
@@ -1926,6 +1967,50 @@ def _handle_benchmark_mobile(args: argparse.Namespace) -> int:
     else:
         payload = {"reports": [report.to_dict() for report in reports]}
         sys.stdout.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    return 0
+
+
+def _handle_profile_memory(args: argparse.Namespace) -> int:
+    from openmed.eval import memprofile as memprofile_module
+
+    model = args.model or memprofile_module.SYNTHETIC_MEMPROFILE_MODEL_NAME
+    loader = (
+        memprofile_module.synthetic_memprofile_loader if args.model is None else None
+    )
+    top_allocators = (
+        memprofile_module.DEFAULT_TOP_ALLOCATORS
+        if args.top_allocators is None
+        else args.top_allocators
+    )
+    if top_allocators < 1:
+        sys.stderr.write("--top-allocators must be a positive integer.\n")
+        return 1
+
+    try:
+        profile = memprofile_module.profile_memory(
+            model,
+            loader=loader,
+            top_allocators=top_allocators,
+            metadata={"source": "cli"},
+        )
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        sys.stderr.write(f"Memory profile failed: {exc}\n")
+        return 1
+
+    rendered = profile.to_markdown() if args.format == "markdown" else profile.to_json()
+    if args.output:
+        try:
+            if args.format == "markdown":
+                profile.write_markdown(args.output)
+            else:
+                profile.write_json(args.output)
+        except OSError as exc:
+            sys.stderr.write(f"Failed to write memory profile: {exc}\n")
+            return 1
+        sys.stdout.write(f"Memory profile written: {args.output}\n")
+        return 0
+
+    sys.stdout.write(rendered if rendered.endswith("\n") else rendered + "\n")
     return 0
 
 
