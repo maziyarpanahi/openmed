@@ -331,9 +331,11 @@ back to `device="cpu"` or install a CUDA-enabled PyTorch build. See
 **Symptom.** You are on an Apple-Silicon Mac and want acceleration, or an MLX-only artifact fails on a
 non-Apple host.
 
-**Cause.** MLX runs only on Apple Silicon. On other hosts, supported MLX token-classification artifacts fall
-back to their upstream PyTorch model. MLX language-model features do not have that fallback and require
-`mlx-lm`:
+**Cause.** MLX runs only on Apple Silicon. On other hosts, OpenMed substitutes
+matching PyTorch repositories for the supported privacy-filter MLX family.
+Other MLX-only token-classification artifacts have no general automatic
+fallback; select a compatible upstream PyTorch model explicitly. MLX
+language-model features also have no non-MLX fallback and require `mlx-lm`:
 
 ```text
 ImportError: mlx-lm is required for OpenMed MLX language models. Install with: pip install openmed[mlx]

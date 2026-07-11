@@ -128,6 +128,15 @@ def test_troubleshooting_describes_real_loader_and_middleware_lifecycles() -> No
     assert "All non-2xx responses use this shape" not in rest_guide
 
 
+def test_mlx_fallback_guidance_is_limited_to_the_privacy_filter_family() -> None:
+    guide = GUIDE.read_text(encoding="utf-8")
+    normalized = re.sub(r"\s+", " ", guide)
+
+    assert "supported privacy-filter MLX family" in normalized
+    assert "no general automatic fallback" in normalized
+    assert "supported MLX token-classification artifacts fall back" not in normalized
+
+
 def test_container_guidance_distinguishes_host_bind_and_cache_controls() -> None:
     rest_guide = REST_GUIDE.read_text(encoding="utf-8")
     normalized = re.sub(r"\s+", " ", rest_guide)
