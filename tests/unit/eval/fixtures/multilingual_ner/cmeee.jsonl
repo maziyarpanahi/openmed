@@ -1,1 +1,1 @@
-{"id":"cmeee-smoke-1","language":"zh","split":"smoke","text":"模拟病历显示肺炎使用阿莫西林。","spans":[{"start":6,"end":8,"label":"dis","text":"肺炎"},{"start":10,"end":14,"label":"dru","text":"阿莫西林"}],"metadata":{"synthetic":true}}
+{"id":"cmeee-smoke-1","language":"zh","split":"smoke","text":"模拟病历显示肺炎使用阿莫西林。","entities":[{"start_idx":6,"end_idx":7,"type":"dis","entity":"肺炎"},{"start_idx":10,"end_idx":13,"type":"dru","entity":"阿莫西林"}],"metadata":{"synthetic":true}}

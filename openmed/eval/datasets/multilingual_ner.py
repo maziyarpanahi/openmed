@@ -569,35 +569,63 @@ def _span_from_mapping(
     *,
     text: str,
 ) -> MultilingualNerSpan:
-    start, end = _span_offsets(span)
-    source_label = str(
-        span.get("source_label")
-        or span.get("label")
-        or span.get("entity_type")
-        or span.get("type")
-        or span.get("category")
-        or OTHER
-    )
+    if source.benchmark == CMEEE and _uses_cmeee_offsets(span):
+        start, end = _cmeee_span_offsets(span)
+        source_label = str(span.get("type") or "")
+        declared_text = span.get("entity")
+        if not source_label:
+            raise ValueError("CMeEE span missing non-empty type")
+        if not isinstance(declared_text, str) or not declared_text:
+            raise ValueError("CMeEE span missing non-empty entity text")
+    else:
+        start, end = _span_offsets(span)
+        source_label = str(
+            span.get("source_label")
+            or span.get("label")
+            or span.get("entity_type")
+            or span.get("type")
+            or span.get("category")
+            or OTHER
+        )
+        declared_text = span.get("text")
+        if declared_text is None:
+            declared_text = span.get("mention")
+        if declared_text is not None:
+            declared_text = str(declared_text)
+
     mapping = map_multilingual_ner_label(source.benchmark, source_label)
-    if start < 0 or end < start or end > len(text):
+    if start < 0 or end <= start or end > len(text):
         raise ValueError(
-            f"{source.benchmark} span offsets {start}:{end} exceed text length "
+            f"{source.benchmark} span offsets {start}:{end} are outside text length "
             f"{len(text)}"
         )
-    span_text = str(span.get("text") or span.get("mention") or text[start:end])
-    if span_text and text[start:end] != span_text:
-        found = text.find(span_text)
-        if found >= 0:
-            start, end = found, found + len(span_text)
+    span_text = text[start:end]
+    if declared_text is not None and span_text != declared_text:
+        raise ValueError(
+            f"{source.benchmark} span text mismatch at {start}:{end}: "
+            f"expected {declared_text!r}, found {span_text!r}"
+        )
     return MultilingualNerSpan(
         start=start,
         end=end,
         source_label=mapping.source_label,
         canonical_label=mapping.canonical_label,
-        text=text[start:end] or span_text,
+        text=span_text,
         mapped=mapping.mapped,
         metadata=_clean_metadata(span.get("metadata") or {}),
     )
+
+
+def _uses_cmeee_offsets(span: Mapping[str, Any]) -> bool:
+    return "start_idx" in span or "end_idx" in span
+
+
+def _cmeee_span_offsets(span: Mapping[str, Any]) -> tuple[int, int]:
+    start = _int_value(span.get("start_idx"))
+    inclusive_end = _int_value(span.get("end_idx"))
+    if start is None or inclusive_end is None:
+        raise ValueError("CMeEE span requires integer start_idx and end_idx")
+    return start, inclusive_end + 1
 
 
 def _span_offsets(span: Mapping[str, Any]) -> tuple[int, int]:
