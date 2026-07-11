@@ -7,10 +7,10 @@ de-identification path with a fully reproducible, no-DUA scoring corpus. It
    in the DICOM header (patient name, MRN, dates) *and* rendered ("burned in")
    onto the pixel data at known bounding boxes, recording gold span + bbox
    truth from a fixed seed;
-2. runs the real DICOM redaction path -- header de-identification
-   (:func:`openmed.multimodal.deidentify_dicom_headers`) and burned-in pixel
-   text redaction (:func:`openmed.multimodal.redact_dicom_pixels`) -- over the
-   generated corpus; and
+2. runs the real DICOM redaction path -- burned-in pixel text redaction
+   (:func:`openmed.multimodal.redact_dicom_pixels`) followed by header
+   de-identification (:func:`openmed.multimodal.deidentify_dicom_headers`) --
+   into one final artifact; and
 3. scores the result with the eval harness's leakage-first metrics
    (residual-PHI rate + character recall) and emits a
    :class:`~openmed.eval.report.BenchmarkReport` so it can feed the leaderboard
@@ -30,7 +30,7 @@ than an import-time failure, and the accompanying tests skip cleanly.
 from __future__ import annotations
 
 import contextlib
-import datetime as _dt
+import hashlib
 import importlib
 import re
 from dataclasses import dataclass, field
@@ -64,6 +64,8 @@ TCIA_SAMPLED = False
 DEFAULT_SEED = 20240917
 #: Default number of synthetic studies in the corpus.
 DEFAULT_CORPUS_SIZE = 6
+#: Default system name recorded in the benchmark report.
+DEFAULT_SYSTEM_NAME = "openmed-dicom-redaction"
 
 #: Device tier reported for pixel-space (image) PHI in the harness slices.
 PIXEL_DEVICE = "cpu"
@@ -173,8 +175,8 @@ def multimodal_dicom_metadata(
         "seed": seed,
         "corpus_size": corpus_size,
         "redaction_path": [
-            "openmed.multimodal.deidentify_dicom_headers",
             "openmed.multimodal.redact_dicom_pixels",
+            "openmed.multimodal.deidentify_dicom_headers",
         ],
         "notes": (
             "Fully synthetic phantom DICOMs with faked burned-in PHI; no TCIA "
@@ -215,7 +217,7 @@ def generate_synthetic_dicom_corpus(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    faker = Faker()
+    faker = Faker("en_US")
     faker.seed_instance(seed)
 
     cases: list[SyntheticDicomCase] = []
@@ -231,7 +233,8 @@ def run_multimodal_dicom(
     seed: int = DEFAULT_SEED,
     corpus_size: int = DEFAULT_CORPUS_SIZE,
     cases: Sequence[SyntheticDicomCase] | None = None,
-    model_name: str = "openmed-dicom-redaction",
+    system_name: str = DEFAULT_SYSTEM_NAME,
+    pii_model_name: str | None = None,
     device: str = "cpu",
     generated_at: str | None = None,
     date_shift_days: int = 17,
@@ -265,7 +268,9 @@ def run_multimodal_dicom(
         seed: Deterministic corpus seed.
         corpus_size: Number of synthetic studies.
         cases: Pre-generated corpus to reuse instead of regenerating.
-        model_name: Reported model / system name.
+        system_name: System name recorded in the benchmark report.
+        pii_model_name: Actual PII checkpoint used by the pixel detector. When
+            omitted, the registered default English PII model is used.
         device: Reported device tier.
         generated_at: Optional ISO timestamp for the report.
         date_shift_days: Non-zero header date shift applied by the header pass.
@@ -277,6 +282,7 @@ def run_multimodal_dicom(
 
     Raises:
         MissingDependencyError: If the ``multimodal`` extra is not installed.
+        ValueError: If *cases* is supplied as an empty corpus.
     """
     import tempfile
 
@@ -287,6 +293,7 @@ def run_multimodal_dicom(
     )
 
     pydicom = _import_pydicom()
+    np = _import_numpy()
 
     temp_holder: tempfile.TemporaryDirectory[str] | None = None
     if cases is None:
@@ -300,6 +307,10 @@ def run_multimodal_dicom(
         )
     else:
         corpus = list(cases)
+    if not corpus:
+        raise ValueError("cases must contain at least one synthetic DICOM case")
+
+    resolved_pii_model = pii_model_name or _default_pii_model_name()
 
     pixel_gold: list[EvalSpan] = []
     pixel_pred: list[EvalSpan] = []
@@ -308,21 +319,44 @@ def run_multimodal_dicom(
     residual_pixel_findings = 0
     header_identifier_total = 0
     header_identifier_residual = 0
+    final_artifact_hashes: list[str] = []
 
     model_context = _offline_pixel_model() if offline else contextlib.nullcontext()
     try:
         with model_context:
             for case in corpus:
-                # --- header de-identification pass ---------------------------
-                header_out = case.path.with_name(f"{case.path.stem}.header.dcm")
-                deidentify_dicom_headers(
-                    case.path,
-                    policy=DicomHeaderDeidPolicy(
-                        output_path=header_out,
-                        date_shift_days=date_shift_days,
-                    ),
-                )
-                deidentified = pydicom.dcmread(header_out)
+                # Pixel redaction runs first so the real path can seed its deny
+                # recognizer from the original headers. Header de-identification
+                # then consumes that output, leaving one final artifact with
+                # both surfaces de-identified. The PHI-bearing intermediate is
+                # always removed.
+                pixel_stage = case.path.with_name(f"{case.path.stem}.pixel-stage.dcm")
+                final_out = case.path.with_name(f"{case.path.stem}.redacted.dcm")
+                final_out.unlink(missing_ok=True)
+                try:
+                    result = redact_dicom_pixels(
+                        case.path,
+                        output_path=pixel_stage,
+                        ocr_engine=GoldBoxOcrEngine(case.pixel_words),
+                        model_name=resolved_pii_model,
+                        verify_residual=True,
+                        fail_on_residual=False,
+                    )
+                    deidentify_dicom_headers(
+                        pixel_stage,
+                        policy=DicomHeaderDeidPolicy(
+                            output_path=final_out,
+                            date_shift_days=date_shift_days,
+                        ),
+                    )
+                except Exception:
+                    final_out.unlink(missing_ok=True)
+                    raise
+                finally:
+                    pixel_stage.unlink(missing_ok=True)
+
+                deidentified = pydicom.dcmread(final_out)
+                final_artifact_hashes.append(_sha256_file(final_out))
                 for keyword in _HEADER_DIRECT_IDENTIFIERS:
                     original = case.header_phi.get(keyword)
                     if not original:
@@ -331,22 +365,9 @@ def run_multimodal_dicom(
                     if _header_value_survives(deidentified, keyword, original):
                         header_identifier_residual += 1
 
-                # --- burned-in pixel redaction pass --------------------------
-                pixel_out = case.path.with_name(f"{case.path.stem}.pixels.dcm")
-                result = redact_dicom_pixels(
-                    case.path,
-                    output_path=pixel_out,
-                    ocr_engine=GoldBoxOcrEngine(case.pixel_words),
-                    model_name=model_name,
-                    verify_residual=True,
-                    fail_on_residual=False,
-                )
                 residual_pixel_findings += result.residual_report.residual_entity_count
-
-                detected_boxes = [
-                    (finding.frame_index, tuple(int(v) for v in finding.bbox))
-                    for finding in result.findings
-                ]
+                final_pixels = np.asarray(deidentified.pixel_array)
+                frame_count = int(getattr(deidentified, "NumberOfFrames", 1) or 1)
 
                 # Offset every case's spans into a single concatenated source
                 # string so character-level leakage/recall accounting is well
@@ -364,14 +385,18 @@ def run_multimodal_dicom(
                         )
                     )
 
-                # A gold word counts as detected when some redaction bbox on its
-                # frame overlaps its gold bbox. The redaction path pads bboxes,
-                # so match by overlap rather than exact equality.
+                # Credit a word only when its final gold region contains no
+                # residual ink. Scoring the final pixels prevents a tiny,
+                # overlapping redaction bbox from counting as a full success.
                 cursor = 0
                 for word in case.pixel_words:
                     start = case.pixel_text.index(word.text, cursor)
                     cursor = start + len(word.text)
-                    if _word_is_covered(word, detected_boxes):
+                    if _word_is_fully_redacted(
+                        word,
+                        final_pixels,
+                        frame_count=frame_count,
+                    ):
                         pixel_pred.append(
                             EvalSpan(
                                 start=start + offset,
@@ -431,10 +456,14 @@ def run_multimodal_dicom(
     metadata["case_ids"] = [case.case_id for case in corpus]
     metadata["date_shift_days"] = date_shift_days
     metadata["offline"] = offline
+    metadata["system_name"] = system_name
+    metadata["pii_model_name"] = resolved_pii_model
+    metadata["artifact_pipeline"] = "pixel-redaction-then-header-deidentification"
+    metadata["final_artifact_sha256"] = final_artifact_hashes
 
     return BenchmarkReport(
         suite=MULTIMODAL_DICOM,
-        model_name=model_name,
+        model_name=system_name,
         device=device,
         fixture_count=len(corpus),
         metrics=metrics,
@@ -477,6 +506,7 @@ def load_multimodal_dicom_fixtures(
                 "dicom_path": str(case.path),
                 "header_phi_labels": dict(_HEADER_PHI_LABELS),
                 "pixel_word_count": len(case.pixel_words),
+                "source_dicom_sha256": case.metadata["source_dicom_sha256"],
             }
         )
         fixtures.append(
@@ -531,7 +561,13 @@ def _generate_case(
     pixels, words = _render_burned_in_frame(np, burned_lines)
 
     path = out_dir / f"om162-synthetic-{index:03d}.dcm"
-    _write_pixel_dicom(np, path, pixels, header_phi)
+    _write_pixel_dicom(
+        np,
+        path,
+        pixels,
+        header_phi,
+        uid_entropy=f"{seed}:{index}",
+    )
 
     pixel_text = " ".join(word.text for word in words)
     pixel_gold_spans = _spans_for_words(words, pixel_text)
@@ -543,7 +579,11 @@ def _generate_case(
         pixel_words=tuple(words),
         pixel_text=pixel_text,
         pixel_gold_spans=pixel_gold_spans,
-        metadata={"seed": seed, "index": index},
+        metadata={
+            "seed": seed,
+            "index": index,
+            "source_dicom_sha256": _sha256_file(path),
+        },
     )
 
 
@@ -615,6 +655,8 @@ def _write_pixel_dicom(
     path: Path,
     pixels: Any,
     header_phi: Mapping[str, str],
+    *,
+    uid_entropy: str,
 ) -> Path:
     pydicom = _import_pydicom()
     from pydicom.dataset import FileDataset, FileMetaDataset
@@ -622,15 +664,23 @@ def _write_pixel_dicom(
 
     file_meta = FileMetaDataset()
     file_meta.MediaStorageSOPClassUID = CTImageStorage
-    file_meta.MediaStorageSOPInstanceUID = generate_uid()
+    file_meta.MediaStorageSOPInstanceUID = generate_uid(
+        entropy_srcs=[MULTIMODAL_DICOM, uid_entropy, "sop-instance"]
+    )
     file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    file_meta.ImplementationClassUID = generate_uid()
+    file_meta.ImplementationClassUID = generate_uid(
+        entropy_srcs=[MULTIMODAL_DICOM, "implementation-class"]
+    )
 
     dataset = FileDataset(str(path), {}, file_meta=file_meta, preamble=b"\0" * 128)
     dataset.SOPClassUID = CTImageStorage
     dataset.SOPInstanceUID = str(file_meta.MediaStorageSOPInstanceUID)
-    dataset.StudyInstanceUID = generate_uid()
-    dataset.SeriesInstanceUID = generate_uid()
+    dataset.StudyInstanceUID = generate_uid(
+        entropy_srcs=[MULTIMODAL_DICOM, uid_entropy, "study-instance"]
+    )
+    dataset.SeriesInstanceUID = generate_uid(
+        entropy_srcs=[MULTIMODAL_DICOM, uid_entropy, "series-instance"]
+    )
     dataset.PatientName = header_phi["PatientName"]
     dataset.PatientID = header_phi["PatientID"]
     dataset.PatientBirthDate = header_phi["PatientBirthDate"]
@@ -669,18 +719,40 @@ def _header_value_survives(dataset: Any, keyword: str, original: str) -> bool:
     return False
 
 
-def _word_is_covered(
+def _word_is_fully_redacted(
     word: BurnedInPhiWord,
-    detected_boxes: Sequence[tuple[int, tuple[int, int, int, int]]],
+    pixel_array: Any,
+    *,
+    frame_count: int,
 ) -> bool:
-    """Return True if a redaction bbox on *word*'s frame overlaps its bbox."""
-    wx0, wy0, wx1, wy1 = word.bbox
-    for frame_index, (bx0, by0, bx1, by1) in detected_boxes:
-        if frame_index != word.frame_index:
-            continue
-        if bx0 < wx1 and wx0 < bx1 and by0 < wy1 and wy0 < by1:
-            return True
-    return False
+    """Return whether the final pixels contain no residual ink in a gold bbox."""
+    np = _import_numpy()
+    pixels = np.asarray(pixel_array)
+    if word.frame_index < 0 or word.frame_index >= frame_count:
+        return False
+    frame = pixels[word.frame_index] if frame_count > 1 else pixels
+    x0, y0, x1, y1 = word.bbox
+    region = frame[y0:y1, x0:x1]
+    return bool(region.size) and not bool(np.any(region))
+
+
+def _sha256_file(path: Path) -> str:
+    """Return the SHA-256 digest of an artifact without exposing its content."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _default_pii_model_name() -> str:
+    """Return the registered English PII checkpoint for pixel detection."""
+    from openmed.core.model_registry import get_default_pii_model
+
+    model_name = get_default_pii_model("en")
+    if not model_name:  # pragma: no cover - registry invariant
+        raise RuntimeError("no default English PII model is registered")
+    return model_name
 
 
 def _format_display_date(compact: str) -> str:
@@ -744,7 +816,7 @@ def _offline_pixel_model() -> Iterator[None]:
             text=text,
             entities=[],
             model_name="offline-header-seeded",
-            timestamp=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+            timestamp="1970-01-01T00:00:00+00:00",
         )
 
     original = dicom_mod._extract_dicom_pixel_phi
@@ -763,6 +835,7 @@ __all__ = [
     "TCIA_SAMPLED",
     "DEFAULT_SEED",
     "DEFAULT_CORPUS_SIZE",
+    "DEFAULT_SYSTEM_NAME",
     "BurnedInPhiWord",
     "SyntheticDicomCase",
     "GoldBoxOcrEngine",
