@@ -103,7 +103,7 @@ A state-of-the-art clinical NER model running locally: no API key, no network ca
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
 | Specialized medical models            |          1,500+          |        Limited         |
-| Model-backed PII languages            |            16            |         Varies         |
+| Model-backed PII languages            |            17            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
 | Native iOS / macOS apps               |   ✅ via OpenMedKit      |           ❌           |
