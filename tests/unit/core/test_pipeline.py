@@ -121,7 +121,9 @@ def test_run_exposes_per_stage_latency_measurements():
     # non-deterministic.
     assert set(result.stage_durations_ms) == set(Pipeline.stage_names)
     assert all(isinstance(value, float) for value in result.stage_durations_ms.values())
+    assert result.cascade_duration_ms is None
     assert "stage_durations_ms" not in result.audit_record
+    assert "cascade_duration_ms" not in result.audit_record
 
 
 def test_stage3_records_unavailable_section_hook_metadata(monkeypatch):
