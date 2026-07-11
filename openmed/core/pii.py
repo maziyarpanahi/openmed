@@ -241,6 +241,25 @@ class DeidentificationResult:
             ),
         }
 
+    def _repr_html_(self) -> str:
+        """Render a highlighted-span HTML view for Jupyter/IPython notebooks.
+
+        IPython calls this automatically to display the result inline,
+        highlighting each detected PII span over the original text. Confidence
+        values are suppressed for this implicit representation; callers can opt
+        into them explicitly with :func:`openmed.processing.show`. The helper is
+        imported lazily so importing this module never requires display
+        dependencies.
+        """
+        from ..processing.display import render_spans_html
+
+        return render_spans_html(
+            self.original_text,
+            self.pii_entities,
+            title=f"deidentify · {self.method}",
+            show_confidence=False,
+        )
+
     def to_dataframe(self) -> Any:
         """Convert detected PII entities to a pandas DataFrame.
 
