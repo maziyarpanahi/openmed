@@ -18,10 +18,10 @@ with an architecture-safe PyTorch attention-selection hotfix:
 - **Python, Swift, Kotlin/Android, REST, gRPC, React Native, TypeScript, and
   browser paths** including OpenMedKit, typed REST clients, ONNX/WebGPU, and
   Transformers.js export bundles.
-- **15 model-backed PII language codes: ar, de, en, es, fr, he, hi, id, it,
-  ja, nl, pt, te, th, and tr** with locale-aware validation and surrogate
-  generation, plus additional validator-backed national-ID coverage for
-  ID-only locales.
+- **17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja,
+  ko, nl, pt, ro, te, th, and tr** in the model-backed allow-list, with
+  locale-aware validation and surrogate generation, plus additional
+  validator-backed national-ID coverage for ID-only locales.
 - **Release evidence** for leakage heatmaps, model scorecards, threshold
   sweeps, k-anonymity/l-diversity/t-closeness, utility loss, SBOMs, signed
   images, SLSA provenance, secret scanning, and reproducible dependency locks.

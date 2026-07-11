@@ -59,7 +59,99 @@ def test_local_only_hf_pipeline_uses_cached_files(mock_pipeline, monkeypatch):
     loader = ModelLoader(OpenMedConfig(local_only=True, backend="hf"))
     loader.create_pipeline("OpenMed/local-pii")
 
-    assert mock_pipeline.call_args.kwargs["local_files_only"] is True
+    pipeline_kwargs = mock_pipeline.call_args.kwargs
+    assert "local_files_only" not in pipeline_kwargs
+    assert pipeline_kwargs["model_kwargs"]["local_files_only"] is True
+    assert pipeline_kwargs["model_kwargs"]["cache_dir"] == loader.config.cache_dir
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.models.pipeline")
+def test_local_only_config_cannot_be_disabled_by_pipeline_kwarg(
+    mock_pipeline, monkeypatch
+):
+    _clear_offline_env(monkeypatch)
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(OpenMedConfig(local_only=True, backend="hf"))
+    loader.create_pipeline("OpenMed/local-pii", local_files_only=False)
+
+    pipeline_kwargs = mock_pipeline.call_args.kwargs
+    assert "local_files_only" not in pipeline_kwargs
+    assert pipeline_kwargs["model_kwargs"]["local_files_only"] is True
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.models.AutoConfig")
+@patch("openmed.core.models.AutoTokenizer")
+@patch("openmed.core.models.AutoModelForTokenClassification")
+def test_local_only_config_cannot_be_disabled_during_component_load(
+    mock_model_class,
+    mock_tokenizer_class,
+    mock_config_class,
+    monkeypatch,
+):
+    _clear_offline_env(monkeypatch)
+    mock_config = Mock(
+        num_labels=2,
+        problem_type="token_classification",
+        architectures=["BertForTokenClassification"],
+    )
+    mock_config_class.from_pretrained.return_value = mock_config
+    mock_model_class.from_pretrained.return_value = Mock(config=mock_config)
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(OpenMedConfig(local_only=True, backend="hf"))
+    loader.load_model("OpenMed/local-pii", local_files_only=False)
+
+    assert mock_config_class.from_pretrained.call_args.kwargs["local_files_only"]
+    assert mock_tokenizer_class.from_pretrained.call_args.kwargs["local_files_only"]
+    assert mock_model_class.from_pretrained.call_args.kwargs["local_files_only"]
+
+
+@patch("openmed.core.models.HF_AVAILABLE", True)
+@patch("openmed.core.models.pipeline")
+def test_local_only_pipeline_fallback_preserves_cached_only_loading(
+    mock_pipeline, monkeypatch
+):
+    _clear_offline_env(monkeypatch)
+    fallback_pipeline = Mock()
+    unguarded_egress_attempts = []
+
+    def record_unguarded_egress(*args, **kwargs):
+        unguarded_egress_attempts.append((args, kwargs))
+        raise AssertionError("pipeline construction attempted network egress")
+
+    monkeypatch.setattr(socket, "create_connection", record_unguarded_egress)
+
+    pipeline_calls = 0
+
+    def pipeline_with_network_probe(*args, **kwargs):
+        nonlocal pipeline_calls
+        pipeline_calls += 1
+        if pipeline_calls == 1:
+            socket.create_connection(("127.0.0.1", 9), timeout=0.01)
+        return fallback_pipeline
+
+    mock_pipeline.side_effect = pipeline_with_network_probe
+
+    from openmed.core.models import ModelLoader
+
+    loader = ModelLoader(OpenMedConfig(local_only=True, backend="hf"))
+    model_data = {
+        "model": Mock(),
+        "tokenizer": Mock(),
+        "config": Mock(),
+    }
+    with patch.object(loader, "load_model", return_value=model_data) as mock_load:
+        result = loader.create_pipeline("OpenMed/local-pii")
+
+    assert result is fallback_pipeline
+    mock_load.assert_called_once_with("OpenMed/local-pii", local_files_only=True)
+    assert unguarded_egress_attempts == []
+    assert "local_files_only" not in mock_pipeline.call_args.kwargs
 
 
 def test_disallowed_socket_connection_raises_clear_offline_error(monkeypatch):
@@ -67,6 +159,14 @@ def test_disallowed_socket_connection_raises_clear_offline_error(monkeypatch):
     config = OpenMedConfig(local_only=True)
 
     with network_blocked_if_offline(config):
+        with pytest.raises(OfflineModeError, match="OPENMED_OFFLINE/local_only=True"):
+            socket.create_connection(("127.0.0.1", 9), timeout=0.01)
+
+
+def test_explicit_local_only_work_blocks_socket_connection(monkeypatch):
+    _clear_offline_env(monkeypatch)
+
+    with network_blocked_if_offline(local_only=True):
         with pytest.raises(OfflineModeError, match="OPENMED_OFFLINE/local_only=True"):
             socket.create_connection(("127.0.0.1", 9), timeout=0.01)
 

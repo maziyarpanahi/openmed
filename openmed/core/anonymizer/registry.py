@@ -182,6 +182,7 @@ _LOCALE_ID_METHODS = {
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
     "sk_SK": "rodne_cislo",
+    "ro_RO": "romanian_cnp",
 }
 
 

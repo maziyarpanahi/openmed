@@ -1,7 +1,9 @@
-# REST Service (v0.6.2)
+# REST Service
 
-OpenMed `v0.6.2` hardens the FastAPI service introduced in `v0.6.1` with shared
-model reuse, explicit model unloading, and idle model cleanup:
+OpenMed's FastAPI service provides shared model reuse, explicit model unloading,
+streaming PII extraction, asynchronous jobs, privacy-gateway egress, and SMART
+Backend Services ingestion. The generated OpenAPI document is the source of
+truth for exact request and response schemas. Its current public operations are:
 
 - `GET /health`
 - `GET /livez`
@@ -10,13 +12,22 @@ model reuse, explicit model unloading, and idle model cleanup:
 - `POST /models/unload`
 - `POST /analyze`
 - `POST /pii/extract`
+- `POST /pii/extract/stream`
 - `POST /pii/deidentify`
+- `POST /fhir/smart-backend/ingestions`
+- `GET /fhir/smart-backend/ingestions/{job_id}`
+- `GET /fhir/smart-backend/ingestions/{job_id}/summary`
 - `POST /jobs`
-- `GET /jobs/{id}`
+- `GET /jobs/{job_id}`
 - `POST /privacy-gateway/complete`
-- Optional `GET /metrics`
 
-This release adds stricter request validation, shared model/pipeline reuse, optional startup preload, bounded warm-pool residency, model keep-alive controls, optional no-PHI OpenTelemetry tracing, and a unified non-2xx error envelope.
+The opt-in `GET /metrics` route is intentionally excluded from the generated
+schema and returns `404` unless metrics are enabled.
+
+The service includes stricter request validation, shared model/pipeline reuse,
+optional startup preload, bounded warm-pool residency, model keep-alive
+controls, optional no-PHI OpenTelemetry tracing, and a consistent application
+error envelope.
 
 For large de-identification batches that should not hold a client connection
 open, use [Async REST Jobs & Webhooks](serving/async-jobs.md).
@@ -32,8 +43,12 @@ uv pip install -e ".[hf,service]"
 Start the API server:
 
 ```bash
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
+
+Keep this loopback bind for local use. Before exposing the service on a network,
+configure [authentication](serving/authentication.md), TLS at the ingress or
+reverse proxy, and an exact trusted-host allowlist.
 
 ## Postman Collection
 
@@ -69,10 +84,14 @@ uv pip install -e ".[hf,service]"
 
 Use `OpenMedClient` against a running service:
 
+All patient-like content in the examples below is synthetic. Do not paste real
+patient text, reversible mappings, or credentials into documentation, issues,
+logs, or screenshots.
+
 ```python
 from openmed.service.client import OpenMedAPIError, OpenMedClient
 
-with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
+with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
     result = client.analyze(
         "Patient started imatinib for CML.",
         model_name="disease_detection_superclinical",
@@ -81,7 +100,6 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=30.0) as client:
     redacted = client.deidentify(
         "Paciente: Maria Garcia",
         method="mask",
-        keep_mapping=True,
     )
     llm = client.privacy_gateway(
         "Patient Maria Garcia called 555-0100.",
@@ -120,7 +138,7 @@ export.
 Optional profile selection (defaults to `prod`):
 
 ```bash
-OPENMED_PROFILE=dev uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_PROFILE=dev uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 ## Browser and Host Allowlists
@@ -159,7 +177,7 @@ Optional shared model preload at startup:
 
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical,OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_PRELOAD_MODELS` is a comma-separated list of registry aliases or full Hugging Face ids. Empty entries are ignored and duplicates are removed.
@@ -169,7 +187,7 @@ Optional warm-pool resident model limit:
 ```bash
 OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
 OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_MAX_RESIDENT_MODELS` bounds how many models remain resident in the shared warm-pool. When the limit is exceeded, the least-recently-used idle model is unloaded. Omit it for unbounded resident model caching.
@@ -177,7 +195,7 @@ uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 Optional default model keep-alive:
 
 ```bash
-OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_KEEP_ALIVE` accepts seconds as a number or duration strings such as `30s`, `5m`, `1h30m`, or `1d`. Omit it for indefinite caching, use `0` for unload-after-request behavior, or use request-level `keep_alive` to override the default for one call.
@@ -185,16 +203,20 @@ OPENMED_SERVICE_KEEP_ALIVE=10m uvicorn openmed.service.app:app --host 0.0.0.0 --
 Optional request text cap:
 
 ```bash
-OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_MAX_TEXT_LENGTH=250000 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
-`OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`, `/pii/extract`, `/pii/deidentify`, and `/privacy-gateway/complete`. The default is `1,000,000` characters. Oversized requests return the standard `422` validation envelope; split larger documents client-side or route them through batch processing.
+`OPENMED_SERVICE_MAX_TEXT_LENGTH` caps the `text` field accepted by `/analyze`,
+`/pii/extract`, `/pii/extract/stream`, `/pii/deidentify`, `/jobs`, and
+`/privacy-gateway/complete`. The default is `1,000,000` characters. Oversized
+requests return the standard `422` validation envelope; split larger documents
+client-side or route them through batch processing.
 
 Optional privacy-gateway egress endpoint:
 
 ```bash
 OPENMED_SERVICE_PRIVACY_GATEWAY_ENDPOINT=https://llm-proxy.example.com/complete \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 `POST /privacy-gateway/complete` refuses to call an external LLM unless
@@ -211,7 +233,7 @@ Optional dynamic request batching:
 OPENMED_SERVICE_BATCHING_ENABLED=true \
 OPENMED_SERVICE_BATCH_MAX_SIZE=8 \
 OPENMED_SERVICE_BATCH_MAX_WAIT_MS=25 \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 Dynamic batching is off by default. When enabled, `/pii/extract` groups
@@ -229,7 +251,7 @@ Optional request coalescing:
 
 ```bash
 OPENMED_SERVICE_COALESCING_ENABLED=true \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 Request coalescing is off by default. When enabled, identical concurrent
@@ -245,7 +267,7 @@ OPENMED_SERVICE_RETRY_MAX_ATTEMPTS=3 \
 OPENMED_SERVICE_RETRY_BACKOFF_INITIAL_SECONDS=0.05 \
 OPENMED_SERVICE_CIRCUIT_BREAKER_FAILURE_THRESHOLD=3 \
 OPENMED_SERVICE_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS=30 \
-uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 Model load and inference work is retried with bounded exponential backoff and
@@ -257,7 +279,7 @@ with error code `circuit_breaker_open` and a `Retry-After` header. See
 Optional graceful-shutdown drain timeout:
 
 ```bash
-OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
+OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS=30 uvicorn openmed.service.app:app --host 127.0.0.1 --port 8080
 ```
 
 `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS` is a non-negative number of seconds.
@@ -343,7 +365,10 @@ names, counts, labels, lengths, and durations. See
 - Graceful shutdown rejects new model-backed requests and drains in-flight model-backed requests for up to `OPENMED_SERVICE_SHUTDOWN_DRAIN_SECONDS`.
 - `/metrics` is opt-in, pull-only, and exposes aggregate counts, gauges, and latency histograms without PHI-derived labels.
 - OpenTelemetry tracing is opt-in, honors incoming trace context, and exports only no-PHI span attributes when configured.
-- Non-2xx responses use one JSON envelope across validation, bad-request, timeout, and internal errors.
+- Application endpoint errors and invalid Host headers use one JSON envelope
+  across validation, bad-request, timeout, and internal errors. A CORS
+  preflight rejected by Starlette's middleware can instead use its native
+  plain-text response.
 - `/pii/deidentify` still accepts the legacy `shift_dates` boolean, but it is now a deprecated alias for `method="shift_dates"`.
 
 ## Endpoints
@@ -356,7 +381,7 @@ Health response:
 {
   "status": "ok",
   "service": "openmed-rest",
-  "version": "0.6.2",
+  "version": "<installed OpenMed version>",
   "profile": "prod"
 }
 ```
@@ -534,12 +559,17 @@ Successful response shape:
 
 ## Error Envelope
 
-All non-2xx responses use this shape:
+Application endpoint errors and invalid Host headers use this shape:
+
+A CORS preflight is handled before the endpoint. If Starlette rejects its
+origin, method, or requested headers, the response can be plain text rather
+than this JSON envelope. Clients should check the status and content type before
+decoding an error body.
 
 ```json
 {
   "error": {
-    "code": "validation_error|bad_request|timeout|not_ready|privacy_gateway_blocked|privacy_gateway_transport_error|privacy_gateway_not_configured|internal_error",
+    "code": "<stable machine-readable error code>",
     "message": "human-readable summary",
     "details": null
   }
@@ -583,29 +613,36 @@ Timeout example:
 Build:
 
 ```bash
-docker build -t openmed:0.6.2 .
+docker build -t openmed:local .
 ```
 
 Run:
 
 ```bash
-docker run --rm -p 8080:8080 \
+docker run --rm -p 127.0.0.1:8080:8080 \
   -e OPENMED_PROFILE=prod \
   -e OPENMED_SERVICE_KEEP_ALIVE=10m \
   -e OPENMED_SERVICE_PRELOAD_MODELS=disease_detection_superclinical \
   -e OPENMED_SERVICE_MAX_RESIDENT_MODELS=2 \
   -e OPENMED_SERVICE_CORS_ORIGINS=http://localhost:5173 \
   -e OPENMED_SERVICE_TRUSTED_HOSTS=127.0.0.1,localhost \
-  openmed:0.6.2
+  openmed:local
 ```
 
 ### Docker Compose
 
 Use the provided `docker-compose.yml` to build and start the service with a
-single command. The Compose setup maps port **8080**, sets
-`OPENMED_PROFILE=prod`, and persists the Hugging Face cache in a named volume.
-`OPENMED_CACHE_DIR` points inside that mounted cache so service model downloads
-are reused across restarts.
+single command. The Compose setup publishes host port **8080**, sets
+`OPENMED_PROFILE=prod`, and persists the standard Hugging Face cache directory
+in a named volume so downloads placed in that cache are reused across restarts.
+`OPENMED_CACHE_DIR` is also passed through for data and deployment workflows
+that explicitly read it; it is not a generic `OpenMedConfig.cache_dir`
+override.
+
+The checked-in Compose port mapping listens on the host's interfaces. Treat it
+as network exposure: for local-only troubleshooting, change the mapping to
+`127.0.0.1:8080:8080`. Before intentional network exposure, configure
+authentication, TLS, and the trusted-host allowlist.
 
 ```bash
 docker compose up -d
