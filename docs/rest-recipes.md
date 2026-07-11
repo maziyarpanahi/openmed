@@ -47,6 +47,13 @@ setup:
 docker compose up -d
 ```
 
+The checked-in Compose mapping publishes port `8080` on every host interface.
+For local-only use, prefer the loopback-bound Uvicorn command above or restrict
+the published port to loopback with the host firewall or a Compose override.
+Before allowing remote access, terminate TLS at a reverse proxy, enable
+[REST authentication](serving/authentication.md), and restrict the trusted-host
+allowlist. CORS is a browser policy, not authentication or transport security.
+
 The examples below assume the service is reachable at
 `http://127.0.0.1:8080`. Export it once so the `curl` snippets stay short:
 
@@ -64,16 +71,18 @@ BASE_URL = "http://127.0.0.1:8080"
 
 By default the service only trusts loopback `Host` headers
 (`localhost,127.0.0.1,[::1]`) and CORS is off. If you call it from another host
-or a browser front-end, configure `OPENMED_SERVICE_TRUSTED_HOSTS` and
-`OPENMED_SERVICE_CORS_ORIGINS` first — see
+configure `OPENMED_SERVICE_TRUSTED_HOSTS`; for a browser front-end, also
+configure `OPENMED_SERVICE_CORS_ORIGINS` — see
 [Browser and Host Allowlists](rest-service.md#browser-and-host-allowlists).
+These allowlists do not encrypt or authenticate traffic; remote deployments
+still need HTTPS and authentication.
 
 ## Health check — `GET /health`
 
 The cheapest call to confirm the service is up. It never loads a model.
 
 ```bash
-curl "$OPENMED_URL/health"
+curl --max-time 10 "$OPENMED_URL/health"
 ```
 
 ```python
@@ -103,7 +112,7 @@ Run a medical NER model over free text. `model_name` defaults to
 `disease_detection_superclinical`; `confidence_threshold` defaults to `0.0`.
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/analyze" \
+curl -sS --max-time 310 -X POST "$OPENMED_URL/analyze" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Patient started imatinib for CML.",
@@ -118,7 +127,7 @@ payload = {
     "model_name": "disease_detection_superclinical",
     "confidence_threshold": 0.5,
 }
-response = requests.post(f"{BASE_URL}/analyze", json=payload, timeout=300)
+response = requests.post(f"{BASE_URL}/analyze", json=payload, timeout=310)
 response.raise_for_status()
 result = response.json()
 for entity in result["entities"]:
@@ -169,7 +178,7 @@ codes: `ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`,
 `pt`, `ro`, `te`, `th`, and `tr`. `confidence_threshold` defaults to `0.5`.
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/pii/extract" \
+curl -sS --max-time 310 -X POST "$OPENMED_URL/pii/extract" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Patient Jordan Ramirez, MRN 4482910, called from 555-0147.",
@@ -184,7 +193,7 @@ payload = {
     "lang": "en",
     "use_smart_merging": True,
 }
-response = requests.post(f"{BASE_URL}/pii/extract", json=payload, timeout=300)
+response = requests.post(f"{BASE_URL}/pii/extract", json=payload, timeout=310)
 response.raise_for_status()
 for entity in response.json()["entities"]:
     print(entity["label"], entity["start"], entity["end"], entity["text"])
@@ -260,7 +269,7 @@ placeholder-to-original mapping and should be reserved for controlled,
 reversible workflows. `confidence_threshold` defaults to `0.7`.
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/pii/deidentify" \
+curl -sS --max-time 310 -X POST "$OPENMED_URL/pii/deidentify" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Call 555-0147 to confirm the appointment.",
@@ -275,7 +284,7 @@ payload = {
     "method": "mask",
     "lang": "en",
 }
-response = requests.post(f"{BASE_URL}/pii/deidentify", json=payload, timeout=300)
+response = requests.post(f"{BASE_URL}/pii/deidentify", json=payload, timeout=310)
 response.raise_for_status()
 result = response.json()
 print(result["deidentified_text"])
@@ -334,7 +343,7 @@ To shift dates instead of masking, use `method: "shift_dates"` with an optional
 `date_shift_days`:
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/pii/deidentify" \
+curl -sS --max-time 310 -X POST "$OPENMED_URL/pii/deidentify" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Patient Jordan Ramirez was admitted on 2026-01-02.",
@@ -353,7 +362,7 @@ Report the warm-pool cache, resident models, and idle-unload countdown. No model
 is loaded by this call.
 
 ```bash
-curl "$OPENMED_URL/models/loaded"
+curl --max-time 10 "$OPENMED_URL/models/loaded"
 ```
 
 ```python
@@ -393,7 +402,7 @@ the service leaves it loaded and reports the count.
 Unload one model:
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/models/unload" \
+curl -sS --max-time 30 -X POST "$OPENMED_URL/models/unload" \
   -H "Content-Type: application/json" \
   -d '{"model_name": "disease_detection_superclinical"}'
 ```
@@ -421,7 +430,7 @@ model (released resource counts vary by backend):
 Unload every inactive model:
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/models/unload" \
+curl -sS --max-time 30 -X POST "$OPENMED_URL/models/unload" \
   -H "Content-Type: application/json" \
   -d '{"all": true}'
 ```
@@ -445,12 +454,14 @@ cached (released resource counts vary by backend):
 }
 ```
 
-Exactly one of `model_name` or `all: true` is required; sending neither returns
-the validation error envelope described below.
+Send `model_name` to unload one model or `all: true` to unload all inactive
+models. Sending neither returns the validation error envelope described below.
+Do not send both: the current schema treats `all: true` as the all-model
+operation when both fields are present.
 
 ## Handling errors
 
-After a request passes the configured host and CORS allowlists, application
+After a request passes the configured host and CORS middleware, application
 endpoint errors use one JSON envelope, so a single handler covers validation,
 bad-request, timeout, and internal errors:
 
@@ -476,13 +487,14 @@ Common `error.code` values include `validation_error`, `bad_request`, `timeout`,
 `circuit_breaker_open`, and `internal_error`. Authentication and privacy-gateway
 features add their own documented codes. `details` may be a list (validation
 errors), an object (for example `{"timeout_seconds": 300}`), or `null`. Every
-response carries an `X-Request-ID` header, and error envelopes echo it as
-`error.request_id` for correlating logs.
+HTTP response carries an `X-Request-ID` header. Application-generated error
+envelopes also echo it as `error.request_id` for correlating logs; middleware
+rejections may provide only the response header.
 
 Reproduce the validation envelope with a blank `text`:
 
 ```bash
-curl -sS -X POST "$OPENMED_URL/analyze" \
+curl -sS --max-time 60 -X POST "$OPENMED_URL/analyze" \
   -H "Content-Type: application/json" \
   -H "X-Request-ID: recipe-validation-error" \
   -d '{"text": "   "}'
@@ -512,14 +524,15 @@ analyze("   ")  # raises RuntimeError with code "validation_error"
 ## Typed Python client
 
 The `service` extra ships a typed synchronous client,
-`openmed.service.client.OpenMedClient`, built on `httpx`. It maps each endpoint
-to a method and raises `OpenMedAPIError` on any non-2xx response, so you skip the
-manual status checks above:
+`openmed.service.client.OpenMedClient`, built on `httpx`. It maps the analysis,
+PII, privacy-gateway, and model-cache endpoints to methods and raises
+`OpenMedAPIError` on any non-2xx response, so you skip the manual status checks
+above:
 
 ```python
 from openmed.service.client import OpenMedAPIError, OpenMedClient
 
-with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
+with OpenMedClient("http://127.0.0.1:8080", timeout=310.0) as client:
     analysis = client.analyze(
         "Patient started imatinib for CML.",
         model_name="disease_detection_superclinical",
@@ -542,8 +555,14 @@ with OpenMedClient("http://127.0.0.1:8080", timeout=300.0) as client:
 ```
 
 `OpenMedAPIError` exposes the service error `code`, `message`, optional
-`details`, HTTP `status_code`, and any `request_id` returned by the service or a
-proxy. Use `client.unload_all_models()` to drop every inactive model in one call.
+`details`, HTTP `status_code`, and the `request_id` from the response header (or
+the outgoing client request ID when the response has none). Use
+`client.unload_all_models()` to drop every inactive model in one call.
+
+The `310`-second model-call timeout is intentionally just above the production
+profile's default `300`-second service deadline, so the client can receive the
+service's structured timeout envelope. Raise both values together if your
+deployment uses a longer server deadline.
 
 ## Related pages
 
