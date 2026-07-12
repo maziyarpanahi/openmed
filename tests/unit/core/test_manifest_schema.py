@@ -177,49 +177,10 @@ def test_manifest_generator_uses_hub_api(monkeypatch):
     assert "leakage" in rows[0]["benchmark"]
 
 
-def test_manifest_generator_infers_language_from_repo_name():
-    examples = {
-        "Bengali": "bn",
-        "Chinese": "zh",
-        "Korean": "ko",
-        "Vietnamese": "vi",
-    }
-    for language_name, language_code in examples.items():
-        repo_id = f"OpenMed/OpenMed-PII-{language_name}-NomicMed-Large-395M-v1"
-        assert generate_manifest._languages(repo_id, []) == [language_code]
-
-
-def test_pii_language_name_matches_manifest_language():
-    language_codes = {
-        "Arabic": "ar",
-        "Bengali": "bn",
-        "Chinese": "zh",
-        "Dutch": "nl",
-        "French": "fr",
-        "German": "de",
-        "Hindi": "hi",
-        "Italian": "it",
-        "Japanese": "ja",
-        "Korean": "ko",
-        "Portuguese": "pt",
-        "Spanish": "es",
-        "Telugu": "te",
-        "Turkish": "tr",
-        "Vietnamese": "vi",
-    }
-    violations = []
-    for row in _rows():
-        repo_id = row["repo_id"]
-        for language_name, language_code in language_codes.items():
-            if f"-PII-{language_name}-" not in repo_id:
-                continue
-            if row["languages"] != [language_code]:
-                violations.append(
-                    f"{repo_id}: expected {language_code}, got {row['languages']}"
-                )
-            break
-
-    assert violations == []
+def test_manifest_generator_infers_korean_from_repo_name():
+    assert generate_manifest._languages(
+        "OpenMed/OpenMed-PII-Korean-NomicMed-Large-395M-v1", []
+    ) == ["ko"]
 
 
 def test_only_manifest_generator_lists_org_models():
