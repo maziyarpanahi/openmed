@@ -138,7 +138,7 @@ def export_android_fp16(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model = onnx.load(str(onnx_path))
+    model = onnx.load(str(onnx_path), load_external_data=False)
     fp16_model = convert_float_to_float16(
         str(onnx_path),
         keep_io_types=keep_io_types,
