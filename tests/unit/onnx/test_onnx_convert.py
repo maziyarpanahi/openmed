@@ -88,6 +88,44 @@ def test_consolidates_external_onnx_tensors_into_one_sidecar(
     onnx.checker.check_model(str(model_path))
 
 
+def test_external_data_consolidation_failure_preserves_original_artifact(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    module = _convert_module()
+    model_path = tmp_path / "model.onnx"
+    initializer = onnx.numpy_helper.from_array(
+        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        name="weights",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [initializer])
+    onnx.save_model(
+        onnx.helper.make_model(graph),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+    sidecar_path = tmp_path / "model.onnx.data"
+    original_model = model_path.read_bytes()
+    original_sidecar = sidecar_path.read_bytes()
+
+    def fail_save(*args, **kwargs):
+        raise RuntimeError("synthetic save failure")
+
+    monkeypatch.setattr(onnx, "save_model", fail_save)
+
+    with pytest.raises(RuntimeError, match="synthetic save failure"):
+        module._consolidate_external_onnx_data(model_path)
+
+    assert model_path.read_bytes() == original_model
+    assert sidecar_path.read_bytes() == original_sidecar
+    assert not (tmp_path / ".model.onnx.consolidated").exists()
+
+
 def test_write_export_manifest_records_onnx_and_webgpu(tmp_path: Path) -> None:
     module = _convert_module()
     (tmp_path / "model.onnx").write_bytes(b"onnx")
@@ -206,7 +244,8 @@ def test_export_webgpu_converts_to_fp16_and_preserves_io_types(
 
     onnx_mod = types.ModuleType("onnx")
 
-    def fake_load(path):
+    def fake_load(path, *, load_external_data=True):
+        assert load_external_data is False
         return {"path": path}
 
     def fake_save(model, path):

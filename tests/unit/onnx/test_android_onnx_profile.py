@@ -109,7 +109,7 @@ def test_export_android_fp16_converts_weights_and_keeps_io_types(
     input_path.write_bytes(b"onnx")
     model = _fake_android_model()
     saved = {}
-    _install_fake_onnx(monkeypatch, model, saved=saved)
+    checked = _install_fake_onnx(monkeypatch, model, saved=saved)
 
     runtime_mod = types.ModuleType("onnxruntime")
     transformers_mod = types.ModuleType("onnxruntime.transformers")
@@ -132,6 +132,7 @@ def test_export_android_fp16_converts_weights_and_keeps_io_types(
     assert output_path.read_bytes() == b"fp16"
     assert converted["model"] == str(input_path)
     assert saved["model"]["keep_io_types"] is True
+    assert checked == [str(output_path)]
 
 
 def test_convert_android_profile_records_fp32_fp16_artifacts_and_metadata(
@@ -400,7 +401,7 @@ def _install_fake_onnx(
 ) -> list:
     checked = []
     onnx_mod = types.ModuleType("onnx")
-    onnx_mod.load = lambda path: model
+    onnx_mod.load = lambda path, **kwargs: model
     onnx_mod.checker = types.SimpleNamespace(
         check_model=lambda model_obj: checked.append(model_obj)
     )

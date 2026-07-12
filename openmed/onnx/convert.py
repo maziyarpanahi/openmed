@@ -324,7 +324,7 @@ def export_webgpu(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model = onnx.load(str(onnx_path))
+    model = onnx.load(str(onnx_path), load_external_data=False)
     fp16_model = convert_float_to_float16(
         str(onnx_path),
         keep_io_types=keep_io_types,
@@ -1305,10 +1305,13 @@ def _consolidate_external_onnx_data(path: Path) -> None:
 
     sidecar_name = f"{path.name}.data"
     sidecar_path = path.parent / sidecar_name
-    temporary_path = path.with_name(f".{path.name}.consolidated")
+    temporary_dir = path.parent / f".{path.name}.consolidated"
+    temporary_path = temporary_dir / path.name
+    temporary_sidecar = temporary_dir / sidecar_name
+    backup_sidecar = temporary_dir / f"{sidecar_name}.original"
     model = onnx.load(str(path), load_external_data=True)
-    temporary_path.unlink(missing_ok=True)
-    sidecar_path.unlink(missing_ok=True)
+    shutil.rmtree(temporary_dir, ignore_errors=True)
+    temporary_dir.mkdir()
 
     try:
         onnx.save_model(
@@ -1320,11 +1323,21 @@ def _consolidate_external_onnx_data(path: Path) -> None:
             size_threshold=0,
             convert_attribute=False,
         )
-        temporary_path.replace(path)
-    except Exception:
-        temporary_path.unlink(missing_ok=True)
-        sidecar_path.unlink(missing_ok=True)
-        raise
+        if not temporary_path.is_file() or not temporary_sidecar.is_file():
+            raise RuntimeError("ONNX external-data consolidation was incomplete")
+
+        if sidecar_path.exists():
+            sidecar_path.replace(backup_sidecar)
+        try:
+            temporary_sidecar.replace(sidecar_path)
+            temporary_path.replace(path)
+        except Exception:
+            sidecar_path.unlink(missing_ok=True)
+            if backup_sidecar.exists():
+                backup_sidecar.replace(sidecar_path)
+            raise
+    finally:
+        shutil.rmtree(temporary_dir, ignore_errors=True)
 
     for location in old_locations - {sidecar_name}:
         old_path = (path.parent / location).resolve(strict=False)
