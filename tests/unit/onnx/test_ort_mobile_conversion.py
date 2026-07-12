@@ -249,3 +249,41 @@ def test_convert_android_profile_skips_ort_when_tooling_unavailable(
     assert "pip install openmed[onnx]" in caplog.text
     assert "Patient" not in caplog.text
     assert "John Doe" not in caplog.text
+
+
+def test_convert_android_onnx_to_ort_skips_serialization_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    module = _ort_module()
+    onnx_path = tmp_path / "model.onnx"
+    onnx_path.write_bytes(b"onnx")
+    partial_ort = tmp_path / "model.ort"
+    partial_config = tmp_path / "model.required_operators_and_types.config"
+
+    def fail_conversion(*args, **kwargs):
+        partial_ort.write_bytes(b"partial")
+        partial_config.write_text("partial", encoding="utf-8")
+        raise RuntimeError("serializer limit")
+
+    fake_tools = types.SimpleNamespace(
+        OptimizationStyle=types.SimpleNamespace(Fixed="Fixed"),
+        convert_onnx_models_to_ort=fail_conversion,
+    )
+    monkeypatch.setattr(module, "_load_ort_tools", lambda: fake_tools)
+    caplog.set_level(logging.WARNING, logger="openmed.onnx.ort_mobile")
+
+    result = module.convert_android_onnx_to_ort(
+        onnx_path,
+        output_dir=tmp_path,
+        validation=types.SimpleNamespace(operators=("Add",), opset=18),
+    )
+
+    assert result.skipped is True
+    assert result.ort_path is None
+    assert result.skip_reason == module.ORT_CONVERSION_FAILED_REASON
+    assert not partial_ort.exists()
+    assert not partial_config.exists()
+    assert "RuntimeError" in caplog.text
+    assert "serializer limit" not in caplog.text

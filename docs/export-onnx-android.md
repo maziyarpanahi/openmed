@@ -4,6 +4,10 @@ OpenMed can export token-classification checkpoints for Android ONNX Runtime
 Mobile with the `android` ONNX profile:
 
 ```bash
+python -m pip install --upgrade "openmed[onnx,hf]"
+```
+
+```bash
 .venv/bin/python -m openmed.onnx.convert \
   --model OpenMed/example-token-classifier \
   --output dist/example-android-onnx \
@@ -25,6 +29,44 @@ dist/example-android-onnx/
   id2label.json
   openmed-onnx.json
 ```
+
+## Private Batch Rollout
+
+For the full OpenMed PyTorch token-classification inventory, use the resumable
+batch runner. It reads `models.jsonl`, selects source PyTorch rows by default,
+skips MLX/CoreML/ONNX-derived rows, and writes compact status evidence to
+`dist/onnx-android/status.jsonl`. The runner disables Hugging Face Xet transfers
+by default for rollout reliability; set `HF_HUB_DISABLE_XET=0` to opt back in:
+
+```bash
+.venv/bin/python scripts/onnx/batch_android_convert_publish.py --dry-run
+```
+
+To convert and upload privately, set a write token in `HF_WRITE_TOKEN` and run:
+
+```bash
+HF_WRITE_TOKEN=... \
+.venv/bin/python scripts/onnx/batch_android_convert_publish.py \
+  --publish-to-hub \
+  --publish-manifest dist/onnx-android/private-models.jsonl
+```
+
+Published repositories are created private by the batch runner. There is no
+public-upload flag in this path. Keep release promotion and updates to the
+public `models.jsonl` as a separate audited step after Android parity,
+quantization, and catalog checks pass.
+
+GLiNER checkpoints are intentionally excluded from this batch. Their zero-shot
+span contract requires prompt labels, word masks, candidate-span indices, and
+span-logit decoding; it is not compatible with OpenMedKit's standard Android
+token-classification session. GLiNER remains available through the Python and
+MLX runtimes until a dedicated Android session is implemented and certified.
+
+Privacy-filter mixture-of-experts checkpoints are also excluded. Their current
+PyTorch forward pass uses data-dependent expert routing that cannot be safely
+captured by the legacy ONNX tracer: the exported graph hard-codes routing split
+sizes and fails parity execution on different synthetic inputs. These models
+remain available through their supported Python and MLX runtimes.
 
 `model.onnx` is the fp32 graph. `model_fp16.onnx` stores fp16 weights while
 keeping public input and output tensor types stable for Android callers.

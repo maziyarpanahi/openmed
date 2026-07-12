@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added a resumable Android ONNX batch rollout runner, Android/ORT model-card
+  format metadata, and runnable MLX examples for token classification and
+  GLiNER zero-shot NER.
 - Added a PEP 561 `py.typed` marker plus a pinned, scoped mypy gate for the
   annotated public-module surface, with built-wheel and sdist verification
   that the marker ships in release artifacts (#548).
@@ -19,6 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an offline immunization zero-shot domain with FHIR-aligned display
   labels, canonical policy metadata, synthetic per-label fixture coverage, and
   generated OM-138 exporter-alignment documentation (#897).
+
+### Fixed
+
+- Hardened Android ONNX export and publishing for large external-data graphs,
+  Longformer tracing, fp16 metadata, dynamic INT8 graph ordering, optional ORT
+  conversion failures, existing Hub repositories, and models that require
+  zero-valued `token_type_ids` at runtime.
 
 ## [1.8.1] - 2026-07-10
 

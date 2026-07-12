@@ -149,7 +149,13 @@ def _artifact_format_block(formats: list[str]) -> list[str]:
     runtime_formats = []
     quantization_formats = []
     for value in formats:
-        if _normalize_format(value) in {"onnx", "webgpu"}:
+        if _normalize_format(value) in {
+            "onnx",
+            "onnx-android",
+            "ort-android",
+            "transformersjs",
+            "webgpu",
+        }:
             runtime_formats.append(value)
         quantization = _quantization_label(value)
         if quantization is not None:
