@@ -23,9 +23,6 @@ DEFAULT_OUTPUT = Path("models.jsonl")
 LANGUAGE_TAGS = {
     "ar": "ar",
     "arabic": "ar",
-    "bengali": "bn",
-    "bn": "bn",
-    "chinese": "zh",
     "de": "de",
     "german": "de",
     "en": "en",
@@ -50,14 +47,9 @@ LANGUAGE_TAGS = {
     "telugu": "te",
     "tr": "tr",
     "turkish": "tr",
-    "vi": "vi",
-    "vietnamese": "vi",
-    "zh": "zh",
 }
 LANGUAGE_NAMES = {
     "arabic": "ar",
-    "bengali": "bn",
-    "chinese": "zh",
     "dutch": "nl",
     "french": "fr",
     "german": "de",
@@ -69,7 +61,6 @@ LANGUAGE_NAMES = {
     "spanish": "es",
     "telugu": "te",
     "turkish": "tr",
-    "vietnamese": "vi",
 }
 
 ARCHITECTURE_TAGS = (
