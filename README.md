@@ -157,7 +157,22 @@ intake, OCR handoff, PII redaction, and token-classification inference through
 dynamic sequence axes, tokenizer files, labels, and Android-ready fp32, fp16,
 INT8, and optional `.ort` outputs.
 
-Add the JitPack repository, then point Gradle at the OpenMed GitHub release tag:
+Add the scoped JitPack repository in `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.maziyarpanahi") }
+        }
+    }
+}
+```
+
+Then point Gradle at the OpenMed GitHub release tag:
 
 ```kotlin
 dependencies {
@@ -165,8 +180,8 @@ dependencies {
 }
 ```
 
-See the [Android installation guide](android/README.md) for the scoped JitPack
-repository declaration.
+See the [Android installation guide](android/README.md) for local builds and
+publishing details.
 
 ```kotlin
 val model = OpenMedKit.fromDirectory(modelDir)
