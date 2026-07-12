@@ -16,6 +16,8 @@ __all__ = [
     "ExportArtifact",
     "INT8_ONNX_FILENAME",
     "ONNX_INT8_FORMAT",
+    "OnnxEntity",
+    "OnnxModel",
     "OnnxConversionResult",
     "OpenVinoBenchmarkRecord",
     "OpenVinoDeviceSelection",
@@ -45,6 +47,7 @@ __all__ = [
     "run_onnx_reference_logits",
     "token_spans_from_logits",
     "int8_artifact_metadata",
+    "load_onnx_model",
     "optimize_onnx_graph",
     "quantize_android_int8",
     "quantize_dynamic_int8",
@@ -62,6 +65,9 @@ def __getattr__(name: str) -> Any:
     """Load conversion helpers lazily so ``python -m`` stays warning-free."""
 
     if name in __all__:
+        if name in {"OnnxEntity", "OnnxModel", "load_onnx_model"}:
+            module = import_module("openmed.onnx.inference")
+            return getattr(module, name)
         if name.startswith(("ANDROID_", "Android", "export_android")) or (
             name == "validate_android_profile"
         ):

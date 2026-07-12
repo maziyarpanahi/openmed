@@ -214,6 +214,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mlkit.text.recognition)
     implementation(libs.onnxruntime.android)
+    implementation(libs.djl.tokenizers)
+    implementation(libs.djl.tokenizer.native.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)

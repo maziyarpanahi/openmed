@@ -128,7 +128,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.8.1"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.8.2"),
 ]
 ```
 
@@ -158,14 +158,8 @@ dynamic sequence axes, tokenizer files, labels, and Android-ready fp32, fp16,
 INT8, and optional `.ort` outputs.
 
 ```kotlin
-// Tokenize with the repository's tokenizer.json and preserve character offsets.
-val classifier = OnnxTokenClassifier(
-    modelFile = File(modelDir, "model_int8.onnx"),
-    id2LabelFile = File(modelDir, "id2label.json"),
-)
-val predictions = classifier.use {
-    it.run(inputIds, attentionMask, tokenOffsets)
-}
+val model = OpenMedKit.fromDirectory(modelDir)
+val entities = model.analyzeText("Patient Alice Nguyen was seen in cardiology.")
 ```
 
 - **Android ONNX profile** emits `model.onnx`, `model_fp16.onnx`,
@@ -178,6 +172,24 @@ val predictions = classifier.use {
 Guides: [Android ONNX export](docs/export-onnx-android.md) ·
 [Android span parity](docs/android-parity.md) ·
 [OpenMedKit Android](android/openmedkit)
+
+### The same ONNX model on Python CPU
+
+```python
+from openmed import OnnxModel
+
+model = OnnxModel.from_pretrained("OpenMed/example-v1-onnx-android")
+entities = model("Patient Alice Nguyen was seen in cardiology.")
+```
+
+### The same ONNX model in the browser
+
+```typescript
+import { loadOnnxModel } from "@openmed/openmedkit-web";
+
+const model = await loadOnnxModel("OpenMed/example-v1-onnx-android");
+const entities = await model("Patient Alice Nguyen was seen in cardiology.");
+```
 
 ---
 
@@ -518,8 +530,8 @@ pip install "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.8.1 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.8.1
+docker build -t openmed:1.8.2 .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.8.2
 ```
 
 Example output:
