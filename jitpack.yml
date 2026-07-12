@@ -1,5 +1,9 @@
 jdk:
   - openjdk11
 
+before_install:
+  - curl -LsSf https://astral.sh/uv/0.11.16/install.sh | env UV_UNMANAGED_INSTALL="$HOME/.local/bin" sh
+  - $HOME/.local/bin/uv python install 3.12
+
 install:
-  - cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" --stacktrace
+  - PYTHON_BIN="$($HOME/.local/bin/uv python find 3.12)" && cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" -PopenmedPython="$PYTHON_BIN" --stacktrace

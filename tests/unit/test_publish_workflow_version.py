@@ -148,15 +148,20 @@ def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():
 def test_jitpack_builds_the_android_release_from_github_tags():
     config = _load_workflow(JITPACK_CONFIG)
     install_command = config["install"][0]
+    before_install = config["before_install"]
     android_build = ANDROID_BUILD.read_text(encoding="utf-8")
     android_readme = ANDROID_README.read_text(encoding="utf-8")
 
     assert config["jdk"] == ["openjdk11"]
+    assert "https://astral.sh/uv/0.11.16/install.sh" in before_install[0]
+    assert "uv python install 3.12" in before_install[1]
     assert "cd android" in install_command
+    assert "uv python find 3.12" in install_command
     assert ":openmedkit:publishReleasePublicationToMavenLocal" in install_command
     assert '-PopenmedAndroidVersion="$VERSION"' in install_command
     assert '-PopenmedAndroidGroup="$GROUP"' in install_command
     assert '-PopenmedAndroidArtifact="$ARTIFACT"' in install_command
+    assert '-PopenmedPython="$PYTHON_BIN"' in install_command
 
     assert 'gradleProperty("openmedAndroidGroup")' in android_build
     assert 'gradleProperty("openmedAndroidArtifact")' in android_build
