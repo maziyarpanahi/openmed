@@ -1,0 +1,5 @@
+jdk:
+  - openjdk11
+
+install:
+  - cd android && ./gradlew :openmedkit:publishReleasePublicationToMavenLocal -PopenmedAndroidVersion="$VERSION" -PopenmedAndroidGroup="$GROUP" -PopenmedAndroidArtifact="$ARTIFACT" --stacktrace

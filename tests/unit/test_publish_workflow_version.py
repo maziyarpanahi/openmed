@@ -13,6 +13,9 @@ PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
 PROVENANCE_WORKFLOW = ROOT / ".github" / "workflows" / "provenance.yml"
 IMAGE_SBOM_WORKFLOW = ROOT / ".github" / "workflows" / "sbom-image.yml"
 ANDROID_PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "android-publish.yml"
+ANDROID_BUILD = ROOT / "android" / "openmedkit" / "build.gradle.kts"
+ANDROID_README = ROOT / "android" / "README.md"
+JITPACK_CONFIG = ROOT / "jitpack.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 
 
@@ -140,3 +143,27 @@ def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():
     assert ":openmedkit:testDebugUnitTest" in workflow
     assert "check-runs" not in workflow
     assert "Android AAR size and cold-start gate" not in workflow
+
+
+def test_jitpack_builds_the_android_release_from_github_tags():
+    config = _load_workflow(JITPACK_CONFIG)
+    install_command = config["install"][0]
+    android_build = ANDROID_BUILD.read_text(encoding="utf-8")
+    android_readme = ANDROID_README.read_text(encoding="utf-8")
+
+    assert config["jdk"] == ["openjdk11"]
+    assert "cd android" in install_command
+    assert ":openmedkit:publishReleasePublicationToMavenLocal" in install_command
+    assert '-PopenmedAndroidVersion="$VERSION"' in install_command
+    assert '-PopenmedAndroidGroup="$GROUP"' in install_command
+    assert '-PopenmedAndroidArtifact="$ARTIFACT"' in install_command
+
+    assert 'gradleProperty("openmedAndroidGroup")' in android_build
+    assert 'gradleProperty("openmedAndroidArtifact")' in android_build
+    assert "groupId = publicationGroup" in android_build
+    assert "artifactId = publicationArtifact" in android_build
+    assert 'it.name.startsWith("publish")' not in android_build
+
+    coordinates = "com.github.maziyarpanahi:openmed:v1.8.2"
+    assert coordinates in android_readme
+    assert coordinates in (ROOT / "README.md").read_text(encoding="utf-8")

@@ -1,8 +1,35 @@
 # OpenMedKit Android
 
 This directory contains the Gradle build for the `:openmedkit` Android library.
-The project is intentionally small until the Android API surface lands in later
-tasks.
+
+## Install From A GitHub Tag
+
+OpenMedKit Android is built directly from OpenMed GitHub tags through JitPack.
+Add the repository in the consumer application's `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.maziyarpanahi") }
+        }
+    }
+}
+```
+
+Then add the tagged OpenMed release:
+
+```kotlin
+dependencies {
+    implementation("com.github.maziyarpanahi:openmed:v1.8.2")
+}
+```
+
+JitPack checks out that immutable Git tag and publishes the `openmedkit` Android
+release component as an AAR. Public consumers do not need GitHub credentials.
 
 ## Build Locally
 
@@ -24,13 +51,13 @@ local-first pipeline.
 
 ## Maven Central Publishing
 
-OpenMedKit publishes from `.github/workflows/android-publish.yml` on `v*` tags or
-manual dispatch only. Tag releases skip Android publication when the Android
-artifact inputs have not changed since the previous release. When publication is
-needed, the workflow assembles the library, runs its unit tests, builds a signed
-Central Portal bundle from the Gradle `release` Maven publication, and uploads it
-to Sonatype. Manual dispatch always runs the full validated publication path after
-the explicit upload confirmation.
+The optional Maven Central path publishes from `.github/workflows/android-publish.yml`
+on `v*` tags or manual dispatch. Tag releases skip Central publication when the
+Android artifact inputs have not changed since the previous release. When
+publication is needed, the workflow assembles the library, runs its unit tests,
+builds a signed Central Portal bundle from the Gradle `release` Maven publication,
+and uploads it to Sonatype. Manual dispatch always runs the full validated
+publication path after the explicit upload confirmation.
 
 Required repository secrets:
 
