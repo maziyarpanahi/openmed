@@ -2,56 +2,32 @@
 
 from __future__ import annotations
 
+import ast
 import io
 import json
 import os
-import subprocess
-import sys
 import types
 from pathlib import Path
 
 from scripts.onnx import batch_android_convert_publish as batch
 
 
-def test_batch_disables_xet_before_hugging_face_import() -> None:
-    env = os.environ.copy()
-    env.pop("HF_HUB_DISABLE_XET", None)
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import sys, types; "
-                "openmed = types.ModuleType('openmed'); "
-                "openmed.__path__ = []; "
-                "core = types.ModuleType('openmed.core'); "
-                "core.__path__ = []; "
-                "onnx = types.ModuleType('openmed.onnx'); "
-                "onnx.__path__ = []; "
-                "hf_publish = types.ModuleType('openmed.core.hf_publish'); "
-                "hf_publish.publish_artifact = object(); "
-                "hf_publish.target_repo_id = object(); "
-                "convert = types.ModuleType('openmed.onnx.convert'); "
-                "convert.convert = object(); "
-                "sys.modules['openmed'] = openmed; "
-                "sys.modules['openmed.core'] = core; "
-                "sys.modules['openmed.onnx'] = onnx; "
-                "sys.modules['openmed.core.hf_publish'] = hf_publish; "
-                "sys.modules['openmed.onnx.convert'] = convert; "
-                "import scripts.onnx.batch_android_convert_publish; "
-                "from huggingface_hub.constants import HF_HUB_DISABLE_XET; "
-                "print(HF_HUB_DISABLE_XET)"
-            ),
-        ],
-        cwd=Path(__file__).parents[3],
-        env=env,
-        check=True,
-        capture_output=True,
-        text=True,
+def test_batch_disables_xet_before_openmed_import(monkeypatch) -> None:
+    script = Path(batch.__file__)
+    tree = ast.parse(script.read_text(encoding="utf-8"), filename=str(script))
+    openmed_import_index = next(
+        index
+        for index, statement in enumerate(tree.body)
+        if isinstance(statement, ast.ImportFrom)
+        and statement.module is not None
+        and statement.module.startswith("openmed.")
     )
+    bootstrap = ast.Module(body=tree.body[:openmed_import_index], type_ignores=[])
 
-    assert result.stdout.strip() == "True"
+    monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    exec(compile(bootstrap, str(script), "exec"), {})
+
+    assert os.environ["HF_HUB_DISABLE_XET"] == "1"
 
 
 def test_candidate_selection_defaults_to_pytorch_source_rows() -> None:
