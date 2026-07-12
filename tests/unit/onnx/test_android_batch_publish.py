@@ -22,6 +22,14 @@ def test_batch_disables_xet_before_hugging_face_import() -> None:
             sys.executable,
             "-c",
             (
+                "import sys, types; "
+                "hf_publish = types.ModuleType('openmed.core.hf_publish'); "
+                "hf_publish.publish_artifact = object(); "
+                "hf_publish.target_repo_id = object(); "
+                "convert = types.ModuleType('openmed.onnx.convert'); "
+                "convert.convert = object(); "
+                "sys.modules['openmed.core.hf_publish'] = hf_publish; "
+                "sys.modules['openmed.onnx.convert'] = convert; "
                 "import scripts.onnx.batch_android_convert_publish; "
                 "from huggingface_hub.constants import HF_HUB_DISABLE_XET; "
                 "print(HF_HUB_DISABLE_XET)"
