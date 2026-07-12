@@ -34,35 +34,42 @@ def render_model_card(row: dict[str, Any]) -> str:
         f"# {title}",
         "",
         "This model card is rendered from the OpenMed model manifest. Update `models.jsonl` and rerun the publish step instead of editing this file directly.",
-        "",
-        "## Manifest Summary",
-        "",
-        "| Field | Value |",
-        "|---|---|",
-        f"| Repository | `{repo_id}` |",
-        f"| Family | {_string(row.get('family'), 'Not specified')} |",
-        f"| Task | {task} |",
-        f"| Languages | {_comma_or_unspecified(languages)} |",
-        f"| Tier | {_string(row.get('tier'), 'Not specified')} |",
-        f"| Parameters | {_format_param_count(row.get('param_count'))} |",
-        f"| Architecture | {_string(row.get('architecture'), 'Not specified')} |",
-        f"| Base model | {_string(row.get('base_model'), 'Not specified')} |",
-        f"| Formats | {_comma_or_unspecified(formats)} |",
-        f"| License | {license_name} |",
-        f"| arXiv | {_arxiv_link(arxiv)} |",
-        f"| Reproducibility hash | `{_string(row.get('reproducibility_hash'), 'Not specified')}` |",
-        f"| Released | {_string(row.get('released'), 'Not specified')} |",
-        "",
-        "## Benchmark",
-        "",
-        "| Dataset | Micro F1 | Recall |",
-        "|---|---:|---:|",
-        f"| {_string(benchmark.get('dataset'), 'Not reported')} | {_metric(benchmark.get('micro_f1'))} | {_metric(benchmark.get('recall'))} |",
-        "",
-        "## Canonical Labels",
-        "",
-        _labels_block(labels),
     ]
+    usage_lines = _onnx_usage_block(repo_id, formats)
+    if usage_lines:
+        lines.extend(["", *usage_lines])
+    lines.extend(
+        [
+            "",
+            "## Manifest Summary",
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            f"| Repository | `{repo_id}` |",
+            f"| Family | {_string(row.get('family'), 'Not specified')} |",
+            f"| Task | {task} |",
+            f"| Languages | {_comma_or_unspecified(languages)} |",
+            f"| Tier | {_string(row.get('tier'), 'Not specified')} |",
+            f"| Parameters | {_format_param_count(row.get('param_count'))} |",
+            f"| Architecture | {_string(row.get('architecture'), 'Not specified')} |",
+            f"| Base model | {_string(row.get('base_model'), 'Not specified')} |",
+            f"| Formats | {_comma_or_unspecified(formats)} |",
+            f"| License | {license_name} |",
+            f"| arXiv | {_arxiv_link(arxiv)} |",
+            f"| Reproducibility hash | `{_string(row.get('reproducibility_hash'), 'Not specified')}` |",
+            f"| Released | {_string(row.get('released'), 'Not specified')} |",
+            "",
+            "## Benchmark",
+            "",
+            "| Dataset | Micro F1 | Recall |",
+            "|---|---:|---:|",
+            f"| {_string(benchmark.get('dataset'), 'Not reported')} | {_metric(benchmark.get('micro_f1'))} | {_metric(benchmark.get('recall'))} |",
+            "",
+            "## Canonical Labels",
+            "",
+            _labels_block(labels),
+        ]
+    )
     artifact_lines = _artifact_format_block(formats)
     if artifact_lines:
         lines.extend(["", "## Artifact Format", "", *artifact_lines])
@@ -168,6 +175,38 @@ def _artifact_format_block(formats: list[str]) -> list[str]:
         "|---|---|",
         f"| Runtime artifacts | {_comma_or_unspecified(runtime_formats)} |",
         f"| Quantization | {_comma_or_unspecified(quantization_formats)} |",
+    ]
+
+
+def _onnx_usage_block(repo_id: str, formats: list[str]) -> list[str]:
+    if not any(
+        _normalize_format(value).startswith(("onnx", "ort")) for value in formats
+    ):
+        return []
+    text = "Patient Alice Nguyen was seen in cardiology."
+    return [
+        "## OpenMed in Python on CPU",
+        "",
+        "```python",
+        "from openmed import OnnxModel",
+        f'model = OnnxModel.from_pretrained("{repo_id}")',
+        f'entities = model("{text}")',
+        "```",
+        "",
+        "## OpenMed in Web",
+        "",
+        "```typescript",
+        'import { loadOnnxModel } from "@openmed/openmedkit-web";',
+        f'const model = await loadOnnxModel("{repo_id}");',
+        f'const entities = await model("{text}");',
+        "```",
+        "",
+        "## OpenMedKit for Android",
+        "",
+        "```kotlin",
+        "val model = OpenMedKit.fromDirectory(modelDirectory)",
+        f'val entities = model.analyzeText("{text}")',
+        "```",
     ]
 
 

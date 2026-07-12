@@ -7,7 +7,7 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-OpenMed `1.8.1` carries the v1.8 cross-platform clinical data platform forward
+OpenMed `1.8.2` carries the v1.8 cross-platform clinical data platform forward
 with an architecture-safe PyTorch attention-selection hotfix:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility

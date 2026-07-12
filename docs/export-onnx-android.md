@@ -30,6 +30,38 @@ dist/example-android-onnx/
   openmed-onnx.json
 ```
 
+## Run an OpenMed ONNX Model
+
+Python CPU:
+
+```python
+from openmed import OnnxModel
+
+model = OnnxModel.from_pretrained("OpenMed/example-v1-onnx-android")
+entities = model("Patient Alice Nguyen was seen in cardiology.")
+```
+
+WebGPU or WebAssembly:
+
+```typescript
+import { loadOnnxModel } from "@openmed/openmedkit-web";
+
+const model = await loadOnnxModel("OpenMed/example-v1-onnx-android");
+const entities = await model("Patient Alice Nguyen was seen in cardiology.");
+```
+
+OpenMedKit for Android after the repository is stored in an app-local model
+directory:
+
+```kotlin
+val model = OpenMedKit.fromDirectory(modelDirectory)
+val entities = model.analyzeText("Patient Alice Nguyen was seen in cardiology.")
+```
+
+Each runtime reads the repository's tokenizer and label assets. Python and Web
+download once and reuse their local cache; Android performs inference from the
+app-local directory and makes no network request during inference.
+
 ## Private Batch Rollout
 
 For the full OpenMed PyTorch token-classification inventory, use the resumable

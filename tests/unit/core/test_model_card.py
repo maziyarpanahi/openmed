@@ -150,6 +150,26 @@ def test_render_model_card_includes_training_provenance_when_present():
     assert "| Provenance reproducibility hash | `" in card
 
 
+def test_onnx_model_card_uses_short_cross_platform_openmed_examples():
+    row = {
+        **_fixture_row(),
+        "repo_id": "OpenMed/example-v1-onnx-android",
+        "formats": ["onnx-android", "onnx-int8", "ort-android"],
+    }
+
+    card = render_model_card(row)
+
+    assert "## OpenMed in Python on CPU" in card
+    assert "from openmed import OnnxModel" in card
+    assert 'OnnxModel.from_pretrained("OpenMed/example-v1-onnx-android")' in card
+    assert "## OpenMed in Web" in card
+    assert 'loadOnnxModel("OpenMed/example-v1-onnx-android")' in card
+    assert "## OpenMedKit for Android" in card
+    assert "OpenMedKit.fromDirectory(modelDirectory)" in card
+    assert "InferenceSession" not in card
+    assert "AutoTokenizer" not in card
+
+
 def test_publish_model_card_uploads_rendered_readme():
     row = _fixture_row()
     captured: dict[str, object] = {}

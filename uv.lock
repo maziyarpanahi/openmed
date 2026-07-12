@@ -4572,6 +4572,12 @@ onnx = [
     { name = "torch" },
     { name = "transformers" },
 ]
+onnx-runtime = [
+    { name = "huggingface-hub" },
+    { name = "numpy" },
+    { name = "onnxruntime" },
+    { name = "transformers" },
+]
 openvino = [
     { name = "nncf" },
     { name = "onnxruntime" },
@@ -4641,6 +4647,7 @@ requires-dist = [
     { name = "huggingface-hub", marker = "extra == 'coreml'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'hf'", specifier = ">=0.30" },
     { name = "huggingface-hub", marker = "extra == 'mlx'", specifier = ">=0.30" },
+    { name = "huggingface-hub", marker = "extra == 'onnx-runtime'", specifier = ">=0.30" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "langchain-core", marker = "extra == 'agents'", specifier = ">=0.2,<2" },
@@ -4661,8 +4668,10 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'dev'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'duckdb'", specifier = ">=1.26" },
     { name = "numpy", marker = "extra == 'multimodal'", specifier = ">=1.26" },
+    { name = "numpy", marker = "extra == 'onnx-runtime'", specifier = ">=1.26" },
     { name = "onnx", marker = "extra == 'onnx'", specifier = ">=1.14" },
     { name = "onnxruntime", marker = "extra == 'onnx'", specifier = ">=1.16" },
+    { name = "onnxruntime", marker = "extra == 'onnx-runtime'", specifier = ">=1.16" },
     { name = "onnxruntime", marker = "extra == 'openvino'", specifier = ">=1.16" },
     { name = "onnxscript", marker = "extra == 'onnx'", specifier = ">=0.1.0" },
     { name = "opentelemetry-api", marker = "extra == 'dev'", specifier = ">=1.26,<2" },
@@ -4716,11 +4725,12 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'hf'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'mlx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.50" },
+    { name = "transformers", marker = "extra == 'onnx-runtime'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'openvino'", specifier = ">=4.50" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
-provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "openvino", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy", "spark"]
+provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "kafka", "langchain", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "presidio", "pydeid", "service", "spacy", "spark"]
 
 [[package]]
 name = "opentelemetry-api"

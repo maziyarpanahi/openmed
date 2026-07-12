@@ -55,6 +55,21 @@ public class OnnxTokenClassifier internal constructor(
     )
 
     public constructor(
+        modelFile: File,
+        id2Label: Map<Int, String>,
+        intraOpThreadCount: Int = 1,
+        inputTensorType: TensorElementType = TensorElementType.INT64,
+    ) : this(
+        createRuntime(modelFile, intraOpThreadCount),
+        id2Label.also {
+            if (it.isEmpty()) {
+                throw InferenceError.InvalidInput("id2Label must not be empty")
+            }
+        },
+        inputTensorType,
+    )
+
+    public constructor(
         modelBytes: ByteArray,
         id2LabelFile: File,
         intraOpThreadCount: Int = 1,
