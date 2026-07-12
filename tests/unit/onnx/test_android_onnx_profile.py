@@ -34,7 +34,7 @@ def test_committed_android_contract_fixture_asserts_names_dtypes_and_dynamic_axe
 
     validation = module.validate_android_profile(model_path)
 
-    assert checked == [model]
+    assert checked == [str(model_path)]
     assert validation.opset == module.ANDROID_ONNX_OPSET
     assert validation.inputs == (
         {
@@ -115,7 +115,10 @@ def test_export_android_fp16_converts_weights_and_keeps_io_types(
     transformers_mod = types.ModuleType("onnxruntime.transformers")
     float16_mod = types.ModuleType("onnxruntime.transformers.float16")
 
+    converted = {}
+
     def fake_convert(model_obj, keep_io_types):
+        converted["model"] = model_obj
         return {"fp16": model_obj, "keep_io_types": keep_io_types}
 
     float16_mod.convert_float_to_float16 = fake_convert
@@ -127,6 +130,7 @@ def test_export_android_fp16_converts_weights_and_keeps_io_types(
 
     assert result == output_path
     assert output_path.read_bytes() == b"fp16"
+    assert converted["model"] == str(input_path)
     assert saved["model"]["keep_io_types"] is True
 
 
@@ -241,6 +245,7 @@ def test_export_onnx_android_profile_uses_fixed_opset_and_named_dynamic_axes(
     export_call = {}
 
     torch_mod = types.ModuleType("torch")
+    torch_mod.float32 = object()
 
     class Module:
         def eval(self) -> None:
@@ -294,17 +299,25 @@ def test_export_onnx_android_profile_uses_fixed_opset_and_named_dynamic_axes(
             }
 
     class FakeModel(Module):
-        pass
+        dtype = None
+
+        def to(self, *, dtype):
+            self.dtype = dtype
+            return self
+
+    fake_model = FakeModel()
 
     transformers_mod = types.ModuleType("transformers")
     transformers_mod.AutoTokenizer = types.SimpleNamespace(
         from_pretrained=lambda *args, **kwargs: FakeTokenizer()
     )
     transformers_mod.AutoModelForTokenClassification = types.SimpleNamespace(
-        from_pretrained=lambda *args, **kwargs: FakeModel()
+        from_pretrained=lambda *args, **kwargs: fake_model
     )
     onnx_mod = types.ModuleType("onnx")
-    onnx_mod.load = lambda path: {"path": path}
+    onnx_mod.load = lambda path, **kwargs: types.SimpleNamespace(
+        graph=types.SimpleNamespace(initializer=[])
+    )
     onnx_mod.checker = types.SimpleNamespace(check_model=lambda model: None)
 
     monkeypatch.setitem(sys.modules, "torch", torch_mod)
@@ -319,6 +332,7 @@ def test_export_onnx_android_profile_uses_fixed_opset_and_named_dynamic_axes(
     )
 
     assert export_call["opset_version"] == module.ANDROID_ONNX_OPSET
+    assert fake_model.dtype is torch_mod.float32
     assert export_call["dynamo"] is False
     assert export_call["dynamic_shapes"] is None
     assert export_call["input_names"] == [

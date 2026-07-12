@@ -15,6 +15,79 @@ def _convert_module():
     return importlib.import_module("openmed.onnx.convert")
 
 
+def test_check_onnx_model_validates_by_path_for_large_models(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _convert_module()
+    model_path = tmp_path / "large.onnx"
+    model_path.write_bytes(b"onnx")
+    checked = []
+
+    onnx_mod = types.ModuleType("onnx")
+    onnx_mod.checker = types.SimpleNamespace(
+        check_model=lambda path: checked.append(path)
+    )
+    monkeypatch.setitem(sys.modules, "onnx", onnx_mod)
+
+    module._check_onnx_model(model_path)
+
+    assert checked == [str(model_path)]
+
+
+def test_consolidates_external_onnx_tensors_into_one_sidecar(
+    tmp_path: Path,
+) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    module = _convert_module()
+    model_path = tmp_path / "model.onnx"
+    first = onnx.numpy_helper.from_array(
+        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        name="first",
+    )
+    second = onnx.numpy_helper.from_array(
+        numpy.asarray([3.0, 4.0], dtype=numpy.float32),
+        name="second",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [first, second])
+    model = onnx.helper.make_model(graph)
+    onnx.save_model(
+        model,
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=False,
+        size_threshold=0,
+    )
+    before = {
+        item.value
+        for tensor in onnx.load(
+            str(model_path), load_external_data=False
+        ).graph.initializer
+        for item in tensor.external_data
+        if item.key == "location"
+    }
+    assert len(before) == 2
+
+    module._consolidate_external_onnx_data(model_path)
+
+    metadata = onnx.load(str(model_path), load_external_data=False)
+    locations = {
+        item.value
+        for tensor in metadata.graph.initializer
+        for item in tensor.external_data
+        if item.key == "location"
+    }
+    assert locations == {"model.onnx.data"}
+    assert (tmp_path / "model.onnx.data").is_file()
+    assert all(not (tmp_path / name).exists() for name in before)
+    onnx.checker.check_model(str(model_path))
+
+    module._consolidate_external_onnx_data(model_path)
+
+    assert (tmp_path / "model.onnx.data").is_file()
+    onnx.checker.check_model(str(model_path))
+
+
 def test_write_export_manifest_records_onnx_and_webgpu(tmp_path: Path) -> None:
     module = _convert_module()
     (tmp_path / "model.onnx").write_bytes(b"onnx")
@@ -151,7 +224,10 @@ def test_export_webgpu_converts_to_fp16_and_preserves_io_types(
     transformers_mod = types.ModuleType("onnxruntime.transformers")
     float16_mod = types.ModuleType("onnxruntime.transformers.float16")
 
+    converted = {}
+
     def fake_convert(model, keep_io_types):
+        converted["model"] = model
         return {"fp16": model, "keep_io_types": keep_io_types}
 
     float16_mod.convert_float_to_float16 = fake_convert
@@ -165,6 +241,7 @@ def test_export_webgpu_converts_to_fp16_and_preserves_io_types(
 
     assert result == output_path
     assert output_path.read_bytes() == b"fp16"
+    assert converted["model"] == str(input_path)
     assert saved["model"]["keep_io_types"] is True
     assert checked
 
@@ -185,6 +262,10 @@ def test_export_onnx_uses_torch_two_dynamic_shapes(
 
         def eval(self) -> None:
             pass
+
+        def to(self, *, dtype=None):
+            self.dtype = dtype
+            return self
 
     class NoGrad:
         def __enter__(self):
@@ -225,6 +306,7 @@ def test_export_onnx_uses_torch_two_dynamic_shapes(
 
     torch_mod.nn = types.SimpleNamespace(Module=Module)
     torch_mod.no_grad = NoGrad
+    torch_mod.float32 = "float32"
     torch_mod.export = types.SimpleNamespace(Dim=fake_dim)
     torch_mod.onnx = types.SimpleNamespace(export=fake_export)
 
@@ -248,7 +330,9 @@ def test_export_onnx_uses_torch_two_dynamic_shapes(
     )
 
     onnx_mod = types.ModuleType("onnx")
-    onnx_mod.load = lambda path: {"path": path}
+    onnx_mod.load = lambda path, **kwargs: types.SimpleNamespace(
+        graph=types.SimpleNamespace(initializer=[])
+    )
     onnx_mod.checker = types.SimpleNamespace(check_model=lambda model: None)
 
     monkeypatch.setitem(sys.modules, "torch", torch_mod)
@@ -269,6 +353,28 @@ def test_export_onnx_uses_torch_two_dynamic_shapes(
             1: {"name": "sequence", "min": 1, "max": None},
         },
     }
+
+
+def test_longformer_export_compatibility_is_scoped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _convert_module()
+    original_mask = object()
+    modeling = types.SimpleNamespace(create_bidirectional_mask=original_mask)
+    longformer_module = types.ModuleType("transformers.models.longformer")
+    longformer_module.modeling_longformer = modeling
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers.models.longformer",
+        longformer_module,
+    )
+    model = types.SimpleNamespace(config=types.SimpleNamespace(model_type="longformer"))
+    torch_module = types.SimpleNamespace()
+
+    with module._onnx_export_compatibility(model, torch_module):
+        assert modeling.create_bidirectional_mask is not original_mask
+
+    assert modeling.create_bidirectional_mask is original_mask
 
 
 def test_convert_optimizes_before_webgpu_and_records_validation(

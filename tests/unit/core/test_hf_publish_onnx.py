@@ -106,6 +106,43 @@ def test_publish_quantized_artifact_merges_format_without_duplicate(
     assert validate_manifest_row(rows[0], line_number=1) == []
 
 
+def test_publish_android_onnx_artifact_renders_runtime_formats(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact = _write_onnx_artifact(tmp_path)
+    manifest = tmp_path / "models.jsonl"
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    result = publish_artifact(
+        artifact_dir=artifact,
+        source_model_id="OpenMed/test-model",
+        format_name="onnx-android",
+        formats=["onnx-android", "onnx-int8", "ort-android"],
+        manifest_path=manifest,
+        api=fake_api,
+        released="2026-07-09",
+        git_sha="abc123",
+        private=True,
+    )
+
+    assert result.repo_id == "OpenMed/test-model-v1-onnx-android"
+    assert result.manifest_row["formats"] == [
+        "onnx-android",
+        "int8",
+        "ort-android",
+    ]
+    assert fake_api.created[0]["private"] is True
+    assert (
+        "| Runtime artifacts | onnx-android, ort-android |"
+        in (fake_api.uploaded_cards[0])
+    )
+    assert "| Quantization | int8 |" in fake_api.uploaded_cards[0]
+    rows = _manifest_rows(manifest)
+    assert validate_manifest_row(rows[0], line_number=1) == []
+
+
 def test_publish_onnx_rerun_skips_existing_repo_without_upload(
     tmp_path: Path,
     monkeypatch,
@@ -134,6 +171,29 @@ def test_publish_onnx_rerun_skips_existing_repo_without_upload(
     ]
     assert fake_api.created == []
     assert fake_api.uploaded == []
+
+
+def test_publish_overwrite_existing_repo_avoids_creation_endpoint(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact = _write_onnx_artifact(tmp_path)
+    fake_api = FakeApi(exists=True)
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    result = publish_artifact(
+        artifact_dir=artifact,
+        source_model_id="OpenMed/test-model",
+        format_name="onnx",
+        api=fake_api,
+        skip_existing=False,
+        released="2026-06-27",
+        git_sha="abc123",
+    )
+
+    assert result.skipped is False
+    assert fake_api.created == []
+    assert len(fake_api.uploaded) == 1
 
 
 def test_publish_token_never_appears_in_logs_or_cli_output(

@@ -25,6 +25,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 <p>
   <a href="swift/OpenMedKit"><img alt="Swift: OpenMedKit" src="https://img.shields.io/badge/Swift-OpenMedKit-0D6E6E?style=for-the-badge&logo=swift&logoColor=white"></a>
   <a href="docs/mlx-backend.md"><img alt="Apple Silicon: MLX" src="https://img.shields.io/badge/Apple_Silicon-MLX-0E1116?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="docs/export-onnx-android.md"><img alt="Android: ONNX Runtime Mobile" src="https://img.shields.io/badge/Android-ONNX_Runtime_Mobile-128787?style=for-the-badge&logo=android&logoColor=white"></a>
   <a href="docs/export-transformersjs.md"><img alt="Browser: Transformers.js" src="https://img.shields.io/badge/Browser-Transformers.js-128787?style=for-the-badge&logo=javascript&logoColor=white"></a>
   <a href="docs/swift-openmedkit.md"><img alt="Platforms" src="https://img.shields.io/badge/Runs_on-iOS,_iPadOS,_macOS-1C2128?style=for-the-badge&logo=apple&logoColor=white"></a>
   <a href="https://openmed.life/docs"><img alt="Docs" src="https://img.shields.io/badge/Docs-openmed.life-128787?style=for-the-badge&logo=readthedocs&logoColor=white"></a>
@@ -145,6 +146,38 @@ Guides: [MLX backend](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-op
   <br/>
   <sub><b>MLX on Apple Silicon: 24–33× faster than CPU PyTorch</b> for the Privacy Filter: median latency per inference step, lower is better.</sub>
 </div>
+
+---
+
+## On-device on Android — Kotlin & ONNX Runtime Mobile
+
+OpenMedKit also ships as a native Android/Kotlin library for local document
+intake, OCR handoff, PII redaction, and token-classification inference through
+**ONNX Runtime Mobile**. Mobile model repositories include stable tensor names,
+dynamic sequence axes, tokenizer files, labels, and Android-ready fp32, fp16,
+INT8, and optional `.ort` outputs.
+
+```kotlin
+// Tokenize with the repository's tokenizer.json and preserve character offsets.
+val classifier = OnnxTokenClassifier(
+    modelFile = File(modelDir, "model_int8.onnx"),
+    id2LabelFile = File(modelDir, "id2label.json"),
+)
+val predictions = classifier.use {
+    it.run(inputIds, attentionMask, tokenOffsets)
+}
+```
+
+- **Android ONNX profile** emits `model.onnx`, `model_fp16.onnx`,
+  `model_int8.onnx`, tokenizer assets, labels, and `openmed-onnx.json`.
+- **ORT Mobile support** records the minimal-build operator configuration when
+  ONNX Runtime conversion tooling is installed.
+- **Kotlin parity tests** keep tokenizer offsets, span boundaries, and decoder
+  output aligned with the Python runtime.
+
+Guides: [Android ONNX export](docs/export-onnx-android.md) ·
+[Android span parity](docs/android-parity.md) ·
+[OpenMedKit Android](android/openmedkit)
 
 ---
 
