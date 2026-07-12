@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed · on-device clinical AI · 1,500+ models" width="400" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed · on-device clinical AI · 2,000+ models" width="400" />
 
 <h2>Your Data. Your Model. Your Hardware.</h2>
 
@@ -8,7 +8,7 @@
 
 <p><b>Turn clinical text into structured, de-identified insight, with nothing uploaded.</b><br/>
 OpenMed extracts biomedical entities and removes 55+ PHI types entirely on the
-hardware you control, so your data never leaves the device. The same 1,500+ open models run from a
+hardware you control, so your data never leaves the device. The same 2,000+ open models run from a
 phone to a GPU server, fully offline: iOS, iPadOS, and Android via OpenMedKit, React Native,
 plain CPUs, Apple Silicon, NVIDIA GPUs, the browser, and REST/gRPC services.
 No cloud. No vendor lock-in. No patient data leaving your network.</p>
@@ -16,7 +16,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -32,7 +32,7 @@ No cloud. No vendor lock-in. No patient data leaving your network.</p>
 </p>
 
 <p>
-  <b>1,500+ models</b> &nbsp;·&nbsp; <b>17 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ models</b> &nbsp;·&nbsp; <b>17 model-backed PII languages</b> &nbsp;·&nbsp; <b>600+ PII checkpoints</b> &nbsp;·&nbsp; <b>100% on-device</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -103,7 +103,7 @@ A state-of-the-art clinical NER model running locally: no API key, no network ca
 | Runs on your device / servers         |            ✅            |           ❌           |
 | Patient data leaves your network      |        **Never**         |   Sent to the vendor   |
 | Cost                                  |    Free & open-source    |    Per-call pricing    |
-| Specialized medical models            |          1,500+          |        Limited         |
+| Specialized medical models            |          2,000+          |        Limited         |
 | Model-backed PII languages            |            17            |         Varies         |
 | Offline / air-gapped                  |            ✅            |           ❌           |
 | Apple Silicon (MLX) acceleration      |            ✅            |          n/a           |
@@ -111,7 +111,7 @@ A state-of-the-art clinical NER model running locally: no API key, no network ca
 | Browser/WebGPU token classification   | ✅ via Transformers.js   |         Varies         |
 | Vendor lock-in                        |    None (Apache-2.0)    |          Yes           |
 
-- **Specialized models**: 1,500+ curated biomedical & clinical models, many outperforming proprietary stacks.
+- **Specialized models**: 2,000+ curated biomedical & clinical models, many outperforming proprietary stacks.
 - **HIPAA-aware de-identification**: all 18 Safe Harbor identifiers, smart entity merging, format-preserving fakes.
 - **Runs everywhere**: CPU, CUDA, Apple Silicon (MLX), iOS/macOS via OpenMedKit, Android/Kotlin, React Native, REST/gRPC services, and browser/WebGPU bundles via Transformers.js.
 - **One-line deployment**: Python API, Dockerized REST service, or batch pipelines.
@@ -128,7 +128,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.8.2"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", branch: "master"),
 ]
 ```
 
@@ -137,7 +137,7 @@ Expected result: Swift Package Manager resolves OpenMedKit and makes
 
 - **MLX runtime** for PII token classification, the Privacy Filter family, experimental GLiNER-family zero-shot tasks, and Python MLX-LM text generation with Laneformer; includes a CoreML fallback path for supported token-classification artifacts.
 - **One model name, every platform**: MLX model names automatically fall back to the matching PyTorch checkpoint on non-Apple hardware.
-- **Python on Apple Silicon** too: `pip install "openmed[mlx]"`.
+- **Python on Apple Silicon** too: `pip install --upgrade "openmed[mlx]"`.
 
 Guides: [MLX backend](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML export](docs/coreml-export.md)
 
@@ -172,11 +172,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then point Gradle at the OpenMed GitHub release tag:
+Then use the latest OpenMed build from the `master` branch:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.8.2")
+    implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")
 }
 ```
 
@@ -242,13 +242,13 @@ PII findings, and de-identified text without sending data to a cloud API.
 
 ```bash
 # Core + Hugging Face runtime (Linux, macOS, Windows; CPU or CUDA)
-pip install "openmed[hf]"
+pip install --upgrade "openmed[hf]"
 
 # Add the REST service
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 
 # Apple Silicon acceleration (MLX)
-pip install "openmed[mlx]"
+pip install --upgrade "openmed[mlx]"
 ```
 
 Expected result:
@@ -552,12 +552,12 @@ Example output:
 A Docker-friendly FastAPI service with request validation, shared pipeline preload, and unified error envelopes.
 
 ```bash
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.8.2 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.8.2
+docker build -t openmed:local .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:local
 ```
 
 Example output:

@@ -74,7 +74,7 @@ openmed_deidentify:
 Then, with the `openmed_deidentify` UDF registered on that DuckDB file:
 
 ```bash
-pip install "openmed[duckdb]" dbt-duckdb
+pip install --upgrade "openmed[duckdb]" dbt-duckdb
 cd examples/dbt-deidentify
 dbt seed && dbt run          # UDF must be registered on the connection first
 ```

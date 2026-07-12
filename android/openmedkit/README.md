@@ -4,8 +4,8 @@
 It is a Gradle `com.android.library` module under the top-level `android/`
 build and uses the Android namespace `org.openmed.openmedkit`.
 
-Public applications consume tagged releases through JitPack. See the
-[Android installation guide](../README.md#install-from-a-github-tag) for the
+Public applications consume the latest `master` build through JitPack. See the
+[Android installation guide](../README.md#install-the-latest-github-build) for the
 repository and dependency declarations.
 
 ## Layout

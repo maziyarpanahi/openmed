@@ -145,7 +145,7 @@ def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():
     assert "Android AAR size and cold-start gate" not in workflow
 
 
-def test_jitpack_builds_the_android_release_from_github_tags():
+def test_jitpack_builds_the_latest_android_release_from_github():
     config = _load_workflow(JITPACK_CONFIG)
     install_command = config["install"][0]
     before_install = config["before_install"]
@@ -169,6 +169,43 @@ def test_jitpack_builds_the_android_release_from_github_tags():
     assert "artifactId = publicationArtifact" in android_build
     assert 'it.name.startsWith("publish")' not in android_build
 
-    coordinates = "com.github.maziyarpanahi:openmed:v1.8.2"
+    coordinates = "com.github.maziyarpanahi:openmed:master-SNAPSHOT"
     assert coordinates in android_readme
     assert coordinates in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert re.search(r"com\.github\.maziyarpanahi:openmed:v\d", android_readme) is None
+
+
+def test_readme_install_guidance_tracks_latest_openmed_release():
+    readmes = set(ROOT.glob("README*.md"))
+    for directory in ("android", "deploy", "examples", "js", "openmed", "swift"):
+        readmes.update((ROOT / directory).glob("**/README.md"))
+    readmes = sorted(
+        path
+        for path in readmes
+        if not any(part.startswith(".") for part in path.relative_to(ROOT).parts)
+        and "node_modules" not in path.parts
+    )
+    assert readmes
+
+    violations = []
+    for path in readmes:
+        text = path.read_text(encoding="utf-8")
+        relative = path.relative_to(ROOT)
+        if re.search(r'from: "\d+\.\d+', text):
+            violations.append(f"{relative}: pinned Swift package")
+        if re.search(r"com\.github\.maziyarpanahi:openmed:v\d", text):
+            violations.append(f"{relative}: pinned Android package")
+        if re.search(r"openmed:[0-9]+\.[0-9]+", text):
+            violations.append(f"{relative}: pinned Docker tag")
+        for line in text.splitlines():
+            if 'pip install "openmed' in line and "pip install --upgrade" not in line:
+                violations.append(f"{relative}: install does not use --upgrade")
+
+    assert violations == []
+
+
+def test_localized_readmes_advertise_current_model_count():
+    readmes = sorted(ROOT.glob("README*.md"))
+
+    assert len(readmes) >= 14
+    assert all("2%2C000+" in path.read_text(encoding="utf-8") for path in readmes)

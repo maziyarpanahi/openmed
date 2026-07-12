@@ -139,7 +139,11 @@ def test_publish_android_onnx_artifact_renders_runtime_formats(
     assert "`model_int8.onnx`" in card
     assert "`model_fp16.onnx`" in card
     assert "`model.ort`" in card
-    assert 'implementation("com.github.maziyarpanahi:openmed:v1.8.2")' in card
+    assert 'pip install --upgrade "openmed[onnx-runtime]"' in card
+    assert 'implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")' in card
+    assert "2,000+ medical models" in card
+    assert "openmed[onnx-runtime]>=" not in card
+    assert "com.github.maziyarpanahi:openmed:v" not in card
     assert "Reproducibility hash" not in card
     rows = _manifest_rows(manifest)
     assert validate_manifest_row(rows[0], line_number=1) == []

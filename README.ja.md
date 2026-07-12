@@ -1,16 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed：オンデバイスの臨床 AI · 1,500 以上のモデル" width="400" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed：オンデバイスの臨床 AI · 2,000 以上のモデル" width="400" />
 
 <h3>あなたのデータ。あなたのモデル。あなたのハードウェア。</h3>
 
 <p><b>臨床テキストを、構造化され匿名化されたインサイトへ変換します。アップロードは一切ありません。</b><br/>
-OpenMed は生物医学エンティティを抽出し、55+ 種類の PHI を、お客様が管理するハードウェア上で完全に除去するため、データがデバイスから外に出ることはありません。同じ 1,500+ のオープンモデルが、スマートフォンから GPU サーバーまで、完全オフラインで動作します。iOS と iPadOS では OpenMedKit 経由、Android では ONNX 経由、通常の CPU、Apple Silicon、NVIDIA GPU、そしてブラウザに対応します。クラウドなし。ベンダーロックインなし。患者データがネットワークの外に出ることもありません。</p>
+OpenMed は生物医学エンティティを抽出し、55+ 種類の PHI を、お客様が管理するハードウェア上で完全に除去するため、データがデバイスから外に出ることはありません。同じ 2,000+ のオープンモデルが、スマートフォンから GPU サーバーまで、完全オフラインで動作します。iOS と iPadOS では OpenMedKit 経由、Android では ONNX 経由、通常の CPU、Apple Silicon、NVIDIA GPU、そしてブラウザに対応します。クラウドなし。ベンダーロックインなし。患者データがネットワークの外に出ることもありません。</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -24,7 +24,7 @@ OpenMed は生物医学エンティティを抽出し、55+ 種類の PHI を、
 </p>
 
 <p>
-  <b>1,500+ モデル</b> &nbsp;·&nbsp; <b>15 の PII 対応言語</b> &nbsp;·&nbsp; <b>600+ 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2,000+ モデル</b> &nbsp;·&nbsp; <b>15 の PII 対応言語</b> &nbsp;·&nbsp; <b>600+ 個の PII チェックポイント</b> &nbsp;·&nbsp; <b>100% オンデバイス</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -85,14 +85,14 @@ for entity in result.entities:
 | 自分のデバイス/サーバーで動作          |            ✅            |            ❌             |
 | 患者データがネットワーク外に出る       |      **決して出ない**     |     ベンダーに送信         |
 | コスト                                |  無料・オープンソース     |   呼び出しごとの課金       |
-| 専門医療モデル                        |          1,500+          |          限定的           |
+| 専門医療モデル                        |          2,000+          |          限定的           |
 | 言語                                  |           12+            |          まちまち         |
 | オフライン / 隔離環境 (air-gapped)    |            ✅            |            ❌             |
 | Apple Silicon (MLX) アクセラレーション |            ✅            |          非対応           |
 | ネイティブ iOS / macOS アプリ          |   ✅ OpenMedKit 経由     |            ❌             |
 | ベンダーロックイン                    |    なし：Apache-2.0     |            あり           |
 
-- **専門モデル**：厳選された 1,500 以上の生物医学・臨床モデル。その多くは商用の専有スタックを上回ります。
+- **専門モデル**：厳選された 2,000 以上の生物医学・臨床モデル。その多くは商用の専有スタックを上回ります。
 - **HIPAA 対応の非識別化**：18 項目すべての Safe Harbor 識別子、スマートなエンティティ統合、フォーマットを保持する偽データ置換。
 - **どこでも動作**：CPU、CUDA、Apple Silicon (MLX)、そして OpenMedKit 経由で iOS/macOS アプリにネイティブ対応。
 - **1 行でデプロイ**：Python API、Docker 化された REST サービス、またはバッチパイプライン。
@@ -109,13 +109,13 @@ OpenMed は、データがすでに存在する場所で動作するよう作ら
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", branch: "master"),
 ]
 ```
 
 - **MLX ランタイム**：PII トークン分類、Privacy Filter ファミリー、実験的な GLiNER ファミリーの zero-shot タスクに対応（CoreML フォールバック経路あり）。
 - **1 つのモデル名であらゆるプラットフォーム**：Apple 以外のハードウェアでは、MLX のモデル名は対応する PyTorch チェックポイントに自動的にフォールバックします。
-- **Apple Silicon 上の Python** も対応：`pip install "openmed[mlx]"`。
+- **Apple Silicon 上の Python** も対応：`pip install --upgrade "openmed[mlx]"`。
 
 ガイド：[MLX バックエンド](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML エクスポート](docs/coreml-export.md)
 
@@ -141,13 +141,13 @@ flowchart LR
 
 ```bash
 # Core + Hugging Face runtime (Linux, macOS, Windows; CPU or CUDA)
-pip install "openmed[hf]"
+pip install --upgrade "openmed[hf]"
 
 # Add the REST service
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 
 # Apple Silicon acceleration (MLX)
-pip install "openmed[mlx]"
+pip install --upgrade "openmed[mlx]"
 ```
 
 <table>
@@ -318,12 +318,12 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 リクエスト検証、共有パイプラインのプリロード、統一されたエラーエンベロープを備えた、Docker フレンドリーな FastAPI サービス。
 
 ```bash
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:local .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:local
 ```
 
 ```bash
