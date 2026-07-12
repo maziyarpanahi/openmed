@@ -50,7 +50,7 @@ const model = await loadOnnxModel("OpenMed/example-v1-onnx-android");
 const entities = await model("Patient Alice Nguyen was seen in cardiology.");
 ```
 
-OpenMedKit for Android is published directly from immutable OpenMed GitHub tags.
+OpenMedKit for Android is published directly from OpenMed's `master` branch.
 Add the scoped JitPack repository in `settings.gradle.kts`:
 
 ```kotlin
@@ -66,11 +66,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Add the matching release tag to the app module:
+Add the moving JitPack snapshot to the app module:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:v1.8.2")
+    implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")
 }
 ```
 

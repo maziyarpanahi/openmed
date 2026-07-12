@@ -160,6 +160,8 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     card = render_model_card(row)
 
     assert "## OpenMed in Python on CPU" in card
+    assert 'pip install --upgrade "openmed[onnx-runtime]"' in card
+    assert "openmed[onnx-runtime]>=" not in card
     assert "from openmed import OnnxModel" in card
     assert 'OnnxModel.from_pretrained("OpenMed/example-v1-onnx-android")' in card
     assert "## OpenMed in Web" in card
@@ -167,7 +169,9 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     assert "const model = await loadOnnxModel(repo);" in card
     assert "## OpenMedKit for Android" in card
     assert 'url = uri("https://jitpack.io")' in card
-    assert 'implementation("com.github.maziyarpanahi:openmed:v1.8.2")' in card
+    assert 'implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")' in card
+    assert "2,000+ medical models" in card
+    assert "com.github.maziyarpanahi:openmed:v" not in card
     assert "OpenMedKit.fromDirectory(modelDirectory)" in card
     assert "# OpenMed PII Detection 44M" in card
     assert "Language | Turkish" in card
