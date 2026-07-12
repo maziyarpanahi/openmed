@@ -50,15 +50,39 @@ const model = await loadOnnxModel("OpenMed/example-v1-onnx-android");
 const entities = await model("Patient Alice Nguyen was seen in cardiology.");
 ```
 
-OpenMedKit for Android after the repository is stored in an app-local model
-directory:
+OpenMedKit for Android is published directly from immutable OpenMed GitHub tags.
+Add the scoped JitPack repository in `settings.gradle.kts`:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            content { includeGroup("com.github.maziyarpanahi") }
+        }
+    }
+}
+```
+
+Add the matching release tag to the app module:
+
+```kotlin
+dependencies {
+    implementation("com.github.maziyarpanahi:openmed:v1.8.2")
+}
+```
+
+Then load the repository after it is stored in an app-local model directory:
 
 ```kotlin
 val model = OpenMedKit.fromDirectory(modelDirectory)
 val entities = model.analyzeText("Patient Alice Nguyen was seen in cardiology.")
 ```
 
-Each runtime reads the repository's tokenizer and label assets. Python and Web
+JitPack consumers do not need GitHub credentials. Each runtime reads the
+repository's tokenizer and label assets. Python and Web
 download once and reuse their local cache; Android performs inference from the
 app-local directory and makes no network request during inference.
 

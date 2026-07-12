@@ -40,24 +40,26 @@ cd android
 ./gradlew test
 ```
 
-Dependency resolution is limited to Google Maven and Maven Central. Dependency
-and plugin versions are declared in `gradle/libs.versions.toml`; avoid hardcoding
-library versions in module build files.
+Dependency resolution is limited to Google Maven, Maven Central, and the scoped
+OpenMed group on JitPack. Dependency and plugin versions are declared in
+`gradle/libs.versions.toml`; avoid hardcoding library versions in module build
+files.
 
 The library currently targets SDK 33 and sets `minSdk` to 26. Android 8.0 is the
 baseline for on-device inference work because it preserves broad device support
 while keeping runtime, storage, and execution APIs modern enough for the planned
 local-first pipeline.
 
-## Maven Central Publishing
+## Optional Maven Central Publishing
 
-The optional Maven Central path publishes from `.github/workflows/android-publish.yml`
-on `v*` tags or manual dispatch. Tag releases skip Central publication when the
-Android artifact inputs have not changed since the previous release. When
-publication is needed, the workflow assembles the library, runs its unit tests,
-builds a signed Central Portal bundle from the Gradle `release` Maven publication,
-and uploads it to Sonatype. Manual dispatch always runs the full validated
-publication path after the explicit upload confirmation.
+JitPack is the public installation path documented above. The separate, optional
+Maven Central path publishes from `.github/workflows/android-publish.yml` on `v*`
+tags or manual dispatch. Tag releases skip Central publication when the Android
+artifact inputs have not changed since the previous release. When publication is
+needed, the workflow assembles the library, runs its unit tests, builds a signed
+Central Portal bundle from the Gradle `release` Maven publication, and uploads it
+to Sonatype. Manual dispatch always runs the full validated publication path after
+the explicit upload confirmation.
 
 Required repository secrets:
 

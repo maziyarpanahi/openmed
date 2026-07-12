@@ -134,11 +134,13 @@ def test_publish_android_onnx_artifact_renders_runtime_formats(
         "ort-android",
     ]
     assert fake_api.created[0]["private"] is True
-    assert (
-        "| Runtime artifacts | onnx-android, ort-android |"
-        in (fake_api.uploaded_cards[0])
-    )
-    assert "| Quantization | int8 |" in fake_api.uploaded_cards[0]
+    card = fake_api.uploaded_cards[0]
+    assert "## Included Artifacts" in card
+    assert "`model_int8.onnx`" in card
+    assert "`model_fp16.onnx`" in card
+    assert "`model.ort`" in card
+    assert 'implementation("com.github.maziyarpanahi:openmed:v1.8.2")' in card
+    assert "Reproducibility hash" not in card
     rows = _manifest_rows(manifest)
     assert validate_manifest_row(rows[0], line_number=1) == []
 
