@@ -7,15 +7,14 @@ from dataclasses import dataclass
 from inspect import Parameter, signature
 from typing import Any
 
+from openmed.core.capabilities import raise_missing_backend
+
 try:
     from spacy.language import Language
     from spacy.tokens import Doc, Span
     from spacy.util import filter_spans
 except ImportError as exc:  # pragma: no cover - exercised without the extra
-    raise ImportError(
-        "spaCy support requires the 'spacy' extra. "
-        "Install with `pip install openmed[spacy]`."
-    ) from exc
+    raise_missing_backend("spacy", feature="spaCy support", cause=exc)
 
 
 Extractor = Callable[..., Any]

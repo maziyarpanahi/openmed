@@ -24,6 +24,7 @@ from .base import (
     ExtractedDocument,
     SourceSpan,
     ensure_multimodal_available,
+    is_multimodal_available,
     redact_document,
     register_handler,
 )
@@ -116,6 +117,7 @@ __all__ = [
     "redact_document",
     "register_handler",
     "ensure_multimodal_available",
+    "is_multimodal_available",
     "MissingDependencyError",
     "UnsupportedDocumentError",
     "ChatLogRedactionSummary",

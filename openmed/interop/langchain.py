@@ -9,6 +9,7 @@ from importlib import import_module as _import_module
 from pathlib import Path
 from typing import Any
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.interop.function_tools import (
     RuntimeProvider,
     create_tool_callable,
@@ -264,10 +265,7 @@ def _load_structured_tool() -> Any:
     try:
         module = _import_module("langchain_core.tools")
     except ImportError as exc:
-        raise ImportError(
-            "LangChain tools require the 'langchain' extra. "
-            "Install with `pip install openmed[langchain]`."
-        ) from exc
+        raise_missing_backend("langchain", feature="LangChain tools", cause=exc)
 
     try:
         return module.StructuredTool
@@ -281,10 +279,7 @@ def _load_runnable_lambda() -> Any:
     try:
         module = _import_module("langchain_core.runnables")
     except ImportError as exc:
-        raise ImportError(
-            "LangChain support requires the 'langchain' extra. "
-            "Install with `pip install openmed[langchain]`."
-        ) from exc
+        raise_missing_backend("langchain", feature="LangChain support", cause=exc)
 
     try:
         return module.RunnableLambda

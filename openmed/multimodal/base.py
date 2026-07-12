@@ -41,6 +41,15 @@ def _missing_multimodal_dependencies() -> list[str]:
     ]
 
 
+def is_multimodal_available() -> bool:
+    """Return True when the ``multimodal`` extra is fully importable.
+
+    Uses :func:`importlib.util.find_spec` under the hood so probing never
+    imports the heavy ingestion dependencies.
+    """
+    return not _missing_multimodal_dependencies()
+
+
 def ensure_multimodal_available() -> None:
     """Raise a clear error if the ``multimodal`` extra is not installed."""
     missing = _missing_multimodal_dependencies()

@@ -5,7 +5,39 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
+from openmed.core.capabilities import is_backend_available as _is_backend_available
+from openmed.core.capabilities import require_backend as _require_backend
+
+
+def is_onnx_available() -> bool:
+    """Return True when the ``onnx`` extra is importable, without importing it."""
+
+    return _is_backend_available("onnx")
+
+
+def ensure_onnx_available() -> None:
+    """Raise an actionable error when the ``onnx`` extra is not installed."""
+
+    _require_backend("onnx", feature="ONNX export and inference")
+
+
+def is_openvino_available() -> bool:
+    """Return True when the ``openvino`` extra is importable, without importing."""
+
+    return _is_backend_available("openvino")
+
+
+def ensure_openvino_available() -> None:
+    """Raise an actionable error when the ``openvino`` extra is not installed."""
+
+    _require_backend("openvino", feature="OpenVINO export and inference")
+
+
 __all__ = [
+    "ensure_onnx_available",
+    "ensure_openvino_available",
+    "is_onnx_available",
+    "is_openvino_available",
     "ANDROID_ONNX_FORMAT",
     "ANDROID_ONNX_OPSET",
     "ANDROID_PROFILE_NAME",

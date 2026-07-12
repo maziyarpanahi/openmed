@@ -5,6 +5,7 @@ from __future__ import annotations
 from importlib import import_module as _import_module
 from typing import Any
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.interop.function_tools import (
     RuntimeProvider,
     create_tool_callable,
@@ -57,10 +58,7 @@ def _load_function_tool() -> Any:
     try:
         module = _import_module("llama_index.core.tools")
     except ImportError as exc:
-        raise ImportError(
-            "LlamaIndex tools require the 'llamaindex' extra. "
-            "Install with `pip install openmed[llamaindex]`."
-        ) from exc
+        raise_missing_backend("llamaindex", feature="LlamaIndex tools", cause=exc)
 
     try:
         return module.FunctionTool

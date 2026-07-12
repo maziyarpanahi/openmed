@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.decoding import build_label_info, labels_to_token_spans
 from openmed.core.hf_publish import publish_artifact
 from openmed.eval.metrics import compute_recall_slices, normalize_eval_spans
@@ -240,9 +241,7 @@ def convert(
             AutoTokenizer,
         )
     except ImportError as e:
-        raise ImportError(
-            f"Missing dependency: {e}. Install with: pip install openmed[coreml]"
-        ) from e
+        raise_missing_backend("coreml", feature="CoreML model conversion", cause=e)
 
     source_config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
     model_type = resolve_supported_model_type(source_config)
@@ -1160,10 +1159,9 @@ def _hf_token_classification_runner(
                     pipeline,
                 )
             except ImportError as exc:
-                raise ImportError(
-                    "transformers is required to certify CoreML parity. "
-                    "Install with: pip install transformers"
-                ) from exc
+                raise_missing_backend(
+                    "hf", feature="Certifying CoreML parity", cause=exc
+                )
 
             tokenizer = get_tokenizer_with_loader(
                 model_id,
@@ -1203,10 +1201,11 @@ def _coreml_artifact_runner(
                 import numpy as np
                 from transformers import AutoTokenizer
             except ImportError as exc:
-                raise ImportError(
-                    "coremltools, numpy, and transformers are required to run "
-                    "CoreML parity fixtures."
-                ) from exc
+                raise_missing_backend(
+                    "coreml",
+                    feature="Running CoreML parity fixtures",
+                    cause=exc,
+                )
 
             id2label = _load_id2label_for_package(model_path)
             pipeline_state["np"] = np

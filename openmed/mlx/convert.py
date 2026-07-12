@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Mapping, Tuple
 
+from openmed.core.capabilities import raise_missing_backend
 from openmed.core.hf_publish import publish_artifact
 from openmed.mlx.artifact import find_tokenizer_files, write_manifest
 from openmed.mlx.models import (
@@ -354,11 +355,8 @@ def convert_weights(
     """Load HF token-classification weights and config, then remap for MLX."""
     try:
         from transformers import AutoConfig, AutoModelForTokenClassification
-    except ImportError:
-        raise ImportError(
-            "transformers is required for model conversion. "
-            "Install with: pip install transformers"
-        )
+    except ImportError as exc:
+        raise_missing_backend("hf", feature="MLX model conversion", cause=exc)
 
     logger.info("Loading Hugging Face token-classification model %s ...", model_id)
     config = AutoConfig.from_pretrained(model_id, cache_dir=cache_dir)
@@ -411,8 +409,8 @@ def save_mlx_model(
         import mlx.core as mx
         import mlx.nn as nn
         from mlx.utils import tree_flatten
-    except ImportError:
-        raise ImportError("MLX is required. Install with: pip install openmed[mlx]")
+    except ImportError as exc:
+        raise_missing_backend("mlx", feature="Saving an MLX model artifact", cause=exc)
 
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -688,10 +686,11 @@ def _hf_token_classification_runner(
                     pipeline,
                 )
             except ImportError as exc:
-                raise ImportError(
-                    "transformers is required to certify MLX quantization. "
-                    "Install with: pip install transformers"
-                ) from exc
+                raise_missing_backend(
+                    "hf",
+                    feature="Certifying MLX quantization recall",
+                    cause=exc,
+                )
 
             tokenizer = get_tokenizer_with_loader(
                 model_id,
