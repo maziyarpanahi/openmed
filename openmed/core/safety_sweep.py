@@ -51,7 +51,9 @@ def _overlaps(start: int, end: int, spans: Sequence[Any]) -> bool:
 
 def _patterns_for_language(lang: str, locale: str | None = None) -> list[PIIPattern]:
     if lang == "en" and locale is None:
-        return list(PII_PATTERNS)
+        from .pii_i18n import AADHAAR_PII_PATTERNS
+
+        return [*PII_PATTERNS, *AADHAAR_PII_PATTERNS]
 
     from .pii_i18n import get_patterns_for_language
 

@@ -32,6 +32,8 @@ class PIIPattern:
     - base_score: Low confidence for pattern-only matches (like Presidio's 0.01-0.3)
     - context_words: Keywords that boost confidence when found nearby
     - validator: Optional checksum/validation function to confirm matches
+    - reject_on_validation_failure: Drop regex matches whose validator fails,
+      rather than retaining them with a reduced confidence score
     - safety_sweep_requires_context: Require nearby context before the
       deterministic safety sweep accepts this pattern
 
@@ -58,6 +60,7 @@ class PIIPattern:
         None  # Validation function (e.g., checksum)
     )
     safety_sweep_requires_context: bool = False
+    reject_on_validation_failure: bool = False
 
 
 # ============================================================================
@@ -628,6 +631,8 @@ def find_semantic_units(
             if pii_pattern.validator:
                 is_valid = pii_pattern.validator(matched_text)
                 if not is_valid:
+                    if pii_pattern.reject_on_validation_failure:
+                        continue
                     # Failed validation - significantly reduce score
                     score = score * 0.3  # Reduce to 30% confidence
                     validated = False

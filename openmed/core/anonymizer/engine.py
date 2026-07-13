@@ -31,12 +31,13 @@ from __future__ import annotations
 import hashlib
 import warnings
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from .. import labels as L
 from ..labels import normalize_label
 from ..name_order import CJK_LANGUAGES, normalize_person_span
 from .format_preserve import (
+    mask_aadhaar,
     preserve_date_format,
     preserve_email_pattern,
     preserve_id_pattern,
@@ -178,8 +179,12 @@ class Anonymizer:
             when no specific generator is registered.
         """
         effective_lang = lang or self.config.lang
-        effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
         canonical = normalize_label(label, effective_lang)
+        effective_locale = resolve_locale(effective_lang, locale or self.config.locale)
+        if canonical == L.ID_NUM and _is_aadhaar_surrogate_source(original):
+            # Aadhaar stays checksum-valid even when an English/code-mixed
+            # note routes through the generic en_US locale.
+            effective_locale = "en_IN"
 
         # CJK PERSON spans: peel a trailing honorific (さん/様/씨/님/先生/…) so
         # the name is swapped while the honorific is re-attached verbatim.
@@ -220,6 +225,39 @@ class Anonymizer:
                 stacklevel=2,
             )
             return f"[{label}]{honorific_suffix}"
+
+    def anonymize_aadhaar(
+        self,
+        original: str,
+        *,
+        strategy: Literal["uidai_mask", "surrogate"] = "uidai_mask",
+    ) -> str:
+        """Apply a dedicated Aadhaar anonymization strategy.
+
+        Args:
+            original: A checksum-valid Aadhaar value.
+            strategy: ``"uidai_mask"`` preserves only the last four digits;
+                ``"surrogate"`` returns a checksum-valid synthetic Aadhaar.
+
+        Returns:
+            A UIDAI-masked value or a Verhoeff-valid synthetic Aadhaar.
+
+        Raises:
+            ValueError: If the source is invalid or the strategy is unknown.
+        """
+
+        if not _is_valid_aadhaar(original):
+            raise ValueError("Aadhaar must have a valid Verhoeff checksum")
+        if strategy == "uidai_mask":
+            return mask_aadhaar(original)
+        if strategy == "surrogate":
+            return self.surrogate(
+                original,
+                "aadhaar",
+                lang="en",
+                locale="en_IN",
+            )
+        raise ValueError("strategy must be 'uidai_mask' or 'surrogate'")
 
     def can_format_preserve(
         self,
@@ -339,6 +377,19 @@ def _non_identical_surrogate(original: str, generator: Any) -> str | None:
         if surrogate != original:
             return surrogate
     return None
+
+
+def _is_valid_aadhaar(value: str) -> bool:
+    from ..pii_i18n import validate_aadhaar
+
+    return validate_aadhaar(value)
+
+
+def _is_aadhaar_surrogate_source(value: str) -> bool:
+    if _is_valid_aadhaar(value):
+        return True
+    source, separator, attempt = value.rpartition("|")
+    return bool(separator and attempt.isdigit() and _is_valid_aadhaar(source))
 
 
 __all__ = ["Anonymizer", "AnonymizerConfig"]

@@ -23,6 +23,7 @@ from .schemas.span import ACTION_KEEP, OpenMedSpan, hmac_text_hash
 # which otherwise imports ``Pipeline`` only when ``deidentify`` is called.
 DeidentificationMethod = Literal[
     "mask",
+    "aadhaar_mask",
     "remove",
     "replace",
     "hash",
