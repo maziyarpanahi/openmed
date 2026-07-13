@@ -169,6 +169,7 @@ _LOCALE_ID_METHODS = {
     "nl_NL": "ssn",
     "en_IN": "aadhaar",
     "hi_IN": "aadhaar",
+    "zh_CN": "chinese_resident_id",
     "de_DE": "german_steuer_id",
     "en_US": "ssn",
     "en_GB": "nino",
@@ -231,15 +232,34 @@ def _uscc_surrogate(faker, original):
     return generate_unified_social_credit_code(rng=faker.random)
 
 
+def _generate_distinct_chinese_resident_id(faker, original):
+    """Return a valid Chinese Resident ID that differs from ``original``."""
+    from openmed.core.pii_i18n import validate_chinese_resident_id
+
+    generate = getattr(faker, "chinese_resident_id")
+    for _ in range(10):
+        candidate = generate()
+        if candidate != original and validate_chinese_resident_id(candidate):
+            return candidate
+    raise RuntimeError("could not generate a distinct Chinese Resident ID")
+
+
 def _gen_id_num(faker, original, *, locale):
+    method = _LOCALE_ID_METHODS.get(locale)
+    if locale == "zh_CN" and method and hasattr(faker, method) and original:
+        from openmed.core.pii_i18n import validate_chinese_resident_id
+
+        if validate_chinese_resident_id(original.strip()):
+            return _generate_distinct_chinese_resident_id(faker, original)
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
     uscc = _uscc_surrogate(faker, original)
     if uscc is not None:
         return uscc
-    method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
+        if locale == "zh_CN":
+            return _generate_distinct_chinese_resident_id(faker, original)
         return getattr(faker, method)()
     return preserve_id_pattern(original, rng=faker.random)
 
