@@ -2,6 +2,7 @@
 
 import pytest
 
+from openmed.core import model_registry
 from openmed.core.model_registry import (
     CATEGORIES,
     OPENMED_MODELS,
@@ -128,3 +129,36 @@ class TestHelperFunctions:
                 assert isinstance(info, ModelInfo)
                 assert key.startswith("pii_")
                 assert info.category == "Privacy"
+
+    def test_get_pii_models_excludes_unsupported_claimed_script(self, monkeypatch):
+        common = {
+            "display_name": "Hindi PII",
+            "category": "Privacy",
+            "specialization": "HI PII detection",
+            "description": "Privacy token-classification model",
+            "entity_types": ["PERSON"],
+            "size_category": "Small",
+            "languages": ["hi"],
+        }
+        supported = ModelInfo(
+            model_id="OpenMed/pii-hi-supported",
+            script_coverage={"devanagari": {"verdict": "supported"}},
+            **common,
+        )
+        unsupported = ModelInfo(
+            model_id="OpenMed/pii-hi-unsupported",
+            script_coverage={"devanagari": {"verdict": "unsupported"}},
+            **common,
+        )
+        monkeypatch.setattr(
+            model_registry,
+            "OPENMED_MODELS",
+            {
+                "pii_hi_supported": supported,
+                "pii_hi_unsupported": unsupported,
+            },
+        )
+
+        assert model_registry.get_pii_models_by_language("hi") == {
+            "pii_hi_supported": supported
+        }

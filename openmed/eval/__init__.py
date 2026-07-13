@@ -75,8 +75,12 @@ from openmed.eval.comparators import (
 from openmed.eval.coverage import (
     GOLDEN_EDGE_CASE_CATEGORIES,
     FixtureCoverageReport,
+    TokenizerCoverageReport,
+    audit_pii_tokenizers,
+    audit_tokenizer_scripts,
     fixture_coverage_report,
     golden_fixture_coverage_report,
+    update_manifest_script_coverage,
 )
 from openmed.eval.data_provenance import (
     DATASET_PROVENANCE_SCHEMA_VERSION,
@@ -583,6 +587,7 @@ __all__ = [
     "STATUS_SCORED",
     "ThresholdSweepPoint",
     "ThresholdSweepReport",
+    "TokenizerCoverageReport",
     "TRANSFER_MATRIX_SCHEMA_VERSION",
     "TransferDeficiency",
     "TransferGapMetrics",
@@ -607,6 +612,8 @@ __all__ = [
     "UNSPECIFIED_GROUP",
     "UNSECTIONED_SECTION",
     "artifact_dir_for",
+    "audit_pii_tokenizers",
+    "audit_tokenizer_scripts",
     "abstention_route",
     "apply_abstention_policy",
     "bootstrap_abstention_residual_risk",
@@ -746,6 +753,7 @@ __all__ = [
     "TIERS",
     "TRAINING_DATA_MANIFEST_SCHEMA_VERSION",
     "utility_loss_report",
+    "update_manifest_script_coverage",
     "weighted_coverage",
     "validate_eval_model_card_claims",
     "validate_model_card_consistency",
