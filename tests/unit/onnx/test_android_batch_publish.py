@@ -9,6 +9,8 @@ import os
 import types
 from pathlib import Path
 
+import pytest
+
 from scripts.onnx import batch_android_convert_publish as batch
 
 
@@ -349,7 +351,14 @@ def test_reuse_existing_artifact_skips_conversion(
     output_root = tmp_path / "out"
     artifact_dir = output_root / "OpenMed" / "source"
     artifact_dir.mkdir(parents=True)
-    for name in ["config.json", "model.onnx", "model.ort", "model_int8.onnx"]:
+    for name in [
+        "config.json",
+        "id2label.json",
+        "model.onnx",
+        "model_fp16.onnx",
+        "model.ort",
+        "model_int8.onnx",
+    ]:
         (artifact_dir / name).write_text("artifact", encoding="utf-8")
     (artifact_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
     manifest_path = artifact_dir / "openmed-onnx.json"
@@ -373,6 +382,11 @@ def test_reuse_existing_artifact_skips_conversion(
     monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
     monkeypatch.setattr(batch, "convert", fail_convert)
     monkeypatch.setattr(batch, "publish_artifact", fake_publish_artifact)
+    monkeypatch.setattr(
+        batch,
+        "_onnx_external_data_files_present",
+        lambda path: path.is_file(),
+    )
     stdout = io.StringIO()
 
     exit_code = batch.run(
@@ -400,6 +414,116 @@ def test_reuse_existing_artifact_skips_conversion(
         "onnx-int8",
         "ort-android",
     ]
+
+
+def test_existing_artifact_rejects_missing_runtime_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_dir = tmp_path / "artifact"
+    artifact_dir.mkdir()
+    for name in [
+        "config.json",
+        "id2label.json",
+        "model.onnx",
+        "model_fp16.onnx",
+        "model_int8.onnx",
+        "tokenizer.json",
+    ]:
+        (artifact_dir / name).write_text("artifact", encoding="utf-8")
+    (artifact_dir / "openmed-onnx.json").write_text(
+        json.dumps({"formats": ["onnx-android", "onnx-int8"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        batch,
+        "_onnx_external_data_files_present",
+        lambda path: path.is_file(),
+    )
+
+    (artifact_dir / "id2label.json").unlink()
+
+    assert batch._load_existing_artifact_result(artifact_dir, include_int8=True) is None
+
+
+def test_existing_artifact_rejects_invalid_external_data(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact_dir = tmp_path / "artifact"
+    artifact_dir.mkdir()
+    for name in [
+        "config.json",
+        "id2label.json",
+        "model.onnx",
+        "model_fp16.onnx",
+        "model_int8.onnx",
+        "tokenizer.json",
+    ]:
+        (artifact_dir / name).write_text("artifact", encoding="utf-8")
+    (artifact_dir / "openmed-onnx.json").write_text(
+        json.dumps({"formats": ["onnx-android", "onnx-int8"]}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        batch,
+        "_onnx_external_data_files_present",
+        lambda path: path.name != "model.onnx",
+    )
+
+    assert batch._load_existing_artifact_result(artifact_dir, include_int8=True) is None
+
+
+def test_external_data_validation_requires_complete_sidecar(tmp_path: Path) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    model_path = tmp_path / "model.onnx"
+    initializer = onnx.numpy_helper.from_array(
+        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        name="weights",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [initializer])
+    onnx.save_model(
+        onnx.helper.make_model(graph),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+    sidecar = tmp_path / "model.onnx.data"
+
+    assert batch._onnx_external_data_files_present(model_path) is True
+
+    sidecar.unlink()
+
+    assert batch._onnx_external_data_files_present(model_path) is False
+
+
+def test_external_data_validation_rejects_out_of_bounds_offset(tmp_path: Path) -> None:
+    onnx = pytest.importorskip("onnx")
+    numpy = pytest.importorskip("numpy")
+    model_path = tmp_path / "model.onnx"
+    initializer = onnx.numpy_helper.from_array(
+        numpy.asarray([1.0, 2.0], dtype=numpy.float32),
+        name="weights",
+    )
+    graph = onnx.helper.make_graph([], "external", [], [], [initializer])
+    onnx.save_model(
+        onnx.helper.make_model(graph),
+        str(model_path),
+        save_as_external_data=True,
+        all_tensors_to_one_file=True,
+        location="model.onnx.data",
+        size_threshold=0,
+    )
+    model = onnx.load(str(model_path), load_external_data=False)
+    tensor = model.graph.initializer[0]
+    offset = next(item for item in tensor.external_data if item.key == "offset")
+    offset.value = str((tmp_path / "model.onnx.data").stat().st_size + 1)
+    model_path.write_bytes(model.SerializeToString())
+
+    assert batch._onnx_external_data_files_present(model_path) is False
 
 
 def test_hub_repo_creation_limit_stops_batch(tmp_path: Path, monkeypatch) -> None:

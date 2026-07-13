@@ -409,6 +409,7 @@ def convert(
         cache_dir=cache_dir,
         max_seq_length=max_seq_length,
         require_id2label=profile in {ANDROID_PROFILE_NAME, OPENVINO_PROFILE_NAME},
+        require_tokenizer_json=profile == ANDROID_PROFILE_NAME,
     )
     if should_optimize_onnx and unoptimized_path is not None:
         optimization_manifest = optimize_onnx_graph(
@@ -637,6 +638,7 @@ def save_source_assets(
     cache_dir: str | None = None,
     max_seq_length: int = 512,
     require_id2label: bool = False,
+    require_tokenizer_json: bool = False,
 ) -> tuple[dict[str, Any], list[str]]:
     """Save config, labels, and tokenizer assets beside exported artifacts."""
 
@@ -674,11 +676,20 @@ def save_source_assets(
         tokenizer.save_pretrained(output_dir)
         tokenizer_files = find_tokenizer_files(output_dir)
     except Exception as exc:
+        if require_tokenizer_json:
+            raise RuntimeError(
+                f"Android ONNX export requires tokenizer.json for {model_id}"
+            ) from exc
         logger.warning(
             "Could not save tokenizer assets for %s into %s: %s",
             model_id,
             output_dir,
             exc,
+        )
+
+    if require_tokenizer_json and not (output_dir / "tokenizer.json").is_file():
+        raise RuntimeError(
+            f"Android ONNX export requires tokenizer.json for {model_id}"
         )
 
     return config, tokenizer_files
