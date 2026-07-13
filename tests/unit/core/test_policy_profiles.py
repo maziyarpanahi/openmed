@@ -11,12 +11,16 @@ from openmed.core.labels import (
     CLINICAL_CONCEPT,
     DIRECT_IDENTIFIER,
     QUASI_IDENTIFIER,
+    id_subtype_for,
+    normalize_label,
     policy_label_for,
 )
 from openmed.core.pii import deidentify
 from openmed.core.pipeline import Pipeline
 from openmed.core.policy import (
     CANONICAL_POLICY_NAMES,
+    CURRENT_POLICY_SCHEMA_VERSION,
+    PolicyName,
     canonical_policy_name,
     lint_policy,
     list_policies,
@@ -205,6 +209,71 @@ def test_china_pipl_profile_covers_sensitive_personal_information():
         "This technical profile is not legal advice."
     )
     assert lint_policy("china_pipl") == ()
+
+
+def test_india_dpdp_act_profile_is_complete_and_assist_only():
+    profile = load_policy("india_dpdp_act")
+
+    assert PolicyName.INDIA_DPDP_ACT.value == "india_dpdp_act"
+    assert profile.name == PolicyName.INDIA_DPDP_ACT.value
+    assert profile.schema_version == CURRENT_POLICY_SCHEMA_VERSION == 1
+    assert profile.safety_sweep_mandatory is True
+    assert profile.default_action == "replace"
+    assert set(profile.actions) == set(CANONICAL_LABELS)
+    assert all(profile.action_for(label) for label in CANONICAL_LABELS)
+    assert all(
+        profile.action_for(label) == "replace"
+        for label in CANONICAL_LABELS
+        if policy_label_for(label) == DIRECT_IDENTIFIER
+    )
+    assert all(
+        profile.action_for(label) == "mask"
+        for label in CANONICAL_LABELS
+        if policy_label_for(label) == QUASI_IDENTIFIER
+    )
+    assert profile.action_for("ID_NUM") == "replace"
+    assert profile.action_for("SSN") == "replace"
+    assert profile.action_for("PERSON") == "replace"
+    assert profile.action_for("PHONE") == "replace"
+    assert profile.action_for("EMAIL") == "replace"
+    assert profile.action_for("STREET_ADDRESS") == "replace"
+    assert profile.action_for("AGE") == "mask"
+    assert profile.action_for("DATE") == "mask"
+    assert profile.action_for("ZIPCODE") == "mask"
+    assert profile.action_for("GENDER") == "mask"
+    assert "india_dpdp_act" in list_policies()
+    assert lint_policy("india_dpdp_act") == ()
+
+    provenance = profile.metadata["provenance"]
+    disclaimer = profile.metadata["disclaimer"]
+    assert "Digital Personal Data Protection Act, 2023" in provenance["basis"]
+    assert "Digital Personal Data Protection Rules, 2025" in provenance["basis"]
+    assert set(provenance["official_sources"]) == {"act", "rules"}
+    assert all(
+        source.startswith("https://www.meity.gov.in/")
+        for source in provenance["official_sources"].values()
+    )
+    assert disclaimer["assist_only"] is True
+    assert disclaimer["legal_advice"] is False
+    assert disclaimer["autonomous_determination"] is False
+
+
+@pytest.mark.parametrize(
+    "source_label",
+    [
+        "aadhaar",
+        "Aadhaar Number",
+        "ABHA",
+        "ABHA Number",
+        "PAN",
+        "Permanent Account Number",
+    ],
+)
+def test_indian_national_identifier_aliases_normalize_to_id_num(
+    source_label: str,
+):
+    assert normalize_label(source_label) == "ID_NUM"
+    assert id_subtype_for(source_label) == "national_id"
 
 
 def test_canada_pipeda_masks_canadian_identifier_entities(monkeypatch):
