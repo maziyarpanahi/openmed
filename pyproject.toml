@@ -57,8 +57,8 @@ dev = [
   "fsspec>=2025.9.0",
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
-  "protobuf>=5.26,<7",
-  "ruff==0.15.20",
+  "protobuf>=5.26,<8",
+  "ruff==0.15.21",
   "tomli>=2.0; python_version < '3.11'",
 ]
 
@@ -166,7 +166,7 @@ cloud = [
 ]
 
 spark = [
-  "pyspark>=3.5,<4",
+  "pyspark>=3.5,<5",
 ]
 
 hf = [
@@ -183,7 +183,7 @@ service = [
   "opentelemetry-api>=1.26,<2",
   "opentelemetry-exporter-otlp-proto-http>=1.26,<2",
   "opentelemetry-sdk>=1.26,<2",
-  "protobuf>=5.26,<7",
+  "protobuf>=5.26,<8",
   "uvicorn[standard]>=0.29",
 ]
 
