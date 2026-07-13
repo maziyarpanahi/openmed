@@ -50,6 +50,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "th",
     "ko",
     "ro",
+    "zh",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -235,6 +236,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". Adresa ",
         ". Control la ",
         ".",
+    ),
+    "zh": (
+        "临床记录：患者",
+        "出生于",
+        "。患者编号",
+        "。电话",
+        "。地址",
+        "。复诊日期",
+        "。",
     ),
 }
 

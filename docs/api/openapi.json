@@ -196,7 +196,8 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -417,7 +418,8 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -540,7 +542,8 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -636,7 +639,8 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -752,7 +756,8 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"
@@ -876,7 +881,8 @@
               "id",
               "th",
               "ko",
-              "ro"
+              "ro",
+              "zh"
             ],
             "title": "Lang",
             "type": "string"

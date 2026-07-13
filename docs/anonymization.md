@@ -333,6 +333,48 @@ def my_first_name(faker, original, *, locale):
 register_label_generator("FIRST_NAME", my_first_name)
 ```
 
+## Chinese word segmentation
+
+Chinese routing uses a pluggable word segmenter that preserves exact Python
+string offsets. The default `jieba` backend and the small synthetic clinical
+dictionary ship with OpenMed; no model download is required:
+
+```python
+from openmed.core.config import OpenMedConfig
+from openmed.processing import create_chinese_segmenter_from_config
+
+config = OpenMedConfig(
+    chinese_segmentation_backend="jieba",
+    chinese_user_dict_path="/srv/openmed/zh_terms.txt",
+)
+segmenter = create_chinese_segmenter_from_config(config)
+tokens = segmenter.segment("患者王芳因心房颤动入院")
+
+assert all(token.text == "患者王芳因心房颤动入院"[token.start:token.end]
+           for token in tokens)
+```
+
+An additional dictionary is a UTF-8 text file with one entry per line in
+`term`, `term frequency`, or `term frequency POS` form. For example:
+
+```text
+心脏超声 90000 nz
+临床路径
+```
+
+Keep organization-specific dictionaries outside the package and point
+`chinese_user_dict_path` or `OPENMED_CHINESE_USER_DICT` at the local file. This
+avoids bundling private terminology or restricted lexicons.
+
+The optional `pkuseg` (MIT) and HanLP (Apache-2.0) adapters are installed with
+`openmed[zh-pkuseg]` and `openmed[zh-hanlp]`, respectively. Set
+`chinese_segmentation_backend` or `OPENMED_CHINESE_SEGMENTATION_BACKEND` to
+select one. `pkuseg` defaults to the `medicine` domain, configurable through
+`chinese_pkuseg_domain`; HanLP accepts a preloaded tokenizer or a local model
+path through `create_chinese_segmenter(..., hanlp_model=...)`. OpenMed never
+downloads optional model files implicitly, so provision those assets before
+selecting either backend.
+
 ## Privacy-filter family
 
 OpenMed ships three privacy-filter families, all **the same OpenAI
@@ -341,9 +383,10 @@ local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`), differing
 only in their training data:
 
 The per-language PII API uses `openmed.core.pii_i18n.SUPPORTED_LANGUAGES`
-as its source of truth and supports **17 supported PII language codes**:
-`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, and `tr`.
-These are the model-backed PII language allow-list.
+as its source of truth and supports **18 supported PII language codes**:
+`ar`, `de`, `en`, `es`, `fr`, `he`, `hi`, `id`, `it`, `ja`, `ko`, `nl`, `pt`, `ro`, `te`, `th`, `tr`, and `zh`.
+Chinese routing currently uses the documented multilingual default-model
+placeholder; dedicated Chinese model weights are not bundled.
 Additional validator-backed national-ID providers cover ID-only locales such as
 Polish, Latvian, Slovak, Malay, Filipino, and Danish without adding
 default PII models for those language codes.
@@ -354,7 +397,7 @@ expand the per-language API allow-list.
 | ------------------------------------ | ----------------------------------------------- | ---------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
 | OpenAI Privacy Filter                | OpenAI's PII training set                       | `openai/privacy-filter`                  | `OpenMed/privacy-filter-mlx`                    | `OpenMed/privacy-filter-mlx-8bit`                     |
 | OpenAI Nemotron Privacy Filter       | Nemotron PII dataset                            | `OpenMed/privacy-filter-nemotron`        | `OpenMed/privacy-filter-nemotron-mlx`           | `OpenMed/privacy-filter-nemotron-mlx-8bit`            |
-| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; same 17-code API allow-list | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
+| OpenMed Multilingual Privacy Filter  | OpenMed multilingual PII corpus; 17 model-backed codes plus the documented `zh` routing placeholder | `OpenMed/privacy-filter-multilingual`    | `OpenMed/privacy-filter-multilingual-mlx`       | `OpenMed/privacy-filter-multilingual-mlx-8bit`        |
 
 All run through the same `extract_pii()` / `deidentify()` API — only the
 weights differ:

@@ -68,6 +68,19 @@ from .text import (
 )
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
+from .zh_segmentation import (
+    ChineseSegmentationConfig,
+    ChineseSegmenter,
+    HanLPSegmenter,
+    JiebaSegmenter,
+    PkusegSegmenter,
+    UserDictionaryEntry,
+    create_chinese_segmenter,
+    create_chinese_segmenter_from_config,
+    load_user_dictionary,
+    segmentation_boundary_f1,
+    validate_segmentation,
+)
 
 __all__ = [
     "TextProcessor",
@@ -78,6 +91,17 @@ __all__ = [
     "postprocess_text",
     "TokenizationHelper",
     "infer_tokenizer_max_length",
+    "ChineseSegmenter",
+    "ChineseSegmentationConfig",
+    "JiebaSegmenter",
+    "PkusegSegmenter",
+    "HanLPSegmenter",
+    "UserDictionaryEntry",
+    "create_chinese_segmenter",
+    "create_chinese_segmenter_from_config",
+    "load_user_dictionary",
+    "segmentation_boundary_f1",
+    "validate_segmentation",
     "get_tokenizer",
     "clear_tokenizer_cache",
     "OutputFormatter",

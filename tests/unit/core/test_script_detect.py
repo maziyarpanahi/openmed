@@ -138,6 +138,15 @@ def test_routing_only_languages_do_not_claim_bundled_models():
     )
 
 
+def test_han_script_routes_to_chinese_candidate_language():
+    text = "患者王芳因心房颤动入院"
+
+    script = detect_script(text)
+
+    assert script == "Han"
+    assert candidate_languages_for_script(script)[0] == "zh"
+
+
 def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():
     text = "Patient J\u200bo\u0301hn D\u03bfe"
     normalized = normalize_for_pii_detection(text)
