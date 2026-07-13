@@ -176,6 +176,7 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     assert "2,000+ medical models" in card
     assert "com.github.maziyarpanahi:openmed:v" not in card
     assert "OpenMedKit.fromDirectory(modelDirectory)" in card
+    assert "suspend fun analyzeModel()" in card
     assert "# OpenMed PII Detection 44M" in card
     assert "Language | Turkish" in card
     assert "`model_int8.onnx`" in card

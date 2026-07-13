@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.8.2] - 2026-07-12
+## [1.9.0] - 2026-07-13
 
 ### Added
 
@@ -37,6 +37,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Longformer tracing, fp16 metadata, dynamic INT8 graph ordering, optional ORT
   conversion failures, existing Hub repositories, and models that require
   zero-valued `token_type_ids` at runtime.
+- Aligned the release train with the conventional-commit SemVer gate at
+  `1.9.0`, replaced fixable vulnerability waivers with dependency and image
+  upgrades, and made the scan gate reject waivers when a fixed version exists.
+- Made Android artifact reuse fail closed when runtime files or ONNX external
+  data are missing, and require `tokenizer.json` before an Android export can
+  be published.
+- Made direct `OpenMed/...-mlx` repository IDs resolve as pre-converted MLX
+  artifacts, so the new token-classification and GLiNER examples do not fall
+  through to PyTorch conversion.
+- Kept Hugging Face tokenizer loading lazy so installing MLX/HF extras does not
+  import pandas as a side effect of importing OpenMed.
 
 ## [1.8.1] - 2026-07-10
 
@@ -1110,8 +1121,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.8.2...HEAD
-[1.8.2]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.8.2
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...v1.7.0

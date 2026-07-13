@@ -488,7 +488,13 @@ def _load_existing_artifact_result(
     if include_int8 and "onnx-int8" not in formats:
         return None
 
-    required_files = {"config.json", "model.onnx", "tokenizer.json"}
+    required_files = {
+        "config.json",
+        "id2label.json",
+        "model.onnx",
+        "model_fp16.onnx",
+        "tokenizer.json",
+    }
     if "ort-android" in formats:
         required_files.add("model.ort")
     if "onnx-int8" in formats:
@@ -496,11 +502,54 @@ def _load_existing_artifact_result(
     if any(not (artifact_dir / name).is_file() for name in required_files):
         return None
 
+    onnx_files = [artifact_dir / "model.onnx", artifact_dir / "model_fp16.onnx"]
+    if "onnx-int8" in formats:
+        onnx_files.append(artifact_dir / "model_int8.onnx")
+    if any(not _onnx_external_data_files_present(path) for path in onnx_files):
+        return None
+
     return ExistingArtifactResult(
         output_dir=artifact_dir,
         manifest_path=manifest_path,
         formats=formats,
     )
+
+
+def _onnx_external_data_files_present(model_path: Path) -> bool:
+    """Validate that ONNX external-data references stay local and are complete."""
+
+    try:
+        import onnx
+        from google.protobuf.message import DecodeError
+    except ImportError:
+        return False
+
+    try:
+        model = onnx.load(str(model_path), load_external_data=False)
+        model_dir = model_path.parent.resolve(strict=False)
+        for tensor in model.graph.initializer:
+            metadata = {item.key: item.value for item in tensor.external_data}
+            location = metadata.get("location")
+            if not location:
+                if (
+                    tensor.external_data
+                    or tensor.data_location == onnx.TensorProto.EXTERNAL
+                ):
+                    return False
+                continue
+            data_path = (model_path.parent / location).resolve(strict=False)
+            if not data_path.is_relative_to(model_dir) or not data_path.is_file():
+                return False
+            offset = int(metadata.get("offset", "0"))
+            length = int(metadata.get("length", "0"))
+            if offset < 0 or length < 0:
+                return False
+            data_size = data_path.stat().st_size
+            if offset > data_size or (length and data_size < offset + length):
+                return False
+    except (DecodeError, OSError, TypeError, ValueError):
+        return False
+    return True
 
 
 def _is_hub_repo_creation_limit(exc: Exception) -> bool:

@@ -393,6 +393,46 @@ def test_save_source_assets_populates_id2label_for_android(
     assert "tokenizer.json" in tokenizer_files
 
 
+def test_save_source_assets_requires_fast_tokenizer_for_android(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _convert_module()
+
+    class FakeConfig:
+        def to_dict(self):
+            return {"model_type": "bert", "num_labels": 1}
+
+    class MissingFastTokenizer:
+        def save_pretrained(self, output_dir):
+            Path(output_dir, "tokenizer_config.json").write_text(
+                "{}",
+                encoding="utf-8",
+            )
+
+    transformers_mod = types.ModuleType("transformers")
+    transformers_mod.AutoConfig = types.SimpleNamespace(
+        from_pretrained=lambda *args, **kwargs: FakeConfig()
+    )
+    transformers_mod.AutoTokenizer = types.SimpleNamespace(
+        from_pretrained=lambda *args, **kwargs: MissingFastTokenizer()
+    )
+    monkeypatch.setitem(sys.modules, "transformers", transformers_mod)
+    monkeypatch.setattr(
+        module,
+        "get_tokenizer_with_loader",
+        lambda model_id, loader, cache_dir=None: MissingFastTokenizer(),
+    )
+
+    with pytest.raises(RuntimeError, match="requires tokenizer.json"):
+        module.save_source_assets(
+            "OpenMed/test-model",
+            tmp_path,
+            require_id2label=True,
+            require_tokenizer_json=True,
+        )
+
+
 def _install_fake_onnx(
     monkeypatch: pytest.MonkeyPatch,
     model,
