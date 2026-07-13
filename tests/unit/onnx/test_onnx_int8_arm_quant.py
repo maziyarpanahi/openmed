@@ -269,6 +269,9 @@ def test_convert_android_profile_emits_int8_and_runs_certification(
             "report_path": "recall_delta.json",
         }
 
+    def fake_convert_android_onnx_to_ort(onnx_path, **kwargs):
+        return types.SimpleNamespace(skipped=True, ort_path=None)
+
     monkeypatch.setattr(module, "export_onnx", fake_export_onnx)
     monkeypatch.setattr(module, "export_android_fp16", fake_export_android_fp16)
     monkeypatch.setattr(module, "quantize_dynamic_int8", fake_quantize_dynamic_int8)
@@ -289,6 +292,11 @@ def test_convert_android_profile_emits_int8_and_runs_certification(
         module,
         "write_int8_recall_delta_report",
         fake_write_int8_recall_delta_report,
+    )
+    monkeypatch.setattr(
+        module,
+        "convert_android_onnx_to_ort",
+        fake_convert_android_onnx_to_ort,
     )
 
     result = module.convert(
