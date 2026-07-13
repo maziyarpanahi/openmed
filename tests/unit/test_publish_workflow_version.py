@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -17,6 +18,8 @@ ANDROID_BUILD = ROOT / "android" / "openmedkit" / "build.gradle.kts"
 ANDROID_README = ROOT / "android" / "README.md"
 JITPACK_CONFIG = ROOT / "jitpack.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
+WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
+WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
 
 
 def _load_workflow(path: Path) -> dict[str, object]:
@@ -44,6 +47,29 @@ def test_about_version_is_parseable_without_runtime_dependencies():
 
     assert match is not None
     assert re.fullmatch(r"\d+\.\d+\.\d+", match.group(1))
+
+
+def test_npm_package_tracks_openmed_release_version():
+    content = ABOUT_FILE.read_text(encoding="utf-8")
+    match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
+    package = json.loads(WEB_PACKAGE.read_text(encoding="utf-8"))
+
+    assert match is not None
+    assert package["name"] == "openmed"
+    assert package["version"] == match.group(1)
+    assert package["publishConfig"] == {
+        "access": "public",
+        "provenance": True,
+    }
+
+
+def test_npm_package_readme_uses_public_unpinned_package_name():
+    readme = WEB_PACKAGE_README.read_text(encoding="utf-8")
+
+    assert "npm install openmed" in readme
+    assert 'from "openmed"' in readme
+    assert "npm install openmed@" not in readme
+    assert "@openmed/openmedkit-web" not in readme
 
 
 def test_only_publish_workflow_uses_pypi_publish_action():
@@ -79,7 +105,6 @@ def test_publish_workflow_keeps_release_gates():
     assert "workflow_dispatch:" not in publish_workflow
     assert "pull_request:" not in publish_workflow
     assert "uses: ./.github/workflows/provenance.yml" in publish_workflow
-    assert "needs: provenance" in publish_workflow
     assert "pypa/gh-action-pypi-publish@v1.14.0" in publish_workflow
     assert "HATCH_INDEX_AUTH: ${{ secrets.PYPI_API_TOKEN }}" not in publish_workflow
 
@@ -89,6 +114,7 @@ def test_publish_workflow_keeps_release_gates():
     assert "id-token" not in publish_job["permissions"]
     assert publish_step["with"]["password"] == "${{ secrets.PYPI_API_TOKEN }}"
     assert publish_step["with"]["attestations"] == "false"
+    assert publish_job["needs"] == ["provenance", "npm-verify"]
 
     assert "fetch-depth: 0" in provenance_workflow
     assert "id-token: write" in provenance_workflow
@@ -98,6 +124,43 @@ def test_publish_workflow_keeps_release_gates():
     assert "steps.release_metadata.outputs.next_version" in provenance_workflow
     assert "Verify version matches tag" in provenance_workflow
     assert "twine check dist/*" in provenance_workflow
+
+
+def test_publish_workflow_verifies_and_publishes_npm_package():
+    workflow = _load_workflow(PUBLISH_WORKFLOW)
+    content = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    npm_verify = workflow["jobs"]["npm-verify"]
+    npm_publish = workflow["jobs"]["npm-publish"]
+    sbom = workflow["jobs"]["sbom"]
+    publish_step = next(
+        step
+        for step in npm_publish["steps"]
+        if step.get("name") == "Publish npm package with provenance"
+    )
+
+    assert npm_verify["permissions"] == {"contents": "read"}
+    assert "actions/setup-node@v6" in content
+    assert "node-version: '24'" in content
+    assert "package-manager-cache: false" in content
+    assert "npm audit --audit-level=low" in content
+    assert "npm test" in content
+    assert "npm pack --dry-run" in content
+    assert "NPM_VERSION" in content
+
+    assert npm_publish["needs"] == ["provenance", "npm-verify"]
+    assert npm_publish["environment"] == {
+        "name": "npm",
+        "url": "https://www.npmjs.com/package/openmed",
+    }
+    assert npm_publish["permissions"] == {
+        "contents": "read",
+        "id-token": "write",
+    }
+    assert publish_step["run"] == (
+        "npm publish --ignore-scripts --access public --provenance"
+    )
+    assert publish_step["env"]["NODE_AUTH_TOKEN"] == ("${{ secrets.NPM_ACCESS_TOKEN }}")
+    assert sbom["needs"] == ["publish", "npm-publish"]
 
 
 def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
@@ -197,6 +260,10 @@ def test_readme_install_guidance_tracks_latest_openmed_release():
             violations.append(f"{relative}: pinned Android package")
         if re.search(r"openmed:[0-9]+\.[0-9]+", text):
             violations.append(f"{relative}: pinned Docker tag")
+        if re.search(r"npm install openmed@\d", text):
+            violations.append(f"{relative}: pinned npm package")
+        if "@openmed/openmedkit-web" in text:
+            violations.append(f"{relative}: unpublished npm package name")
         for line in text.splitlines():
             if 'pip install "openmed' in line and "pip install --upgrade" not in line:
                 violations.append(f"{relative}: install does not use --upgrade")
