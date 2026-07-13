@@ -34,6 +34,7 @@ from .language_pack_catalog import (
     DEFAULT_PII_MODELS,
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
+    USER_SUPPLIED_MODEL_LANGUAGES,
 )
 
 # ---------------------------------------------------------------------------

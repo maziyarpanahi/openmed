@@ -194,25 +194,29 @@
   },
   "script_language_hints": {
     "Arabic": [
-      "ar"
+      "ar",
+      "ur"
     ],
     "Bengali": [
-      "hi"
+      "bn",
+      "as"
     ],
     "Cyrillic": [
       "en"
     ],
     "Devanagari": [
-      "hi"
+      "hi",
+      "mr",
+      "ne"
     ],
     "Greek": [
       "en"
     ],
     "Gujarati": [
-      "hi"
+      "gu"
     ],
     "Gurmukhi": [
-      "hi"
+      "pa"
     ],
     "Han": [
       "ja"
@@ -227,7 +231,7 @@
       "ja"
     ],
     "Kannada": [
-      "te"
+      "kn"
     ],
     "Latin": [
       "en",
@@ -240,13 +244,13 @@
       "tr"
     ],
     "Malayalam": [
-      "te"
+      "ml"
     ],
     "Odia": [
-      "hi"
+      "or"
     ],
     "Tamil": [
-      "te"
+      "ta"
     ],
     "Telugu": [
       "te"
