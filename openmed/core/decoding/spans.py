@@ -8,22 +8,111 @@ dependencies.
 
 from __future__ import annotations
 
+import bisect
 import hashlib
 import re
+import unicodedata
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
+from ..script_detect import (
+    CJK_SCRIPTS,
+    INDIC_SCRIPTS,
+    UNKNOWN_SCRIPT,
+    segment_by_script,
+)
+
+_GRAPHEME_CONTROL_CATEGORIES: Final = frozenset({"Cc", "Cf", "Cs", "Zl", "Zp"})
+_INDIC_LINKERS: Final = frozenset({"\u094d", "\u0c4d"})
+_SCRIPT_REFINEMENT_GUARDS: Final = CJK_SCRIPTS | INDIC_SCRIPTS
+_PREPEND_RANGES: Final = (
+    (0x0600, 0x0605),
+    (0x06DD, 0x06DD),
+    (0x070F, 0x070F),
+    (0x0890, 0x0891),
+    (0x08E2, 0x08E2),
+    (0x0D4E, 0x0D4E),
+    (0x110BD, 0x110BD),
+    (0x110CD, 0x110CD),
+    (0x111C2, 0x111C3),
+    (0x1193F, 0x1193F),
+    (0x11941, 0x11941),
+    (0x11A3A, 0x11A3A),
+    (0x11A84, 0x11A89),
+    (0x11D46, 0x11D46),
+    (0x11F02, 0x11F02),
+)
+
+
+def iter_grapheme_cluster_spans(text: str) -> Iterator[tuple[int, int]]:
+    """Yield UAX #29-style extended grapheme-cluster offsets for ``text``.
+
+    The implementation is stdlib-only and preserves Python code-point offsets.
+    It covers combining and spacing marks, Hangul syllables, regional-indicator
+    pairs, emoji modifiers and ZWJ sequences, and Indic virama conjuncts.
+
+    Args:
+        text: Original, unnormalized Unicode text.
+
+    Yields:
+        ``(start, end)`` code-point offsets for each whole grapheme cluster.
+    """
+    if not text:
+        return
+
+    cluster_start = 0
+    for index in range(1, len(text)):
+        if _has_grapheme_break(text, index):
+            yield cluster_start, index
+            cluster_start = index
+    yield cluster_start, len(text)
+
+
+def snap_span_to_grapheme_boundaries(
+    start: int,
+    end: int,
+    text: str,
+) -> tuple[int, int]:
+    """Clamp a span and snap its non-empty boundaries outward by cluster.
+
+    Empty spans remain empty and are moved to the preceding cluster boundary.
+    Returned offsets always index the original ``text`` directly.
+    """
+    text_length = len(text)
+    safe_start = max(0, min(int(start), text_length))
+    safe_end = max(safe_start, min(int(end), text_length))
+    boundaries = [0]
+    boundaries.extend(end for _, end in iter_grapheme_cluster_spans(text))
+
+    start_index = bisect.bisect_right(boundaries, safe_start) - 1
+    snapped_start = boundaries[start_index]
+    if safe_start == safe_end:
+        return snapped_start, snapped_start
+
+    end_index = bisect.bisect_left(boundaries, safe_end)
+    return snapped_start, boundaries[end_index]
+
 
 def trim_span_whitespace(start: int, end: int, text: str) -> tuple[int, int]:
-    """Strip leading and trailing whitespace from ``text[start:end]``.
+    """Strip whole whitespace clusters from ``text[start:end]``.
 
-    Returns the inclusive ``[start, end)`` indices into ``text`` after
-    trimming. ``start`` and ``end`` are clamped so ``start <= end``.
+    Input boundaries are first snapped outward, so the returned ``[start, end)``
+    offsets never bisect a combining sequence, Indic aksara, or emoji sequence.
     """
-    while start < end and text[start].isspace():
-        start += 1
-    while end > start and text[end - 1].isspace():
-        end -= 1
+    start, end = snap_span_to_grapheme_boundaries(start, end, text)
+    if start == end:
+        return start, end
+
+    clusters = list(iter_grapheme_cluster_spans(text))
+    selected = [
+        cluster for cluster in clusters if cluster[0] >= start and cluster[1] <= end
+    ]
+
+    while selected and _cluster_is_whitespace(text[slice(*selected[0])]):
+        start = selected.pop(0)[1]
+    while selected and _cluster_is_whitespace(text[slice(*selected[-1])]):
+        end = selected.pop()[0]
     return start, end
 
 
@@ -40,29 +129,223 @@ def refine_privacy_filter_span(
     end: int,
     text: str,
 ) -> tuple[int, int]:
-    """Tighten obvious structured-PII spans when the model absorbs glue words.
+    """Tighten a PII span without crossing grapheme or script boundaries.
 
     For email / URL / phone labels, locate the strict regex match inside
-    the model-suggested span and shrink to that. For any label, drop a
-    trailing ``" and"`` or ``" or"`` that the model often grabs because
-    it sat next to the entity in training data.
+    Latin or neutral script runs and shrink to it. The Latin-only trailing
+    ``" and"`` / ``" or"`` heuristic is disabled for spans containing CJK
+    or other scripts. Every returned boundary is snapped to a whole grapheme.
     """
     start, end = trim_span_whitespace(start, end, text)
     span_text = text[start:end]
     normalized = label.lower()
+    script_runs = list(segment_by_script(span_text))
 
     for label_hint, pattern in _PRIVACY_FILTER_SPAN_PATTERNS:
         if label_hint not in normalized:
             continue
-        match = pattern.search(span_text)
-        if match:
-            return start + match.start(), start + match.end()
+        match_offsets = _find_structured_match(span_text, pattern, script_runs)
+        if match_offsets is not None:
+            match_start, match_end = match_offsets
+            return trim_span_whitespace(
+                start + match_start,
+                start + match_end,
+                text,
+            )
 
-    for suffix in (" and", " or"):
-        if span_text.lower().endswith(suffix):
-            end -= len(suffix)
-            break
+    scripts = {script for _, _, script in script_runs}
+    if scripts <= {"Latin", UNKNOWN_SCRIPT}:
+        for suffix in (" and", " or"):
+            if span_text.lower().endswith(suffix):
+                end -= len(suffix)
+                break
     return trim_span_whitespace(start, end, text)
+
+
+def _find_structured_match(
+    span_text: str,
+    pattern: re.Pattern[str],
+    script_runs: list[tuple[int, int, str]],
+) -> tuple[int, int] | None:
+    guarded = any(script in _SCRIPT_REFINEMENT_GUARDS for _, _, script in script_runs)
+    if not guarded:
+        match = pattern.search(span_text)
+        if match is not None:
+            return match.start(), match.end()
+        return None
+
+    # A leading CJK/Indic code point defeats the regex ``\b`` before an
+    # adjacent Latin email or URL. Searching the Latin run independently also
+    # prevents a URL path from greedily absorbing an adjacent ideograph.
+    for run_start, run_end, script in script_runs:
+        if script != "Latin":
+            continue
+        run_match = pattern.search(span_text[run_start:run_end])
+        if run_match is not None:
+            return run_start + run_match.start(), run_start + run_match.end()
+
+    # Phone spans can be neutral-only digits attached to a surrounding script
+    # run. Retain that legacy match only when the matched text itself has no
+    # CJK/Indic code points.
+    match = pattern.search(span_text)
+    if match is not None:
+        match_scripts = {script for _, _, script in segment_by_script(match.group(0))}
+        if not (match_scripts & _SCRIPT_REFINEMENT_GUARDS):
+            return match.start(), match.end()
+    return None
+
+
+def _cluster_is_whitespace(cluster: str) -> bool:
+    saw_whitespace = False
+    for char in cluster:
+        if char.isspace():
+            saw_whitespace = True
+            continue
+        if _grapheme_break_class(char) in {"EXTEND", "ZWJ"}:
+            continue
+        return False
+    return saw_whitespace
+
+
+def _has_grapheme_break(text: str, index: int) -> bool:
+    previous = text[index - 1]
+    current = text[index]
+    previous_class = _grapheme_break_class(previous)
+    current_class = _grapheme_break_class(current)
+
+    if previous_class == "CR" and current_class == "LF":
+        return False
+    if previous_class in {"CR", "LF", "CONTROL"}:
+        return True
+    if current_class in {"CR", "LF", "CONTROL"}:
+        return True
+    if previous_class == "L" and current_class in {"L", "V", "LV", "LVT"}:
+        return False
+    if previous_class in {"LV", "V"} and current_class in {"V", "T"}:
+        return False
+    if previous_class in {"LVT", "T"} and current_class == "T":
+        return False
+    if current_class in {"EXTEND", "ZWJ", "SPACING_MARK"}:
+        return False
+    if previous_class == "PREPEND":
+        return False
+    if _continues_indic_conjunct(text, index):
+        return False
+    if (
+        current_class == "EXTENDED_PICTOGRAPHIC"
+        and previous_class == "ZWJ"
+        and _extended_pictographic_before_zwj(text, index - 1)
+    ):
+        return False
+    if previous_class == current_class == "REGIONAL_INDICATOR":
+        preceding_indicators = 0
+        cursor = index - 1
+        while cursor >= 0 and _grapheme_break_class(text[cursor]) == (
+            "REGIONAL_INDICATOR"
+        ):
+            preceding_indicators += 1
+            cursor -= 1
+        return preceding_indicators % 2 == 0
+    return True
+
+
+def _grapheme_break_class(char: str) -> str:
+    codepoint = ord(char)
+    if char == "\r":
+        return "CR"
+    if char == "\n":
+        return "LF"
+    if char == "\u200d":
+        return "ZWJ"
+    hangul_class = _hangul_grapheme_class(codepoint)
+    if hangul_class is not None:
+        return hangul_class
+    if 0x1F1E6 <= codepoint <= 0x1F1FF:
+        return "REGIONAL_INDICATOR"
+    if _in_ranges(codepoint, _PREPEND_RANGES):
+        return "PREPEND"
+    if _is_grapheme_extend(char):
+        return "EXTEND"
+    if unicodedata.category(char) == "Mc":
+        return "SPACING_MARK"
+    if unicodedata.category(char) in _GRAPHEME_CONTROL_CATEGORIES:
+        return "CONTROL"
+    if _is_extended_pictographic(codepoint):
+        return "EXTENDED_PICTOGRAPHIC"
+    return "OTHER"
+
+
+def _hangul_grapheme_class(codepoint: int) -> str | None:
+    if 0x1100 <= codepoint <= 0x115F or 0xA960 <= codepoint <= 0xA97C:
+        return "L"
+    if 0x1160 <= codepoint <= 0x11A7 or 0xD7B0 <= codepoint <= 0xD7C6:
+        return "V"
+    if 0x11A8 <= codepoint <= 0x11FF or 0xD7CB <= codepoint <= 0xD7FB:
+        return "T"
+    if 0xAC00 <= codepoint <= 0xD7A3:
+        return "LV" if (codepoint - 0xAC00) % 28 == 0 else "LVT"
+    return None
+
+
+def _is_grapheme_extend(char: str) -> bool:
+    codepoint = ord(char)
+    return (
+        unicodedata.category(char) in {"Mn", "Me"}
+        or char == "\u200c"
+        or 0x1F3FB <= codepoint <= 0x1F3FF
+        or 0xE0020 <= codepoint <= 0xE007F
+    )
+
+
+def _continues_indic_conjunct(text: str, index: int) -> bool:
+    if not _is_indic_consonant(text[index]):
+        return False
+
+    saw_linker = False
+    cursor = index - 1
+    while cursor >= 0:
+        char = text[cursor]
+        if char in _INDIC_LINKERS:
+            saw_linker = True
+            cursor -= 1
+            continue
+        if _grapheme_break_class(char) in {"EXTEND", "ZWJ", "SPACING_MARK"}:
+            cursor -= 1
+            continue
+        return saw_linker and _is_indic_consonant(char)
+    return False
+
+
+def _is_indic_consonant(char: str) -> bool:
+    codepoint = ord(char)
+    return (
+        0x0915 <= codepoint <= 0x0939
+        or 0x0958 <= codepoint <= 0x095F
+        or 0x0978 <= codepoint <= 0x097F
+        or 0x0C15 <= codepoint <= 0x0C39
+        or 0x0C58 <= codepoint <= 0x0C5A
+    )
+
+
+def _extended_pictographic_before_zwj(text: str, zwj_index: int) -> bool:
+    cursor = zwj_index - 1
+    while cursor >= 0 and _grapheme_break_class(text[cursor]) == "EXTEND":
+        cursor -= 1
+    return cursor >= 0 and _grapheme_break_class(text[cursor]) == (
+        "EXTENDED_PICTOGRAPHIC"
+    )
+
+
+def _is_extended_pictographic(codepoint: int) -> bool:
+    return (
+        0x1F000 <= codepoint <= 0x1FAFF
+        or 0x2300 <= codepoint <= 0x23FF
+        or 0x2600 <= codepoint <= 0x27BF
+    )
+
+
+def _in_ranges(codepoint: int, ranges: tuple[tuple[int, int], ...]) -> bool:
+    return any(start <= codepoint <= end for start, end in ranges)
 
 
 def _byte_offset(text: str, char_offset: int) -> int:
@@ -328,9 +611,11 @@ __all__ = [
     "TokenClassificationSpan",
     "TokenClassificationStreamEvent",
     "coerce_token_classification_spans",
+    "iter_grapheme_cluster_spans",
     "reconcile_stream_spans",
     "refine_privacy_filter_span",
     "stable_span_id",
     "stable_span_key",
+    "snap_span_to_grapheme_boundaries",
     "trim_span_whitespace",
 ]

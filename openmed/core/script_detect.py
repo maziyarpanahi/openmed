@@ -16,6 +16,9 @@ from .language_pack_catalog import SCRIPT_LANGUAGE_HINTS
 
 UNKNOWN_SCRIPT = "Unknown"
 
+CJK_SCRIPTS = frozenset({"Han", "Hiragana/Katakana", "Hangul"})
+INDIC_SCRIPTS = frozenset({"Devanagari", "Telugu"})
+
 SUPPORTED_SCRIPTS = (
     "Latin",
     "Arabic",
@@ -477,7 +480,9 @@ def _fold_confusable_char(char: str) -> str:
 
 
 __all__ = [
+    "CJK_SCRIPTS",
     "DetectionNormalization",
+    "INDIC_SCRIPTS",
     "SCRIPT_LANGUAGE_HINTS",
     "SUPPORTED_SCRIPTS",
     "UNKNOWN_SCRIPT",
