@@ -5,9 +5,10 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Tuple
 
+from openmed.core.decoding.spans import is_indic_text, iter_grapheme_clusters
+
 if TYPE_CHECKING:
     from transformers import PreTrainedTokenizer
-
 logger = logging.getLogger(__name__)
 
 _UNSET_MAX_LENGTH_SENTINEL = 1_000_000
@@ -39,6 +40,32 @@ class SpanToken:
     end: int
 
 
+def grapheme_tokenize(text: str) -> List[SpanToken]:
+    """Return one non-whitespace token per extended grapheme cluster.
+
+    This output-oriented tokenizer preserves exact source offsets and keeps
+    Indic aksharas, emoji ZWJ sequences, and combining-mark sequences intact.
+    It does not create model input IDs.
+    """
+
+    return [
+        SpanToken(text[start:end], start, end)
+        for start, end in iter_grapheme_clusters(text)
+        if not text[start:end].isspace()
+    ]
+
+
+def indic_grapheme_tokenize(text: str) -> List[SpanToken]:
+    """Return grapheme-aligned tokens for Indic runs in *text*.
+
+    Non-Indic clusters and whitespace are omitted. Offsets always refer to the
+    original string, allowing callers to combine this producer with their
+    existing tokenization for other scripts.
+    """
+
+    return [token for token in grapheme_tokenize(text) if is_indic_text(token.text)]
+
+
 def medical_tokenize(
     text: str,
     *,
@@ -52,10 +79,7 @@ def medical_tokenize(
     """
     exceptions_set = {e for e in (exceptions or []) if e}
     if not exceptions_set:
-        return [
-            SpanToken(m.group(0), m.start(), m.end())
-            for m in _MEDICAL_TOKEN_PATTERN.finditer(text)
-        ]
+        return _medical_tokens_in_segment(text)
 
     protected: List[Tuple[int, int]] = []
     for exc in sorted(exceptions_set, key=len, reverse=True):
@@ -72,28 +96,59 @@ def medical_tokenize(
             start = idx + len(exc)
 
     if not protected:
-        return [
-            SpanToken(m.group(0), m.start(), m.end())
-            for m in _MEDICAL_TOKEN_PATTERN.finditer(text)
-        ]
+        return _medical_tokens_in_segment(text)
 
     protected.sort()
     tokens: List[SpanToken] = []
     cursor = 0
     for s, e in protected:
         if cursor < s:
-            for m in _MEDICAL_TOKEN_PATTERN.finditer(text[cursor:s]):
-                tokens.append(
-                    SpanToken(m.group(0), m.start() + cursor, m.end() + cursor)
-                )
+            tokens.extend(_medical_tokens_in_segment(text[cursor:s], offset=cursor))
         tokens.append(SpanToken(text[s:e], s, e))
         cursor = e
     if cursor < len(text):
-        for m in _MEDICAL_TOKEN_PATTERN.finditer(text[cursor:]):
-            tokens.append(SpanToken(m.group(0), m.start() + cursor, m.end() + cursor))
+        tokens.extend(_medical_tokens_in_segment(text[cursor:], offset=cursor))
 
     return [
         t for t in sorted(tokens, key=lambda x: (x.start, x.end)) if t.end > t.start
+    ]
+
+
+def _medical_tokens_in_segment(text: str, *, offset: int = 0) -> List[SpanToken]:
+    tokens: List[SpanToken] = []
+    non_indic_start = 0
+
+    for cluster_start, cluster_end in iter_grapheme_clusters(text):
+        cluster = text[cluster_start:cluster_end]
+        if not is_indic_text(cluster):
+            continue
+        if non_indic_start < cluster_start:
+            tokens.extend(
+                _regex_medical_tokens(
+                    text[non_indic_start:cluster_start],
+                    offset=offset + non_indic_start,
+                )
+            )
+        if not cluster.isspace():
+            tokens.append(
+                SpanToken(cluster, offset + cluster_start, offset + cluster_end)
+            )
+        non_indic_start = cluster_end
+
+    if non_indic_start < len(text):
+        tokens.extend(
+            _regex_medical_tokens(
+                text[non_indic_start:],
+                offset=offset + non_indic_start,
+            )
+        )
+    return tokens
+
+
+def _regex_medical_tokens(text: str, *, offset: int) -> List[SpanToken]:
+    return [
+        SpanToken(match.group(0), offset + match.start(), offset + match.end())
+        for match in _MEDICAL_TOKEN_PATTERN.finditer(text)
     ]
 
 

@@ -15,6 +15,8 @@ import math
 from dataclasses import dataclass
 from typing import Final, Sequence
 
+from .spans import is_indic_text, snap_span_to_graphemes
+
 # ---------------------------------------------------------------------------
 # Public types
 # ---------------------------------------------------------------------------
@@ -459,3 +461,55 @@ def labels_to_token_spans(
     if current_label is not None and start_idx is not None and previous_idx is not None:
         spans.append((current_label, start_idx, previous_idx + 1))
     return spans
+
+
+def token_spans_to_char_spans(
+    token_spans: Sequence[tuple[int, int, int]],
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+) -> list[tuple[int, int, int]]:
+    """Map token spans to character spans and snap Indic runs to graphemes.
+
+    Args:
+        token_spans: ``(span_label, token_start, token_end)`` triples.
+        token_offsets: Half-open character offsets for every source token.
+        text: Exact source text referenced by ``token_offsets``.
+
+    Returns:
+        ``(span_label, start, end)`` triples with character offsets. Invalid
+        token ranges are omitted. A span touching an Indic run is expanded to
+        enclosing grapheme boundaries so Viterbi output cannot split an
+        akshara.
+    """
+
+    char_spans: list[tuple[int, int, int]] = []
+    for span_label, token_start, token_end in token_spans:
+        if not (0 <= token_start < token_end <= len(token_offsets)):
+            continue
+        start_offset = token_offsets[token_start]
+        end_offset = token_offsets[token_end - 1]
+        if len(start_offset) < 2 or len(end_offset) < 2:
+            continue
+        start = max(0, min(int(start_offset[0]), len(text)))
+        end = max(start, min(int(end_offset[1]), len(text)))
+        context_start = max(0, start - 1)
+        context_end = min(len(text), end + 1)
+        if is_indic_text(text[context_start:context_end]):
+            start, end = snap_span_to_graphemes(start, end, text)
+        char_spans.append((span_label, start, end))
+    return char_spans
+
+
+def labels_to_char_spans(
+    labels_by_index: dict[int, int],
+    label_info: TokenLabelInfo,
+    token_offsets: Sequence[Sequence[int]],
+    text: str,
+) -> list[tuple[int, int, int]]:
+    """Decode labels directly to grapheme-safe character span triples."""
+
+    return token_spans_to_char_spans(
+        labels_to_token_spans(labels_by_index, label_info),
+        token_offsets,
+        text,
+    )

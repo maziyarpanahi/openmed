@@ -21,6 +21,7 @@ from openmed.core.decoding import (
     decode_span_graph,
     labels_to_token_spans,
     refine_privacy_filter_span,
+    token_spans_to_char_spans,
     trim_span_whitespace,
     viterbi_decode,
 )
@@ -563,13 +564,20 @@ class PrivacyFilterMLXPipeline:
             index: int(label_id) for index, label_id in enumerate(pred_ids)
         }
         token_spans = labels_to_token_spans(labels_by_index, self.label_info)
+        token_offsets = list(zip(char_starts, char_ends))
 
         entities: list[dict[str, Any]] = []
         for span_label, token_start, token_end in token_spans:
             if not (0 <= token_start < token_end <= len(char_starts)):
                 continue
-            start = char_starts[token_start]
-            end = char_ends[token_end - 1]
+            char_spans = token_spans_to_char_spans(
+                [(span_label, token_start, token_end)],
+                token_offsets,
+                text,
+            )
+            if not char_spans:
+                continue
+            _, start, end = char_spans[0]
             start, end = _trim_span_whitespace(start, end, text)
             if end <= start:
                 continue

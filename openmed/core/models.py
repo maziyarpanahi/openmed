@@ -71,7 +71,6 @@ def _ensure_hf_pipeline() -> None:
 
         pipeline = transformers_pipeline
 
-
 if TYPE_CHECKING:
     from .config import OpenMedConfig
 
@@ -93,6 +92,50 @@ from .offline import (
 )
 
 
+def _ensure_transformers_loaded() -> None:
+    global AutoConfig
+    global AutoModelForTokenClassification
+    global AutoTokenizer
+    global pipeline
+
+    if all(
+        dependency is not None
+        for dependency in (
+            AutoConfig,
+            AutoModelForTokenClassification,
+            AutoTokenizer,
+            pipeline,
+        )
+    ):
+        return
+
+    try:
+        from transformers import (
+            AutoConfig as TransformersAutoConfig,
+        )
+        from transformers import (
+            AutoModelForTokenClassification as TransformersAutoModel,
+        )
+        from transformers import (
+            AutoTokenizer as TransformersAutoTokenizer,
+        )
+        from transformers import pipeline as transformers_pipeline
+    except (ImportError, OSError) as exc:
+        raise ImportError(
+            "HuggingFace transformers is required. "
+            "Install with: pip install transformers"
+        ) from exc
+
+    if AutoConfig is None:
+        AutoConfig = TransformersAutoConfig
+    if AutoModelForTokenClassification is None:
+        AutoModelForTokenClassification = TransformersAutoModel
+    if AutoTokenizer is None:
+        AutoTokenizer = TransformersAutoTokenizer
+    if pipeline is None:
+        pipeline = transformers_pipeline
+
+
 class ModelLoader:
     """Handles loading and managing OpenMed models from HuggingFace Hub."""
 
@@ -108,6 +151,7 @@ class ModelLoader:
                 "HuggingFace transformers is required. "
                 "Install with: pip install transformers"
             )
+        _ensure_transformers_loaded()
 
         configure_offline_mode(self.config)
         self._models: Dict[str, Any] = {}  # Cache for loaded models
