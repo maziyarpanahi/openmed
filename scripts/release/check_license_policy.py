@@ -74,6 +74,7 @@ REVIEWED_LICENSES = {
     "hanlp": "Apache-2.0",
     "huggingface-hub": "Apache-2.0",
     "httpx": "BSD-3-Clause",
+    "jieba": "MIT",
     "langchain-core": "MIT",
     "llama-index-core": "MIT",
     "markdown-it-py": "MIT",
