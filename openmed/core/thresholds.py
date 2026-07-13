@@ -19,6 +19,14 @@ DEFAULT_POLICY_PROFILE = "balanced"
 STRICT_NO_LEAK_PROFILE = "strict_no_leak"
 WILDCARD_LANGUAGE = "*"
 DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING = 0.05
+DEFAULT_SCRIPT_LEAKAGE_CEILING = 0.01
+DEFAULT_SCRIPT_RECALL_FLOORS: Mapping[str, float] = {
+    "Devanagari": 0.99,
+    "Han": 0.99,
+    "Hangul": 0.99,
+    "Hiragana/Katakana": 0.99,
+    "Telugu": 0.99,
+}
 
 
 @dataclass(frozen=True)
@@ -165,6 +173,7 @@ def validate_threshold_matrix(matrix: Mapping[str, Any]) -> None:
         if not isinstance(profile, Mapping):
             raise ValueError(f"profile {profile_name!r} must be an object")
         _validate_recall_floor(profile.get("recall_floor"), profile_name)
+        _validate_script_thresholds(profile, str(profile_name))
         _validate_entry(profile.get("default"), f"{profile_name}.default")
         _validate_membership_defense(
             profile.get("membership_defense"),
@@ -234,11 +243,50 @@ def profile_recall_floor(
     policy_profile: str = DEFAULT_POLICY_PROFILE,
     *,
     matrix: Mapping[str, Any] | None = None,
+    script: str | None = None,
 ) -> float:
     payload = matrix if matrix is not None else load_thresholds()
     validate_threshold_matrix(payload)
     profile_name = _resolve_profile_name(payload, policy_profile)
-    return float(payload["profiles"][profile_name]["recall_floor"])
+    floor = float(payload["profiles"][profile_name]["recall_floor"])
+    if script is None:
+        return floor
+    return profile_script_recall_floors(profile_name, matrix=payload).get(
+        str(script),
+        floor,
+    )
+
+
+def profile_script_recall_floors(
+    policy_profile: str = DEFAULT_POLICY_PROFILE,
+    *,
+    matrix: Mapping[str, Any] | None = None,
+) -> dict[str, float]:
+    """Return configured recall floors for protected Unicode scripts."""
+    payload = matrix if matrix is not None else load_thresholds()
+    validate_threshold_matrix(payload)
+    profile_name = _resolve_profile_name(payload, policy_profile)
+    profile = payload["profiles"][profile_name]
+    configured = profile.get("script_recall_floors")
+    source = DEFAULT_SCRIPT_RECALL_FLOORS if configured is None else configured
+    return {str(script): float(value) for script, value in sorted(source.items())}
+
+
+def profile_script_leakage_ceiling(
+    policy_profile: str = DEFAULT_POLICY_PROFILE,
+    *,
+    matrix: Mapping[str, Any] | None = None,
+) -> float:
+    """Return the leakage ceiling applied to protected Unicode scripts."""
+    payload = matrix if matrix is not None else load_thresholds()
+    validate_threshold_matrix(payload)
+    profile_name = _resolve_profile_name(payload, policy_profile)
+    return float(
+        payload["profiles"][profile_name].get(
+            "script_leakage_ceiling",
+            DEFAULT_SCRIPT_LEAKAGE_CEILING,
+        )
+    )
 
 
 def membership_defense_for_profile(
@@ -435,6 +483,33 @@ def _validate_recall_floor(value: Any, profile_name: str) -> None:
         raise ValueError(f"profile {profile_name!r} recall_floor must be 0..1")
 
 
+def _validate_script_thresholds(
+    profile: Mapping[str, Any],
+    profile_name: str,
+) -> None:
+    floors = profile.get("script_recall_floors")
+    if floors is not None:
+        if not isinstance(floors, Mapping):
+            raise ValueError(
+                f"profile {profile_name!r} script_recall_floors must be an object"
+            )
+        for script, floor in floors.items():
+            if not str(script).strip():
+                raise ValueError(
+                    f"profile {profile_name!r} script recall key must be non-empty"
+                )
+            _bounded_probability(
+                floor,
+                f"profiles.{profile_name}.script_recall_floors.{script}",
+            )
+    ceiling = profile.get("script_leakage_ceiling")
+    if ceiling is not None:
+        _bounded_probability(
+            ceiling,
+            f"profiles.{profile_name}.script_leakage_ceiling",
+        )
+
+
 def _validate_entry(entry: Any, path: str) -> None:
     if not isinstance(entry, Mapping):
         raise ValueError(f"{path} must be an object")
@@ -499,6 +574,8 @@ __all__ = [
     "CURRENT_SCHEMA_VERSION",
     "DEFAULT_POLICY_PROFILE",
     "DEFAULT_MEMBERSHIP_ADVANTAGE_CEILING",
+    "DEFAULT_SCRIPT_LEAKAGE_CEILING",
+    "DEFAULT_SCRIPT_RECALL_FLOORS",
     "MembershipDefensePolicy",
     "RecallGuardResult",
     "STRICT_NO_LEAK_PROFILE",
@@ -510,6 +587,8 @@ __all__ = [
     "lookup_threshold",
     "membership_defense_for_profile",
     "profile_recall_floor",
+    "profile_script_leakage_ceiling",
+    "profile_script_recall_floors",
     "recall_floor_guard",
     "update_thresholds",
     "validate_threshold_matrix",

@@ -13,6 +13,9 @@ from openmed.core.thresholds import (
     load_thresholds,
     lookup_threshold,
     membership_defense_for_profile,
+    profile_recall_floor,
+    profile_script_leakage_ceiling,
+    profile_script_recall_floors,
     recall_floor_guard,
     update_thresholds,
     validate_threshold_matrix,
@@ -71,6 +74,25 @@ def test_thresholds_json_has_schema_version_and_valid_actions():
         for label_entries in profile["labels"].values():
             for entry in label_entries.values():
                 assert entry["action"] in ACTION_VALUES
+
+
+def test_profiles_define_configurable_strict_cjk_and_indic_floors():
+    matrix = load_thresholds()
+    floors = profile_script_recall_floors("balanced", matrix=matrix)
+
+    assert floors["Han"] >= 0.99
+    assert floors["Devanagari"] >= 0.99
+    assert floors["Telugu"] >= 0.99
+    assert (
+        profile_recall_floor("balanced", matrix=matrix, script="Han") == (floors["Han"])
+    )
+    assert profile_script_leakage_ceiling("balanced", matrix=matrix) <= 0.01
+
+    matrix["profiles"]["balanced"]["script_recall_floors"]["Han"] = 0.997
+    matrix["profiles"]["balanced"]["script_leakage_ceiling"] = 0.003
+    validate_threshold_matrix(matrix)
+    assert profile_recall_floor("balanced", matrix=matrix, script="Han") == 0.997
+    assert profile_script_leakage_ceiling("balanced", matrix=matrix) == 0.003
 
 
 def test_recall_floor_guard_blocks_drop_below_profile_floor():
