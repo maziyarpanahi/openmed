@@ -58,12 +58,22 @@ from .object_storage import (
 )
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
-from .text import TextProcessor, postprocess_text, preprocess_text
+from .text import (
+    INDIC_SCRIPTS,
+    IndicNormalization,
+    IndicNormalizer,
+    TextProcessor,
+    postprocess_text,
+    preprocess_text,
+)
 from .tokenization import TokenizationHelper, infer_tokenizer_max_length
 from .tokenizer_cache import clear_tokenizer_cache, get_tokenizer
 
 __all__ = [
     "TextProcessor",
+    "INDIC_SCRIPTS",
+    "IndicNormalization",
+    "IndicNormalizer",
     "preprocess_text",
     "postprocess_text",
     "TokenizationHelper",
