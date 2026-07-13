@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -153,9 +153,13 @@ _LANGUAGE_NAME_TO_CODE = {
     "telugu": "te",
     "thai": "th",
     "turkish": "tr",
+    "chinese": "zh",
 }
 _LOCALIZED_PII_LANGUAGE_KEYS = {
     code for code in _LANGUAGE_NAME_TO_CODE.values() if code != "en"
+}
+_PII_LANGUAGE_FALLBACKS = {
+    "zh": "OpenMed/privacy-filter-multilingual",
 }
 _LANGUAGE_CONFIG = {
     code: {"name": name.title(), "prefix": f"{name.title()}-"}
@@ -693,6 +697,29 @@ def _build_registry(rows: Iterable[Dict[str, Any]]) -> Dict[str, ModelInfo]:
 
         for alias in _compatibility_aliases(row):
             registry.setdefault(alias, info)
+
+    # Chinese is intentionally routed to the existing multilingual fallback
+    # until a dedicated checkpoint is published. Keep the manifest-derived
+    # model immutable and expose a language-scoped registry view instead of
+    # overstating the source checkpoint metadata.
+    for language, model_id in sorted(_PII_LANGUAGE_FALLBACKS.items()):
+        source = next(
+            (
+                (key, info)
+                for key, info in registry.items()
+                if key.startswith("pii_") and info.model_id == model_id
+            ),
+            None,
+        )
+        if source is None:
+            continue
+        source_key, source_info = source
+        fallback_info = replace(
+            source_info,
+            languages=sorted({*source_info.languages, language}),
+        )
+        suffix = source_key.removeprefix("pii_")
+        registry.setdefault(f"pii_{language}_{suffix}", fallback_info)
     return registry
 
 
