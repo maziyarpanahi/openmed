@@ -36,7 +36,12 @@ from typing import TYPE_CHECKING, Any, Dict, Literal, NoReturn, Optional, Sequen
 
 from ..processing.outputs import EntityPrediction, PredictionResult
 from .config import OpenMedConfig
-from .custom_recognizer import CUSTOM_DENY_DETECTOR, coerce_custom_recognizer
+from .custom_recognizer import (
+    CUSTOM_DENY_DETECTOR,
+    abdm_mode_enabled,
+    coerce_custom_recognizer,
+    with_abdm_recognizer,
+)
 from .date_shift import (
     DEFAULT_DATE_SHIFT_MAX_DAYS,
     stable_offset_for,
@@ -756,6 +761,7 @@ def _extract_pii_batch(
     lang: str = "en",
     normalize_accents: Optional[bool] = None,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
     *,
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
@@ -842,7 +848,10 @@ def _extract_pii_batch(
         for result, item in zip(results, prepared)
     ]
 
-    recognizer = coerce_custom_recognizer(custom_recognizer)
+    recognizer_config = custom_recognizer
+    if abdm_mode_enabled(abdm, lang=lang, locale=locale):
+        recognizer_config = with_abdm_recognizer(recognizer_config)
+    recognizer = coerce_custom_recognizer(recognizer_config)
     if recognizer is not None:
         for result in results:
             recognizer.apply_to_prediction_result(result)
@@ -877,6 +886,7 @@ def extract_pii(
     locale: Optional[str] = None,
     loader: Optional["ModelLoader"] = None,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
 
@@ -909,6 +919,9 @@ def extract_pii(
             ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
             matches are added with ``custom:deny`` provenance; allow-list
             matches suppress overlapping spans from any detector.
+        abdm: Enable the India ABDM identifier bundle. ``None`` auto-enables
+            it for Hindi/Telugu and India locales; ``False`` explicitly
+            disables that automatic activation.
         cache_results: Whether to cache this result in the in-process LRU
             cache. Cached results may contain PHI, but are never saved to disk.
         max_cache_entries: Maximum number of cached results.
@@ -961,6 +974,7 @@ def extract_pii(
         locale=locale,
         loader=loader,
         custom_recognizer=custom_recognizer,
+        abdm=abdm,
     )[0]
     if cache_results:
         cache.set(cache_key, final_result)
@@ -1768,6 +1782,7 @@ def _deidentify_batch(
     normalize_accents: Optional[bool] = None,
     use_safety_sweep: bool = True,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
     policy: Optional[str] = None,
     *,
     consistent: bool = False,
@@ -1799,6 +1814,12 @@ def _deidentify_batch(
         normalize_accents=normalize_accents,
         locale=locale,
         custom_recognizer=recognizer,
+        abdm=abdm_mode_enabled(
+            abdm,
+            policy=policy,
+            lang=lang,
+            locale=locale,
+        ),
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
         **pipeline_kwargs,
@@ -1870,6 +1891,7 @@ def deidentify(
     policy: Optional[str] = None,
     calibration_thresholds_path: Optional[str | Path] = None,
     custom_recognizer: Any = None,
+    abdm: Optional[bool] = None,
     audit: bool = False,
     cache_results: bool = False,
     max_cache_entries: int = 128,
@@ -1944,6 +1966,9 @@ def deidentify(
             ``CustomRecognizer`` instance, or JSON/YAML config path. Deny-list
             matches are redacted with ``custom:deny`` provenance; allow-list
             matches suppress overlapping spans from any detector.
+        abdm: Enable the India ABDM recognizer bundle. ``None`` auto-enables
+            it for ``policy="india_dpdp_act"``, Hindi/Telugu, or an India
+            locale. Pass ``False`` to opt out of automatic activation.
         audit: Return a deterministic AuditReport instead of the
             DeidentificationResult.
         cache_results: Whether to cache this result in the in-process LRU cache. Cached results may contain PHI, but are never saved to disk.
@@ -2003,6 +2028,10 @@ def deidentify(
             return final_result
     from .pipeline import Pipeline
 
+    recognizer_config = custom_recognizer
+    if abdm_mode_enabled(abdm, policy=policy, lang=lang, locale=locale):
+        recognizer_config = with_abdm_recognizer(recognizer_config)
+
     pipeline = Pipeline(
         model_name=model_name,
         confidence_threshold=confidence_threshold,
@@ -2018,7 +2047,7 @@ def deidentify(
             if calibration_thresholds_path is not None
             else None
         ),
-        custom_recognizer=custom_recognizer,
+        custom_recognizer=recognizer_config,
     )
     result = pipeline.run(
         text,

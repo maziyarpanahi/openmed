@@ -15,6 +15,14 @@ from .schemas.span import OpenMedSpan, hmac_text_hash
 
 CUSTOM_DENY_DETECTOR = "custom:deny"
 DEFAULT_CUSTOM_HASH_SECRET = b"openmed-custom-recognizer-v1"
+ABDM_MODE = "abdm"
+
+ABHA_NUMBER = "ABHA_NUMBER"
+ABHA_ADDRESS = "ABHA_ADDRESS"
+AADHAAR = "AADHAAR"
+PAN = "PAN"
+ABDM_HPR_ID = "ABDM_HPR_ID"
+ABDM_HFR_ID = "ABDM_HFR_ID"
 
 
 @dataclass(frozen=True)
@@ -39,11 +47,13 @@ class _CompiledRule:
 
     def iter_matches(self, text: str) -> Iterable[CustomMatch]:
         for match in self.pattern.finditer(text):
-            if match.start() == match.end():
+            group = "value" if "value" in self.pattern.groupindex else 0
+            start, end = match.span(group)
+            if start == end:
                 continue
             yield CustomMatch(
-                start=match.start(),
-                end=match.end(),
+                start=start,
+                end=end,
                 label=self.label,
                 kind=self.kind,
                 rule_id=self.rule_id,
@@ -239,7 +249,7 @@ class CustomRecognizer:
     ) -> tuple[list[Any], int]:
         """Remove entities whose spans overlap the allow-list."""
 
-        if not self._allow_rules:
+        if not self.has_allow_rules:
             return list(entities), 0
 
         allow_intervals = _intervals(self.allow_matches(text))
@@ -260,7 +270,7 @@ class CustomRecognizer:
     ) -> tuple[tuple[OpenMedSpan, ...], int]:
         """Remove spans whose offsets overlap the allow-list."""
 
-        if not self._allow_rules:
+        if not self.has_allow_rules:
             return tuple(spans), 0
 
         allow_intervals = _intervals(self.allow_matches(text))
@@ -300,6 +310,164 @@ class CustomRecognizer:
         }
         result.metadata = metadata
         return result
+
+
+_ABDM_DENY_PATTERNS: tuple[dict[str, Any], ...] = (
+    {
+        "id": "abdm_hpr_id",
+        "label": ABDM_HPR_ID,
+        "pattern": (
+            r"\b(?:HPR|healthcare\s+professional(?:\s+registry)?)\s*"
+            r"(?:ID|number)?\s*[:#=-]?\s*"
+            r"(?P<value>(?:HPR-)?[A-Z0-9][A-Z0-9-]{5,63}|\d{14})"
+            r"(?![A-Z0-9-])"
+        ),
+    },
+    {
+        "id": "abdm_hfr_id",
+        "label": ABDM_HFR_ID,
+        "pattern": (
+            r"\b(?:HFR|health\s+facility(?:\s+registry)?|facility)\s*"
+            r"(?:ID|number)?\s*[:#=-]?\s*"
+            r"(?P<value>(?:HFR-)?[A-Z0-9][A-Z0-9-]{5,63}|\d{14})"
+            r"(?![A-Z0-9-])"
+        ),
+    },
+    {
+        "id": "abdm_abha_address",
+        "label": ABHA_ADDRESS,
+        "pattern": (
+            r"(?<![\w.])(?P<value>[A-Z][A-Z0-9]*"
+            r"(?:\.[A-Z0-9]+)*@[A-Z][A-Z0-9-]{1,31})(?![\w.-])"
+        ),
+    },
+    {
+        "id": "abdm_abha_number",
+        "label": ABHA_NUMBER,
+        "pattern": r"(?<!\d)(?P<value>\d(?:[\s-]?\d){13})(?!\d)",
+    },
+    {
+        "id": "abdm_aadhaar",
+        "label": AADHAAR,
+        "pattern": r"(?<!\d)(?P<value>[2-9]\d{3}(?:[\s-]?\d{4}){2})(?!\d)",
+    },
+    {
+        "id": "abdm_pan",
+        "label": PAN,
+        "pattern": r"(?<![A-Z0-9])(?P<value>[A-Z]{3}[ABCFGHLJPT][A-Z]\d{4}[A-Z])(?![A-Z0-9])",
+    },
+)
+
+
+class ABDMRecognizer(CustomRecognizer):
+    """Recognize checksum-valid and context-bound India ABDM identifiers."""
+
+    def __init__(self) -> None:
+        super().__init__(deny_patterns=_ABDM_DENY_PATTERNS)
+
+    def deny_matches(self, text: str) -> tuple[CustomMatch, ...]:
+        from .anonymizer.providers.clinical_ids import (
+            validate_abdm_registry_id,
+            validate_abha_address,
+            validate_abha_number,
+            validate_pan,
+        )
+        from .pii_i18n import validate_aadhaar
+
+        validators = {
+            "abdm_abha_address": validate_abha_address,
+            "abdm_abha_number": validate_abha_number,
+            "abdm_aadhaar": validate_aadhaar,
+            "abdm_pan": validate_pan,
+        }
+        validated: list[CustomMatch] = []
+        for match in super().deny_matches(text):
+            surface = text[match.start : match.end]
+            validator = validators.get(match.rule_id)
+            if validator is not None and not validator(surface):
+                continue
+            if match.rule_id in {"abdm_hpr_id", "abdm_hfr_id"}:
+                compact = re.sub(r"[^0-9]", "", surface)
+                if len(compact) != 14 and not validate_abdm_registry_id(surface):
+                    continue
+            validated.append(match)
+
+        registry_spans = {
+            (match.start, match.end)
+            for match in validated
+            if match.label in {ABDM_HPR_ID, ABDM_HFR_ID}
+        }
+        return _dedupe_matches(
+            match
+            for match in validated
+            if not (
+                match.label == ABHA_NUMBER
+                and (match.start, match.end) in registry_spans
+            )
+        )
+
+
+class _CombinedCustomRecognizer(CustomRecognizer):
+    def __init__(self, recognizers: Sequence[CustomRecognizer]) -> None:
+        self._recognizers = tuple(recognizers)
+
+    @property
+    def has_allow_rules(self) -> bool:
+        return any(recognizer.has_allow_rules for recognizer in self._recognizers)
+
+    @property
+    def has_deny_rules(self) -> bool:
+        return any(recognizer.has_deny_rules for recognizer in self._recognizers)
+
+    def allow_matches(self, text: str) -> tuple[CustomMatch, ...]:
+        return _dedupe_matches(
+            match
+            for recognizer in self._recognizers
+            for match in recognizer.allow_matches(text)
+        )
+
+    def deny_matches(self, text: str) -> tuple[CustomMatch, ...]:
+        allow_intervals = _intervals(self.allow_matches(text))
+        return _dedupe_matches(
+            match
+            for recognizer in self._recognizers
+            for match in recognizer.deny_matches(text)
+            if not _overlaps_any(match.start, match.end, allow_intervals)
+        )
+
+
+def with_abdm_recognizer(config: Any = None) -> CustomRecognizer:
+    """Return an ABDM recognizer, preserving any user-supplied custom rules."""
+
+    recognizer = coerce_custom_recognizer(config)
+    if isinstance(recognizer, ABDMRecognizer):
+        return recognizer
+    abdm = ABDMRecognizer()
+    if recognizer is None:
+        return abdm
+    return _CombinedCustomRecognizer((recognizer, abdm))
+
+
+def abdm_mode_enabled(
+    abdm: bool | None,
+    *,
+    policy: Any = None,
+    lang: str = "en",
+    locale: str | None = None,
+) -> bool:
+    """Resolve explicit, policy, and India-locale ABDM activation."""
+
+    if abdm is not None:
+        return bool(abdm)
+    policy_name = getattr(policy, "name", policy)
+    normalized_policy = str(policy_name or "").strip().casefold().replace("-", "_")
+    if normalized_policy == "india_dpdp_act":
+        return True
+    normalized_locale = str(locale or "").strip().casefold().replace("-", "_")
+    if normalized_locale == "in" or normalized_locale.endswith("_in"):
+        return True
+    base_lang = str(lang or "").strip().casefold().replace("-", "_").split("_", 1)[0]
+    return base_lang in {"hi", "te"}
 
 
 def coerce_custom_recognizer(config: Any) -> CustomRecognizer | None:
@@ -543,8 +711,18 @@ def _match_metadata(
 
 
 __all__ = [
+    "AADHAAR",
+    "ABDM_HFR_ID",
+    "ABDM_HPR_ID",
+    "ABDM_MODE",
+    "ABDMRecognizer",
+    "ABHA_ADDRESS",
+    "ABHA_NUMBER",
     "CUSTOM_DENY_DETECTOR",
     "CustomMatch",
     "CustomRecognizer",
+    "PAN",
+    "abdm_mode_enabled",
     "coerce_custom_recognizer",
+    "with_abdm_recognizer",
 ]
