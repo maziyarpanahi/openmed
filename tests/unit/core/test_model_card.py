@@ -165,6 +165,9 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     assert "from openmed import OnnxModel" in card
     assert 'OnnxModel.from_pretrained("OpenMed/example-v1-onnx-android")' in card
     assert "## OpenMed in Web" in card
+    assert "npm install openmed @huggingface/transformers onnxruntime-web" in card
+    assert 'import { loadOnnxModel } from "openmed";' in card
+    assert "@openmed/openmedkit-web" not in card
     assert 'const repo = "OpenMed/example-v1-onnx-android";' in card
     assert "const model = await loadOnnxModel(repo);" in card
     assert "## OpenMedKit for Android" in card

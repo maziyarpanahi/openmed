@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a resumable Android ONNX batch rollout runner, Android/ORT model-card
   format metadata, and runnable MLX examples for token classification and
   GLiNER zero-shot NER.
+- Added the public `openmed` npm package for browser and Node.js inference, with
+  synchronized release versions, WebGPU/WebAssembly examples, package tests,
+  npm audit enforcement, and provenance-backed tag publishing.
 - Added a PEP 561 `py.typed` marker plus a pinned, scoped mypy gate for the
   annotated public-module surface, with built-wheel and sdist verification
   that the marker ships in release artifacts (#548).

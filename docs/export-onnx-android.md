@@ -43,8 +43,12 @@ entities = model("Patient Alice Nguyen was seen in cardiology.")
 
 WebGPU or WebAssembly:
 
+```bash
+npm install openmed @huggingface/transformers
+```
+
 ```typescript
-import { loadOnnxModel } from "@openmed/openmedkit-web";
+import { loadOnnxModel } from "openmed";
 
 const model = await loadOnnxModel("OpenMed/example-v1-onnx-android");
 const entities = await model("Patient Alice Nguyen was seen in cardiology.");
