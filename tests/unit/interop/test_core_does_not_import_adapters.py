@@ -6,6 +6,8 @@ import pytest
 
 OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "duckdb",
+    "indicnlp",
+    "jieba",
     "langchain",
     "langchain_core",
     "pandas",
@@ -17,6 +19,8 @@ OPTIONAL_ADAPTER_MODULE_PREFIXES = (
     "pydeid",
     "gliner",
     "llama_index",
+    "opencc",
+    "pypinyin",
     "spacy",
 )
 
@@ -54,6 +58,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "function_tools",
         "gliner_biomed",
         "hl7v2",
+        "indic",
         "langchain",
         "llamaindex",
         "omop",
@@ -64,11 +69,13 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
         "presidio",
         "pydeid",
         "spacy",
+        "zh",
     )
     assert adapter_spec("cda").extra == "core"
     assert adapter_spec("cdm_etl").extra == ""
     assert adapter_spec("duckdb").extra == "duckdb"
     assert adapter_spec("hl7v2").extra == ""
+    assert adapter_spec("indic").extra == "indic"
     assert adapter_spec("function_tools").extra == ""
     assert adapter_spec("langchain").extra == "langchain"
     assert adapter_spec("llamaindex").extra == "llamaindex"
@@ -81,6 +88,7 @@ def test_import_interop_registry_does_not_import_optional_adapter_dependencies()
     assert adapter_spec("pydeid").extra == "pydeid"
     assert adapter_spec("gliner_biomed").extra == "gliner"
     assert adapter_spec("spacy").extra == "spacy"
+    assert adapter_spec("zh").extra == "zh"
     assert not any(_is_optional_adapter_module(name) for name in sys.modules)
 
 
