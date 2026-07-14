@@ -23,6 +23,7 @@ from openmed.core.pii_i18n import (
     USCC_PII_PATTERNS,
     get_patterns_for_language,
     validate_bic,
+    validate_czech_rodne_cislo,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
@@ -75,7 +76,7 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "lv", "sk", "ms", "tl", "da"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "lv", "sk", "ms", "tl", "da", "cs"}
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -2399,6 +2400,167 @@ def test_latvian_i18n_golden_fixture_offsets():
     assert actual == expected
     for label, start, end, value in actual:
         assert text[start:end] == value, label
+
+
+def test_validate_czech_rodne_cislo():
+    # Modern ten-digit form (delegated to the Czechoslovak validator).
+    assert validate_czech_rodne_cislo("751116/0008")
+    assert validate_czech_rodne_cislo("7511160008")
+    # Female +50 month offset and post-2004 +20 overflow series.
+    assert validate_czech_rodne_cislo("756116/0002")
+    assert validate_czech_rodne_cislo("083116/0000")
+    # Legacy pre-1954 nine-digit form (no checksum).
+    assert validate_czech_rodne_cislo("485305/123")
+    assert validate_czech_rodne_cislo("531116/456")
+    assert validate_czech_rodne_cislo("850307/789")
+    # Year suffixes above 53 decode to the 1800s (here 1854), so every
+    # nine-digit suffix maps to a valid pre-1954 century.
+    assert validate_czech_rodne_cislo("541116/123")
+
+    # Modern form with a broken modulo-11 check.
+    assert validate_czech_rodne_cislo("751116/0009") is False
+    # Legacy form must not use the post-2004 overflow month series.
+    assert not validate_czech_rodne_cislo("483105/123")
+    # Legacy form with an impossible embedded date.
+    assert not validate_czech_rodne_cislo("480230/123")
+    assert not validate_czech_rodne_cislo("12345678")
+    assert not validate_czech_rodne_cislo("abcdef")
+
+
+def test_generated_czech_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["cs"] == "cs_CZ"
+
+    anonymizer = Anonymizer(lang="cs", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("751116/0008", "national_id")
+
+    assert validate_czech_rodne_cislo(surrogate) is True
+    # The shared Czechoslovak provider output stays valid for Slovak too.
+    assert validate_czechoslovak_rodne_cislo(surrogate) is True
+
+
+def test_czech_clinical_sample_expected_spans():
+    text = (
+        "Pacient: Jan Novak. Datum narozeni 16.11.1975, "
+        "telefon +420 601 234 567, rodne cislo 751116/0008, "
+        "adresa Vodickova ulice 12, PSC 110 00."
+    )
+    expected = {
+        ("date", 35, 45, "16.11.1975"),
+        ("phone_number", 55, 71, "+420 601 234 567"),
+        ("national_id", 85, 96, "751116/0008"),
+        ("street_address", 105, 123, "Vodickova ulice 12"),
+        ("postcode", 129, 135, "110 00"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("cs"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_czech_legacy_rodne_cislo_pattern_matches():
+    text = "Pacientka, rodne cislo 485305/123, prijata k hospitalizaci."
+    observed = set()
+    for pattern in get_patterns_for_language("cs"):
+        if pattern.entity_type != "national_id":
+            continue
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add(value)
+
+    assert "485305/123" in observed
+
+
+def test_czech_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/cs.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "cs"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 35, 45, "16.11.1975"),
+        ("PHONE", 55, 71, "+420 601 234 567"),
+        ("ID_NUM", 85, 96, "751116/0008"),
+        ("STREET_ADDRESS", 105, 123, "Vodickova ulice 12"),
+        ("ZIPCODE", 129, 135, "110 00"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_czech_rodne_cislo(ids_by_type["rodne_cislo"])
+
+
+def test_czech_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/cs.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="cs",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="cs",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
 
 
 class TestSlovakLocaleAndFixture:
