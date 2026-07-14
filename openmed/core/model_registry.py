@@ -365,6 +365,10 @@ def load_manifest_rows(path: Path = MANIFEST_PATH) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
 
+    from .model_integrity import verify_manifest_signature_if_present
+
+    verify_manifest_signature_if_present(path)
+
     rows: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, start=1):
