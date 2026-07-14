@@ -13,6 +13,7 @@ from openmed.eval.release_gates import (
     ReleaseGate,
 )
 from openmed.eval.report import BenchmarkReport
+from openmed.eval.surrogate_quality import load_surrogate_quality_records
 
 SIGNING_KEY = "unit-release-key"
 
@@ -249,6 +250,66 @@ def test_release_gate_passes_and_emits_signed_section_64_report(
     restored = GateReport.from_json(result.to_json())
     assert restored.verify(SIGNING_KEY)
     assert restored.to_json() == result.to_json()
+
+
+def test_surrogate_quality_gate_requires_evidence_when_applicable(
+    tmp_path: Path,
+) -> None:
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"surrogate_quality_required": True},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, release_gates.SURROGATE_QUALITY_GATE)
+    assert result.decision == QUARANTINED
+    assert check.passed is False
+    assert check.reason == "surrogate-quality evidence is required"
+
+
+def test_surrogate_quality_gate_quarantines_bad_release_evidence(
+    tmp_path: Path,
+) -> None:
+    records: list[object] = list(load_surrogate_quality_records())
+    records.append(
+        {
+            "record_id": "sq-zh-release-regression",
+            "language": "zh",
+            "locale": "zh_CN",
+            "surrogates": {
+                "name": "John Doe",
+                "date_of_birth": "04/12/1990",
+                "national_id": "110105199004123416",
+            },
+            "expected": {
+                "birth_date": "1990-04-12",
+                "gender": "female",
+                "region_code": "110105",
+            },
+            "metadata": {
+                "synthetic": True,
+                "contains_real_phi": False,
+                "synthetic_source": "release_gate_regression",
+            },
+        }
+    )
+
+    result = _gate().evaluate(
+        _report(
+            tmp_path,
+            metadata_updates={"surrogate_quality_required": True},
+            metric_updates={"surrogate_quality": {"records": records}},
+        ),
+        _baseline(),
+    )
+
+    check = _check(result, release_gates.SURROGATE_QUALITY_GATE)
+    assert result.decision == QUARANTINED
+    assert result.verify(SIGNING_KEY)
+    assert check.passed is False
+    assert check.details["failing_locales"] == {"zh": 0.5}
 
 
 def test_g9_relation_gate_fails_when_strict_lower_ci_below_floor(
@@ -927,6 +988,16 @@ def test_manifest_coherence_fails_when_readme_count_drifts(tmp_path: Path) -> No
     assert result.decision == QUARANTINED
     assert check.passed is False
     assert check.details["mismatches"]["readme"]["models"]["readme_floor"] == 2
+
+
+def test_default_manifest_count_includes_published_android_onnx_fleet() -> None:
+    rows = release_gates._load_manifest_rows(release_gates._DEFAULT_MANIFEST_PATH)
+
+    derived_count = release_gates._published_android_onnx_derivative_count(rows)
+
+    assert len(rows) == 1_519
+    assert derived_count == 751
+    assert len(rows) + derived_count >= 2_000
 
 
 def _coreml_manifest() -> dict[str, object]:

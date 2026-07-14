@@ -45,6 +45,7 @@ def test_eval_modules_import_cleanly():
         "policy_compliance",
         "biomedical-ner",
         "multilingual-clinical-ner",
+        "multimodal_dicom",
     )
 
 
