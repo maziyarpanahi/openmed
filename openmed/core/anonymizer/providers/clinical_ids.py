@@ -1622,11 +1622,15 @@ def generate_unified_social_credit_code(*, rng: random.Random | None = None) -> 
     segment, and always passes ``validate_unified_social_credit_code`` by
     construction.
     """
-    from openmed.core.pii_i18n import USCC_ALPHABET, uscc_check_char
+    from openmed.core.pii_i18n import (
+        USCC_ALPHABET,
+        USCC_DEPARTMENT_CATEGORY_CODES,
+        uscc_check_char,
+    )
 
     source = rng or random.Random()
-    department = source.choice(USCC_ALPHABET)
-    category = source.choice(USCC_ALPHABET)
+    department = source.choice(tuple(USCC_DEPARTMENT_CATEGORY_CODES))
+    category = source.choice(tuple(sorted(USCC_DEPARTMENT_CATEGORY_CODES[department])))
     region = "".join(str(source.randint(0, 9)) for _ in range(6))
     organization = "".join(source.choice(USCC_ALPHABET) for _ in range(9))
     body = f"{department}{category}{region}{organization}"
@@ -1637,6 +1641,8 @@ class UnifiedSocialCreditCodeProvider(BaseProvider):
     """Faker provider for China Unified Social Credit Code surrogates."""
 
     def unified_social_credit_code(self) -> str:
+        """Return a checksum-valid synthetic Unified Social Credit Code."""
+
         return generate_unified_social_credit_code(rng=self.generator.random)
 
 

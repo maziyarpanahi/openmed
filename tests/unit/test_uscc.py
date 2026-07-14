@@ -6,6 +6,7 @@ import random
 
 import pytest
 
+import openmed
 from openmed.core.anonymizer.providers.clinical_ids import (
     UnifiedSocialCreditCodeProvider,
     generate_unified_social_credit_code,
@@ -18,15 +19,28 @@ from openmed.core.labels import (
 )
 from openmed.core.pii_entity_merger import find_semantic_units
 from openmed.core.pii_i18n import (
+    USCC_ALPHABET,
     get_patterns_for_language,
+    uscc_check_char,
     validate_unified_social_credit_code,
 )
+from openmed.processing.outputs import PredictionResult
 
-# Algorithmically generated valid codes (GB 32100 MOD-31-3), including the two
-# check-character edge cases.
-VALID_Y = "9135010000ABCDEF3Y"  # check char -> Y (value 30)
-VALID_0 = "9135010000ABCDEFQ0"  # check char -> 0
 EXCLUDED = "IOZSV"
+
+
+def _synthetic_code_with_check_char(check_char: str) -> str:
+    """Construct a synthetic valid code with the requested check character."""
+
+    for suffix in USCC_ALPHABET:
+        body = f"91123456ABCDEFGH{suffix}"
+        if uscc_check_char(body) == check_char:
+            return body + check_char
+    raise AssertionError(f"could not construct check character {check_char!r}")
+
+
+VALID_Y = _synthetic_code_with_check_char("Y")
+VALID_0 = _synthetic_code_with_check_char("0")
 
 
 # --------------------------------------------------------------------------
@@ -61,6 +75,20 @@ def test_region_segment_must_be_digits():
     # Positions 3-8 are the 6-digit administrative region code.
     code = VALID_Y[:3] + "A" + VALID_Y[4:]
     assert validate_unified_social_credit_code(code) is False
+
+
+@pytest.mark.parametrize("prefix", ["01", "9A", "B1"])
+def test_rejects_invalid_department_category_pair(prefix):
+    body = prefix + "123456ABCDEFGH0"
+    code = body + uscc_check_char(body)
+    assert validate_unified_social_credit_code(code) is False
+
+
+def test_check_char_rejects_malformed_body():
+    with pytest.raises(ValueError, match="17 characters"):
+        uscc_check_char("ABC")
+    with pytest.raises(ValueError, match="USCC_ALPHABET"):
+        uscc_check_char("91123456ABCDEFGI0")
 
 
 # --------------------------------------------------------------------------
@@ -128,6 +156,14 @@ def test_zh_pattern_detects_in_context_with_correct_offsets():
     assert id_subtype_for(entity_type) == ID_SUBTYPE_SOCIAL_CREDIT_CODE
 
 
+def test_zh_pattern_allows_adjacent_han_context():
+    text = f"登记机关：统一社会信用代码{VALID_Y}。"
+    units = find_semantic_units(text, get_patterns_for_language("en"))
+
+    matches = [u for u in units if text[u[0] : u[1]] == VALID_Y]
+    assert len(matches) == 1
+
+
 def test_surrogate_replaces_uscc_with_a_valid_distinct_code():
     from openmed.core.anonymizer import Anonymizer
 
@@ -136,3 +172,30 @@ def test_surrogate_replaces_uscc_with_a_valid_distinct_code():
 
     assert validate_unified_social_credit_code(surrogate) is True
     assert surrogate != VALID_Y  # original does not survive
+
+
+def test_deidentify_registrant_block_replaces_original_with_valid_code(monkeypatch):
+    def fake_analyze_text(text, **_kwargs):
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name="fixture-pii-model",
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze_text)
+    original = f"登记机关：统一社会信用代码{VALID_Y}。"
+
+    result = openmed.deidentify(
+        original,
+        method="replace",
+        model_name="fixture-pii-model",
+        seed=17,
+        use_safety_sweep=False,
+    )
+
+    assert VALID_Y not in result.deidentified_text
+    assert len(result.pii_entities) == 1
+    surrogate = result.pii_entities[0].surrogate
+    assert surrogate is not None
+    assert validate_unified_social_credit_code(surrogate)

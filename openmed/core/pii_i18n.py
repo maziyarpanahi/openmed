@@ -1687,11 +1687,40 @@ _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 USCC_ALPHABET = "0123456789ABCDEFGHJKLMNPQRTUWXY"
 _USCC_VALUE = {char: index for index, char in enumerate(USCC_ALPHABET)}
 _USCC_WEIGHTS = tuple(pow(3, i, 31) for i in range(17))
+# Department/category pairs from GB 32100-2015 Amendment No. 1. Keeping the
+# pairs together prevents a checksum-valid but structurally impossible prefix.
+USCC_DEPARTMENT_CATEGORY_CODES = {
+    "1": frozenset("1239"),
+    "2": frozenset("19"),
+    "3": frozenset("123459"),
+    "4": frozenset("19"),
+    "5": frozenset("1239"),
+    "6": frozenset("129"),
+    "7": frozenset("129"),
+    "8": frozenset("19"),
+    "9": frozenset("123"),
+    "A": frozenset("19"),
+    "N": frozenset("1239"),
+    "Y": frozenset("1"),
+}
 
 
 def uscc_check_char(body17: str) -> str:
-    """Return the ISO 7064 MOD 31-3 check character for a 17-character body."""
+    """Return the ISO 7064 MOD 31-3 check character for a USCC body.
 
+    Args:
+        body17: Seventeen characters from :data:`USCC_ALPHABET`.
+
+    Returns:
+        The single checksum character.
+
+    Raises:
+        ValueError: If the body has the wrong length or contains a forbidden
+            character.
+    """
+
+    if len(body17) != 17 or any(char not in _USCC_VALUE for char in body17):
+        raise ValueError("USCC body must contain 17 characters from USCC_ALPHABET")
     total = sum(_USCC_VALUE[char] * _USCC_WEIGHTS[i] for i, char in enumerate(body17))
     return USCC_ALPHABET[(31 - (total % 31)) % 31]
 
@@ -1708,6 +1737,9 @@ def validate_unified_social_credit_code(text: str) -> bool:
     code = text.strip()
     if len(code) != 18 or any(char not in _USCC_VALUE for char in code):
         return False
+    categories = USCC_DEPARTMENT_CATEGORY_CODES.get(code[0])
+    if categories is None or code[1] not in categories:
+        return False
     # Positions 3-8 (0-indexed 2:8) are the 6-digit administrative region code.
     if not code[2:8].isdigit():
         return False
@@ -1718,7 +1750,7 @@ def validate_unified_social_credit_code(text: str) -> bool:
 # MOD 31-3 validator and always included in the universal base set.
 USCC_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
-        r"\b[0-9A-HJ-NP-RTUW-Y]{18}\b",
+        r"(?<![0-9A-Z])[0-9A-HJ-NP-RTUW-Y]{18}(?![0-9A-Z])",
         "social_credit_code",
         priority=15,
         base_score=0.6,
