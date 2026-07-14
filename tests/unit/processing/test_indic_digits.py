@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+import openmed
 from openmed.core.pii_entity_merger import find_semantic_units
 from openmed.core.pii_i18n import get_patterns_for_language, validate_aadhaar
+from openmed.core.script_detect import normalize_for_pii_detection
+from openmed.processing.outputs import PredictionResult
 from openmed.processing.text import (
     INDIC_DIGIT_SCRIPTS,
     DigitFolding,
@@ -124,3 +127,42 @@ def test_detect_maps_native_digit_date_back_to_source():
     assert dates
     start, end, _ = dates[0]
     assert original[start:end] == original
+
+
+def test_detection_normalization_folds_digits_and_preserves_source_offsets():
+    original = f"आधार {_native(0x0966, '234123412346')}"
+    result = normalize_for_pii_detection(original)
+
+    assert result.text == "आधार 234123412346"
+    assert result.folded_native_digits == 12
+    assert result.to_metadata()["folded_native_digits"] == 12
+    start = result.text.index("234123412346")
+    assert result.remap_span(start, len(result.text)) == (start, len(original))
+
+
+def test_extract_pii_detects_native_digit_aadhaar_and_returns_original(monkeypatch):
+    native_aadhaar = _native(0x0966, "234123412346")
+    original = f"आधार संख्या: {native_aadhaar}"
+
+    def fake_analyze_text(text, **_kwargs):
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name="fixture-pii-model",
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze_text)
+
+    result = openmed.extract_pii(
+        original,
+        model_name="fixture-pii-model",
+        lang="hi",
+    )
+
+    national_ids = [
+        entity for entity in result.entities if entity.label == "national_id"
+    ]
+    assert len(national_ids) == 1
+    assert national_ids[0].text == native_aadhaar
+    assert original[national_ids[0].start : national_ids[0].end] == native_aadhaar
