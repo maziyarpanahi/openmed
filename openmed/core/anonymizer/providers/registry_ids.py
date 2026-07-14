@@ -34,6 +34,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_hungarian_taj,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
@@ -62,6 +63,7 @@ from .clinical_ids import (
     CanadianSINProvider,
     DanishCPRProvider,
     GermanSteuerIdProvider,
+    HungarianTAJProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
@@ -358,6 +360,13 @@ def _register_builtin_specs() -> None:
         validate=validate_romanian_cnp,
         faker_method="romanian_cnp",
         faker_provider=RomanianCNPProvider,
+    )
+    _register_aliases(
+        ("hu", "hu_HU"),
+        id_type="taj",
+        validate=validate_hungarian_taj,
+        faker_method="hungarian_taj",
+        faker_provider=HungarianTAJProvider,
     )
     _register_aliases(
         ("pt", "pt_BR"),

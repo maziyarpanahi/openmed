@@ -32,6 +32,14 @@ def test_parse_date_respects_english_us_month_day_order() -> None:
     assert result.ambiguous is False
 
 
+def test_parse_date_respects_hungarian_year_month_day_order() -> None:
+    result = parse_date("2026.03.04", "hu")
+
+    assert result.normalized == (2026, 3, 4)
+    assert result.order == "ymd"
+    assert result.ambiguous is False
+
+
 def test_parse_date_without_locale_signal_flags_ambiguous_date() -> None:
     result = parse_date("03/04/2026", None)
 

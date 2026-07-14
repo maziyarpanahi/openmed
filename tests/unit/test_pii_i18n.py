@@ -27,6 +27,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
@@ -74,7 +75,15 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "lv", "sk", "ms", "tl", "da"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {
+            "pl",
+            "lv",
+            "sk",
+            "ms",
+            "tl",
+            "da",
+            "hu",
+        }
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -726,6 +735,35 @@ class TestValidateDanishCPR:
         surrogate = anonymizer.surrogate("170885-1234", "national_id")
 
         assert validate_danish_cpr(surrogate) is True
+
+
+class TestValidateHungarianTaj:
+    """Tests for validate_hungarian_taj()."""
+
+    @pytest.mark.parametrize(
+        "value",
+        ["123456788", "123 456 788", "123-456-788", "000000017"],
+    )
+    def test_accepts_valid_taj(self, value):
+        assert validate_hungarian_taj(value) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "123456789",  # wrong check digit
+            "12345678",  # too short
+            "1234567880",  # too long
+            "123 456-788",  # mixed separators
+            "123.456.788",  # unsupported separator
+            "１２３４５６７８８",  # non-ASCII digits
+            "",
+        ],
+    )
+    def test_rejects_invalid_taj(self, value):
+        assert validate_hungarian_taj(value) is False
+
+    def test_rejects_non_string(self):
+        assert validate_hungarian_taj(None) is False
 
 
 class TestValidateCzechoslovakRodneCislo:
@@ -1648,6 +1686,45 @@ class TestLanguagePIIPatterns:
 
         assert expected <= observed
 
+    def test_hungarian_clinical_sample_expected_spans(self):
+        text = (
+            "Beteg: Kovács Anna. Születési dátum: 1985. május 5. "
+            "Telefon: +36 30 123 4567. TAJ-szám: 123 456 788. "
+            "Lakcím: Kossuth Lajos utca 12, irányítószám: 1051 Budapest."
+        )
+        expected = {
+            ("date", 37, 51, "1985. május 5."),
+            ("phone_number", 61, 76, "+36 30 123 4567"),
+            ("national_id", 88, 99, "123 456 788"),
+            ("street_address", 109, 130, "Kossuth Lajos utca 12"),
+            ("postcode", 146, 150, "1051"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("hu"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_hungarian_taj_pattern_rejects_bad_checksum(self):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["hu"]
+            if pattern.entity_type == "national_id"
+        ]
+        assert patterns, "Hungarian pack must expose a national_id pattern"
+        for pattern in patterns:
+            matches = list(
+                re.finditer(pattern.pattern, "TAJ: 123 456 789", pattern.flags)
+            )
+            assert matches, "Hungarian TAJ pattern must recognize formatted candidates"
+            for match in matches:
+                assert pattern.validator is not None
+                assert not pattern.validator(match.group(0))
+
     def test_romanian_clinical_sample_expected_spans(self):
         text = (
             "Pacient: Ana Popescu, nascuta 12 martie 1985. "
@@ -2437,6 +2514,63 @@ class TestSlovakLocaleAndFixture:
         }
         assert actual == expected
         for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+
+class TestHungarianLocaleAndFixture:
+    """Tests for Hungarian locale, TAJ surrogate, and golden fixture wiring."""
+
+    def test_locale_and_surrogate_taj_round_trip(self):
+        assert LANG_TO_LOCALE["hu"] == "hu_HU"
+        anon = Anonymizer(lang="hu", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("123456788", "national_id")
+
+        assert validate_hungarian_taj(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets_and_patterns(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/hu.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "hu"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        labels = {
+            "date": "DATE",
+            "national_id": "ID_NUM",
+            "phone_number": "PHONE",
+            "postcode": "ZIPCODE",
+            "street_address": "STREET_ADDRESS",
+        }
+        observed = set()
+        for pattern in LANGUAGE_PII_PATTERNS["hu"]:
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add(
+                    (
+                        labels[pattern.entity_type],
+                        match.start(),
+                        match.end(),
+                        value,
+                    )
+                )
+
+        assert expected <= observed
+        for label, start, end, value in expected:
             assert text[start:end] == value, label
 
 
