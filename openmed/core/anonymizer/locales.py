@@ -59,12 +59,13 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "tl": "fil_PH",
     "da": "da_DK",
     "ro": "ro_RO",
+    "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
 }
 
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
+_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -72,6 +73,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "ms_MY": "id_ID",
+    "sr_RS": "hr_HR",
 }
 
 
@@ -108,6 +110,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
+    "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
 }
 
 _warned: set[str] = set()
