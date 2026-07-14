@@ -4982,8 +4982,10 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "python-dateutil" },
+    { name = "rich" },
     { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
+    { name = "typer" },
 ]
 docs = [
     { name = "griffe" },
@@ -5232,6 +5234,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rapidfuzz", marker = "extra == 'grounding'", specifier = ">=3.9,<4" },
     { name = "rich", marker = "extra == 'cli'", specifier = ">=13.0" },
+    { name = "rich", marker = "extra == 'dev'", specifier = ">=13.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.15.22" },
     { name = "s3fs", marker = "extra == 'cloud'", specifier = ">=2025.9.0" },
     { name = "safetensors", marker = "extra == 'mlx'", specifier = ">=0.4" },
@@ -5250,6 +5253,7 @@ requires-dist = [
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.50" },
     { name = "transformers", marker = "extra == 'openvino'", specifier = ">=4.50" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
+    { name = "typer", marker = "extra == 'dev'", specifier = ">=0.12" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'service'", specifier = ">=0.29" },
 ]
 provides-extras = ["agents", "awq", "cli", "cloud", "columnar", "coreml", "dask", "dev", "docs", "duckdb", "gliner", "gptq", "grounding", "hf", "indic", "integrity", "kafka", "langchain", "lid", "llamaindex", "mcp", "mlx", "multimodal", "ocr-paddle", "onnx", "onnx-runtime", "openvino", "pandas", "philter", "polars", "prefect", "presidio", "pydeid", "service", "spacy", "spark", "zh", "zh-hanlp", "zh-pkuseg"]
