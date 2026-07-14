@@ -101,6 +101,10 @@ class OpenMedConfig:
     # Cache-only, no-egress mode for inference and de-identification
     local_only: bool = False
 
+    # CJK width normalization convention: "cjk" (Latin/digits/symbols to
+    # half-width, Han left as-is) or "nfkc" (strict per-character NFKC).
+    cjk_width_convention: str = "cjk"
+
     # Active profile name (if any)
     profile: Optional[str] = None
 
@@ -108,6 +112,12 @@ class OpenMedConfig:
         """Post-initialization to set default values."""
         if self.cache_dir is None:
             self.cache_dir = os.path.expanduser("~/.cache/openmed")
+
+        if self.cjk_width_convention not in {"cjk", "nfkc"}:
+            raise ValueError(
+                "cjk_width_convention must be 'cjk' or 'nfkc', got "
+                f"{self.cjk_width_convention!r}"
+            )
 
         if self.hf_token is None:
             self.hf_token = os.getenv("HF_TOKEN")
@@ -200,6 +210,7 @@ class OpenMedConfig:
             "load_in_4bit",
             "bnb_4bit_use_double_quant",
             "local_only",
+            "cjk_width_convention",
             "profile",
         }
         filtered = {k: v for k, v in config_dict.items() if k in valid_keys}
@@ -261,6 +272,7 @@ class OpenMedConfig:
             "load_in_4bit": self.load_in_4bit,
             "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
             "local_only": self.local_only,
+            "cjk_width_convention": self.cjk_width_convention,
             "profile": self.profile,
         }
 
