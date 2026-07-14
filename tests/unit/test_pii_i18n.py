@@ -1,6 +1,7 @@
 """Tests for multilingual PII detection support (pii_i18n module)."""
 
 import json
+import random
 import re
 from pathlib import Path
 
@@ -8,6 +9,10 @@ import pytest
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
+from openmed.core.anonymizer.providers import (
+    HungarianTAJProvider,
+    generate_hungarian_taj,
+)
 from openmed.core.anonymizer.providers.clinical_ids import generate_philhealth_pin
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
@@ -764,6 +769,12 @@ class TestValidateHungarianTaj:
 
     def test_rejects_non_string(self):
         assert validate_hungarian_taj(None) is False
+
+    def test_public_generator_round_trips_validator(self):
+        assert HungarianTAJProvider is not None
+        for seed in range(50):
+            value = generate_hungarian_taj(rng=random.Random(seed))
+            assert validate_hungarian_taj(value), (seed, value)
 
 
 class TestValidateCzechoslovakRodneCislo:
