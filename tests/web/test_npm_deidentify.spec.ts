@@ -89,6 +89,27 @@ test("local model loading is offline-only by default", async () => {
   assert.equal(runtime.env?.allowLocalModels, false);
 });
 
+test("OpenMed ONNX loading selects the root INT8 artifact", async () => {
+  const api = await loadApi();
+  const runtime: TransformersRuntime = {
+    pipeline: async (task, model, options) => {
+      assert.equal(task, "token-classification");
+      assert.equal(model, "OpenMed/example-v1-onnx-android");
+      assert.equal(options?.subfolder, "");
+      assert.equal(options?.model_file_name, "model_int8");
+      assert.equal(options?.quantized, false);
+      return fixturePipeline;
+    },
+  };
+
+  const loaded = (await api.loadOnnxModel(
+    "OpenMed/example-v1-onnx-android",
+    { runtime },
+  )) as TokenClassificationPipeline;
+
+  assert.equal(loaded, fixturePipeline);
+});
+
 async function loadApi() {
   return import(distUrl);
 }

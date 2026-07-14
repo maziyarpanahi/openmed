@@ -12,12 +12,16 @@ nav:
   - Overview:
       - Welcome: index.md
       - Feature Map: feature-map.md
+      - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
+      - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - v1.6-v1.7 Feature Coverage: release/v1.6-v1.7-feature-coverage.md
       - Quick Start: getting-started.md
+      - Persona Quickstarts: quickstarts.md
   - Core Guides:
       - Analyze Text Helper: analyze-text.md
       - REST Service (MVP): rest-service.md
+      - REST API Recipes: rest-recipes.md
       - REST Tracing: serving/tracing.md
       - Serving Resilience: serving/resilience.md
       - Hardened Service Image: deploy/hardened-image.md
@@ -78,10 +82,12 @@ nav:
       - Swift-Kotlin API Parity: swift-kotlin-parity.md
   - Project:
       - FAQ: faq.md
+      - Troubleshooting & Common Errors: troubleshooting.md
       - Onboarding: onboarding.md
       - Contributing & Releases: contributing.md
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
+      - Redactor Threat Model: security/threat-model.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md
@@ -91,6 +97,8 @@ nav:
       - Container Image Signing: supply-chain/image-signing.md
       - Release Streams & Channels: release/semver-and-channels.md
       - PyPI Publishing: release/trusted-publishing.md
+      - OpenMed 1.9.1 Release Notes: release/v1.9.1.md
+      - OpenMed 1.9.0 Release Notes: release/v1.9.0.md
       - OpenMed 1.8.0 Release Notes: release/v1.8.0.md
       - OpenMed 1.7.0 Release Notes: release/v1.7.0.md
       - Generative Model Policy: generative-model-policy.md

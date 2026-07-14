@@ -58,9 +58,11 @@ def quantize_dynamic_int8(
         str(output_path),
         weight_type=QuantType.QInt8,
         op_types_to_quantize=list(op_types_to_quantize),
+        use_external_data_format=_uses_external_data(onnx_path),
     )
     if not output_path.exists():
         raise RuntimeError(f"INT8 model was not written: {output_path}")
+    _repair_onnx_topological_order(output_path)
     _check_onnx_model(output_path)
     return output_path
 
@@ -632,8 +634,109 @@ def _check_onnx_model(path: Path) -> None:
             "onnx is required to validate INT8 ONNX artifacts. "
             "Install with: pip install openmed[onnx]"
         ) from exc
+    onnx.checker.check_model(str(path))
+
+
+def _repair_onnx_topological_order(path: Path) -> None:
+    """Repair node ordering after ONNX Runtime dynamic quantization."""
+
+    try:
+        import onnx
+    except ImportError:
+        return
+
     model = onnx.load(str(path))
-    onnx.checker.check_model(model)
+    graph = getattr(model, "graph", None)
+    if graph is None or not hasattr(onnx, "AttributeProto"):
+        return
+    if _sort_onnx_graph(graph, onnx):
+        onnx.save(model, str(path))
+
+
+def _uses_external_data(path: Path) -> bool:
+    """Return whether an ONNX graph references external initializer data."""
+
+    try:
+        import onnx
+    except ImportError:
+        return False
+
+    model = onnx.load(str(path), load_external_data=False)
+    graph = getattr(model, "graph", None)
+    if graph is None:
+        return False
+    return any(tensor.external_data for tensor in graph.initializer)
+
+
+def _sort_onnx_graph(graph: Any, onnx_module: Any) -> bool:
+    """Topologically sort *graph*, including subgraph capture dependencies."""
+
+    changed = False
+    for node in graph.node:
+        for subgraph in _node_subgraphs(node, onnx_module):
+            changed = _sort_onnx_graph(subgraph, onnx_module) or changed
+
+    produced = {name for node in graph.node for name in node.output if name}
+    available = {value.name for value in graph.input}
+    available.update(initializer.name for initializer in graph.initializer)
+    available.update(
+        initializer.values.name for initializer in graph.sparse_initializer
+    )
+
+    pending = list(graph.node)
+    ordered = []
+    while pending:
+        progressed = False
+        next_pending = []
+        for node in pending:
+            dependencies = {name for name in node.input if name and name in produced}
+            for subgraph in _node_subgraphs(node, onnx_module):
+                dependencies.update(
+                    name
+                    for name in _external_graph_inputs(subgraph, onnx_module)
+                    if name in produced
+                )
+            if dependencies <= available:
+                ordered.append(node)
+                available.update(name for name in node.output if name)
+                progressed = True
+            else:
+                next_pending.append(node)
+        if not progressed:
+            ordered.extend(next_pending)
+            break
+        pending = next_pending
+
+    original_signatures = [node.SerializeToString() for node in graph.node]
+    ordered_signatures = [node.SerializeToString() for node in ordered]
+    if ordered_signatures != original_signatures:
+        del graph.node[:]
+        graph.node.extend(ordered)
+        changed = True
+    return changed
+
+
+def _external_graph_inputs(graph: Any, onnx_module: Any) -> set[str]:
+    local = {value.name for value in graph.input}
+    local.update(initializer.name for initializer in graph.initializer)
+    local.update(initializer.values.name for initializer in graph.sparse_initializer)
+    local.update(name for node in graph.node for name in node.output if name)
+
+    used: set[str] = set()
+    for node in graph.node:
+        used.update(name for name in node.input if name)
+        for subgraph in _node_subgraphs(node, onnx_module):
+            used.update(_external_graph_inputs(subgraph, onnx_module))
+    return used - local
+
+
+def _node_subgraphs(node: Any, onnx_module: Any) -> Iterable[Any]:
+    attribute_proto = onnx_module.AttributeProto
+    for attribute in node.attribute:
+        if attribute.type == attribute_proto.GRAPH:
+            yield attribute.g
+        elif attribute.type == attribute_proto.GRAPHS:
+            yield from attribute.graphs
 
 
 def _id2label(config: Mapping[str, Any]) -> dict[int, str]:

@@ -32,16 +32,13 @@ jobs:
     - name: Lint Swift formatting
       run: scripts/lint_swift.sh
 
-    - name: Resolve Swift package dependencies
-      working-directory: swift/OpenMedKit
+    - name: Resolve documented root package dependencies
       run: swift package resolve
 
-    - name: Build OpenMedKit
-      working-directory: swift/OpenMedKit
+    - name: Build documented root package
       run: swift build
 
-    - name: Run OpenMedKit tests
-      working-directory: swift/OpenMedKit
+    - name: Test documented root package
       run: swift test
 
   build-ios:

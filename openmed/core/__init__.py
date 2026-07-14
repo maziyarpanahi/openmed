@@ -11,10 +11,27 @@ from .config import (
     save_profile,
 )
 from .custom_recognizer import CustomRecognizer
+from .hf_hub import (
+    CachedModel,
+    clear_cached_model,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from .model_search import ModelQuery, ModelSearchResult, search_models
 from .models import ModelLoader, load_model
 from .offline import OfflineModeError
 from .redaction_preview import redaction_preview, render_redaction_preview
+from .rtl_render import (
+    BIDI_CONTROL_CHARS,
+    RTL_SCRIPTS,
+    RenderedRedaction,
+    base_direction,
+    contains_rtl,
+    render_redacted,
+    strip_bidi_controls,
+    wrap_mask,
+)
 from .script_detect import (
     SCRIPT_LANGUAGE_HINTS,
     SUPPORTED_SCRIPTS,
@@ -52,6 +69,14 @@ __all__ = [
     "DetectorInfo",
     "redaction_preview",
     "render_redaction_preview",
+    "BIDI_CONTROL_CHARS",
+    "RTL_SCRIPTS",
+    "RenderedRedaction",
+    "base_direction",
+    "contains_rtl",
+    "render_redacted",
+    "strip_bidi_controls",
+    "wrap_mask",
     "SurrogateVault",
     "SurrogateKey",
     "SurrogateEntry",
@@ -77,4 +102,9 @@ __all__ = [
     "normalize_for_pii_detection",
     "segment_by_script",
     "OfflineModeError",
+    "prefetch_model",
+    "list_cached_models",
+    "clear_cached_model",
+    "resolve_repo_id",
+    "CachedModel",
 ]

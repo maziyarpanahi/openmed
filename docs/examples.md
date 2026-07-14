@@ -14,6 +14,56 @@ examples use synthetic data and are safe to run during release review.
 
 Run them with VS Code, Jupyter, or Google Colab—each relies on the same `uv pip install ".[hf]"` baseline.
 
+### Rich highlight widget in notebooks
+
+`openmed.processing.show()` renders a displaCy-style colored highlight of every
+detected span — with a per-label legend and confidence scores — directly in an
+active Jupyter/IPython shell. Typed results render themselves automatically
+(they expose `_repr_html_`), so evaluating an `AnalyzeResult` or
+`DeidentificationResult` as the last line of a cell shows the widget:
+
+```python
+from openmed import deidentify
+
+# Synthetic text only. The result renders inline in Jupyter via _repr_html_.
+deidentify("Patient John Doe called from 555-123-4567.", method="mask")
+```
+
+For explicit control, call `show()` (renders inline and returns `None` in an
+active IPython shell, or returns the HTML string elsewhere) or
+`render_spans_html()` (always returns the HTML string):
+
+```python
+from openmed.processing import render_spans_html, show
+
+text = "Contact Jane Roe at jane.roe@example.com."
+spans = [
+    {"start": 8, "end": 16, "label": "PERSON", "score": 0.98},
+    {"start": 20, "end": 40, "label": "EMAIL", "score": 0.95},
+]
+
+show(text, spans)  # active IPython: displays and returns None; otherwise HTML
+html = render_spans_html(text, spans)  # raw HTML is also available
+```
+
+`show()` accepts an `AnalyzeResult`, a `DeidentificationResult`, or an explicit
+`(text, spans)` pair, where spans may be dicts, `EntityPrediction`/`PIIEntity`
+objects, or `OpenMedSpan` records. IPython is an optional, lazily imported
+dependency: rendering the HTML string never requires it, and merely having
+IPython installed does not trigger display outside an active shell. Overlapping
+annotations are placed on deterministic layers so every input span remains a
+complete highlight. The source text is always HTML-escaped, so brackets and
+ampersands in clinical notes cannot break the view. Recipe 5 in
+`Deidentification_Cookbook.ipynb` demonstrates the widget end-to-end.
+
+The widget intentionally renders its source text, and notebook outputs can be
+stored inside the `.ipynb` file. Use only authorized or synthetic text, clear
+outputs before sharing a notebook, and pass `show_confidence=False` when scores
+should not be persisted. Automatic rich representations suppress confidence
+scores by default. The generated fragment is script-free and makes no network
+requests; semantic `pre`/`mark` elements preserve readable text when a strict
+content-security policy blocks the optional inline styling.
+
 ## Scripts & tools
 
 | Path | What it does |
@@ -65,7 +115,7 @@ deployment paths:
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.8.1` includes release-critical Apple, Android, browser, and service entry points:
+OpenMed `1.9.1` includes release-critical Apple, Android, browser, and service entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

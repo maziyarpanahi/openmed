@@ -55,6 +55,21 @@ public class OnnxTokenClassifier internal constructor(
     )
 
     public constructor(
+        modelFile: File,
+        id2Label: Map<Int, String>,
+        intraOpThreadCount: Int = 1,
+        inputTensorType: TensorElementType = TensorElementType.INT64,
+    ) : this(
+        createRuntime(modelFile, intraOpThreadCount),
+        id2Label.also {
+            if (it.isEmpty()) {
+                throw InferenceError.InvalidInput("id2Label must not be empty")
+            }
+        },
+        inputTensorType,
+    )
+
+    public constructor(
         modelBytes: ByteArray,
         id2LabelFile: File,
         intraOpThreadCount: Int = 1,
@@ -126,12 +141,14 @@ public class OnnxTokenClassifier internal constructor(
         ensureOpen()
         validateInputs(inputIds, attentionMask, offsets)
 
-        val outputs = session.run(
-            mapOf(
-                INPUT_IDS_NAME to createInputTensor(inputIds),
-                ATTENTION_MASK_NAME to createInputTensor(attentionMask),
-            )
+        val inputs = mutableMapOf(
+            INPUT_IDS_NAME to createInputTensor(inputIds),
+            ATTENTION_MASK_NAME to createInputTensor(attentionMask),
         )
+        if (TOKEN_TYPE_IDS_NAME in session.inputNames) {
+            inputs[TOKEN_TYPE_IDS_NAME] = createInputTensor(IntArray(inputIds.size))
+        }
+        val outputs = session.run(inputs)
         val logitsOutput = outputs[LOGITS_NAME]
             ?: throw InferenceError.MissingOutput(LOGITS_NAME)
         return decodePredictions(normalizeLogits(logitsOutput), offsets)
@@ -276,6 +293,7 @@ public class OnnxTokenClassifier internal constructor(
     internal companion object {
         internal const val INPUT_IDS_NAME = "input_ids"
         internal const val ATTENTION_MASK_NAME = "attention_mask"
+        internal const val TOKEN_TYPE_IDS_NAME = "token_type_ids"
         internal const val LOGITS_NAME = "logits"
 
         internal fun loadId2Label(id2LabelFile: File): Map<Int, String> {
@@ -359,6 +377,8 @@ public class OnnxTokenClassifier internal constructor(
 }
 
 internal interface TokenClassificationSession : Closeable {
+    val inputNames: Set<String>
+
     fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?>
 }
 
@@ -390,6 +410,9 @@ private class OnnxRuntimeTokenClassificationSession(
     private val environment: OrtEnvironment,
     private val session: OrtSession,
 ) : TokenClassificationSession {
+    override val inputNames: Set<String>
+        get() = session.inputNames
+
     override fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?> {
         val tensors = inputs.mapValues { (_, tensor) -> tensor.toOnnxTensor(environment) }
         try {

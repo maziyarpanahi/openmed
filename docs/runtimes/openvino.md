@@ -5,7 +5,7 @@ CPU, GPU, and NPU edge deployments:
 
 ```bash
 .venv/bin/python -m openmed.onnx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-openvino \
   --profile openvino
 ```
@@ -80,7 +80,7 @@ from openmed.onnx import OpenVinoBenchmarkRecord, write_openvino_benchmark_repor
 
 write_openvino_benchmark_report(
     "dist/example-openvino/openvino-benchmark.report.json",
-    model_name="OpenMed/example-token-classifier",
+    model_name="dslim/bert-base-NER",
     records=[
         OpenVinoBenchmarkRecord(
             device="CPU",
