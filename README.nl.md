@@ -1,16 +1,16 @@
 <div align="center">
 
-<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed: klinische AI op het apparaat · 1.500+ modellen" width="400" />
+<img src="docs/brand/openmed-mascot-lockup.png" alt="OpenMed: klinische AI op het apparaat · 2.000+ modellen" width="400" />
 
 <h3>Jouw data. Jouw model. Jouw hardware.</h3>
 
 <p><b>Zet klinische tekst om in gestructureerd, ge-de-identificeerd inzicht, zonder iets te uploaden.</b><br/>
-OpenMed extraheert biomedische entiteiten en verwijdert 55+ PHI-typen volledig op de hardware die jij beheert, zodat je gegevens het apparaat nooit verlaten. Dezelfde 1.500+ open modellen draaien van een telefoon tot een GPU-server, volledig offline: iOS en iPadOS via OpenMedKit, Android via ONNX, gewone CPU's, Apple Silicon, NVIDIA GPU's en de browser. Geen cloud. Geen vendor lock-in. Geen patiëntgegevens die je netwerk verlaten.</p>
+OpenMed extraheert biomedische entiteiten en verwijdert 55+ PHI-typen volledig op de hardware die jij beheert, zodat je gegevens het apparaat nooit verlaten. Dezelfde 2.000+ open modellen draaien van een telefoon tot een GPU-server, volledig offline: iOS en iPadOS via OpenMedKit, Android via ONNX, gewone CPU's, Apple Silicon, NVIDIA GPU's en de browser. Geen cloud. Geen vendor lock-in. Geen patiëntgegevens die je netwerk verlaten.</p>
 
 <p>
   <a href="https://pypi.org/project/openmed/"><img alt="PyPI" src="https://img.shields.io/pypi/v/openmed?style=for-the-badge&label=PyPI&logo=pypi&logoColor=white&color=0D6E6E"></a>
   <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10+-128787?style=for-the-badge&logo=python&logoColor=white"></a>
-  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-1%2C500+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
+  <a href="https://huggingface.co/OpenMed"><img alt="Models" src="https://img.shields.io/badge/%F0%9F%A4%97%20Models-2%2C000+-F5E27A?style=for-the-badge&labelColor=0E1116"></a>
   <a href="https://arxiv.org/abs/2508.01630"><img alt="arXiv" src="https://img.shields.io/badge/arXiv-2508.01630-C5453A?style=for-the-badge&logo=arxiv&logoColor=white"></a>
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-0A5656?style=for-the-badge"></a>
   <a href="https://github.com/maziyarpanahi/openmed/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/maziyarpanahi/openmed?style=for-the-badge&logo=github&logoColor=0E1116&color=F5E27A&labelColor=0E1116"></a>
@@ -24,7 +24,7 @@ OpenMed extraheert biomedische entiteiten en verwijdert 55+ PHI-typen volledig o
 </p>
 
 <p>
-  <b>1.500+ modellen</b> &nbsp;·&nbsp; <b>15 PII-talen</b> &nbsp;·&nbsp; <b>600+ PII-checkpoints</b> &nbsp;·&nbsp; <b>100% op het apparaat</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
+  <b>2.000+ modellen</b> &nbsp;·&nbsp; <b>15 PII-talen</b> &nbsp;·&nbsp; <b>600+ PII-checkpoints</b> &nbsp;·&nbsp; <b>100% op het apparaat</b> &nbsp;·&nbsp; <b>Apache-2.0</b>
 </p>
 
 <p>
@@ -85,14 +85,14 @@ Een state-of-the-art klinisch NER-model dat lokaal draait: geen API-sleutel, gee
 | Draait op je apparaat/servers         |            ✅            |             ❌             |
 | Patiëntgegevens verlaten je netwerk   |        **Nooit**         | Naar de leverancier gestuurd |
 | Kosten                                | Gratis & open source     |     Prijs per aanroep      |
-| Gespecialiseerde medische modellen    |          1.500+          |           Beperkt          |
+| Gespecialiseerde medische modellen    |          2.000+          |           Beperkt          |
 | Talen                                 |           12+            |          Wisselend         |
 | Offline / air-gapped                  |            ✅            |             ❌             |
 | Apple Silicon (MLX)-versnelling       |            ✅            |           n.v.t.           |
 | Native iOS-/macOS-apps                |   ✅ via OpenMedKit       |             ❌             |
 | Vendor lock-in                        |    Geen: Apache-2.0     |             Ja             |
 
-- **Gespecialiseerde modellen**: meer dan 1.500 zorgvuldig geselecteerde biomedische en klinische modellen, waarvan vele propriëtaire oplossingen overtreffen.
+- **Gespecialiseerde modellen**: meer dan 2.000 zorgvuldig geselecteerde biomedische en klinische modellen, waarvan vele propriëtaire oplossingen overtreffen.
 - **HIPAA-bewuste de-identificatie**: alle 18 Safe Harbor-identificatoren, slimme entiteitssamenvoeging en formaatbehoudende nepwaarden.
 - **Draait overal**: CPU, CUDA, Apple Silicon (MLX), en native in iOS-/macOS-apps via OpenMedKit.
 - **Implementatie in één regel**: Python-API, gedockeriseerde REST-service of batchpipelines.
@@ -109,13 +109,13 @@ klinische extractie volledig offline, op het apparaat, plaatsvinden.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.5.5"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.0"),
 ]
 ```
 
 - **MLX-runtime** voor PII-tokenclassificatie, de Privacy Filter-familie en experimentele zero-shot-taken van de GLiNER-familie, met een CoreML-fallbackpad.
 - **Eén modelnaam, elk platform**: op niet-Apple-hardware vallen MLX-modelnamen automatisch terug op het bijbehorende PyTorch-checkpoint.
-- **Python op Apple Silicon** ook: `pip install "openmed[mlx]"`.
+- **Python op Apple Silicon** ook: `pip install --upgrade "openmed[mlx]"`.
 
 Handleidingen: [MLX-backend](docs/mlx-backend.md) · [OpenMedKit (Swift)](docs/swift-openmedkit.md) · [CoreML-export](docs/coreml-export.md)
 
@@ -141,13 +141,13 @@ flowchart LR
 
 ```bash
 # Core + Hugging Face runtime (Linux, macOS, Windows; CPU or CUDA)
-pip install "openmed[hf]"
+pip install --upgrade "openmed[hf]"
 
 # Add the REST service
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 
 # Apple Silicon acceleration (MLX)
-pip install "openmed[mlx]"
+pip install --upgrade "openmed[mlx]"
 ```
 
 <table>
@@ -318,12 +318,12 @@ for r in (portuguese, dutch, hindi, arabic, japanese, turkish):
 Een Docker-vriendelijke FastAPI-service met requestvalidatie, gedeelde pipeline-preload en uniforme foutenveloppen.
 
 ```bash
-pip install "openmed[hf,service]"
+pip install --upgrade "openmed[hf,service]"
 uvicorn openmed.service.app:app --host 0.0.0.0 --port 8080
 
 # or with Docker
-docker build -t openmed:1.5.5 .
-docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:1.5.5
+docker build -t openmed:local .
+docker run --rm -p 8080:8080 -e OPENMED_PROFILE=prod openmed:local
 ```
 
 ```bash

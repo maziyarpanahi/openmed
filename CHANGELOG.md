@@ -7,18 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-14
+
+This release adds one model-repository contract for ONNX token-classification
+inference across Python, browsers, Node.js, and Android, then extends the
+clinical, multilingual privacy, evaluation, documentation, and developer
+surfaces delivered after `v1.8.1`.
+
 ### Added
 
-- Added a PEP 561 `py.typed` marker plus a pinned, scoped mypy gate for the
-  annotated public-module surface, with built-wheel and sdist verification
-  that the marker ships in release artifacts (#548).
-- Added a full Korean (`ko`) PII language pack with native date, phone, RRN,
-  postcode, and address patterns, checksum-valid local surrogates, synthetic
-  golden coverage, service and training wiring, and the manifest-backed Korean
-  default model (#262).
+- Added concise cross-platform ONNX inference APIs: `OnnxModel` for Python CPU,
+  `loadOnnxModel` for WebGPU/WebAssembly, and `OpenMedKit.fromDirectory` for
+  Android with Hugging Face tokenizer offset parity. The same exported model
+  repository can now serve every supported runtime without application-level
+  tokenizer or tensor plumbing (#1550).
+- Added a resumable Android ONNX batch rollout runner, Android/ORT model-card
+  format metadata, immutable Git-tag installation through JitPack, and runnable
+  MLX examples for token classification and GLiNER zero-shot NER (#1550).
+- Added the public `openmed` npm package for browser and Node.js inference, with
+  synchronized release versions, ESM/CommonJS exports, WebGPU/WebAssembly
+  examples, package tests, npm audit enforcement, and provenance-backed tag
+  publishing (#1550).
+- Added Hugging Face Hub model-pull convenience helpers and artifact-backed
+  model-card datasheets generated from provenance-hashed evaluation evidence
+  (#1339, #1228).
 - Added an offline immunization zero-shot domain with FHIR-aligned display
-  labels, canonical policy metadata, synthetic per-label fixture coverage, and
-  generated OM-138 exporter-alignment documentation (#897).
+  labels, canonical policy metadata, synthetic per-label fixtures, and
+  exporter-alignment documentation (#1159).
+- Added relation metrics, a synthetic gold loader, strict and relaxed clinical
+  relation-extraction scoring, an RE release gate, and a dataframe API for
+  clinical extraction results (#1211, #1212, #1224).
+- Added a Go REST client, a Postman collection, copy-paste REST recipes, and a
+  Jupyter/IPython rich display widget for de-identification results (#1379,
+  #1385, #1387, #1382).
+- Added full Korean (`ko`) and Romanian (`ro`) PII language packs, including
+  native identifier validation, locale-aware surrogates, synthetic fixtures,
+  and model/service wiring. The model-backed PII allow-list now covers 17
+  language codes (#1544, #1389).
+- Added Canadian SIN and provincial health-card validators, Australian Medicare
+  and TFN validators, CJK family-name-first honorific stripping, RTL-aware
+  redacted-output rendering, multilingual clinical section detection,
+  translation augmentation for low-resource NER, and multilingual surrogate
+  quality gates (#1340, #1342, #1346, #1384, #1226, #1221, #1225).
+- Added critical-finding recall and leakage-under-extraction safety gates, a
+  multilingual clinical NER benchmark aggregator, a false-negative explorer,
+  throughput-versus-accuracy frontier reporting, inference memory profiling,
+  property-based de-identification fuzzing, a burned-in-PHI DICOM benchmark,
+  and a redactor threat model with leakage-bypass abuse cases (#1213, #1214,
+  #1223, #1343, #1347, #1349, #1350, #1388, #1352).
+- Added a public-API docstring coverage check plus PEP 561 `py.typed` packaging
+  and scoped type-hint coverage for the expanded module surface (#1341, #1348).
+- Added persona quickstarts, hardened offline model loading, and a dedicated
+  troubleshooting and common-errors guide (#1386, #1380).
+
+### Changed
+
+- Consolidated OpenMed's brand and on-device clinical-AI messaging across the
+  repository, documentation, and website (#1415).
+- Bounded the ten-stage clinical pipeline on long notes and strengthened offline
+  loading paths used by the new runtime quickstarts (#1383, #1386).
+
+### Fixed
+
+- Hardened Android ONNX export and publishing for large external-data graphs,
+  Longformer tracing, fp16 metadata, dynamic INT8 graph ordering, optional ORT
+  conversion failures, existing Hub repositories, and models that require
+  zero-valued `token_type_ids` at runtime (#1550).
+- Made Android artifact reuse fail closed when runtime files or ONNX external
+  data are missing, required `tokenizer.json` before publication, and kept
+  resumable batch cleanup from deleting valid artifacts (#1550).
+- Made direct `OpenMed/...-mlx` repository IDs resolve as pre-converted MLX
+  artifacts and kept optional tokenizer loading lazy, avoiding unintended
+  PyTorch conversion and eager pandas imports (#1550).
+- Aligned Python, npm, Swift, Android, Helm, OpenAPI, container, and demo release
+  surfaces on `1.9.0` and immutable release coordinates (#1550).
+
+### Security
+
+- Replaced fixable vulnerability waivers with dependency and base-image
+  upgrades, and made the vulnerability gate reject waivers when a fixed version
+  is available (#1550).
+- Added explicit release gates for critical-finding recall and leakage under
+  clinical extraction, alongside the redactor threat model, de-identification
+  fuzz harness, and synthetic burned-in-PHI DICOM benchmark (#1213, #1214,
+  #1350, #1352, #1388).
 
 ## [1.8.1] - 2026-07-10
 
@@ -1092,7 +1164,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0
 [1.7.0]: https://github.com/maziyarpanahi/openmed/compare/v1.6.0...v1.7.0

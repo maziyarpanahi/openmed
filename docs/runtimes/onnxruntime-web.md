@@ -14,11 +14,15 @@ The threaded wasm path requires the application to serve pages with
 hide `SharedArrayBuffer`; the loader falls back to single-threaded wasm instead
 of reaching for a remote runtime.
 
+```bash
+npm install openmed onnxruntime-web
+```
+
 ```ts
 import {
   loadOrtWebTokenClassificationPipeline,
   deidentify,
-} from "@openmed/openmedkit-web";
+} from "openmed";
 
 const pipeline = await loadOrtWebTokenClassificationPipeline({
   modelPath: "/models/openmed-pii/onnx/model.onnx",

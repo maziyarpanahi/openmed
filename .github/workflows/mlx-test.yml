@@ -32,14 +32,21 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        uv sync --frozen --extra dev --python ${{ matrix.python-version }}
 
     - name: Run MLX unit tests (mocked, no MLX required)
       run: |
-        pytest tests/unit/mlx/ tests/unit/test_backends.py -v
+        uv run pytest tests/unit/mlx/ tests/unit/test_backends.py -v
 
   mlx-integration:
     name: MLX integration (Apple Silicon)
@@ -58,18 +65,25 @@ jobs:
       with:
         python-version: "3.12"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          pyproject.toml
+          uv.lock
+
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev,mlx,hf]"
+        uv sync --frozen --extra dev --extra mlx --extra hf --python 3.12
 
     - name: Verify MLX is available
       run: |
-        python -c "import mlx.core as mx; print(f'MLX {mx.__version__} on {mx.default_device()}')"
+        uv run python -c "import mlx.core as mx; print(f'MLX {mx.__version__} on {mx.default_device()}')"
 
     - name: Run backend auto-detection test
       run: |
-        python -c "
+        uv run python -c "
         from openmed.core.backends import get_backend
         backend = get_backend()
         print(f'Auto-detected backend: {type(backend).__name__}')
@@ -78,13 +92,13 @@ jobs:
 
     - name: Convert pilot model to MLX
       run: |
-        python -m openmed.mlx.convert \
+        uv run python -m openmed.mlx.convert \
           --model OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1 \
           --output /tmp/mlx-pii-small
 
     - name: Run MLX inference smoke test
       run: |
-        python -c "
+        uv run python -c "
         from openmed.mlx.inference import create_mlx_pipeline
         pipeline = create_mlx_pipeline('/tmp/mlx-pii-small')
         result = pipeline('Patient John Doe, phone 555-123-4567')
@@ -95,4 +109,4 @@ jobs:
         "
 
     - name: Run full test suite
-      run: pytest tests/ -v
+      run: uv run pytest tests/ -v
