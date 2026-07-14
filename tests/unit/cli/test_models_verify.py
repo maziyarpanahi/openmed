@@ -7,6 +7,7 @@ import socket
 from pathlib import Path
 from types import SimpleNamespace
 
+from click import unstyle
 from typer.testing import CliRunner
 
 from openmed.cli import main_module, typer_app
@@ -77,9 +78,13 @@ def test_models_verify_all_is_offline_and_returns_failure_on_tamper(
 
 
 def test_models_verify_requires_model_id_or_all() -> None:
-    result = CliRunner().invoke(typer_app.build_app(), ["models", "verify"])
+    result = CliRunner().invoke(
+        typer_app.build_app(),
+        ["models", "verify"],
+        terminal_width=200,
+    )
     assert result.exit_code != 0
-    assert "Provide MODEL_ID or --all" in result.output
+    assert "Provide MODEL_ID or --all" in unstyle(result.output)
 
 
 def test_installed_cli_models_verify_uses_same_offline_verdict(
