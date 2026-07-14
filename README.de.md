@@ -109,7 +109,7 @@ PII-Erkennung und klinische Extraktion vollständig offline, auf dem Gerät, sta
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", branch: "master"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.0"),
 ]
 ```
 

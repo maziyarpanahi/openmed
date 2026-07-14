@@ -20,10 +20,19 @@ JITPACK_CONFIG = ROOT / "jitpack.yml"
 ABOUT_FILE = ROOT / "openmed" / "__about__.py"
 WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
 WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
+SWIFT_GUIDE = ROOT / "docs" / "swift-openmedkit.md"
+ANDROID_ONNX_GUIDE = ROOT / "docs" / "export-onnx-android.md"
 
 
 def _load_workflow(path: Path) -> dict[str, object]:
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+def _release_version() -> str:
+    content = ABOUT_FILE.read_text(encoding="utf-8")
+    match = re.search(r'__version__\s*=\s*"([^"]+)"', content)
+    assert match is not None
+    return match.group(1)
 
 
 def test_publish_workflow_reads_version_without_importing_openmed_package():
@@ -232,13 +241,25 @@ def test_jitpack_builds_the_latest_android_release_from_github():
     assert "artifactId = publicationArtifact" in android_build
     assert 'it.name.startsWith("publish")' not in android_build
 
-    coordinates = "com.github.maziyarpanahi:openmed:master-SNAPSHOT"
+    coordinates = f"com.github.maziyarpanahi:openmed:v{_release_version()}"
     assert coordinates in android_readme
     assert coordinates in (ROOT / "README.md").read_text(encoding="utf-8")
-    assert re.search(r"com\.github\.maziyarpanahi:openmed:v\d", android_readme) is None
+    assert coordinates in ANDROID_ONNX_GUIDE.read_text(encoding="utf-8")
+    assert "master-SNAPSHOT" not in android_readme
 
 
-def test_readme_install_guidance_tracks_latest_openmed_release():
+def test_readme_install_guidance_uses_stable_release_coordinates():
+    version = _release_version()
+    swift_requirement = f'from: "{version}"'
+    android_coordinate = f"com.github.maziyarpanahi:openmed:v{version}"
+    root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert swift_requirement in root_readme
+    assert swift_requirement in SWIFT_GUIDE.read_text(encoding="utf-8")
+    assert android_coordinate in root_readme
+    assert android_coordinate in ANDROID_README.read_text(encoding="utf-8")
+    assert android_coordinate in ANDROID_ONNX_GUIDE.read_text(encoding="utf-8")
+
     readmes = set(ROOT.glob("README*.md"))
     for directory in ("android", "deploy", "examples", "js", "openmed", "swift"):
         readmes.update((ROOT / directory).glob("**/README.md"))
@@ -254,10 +275,10 @@ def test_readme_install_guidance_tracks_latest_openmed_release():
     for path in readmes:
         text = path.read_text(encoding="utf-8")
         relative = path.relative_to(ROOT)
-        if re.search(r'from: "\d+\.\d+', text):
-            violations.append(f"{relative}: pinned Swift package")
-        if re.search(r"com\.github\.maziyarpanahi:openmed:v\d", text):
-            violations.append(f"{relative}: pinned Android package")
+        if "master-SNAPSHOT" in text:
+            violations.append(f"{relative}: moving Android package")
+        if re.search(r'openmed\.git", branch: "master"', text):
+            violations.append(f"{relative}: moving Swift package")
         if re.search(r"openmed:[0-9]+\.[0-9]+", text):
             violations.append(f"{relative}: pinned Docker tag")
         if re.search(r"npm install openmed@\d", text):

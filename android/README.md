@@ -2,9 +2,9 @@
 
 This directory contains the Gradle build for the `:openmedkit` Android library.
 
-## Install The Latest GitHub Build
+## Install OpenMedKit 1.9.0
 
-OpenMedKit Android is built directly from OpenMed's `master` branch through JitPack.
+OpenMedKit Android is published from immutable OpenMed release tags through JitPack.
 Add the repository in the consumer application's `settings.gradle.kts`:
 
 ```kotlin
@@ -20,17 +20,18 @@ dependencyResolutionManagement {
 }
 ```
 
-Then add the moving `master-SNAPSHOT` coordinate:
+Then add the `v1.9.0` coordinate:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")
+    implementation("com.github.maziyarpanahi:openmed:v1.9.0")
 }
 ```
 
-JitPack resolves the latest commit on `master` and publishes the `openmedkit`
+JitPack resolves the immutable `v1.9.0` tag and publishes the `openmedkit`
 Android release component as an AAR. Public consumers do not need GitHub
-credentials.
+credentials. Use a commit coordinate only when intentionally testing an
+unreleased build.
 
 ## Build Locally
 

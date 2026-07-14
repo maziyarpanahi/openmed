@@ -7,8 +7,9 @@ infrastructure. This documentation keeps copied snippets and workflows close
 at hand: each section is Markdown-first, searchable, and optimized for quick
 scanning or copy/paste into notebooks.
 
-OpenMed `1.9.0` carries the cross-platform clinical data platform forward
-with an architecture-safe PyTorch attention-selection hotfix:
+OpenMed `1.9.0` adds one ONNX token-classification model contract across
+Python, browsers, Node.js, and Android, alongside expanded clinical extraction,
+17-language PII coverage, and stronger release evidence:
 
 - **Policy-aware de-identification** with signed audit reports, reproducibility
   hashes, review bundles, redaction previews, and release gates.
@@ -71,7 +72,8 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 ## Latest release highlights
 
-- [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – detailed release inventory, commit coverage, and migration notes.
+- [OpenMed 1.9.0 Release Notes](./release/v1.9.0.md) – cross-platform ONNX runtimes, clinical and multilingual privacy additions, release evidence, and migration notes.
+- [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – historical cross-platform runtime and service release inventory.
 - [OpenMed v1.6-v1.7 Feature Coverage](./release/v1.6-v1.7-feature-coverage.md) – historical coverage checklist across examples, docs, website, and source modules.
 - [Examples & Copy/Paste Recipes](./examples.md) – release-friendly snippets for Python, PII, batch jobs, Apple runtimes, browser export, multimodal inputs, and FHIR/HL7.
 - [Transformers.js Export](./export-transformersjs.md) – browser/WebGPU packaging for token classification bundles.
@@ -82,7 +84,7 @@ configuration, zero-shot GLiNER workflows, and advanced processing helpers.
 
 1. [Quick Start](./getting-started.md) – fastest path to a working environment plus a copy/paste script.
 2. [Feature Map](./feature-map.md) – see how every capability maps back to the code.
-3. [OpenMed 1.8.0 Release Notes](./release/v1.8.0.md) – review the post-v1.7 release inventory and migration notes.
+3. [OpenMed 1.9.0 Release Notes](./release/v1.9.0.md) – review the current release inventory and migration notes.
 4. Core guides:
    - [Analyze Text Helper](./analyze-text.md) for single-call inference.
    - [REST Service (MVP)](./rest-service.md) for Dockerized HTTP endpoints.

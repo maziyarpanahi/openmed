@@ -128,7 +128,7 @@ PII detection and clinical extraction happen fully offline, on the device.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", branch: "master"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.0"),
 ]
 ```
 
@@ -172,11 +172,11 @@ dependencyResolutionManagement {
 }
 ```
 
-Then use the latest OpenMed build from the `master` branch:
+Then use the immutable OpenMed `v1.9.0` release:
 
 ```kotlin
 dependencies {
-    implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")
+    implementation("com.github.maziyarpanahi:openmed:v1.9.0")
 }
 ```
 
@@ -624,7 +624,7 @@ Full guides at **[openmed.life/docs](https://openmed.life/docs/)**.
 | [FAQ](docs/faq.md) | [Anonymization](docs/anonymization.md) | [Batch Processing](https://openmed.life/docs/batch-processing) |
 | [Configuration Profiles](https://openmed.life/docs/profiles) | [REST Service](docs/rest-service.md) | [MLX Backend](docs/mlx-backend.md) |
 | [Transformers.js Export](docs/export-transformersjs.md) | [FHIR Interop](docs/fhir-interop.md) | [HL7 v2 De-identification](docs/hl7v2-deidentification.md) |
-| [OpenMed 1.8.0 Release Notes](docs/release/v1.8.0.md) | [v1.6-v1.7 Feature Coverage](docs/release/v1.6-v1.7-feature-coverage.md) | [Examples](docs/examples.md) |
+| [OpenMed 1.9.0 Release Notes](docs/release/v1.9.0.md) | [OpenMed 1.8.0 Release Notes](docs/release/v1.8.0.md) | [Examples](docs/examples.md) |
 | [Release Streams](docs/release/semver-and-channels.md) | [Generative Model Policy](docs/generative-model-policy.md) | [Contributing](docs/contributing.md) |
 | [Security Policy](SECURITY.md) | [Compliance Posture](docs/compliance.md) | |
 
