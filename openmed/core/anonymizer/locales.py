@@ -59,6 +59,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "tl": "fil_PH",
     "da": "da_DK",
     "ro": "ro_RO",
+    "fi": "fi_FI",
 }
 
 
@@ -108,6 +109,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
+    "fi": ("fi_FI", "ssn"),  # Finnish HETU (Faker's native fi_FI ssn)
 }
 
 _warned: set[str] = set()
