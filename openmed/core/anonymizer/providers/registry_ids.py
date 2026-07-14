@@ -32,6 +32,7 @@ from openmed.core.pii_i18n import (
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
+    validate_estonian_isikukood,
     validate_french_nir,
     validate_german_steuer_id,
     validate_indonesian_nik,
@@ -61,6 +62,7 @@ from .clinical_ids import (
     BCPHNProvider,
     CanadianSINProvider,
     DanishCPRProvider,
+    EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
@@ -330,6 +332,13 @@ def _register_builtin_specs() -> None:
         validate=validate_latvian_personas_kods,
         faker_method="personas_kods",
         faker_provider=LatvianPersonasKodsProvider,
+    )
+    _register_aliases(
+        ("et", "et_EE"),
+        id_type="isikukood",
+        validate=validate_estonian_isikukood,
+        faker_method="isikukood",
+        faker_provider=EstonianIsikukoodProvider,
     )
     _register_aliases(
         ("ko", "ko_KR"),
