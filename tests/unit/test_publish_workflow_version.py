@@ -322,12 +322,21 @@ def test_readme_install_guidance_uses_stable_release_coordinates():
     swift_requirement = f'from: "{version}"'
     android_coordinate = f"com.github.maziyarpanahi:openmed:v{version}"
     root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    release_notes = ROOT / "docs" / "release" / f"v{version}.md"
 
     assert swift_requirement in root_readme
     assert swift_requirement in SWIFT_GUIDE.read_text(encoding="utf-8")
     assert android_coordinate in root_readme
     assert android_coordinate in ANDROID_README.read_text(encoding="utf-8")
     assert android_coordinate in ANDROID_ONNX_GUIDE.read_text(encoding="utf-8")
+    assert release_notes.is_file()
+    assert f"openmed=={version}" in release_notes.read_text(encoding="utf-8")
+    assert f"openmed@{version}" in release_notes.read_text(encoding="utf-8")
+    assert swift_requirement in release_notes.read_text(encoding="utf-8")
+    assert android_coordinate in release_notes.read_text(encoding="utf-8")
+    assert f"ghcr.io/maziyarpanahi/openmed:v{version}" in release_notes.read_text(
+        encoding="utf-8"
+    )
 
     readmes = set(ROOT.glob("README*.md"))
     for directory in ("android", "deploy", "examples", "js", "openmed", "swift"):
@@ -348,6 +357,8 @@ def test_readme_install_guidance_uses_stable_release_coordinates():
             violations.append(f"{relative}: moving Android package")
         if re.search(r'openmed\.git", branch: "master"', text):
             violations.append(f"{relative}: moving Swift package")
+        if 'openmed.git", from:' in text and swift_requirement not in text:
+            violations.append(f"{relative}: stale Swift release requirement")
         if re.search(r"openmed:[0-9]+\.[0-9]+", text):
             violations.append(f"{relative}: pinned Docker tag")
         if re.search(r"npm install openmed@\d", text):
