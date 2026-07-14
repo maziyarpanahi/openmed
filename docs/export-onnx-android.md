@@ -9,7 +9,7 @@ python -m pip install --upgrade "openmed[onnx,hf]"
 
 ```bash
 .venv/bin/python -m openmed.onnx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-android-onnx \
   --profile android
 ```
@@ -37,7 +37,9 @@ Python CPU:
 ```python
 from openmed import OnnxModel
 
-model = OnnxModel.from_pretrained("OpenMed/example-v1-onnx-android")
+model = OnnxModel.from_pretrained(
+    "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android"
+)
 entities = model("Patient Alice Nguyen was seen in cardiology.")
 ```
 
@@ -50,7 +52,9 @@ npm install openmed @huggingface/transformers
 ```typescript
 import { loadOnnxModel } from "openmed";
 
-const model = await loadOnnxModel("OpenMed/example-v1-onnx-android");
+const model = await loadOnnxModel(
+  "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android",
+);
 const entities = await model("Patient Alice Nguyen was seen in cardiology.");
 ```
 
@@ -202,7 +206,7 @@ When an eval suite is available, pass it to the Android export:
 
 ```bash
 .venv/bin/python -m openmed.onnx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-android-onnx \
   --profile android \
   --eval-suite openmed/eval/golden/fixtures/checksum_ids.json

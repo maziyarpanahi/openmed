@@ -24,6 +24,9 @@ SWIFT_GUIDE = ROOT / "docs" / "swift-openmedkit.md"
 ANDROID_ONNX_GUIDE = ROOT / "docs" / "export-onnx-android.md"
 SWIFT_PACKAGE = ROOT / "Package.swift"
 SWIFT_WORKFLOW = ROOT / ".github" / "workflows" / "swift-test.yml"
+PUBLIC_ONNX_MODEL = "OpenMed/OpenMed-PII-ClinicalE5-Small-33M-v1-onnx-android"
+PUBLIC_TOKEN_CLASSIFIER = "dslim/bert-base-NER"
+PUBLIC_CAUSAL_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 
 
 def _load_workflow(path: Path) -> dict[str, object]:
@@ -356,6 +359,38 @@ def test_readme_install_guidance_uses_stable_release_coordinates():
                 violations.append(f"{relative}: install does not use --upgrade")
 
     assert violations == []
+
+
+def test_documented_model_ids_use_concrete_public_examples():
+    token_classifier_guides = [
+        ROOT / "README.md",
+        ROOT / "docs" / "android-parity.md",
+        ROOT / "docs" / "export-mlx-quant.md",
+        ANDROID_ONNX_GUIDE,
+        ROOT / "docs" / "export-transformersjs.md",
+        ROOT / "docs" / "runtimes" / "openvino.md",
+    ]
+    causal_model_guides = [
+        ROOT / "docs" / "export-awq.md",
+        ROOT / "docs" / "export-gptq.md",
+    ]
+    checked_guides = token_classifier_guides + causal_model_guides
+
+    assert PUBLIC_ONNX_MODEL in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert PUBLIC_ONNX_MODEL in ANDROID_ONNX_GUIDE.read_text(encoding="utf-8")
+    assert all(
+        PUBLIC_TOKEN_CLASSIFIER in path.read_text(encoding="utf-8")
+        for path in token_classifier_guides
+    )
+    assert all(
+        PUBLIC_CAUSAL_MODEL in path.read_text(encoding="utf-8")
+        for path in causal_model_guides
+    )
+    assert all(
+        "OpenMed/example-token-classifier" not in path.read_text(encoding="utf-8")
+        and "OpenMed/example-v1-onnx-android" not in path.read_text(encoding="utf-8")
+        for path in checked_guides
+    )
 
 
 def test_localized_readmes_advertise_current_model_count():
