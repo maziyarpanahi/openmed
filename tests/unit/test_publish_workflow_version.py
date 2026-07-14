@@ -22,6 +22,8 @@ WEB_PACKAGE = ROOT / "js" / "openmedkit-web" / "package.json"
 WEB_PACKAGE_README = ROOT / "js" / "openmedkit-web" / "README.md"
 SWIFT_GUIDE = ROOT / "docs" / "swift-openmedkit.md"
 ANDROID_ONNX_GUIDE = ROOT / "docs" / "export-onnx-android.md"
+SWIFT_PACKAGE = ROOT / "Package.swift"
+SWIFT_WORKFLOW = ROOT / ".github" / "workflows" / "swift-test.yml"
 
 
 def _load_workflow(path: Path) -> dict[str, object]:
@@ -202,19 +204,83 @@ def test_image_sbom_release_path_attaches_artifact_and_labels_image():
 
 
 def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():
-    workflow = ANDROID_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    content = ANDROID_PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    workflow = _load_workflow(ANDROID_PUBLISH_WORKFLOW)
+    guard = workflow["jobs"]["guard"]
+    build = workflow["jobs"]["build"]
+    publish = workflow["jobs"]["publish"]
+    credential_step = next(
+        step
+        for step in guard["steps"]
+        if step.get("name") == "Detect optional Central Portal credentials"
+    )
+    central_steps = [
+        step
+        for step in build["steps"]
+        if step.get("name")
+        in {
+            "Build signed Maven Central bundle",
+            "Upload Central Portal bundle artifact",
+        }
+    ]
 
-    assert "fetch-depth: 0" in workflow
-    assert "Detect Android artifact changes" in workflow
-    assert 'git describe --tags --abbrev=0 "${GITHUB_SHA}^"' in workflow
-    assert "android/ models.jsonl scripts/android/build_android_catalog.py" in workflow
-    assert "':(exclude,glob)android/**/*.md'" in workflow
-    assert 'echo "publish_android=false"' in workflow
-    assert workflow.count("if: needs.guard.outputs.publish_android == 'true'") == 2
-    assert ":openmedkit:assembleDebug" in workflow
-    assert ":openmedkit:testDebugUnitTest" in workflow
-    assert "check-runs" not in workflow
-    assert "Android AAR size and cold-start gate" not in workflow
+    assert "fetch-depth: 0" in content
+    assert "Detect Android artifact changes" in content
+    assert 'git describe --tags --abbrev=0 "${GITHUB_SHA}^"' in content
+    assert "android/ models.jsonl scripts/android/build_android_catalog.py" in content
+    assert "':(exclude,glob)android/**/*.md'" in content
+    assert 'echo "publish_android=false"' in content
+    assert build["if"] == "needs.guard.outputs.publish_android == 'true'"
+    assert publish["if"] == (
+        "needs.guard.outputs.publish_android == 'true' && "
+        "needs.guard.outputs.central_portal_configured == 'true'"
+    )
+    assert guard["outputs"]["central_portal_configured"] == (
+        "${{ steps.central_credentials.outputs.configured }}"
+    )
+    assert set(credential_step["env"]) == {
+        "ANDROID_SIGNING_KEY",
+        "ANDROID_SIGNING_KEY_PASSWORD",
+        "SONATYPE_USERNAME",
+        "SONATYPE_PASSWORD",
+    }
+    assert 'if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]' in credential_step["run"]
+    assert (
+        "the immutable tag remains available through JitPack" in credential_step["run"]
+    )
+    assert len(central_steps) == 2
+    assert all(
+        step["if"] == "needs.guard.outputs.central_portal_configured == 'true'"
+        for step in central_steps
+    )
+    assert ":openmedkit:assembleDebug" in content
+    assert ":openmedkit:testDebugUnitTest" in content
+    assert "check-runs" not in content
+    assert "Android AAR size and cold-start gate" not in content
+
+
+def test_swift_workflow_validates_documented_root_package_and_resources():
+    manifest = SWIFT_PACKAGE.read_text(encoding="utf-8")
+    workflow = _load_workflow(SWIFT_WORKFLOW)
+    steps = {
+        step.get("name"): step for step in workflow["jobs"]["build-and-test"]["steps"]
+    }
+
+    assert 'path: "swift/OpenMedKit/Sources/OpenMedKit"' in manifest
+    assert '.process("Resources")' in manifest
+    assert steps["Resolve documented root package dependencies"]["run"] == (
+        "swift package resolve"
+    )
+    assert steps["Build documented root package"]["run"] == "swift build"
+    assert steps["Test documented root package"]["run"] == "swift test"
+    assert all(
+        "working-directory" not in steps[name]
+        for name in (
+            "Resolve documented root package dependencies",
+            "Build documented root package",
+            "Test documented root package",
+        )
+    )
 
 
 def test_jitpack_builds_the_latest_android_release_from_github():

@@ -55,15 +55,15 @@ local-first pipeline.
 ## Optional Maven Central Publishing
 
 JitPack is the public installation path documented above. The separate, optional
-Maven Central path publishes from `.github/workflows/android-publish.yml` on `v*`
-tags or manual dispatch. Tag releases skip Central publication when the Android
-artifact inputs have not changed since the previous release. When publication is
-needed, the workflow assembles the library, runs its unit tests, builds a signed
-Central Portal bundle from the Gradle `release` Maven publication, and uploads it
-to Sonatype. Manual dispatch always runs the full validated publication path after
+Maven Central path runs from `.github/workflows/android-publish.yml` on `v*` tags
+or manual dispatch. Tag releases with Android artifact changes always assemble
+the library and run its unit tests. They build and upload a signed Central Portal
+bundle only when all signing and Sonatype credentials are configured; otherwise
+the validated JitPack release remains the supported public artifact. Manual
+dispatch always requires the credentials and runs the full publication path after
 the explicit upload confirmation.
 
-Required repository secrets:
+Repository secrets required only for Central Portal publication:
 
 - `ANDROID_SIGNING_KEY`: ASCII-armored GPG private key for artifact signing.
 - `ANDROID_SIGNING_KEY_PASSWORD`: passphrase for the signing key.

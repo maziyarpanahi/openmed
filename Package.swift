@@ -37,7 +37,10 @@ let package = Package(
                 .product(name: "MLXNN", package: "mlx-swift"),
                 .product(name: "ZIPFoundation", package: "ZIPFoundation"),
             ],
-            path: "swift/OpenMedKit/Sources/OpenMedKit"
+            path: "swift/OpenMedKit/Sources/OpenMedKit",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "OpenMedKitTests",
