@@ -30,6 +30,7 @@ from openmed.mlx.artifact import (
     load_artifact_config,
     read_manifest,
     resolve_tokenizer_reference,
+    resolve_weight_candidates,
 )
 from openmed.processing.advanced_ner import stream_token_classifier
 from openmed.processing.tokenizer_cache import get_tokenizer_with_loader
@@ -1153,7 +1154,8 @@ def _resolve_mlx_model(
     Tries in order:
     1. Pre-converted MLX model from _MLX_MODEL_MAP
     2. Local path if model_name is a directory with config.json or openmed-mlx.json
-    3. On-the-fly conversion from HuggingFace
+    3. Pre-converted Hugging Face repository passed directly by the caller
+    4. On-the-fly conversion from HuggingFace
     """
     from openmed.core.model_registry import OPENMED_MODELS
     from openmed.core.offline import is_local_only, raise_offline_error
@@ -1213,6 +1215,52 @@ def _resolve_mlx_model(
 
         tokenizer_name = local_config.get("_name_or_path") or model_name
         return str(local), tokenizer_name
+
+    # Callers may pass a converted Hub repository directly instead of its
+    # source model ID. Do not send an existing MLX artifact through the PyTorch
+    # conversion path, which expects model.safetensors or pytorch_model.bin.
+    repo_name = full_model_id.rsplit("/", maxsplit=1)[-1]
+    if re.search(r"-mlx(?:-\d+bit)?$", repo_name, flags=re.IGNORECASE):
+        try:
+            download_kwargs: dict[str, Any] = {"cache_dir": cache_dir}
+            if local_only:
+                download_kwargs["local_files_only"] = True
+            mlx_path = Path(
+                _download_preconverted_mlx_model(
+                    full_model_id,
+                    **download_kwargs,
+                )
+            )
+        except Exception as exc:
+            if local_only:
+                raise_offline_error(f"MLX model snapshot lookup for {full_model_id}")
+            raise RuntimeError(
+                f"Unable to download pre-converted MLX model {full_model_id}"
+            ) from exc
+
+        manifest, artifact_config = load_artifact_config(mlx_path)
+        if manifest is None:
+            raise ValueError(
+                f"Pre-converted MLX repository {full_model_id} is missing "
+                f"{MANIFEST_FILENAME}"
+            )
+        if not any(
+            path.is_file()
+            for path in resolve_weight_candidates(
+                mlx_path,
+                config=artifact_config,
+                manifest=manifest,
+            )
+        ):
+            raise ValueError(
+                f"Pre-converted MLX repository {full_model_id} has no supported "
+                "weights file"
+            )
+        return str(mlx_path), resolve_tokenizer_reference(
+            mlx_path,
+            config=artifact_config,
+            manifest=manifest,
+        )
 
     # On-the-fly conversion
     mlx_cache = Path(cache_dir or "~/.cache/openmed/mlx").expanduser()

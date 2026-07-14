@@ -8,14 +8,9 @@ from os import PathLike
 from threading import RLock
 from typing import Any
 
-try:
-    from transformers import AutoTokenizer
-except (ImportError, OSError):
-    AutoTokenizer = None  # type: ignore[assignment]
-
-
 DEFAULT_TOKENIZER_CACHE_SIZE = 32
 
+AutoTokenizer: Any = None
 _TOKENIZER_CACHE: "OrderedDict[tuple[Any, ...], Any]" = OrderedDict()
 _TOKENIZER_CACHE_LOCK = RLock()
 
@@ -73,11 +68,16 @@ def clear_tokenizer_cache() -> None:
 
 
 def _default_tokenizer_loader() -> Callable[..., Any]:
+    global AutoTokenizer
     if AutoTokenizer is None:
-        raise ImportError(
-            "HuggingFace transformers is required to load tokenizers. "
-            "Install with: pip install transformers"
-        )
+        try:
+            from transformers import AutoTokenizer as TransformersAutoTokenizer
+        except (ImportError, OSError) as exc:
+            raise ImportError(
+                "HuggingFace transformers is required to load tokenizers. "
+                "Install with: pip install transformers"
+            ) from exc
+        AutoTokenizer = TransformersAutoTokenizer
     return AutoTokenizer.from_pretrained
 
 

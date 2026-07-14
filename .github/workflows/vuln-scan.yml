@@ -86,6 +86,9 @@ jobs:
 
       - name: Verify active waiver suppresses seeded finding
         run: |
+          jq 'del(.Results[].Vulnerabilities[].FixedVersion)' \
+            tests/fixtures/security/trivy-high-vulnerability.json \
+            > "$RUNNER_TEMP/trivy-high-without-fix.json"
           cat > "$RUNNER_TEMP/cve-allowlist-seeded.yaml" <<'YAML'
           version: 1
           policy:
@@ -97,7 +100,7 @@ jobs:
               reason: Synthetic waiver used only to prove active waivers suppress matching seeded findings.
           YAML
           uv run python scripts/security/vulnerability_scan_gate.py \
-            --report tests/fixtures/security/trivy-high-vulnerability.json \
+            --report "$RUNNER_TEMP/trivy-high-without-fix.json" \
             --allowlist "$RUNNER_TEMP/cve-allowlist-seeded.yaml" \
             --output vulnerability-reports/seeded-allowlisted-summary.json
 

@@ -115,7 +115,7 @@ deployment paths:
 
 ## Apple Silicon & Swift recipes
 
-OpenMed `1.8.1` includes release-critical Apple, Android, browser, and service entry points:
+OpenMed `1.9.0` includes release-critical Apple, Android, browser, and service entry points:
 
 - [MLX Backend](./mlx-backend.md) for Python on Apple Silicon Macs, including Privacy Filter, OpenMed Multilingual Privacy Filter, and experimental GLiNER-family artifacts
 - [OpenMedKit (Swift Package)](./swift-openmedkit.md) for macOS, iOS, and iPadOS apps

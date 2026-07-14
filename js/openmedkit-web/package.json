@@ -1,16 +1,30 @@
 {
-  "name": "@openmed/openmedkit-web",
-  "version": "0.1.0",
-  "description": "Typed web and Node de-identification helpers for OpenMed Transformers.js exports.",
+  "name": "openmed",
+  "version": "1.9.0",
+  "description": "On-device medical AI and de-identification for browsers and Node.js.",
+  "keywords": [
+    "medical-ai",
+    "de-identification",
+    "pii",
+    "ner",
+    "onnx",
+    "webgpu",
+    "healthcare"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
   "files": [
@@ -22,7 +36,8 @@
     "build": "tsup src/index.ts --format esm,cjs --dts --sourcemap --clean --out-dir dist",
     "typecheck": "tsc --noEmit",
     "test": "npm run build && npm run typecheck && npm run test:node",
-    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_ort_web_loader.spec.ts"
+    "test:node": "tsx --test ../../tests/web/test_npm_deidentify.spec.ts ../../tests/web/test_ort_web_loader.spec.ts",
+    "prepack": "npm run build"
   },
   "peerDependencies": {
     "@huggingface/transformers": ">=3.0.0",
@@ -42,8 +57,24 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   },
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
   "engines": {
     "node": ">=20"
   },
-  "license": "Apache-2.0"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maziyarpanahi/openmed.git",
+    "directory": "js/openmedkit-web"
+  },
+  "homepage": "https://github.com/maziyarpanahi/openmed/tree/master/js/openmedkit-web#readme",
+  "bugs": {
+    "url": "https://github.com/maziyarpanahi/openmed/issues"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
 }
