@@ -59,6 +59,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "tl": "fil_PH",
     "da": "da_DK",
     "ro": "ro_RO",
+    "hu": "hu_HU",
 }
 
 
@@ -108,6 +109,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
+    "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
 }
 
 _warned: set[str] = set()
