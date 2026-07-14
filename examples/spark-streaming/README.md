@@ -8,7 +8,7 @@ been written.
 Install the optional Spark dependencies in your application environment:
 
 ```bash
-uv pip install "openmed[spark]"
+uv pip install --upgrade "openmed[spark]"
 ```
 
 ```python

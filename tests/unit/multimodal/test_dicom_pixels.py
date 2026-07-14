@@ -129,6 +129,31 @@ def test_redact_document_runs_header_and_pixel_pass(monkeypatch, tmp_path: Path)
     assert document.metadata["dicom_pixel_redaction"]["residual_report"]["passed"]
 
 
+@pytest.mark.parametrize("in_place", [False, True])
+def test_residual_failure_does_not_write_unsafe_pixel_artifact(
+    monkeypatch,
+    tmp_path: Path,
+    in_place: bool,
+):
+    _generic_model_misses(monkeypatch)
+    source = _write_pixel_dicom(tmp_path / "phi.dcm", _single_frame_pixels())
+    original = source.read_bytes()
+    output = None if in_place else tmp_path / "unsafe-redacted.dcm"
+
+    with pytest.raises(ValueError, match="residual OCR PHI verification failed"):
+        redact_dicom_pixels(
+            source,
+            output_path=output,
+            ocr_engine=_PersistentOcrEngine(_name_words()),
+            model_name="stub",
+            fail_on_residual=True,
+        )
+
+    assert source.read_bytes() == original
+    if output is not None:
+        assert not output.exists()
+
+
 class _BurnedInOcrEngine:
     name = "burned-in-test"
 
@@ -144,6 +169,12 @@ class _BurnedInOcrEngine:
             if array[y0:y1, x0:x1].max(initial=0) > 0:
                 words.append(word)
         return OcrResult(words=tuple(words), metadata={"engine": self.name})
+
+
+class _PersistentOcrEngine(_BurnedInOcrEngine):
+    def recognize(self, image, *, languages=None):
+        del image, languages
+        return OcrResult(words=self._words, metadata={"engine": self.name})
 
 
 def _generic_model_misses(monkeypatch) -> None:
