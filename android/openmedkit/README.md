@@ -4,6 +4,10 @@
 It is a Gradle `com.android.library` module under the top-level `android/`
 build and uses the Android namespace `org.openmed.openmedkit`.
 
+Public applications consume the immutable `v1.9.1` release through JitPack. See the
+[Android installation guide](../README.md#install-openmedkit-190) for the
+repository and dependency declarations.
+
 ## Layout
 
 - `src/main/kotlin/com/openmed/openmedkit/` contains the current public Kotlin API.

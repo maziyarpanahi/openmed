@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from openmed.__about__ import __version__
 from openmed.core import hf_publish
 from openmed.core.hf_publish import publish_artifact
 from openmed.core.manifest_schema import validate_manifest_row
@@ -106,6 +107,49 @@ def test_publish_quantized_artifact_merges_format_without_duplicate(
     assert validate_manifest_row(rows[0], line_number=1) == []
 
 
+def test_publish_android_onnx_artifact_renders_runtime_formats(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact = _write_onnx_artifact(tmp_path)
+    manifest = tmp_path / "models.jsonl"
+    fake_api = FakeApi()
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    result = publish_artifact(
+        artifact_dir=artifact,
+        source_model_id="OpenMed/test-model",
+        format_name="onnx-android",
+        formats=["onnx-android", "onnx-int8", "ort-android"],
+        manifest_path=manifest,
+        api=fake_api,
+        released="2026-07-09",
+        git_sha="abc123",
+        private=True,
+    )
+
+    assert result.repo_id == "OpenMed/test-model-v1-onnx-android"
+    assert result.manifest_row["formats"] == [
+        "onnx-android",
+        "int8",
+        "ort-android",
+    ]
+    assert fake_api.created[0]["private"] is True
+    card = fake_api.uploaded_cards[0]
+    assert "## Included Artifacts" in card
+    assert "`model_int8.onnx`" in card
+    assert "`model_fp16.onnx`" in card
+    assert "`model.ort`" in card
+    assert 'pip install --upgrade "openmed[onnx-runtime]"' in card
+    assert f'implementation("com.github.maziyarpanahi:openmed:v{__version__}")' in card
+    assert "2,000+ medical models" in card
+    assert "openmed[onnx-runtime]>=" not in card
+    assert "master-SNAPSHOT" not in card
+    assert "Reproducibility hash" not in card
+    rows = _manifest_rows(manifest)
+    assert validate_manifest_row(rows[0], line_number=1) == []
+
+
 def test_publish_onnx_rerun_skips_existing_repo_without_upload(
     tmp_path: Path,
     monkeypatch,
@@ -134,6 +178,29 @@ def test_publish_onnx_rerun_skips_existing_repo_without_upload(
     ]
     assert fake_api.created == []
     assert fake_api.uploaded == []
+
+
+def test_publish_overwrite_existing_repo_avoids_creation_endpoint(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    artifact = _write_onnx_artifact(tmp_path)
+    fake_api = FakeApi(exists=True)
+    monkeypatch.setenv("HF_WRITE_TOKEN", "secret-token")
+
+    result = publish_artifact(
+        artifact_dir=artifact,
+        source_model_id="OpenMed/test-model",
+        format_name="onnx",
+        api=fake_api,
+        skip_existing=False,
+        released="2026-06-27",
+        git_sha="abc123",
+    )
+
+    assert result.skipped is False
+    assert fake_api.created == []
+    assert len(fake_api.uploaded) == 1
 
 
 def test_publish_token_never_appears_in_logs_or_cli_output(

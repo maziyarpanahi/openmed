@@ -26,6 +26,7 @@ from openmed.core.pii_i18n import (
     validate_italian_codice_fiscale,
     validate_korean_rrn,
     validate_portuguese_cpf,
+    validate_romanian_cnp,
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
@@ -48,6 +49,7 @@ SUPPORTED_LOCALE_PHI_LANGUAGES: Final[tuple[str, ...]] = (
     "id",
     "th",
     "ko",
+    "ro",
 )
 
 LOCALE_PHI_LABELS: Final[tuple[str, ...]] = (
@@ -225,6 +227,15 @@ _TEMPLATES: Final[Mapping[str, tuple[str, ...]]] = {
         ". 추적 관찰일 ",
         ".",
     ),
+    "ro": (
+        "Nota clinica: pacient ",
+        " nascut la ",
+        ". CNP pacient ",
+        ". Telefon ",
+        ". Adresa ",
+        ". Control la ",
+        ".",
+    ),
 }
 
 _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
@@ -242,6 +253,7 @@ _NATIONAL_ID_VALIDATORS: Final[Mapping[str, Callable[[str], bool]]] = {
     "id": validate_indonesian_nik,
     "th": validate_thai_national_id,
     "ko": validate_korean_rrn,
+    "ro": validate_romanian_cnp,
 }
 
 _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
@@ -259,6 +271,7 @@ _NATIONAL_ID_VALIDATOR_NAMES: Final[Mapping[str, str]] = {
     "id": "pii_i18n.validate_indonesian_nik",
     "th": "pii_i18n.validate_thai_national_id",
     "ko": "pii_i18n.validate_korean_rrn",
+    "ro": "pii_i18n.validate_romanian_cnp",
 }
 
 

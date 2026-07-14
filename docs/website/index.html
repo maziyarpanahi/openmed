@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenMed · On-Device Clinical AI for NER and PHI De-Identification</title>
     <meta name="description"
-        content="Open-source clinical AI that runs 100% on-device. Extract biomedical entities and de-identify 55+ PHI types across 16 PII languages, offline, from a phone to a GPU server. 1,500+ models, Apache-2.0." />
+        content="Open-source clinical AI that runs 100% on-device. Extract biomedical entities and de-identify 55+ PHI types across 17 PII languages, offline, from a phone to a GPU server. 2,000+ models, Apache-2.0." />
     <meta name="keywords"
         content="OpenMed, state-of-the-art LLMs for healthcare, healthcare AI, clinical AI models, biomedical NER, zero-shot medical AI, clinical LLMs, medical language models, healthcare machine learning, clinical LLM workflows, medical AI, biomedical AI, SOTA healthcare models, Maziyar Panahi, Hugging Face, Apache-2.0, SageMaker, clinical decision support, medical text analysis" />
     <meta name="author" content="Maziyar Panahi" />
@@ -20,7 +20,7 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="OpenMed · On-Device Clinical AI" />
     <meta property="og:description"
-        content="Open-source clinical AI that runs 100% on-device: extract entities and de-identify 55+ PHI types offline, from a phone to a GPU server. 1,500+ models, 16 PII languages, Apache-2.0." />
+        content="Open-source clinical AI that runs 100% on-device: extract entities and de-identify 55+ PHI types offline, from a phone to a GPU server. 2,000+ models, 17 PII languages, Apache-2.0." />
     <meta property="og:url" content="https://openmed.life/" />
     <meta property="og:site_name" content="OpenMed" />
     <meta property="og:image" content="https://openmed.life/og.png?v=20260705" />
@@ -34,7 +34,7 @@
     <meta name="twitter:creator" content="@MaziyarPanahi" />
     <meta name="twitter:title" content="OpenMed · On-Device Clinical AI" />
     <meta name="twitter:description"
-        content="On-device clinical AI · biomedical NER · de-identify 55+ PHI types offline · 16 PII languages · runs from a phone to a GPU server · Apache-2.0." />
+        content="On-device clinical AI · biomedical NER · de-identify 55+ PHI types offline · 17 PII languages · runs from a phone to a GPU server · Apache-2.0." />
     <meta name="twitter:image" content="https://openmed.life/og.png?v=20260705" />
     <meta name="twitter:image:alt" content="OpenMed · on-device clinical AI. Your data, your model, your hardware." />
 
@@ -61,7 +61,7 @@
         "operatingSystem": "macOS, iOS, iPadOS, Cloud, On-Premises",
         "applicationCategory": "AIApplication",
         "description": "OpenMed provides open-source healthcare language models for biomedical named-entity recognition and PHI de-identification that run entirely on-device: on phones, CPUs, Apple Silicon, NVIDIA GPUs, in the browser, and on-premises, so clinical data never leaves your control.",
-        "softwareVersion": "1.8.1",
+        "softwareVersion": "1.9.1",
         "url": "https://openmed.life/",
         "provider": { "@type": "Organization", "name": "OpenMed", "url": "https://openmed.life/" },
         "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" },
@@ -75,13 +75,13 @@
         "@type": "FAQPage",
         "mainEntity": [
             { "@type": "Question", "name": "What is OpenMed, exactly?",
-              "acceptedAnswer": { "@type": "Answer", "text": "An open-source medical LLM toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 16 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, te, th, and tr. These are the model-backed PII language allow-list. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure." } },
+              "acceptedAnswer": { "@type": "Answer", "text": "An open-source medical LLM toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr. These are the model-backed PII language allow-list. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure." } },
             { "@type": "Question", "name": "Are these generative LLMs or something else?",
               "acceptedAnswer": { "@type": "Answer", "text": "Encoder transformers (BERT, ELECTRA, DeBERTa families), not generative chat models. They do extraction and classification, pulling structured entities out of unstructured clinical text, and stay small enough to run on a laptop or a phone. The reference paper reports new state-of-the-art on 10 of 12 biomedical NER benchmarks. Complementary to the larger generative medical LLM category, not a replacement." } },
             { "@type": "Question", "name": "Where does my data go when I use OpenMed?",
               "acceptedAnswer": { "@type": "Answer", "text": "Nowhere you don't send it. You download the models once (Hugging Face or a private mirror) and inference runs wherever you run the Python process, the Docker container, or the Swift app: your laptop, your VPC, an on-prem server, or air-gapped hardware. No telemetry, no license check-in, no outbound calls at runtime. PHI stays on your side of the fence by default." } },
             { "@type": "Question", "name": "Does OpenMed support HIPAA-aligned workflows?",
-              "acceptedAnswer": { "@type": "Answer", "text": "The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 16 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, te, th, and tr, the model-backed PII language allow-list, with locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls; the legal compliance boundary lives in your deployment." } },
+              "acceptedAnswer": { "@type": "Answer", "text": "The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr, the model-backed PII language allow-list, with locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, CNP, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls; the legal compliance boundary lives in your deployment." } },
             { "@type": "Question", "name": "Can I fine-tune OpenMed models for my own vocabulary?",
               "acceptedAnswer": { "@type": "Answer", "text": "Yes. Models are published on Hugging Face under permissive licensing with full training recipes. The reference approach combines lightweight domain-adaptive pre-training on a 350k-passage biomedical corpus with parameter-efficient LoRA fine-tuning, updating less than 1.5% of model parameters and completing in under 12 hours on a single GPU (<1.2 kg CO2e). Tokenizer assets and starter notebooks are in the openmed-starter repo." } },
             { "@type": "Question", "name": "Do I need OpenMed Agent to use OpenMed?",
@@ -104,7 +104,7 @@
                 <img class="logo-mark logo-mark--onlight" src="brand/openmed-mark.svg" width="32" height="32" alt="" aria-hidden="true">
                 <img class="logo-mark logo-mark--ondark" src="brand/openmed-mark-light.svg" width="32" height="32" alt="" aria-hidden="true">
                 <span class="wordmark">OpenMed</span>
-                <span class="version-tag">v1.8.1</span>
+                <span class="version-tag">v1.9.1</span>
             </a>
 
             <nav class="nav-menu" id="primaryNav" aria-label="Primary">
@@ -153,12 +153,12 @@
     <section id="home" class="hero bg-grid" data-screen>
         <div class="container hero-grid">
             <div>
-                <div class="eyebrow">OpenMed 1.8.1 · On-Device Clinical AI</div>
+                <div class="eyebrow">OpenMed 1.9.1 · On-Device Clinical AI</div>
                 <h1 class="display-xl hero-title">
                     Your Data. Your Model. Your <span class="serif-italic">Hardware</span>.
                 </h1>
                 <p class="body-lg hero-desc">
-                    OpenMed reads clinical text and removes 55+ PHI types on the hardware you control, so <span style="background:var(--highlight);color:#0E1116;padding:0 .2em;border-radius:3px">patient data never leaves the device</span>. The same open models run from a phone to a GPU server, fully offline. 1,500+ models, 16 PII languages, and state of the art on 10 of 12 biomedical NER benchmarks.
+                    OpenMed reads clinical text and removes 55+ PHI types on the hardware you control, so <span style="background:var(--highlight);color:#0E1116;padding:0 .2em;border-radius:3px">patient data never leaves the device</span>. The same open models run from a phone to a GPU server, fully offline. 2,000+ models, 17 PII languages, and state of the art on 10 of 12 biomedical NER benchmarks.
                 </p>
 
                 <div class="hero-ctas">
@@ -240,7 +240,7 @@
                     </div>
                 </div>
                 <div class="hero-caption">
-                    <span>Live PHI detection · 16 model-backed languages</span>
+                    <span>Live PHI detection · 17 model-backed languages</span>
                     <span class="play">▶ watch</span>
                 </div>
             </div>
@@ -271,14 +271,14 @@
                     <div class="statband-label">OpenMed installs</div>
                 </div>
                 <div class="statband-cell">
-                    <div class="statband-num">1,500+</div>
+                    <div class="statband-num">2,000+</div>
                     <div class="statband-label">Open models: the largest open medical-AI collection</div>
                 </div>
             </div>
             <div class="statband-grid statband-grid--secondary">
                 <div class="statband-cell">
-                    <div class="statband-num statband-num--sm">16</div>
-                    <div class="statband-label">Model-backed PII languages: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, te, th, tr</div>
+                    <div class="statband-num statband-num--sm">17</div>
+                    <div class="statband-label">Model-backed PII languages: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, tr</div>
                 </div>
                 <div class="statband-cell">
                     <div class="statband-num statband-num--sm">&lt;1.2kg</div>
@@ -326,7 +326,7 @@
                             </span>
                             <div>
                                 <code class="code-inline">extract_pii / deidentify</code>
-                                <div class="body-sm" style="margin-top:4px">Language-aware across 16 model-backed languages</div>
+                                <div class="body-sm" style="margin-top:4px">Language-aware across 17 model-backed languages</div>
                             </div>
                         </li>
                         <li>
@@ -364,7 +364,7 @@
                             <span class="code-dot yellow"></span>
                             <span class="code-dot green"></span>
                         </div>
-                        <span class="code-title">openmed 1.8.1 · quickstart</span>
+                        <span class="code-title">openmed 1.9.1 · quickstart</span>
                         <button class="code-copy" type="button">copy</button>
                     </div>
                     <div class="code-install">
@@ -455,7 +455,7 @@
                     Clinical text de-identification, built for <span class="serif-italic">HIPAA &amp; GDPR</span>.
                 </h2>
                 <p class="body-lg" style="max-width:62ch;margin-top:16px">
-                    Language-aware PII models across 16 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, te, th, and tr, plus validator-backed national-ID coverage for additional ID-only locales. These are the model-backed PII language allow-list. Process data locally, so your PHI never leaves your environment.
+                    Language-aware PII models across 17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr, plus validator-backed national-ID coverage for additional ID-only locales. These are the model-backed PII language allow-list. Process data locally, so your PHI never leaves your environment.
                 </p>
             </div>
 
@@ -545,11 +545,11 @@
                         </svg>
                     </div>
                     <h3 class="heading-sm">HIPAA Safe Harbor ready</h3>
-                    <p class="body-sm">Detects all 18 HIPAA Safe Harbor identifiers, part of a wider 55+ PII entity catalog, across 16 model-backed PII language codes, with additional validator-backed national-ID coverage for ID-only locales.</p>
+                    <p class="body-sm">Detects all 18 HIPAA Safe Harbor identifiers, part of a wider 55+ PII entity catalog, across 17 model-backed PII language codes, with additional validator-backed national-ID coverage for ID-only locales.</p>
                     <div class="tag-row">
                         <span class="tag">18 Safe Harbor</span>
                         <span class="tag">55+ entity types</span>
-                        <span class="tag">16 model-backed languages</span>
+                        <span class="tag">17 model-backed languages</span>
                     </div>
                 </div>
             </div>
@@ -571,7 +571,7 @@
                         </p>
                     </div>
                     <a class="btn btn-outline" href="https://huggingface.co/OpenMed" target="_blank" rel="noopener">
-                        Browse 1,500+ on HF
+                        Browse 2,000+ on HF
                         <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <line x1="7" y1="17" x2="17" y2="7" />
                             <polyline points="7 7 17 7 17 17" />
@@ -866,7 +866,7 @@
                         <div class="faq-plus" aria-hidden="true">+</div>
                     </div>
                     <div class="faq-body">
-                        <p>An open-source medical NLP toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 16 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, te, th, and tr. These are the model-backed PII language allow-list. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure.</p>
+                        <p>An open-source medical NLP toolkit. Specialized transformer models fine-tuned for biomedical named-entity recognition: diseases, drugs, genes, anatomy, chemicals, oncology, plus PII extraction and de-identification across 17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr. These are the model-backed PII language allow-list. Ships as a Python package, Dockerized FastAPI and gRPC services, Swift and Kotlin OpenMedKit packages, React Native bridge, and browser runtime. Apache-2.0, no vendor lock-in, runs on your infrastructure.</p>
                     </div>
                 </div>
                 <div class="faq-item">
@@ -893,7 +893,7 @@
                         <div class="faq-plus" aria-hidden="true">+</div>
                     </div>
                     <div class="faq-body">
-                        <p>The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 16 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, te, th, and tr, the model-backed PII language allow-list, with locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls (on-device processing, configurable thresholds, multiple redaction methods); the legal compliance boundary lives in your deployment.</p>
+                        <p>The PII catalog covers all 18 HIPAA Safe Harbor identifiers across 17 supported PII language codes: ar, de, en, es, fr, he, hi, id, it, ja, ko, nl, pt, ro, te, th, and tr, the model-backed PII language allow-list, with locale-aware validators for SSN, NIR, Steuer-ID, Codice Fiscale, DNI, BSN, CPF/CNPJ, RRN, CNP, Luhn checks, and additional ID-only national-ID validators. Models are trained on de-identified, ethically sourced corpora. OpenMed provides the technical controls (on-device processing, configurable thresholds, multiple redaction methods); the legal compliance boundary lives in your deployment.</p>
                     </div>
                 </div>
                 <div class="faq-item">

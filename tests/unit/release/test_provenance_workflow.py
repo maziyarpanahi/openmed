@@ -54,6 +54,8 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
     jobs = workflow["jobs"]
     provenance = jobs["provenance"]
     publish = jobs["publish"]
+    npm_verify = jobs["npm-verify"]
+    npm_publish = jobs["npm-publish"]
 
     assert provenance["uses"] == "./.github/workflows/provenance.yml"
     assert provenance["permissions"] == {
@@ -61,7 +63,14 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
         "id-token": "write",
         "attestations": "write",
     }
-    assert publish["needs"] == "provenance"
+    assert publish["needs"] == ["provenance", "npm-verify"]
+    assert npm_publish["needs"] == ["provenance", "npm-verify"]
+    assert npm_publish["permissions"]["id-token"] == "write"
+    assert "npm test" in str(npm_verify)
+    assert "npm run build" in str(npm_publish)
+    assert "npm publish --ignore-scripts --access public --provenance" in str(
+        npm_publish
+    )
     assert "pypa/gh-action-pypi-publish@v1.14.0" in PUBLISH_WORKFLOW.read_text(
         encoding="utf-8"
     )
