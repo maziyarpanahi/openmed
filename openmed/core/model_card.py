@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+from openmed.__about__ import __version__
+
 DEFAULT_ARXIV = "2508.01630"
 
 _MODEL_LANGUAGES = {
@@ -365,11 +367,11 @@ def _render_android_onnx_model_card(
             "}",
             "```",
             "",
-            "Use the latest OpenMed build from the `master` branch:",
+            f"Use the stable OpenMed `{__version__}` release:",
             "",
             "```kotlin",
             "dependencies {",
-            '    implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")',
+            f'    implementation("com.github.maziyarpanahi:openmed:v{__version__}")',
             "}",
             "```",
             "",

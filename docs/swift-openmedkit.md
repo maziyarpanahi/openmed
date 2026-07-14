@@ -55,7 +55,7 @@ iOS Simulator is **not** a Swift MLX validation target.
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", branch: "master"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.0"),
 ]
 ```
 

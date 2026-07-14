@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from openmed.__about__ import __version__
 from openmed.core import hf_publish
 from openmed.core.hf_publish import publish_artifact
 from openmed.core.manifest_schema import validate_manifest_row
@@ -140,10 +141,10 @@ def test_publish_android_onnx_artifact_renders_runtime_formats(
     assert "`model_fp16.onnx`" in card
     assert "`model.ort`" in card
     assert 'pip install --upgrade "openmed[onnx-runtime]"' in card
-    assert 'implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")' in card
+    assert f'implementation("com.github.maziyarpanahi:openmed:v{__version__}")' in card
     assert "2,000+ medical models" in card
     assert "openmed[onnx-runtime]>=" not in card
-    assert "com.github.maziyarpanahi:openmed:v" not in card
+    assert "master-SNAPSHOT" not in card
     assert "Reproducibility hash" not in card
     rows = _manifest_rows(manifest)
     assert validate_manifest_row(rows[0], line_number=1) == []

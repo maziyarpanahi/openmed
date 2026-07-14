@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from openmed.__about__ import __version__
 from openmed.core.hf_publish import (
     DEFAULT_MODEL_CARD_COMMIT_MESSAGE,
     publish_model_card,
@@ -172,9 +173,9 @@ def test_android_onnx_model_card_is_personalized_and_cross_platform():
     assert "const model = await loadOnnxModel(repo);" in card
     assert "## OpenMedKit for Android" in card
     assert 'url = uri("https://jitpack.io")' in card
-    assert 'implementation("com.github.maziyarpanahi:openmed:master-SNAPSHOT")' in card
+    assert f'implementation("com.github.maziyarpanahi:openmed:v{__version__}")' in card
     assert "2,000+ medical models" in card
-    assert "com.github.maziyarpanahi:openmed:v" not in card
+    assert "master-SNAPSHOT" not in card
     assert "OpenMedKit.fromDirectory(modelDirectory)" in card
     assert "suspend fun analyzeModel()" in card
     assert "# OpenMed PII Detection 44M" in card
