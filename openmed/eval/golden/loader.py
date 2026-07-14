@@ -43,6 +43,7 @@ _NON_DEID_FIXTURE_NAMES = frozenset(
         "grounding_crosslingual.jsonl",
         "relation_assertion.jsonl",
         "relation_gold.jsonl",
+        "surrogate_multilingual.jsonl",
     }
 )
 
@@ -267,6 +268,21 @@ def fixture_languages(
     }
 
 
+def non_latin_golden_fixtures(
+    fixtures: list[GoldenFixture] | None = None,
+) -> list[GoldenFixture]:
+    """Return synthetic golden fixtures containing non-Latin PHI spans."""
+    source = fixtures if fixtures is not None else load_golden_fixtures()
+    return sorted(
+        (
+            fixture
+            for fixture in source
+            if any(_has_non_latin_alpha(span.text) for span in fixture.gold_spans)
+        ),
+        key=lambda fixture: fixture.fixture_id,
+    )
+
+
 def _validate_raw_span_labels(raw_spans: list[Any], language: str) -> None:
     for raw_span in raw_spans:
         if not isinstance(raw_span, Mapping):
@@ -425,6 +441,10 @@ def _is_dua_source_marker(value: str) -> bool:
     return bool(parts & markers)
 
 
+def _has_non_latin_alpha(value: str) -> bool:
+    return any(ord(char) > 127 and char.isalpha() for char in value)
+
+
 def _plain_mapping(value: Mapping[str, Any]) -> dict[str, Any]:
     return {str(key): _plain(value[key]) for key in sorted(value, key=str)}
 
@@ -450,4 +470,5 @@ __all__ = [
     "list_fixture_paths",
     "load_benchmark_fixtures",
     "load_golden_fixtures",
+    "non_latin_golden_fixtures",
 ]

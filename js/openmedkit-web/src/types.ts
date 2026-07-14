@@ -168,6 +168,12 @@ export interface LoadModelOptions {
   pipelineOptions?: Record<string, unknown>;
 }
 
+export type OpenMedOnnxVariant = "int8" | "fp32" | "fp16";
+
+export interface LoadOnnxModelOptions extends LoadModelOptions {
+  variant?: OpenMedOnnxVariant;
+}
+
 export interface TransformersRuntime {
   pipeline: (
     task: "token-classification",

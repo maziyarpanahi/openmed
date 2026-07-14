@@ -158,7 +158,7 @@ Explore zero-shot learning:
 
 ```bash
 # Install OpenMed
-uv pip install "openmed[hf]"
+uv pip install --upgrade "openmed[hf]"
 
 # Install Jupyter
 uv pip install jupyter

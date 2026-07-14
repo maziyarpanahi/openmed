@@ -8,6 +8,7 @@ publish the package to PyPI or GitHub Pages.
 - `make help` prints a list of scripted tasks (build, publish, release, docs, etc.).
 - `make format` applies the canonical Ruff import ordering and formatting.
 - `make lint` and `make format-check` run the same style gates used by CI.
+- `make type-check` runs the same scoped, pinned mypy gate used by CI.
 - `make format-swift` and `make lint-swift` apply the canonical Swift format checks for OpenMedKit.
 - `pre-commit install` enables the local hooks that auto-format staged Python files before commit.
 - `make docs-serve` starts the MkDocs preview with hot reload at `http://127.0.0.1:8008`.
@@ -25,11 +26,12 @@ or editor-specific formatters over the repository. Before opening a pull request
 uv pip install -e ".[dev]"
 make format
 make lint
+make type-check
 make format-check
 ```
 
-CI enforces `ruff check .` and `ruff format --check .`; pull requests should not include unrelated formatting-only
-changes outside the files needed for the feature or fix.
+CI enforces `ruff check .`, `ruff format --check .`, and the scoped mypy configuration in `pyproject.toml`; pull
+requests should not include unrelated formatting-only changes outside the files needed for the feature or fix.
 
 Swift package code uses Apple `swift-format` with the checked-in `.swift-format` configuration. For changes under
 `swift/OpenMedKit`, run:
@@ -38,6 +40,28 @@ Swift package code uses Apple `swift-format` with the checked-in `.swift-format`
 make format-swift
 make lint-swift
 ```
+
+## Public API docstrings and export inventory
+
+Every function and class exported from `openmed.__all__` must carry a meaningful
+docstring. This keeps runtime help, IDE inspection, and explicitly configured
+mkdocstrings entries useful without imposing coverage requirements on private or
+internal modules. Data exports cannot carry symbol-specific instance docstrings,
+so the gate resolves them into an explicit inventory instead of scoring them as
+functions or classes.
+
+```bash
+python scripts/check_public_api_docstrings.py            # prints coverage + offenders
+pytest tests/unit/test_public_api_docstrings.py -q       # CI gate
+```
+
+The standalone checker is stdlib-only (`ast` parsing, no runtime import). The
+pytest gate adds a separate runtime parity check: it imports `openmed`, requires
+the live `__all__` order to match the static inventory, verifies meaningful
+docstrings on exported functions/classes, and checks the exact allow-list of data
+exports without relying on generic built-in instance documentation. Function and
+class coverage must remain at 100%; add a docstring in the same pull request as a
+new public callable or class.
 
 ## Release outline
 

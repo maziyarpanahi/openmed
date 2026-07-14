@@ -1,15 +1,19 @@
-# PyPI Publishing
+# Registry Publishing
 
 OpenMed publishes the `openmed` wheel and source distribution from the
-tag-driven `.github/workflows/publish.yml` workflow. The current production
-path uses the project-scoped `PYPI_API_TOKEN` GitHub secret for upload, after a
-separate provenance job builds, checks, attests, and verifies the distributions.
+tag-driven `.github/workflows/publish.yml` workflow. The same workflow validates
+and publishes the `openmed` npm package for browsers and Node.js. Both packages
+must match the release tag before either registry upload begins.
+
+The current PyPI path uses the project-scoped `PYPI_API_TOKEN` GitHub secret.
+The npm path uses the short-lived `NPM_ACCESS_TOKEN` secret from the GitHub
+`npm` environment and publishes with Sigstore provenance.
 
 PyPI Trusted Publishing is the preferred future path, but it must not be used
 until the PyPI `openmed` project has a trusted publisher that exactly matches
 this repository, workflow file, and GitHub environment.
 
-## Workflow contract
+## PyPI workflow contract
 
 The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 
@@ -32,6 +36,32 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
 
 Do not add a second PyPI publishing workflow. Do not add `hatch publish` or
 Twine upload commands back to release CI.
+
+## npm workflow contract
+
+The JavaScript package source lives in `js/openmedkit-web`, but it is published
+under the existing unscoped npm name `openmed`.
+
+- `js/openmedkit-web/package.json`, `openmed/__about__.py`, and the `v*` tag must
+  contain the same semantic version.
+- The `npm-verify` job uses Node.js 24, installs only from the committed lockfile,
+  rejects any npm audit finding, builds both ESM and CommonJS distributions,
+  typechecks the public API, runs the Web runtime tests, and inspects the package
+  tarball.
+- PyPI and npm publication both depend on the Python provenance job and the npm
+  verification job.
+- The `npm-publish` job attaches the `npm` GitHub environment, grants
+  `contents: read` and `id-token: write`, and reads only the environment-scoped
+  `NPM_ACCESS_TOKEN` secret.
+- The publish job builds before exposing the token, then
+  `npm publish --ignore-scripts --access public --provenance` uploads the package
+  without running lifecycle hooks in the credential-bearing step. Provenance
+  links the package to the tag workflow and source commit.
+- The release SBOM job starts only after both PyPI and npm publication succeed.
+
+Do not publish `@openmed/openmedkit-web`; the public package name is `openmed`.
+Do not add another npm publishing workflow or place a plaintext npm token in an
+`.npmrc` file.
 
 ## v1.8.0 Incident Lessons
 
@@ -110,3 +140,10 @@ succeeds through the tokenless path, retire the token path:
 - Do not recreate a broad PyPI token for CI. If an emergency manual upload is
   ever required, create a short-lived project-scoped token outside the normal CI
   path and revoke it immediately after use.
+
+Keep `NPM_ACCESS_TOKEN` scoped to the npm `openmed` package with publish access,
+store it only in the GitHub `npm` environment, and rotate it before its 90-day
+expiry. The package already exists, so npm Trusted Publishing can replace the
+token without a bootstrap release. When migrating, configure npm for owner
+`maziyarpanahi`, repository `openmed`, workflow `publish.yml`, and environment
+`npm`; then remove `NODE_AUTH_TOKEN` from the publish step and delete the secret.
