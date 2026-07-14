@@ -57,7 +57,15 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
+    "pl",
+    "lv",
+    "sk",
+    "ms",
+    "tl",
+    "da",
+    "hu",
+}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -904,6 +912,37 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+_HUNGARIAN_TAJ_RE = re.compile(
+    r"^(?:\d{9}|\d{3}(?P<separator>[ -])\d{3}(?P=separator)\d{3})$"
+)
+
+
+def validate_hungarian_taj(text: str) -> bool:
+    """Validate a Hungarian TAJ social-security identifier.
+
+    TAJ contains eight serial digits followed by a CDV check digit. Digits in
+    odd positions are weighted by 3, digits in even positions by 7, and the
+    sum modulo 10 must equal the ninth digit. Plain nine-digit values and the
+    consistently grouped ``NNN NNN NNN`` / ``NNN-NNN-NNN`` forms are accepted.
+
+    Args:
+        text: Candidate TAJ value.
+
+    Returns:
+        ``True`` when the shape and checksum are valid.
+    """
+    candidate = text.strip()
+    if _HUNGARIAN_TAJ_RE.fullmatch(candidate) is None:
+        return False
+
+    digits = re.sub(r"[ -]", "", candidate)
+    weights = (3, 7, 3, 7, 3, 7, 3, 7)
+    check_digit = (
+        sum(weight * int(digit) for weight, digit in zip(weights, digits[:8])) % 10
+    )
+    return int(digits[8]) == check_digit
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -3482,6 +3521,103 @@ _TAGALOG_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+_HUNGARIAN_MONTH_PATTERN = (
+    r"január|február|március|április|május|június|július|"
+    r"augusztus|szeptember|október|november|december"
+)
+
+_HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{4}\.\s?\d{1,2}\.\s?\d{1,2}\.(?!\w)",
+        "date",
+        priority=9,
+        base_score=0.65,
+        context_words=[
+            "dátum",
+            "születési dátum",
+            "született",
+            "felvétel",
+            "elbocsátás",
+            "vizsgálat",
+        ],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        rf"\b\d{{4}}\.\s?(?:{_HUNGARIAN_MONTH_PATTERN})\s+\d{{1,2}}\.(?!\w)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "dátum",
+            "születési dátum",
+            "született",
+            "felvétel",
+            "elbocsátás",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+36|06)[\s.-]?(?:1|20|30|31|50|70)"
+        r"[\s/.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.6,
+        context_words=[
+            "telefon",
+            "telefonszám",
+            "mobil",
+            "elérhetőség",
+            "hívható",
+            "kapcsolat",
+        ],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:\d{9}|\d{3}(?:[ -]\d{3}){2})(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "taj",
+            "taj-szám",
+            "taj szám",
+            "társadalombiztosítási azonosító jel",
+        ],
+        context_boost=0.45,
+        validator=validate_hungarian_taj,
+    ),
+    PIIPattern(
+        r"\b[A-ZÁÉÍÓÖŐÚÜŰ][\w.'-]+(?:\s+[A-ZÁÉÍÓÖŐÚÜŰ][\w.'-]+){0,3}"
+        r"\s+(?:utca|út|tér|köz|körút|sétány|fasor|rakpart)"
+        r"\s+\d{1,4}[A-Za-z]?(?:/\d+)?\.?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["cím", "lakcím", "lakhely", "utca", "út", "tér"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{4}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.2,
+        context_words=[
+            "irányítószám",
+            "postai irányítószám",
+            "lakcím",
+            "cím",
+        ],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _DANISH_MONTH_PATTERN = (
     r"januar|februar|marts|april|maj|juni|juli|august|september|"
     r"oktober|november|december"
@@ -3842,6 +3978,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
+    "hu": _HUNGARIAN_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
 }
 
@@ -4222,6 +4359,22 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Manila", "Quezon City", "Cebu City"],
         "ZIPCODE": ["1000", "1100", "6000"],
+    },
+    "hu": {
+        # Hungarian personal names conventionally place the family name first.
+        "NAME": ["Nagy Anna", "Kovács Péter", "Szabó Eszter", "Tóth Gábor"],
+        "FIRST_NAME": ["Anna", "Péter", "Eszter", "Gábor"],
+        "LAST_NAME": ["Nagy", "Kovács", "Szabó", "Tóth"],
+        "EMAIL": ["beteg@example.hu", "kapcsolat@example.org"],
+        "PHONE": ["+36 30 123 4567", "06 20 987 6543"],
+        "ID_NUM": ["123 456 788", "987654322"],
+        "STREET_ADDRESS": ["Kossuth Lajos utca 12", "Andrássy út 45"],
+        "URL_PERSONAL": ["https://example.hu"],
+        "USERNAME": ["beteg123", "felhasznalo456"],
+        "DATE": ["1985. 08. 17.", "2000. január 1."],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Budapest", "Szeged", "Debrecen"],
+        "ZIPCODE": ["1051", "6720", "4024"],
     },
     "da": {
         "NAME": ["Anna Nielsen", "Peter Jensen", "Mette Hansen", "Lars Andersen"],

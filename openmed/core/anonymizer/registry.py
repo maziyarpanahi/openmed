@@ -179,6 +179,7 @@ _LOCALE_ID_METHODS = {
     "da_DK": "danish_cpr",
     "pl_PL": "pesel",
     "lv_LV": "personas_kods",
+    "hu_HU": "hungarian_taj",
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
     "sk_SK": "rodne_cislo",

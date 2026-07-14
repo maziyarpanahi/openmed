@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a Hungarian (`hu`) PII language pack with checksum-valid TAJ
+  detection and surrogates, locale-specific dates, phones, addresses, and a
+  fully synthetic clinical golden fixture (#816).
+
 ## [1.9.0] - 2026-07-14
 
 This release adds one model-repository contract for ONNX token-classification

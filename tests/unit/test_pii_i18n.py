@@ -1,6 +1,7 @@
 """Tests for multilingual PII detection support (pii_i18n module)."""
 
 import json
+import random
 import re
 from pathlib import Path
 
@@ -8,7 +9,10 @@ import pytest
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
-from openmed.core.anonymizer.providers.clinical_ids import generate_philhealth_pin
+from openmed.core.anonymizer.providers.clinical_ids import (
+    generate_hungarian_taj,
+    generate_philhealth_pin,
+)
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -27,6 +31,7 @@ from openmed.core.pii_i18n import (
     validate_dutch_bsn,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
@@ -74,7 +79,15 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "lv", "sk", "ms", "tl", "da"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {
+            "pl",
+            "lv",
+            "sk",
+            "ms",
+            "tl",
+            "da",
+            "hu",
+        }
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -2396,6 +2409,104 @@ def test_latvian_i18n_golden_fixture_offsets():
     assert actual == expected
     for label, start, end, value in actual:
         assert text[start:end] == value, label
+
+
+class TestHungarianLocaleAndFixture:
+    """Tests for Hungarian PII detection, TAJ, locale, and fixture wiring."""
+
+    @pytest.mark.parametrize(
+        "value",
+        ["123456788", "123 456 788", "123-456-788", "987654322"],
+    )
+    def test_validate_taj_accepts_checksum_valid_values(self, value):
+        assert validate_hungarian_taj(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "123456789",
+            "123 456 789",
+            "123-456 788",
+            "123.456.788",
+            "12345678",
+            "1234567880",
+            "abcdefghi",
+        ],
+    )
+    def test_validate_taj_rejects_bad_checksum_or_shape(self, value):
+        assert not validate_hungarian_taj(value)
+
+    def test_generated_taj_round_trips_validator(self):
+        for seed in range(50):
+            value = generate_hungarian_taj(rng=random.Random(seed))
+            assert validate_hungarian_taj(value), (seed, value)
+
+    def test_locale_and_anonymizer_surrogate_round_trip(self):
+        assert LANG_TO_LOCALE["hu"] == "hu_HU"
+        anonymizer = Anonymizer(lang="hu", consistent=True, seed=42)
+
+        surrogate = anonymizer.surrogate("123 456 788", "national_id")
+
+        assert validate_hungarian_taj(surrogate)
+
+    def test_hungarian_patterns_cover_synthetic_clinical_sample(self):
+        text = (
+            "Beteg: Nagy Anna. Születési dátum: 1985. 08. 17., "
+            "telefon: +36 30 123 4567, TAJ-szám: 123 456 788, "
+            "lakcím: 1051 Budapest, Kossuth Lajos utca 12."
+        )
+        expected = {
+            ("date", 35, 48, "1985. 08. 17."),
+            ("phone_number", 59, 74, "+36 30 123 4567"),
+            ("national_id", 86, 97, "123 456 788"),
+            ("postcode", 107, 111, "1051"),
+            ("street_address", 122, 143, "Kossuth Lajos utca 12"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("hu"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_i18n_golden_fixture_is_synthetic_and_offset_safe(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/hu.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "hu"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+        assert row["metadata"]["identifier_type"] == "taj"
+
+        text = row["text"]
+        expected = {
+            ("PERSON", 7, 16, "Nagy Anna"),
+            ("DATE", 35, 48, "1985. 08. 17."),
+            ("PHONE", 59, 74, "+36 30 123 4567"),
+            ("ID_NUM", 86, 97, "123 456 788"),
+            ("ZIPCODE", 107, 111, "1051"),
+            ("STREET_ADDRESS", 122, 143, "Kossuth Lajos utca 12"),
+        }
+        actual = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        assert actual == expected
+        for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+        expected_output = row["metadata"]["expected_output"]["text"]
+        for _label, _start, _end, value in actual:
+            assert value not in expected_output
 
 
 class TestSlovakLocaleAndFixture:

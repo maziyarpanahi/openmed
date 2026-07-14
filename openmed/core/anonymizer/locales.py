@@ -53,6 +53,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "th": "th_TH",
     "pl": "pl_PL",
     "lv": "lv_LV",
+    "hu": "hu_HU",
     "ko": "ko_KR",
     "sk": "sk_SK",
     "ms": "ms_MY",
@@ -102,6 +103,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "th": ("th_TH", "thai_national_id"),  # Thai 13-digit national ID
     "pl": ("pl_PL", "pesel"),  # PESEL
     "lv": ("lv_LV", "personas_kods"),
+    "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
     "ko": ("ko_KR", "korean_rrn"),  # RRN
     "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
     "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC

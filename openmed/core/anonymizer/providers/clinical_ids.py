@@ -924,6 +924,30 @@ class LatvianPersonasKodsProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Hungarian TAJ (9 digits, alternating 3/7 weighted modulo-10 checksum)
+# ---------------------------------------------------------------------------
+
+
+def generate_hungarian_taj(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Hungarian TAJ accepted by its validator."""
+    source = rng or random.Random()
+
+    body = [source.randint(0, 9) for _ in range(8)]
+    if not any(body):
+        body[-1] = 1
+    weights = (3, 7, 3, 7, 3, 7, 3, 7)
+    check = sum(weight * digit for weight, digit in zip(weights, body)) % 10
+    return "".join(str(digit) for digit in (*body, check))
+
+
+class HungarianTAJProvider(BaseProvider):
+    """Generate synthetic Hungarian TAJ social-security identifiers."""
+
+    def hungarian_taj(self) -> str:
+        return generate_hungarian_taj(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -1634,6 +1658,7 @@ __all__ = [
     "DanishCPRProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
+    "HungarianTAJProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
@@ -1658,6 +1683,7 @@ __all__ = [
     "generate_canadian_sin",
     "generate_danish_cpr",
     "generate_iban",
+    "generate_hungarian_taj",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
     "generate_teudat_zehut",
