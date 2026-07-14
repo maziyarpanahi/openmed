@@ -6,10 +6,13 @@ import re
 
 import pytest
 
+import openmed
 from openmed.core.config import OpenMedConfig
 from openmed.core.decoding.spans import trim_span_whitespace
 from openmed.core.pii_entity_merger import find_semantic_units
 from openmed.core.pii_i18n import get_patterns_for_language
+from openmed.core.script_detect import normalize_for_pii_detection
+from openmed.processing.outputs import PredictionResult
 from openmed.processing.zh_normalize import (
     CJK_CONVENTION,
     STRICT_NFKC,
@@ -147,6 +150,38 @@ def test_prepass_detects_fullwidth_date_via_existing_engine():
     assert original[start:end] == "２０２４－０１－１５"
 
 
+def test_detection_normalization_composes_width_and_source_maps():
+    original = "ＩＤ　㎏"
+    result = normalize_for_pii_detection(original, width_convention="nfkc")
+
+    assert result.text == "ID kg"
+    assert result.remap_span(0, 2) == (0, 2)
+    assert result.remap_span(3, 5) == (3, 4)
+
+
+def test_extract_pii_matches_normalized_width_and_returns_original_span(monkeypatch):
+    original = "就诊日期：２０２４－０１－１５"
+    observed_inputs = []
+
+    def fake_analyze_text(text, **_kwargs):
+        observed_inputs.append(text)
+        return PredictionResult(
+            text=text,
+            entities=[],
+            model_name="fixture-pii-model",
+            timestamp="2026-01-01T00:00:00",
+        )
+
+    monkeypatch.setattr(openmed, "analyze_text", fake_analyze_text)
+
+    result = openmed.extract_pii(original, model_name="fixture-pii-model")
+
+    assert observed_inputs == ["就诊日期:2024-01-15"]
+    assert [(entity.text, entity.start, entity.end) for entity in result.entities] == [
+        ("２０２４－０１－１５", 5, 15)
+    ]
+
+
 # --------------------------------------------------------------------------
 # Config policy switch
 # --------------------------------------------------------------------------
@@ -165,3 +200,4 @@ def test_config_accepts_nfkc_and_rejects_unknown():
 def test_config_from_dict_preserves_width_convention():
     config = OpenMedConfig.from_dict({"cjk_width_convention": "nfkc"})
     assert config.cjk_width_convention == "nfkc"
+    assert config.to_dict()["cjk_width_convention"] == "nfkc"

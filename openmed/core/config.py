@@ -272,6 +272,7 @@ class OpenMedConfig:
             "load_in_4bit": self.load_in_4bit,
             "bnb_4bit_use_double_quant": self.bnb_4bit_use_double_quant,
             "local_only": self.local_only,
+            "cjk_width_convention": self.cjk_width_convention,
             "profile": self.profile,
         }
 
