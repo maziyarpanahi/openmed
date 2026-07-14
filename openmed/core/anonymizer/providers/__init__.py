@@ -8,6 +8,7 @@ and produce values that pass the existing checksum validators in
 
 from .clinical_ids import (
     AadhaarProvider,
+    BulgarianEgnProvider,
     DanishCPRProvider,
     FinancialIdentifierProvider,
     GermanSteuerIdProvider,
@@ -22,6 +23,7 @@ from .clinical_ids import (
     RomanianCNPProvider,
     SpanishDNIProvider,
     generate_bic,
+    generate_bulgarian_egn,
     generate_danish_cpr,
     generate_iban,
     generate_indonesian_nik,
@@ -43,6 +45,7 @@ from .registry_ids import (
 
 __all__ = [
     "AadhaarProvider",
+    "BulgarianEgnProvider",
     "DanishCPRProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
@@ -59,6 +62,7 @@ __all__ = [
     "RomanianCNPProvider",
     "SpanishDNIProvider",
     "generate_bic",
+    "generate_bulgarian_egn",
     "generate_danish_cpr",
     "generate_iban",
     "generate_indonesian_nik",

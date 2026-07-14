@@ -57,7 +57,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da", "bg"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -904,6 +904,61 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+def validate_bulgarian_egn(text: str) -> bool:
+    """Validate Bulgarian EGN unified civil number.
+
+    The EGN is a 10-digit code ``YYMMDDRRRC``:
+
+    - YYMMDD: birth date with a century-offset month — months 01-12 are
+      births in the 1900s, 21-32 (month + 20) the 1800s, and 41-52
+      (month + 40) the 2000s.
+    - RRR: region/serial digits; the ninth digit encodes sex.
+    - C: weighted check digit; see :func:`_bulgarian_egn_check_digit`.
+    """
+
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 10:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    if numbers[9] != _bulgarian_egn_check_digit(numbers[:9]):
+        return False
+
+    year = int(digits[0:2])
+    month_raw = int(digits[2:4])
+    day = int(digits[4:6])
+    if 41 <= month_raw <= 52:
+        year += 2000
+        month = month_raw - 40
+    elif 21 <= month_raw <= 32:
+        year += 1800
+        month = month_raw - 20
+    elif 1 <= month_raw <= 12:
+        year += 1900
+        month = month_raw
+    else:
+        return False
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _bulgarian_egn_check_digit(digits: list[int]) -> int:
+    """Return the Bulgarian EGN check digit for the first 9 digits.
+
+    Weighted sum with weights 2,4,8,5,10,9,7,3,6 modulo 11; a remainder
+    of 10 yields check digit 0.
+    """
+    weights = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+    remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+    return 0 if remainder == 10 else remainder
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -3170,6 +3225,70 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Bulgarian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_BULGARIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "раждане",
+            "роден",
+            "родена",
+            "приет",
+            "приета",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+359[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "мобилен", "gsm"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{2}[0-5]\d[0-3]\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "егн",
+            "егн:",
+            "egn",
+            "единен граждански номер",
+        ],
+        context_boost=0.4,
+        validator=validate_bulgarian_egn,
+    ),
+    PIIPattern(
+        r"\b(?:[А-Я][а-яА-Я.'-]+\s+(?:улица|булевард|площад)\s+\d{1,5}[А-Яа-яA-Za-z]?|(?:улица|булевард|площад|ул\.|бул\.)\s+[А-Я][а-яА-Я .'-]{2,60}\s+\d{1,5}[А-Яа-яA-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адрес", "живее", "улица"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{4}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["пощенски код", "адрес"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # Korean dates: YYYY년 MM월 DD일
@@ -3843,6 +3962,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "bg": _BULGARIAN_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -4346,6 +4466,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
+    },
+    "bg": {
+        "NAME": ["Иван Петров", "Мария Иванова", "Георги Димитров", "Елена Тодорова"],
+        "FIRST_NAME": ["Иван", "Мария", "Георги", "Елена"],
+        "LAST_NAME": ["Петров", "Иванова", "Димитров", "Тодорова"],
+        "EMAIL": ["patsient@example.bg", "kontakt@example.org"],
+        "PHONE": ["+359 88 123 4567", "02 987 6543"],
+        "ID_NUM": ["8205210172", "0449035017"],
+        "STREET_ADDRESS": ["улица Раковски 35", "булевард Витоша 18"],
+        "URL_PERSONAL": ["https://example.bg"],
+        "USERNAME": ["patsient123", "potrebitel456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["София", "Пловдив", "Варна"],
+        "ZIPCODE": ["1000", "4000", "9000"],
     },
 }
 
