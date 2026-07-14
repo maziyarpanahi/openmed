@@ -57,7 +57,7 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da", "hr"}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -904,6 +904,34 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+def validate_croatian_oib(text: str) -> bool:
+    """Validate Croatian OIB personal identification number.
+
+    The OIB is an 11-digit code with no embedded structure; the final
+    digit is an ISO 7064 MOD 11,10 check over the first 10 digits; see
+    :func:`_croatian_oib_check_digit`.
+    """
+
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    return numbers[10] == _croatian_oib_check_digit(numbers[:10])
+
+
+def _croatian_oib_check_digit(digits: list[int]) -> int:
+    """Return the ISO 7064 MOD 11,10 check digit for the first 10 digits."""
+    partial = 10
+    for digit in digits:
+        partial = (partial + digit) % 10
+        if partial == 0:
+            partial = 10
+        partial = (partial * 2) % 11
+    return (11 - partial) % 10
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -3170,6 +3198,69 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Croatian PII patterns
+# ---------------------------------------------------------------------------
+
+_CROATIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "rodjenja",
+            "rođenja",
+            "primljen",
+            "otpusten",
+            "otpušten",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+385[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobitel", "kontakt"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "oib",
+            "oib:",
+            "osobni identifikacijski broj",
+        ],
+        context_boost=0.4,
+        validator=validate_croatian_oib,
+    ),
+    PIIPattern(
+        r"\b(?:[A-ZČĆŠŽĐ][A-Za-zčćšžđ.'-]+\s+(?:ulica|trg|avenija|cesta)\s+\d{1,5}[A-Za-z]?|(?:ulica|trg|avenija|cesta)\s+[A-ZČĆŠŽĐ][A-Za-zčćšžđ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresa", "stanuje", "ulica"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postanski broj", "poštanski broj", "adresa"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # Korean dates: YYYY년 MM월 DD일
@@ -3843,6 +3934,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "hr": _CROATIAN_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -4346,6 +4438,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
+    },
+    "hr": {
+        "NAME": ["Ivan Horvat", "Ana Kovacevic", "Marko Babic", "Petra Novak"],
+        "FIRST_NAME": ["Ivan", "Ana", "Marko", "Petra"],
+        "LAST_NAME": ["Horvat", "Kovacevic", "Babic", "Novak"],
+        "EMAIL": ["pacijent@example.hr", "kontakt@example.org"],
+        "PHONE": ["+385 91 234 5678", "01 234 5678"],
+        "ID_NUM": ["12345678903", "55512345672"],
+        "STREET_ADDRESS": ["Savska ulica 12", "Vukovarska ulica 45"],
+        "URL_PERSONAL": ["https://example.hr"],
+        "USERNAME": ["pacijent123", "korisnik456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Zagreb", "Split", "Rijeka"],
+        "ZIPCODE": ["10000", "21000", "51000"],
     },
 }
 
