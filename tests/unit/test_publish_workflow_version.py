@@ -193,17 +193,15 @@ def test_image_sbom_workflow_builds_and_validates_cyclonedx_image_sbom():
     assert "if-no-files-found: error" in workflow
 
 
-def test_image_sbom_release_path_attaches_artifact_and_labels_image():
+def test_image_sbom_release_path_attaches_artifact_without_publishing_image():
     workflow = IMAGE_SBOM_WORKFLOW.read_text(encoding="utf-8")
 
     assert "gh release upload" in workflow
     assert "image-sbom.cdx.json" in workflow
     assert "image-sbom.cdx.json.sha256" in workflow
-    assert "docker/login-action" in workflow
-    assert "push: true" in workflow
-    assert (
-        "org.opencontainers.image.sbom.digest=${{ steps.sbom_digest.outputs.digest }}"
-    ) in workflow
+    assert "docker/login-action" not in workflow
+    assert "push: true" not in workflow
+    assert "org.opencontainers.image.sbom.digest" not in workflow
 
 
 def test_android_publish_skips_unchanged_artifacts_and_runs_its_own_tests():

@@ -19,18 +19,17 @@ Each run uploads:
 
 Tagged release runs also attach both files to the GitHub release.
 
-## Image label
+## Published image
 
-For tagged releases, the workflow publishes the release image to
-`ghcr.io/maziyarpanahi/openmed` and labels it with the SBOM digest:
+The `Image SBOM` workflow does not publish or retag container images. Release
+images are published exclusively by the `Container Multi-Arch` workflow so the
+`vX.Y.Z` and `latest` tags retain both `linux/amd64` and `linux/arm64` manifest
+entries. The `Container Image Signing` workflow attaches a CycloneDX SBOM
+attestation to that immutable multi-architecture manifest digest.
 
-```bash
-docker inspect ghcr.io/maziyarpanahi/openmed:vX.Y.Z \
-  --format '{{ index .Config.Labels "org.opencontainers.image.sbom.digest" }}'
-```
-
-The label value is `sha256:<digest>` for the attached
-`image-sbom.cdx.json` file.
+Use `image-sbom.cdx.json.sha256` to verify the standalone release asset as
+shown below. For OCI attestation verification, follow the
+[Container Image Signing](image-signing.md) guide.
 
 ## Consume and verify
 
