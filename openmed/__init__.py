@@ -19,6 +19,13 @@ from .core.anonymizer import (
 from .core.audit import AuditReport, AuditSignature, AuditSpan, DetectorInfo
 from .core.custom_recognizer import CustomRecognizer
 from .core.explain import ExplainReport, explain
+from .core.hf_hub import (
+    CachedModel,
+    clear_cached_model,
+    list_cached_models,
+    prefetch_model,
+    resolve_repo_id,
+)
 from .core.labels import CANONICAL_LABELS, normalize_label
 from .core.model_registry import (
     get_all_models,
@@ -83,6 +90,7 @@ from .mlx.lm import (
     TokenRange,
     generate_text,
 )
+from .onnx.inference import OnnxEntity, OnnxModel, load_onnx_model
 from .processing import (
     BatchItem,
     BatchItemResult,
@@ -637,6 +645,9 @@ __all__ = [
     "ModelLoader",
     "load_model",
     "OpenMedConfig",
+    "OnnxEntity",
+    "OnnxModel",
+    "load_onnx_model",
     "TextProcessor",
     "preprocess_text",
     "postprocess_text",
@@ -673,6 +684,12 @@ __all__ = [
     "get_model_suggestions",
     "get_pii_models_by_language",
     "get_default_pii_model",
+    # Hugging Face Hub model-pull helpers
+    "prefetch_model",
+    "list_cached_models",
+    "clear_cached_model",
+    "resolve_repo_id",
+    "CachedModel",
     "list_models",
     "get_model_max_length",
     "analyze_text",

@@ -1,5 +1,5 @@
-# Tags matching v* build and publish the openmed package to PyPI.
-name: Publish to PyPI
+# Tags matching v* build and publish OpenMed to PyPI and npm.
+name: Publish OpenMed Packages
 
 on:
   push:
@@ -15,9 +15,55 @@ jobs:
       id-token: write
       attestations: write
 
+  npm-verify:
+    name: Verify npm package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify release versions agree
+        run: |
+          PYTHON_VERSION=$(python3 -c "import pathlib, re; content = pathlib.Path('openmed/__about__.py').read_text(); print(re.search(r'__version__\\s*=\\s*\"([^\"]+)\"', content).group(1))")
+          NPM_VERSION=$(node -p "require('./js/openmedkit-web/package.json').version")
+          TAG_VERSION=${GITHUB_REF_NAME#v}
+          if [ "$PYTHON_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: Python $PYTHON_VERSION != tag $TAG_VERSION"
+            exit 1
+          fi
+          if [ "$NPM_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: npm $NPM_VERSION != tag $TAG_VERSION"
+            exit 1
+          fi
+
+      - name: Install npm dependencies
+        working-directory: js/openmedkit-web
+        run: npm ci
+
+      - name: Audit npm dependencies
+        working-directory: js/openmedkit-web
+        run: npm audit --audit-level=low
+
+      - name: Build, typecheck, and test npm package
+        working-directory: js/openmedkit-web
+        run: npm test
+
+      - name: Inspect npm package tarball
+        working-directory: js/openmedkit-web
+        run: npm pack --dry-run
+
   publish:
     name: Publish distributions
-    needs: provenance
+    needs: [provenance, npm-verify]
     if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
     runs-on: ubuntu-latest
     environment:
@@ -39,9 +85,54 @@ jobs:
           password: ${{ secrets.PYPI_API_TOKEN }}
           attestations: false
 
+  npm-publish:
+    name: Publish npm package
+    needs: [provenance, npm-verify]
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v')
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/openmed
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify npm credentials
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_ACCESS_TOKEN is not configured in the npm environment."
+            exit 1
+          fi
+
+      - name: Install npm dependencies
+        working-directory: js/openmedkit-web
+        run: npm ci
+
+      - name: Build npm distribution
+        working-directory: js/openmedkit-web
+        run: npm run build
+
+      - name: Publish npm package with provenance
+        working-directory: js/openmedkit-web
+        run: npm publish --ignore-scripts --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+
   sbom:
     name: Generate release SBOM
-    needs: publish
+    needs: [publish, npm-publish]
     runs-on: ubuntu-latest
     permissions:
       contents: write  # attach the SBOM asset to the tagged GitHub release

@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import random
 import re
+from datetime import date
 from typing import Sequence
 
 from faker.providers import BaseProvider
@@ -1214,6 +1215,392 @@ class ThaiNationalIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Romanian CNP (13 digits, weighted mod-11 checksum with embedded birth date)
+# ---------------------------------------------------------------------------
+
+
+def generate_romanian_cnp(*, rng: random.Random | None = None) -> str:
+    """Generate a Romanian CNP that passes :func:`validate_romanian_cnp`.
+
+    Builds a 13-digit ``S YY MM DD JJ NNN C`` identifier for a random,
+    non-future birth date and location code, then appends the documented
+    ``279146358279`` weighted modulo-11 control digit (a remainder of 10 maps
+    to control digit 1).
+    """
+    source = rng or random.Random()
+
+    today = date.today()
+    documented_ranges = {
+        1: (date(1900, 1, 1), date(1999, 12, 31)),
+        2: (date(1900, 1, 1), date(1999, 12, 31)),
+        3: (date(1800, 1, 1), date(1899, 12, 31)),
+        4: (date(1800, 1, 1), date(1899, 12, 31)),
+        5: (date(2000, 1, 1), date(2099, 12, 31)),
+        6: (date(2000, 1, 1), date(2099, 12, 31)),
+    }
+    available_ranges = {
+        code: (start, min(end, today))
+        for code, (start, end) in documented_ranges.items()
+        if start <= today
+    }
+    gender_code = source.choice(tuple(available_ranges))
+    start, end = available_ranges[gender_code]
+    birth_date = date.fromordinal(source.randint(start.toordinal(), end.toordinal()))
+
+    # Legacy county/sector codes 01-46 and 51-52, or current SIIEASC code 70.
+    county = source.choice(tuple(range(1, 47)) + (51, 52, 70))
+    serial = source.randint(1, 999)  # non-zero sequence number
+
+    body = (
+        f"{gender_code}{birth_date.year % 100:02d}{birth_date.month:02d}"
+        f"{birth_date.day:02d}{county:02d}{serial:03d}"
+    )
+    weights = (2, 7, 9, 1, 4, 6, 3, 5, 8, 2, 7, 9)
+    total = sum(weight * int(digit) for weight, digit in zip(weights, body))
+    control = total % 11
+    if control == 10:
+        control = 1
+
+    return body + str(control)
+
+
+class RomanianCNPProvider(BaseProvider):
+    """Generates valid Romanian CNP (Cod Numeric Personal) identifiers."""
+
+    def romanian_cnp(self) -> str:
+        return generate_romanian_cnp(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Canadian Social Insurance Number and provincial health-card numbers
+#
+# These identify Canadian residents and patients:
+#   - SIN: nine-digit Social Insurance Number with a Luhn (mod-10) check.
+#   - Ontario health card: ten-digit number with a Luhn check, optionally
+#     suffixed by a two-letter version code (a health identifier).
+#   - British Columbia Personal Health Number (PHN): ten digits beginning
+#     with ``9`` and validated with a weighted modulus-11 check (a health
+#     identifier).
+# ---------------------------------------------------------------------------
+
+# SIN and BC PHN validators accept only their plain digit form or the canonical
+# consistently spaced/hyphenated grouping used on forms and cards.
+_CANADIAN_SIN_RE = re.compile(
+    r"^(?:\d{9}|\d{3}(?P<sin_sep>[ -])\d{3}(?P=sin_sep)\d{3})$"
+)
+_BC_PHN_RE = re.compile(r"^(?:9\d{9}|9\d{3}(?P<bc_sep>[ -])\d{3}(?P=bc_sep)\d{3})$")
+
+# Ontario health-card numbers start with 1-9, contain ten digits, and may be
+# grouped 4-3-3. The official HCV schema permits a one- or two-letter version
+# code only at the end.
+_ONTARIO_HEALTH_CARD_RE = re.compile(
+    r"^(?P<number>[1-9]\d{3}(?P<ontario_sep>[ -]?)\d{3}"
+    r"(?P=ontario_sep)\d{3})(?:[ -]?(?P<version>[A-Za-z]{1,2}))?$"
+)
+
+# British Columbia PHN weights applied to digits two through nine.
+_BC_PHN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3)
+
+
+def _split_ontario_health_card(text: str) -> tuple[str, str]:
+    """Return the ``(digits, version_code)`` parts of an Ontario health card."""
+
+    match = _ONTARIO_HEALTH_CARD_RE.fullmatch(text.strip())
+    if match is None:
+        return "", ""
+    digits = _digits_only(match.group("number"))
+    version = (match.group("version") or "").upper()
+    return digits, version
+
+
+def validate_canadian_sin(text: str) -> bool:
+    """Validate a nine-digit Canadian Social Insurance Number (SIN).
+
+    The SIN carries a Luhn (mod-10) check digit over all nine digits. A SIN
+    starting with ``0`` is not assigned to a person, so it is rejected.
+
+    Args:
+        text: Candidate SIN, optionally spaced or hyphenated (``NNN-NNN-NNN``).
+
+    Returns:
+        ``True`` when ``text`` is a Luhn-valid, non-zero-prefixed SIN.
+    """
+
+    candidate = text.strip()
+    if _CANADIAN_SIN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
+    if len(digits) != 9:
+        return False
+    if digits[0] == "0":
+        return False
+
+    body = [int(digit) for digit in digits[:-1]]
+    return _luhn_check_digit(body) == int(digits[-1])
+
+
+def generate_canadian_sin(*, rng: random.Random | None = None) -> str:
+    """Generate a Canadian SIN accepted by :func:`validate_canadian_sin`."""
+
+    source = rng or random.Random()
+    body = [source.randint(1, 9)]
+    body.extend(source.randint(0, 9) for _ in range(7))
+    check_digit = _luhn_check_digit(body)
+    return "".join(str(digit) for digit in body) + str(check_digit)
+
+
+def validate_ontario_health_card(text: str) -> bool:
+    """Validate an Ontario (OHIP) health-card number.
+
+    The core is a ten-digit number carrying a Luhn (mod-10) check digit. An
+    optional one- or two-letter version code may follow the ten digits. Ontario
+    health cards are health identifiers.
+
+    Args:
+        text: Candidate health card, optionally spaced or hyphenated and
+            optionally suffixed by a two-letter version code.
+
+    Returns:
+        ``True`` when the ten-digit core is Luhn-valid and any version code is
+        well formed.
+    """
+
+    digits, version = _split_ontario_health_card(text)
+    if len(digits) != 10:
+        return False
+    body = [int(digit) for digit in digits[:-1]]
+    return _luhn_check_digit(body) == int(digits[-1])
+
+
+def generate_ontario_health_card(
+    *,
+    rng: random.Random | None = None,
+    with_version: bool = True,
+) -> str:
+    """Generate an Ontario health card accepted by the validator.
+
+    Args:
+        rng: Optional deterministic random source.
+        with_version: When ``True``, append a synthetic two-letter version code.
+
+    Returns:
+        A ten-digit Luhn-valid Ontario health-card number, optionally suffixed
+        with a two-letter version code.
+    """
+
+    source = rng or random.Random()
+    body = [source.randint(1, 9)]
+    body.extend(source.randint(0, 9) for _ in range(8))
+    check_digit = _luhn_check_digit(body)
+    number = "".join(str(digit) for digit in body) + str(check_digit)
+    if not with_version:
+        return number
+    letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    version = source.choice(letters) + source.choice(letters)
+    return f"{number}-{version}"
+
+
+def validate_bc_phn(text: str) -> bool:
+    """Validate a British Columbia Personal Health Number (PHN).
+
+    The PHN is ten digits beginning with ``9``. Digits two through nine are
+    weighted by ``(2, 4, 8, 5, 10, 9, 7, 3)``; the check digit is
+    ``11 - (sum mod 11)``. A remainder that yields a check of ``10`` or ``11``
+    marks an unissued number and is rejected. BC PHNs are health identifiers.
+
+    Args:
+        text: Candidate PHN, optionally spaced or hyphenated.
+
+    Returns:
+        ``True`` when ``text`` is a valid, issued BC PHN.
+    """
+
+    candidate = text.strip()
+    if _BC_PHN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
+    if len(digits) != 10:
+        return False
+
+    numbers = [int(digit) for digit in digits]
+    if numbers[0] != 9:
+        return False
+
+    total = sum(weight * value for weight, value in zip(_BC_PHN_WEIGHTS, numbers[1:9]))
+    check = 11 - (total % 11)
+    if check in (10, 11):
+        return False
+
+    return numbers[9] == check
+
+
+def generate_bc_phn(*, rng: random.Random | None = None) -> str:
+    """Generate a BC PHN accepted by :func:`validate_bc_phn`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body_digits = [source.randint(0, 9) for _ in range(8)]
+        total = sum(
+            weight * value for weight, value in zip(_BC_PHN_WEIGHTS, body_digits)
+        )
+        check = 11 - (total % 11)
+        if check in (10, 11):
+            continue
+        return "9" + "".join(str(digit) for digit in body_digits) + str(check)
+
+    return "9999999998"
+
+
+class CanadianSINProvider(BaseProvider):
+    """Generates valid nine-digit Canadian Social Insurance Numbers."""
+
+    def canadian_sin(self) -> str:
+        return generate_canadian_sin(rng=self.generator.random)
+
+
+class OntarioHealthCardProvider(BaseProvider):
+    """Generates valid Ontario health-card numbers with a version code."""
+
+    def ontario_health_card(self) -> str:
+        return generate_ontario_health_card(rng=self.generator.random)
+
+
+class BCPHNProvider(BaseProvider):
+    """Generates valid British Columbia Personal Health Numbers."""
+
+    def bc_phn(self) -> str:
+        return generate_bc_phn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Australian Medicare card number (10 digits, weighted checksum + issue digit)
+# and Tax File Number (TFN, 9-digit weighted mod-11)
+# ---------------------------------------------------------------------------
+
+# Weights applied to the first eight Medicare digits before the mod-10 check
+# digit (the ninth digit). The tenth digit is the card issue number and is not
+# part of the checksum; a person's separate IRN may follow the full card number.
+_MEDICARE_WEIGHTS: Sequence[int] = (1, 3, 7, 9, 1, 3, 7, 9)
+
+# ATO Tax File Number weighting factors for the published nine-digit format.
+_TFN_WEIGHTS_9: Sequence[int] = (1, 4, 3, 7, 5, 8, 6, 9, 10)
+
+# Medicare accepts the 10-digit card in plain or printed 4-5-1 grouping. A
+# separate one-digit Individual Reference Number (IRN) may follow contiguously,
+# after a space/hyphen, or after a slash. TFNs accept only their plain or
+# canonically spaced 3-3-3 form.
+_AUSTRALIAN_MEDICARE_RE = re.compile(
+    r"^(?P<card>[2-6]\d{9}|[2-6]\d{3} \d{5} \d)"
+    r"(?:(?:[ ]*/[ ]*|[ -]?)(?P<irn>[1-9]))?$"
+)
+_AUSTRALIAN_TFN_RE = re.compile(r"^(?:\d{9}|\d{3} \d{3} \d{3})$")
+
+
+def validate_australian_medicare(text: str) -> bool:
+    """Validate an Australian Medicare card number.
+
+    Medicare card numbers are ten digits. The first eight digits are weighted
+    by ``1, 3, 7, 9, 1, 3, 7, 9`` and summed modulo 10; that remainder must
+    equal the ninth digit (the check digit). The tenth digit is the card issue
+    number and does not participate in the checksum. A separate one-digit
+    Individual Reference Number (IRN) may follow the card number. The leading
+    digit is constrained to ``2``-``6`` by Services Australia's published
+    numbering scheme.
+
+    This is a health identifier under HIPAA cross-mapping: it identifies an
+    individual's enrolment in the Australian Medicare scheme.
+
+    Args:
+        text: Medicare card number, with or without printed spaces
+            (``NNNN NNNNN N``), optionally followed by a one-digit IRN.
+
+    Returns:
+        True when the value has a valid Medicare shape and checksum.
+    """
+
+    match = _AUSTRALIAN_MEDICARE_RE.fullmatch(text.strip())
+    if match is None:
+        return False
+    digits = _digits_only(match.group("card"))
+
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(_MEDICARE_WEIGHTS, numbers[:8]))
+    return total % 10 == numbers[8]
+
+
+def generate_australian_medicare(*, rng: random.Random | None = None) -> str:
+    """Generate a Medicare number accepted by :func:`validate_australian_medicare`.
+
+    Returns the digits-only ``NNNNNNNNNN`` form; the ninth digit is a valid
+    checksum and the tenth is a non-zero issue number.
+    """
+
+    source = rng or random.Random()
+    body = [source.randint(2, 6)]
+    body.extend(source.randint(0, 9) for _ in range(7))
+    check = sum(weight * value for weight, value in zip(_MEDICARE_WEIGHTS, body)) % 10
+    issue = source.randint(1, 9)
+    return "".join(str(digit) for digit in body) + str(check) + str(issue)
+
+
+def _tfn_checksum_ok(digits: str) -> bool:
+    if len(digits) != 9 or digits == "000000000":
+        return False
+    numbers = [int(digit) for digit in digits]
+    total = sum(weight * value for weight, value in zip(_TFN_WEIGHTS_9, numbers))
+    return total % 11 == 0
+
+
+def validate_australian_tfn(text: str) -> bool:
+    """Validate an Australian Tax File Number (TFN).
+
+    A TFN is nine digits guarded by a weighted modulus-11 checksum. The weights
+    are ``1, 4, 3, 7, 5, 8, 6, 9, 10`` and the weighted sum must be divisible
+    by 11. The all-zero value is not a valid issued TFN.
+
+    Args:
+        text: TFN string, with or without spaces (``NNN NNN NNN``).
+
+    Returns:
+        True when the value has a valid TFN length and checksum.
+    """
+
+    candidate = text.strip()
+    if _AUSTRALIAN_TFN_RE.fullmatch(candidate) is None:
+        return False
+    digits = _digits_only(candidate)
+    return _tfn_checksum_ok(digits)
+
+
+def generate_australian_tfn(*, rng: random.Random | None = None) -> str:
+    """Generate a nine-digit TFN accepted by :func:`validate_australian_tfn`."""
+
+    source = rng or random.Random()
+    for _ in range(200):
+        body = [source.randint(0, 9) for _ in range(9)]
+        if any(body):
+            digits = "".join(str(digit) for digit in body)
+            if _tfn_checksum_ok(digits):
+                return digits
+
+    return "123456782"
+
+
+class AustralianMedicareProvider(BaseProvider):
+    """Generates valid 10-digit Australian Medicare card numbers."""
+
+    def australian_medicare(self) -> str:
+        return generate_australian_medicare(rng=self.generator.random)
+
+
+class AustralianTFNProvider(BaseProvider):
+    """Generates valid Australian Tax File Numbers."""
+
+    def australian_tfn(self) -> str:
+        return generate_australian_tfn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Bulk registration helper
 # ---------------------------------------------------------------------------
 
@@ -1240,6 +1627,10 @@ def register_clinical_providers(faker) -> None:
 
 __all__ = [
     "AadhaarProvider",
+    "AustralianMedicareProvider",
+    "AustralianTFNProvider",
+    "BCPHNProvider",
+    "CanadianSINProvider",
     "DanishCPRProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
@@ -1253,15 +1644,21 @@ __all__ = [
     "NPIProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",
+    "RomanianCNPProvider",
     "RodneCisloProvider",
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
+    "generate_australian_medicare",
+    "generate_australian_tfn",
+    "generate_bc_phn",
     "generate_bic",
+    "generate_canadian_sin",
     "generate_danish_cpr",
     "generate_iban",
+    "generate_ontario_health_card",
     "generate_indonesian_nik",
     "generate_teudat_zehut",
     "generate_korean_rrn",
@@ -1273,16 +1670,22 @@ __all__ = [
     "generate_philhealth_pin",
     "generate_philsys_psn",
     "generate_rodne_cislo",
+    "generate_romanian_cnp",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
     "generate_uk_nhs_number",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
+    "validate_australian_medicare",
+    "validate_australian_tfn",
+    "validate_bc_phn",
     "validate_bic",
+    "validate_canadian_sin",
     "validate_iban",
     "validate_luhn",
     "validate_npi",
+    "validate_ontario_health_card",
     "validate_phone_us",
     "validate_ssn",
     "validate_uk_nhs_number",

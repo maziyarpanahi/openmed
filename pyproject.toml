@@ -41,6 +41,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "jsonschema>=4.0",
+  "mypy==2.2.0",
   "duckdb>=1.0,<2",
   "numpy>=1.26",
   "fastapi>=0.110",
@@ -52,6 +53,7 @@ dev = [
   "pandas>=2.0",
   "polars>=0.20",
   "python-dateutil>=2.8",
+  "hypothesis>=6.100",
   "fsspec>=2025.9.0",
   "grpcio>=1.64",
   "grpcio-tools>=1.64",
@@ -215,6 +217,13 @@ onnx = [
   "transformers>=4.50",
 ]
 
+onnx-runtime = [
+  "huggingface-hub>=0.30",
+  "numpy>=1.26",
+  "onnxruntime>=1.16",
+  "transformers>=4.50",
+]
+
 openvino = [
   "openvino>=2024.0",
   "nncf>=2.10",
@@ -238,6 +247,7 @@ openmed = "openmed.cli:main"
 [tool.hatch.build]
 include = [
   "openmed/**",
+  "openmed/py.typed",
   "openmed/core/thresholds.json",
   "openmed/core/policies/*.json",
   "openmed/core/schemas/json/*.json",
@@ -262,6 +272,7 @@ pypi = { url = "https://upload.pypi.org/legacy/" }
 markers = [
   "integration: marks end-to-end or external integration tests",
   "slow: marks tests that are expected to run slowly",
+  "fuzz: marks property-based (Hypothesis) fuzz tests",
   "doctest_examples: runs doctest examples for targeted public modules"
 ]
 python_files = [
@@ -303,3 +314,19 @@ known-first-party = ["openmed"]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
+
+# Scoped type-checking configuration. This intentionally covers only the newer
+# v1.6 public surfaces that already ship precise annotations and a py.typed
+# marker; it is not a strict project-wide gate. The pinned development checker,
+# local Make target, regression test, and CI lint job all use this same scope.
+[tool.mypy]
+python_version = "3.10"
+files = [
+  "openmed/core/audit.py",
+  "openmed/core/pipeline.py",
+  "openmed/clinical/context.py",
+  "openmed/clinical/exporters/fhir/bundle.py",
+]
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = false

@@ -8,7 +8,7 @@ same synthetic or approved eval fixtures.
 
 ```bash
 python -m openmed.mlx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-mlx-4bit \
   --quantize 4 \
   --quantize-group-size 64 \

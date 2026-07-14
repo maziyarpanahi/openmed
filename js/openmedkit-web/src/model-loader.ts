@@ -1,10 +1,32 @@
 import type {
   LoadModelOptions,
+  LoadOnnxModelOptions,
   TokenClassificationPipeline,
   TransformersRuntime,
 } from "./types";
 
 const TRANSFORMERS_JS_MODULE = "@huggingface/transformers";
+const ONNX_MODEL_FILENAMES = {
+  int8: "model_int8",
+  fp32: "model",
+  fp16: "model_fp16",
+} as const;
+
+export async function loadOnnxModel(
+  model: string,
+  options: LoadOnnxModelOptions = {},
+): Promise<TokenClassificationPipeline> {
+  const { variant = "int8", pipelineOptions, ...loaderOptions } = options;
+  return loadTokenClassificationPipeline(model, {
+    ...loaderOptions,
+    quantized: false,
+    pipelineOptions: {
+      subfolder: "",
+      model_file_name: ONNX_MODEL_FILENAMES[variant],
+      ...pipelineOptions,
+    },
+  });
+}
 
 export async function loadTokenClassificationPipeline(
   model: string,
