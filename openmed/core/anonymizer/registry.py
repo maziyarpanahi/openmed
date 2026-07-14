@@ -206,10 +206,28 @@ def _mrz_surrogate(faker, original):
     return None
 
 
+def _uscc_surrogate(faker, original):
+    """Return a valid USCC surrogate when ``original`` is a valid USCC."""
+    if not original:
+        return None
+    from openmed.core.pii_i18n import validate_unified_social_credit_code
+
+    if not validate_unified_social_credit_code(original.strip()):
+        return None
+    from openmed.core.anonymizer.providers.clinical_ids import (
+        generate_unified_social_credit_code,
+    )
+
+    return generate_unified_social_credit_code(rng=faker.random)
+
+
 def _gen_id_num(faker, original, *, locale):
     mrz = _mrz_surrogate(faker, original)
     if mrz is not None:
         return mrz
+    uscc = _uscc_surrogate(faker, original)
+    if uscc is not None:
+        return uscc
     method = _LOCALE_ID_METHODS.get(locale)
     if method and hasattr(faker, method):
         return getattr(faker, method)()

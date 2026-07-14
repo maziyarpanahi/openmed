@@ -1681,6 +1681,60 @@ _AU_ENGLISH_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# China Unified Social Credit Code (GB 32100-2015), ISO 7064 MOD 31-3 over a
+# restricted 31-character alphabet that excludes the ambiguous letters I, O, S,
+# V and Z. Position values are the index into this ordered alphabet.
+USCC_ALPHABET = "0123456789ABCDEFGHJKLMNPQRTUWXY"
+_USCC_VALUE = {char: index for index, char in enumerate(USCC_ALPHABET)}
+_USCC_WEIGHTS = tuple(pow(3, i, 31) for i in range(17))
+
+
+def uscc_check_char(body17: str) -> str:
+    """Return the ISO 7064 MOD 31-3 check character for a 17-character body."""
+
+    total = sum(_USCC_VALUE[char] * _USCC_WEIGHTS[i] for i, char in enumerate(body17))
+    return USCC_ALPHABET[(31 - (total % 31)) % 31]
+
+
+def validate_unified_social_credit_code(text: str) -> bool:
+    """Validate a China Unified Social Credit Code (18-char, ISO 7064 MOD 31-3).
+
+    Checks the length, the restricted alphabet (excluding I/O/S/V/Z), the
+    numeric administrative-region segment (positions 3-8), and the MOD 31-3
+    check character. Returns ``False`` for any non-conforming input.
+    """
+    if not isinstance(text, str):
+        return False
+    code = text.strip()
+    if len(code) != 18 or any(char not in _USCC_VALUE for char in code):
+        return False
+    # Positions 3-8 (0-indexed 2:8) are the 6-digit administrative region code.
+    if not code[2:8].isdigit():
+        return False
+    return uscc_check_char(code[:17]) == code[17]
+
+
+# Language-agnostic China Unified Social Credit Code pattern, guarded by the
+# MOD 31-3 validator and always included in the universal base set.
+USCC_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b[0-9A-HJ-NP-RTUW-Y]{18}\b",
+        "social_credit_code",
+        priority=15,
+        base_score=0.6,
+        context_words=[
+            "统一社会信用代码",
+            "信用代码",
+            "unified social credit",
+            "social credit code",
+            "uscc",
+        ],
+        context_boost=0.4,
+        validator=validate_unified_social_credit_code,
+    ),
+]
+
+
 # Language-agnostic ICAO 9303 machine-readable-zone patterns, guarded by the
 # check-digit validators and always included in the universal base set.
 MRZ_PII_PATTERNS: List[PIIPattern] = [
@@ -4413,8 +4467,8 @@ def get_patterns_for_language(lang: str, locale: str | None = None) -> List[PIIP
     from .pii_entity_merger import PII_PATTERNS
 
     # English patterns serve as universal base
-    # MRZ patterns are language-agnostic, so they join the universal base.
-    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS
+    # MRZ and USCC patterns are language-agnostic, so they join the universal base.
+    base = list(PII_PATTERNS) + MRZ_PII_PATTERNS + USCC_PII_PATTERNS
 
     combined = base
     if base_lang != "en":
