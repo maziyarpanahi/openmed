@@ -258,12 +258,16 @@ def test_sha256_streaming_500mb_stays_under_two_seconds(tmp_path: Path) -> None:
 
 
 def test_sigstore_bundle_rejects_tampered_manifest(tmp_path: Path) -> None:
-    manifest = FIXTURES / "models.jsonl"
+    source_manifest = FIXTURES / "models.jsonl"
     bundle = FIXTURES / "models.jsonl.sigstore.json"
+    manifest = tmp_path / "models.jsonl"
+    # Git for Windows may check out this text fixture with CRLF, while the
+    # detached test bundle signs the canonical LF payload.
+    manifest.write_bytes(source_manifest.read_bytes().replace(b"\r\n", b"\n"))
     verified = verify_manifest_signature(manifest, bundle)
     assert verified == sha256_file(manifest)
 
-    tampered = tmp_path / "models.jsonl"
+    tampered = tmp_path / "tampered-models.jsonl"
     tampered.write_bytes(manifest.read_bytes().replace(b"fixture", b"tampered"))
     with pytest.raises(ModelIntegrityError) as raised:
         verify_manifest_signature(tampered, bundle)
