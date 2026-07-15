@@ -549,6 +549,41 @@ def validate_portuguese_cnpj(text: str) -> bool:
     return numbers[12] == first_check and numbers[13] == second_check
 
 
+# Portuguese NIF/NIPC valid leading digits (individuals, companies, public
+# bodies, sole traders) and two-digit prefixes (non-resident individuals and
+# special taxpayer categories).
+_PORTUGUESE_NIF_FIRST_DIGITS: frozenset[str] = frozenset("1235689")
+_PORTUGUESE_NIF_PREFIXES: frozenset[str] = frozenset(
+    {"45", "70", "71", "72", "74", "75", "77", "79", "90", "91", "98", "99"}
+)
+
+
+def validate_portuguese_nif(text: str) -> bool:
+    """Validate a Portuguese NIF/NIPC tax identification number.
+
+    The NIF (individuals) and NIPC (entities) share a nine-digit format
+    with a weighted modulo-11 check digit. The leading digit — or, for
+    some taxpayer categories, the leading two digits — must fall in the
+    documented issuance set. This is distinct from the Brazilian CPF/CNPJ
+    validated elsewhere in the Portuguese pack.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 9:
+        return False
+    if (
+        digits[0] not in _PORTUGUESE_NIF_FIRST_DIGITS
+        and digits[:2] not in _PORTUGUESE_NIF_PREFIXES
+    ):
+        return False
+
+    total = sum(int(digits[index]) * (9 - index) for index in range(8))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return check == int(digits[8])
+
+
 def validate_turkish_tckn(text: str) -> bool:
     """Validate Turkish T.C. Kimlik No (TCKN).
 
@@ -2595,6 +2630,23 @@ _PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.45,
         validator=validate_portuguese_cnpj,
+    ),
+    # Portuguese NIF / NIPC (9 digits, pt_PT)
+    PIIPattern(
+        r"\b\d{3}\s?\d{3}\s?\d{3}\b",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "nif",
+            "nipc",
+            "contribuinte",
+            "n\u00famero de contribuinte",
+            "numero de contribuinte",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_portuguese_nif,
     ),
     # Portuguese street addresses
     PIIPattern(
