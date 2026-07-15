@@ -347,6 +347,54 @@ def test_czech_i18n_jsonl_fixture_offsets_and_checksum():
     assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
 
 
+def test_czech_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/cs.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    empty_result = PredictionResult(
+        text=fixture.text,
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        fixture.text,
+        empty_result,
+        lang=fixture.language,
+    )
+    result = _build_deidentification_result(
+        fixture.text,
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang=fixture.language,
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(fixture.gold_spans)
+    for span in fixture.gold_spans:
+        assert span.text not in result.deidentified_text
+
+
 def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():
     fixture_path = Path("openmed/eval/golden/fixtures/i18n/ro.jsonl")
     rows = [
