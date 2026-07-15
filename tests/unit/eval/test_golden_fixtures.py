@@ -326,6 +326,27 @@ def test_hungarian_i18n_jsonl_fixture_deidentifies_with_no_leakage_offline():
         assert span.text not in result.deidentified_text
 
 
+def test_czech_i18n_jsonl_fixture_offsets_and_checksum():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/cs.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    fixture = GoldenFixture.from_mapping(rows[0])
+    assert fixture.language == "cs"
+
+    gold_by_label = {span.label: span.text for span in fixture.gold_spans}
+    assert gold_by_label["DATE"] == "05.05.1985"
+    assert gold_by_label["PHONE"] == "+420 601 123 456"
+    assert gold_by_label["ZIPCODE"] == "11000"
+    assert gold_by_label["STREET_ADDRESS"] == "Hlavní ulice 12"
+    # 850505/0060 only validates under the corrected remainder-10 checksum rule.
+    assert validate_czechoslovak_rodne_cislo(gold_by_label["ID_NUM"])
+
+
 def test_romanian_i18n_jsonl_fixture_offsets_and_checksum():
     fixture_path = Path("openmed/eval/golden/fixtures/i18n/ro.jsonl")
     rows = [

@@ -54,6 +54,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "pl": "pl_PL",
     "lv": "lv_LV",
     "ko": "ko_KR",
+    "cs": "cs_CZ",
     "sk": "sk_SK",
     "ms": "ms_MY",
     "tl": "fil_PH",
@@ -109,6 +110,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "pl": ("pl_PL", "pesel"),  # PESEL
     "lv": ("lv_LV", "personas_kods"),
     "ko": ("ko_KR", "korean_rrn"),  # RRN
+    "cs": ("cs_CZ", "rodne_cislo"),  # Czech rodne cislo (shared Czechoslovak system)
     "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
     "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN

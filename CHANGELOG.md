@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
   address, and postcode patterns, and an offline synthetic golden fixture
   (#816).
+- Added a Czech (`cs`) national-ID PII language pack: rodné číslo detection with
+  Czech date, phone (`+420`), address, and postcode cues, plus locale wiring
+  (`cs_CZ`), surrogate generation, and a synthetic golden fixture. Resolves
+  [#815](https://github.com/maziyarpanahi/openmed/issues/815).
+
+### Fixed
+
+- Corrected the Czechoslovak rodné číslo checksum to run modulo-11 over the
+  first nine digits (accepting the remainder-10 / check-digit-0 case) and to
+  accept legacy nine-digit birth numbers, so valid older Czech and Slovak
+  identifiers are no longer rejected.
 
 ## [1.9.1] - 2026-07-14
 

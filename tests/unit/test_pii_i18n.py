@@ -97,6 +97,7 @@ class TestConstants:
             "pl",
             "lv",
             "sk",
+            "cs",
             "ms",
             "tl",
             "da",
@@ -1791,6 +1792,31 @@ class TestLanguagePIIPatterns:
 
         assert patterns
         assert all(pattern.safety_sweep_requires_context for pattern in patterns)
+
+    def test_czech_clinical_sample_expected_spans(self):
+        # The rodné číslo here (850505/0060) has first_nine % 11 == 10, so it is
+        # only valid under the corrected remainder-10 checksum rule.
+        text = (
+            "Pacient: Petr Novák. Datum narození 05.05.1985, "
+            "telefon +420 601 123 456, rodné číslo 850505/0060, "
+            "adresa Hlavní ulice 12, PSČ 11000."
+        )
+        expected = {
+            ("date", 36, 46, "05.05.1985"),
+            ("phone_number", 56, 72, "+420 601 123 456"),
+            ("national_id", 86, 97, "850505/0060"),
+            ("street_address", 106, 121, "Hlavní ulice 12"),
+            ("postcode", 127, 132, "11000"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("cs"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
 
     def test_romanian_clinical_sample_expected_spans(self):
         text = (

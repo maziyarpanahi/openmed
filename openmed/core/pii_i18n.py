@@ -61,6 +61,7 @@ NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
     "pl",
     "lv",
     "sk",
+    "cs",
     "ms",
     "tl",
     "da",
@@ -4525,6 +4526,113 @@ _HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+# Czech month names in both nominative and genitive (dates read "16. listopadu
+# 1975"). Longer forms are listed first so the alternation prefers them.
+_CZECH_MONTH_PATTERN = (
+    r"ledna|leden|února|únor|března|březen|dubna|duben|"
+    r"května|květen|července|červenec|června|červen|"
+    r"srpna|srpen|září|října|říjen|listopadu|listopad|prosince|prosinec"
+)
+
+_CZECH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "narození",
+            "narozen",
+            "narozena",
+            "přijat",
+            "přijata",
+            "propuštěn",
+            "propuštěna",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\.?\s+(?:{_CZECH_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "datum",
+            "narození",
+            "narozen",
+            "narozena",
+            "přijat",
+            "přijata",
+            "propuštěn",
+            "propuštěna",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+420\s?)?[67]\d{2}(?:[\s.-]?\d{3}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "telefon",
+            "tel",
+            "mobil",
+            "číslo",
+            "cislo",
+            "kontakt",
+        ],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{4}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "rodne cislo",
+            "rodné číslo",
+            "rc",
+            "rč",
+            "identifikacni cislo",
+            "identifikační číslo",
+        ],
+        context_boost=0.45,
+        validator=validate_czech_rodne_cislo,
+    ),
+    PIIPattern(
+        r"\b(?!(?:adresa|bydliště|trvalé)\b)(?:[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+(?:\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+)*?\s+(?:ulice|ul\.|třída|náměstí|nábřeží)\s+\d{1,5}[A-Za-z]?|(?:ulice|ul\.|třída|náměstí|nábřeží)\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adresa",
+            "bydliště",
+            "trvalé bydliště",
+            "ulice",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}\s?\d{2}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "psc",
+            "psč",
+            "poštovní směrovací číslo",
+            "adresa",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -4543,6 +4651,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "lv": _LATVIAN_PII_PATTERNS,
     "pl": _POLISH_PII_PATTERNS,
     "ko": _KOREAN_PII_PATTERNS,
+    "cs": _CZECH_PII_PATTERNS,
     "sk": _SLOVAK_PII_PATTERNS,
     "ms": _MALAY_PII_PATTERNS,
     "tl": _TAGALOG_PII_PATTERNS,
@@ -5005,6 +5114,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bratislava", "Kosice", "Zilina"],
         "ZIPCODE": ["81101", "04001", "01001"],
+    },
+    "cs": {
+        "NAME": [
+            "Jana Nováková",
+            "Petr Novák",
+            "Marie Svobodová",
+            "Tomáš Král",
+        ],
+        "FIRST_NAME": ["Jana", "Petr", "Marie", "Tomáš"],
+        "LAST_NAME": ["Nováková", "Novák", "Svobodová", "Král"],
+        "EMAIL": ["pacient@example.cz", "kontakt@example.org"],
+        "PHONE": ["+420 601 123 456", "603 987 654"],
+        "ID_NUM": ["756116/9979", "850505/0060"],
+        "STREET_ADDRESS": ["Hlavní ulice 12", "Náměstí Míru 5"],
+        "URL_PERSONAL": ["https://example.cz"],
+        "USERNAME": ["pacient123", "uzivatel456"],
+        "DATE": ["16.11.1975", "16. listopadu 1975"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Praha", "Brno", "Ostrava"],
+        "ZIPCODE": ["11000", "60200", "70200"],
     },
     "ko": {
         "NAME": [
