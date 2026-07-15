@@ -2417,6 +2417,21 @@ def test_validate_croatian_oib():
     assert not validate_croatian_oib("123456789031")
     assert not validate_croatian_oib("abcdef")
     assert not validate_croatian_oib("123")
+    assert not validate_croatian_oib("123 456 789 03")
+    assert not validate_croatian_oib("OIB 12345678903")
+    assert not validate_croatian_oib(None)
+
+
+def test_croatian_national_id_safety_sweep_requires_context():
+    patterns = get_patterns_for_language("hr")
+    national_id_patterns = [
+        pattern for pattern in patterns if pattern.entity_type == "national_id"
+    ]
+
+    assert national_id_patterns
+    assert all(
+        pattern.safety_sweep_requires_context for pattern in national_id_patterns
+    )
 
 
 def test_faker_native_hr_ssn_round_trips_oib_validator():
