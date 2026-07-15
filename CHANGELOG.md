@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The `openmed deid` and `openmed pii deidentify` commands now accept
+  `--date-shift-days` for `shift_dates`; omitting the legacy `--shift-dates`
+  flag no longer conflicts with an explicitly selected `--method shift_dates`.
+
 ## [1.9.1] - 2026-07-14
 
 This patch completes the `1.9` distribution rollout without changing the

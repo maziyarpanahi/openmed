@@ -47,6 +47,109 @@ def test_deid_stdin_prints_deidentified_text_and_forwards_policy_method(
     assert calls["audit"] is False
 
 
+def test_deid_forwards_explicit_date_shift_days(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: dict[str, Any] = {}
+
+    def fake_deidentify(text: str, **kwargs: Any) -> SimpleNamespace:
+        calls["text"] = text
+        calls.update(kwargs)
+        return SimpleNamespace(deidentified_text="Visit on 2024-06-30", pii_entities=[])
+
+    monkeypatch.setattr(pii_module, "deidentify", fake_deidentify)
+    monkeypatch.setattr(main_module.sys, "stdin", io.StringIO("Visit on 2024-01-02"))
+
+    result = main_module.main(
+        ["deid", "--method", "shift_dates", "--date-shift-days", "180"]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.err == ""
+    assert calls["method"] == "shift_dates"
+    assert calls["date_shift_days"] == 180
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_method", "expected_shift_dates", "expected_date_shift_days"),
+    [
+        (["pii", "deidentify", "--method", "shift_dates"], "shift_dates", None, None),
+        (["pii", "deidentify", "--shift-dates"], "mask", True, None),
+        (
+            [
+                "pii",
+                "deidentify",
+                "--method",
+                "shift_dates",
+                "--date-shift-days",
+                "180",
+            ],
+            "shift_dates",
+            None,
+            180,
+        ),
+    ],
+)
+def test_pii_deidentify_forwards_date_shift_options(
+    argv: list[str],
+    expected_method: str,
+    expected_shift_dates: bool | None,
+    expected_date_shift_days: int | None,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: dict[str, Any] = {}
+
+    def fake_deidentify(text: str, **kwargs: Any) -> SimpleNamespace:
+        pii_module._resolve_deidentification_method(
+            kwargs["method"],
+            kwargs["shift_dates"],
+            kwargs["date_shift_days"],
+        )
+        calls["text"] = text
+        calls.update(kwargs)
+        return SimpleNamespace(deidentified_text="Visit on 2024-06-30", pii_entities=[])
+
+    monkeypatch.setattr(pii_module, "deidentify", fake_deidentify)
+
+    result = main_module.main([*argv, "--text", "Visit on 2024-01-02"])
+    captured = capsys.readouterr()
+
+    assert result == 0
+    assert captured.err == "\n[Redacted 0 entities]\n"
+    assert calls["method"] == expected_method
+    assert calls["shift_dates"] is expected_shift_dates
+    assert calls["date_shift_days"] == expected_date_shift_days
+
+
+def test_pii_deidentify_prints_date_shift_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def fake_deidentify(text: str, **kwargs: Any) -> SimpleNamespace:
+        raise ValueError("date_shift_days requires method='shift_dates'")
+
+    monkeypatch.setattr(pii_module, "deidentify", fake_deidentify)
+
+    result = main_module.main(
+        [
+            "pii",
+            "deidentify",
+            "--text",
+            "Visit on 2024-01-02",
+            "--date-shift-days",
+            "180",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert result == 2
+    assert captured.out == ""
+    assert captured.err == "date_shift_days requires method='shift_dates'\n"
+
+
 def test_deid_audit_writes_report_and_prints_path(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
