@@ -57,7 +57,15 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
+    "pl",
+    "lv",
+    "sk",
+    "ms",
+    "tl",
+    "da",
+    "vi",
+}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -614,6 +622,121 @@ def validate_indonesian_nik(text: str) -> bool:
         )
     except (ValueError, calendar.IllegalMonthError):
         return False
+
+
+_VIETNAMESE_PROVINCE_CODES = frozenset(
+    {
+        "001",
+        "002",
+        "004",
+        "006",
+        "008",
+        "010",
+        "011",
+        "012",
+        "014",
+        "015",
+        "017",
+        "019",
+        "020",
+        "022",
+        "024",
+        "025",
+        "026",
+        "027",
+        "030",
+        "031",
+        "033",
+        "034",
+        "035",
+        "036",
+        "037",
+        "038",
+        "040",
+        "042",
+        "044",
+        "045",
+        "046",
+        "048",
+        "049",
+        "051",
+        "052",
+        "054",
+        "056",
+        "058",
+        "060",
+        "062",
+        "064",
+        "066",
+        "067",
+        "068",
+        "070",
+        "072",
+        "074",
+        "075",
+        "077",
+        "079",
+        "080",
+        "082",
+        "083",
+        "084",
+        "086",
+        "087",
+        "089",
+        "091",
+        "092",
+        "093",
+        "094",
+        "095",
+        "096",
+    }
+)
+
+
+def validate_vietnamese_cccd(text: str) -> bool:
+    """Validate the offline-verifiable structure of a Vietnamese CCCD.
+
+    A CCCD/personal identification number contains 12 digits: a three-digit
+    birthplace code, one century/gender digit, a two-digit birth year, and a
+    six-digit random sequence. Vietnam does not publish a check digit for this
+    identifier, so this validator deliberately checks only stable structure and
+    known province codes; detection patterns require nearby CCCD context to
+    avoid treating arbitrary clinical numbers as identifiers.
+
+    Args:
+        text: CCCD value, contiguous or grouped as four three-digit blocks.
+
+    Returns:
+        True when the candidate has a recognized CCCD structure.
+    """
+    stripped = text.strip()
+    if re.fullmatch(r"\d{12}|\d{3}(?:[\s-]+\d{3}){3}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    return digits[:3] in _VIETNAMESE_PROVINCE_CODES
+
+
+def validate_vietnamese_cmnd(text: str) -> bool:
+    """Validate the local structure of a legacy Vietnamese CMND.
+
+    Legacy CMND values have nine digits and no public checksum. To keep this
+    structural validator conservative, all-zero and repeated-digit values are
+    rejected. The corresponding detection pattern additionally requires an
+    explicit CMND or ``chung minh nhan dan`` context cue.
+
+    Args:
+        text: CMND value, contiguous or grouped as three three-digit blocks.
+
+    Returns:
+        True when the candidate has a plausible legacy CMND structure.
+    """
+    stripped = text.strip()
+    if re.fullmatch(r"\d{9}|\d{3}(?:[\s-]+\d{3}){2}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    return len(set(digits)) > 1
 
 
 def validate_thai_national_id(text: str) -> bool:
@@ -3906,6 +4029,157 @@ _SLOVAK_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+# ---------------------------------------------------------------------------
+# Vietnamese PII patterns
+# ---------------------------------------------------------------------------
+
+_VIETNAMESE_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"(?<!\d)(?:0?[1-9]|[12]\d|3[01])/(?:0?[1-9]|1[0-2])/(?:19|20)\d{2}(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "ngày sinh",
+            "ngay sinh",
+            "sinh ngày",
+            "sinh ngay",
+            "ngày khám",
+            "ngay kham",
+            "ngày nhập viện",
+            "ngay nhap vien",
+            "ngày xuất viện",
+            "ngay xuat vien",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)ngày\s+(?:0?[1-9]|[12]\d|3[01])\s+tháng\s+"
+        r"(?:0?[1-9]|1[0-2])\s+năm\s+(?:19|20)\d{2}(?!\d)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=["ngày sinh", "sinh ngày", "ngày khám", "ngày nhập viện"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+84[\s.-]?|0)[35789]\d(?:[\s.-]?\d){7}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=[
+            "điện thoại",
+            "dien thoai",
+            "số điện thoại",
+            "so dien thoai",
+            "di động",
+            "di dong",
+            "liên hệ",
+            "lien he",
+            "đt",
+            "sđt",
+        ],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+84[\s.-]?|0)2\d{1,2}(?:[\s.-]?\d){7,8}(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.45,
+        context_words=[
+            "điện thoại",
+            "dien thoai",
+            "số điện thoại",
+            "so dien thoai",
+            "liên hệ",
+            "lien he",
+            "đt",
+        ],
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}(?:[\s-]?\d{3}){3}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "cccd",
+            "căn cước công dân",
+            "can cuoc cong dan",
+            "căn cước",
+            "can cuoc",
+            "số định danh cá nhân",
+            "so dinh danh ca nhan",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        validator=validate_vietnamese_cccd,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}(?:[\s-]?\d{3}){2}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.35,
+        context_words=[
+            "cmnd",
+            "chứng minh nhân dân",
+            "chung minh nhan dan",
+            "số chứng minh",
+            "so chung minh",
+        ],
+        # Keep a contextual CMND below a fully contextual Vietnamese phone so
+        # a spaced nine-digit subscriber number wins overlap resolution.
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        validator=validate_vietnamese_cmnd,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:số\s+)?\d{1,5}[A-Za-z]?(?:[/.-]\d{1,5}[A-Za-z]?)?\s+"
+        r"(?:đường|duong|phố|pho|ngõ|ngo|hẻm|hem)\s+[^\n,;]{2,80}",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "địa chỉ",
+            "dia chi",
+            "thường trú",
+            "thuong tru",
+            "tạm trú",
+            "tam tru",
+            "đường",
+            "duong",
+            "phường",
+            "phuong",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{5}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=[
+            "mã bưu chính",
+            "ma buu chinh",
+            "mã bưu điện",
+            "ma buu dien",
+            "bưu chính",
+            "buu chinh",
+            "địa chỉ",
+            "dia chi",
+        ],
+        context_boost=0.55,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -3929,6 +4203,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "vi": _VIETNAMESE_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -4323,6 +4598,29 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Kobenhavn", "Aarhus", "Odense"],
         "ZIPCODE": ["1260", "8000", "5000"],
+    },
+    "vi": {
+        "NAME": [
+            "Nguyễn Minh Anh",
+            "Trần Hoàng Nam",
+            "Lê Thu Hà",
+            "Phạm Quang Huy",
+        ],
+        "FIRST_NAME": ["Minh Anh", "Hoàng Nam", "Thu Hà", "Quang Huy"],
+        "LAST_NAME": ["Nguyễn", "Trần", "Lê", "Phạm"],
+        "EMAIL": ["benhnhan@example.vn", "lienhe@example.org"],
+        "PHONE": ["+84 912 345 678", "0912-345-678", "028 3822 1234"],
+        "ID_NUM": ["001203123456", "024 203 654 321", "123456789"],
+        "STREET_ADDRESS": [
+            "12 đường Nguyễn Trãi",
+            "45 phố Trần Hưng Đạo",
+        ],
+        "URL_PERSONAL": ["https://example.vn"],
+        "USERNAME": ["benhnhan123", "nguoidung456"],
+        "DATE": ["17/08/1985", "ngày 1 tháng 1 năm 2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Hà Nội", "Thành phố Hồ Chí Minh", "Đà Nẵng"],
+        "ZIPCODE": ["10000", "70000", "50000"],
     },
     "th": {
         "NAME": [
