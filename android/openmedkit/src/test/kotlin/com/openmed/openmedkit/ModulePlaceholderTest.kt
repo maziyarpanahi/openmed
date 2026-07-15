@@ -11,6 +11,6 @@ import org.robolectric.annotation.Config
 class ModulePlaceholderTest {
     @Test
     fun exposesPlaceholderVersion() {
-        assertEquals("1.9.0", OpenMedKit.VERSION)
+        assertEquals("1.9.1", OpenMedKit.VERSION)
     }
 }
