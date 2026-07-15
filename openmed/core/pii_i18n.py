@@ -931,11 +931,17 @@ def validate_finnish_hetu(text: str) -> bool:
       mapped through the alphabet ``0-9ABCDEFHJKLMNPRSTUVWXY``.
     """
 
-    match = _FINNISH_HETU_RE.match(text.strip())
+    if not isinstance(text, str):
+        return False
+
+    match = _FINNISH_HETU_RE.fullmatch(text)
     if match is None:
         return False
 
     day_text, month_text, year_text, sign, serial, check = match.groups()
+    if not 2 <= int(serial) <= 899:
+        return False
+
     expected = _FINNISH_HETU_CHECK_ALPHABET[
         int(day_text + month_text + year_text + serial) % 31
     ]

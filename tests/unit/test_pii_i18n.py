@@ -2425,6 +2425,12 @@ def test_validate_finnish_hetu():
     assert not validate_finnish_hetu("161175-802")
     assert not validate_finnish_hetu("abcdef")
     assert not validate_finnish_hetu("123")
+    # Individual numbers 000-001 and 900-999 are not ordinary HETU values.
+    assert not validate_finnish_hetu("161175-000J")
+    assert not validate_finnish_hetu("161175-001K")
+    assert not validate_finnish_hetu("161175-900K")
+    assert not validate_finnish_hetu(" 161175-802D ")
+    assert not validate_finnish_hetu(None)
 
 
 def test_faker_native_fi_ssn_round_trips_hetu_validator():
