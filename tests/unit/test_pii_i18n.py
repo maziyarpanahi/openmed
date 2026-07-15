@@ -41,6 +41,7 @@ from openmed.core.pii_i18n import (
     validate_danish_cpr,
     validate_dutch_bsn,
     validate_estonian_isikukood,
+    validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
     validate_hungarian_taj,
@@ -104,6 +105,7 @@ class TestConstants:
             "sr",
             "hr",
             "bg",
+            "fi",
         }
 
     def test_language_names_keys(self):
@@ -3161,6 +3163,162 @@ def test_bulgarian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
         date_shift_days=None,
         keep_mapping=False,
         lang="bg",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
+def test_validate_finnish_hetu():
+    # 1900s '-' sign, including letter check characters.
+    assert validate_finnish_hetu("161175-802D")
+    assert validate_finnish_hetu("110174-237M")
+    # 1800s '+' sign.
+    assert validate_finnish_hetu("070385+1003")
+    # 2000s 'A' sign and 2023-reform signs.
+    assert validate_finnish_hetu("030904A406A")
+    assert validate_finnish_hetu("161175Y802D")
+    assert validate_finnish_hetu("030904B406A")
+
+    # Bad check character.
+    assert validate_finnish_hetu("161175-802E") is False
+    # Check-valid values with impossible embedded dates.
+    assert not validate_finnish_hetu("300275-8026")  # 30 February
+    assert not validate_finnish_hetu("320175-802N")  # day 32
+    # Invalid century sign or check char outside the mod-31 alphabet.
+    assert not validate_finnish_hetu("161175G802D")
+    assert not validate_finnish_hetu("161175-802I")
+    assert not validate_finnish_hetu("161175-802")
+    assert not validate_finnish_hetu("abcdef")
+    assert not validate_finnish_hetu("123")
+    # Individual numbers 000-001 and 900-999 are not ordinary HETU values.
+    assert not validate_finnish_hetu("161175-000J")
+    assert not validate_finnish_hetu("161175-001K")
+    assert not validate_finnish_hetu("161175-900K")
+    assert not validate_finnish_hetu(" 161175-802D ")
+    assert not validate_finnish_hetu(None)
+
+
+def test_faker_native_fi_ssn_round_trips_hetu_validator():
+    faker = Faker("fi_FI")
+    faker.seed_instance(1234)
+    for _ in range(200):
+        assert validate_finnish_hetu(faker.ssn())
+
+
+def test_generated_finnish_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["fi"] == "fi_FI"
+
+    anonymizer = Anonymizer(lang="fi", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("161175-802D", "national_id")
+
+    assert validate_finnish_hetu(surrogate) is True
+
+
+def test_finnish_clinical_sample_expected_spans():
+    text = (
+        "Potilas: Matti Virtanen. Syntymäaika 16.11.1975, "
+        "puhelin +358 40 123 4567, henkilötunnus 161175-802D, "
+        "osoite Mannerheimintie 12, postinumero 00100."
+    )
+    expected = {
+        ("date", 37, 47, "16.11.1975"),
+        ("phone_number", 57, 73, "+358 40 123 4567"),
+        ("national_id", 89, 100, "161175-802D"),
+        ("street_address", 109, 127, "Mannerheimintie 12"),
+        ("postcode", 141, 146, "00100"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("fi"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_finnish_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/fi.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "fi"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 37, 47, "16.11.1975"),
+        ("PHONE", 57, 73, "+358 40 123 4567"),
+        ("ID_NUM", 89, 100, "161175-802D"),
+        ("STREET_ADDRESS", 109, 127, "Mannerheimintie 12"),
+        ("ZIPCODE", 141, 146, "00100"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_finnish_hetu(ids_by_type["hetu"])
+
+
+def test_finnish_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/fi.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="fi",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="fi",
         consistent=False,
         seed=None,
         locale=None,

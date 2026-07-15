@@ -35,6 +35,7 @@ from openmed.core.pii_i18n import (
     validate_danish_cpr,
     validate_dutch_bsn,
     validate_estonian_isikukood,
+    validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
     validate_hungarian_taj,
@@ -339,6 +340,12 @@ def _register_builtin_specs() -> None:
         validate=validate_latvian_personas_kods,
         faker_method="personas_kods",
         faker_provider=LatvianPersonasKodsProvider,
+    )
+    _register_aliases(
+        ("fi", "fi_FI"),
+        id_type="hetu",
+        validate=validate_finnish_hetu,
+        faker_method="ssn",
     )
     _register_aliases(
         ("bg", "bg_BG"),
