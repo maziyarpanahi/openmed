@@ -919,11 +919,10 @@ def validate_jmbg(text: str) -> bool:
     - K: modulo-11 check digit; see :func:`_jmbg_check_digit`.
     """
 
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 13:
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{13}", text) is None:
         return False
 
+    digits = text
     numbers = [int(digit) for digit in digits]
     if numbers[12] != _jmbg_check_digit(numbers[:12]):
         return False
