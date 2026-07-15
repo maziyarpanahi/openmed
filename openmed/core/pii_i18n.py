@@ -914,11 +914,10 @@ def validate_croatian_oib(text: str) -> bool:
     :func:`_croatian_oib_check_digit`.
     """
 
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 11:
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{11}", text) is None:
         return False
 
+    digits = text
     numbers = [int(digit) for digit in digits]
     return numbers[10] == _croatian_oib_check_digit(numbers[:10])
 
@@ -3325,6 +3324,7 @@ _CROATIAN_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.4,
         validator=validate_croatian_oib,
+        safety_sweep_requires_context=True,
     ),
     PIIPattern(
         r"\b(?:[A-ZČĆŠŽĐ][A-Za-zčćšžđ.'-]+\s+(?:ulica|trg|avenija|cesta)\s+\d{1,5}[A-Za-z]?|(?:ulica|trg|avenija|cesta)\s+[A-ZČĆŠŽĐ][A-Za-zčćšžđ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
