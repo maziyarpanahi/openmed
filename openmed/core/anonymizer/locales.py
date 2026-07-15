@@ -103,7 +103,9 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "nl": ("nl_NL", "ssn"),  # BSN
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
-    "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    # CPF drives the OM-135 coherence round-trip; pt_PT surrogates draw NIF via
+    # the locale-keyed registry dispatch (``registry._LOCALE_ID_METHODS``).
+    "pt": ("pt_BR", "cpf"),
     "tr": ("tr_TR", "ssn"),  # TCKN
     "he": ("he_IL", "teudat_zehut"),  # Israeli Teudat Zehut
     "id": ("id_ID", "indonesian_nik"),  # NIK
