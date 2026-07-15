@@ -958,7 +958,7 @@ def validate_estonian_isikukood(text: str) -> bool:
       :func:`_estonian_isikukood_check_digit`.
     """
 
-    if re.fullmatch(r"[0-9]{11}", text) is None:
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{11}", text) is None:
         return False
 
     digits = text
