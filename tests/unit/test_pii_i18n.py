@@ -1,7 +1,9 @@
 """Tests for multilingual PII detection support (pii_i18n module)."""
 
 import json
+import random
 import re
+import warnings
 from pathlib import Path
 
 import pytest
@@ -9,7 +11,16 @@ from faker import Faker
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
-from openmed.core.anonymizer.providers.clinical_ids import generate_philhealth_pin
+from openmed.core.anonymizer.providers import (
+    HungarianTAJProvider,
+    generate_hungarian_taj,
+)
+from openmed.core.anonymizer.providers.clinical_ids import (
+    generate_bulgarian_egn,
+    generate_estonian_isikukood,
+    generate_jmbg,
+    generate_philhealth_pin,
+)
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -24,16 +35,21 @@ from openmed.core.pii_i18n import (
     USCC_PII_PATTERNS,
     get_patterns_for_language,
     validate_bic,
+    validate_bulgarian_egn,
+    validate_croatian_oib,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
+    validate_estonian_isikukood,
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_jmbg,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
@@ -77,7 +93,20 @@ class TestConstants:
         }
 
     def test_national_id_only_languages(self):
-        assert NATIONAL_ID_ONLY_LANGUAGES == {"pl", "lv", "sk", "ms", "tl", "da", "fi"}
+        assert NATIONAL_ID_ONLY_LANGUAGES == {
+            "pl",
+            "lv",
+            "sk",
+            "ms",
+            "tl",
+            "da",
+            "hu",
+            "et",
+            "sr",
+            "hr",
+            "bg",
+            "fi",
+        }
 
     def test_language_names_keys(self):
         assert set(LANGUAGE_NAMES.keys()) == SUPPORTED_LANGUAGES
@@ -729,6 +758,54 @@ class TestValidateDanishCPR:
         surrogate = anonymizer.surrogate("170885-1234", "national_id")
 
         assert validate_danish_cpr(surrogate) is True
+
+
+class TestValidateHungarianTaj:
+    """Tests for validate_hungarian_taj()."""
+
+    @pytest.mark.parametrize(
+        "value",
+        ["123456788", "123 456 788", "123-456-788", "000000017"],
+    )
+    def test_accepts_valid_taj(self, value):
+        assert validate_hungarian_taj(value) is True
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            "123456789",  # wrong check digit
+            "12345678",  # too short
+            "1234567880",  # too long
+            "123 456-788",  # mixed separators
+            "123.456.788",  # unsupported separator
+            "１２３４５６７８８",  # non-ASCII digits
+            "",
+        ],
+    )
+    def test_rejects_invalid_taj(self, value):
+        assert validate_hungarian_taj(value) is False
+
+    def test_rejects_non_string(self):
+        assert validate_hungarian_taj(None) is False
+
+    def test_public_generator_round_trips_validator(self):
+        assert HungarianTAJProvider is not None
+        for seed in range(50):
+            value = generate_hungarian_taj(rng=random.Random(seed))
+            assert validate_hungarian_taj(value), (seed, value)
+
+    def test_public_generator_skips_reserved_unknown_person_code(self):
+        class SequenceRandom:
+            def __init__(self):
+                self.values = iter([9, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+
+            def randint(self, _start, _end):
+                return next(self.values)
+
+        value = generate_hungarian_taj(rng=SequenceRandom())
+
+        assert value != "900000007"
+        assert validate_hungarian_taj(value)
 
 
 class TestValidateCzechoslovakRodneCislo:
@@ -1651,6 +1728,55 @@ class TestLanguagePIIPatterns:
 
         assert expected <= observed
 
+    def test_hungarian_clinical_sample_expected_spans(self):
+        text = (
+            "Beteg: Kovács Anna. Születési dátum: 1985. május 5. "
+            "Telefon: +36 30 123 4567. TAJ-szám: 123 456 788. "
+            "Lakcím: Kossuth Lajos utca 12, irányítószám: 1051 Budapest."
+        )
+        expected = {
+            ("date", 37, 51, "1985. május 5."),
+            ("phone_number", 61, 76, "+36 30 123 4567"),
+            ("national_id", 88, 99, "123 456 788"),
+            ("street_address", 109, 130, "Kossuth Lajos utca 12"),
+            ("postcode", 146, 150, "1051"),
+        }
+        observed = set()
+        for pattern in get_patterns_for_language("hu"):
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+        assert expected <= observed
+
+    def test_hungarian_taj_pattern_rejects_bad_checksum(self):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["hu"]
+            if pattern.entity_type == "national_id"
+        ]
+        assert patterns, "Hungarian pack must expose a national_id pattern"
+        for pattern in patterns:
+            matches = list(
+                re.finditer(pattern.pattern, "TAJ: 123 456 789", pattern.flags)
+            )
+            assert matches, "Hungarian TAJ pattern must recognize formatted candidates"
+            for match in matches:
+                assert pattern.validator is not None
+                assert not pattern.validator(match.group(0))
+
+    def test_hungarian_taj_safety_sweep_requires_context(self):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["hu"]
+            if pattern.entity_type == "national_id"
+        ]
+
+        assert patterns
+        assert all(pattern.safety_sweep_requires_context for pattern in patterns)
+
     def test_romanian_clinical_sample_expected_spans(self):
         text = (
             "Pacient: Ana Popescu, nascuta 12 martie 1985. "
@@ -2403,6 +2529,651 @@ def test_latvian_i18n_golden_fixture_offsets():
         assert text[start:end] == value, label
 
 
+def test_validate_estonian_isikukood():
+    # Standard first-pass checksums.
+    assert validate_estonian_isikukood("47511160002")
+    assert validate_estonian_isikukood("38205210123")
+    assert validate_estonian_isikukood("60409032208")
+    # Second-pass weight fallback (first pass leaves remainder 10).
+    assert validate_estonian_isikukood("47511160214")
+    assert validate_estonian_isikukood("18503070027")
+    # Both passes leave remainder 10, so the check digit falls back to 0.
+    assert validate_estonian_isikukood("47511160080")
+    assert validate_estonian_isikukood("18503071660")
+
+    # Bad check digit.
+    assert not validate_estonian_isikukood("47511160003")
+    # Checksum-valid values with impossible embedded dates.
+    assert not validate_estonian_isikukood("47511320008")
+    assert not validate_estonian_isikukood("47502290008")
+    # Checksum-valid values with invalid century/sex first digits.
+    assert not validate_estonian_isikukood("77511160005")
+    assert not validate_estonian_isikukood("87511160006")
+    assert not validate_estonian_isikukood("97511160007")
+    # Isikukood has no formatted representation; separators are invalid.
+    assert not validate_estonian_isikukood("475-111-60002")
+    assert not validate_estonian_isikukood(None)
+    assert not validate_estonian_isikukood("abcdef")
+    assert not validate_estonian_isikukood("123")
+
+
+def test_generated_estonian_isikukood_round_trips_validator():
+    rng = random.Random(1234)
+    for _ in range(200):
+        assert validate_estonian_isikukood(generate_estonian_isikukood(rng=rng))
+
+
+def test_generated_estonian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["et"] == "et_EE"
+
+    anonymizer = Anonymizer(lang="et", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("47511160002", "national_id")
+
+    assert validate_estonian_isikukood(surrogate) is True
+
+
+def test_estonian_clinical_sample_expected_spans():
+    text = (
+        "Patsient: Mari Tamm. Sunniaeg 16.11.1975, "
+        "telefon +372 5123 4567, isikukood 47511160002, "
+        "aadress Pikk tanav 12, postiindeks 10115."
+    )
+    expected = {
+        ("date", 30, 40, "16.11.1975"),
+        ("phone_number", 50, 64, "+372 5123 4567"),
+        ("national_id", 76, 87, "47511160002"),
+        ("street_address", 97, 110, "Pikk tanav 12"),
+        ("postcode", 124, 129, "10115"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("et"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_estonian_street_address_supports_native_diacritics():
+    text = "Aadress: Jõe tänav 5, Tallinn."
+    observed = {
+        match.group(0)
+        for pattern in get_patterns_for_language("et")
+        if pattern.entity_type == "street_address"
+        for match in re.finditer(pattern.pattern, text, pattern.flags)
+    }
+
+    assert "Jõe tänav 5" in observed
+
+
+def test_estonian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/et.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "et"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 30, 40, "16.11.1975"),
+        ("PHONE", 50, 64, "+372 5123 4567"),
+        ("ID_NUM", 76, 87, "47511160002"),
+        ("STREET_ADDRESS", 97, 110, "Pikk tanav 12"),
+        ("ZIPCODE", 124, 129, "10115"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_estonian_isikukood(ids_by_type["isikukood"])
+
+
+def test_estonian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/et.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-03T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="et",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="et",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
+def test_validate_jmbg():
+    # Standard checksum path.
+    assert validate_jmbg("1611975710028")
+    assert validate_jmbg("2105982710174")
+    # A 2000s birth date (YYY below 800).
+    assert validate_jmbg("0309004715013")
+    # Special rule: remainder 10 or 11 yields check digit 0.
+    assert validate_jmbg("0703985710130")
+    assert validate_jmbg("0703985710040")
+
+    # Bad check digit.
+    assert not validate_jmbg("1611975710029")
+    # Checksum-valid values with impossible embedded dates.
+    assert not validate_jmbg(_jmbg_with_valid_check("3211975710"))  # day 32
+    assert not validate_jmbg(_jmbg_with_valid_check("3002988715"))  # 30 Feb
+    assert not validate_jmbg(_jmbg_with_valid_check("1613975710"))  # month 13
+    assert not validate_jmbg("161197-5710028")
+    assert not validate_jmbg("JMBG 1611975710028")
+    assert not validate_jmbg(None)
+    assert not validate_jmbg("abcdef")
+    assert not validate_jmbg("123")
+
+
+def _jmbg_with_valid_check(first_ten: str) -> str:
+    """Complete a 12-digit JMBG body with a valid check digit for tests."""
+    from openmed.core.pii_i18n import _jmbg_check_digit
+
+    body = [int(digit) for digit in first_ten + "00"]
+    return first_ten + "00" + str(_jmbg_check_digit(body))
+
+
+def test_generated_jmbg_round_trips_validator():
+    rng = random.Random(1234)
+    for _ in range(200):
+        assert validate_jmbg(generate_jmbg(rng=rng))
+
+
+def test_generated_serbian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["sr"] == "sr_RS"
+
+    anonymizer = Anonymizer(lang="sr", consistent=True, seed=42)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        surrogate = anonymizer.surrogate("1611975710028", "national_id")
+
+    assert validate_jmbg(surrogate) is True
+
+
+def test_serbian_clinical_sample_expected_spans():
+    text = (
+        "Pacijent: Marko Petrovic. Datum rodjenja 16.11.1975, "
+        "telefon +381 64 123 4567, JMBG 1611975710028, "
+        "adresa Bulevar Oslobodjenja 45, postanski broj 21000."
+    )
+    expected = {
+        ("date", 41, 51, "16.11.1975"),
+        ("phone_number", 61, 77, "+381 64 123 4567"),
+        ("national_id", 84, 97, "1611975710028"),
+        ("street_address", 106, 129, "Bulevar Oslobodjenja 45"),
+        ("postcode", 146, 151, "21000"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("sr"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_serbian_cyrillic_sample_expected_spans():
+    text = (
+        "Пацијент: Јелена Јовановић. Датум рођења 05.03.1988, "
+        "телефон +381 63 987 6543, ЈМБГ 0503988715010, "
+        "адреса Булевар Ослобођења 45, поштански број 21000."
+    )
+    expected = {
+        ("date", 41, 51, "05.03.1988"),
+        ("phone_number", 61, 77, "+381 63 987 6543"),
+        ("national_id", 84, 97, "0503988715010"),
+        ("street_address", 106, 127, "Булевар Ослобођења 45"),
+        ("postcode", 144, 149, "21000"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("sr"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_serbian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/sr.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 2
+    scripts = {row["metadata"]["script"] for row in rows}
+    assert scripts == {"latin", "cyrillic"}
+
+    for row in rows:
+        assert row["language"] == "sr"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        labels = set()
+        for span in row["gold_spans"]:
+            assert text[span["start"] : span["end"]] == span["text"], span
+            labels.add(span["label"])
+        assert labels == {"DATE", "PHONE", "ID_NUM", "STREET_ADDRESS", "ZIPCODE"}
+
+        ids_by_type = {
+            span["metadata"]["identifier_type"]: span["text"]
+            for span in row["gold_spans"]
+            if span["label"] == "ID_NUM"
+        }
+        assert validate_jmbg(ids_by_type["jmbg"])
+
+
+def test_serbian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/sr.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 2
+    for row in rows:
+        empty_result = PredictionResult(
+            text=row["text"],
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-14T00:00:00Z",
+            metadata={},
+        )
+
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            row["text"],
+            empty_result,
+            lang="sr",
+        )
+        result = _build_deidentification_result(
+            row["text"],
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="sr",
+            consistent=False,
+            seed=None,
+            locale=None,
+            use_safety_sweep=True,
+        )
+
+        assert added_count == len(row["gold_spans"]), row["metadata"]["script"]
+        for span in row["gold_spans"]:
+            assert span["text"] not in result.deidentified_text, span
+
+
+def test_validate_croatian_oib():
+    assert validate_croatian_oib("12345678903")
+    assert validate_croatian_oib("06185927341")
+    assert validate_croatian_oib("97531864205")
+    assert validate_croatian_oib("55512345672")
+
+    # Bad ISO 7064 MOD 11,10 check digit.
+    assert not validate_croatian_oib("12345678904")
+    assert not validate_croatian_oib("97531864206")
+    # Wrong length or shape.
+    assert not validate_croatian_oib("1234567890")
+    assert not validate_croatian_oib("123456789031")
+    assert not validate_croatian_oib("abcdef")
+    assert not validate_croatian_oib("123")
+    assert not validate_croatian_oib("123 456 789 03")
+    assert not validate_croatian_oib("OIB 12345678903")
+    assert not validate_croatian_oib(None)
+
+
+def test_croatian_national_id_safety_sweep_requires_context():
+    patterns = get_patterns_for_language("hr")
+    national_id_patterns = [
+        pattern for pattern in patterns if pattern.entity_type == "national_id"
+    ]
+
+    assert national_id_patterns
+    assert all(
+        pattern.safety_sweep_requires_context for pattern in national_id_patterns
+    )
+
+
+def test_faker_native_hr_ssn_round_trips_oib_validator():
+    faker = Faker("hr_HR")
+    faker.seed_instance(1234)
+    for _ in range(200):
+        assert validate_croatian_oib(faker.ssn())
+
+
+def test_generated_croatian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["hr"] == "hr_HR"
+
+    anonymizer = Anonymizer(lang="hr", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("97531864205", "national_id")
+
+    assert validate_croatian_oib(surrogate) is True
+
+
+def test_croatian_clinical_sample_expected_spans():
+    text = (
+        "Pacijent: Ivan Horvat. Datum rodjenja 16.11.1975, "
+        "telefon +385 91 234 5678, OIB 97531864205, "
+        "adresa Savska ulica 12, postanski broj 10000."
+    )
+    expected = {
+        ("date", 38, 48, "16.11.1975"),
+        ("phone_number", 58, 74, "+385 91 234 5678"),
+        ("national_id", 80, 91, "97531864205"),
+        ("street_address", 100, 115, "Savska ulica 12"),
+        ("postcode", 132, 137, "10000"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("hr"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_croatian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/hr.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "hr"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 38, 48, "16.11.1975"),
+        ("PHONE", 58, 74, "+385 91 234 5678"),
+        ("ID_NUM", 80, 91, "97531864205"),
+        ("STREET_ADDRESS", 100, 115, "Savska ulica 12"),
+        ("ZIPCODE", 132, 137, "10000"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_croatian_oib(ids_by_type["oib"])
+
+
+def test_croatian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/hr.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="hr",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="hr",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
+def test_validate_bulgarian_egn():
+    # All three century encodings: 1900s (month 01-12), 1800s (month
+    # 21-32), and 2000s (month 41-52).
+    assert validate_bulgarian_egn("7511168208")
+    assert validate_bulgarian_egn("8523071005")
+    assert validate_bulgarian_egn("0449035017")
+    # Weighted-sum remainder of 10 yields check digit 0.
+    assert validate_bulgarian_egn("8503070010")
+
+    # Bad check digit.
+    assert validate_bulgarian_egn("7511168209") is False
+    # Checksum-valid values with impossible embedded dates.
+    assert not validate_bulgarian_egn("7511328203")  # day 32
+    assert not validate_bulgarian_egn("7502308204")  # 30 February
+    assert not validate_bulgarian_egn("7515328201")  # month code 15
+    assert not validate_bulgarian_egn("abcdef")
+    assert not validate_bulgarian_egn("123")
+    assert not validate_bulgarian_egn("751116-8208")
+    assert not validate_bulgarian_egn("ЕГН 7511168208")
+    assert not validate_bulgarian_egn(None)
+
+
+def test_generated_bulgarian_egn_round_trips_validator():
+    rng = random.Random(1234)
+    for _ in range(200):
+        assert validate_bulgarian_egn(generate_bulgarian_egn(rng=rng))
+
+
+def test_generated_bulgarian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["bg"] == "bg_BG"
+
+    anonymizer = Anonymizer(lang="bg", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("7511168208", "national_id")
+
+    assert validate_bulgarian_egn(surrogate) is True
+
+
+def test_bulgarian_clinical_sample_expected_spans():
+    text = (
+        "Пациент: Иван Петров. Дата на раждане 16.11.1975, "
+        "телефон +359 88 123 4567, ЕГН 7511168208, "
+        "адрес улица Раковски 35, пощенски код 1000."
+    )
+    expected = {
+        ("date", 38, 48, "16.11.1975"),
+        ("phone_number", 58, 74, "+359 88 123 4567"),
+        ("national_id", 80, 90, "7511168208"),
+        ("street_address", 98, 115, "улица Раковски 35"),
+        ("postcode", 130, 134, "1000"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("bg"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_bulgarian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/bg.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "bg"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 38, 48, "16.11.1975"),
+        ("PHONE", 58, 74, "+359 88 123 4567"),
+        ("ID_NUM", 80, 90, "7511168208"),
+        ("STREET_ADDRESS", 98, 115, "улица Раковски 35"),
+        ("ZIPCODE", 130, 134, "1000"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_bulgarian_egn(ids_by_type["egn"])
+
+
+def test_bulgarian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/bg.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="bg",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="bg",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
 def test_validate_finnish_hetu():
     # 1900s '-' sign, including letter check characters.
     assert validate_finnish_hetu("161175-802D")
@@ -2598,6 +3369,63 @@ class TestSlovakLocaleAndFixture:
         }
         assert actual == expected
         for label, start, end, value in actual:
+            assert text[start:end] == value, label
+
+
+class TestHungarianLocaleAndFixture:
+    """Tests for Hungarian locale, TAJ surrogate, and golden fixture wiring."""
+
+    def test_locale_and_surrogate_taj_round_trip(self):
+        assert LANG_TO_LOCALE["hu"] == "hu_HU"
+        anon = Anonymizer(lang="hu", consistent=True, seed=42)
+
+        surrogate = anon.surrogate("123456788", "national_id")
+
+        assert validate_hungarian_taj(surrogate) is True
+
+    def test_i18n_golden_fixture_offsets_and_patterns(self):
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/hu.jsonl")
+        rows = [
+            json.loads(line)
+            for line in fixture_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["language"] == "hu"
+        assert row["metadata"]["synthetic"] is True
+        assert row["metadata"]["category"] == "multilingual"
+
+        text = row["text"]
+        expected = {
+            (span["label"], span["start"], span["end"], span["text"])
+            for span in row["gold_spans"]
+        }
+        labels = {
+            "date": "DATE",
+            "national_id": "ID_NUM",
+            "phone_number": "PHONE",
+            "postcode": "ZIPCODE",
+            "street_address": "STREET_ADDRESS",
+        }
+        observed = set()
+        for pattern in LANGUAGE_PII_PATTERNS["hu"]:
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add(
+                    (
+                        labels[pattern.entity_type],
+                        match.start(),
+                        match.end(),
+                        value,
+                    )
+                )
+
+        assert expected <= observed
+        for label, start, end, value in expected:
             assert text[start:end] == value, label
 
 
