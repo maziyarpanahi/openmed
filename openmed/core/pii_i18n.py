@@ -3907,6 +3907,15 @@ _ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
 # Czech PII patterns
 # ---------------------------------------------------------------------------
 
+# Czech month names in both nominative and genitive (dates read
+# "16. listopadu 1975"). Longer forms are listed first so the alternation
+# prefers them.
+_CZECH_MONTH_PATTERN = (
+    r"ledna|leden|února|únor|března|březen|dubna|duben|"
+    r"května|květen|července|červenec|června|červen|"
+    r"srpna|srpen|září|října|říjen|listopadu|listopad|prosince|prosinec"
+)
+
 _CZECH_PII_PATTERNS: List[PIIPattern] = [
     PIIPattern(
         r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
@@ -3918,21 +3927,44 @@ _CZECH_PII_PATTERNS: List[PIIPattern] = [
             "narozeni",
             "narození",
             "narozen",
+            "narozena",
             "prijat",
             "přijat",
+            "přijata",
             "propusten",
             "propuštěn",
+            "propuštěna",
         ],
         context_boost=0.3,
     ),
     PIIPattern(
-        r"(?<!\w)(?:\+420[\s.-]?|0)?[67]\d{2}(?:[\s.-]?\d{3}){2}\b",
+        rf"\b\d{{1,2}}\.?\s+(?:{_CZECH_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "datum",
+            "narození",
+            "narozeni",
+            "narozen",
+            "narozena",
+            "přijat",
+            "prijat",
+            "přijata",
+            "propuštěn",
+            "propusten",
+            "propuštěna",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+420\s?)?[67]\d{2}(?:[\s.-]?\d{3}){2}\b",
         "phone_number",
         priority=8,
         base_score=0.55,
-        context_words=["telefon", "tel", "mobil", "kontakt"],
+        context_words=["telefon", "tel", "mobil", "číslo", "cislo", "kontakt"],
         context_boost=0.35,
-        flags=re.IGNORECASE,
     ),
     PIIPattern(
         r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{3,4}(?!\d)",
@@ -3944,21 +3976,29 @@ _CZECH_PII_PATTERNS: List[PIIPattern] = [
             "rodné číslo",
             "rc",
             "rč",
+            "identifikacni cislo",
+            "identifikační číslo",
         ],
         context_boost=0.45,
         validator=validate_czech_rodne_cislo,
     ),
     PIIPattern(
-        r"\b(?:[A-ZÀ-Ž][A-Za-zà-ž.'-]+\s+(?:ulice|ul\.|trida|třída|namesti|náměstí)\s+\d{1,5}[A-Za-z]?|(?:ulice|ul\.|trida|třída|namesti|náměstí)\s+[A-ZÀ-Ž][A-Za-zà-ž .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        r"\b(?!(?:adresa|bydliště|bydliste|trvalé)\b)(?:[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+(?:\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+)*?\s+(?:ulice|ul\.|trida|třída|namesti|náměstí|nábřeží)\s+\d{1,5}[A-Za-z]?|(?:ulice|ul\.|trida|třída|namesti|náměstí|nábřeží)\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
         "street_address",
         priority=7,
         base_score=0.65,
-        context_words=["adresa", "bydliste", "bydliště", "ulice"],
+        context_words=[
+            "adresa",
+            "bydliste",
+            "bydliště",
+            "trvalé bydliště",
+            "ulice",
+        ],
         context_boost=0.25,
         flags=re.IGNORECASE,
     ),
     PIIPattern(
-        r"\b\d{3}\s?\d{2}\b",
+        r"(?<!\d)\d{3}\s?\d{2}(?!\d)",
         "postcode",
         priority=6,
         base_score=0.3,
@@ -5349,16 +5389,16 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "ZIPCODE": ["10115", "50090", "80010"],
     },
     "cs": {
-        "NAME": ["Jan Novak", "Petra Svobodova", "Tomas Dvorak", "Eva Cerna"],
-        "FIRST_NAME": ["Jan", "Petra", "Tomas", "Eva"],
-        "LAST_NAME": ["Novak", "Svobodova", "Dvorak", "Cerna"],
+        "NAME": ["Jana Nováková", "Petr Novák", "Marie Svobodová", "Tomáš Král"],
+        "FIRST_NAME": ["Jana", "Petr", "Marie", "Tomáš"],
+        "LAST_NAME": ["Nováková", "Novák", "Svobodová", "Král"],
         "EMAIL": ["pacient@example.cz", "kontakt@example.org"],
         "PHONE": ["+420 601 234 567", "702 345 678"],
         "ID_NUM": ["820521/0002", "485305/123"],
-        "STREET_ADDRESS": ["Vodickova ulice 12", "Masarykova trida 45"],
+        "STREET_ADDRESS": ["Hlavní ulice 12", "Náměstí Míru 5"],
         "URL_PERSONAL": ["https://example.cz"],
         "USERNAME": ["pacient123", "uzivatel456"],
-        "DATE": ["16.11.1975", "01.01.2000"],
+        "DATE": ["16.11.1975", "16. listopadu 1975"],
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Praha", "Brno", "Ostrava"],
         "ZIPCODE": ["110 00", "602 00", "702 00"],
