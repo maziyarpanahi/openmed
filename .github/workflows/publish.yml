@@ -129,6 +129,123 @@ jobs:
         run: npm publish --ignore-scripts --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+  evidence:
+    name: Sign and attach release evidence
+    needs: [provenance, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # attach the evidence assets to the tagged release
+      id-token: write  # keyless Sigstore signing
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v8
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      # Evidence generation is best effort: the provenance job already treats
+      # attestation as continue-on-error, so the bundle may not exist at all.
+      - name: Download provenance evidence
+        id: provenance-evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: release-provenance
+          path: release-provenance/
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Sigstore
+        id: install-sigstore
+        continue-on-error: true
+        run: |
+          python -m pip install --upgrade pip
+          pip install 'sigstore==4.4.0'
+
+      - name: Sign distributions with Sigstore
+        id: sign-distributions
+        if: steps.install-sigstore.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p sigstore-bundles
+          for artifact in dist/*; do
+            name="$(basename "$artifact")"
+            python -m sigstore sign "$artifact" \
+              --bundle "sigstore-bundles/${name}.sigstore.json"
+          done
+
+      # Evidence that was produced must verify. This step is deliberately not
+      # continue-on-error: a bundle that cannot be verified must never be
+      # attached to a release.
+      - name: Verify Sigstore bundles
+        if: steps.sign-distributions.outcome == 'success'
+        shell: bash
+        env:
+          SIGNER_WORKFLOW: .github/workflows/publish.yml
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/${SIGNER_WORKFLOW}@${GITHUB_REF}"
+          for artifact in dist/*; do
+            name="$(basename "$artifact")"
+            bundle="sigstore-bundles/${name}.sigstore.json"
+            test -s "$bundle"
+            python -m sigstore verify github "$artifact" \
+              --bundle "$bundle" \
+              --offline \
+              --cert-identity "$identity" \
+              --repository "$GITHUB_REPOSITORY" \
+              --sha "$GITHUB_SHA" \
+              --ref "$GITHUB_REF"
+          done
+
+      # Attachment of produced evidence must succeed. `gh release create` is
+      # tolerated as a no-op because the release usually already exists, and the
+      # sbom job may otherwise create it first.
+      - name: Attach release evidence to the tagged GitHub release
+        if: >-
+          steps.sign-distributions.outcome == 'success' ||
+          steps.provenance-evidence.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}  # this job does not check out the repo
+          SIGN_OUTCOME: ${{ steps.sign-distributions.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          assets=()
+          for candidate in \
+            release-provenance/provenance-bundles/python-distributions.intoto.json \
+            release-provenance/release-artifact-digests.txt; do
+            if [ -s "$candidate" ]; then
+              assets+=("$candidate")
+            fi
+          done
+
+          # Only ship signatures from a fully successful signing run: a partial
+          # run leaves bundles behind that the verify step never checked.
+          if [ "$SIGN_OUTCOME" = "success" ]; then
+            assets+=(sigstore-bundles/*.sigstore.json)
+          fi
+
+          if [ "${#assets[@]}" -eq 0 ]; then
+            echo "No release evidence was produced; nothing to attach."
+            exit 0
+          fi
+
+          printf 'Attaching release evidence:\n'
+          printf -- '- %s\n' "${assets[@]}"
+
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
 
   sbom:
     name: Generate release SBOM
