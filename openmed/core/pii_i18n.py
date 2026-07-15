@@ -918,11 +918,10 @@ def validate_bulgarian_egn(text: str) -> bool:
     - C: weighted check digit; see :func:`_bulgarian_egn_check_digit`.
     """
 
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 10:
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{10}", text) is None:
         return False
 
+    digits = text
     numbers = [int(digit) for digit in digits]
     if numbers[9] != _bulgarian_egn_check_digit(numbers[:9]):
         return False

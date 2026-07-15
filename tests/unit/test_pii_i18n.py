@@ -2423,6 +2423,9 @@ def test_validate_bulgarian_egn():
     assert not validate_bulgarian_egn("7515328201")  # month code 15
     assert not validate_bulgarian_egn("abcdef")
     assert not validate_bulgarian_egn("123")
+    assert not validate_bulgarian_egn("751116-8208")
+    assert not validate_bulgarian_egn("ЕГН 7511168208")
+    assert not validate_bulgarian_egn(None)
 
 
 def test_generated_bulgarian_egn_round_trips_validator():
