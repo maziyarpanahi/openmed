@@ -37,6 +37,7 @@ from openmed.core.pii_i18n import (
     validate_bic,
     validate_bulgarian_egn,
     validate_croatian_oib,
+    validate_czech_rodne_cislo,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
@@ -821,11 +822,27 @@ class TestValidateCzechoslovakRodneCislo:
     def test_valid_slovak_rodne_cislo_without_slash(self):
         assert validate_czechoslovak_rodne_cislo("8505051236") is True
 
+    def test_valid_remainder_ten_check_digit_zero(self):
+        # first_nine % 11 == 10, encoded as a check digit of 0. The old
+        # whole-number modulo-11 rule rejected these valid older numbers.
+        assert int("850505006") % 11 == 10
+        assert validate_czechoslovak_rodne_cislo("850505/0060") is True
+
+    def test_valid_legacy_nine_digit_rodne_cislo(self):
+        # Pre-1954 birth numbers use nine digits and carry no check digit.
+        assert validate_czechoslovak_rodne_cislo("510505/123") is True
+
+    def test_invalid_legacy_nine_digit_impossible_date(self):
+        assert validate_czechoslovak_rodne_cislo("510231/123") is False
+
     def test_invalid_slovak_rodne_cislo_wrong_checksum(self):
         assert validate_czechoslovak_rodne_cislo("850505/1237") is False
 
     def test_invalid_slovak_rodne_cislo_impossible_date(self):
         assert validate_czechoslovak_rodne_cislo("850231/0003") is False
+
+    def test_czech_alias_is_the_same_validator(self):
+        assert validate_czech_rodne_cislo is validate_czechoslovak_rodne_cislo
 
     def test_generated_slovak_surrogate_passes_validator(self):
         assert LANG_TO_LOCALE["sk"] == "sk_SK"

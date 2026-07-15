@@ -1210,23 +1210,38 @@ def validate_korean_rrn(text: str) -> bool:
 def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     """Validate a Czech/Slovak rodne cislo birth number.
 
-    Modern Czech and Slovak birth numbers use ten digits in the shape
-    ``YYMMDDXXXX`` with a modulo-11 checksum over the whole value. Female
-    identifiers add 50 to the birth month; overflow series may add 20 for
-    men or 70 for women.
+    Czech and Slovak birth numbers share the Czechoslovak system. Modern values
+    (assigned from 1954 onward) use ten digits in the shape ``YYMMDDXXXC`` where
+    ``C`` is a modulo-11 check digit computed over the first nine digits: it
+    equals ``first_nine % 11``, except that a remainder of 10 is encoded as a
+    check digit of ``0``. Legacy pre-1954 numbers use nine digits and carry no
+    check digit. Female identifiers add 50 to the birth month; post-2004
+    overflow series may add 20 for men or 70 for women.
 
     Args:
         text: Birth number string, optionally containing a slash, spaces, or
             hyphen separators.
 
     Returns:
-        True if the identifier has a decodable birth date and modulo-11 check.
+        True if the identifier has a decodable birth date and, for ten-digit
+        values, a valid modulo-11 check digit.
     """
     digits = re.sub(r"[^0-9]", "", text)
 
-    if len(digits) != 10:
-        return False
-    if int(digits) % 11 != 0:
+    if len(digits) == 10:
+        first_nine = digits[:9]
+        remainder = int(first_nine) % 11
+        # A remainder of 10 cannot be a single digit; older numbers encode it
+        # as a check digit of 0 rather than being skipped entirely.
+        expected_check = 0 if remainder == 10 else remainder
+        if int(digits[9]) != expected_check:
+            return False
+        legacy = False
+    elif len(digits) == 9:
+        # Nine-digit values predate the 1954 ten-digit reform and carry no
+        # check digit; they are validated on date plausibility alone.
+        legacy = True
+    else:
         return False
 
     year_suffix = int(digits[0:2])
@@ -1247,26 +1262,42 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     else:
         return False
 
+    # The +20/+70 overflow series were only introduced in 2004, so a legacy
+    # nine-digit number can never carry them.
+    if legacy and overflow_series:
+        return False
+
     if day < 1 or day > 31:
         return False
 
     import calendar
 
-    # Ten-digit rodne cislo values were introduced in 1954. The two-digit year
-    # is century-ambiguous, so accept either plausible civil-registration
-    # century while keeping the overflow series in the post-2004 era.
-    for century in (1900, 2000):
+    # The two-digit year is century-ambiguous. Ten-digit values were introduced
+    # in 1954; nine-digit legacy values predate it. Accept any plausible civil-
+    # registration century that reconstructs a real calendar date.
+    centuries = (1800, 1900) if legacy else (1900, 2000)
+    for century in centuries:
         year = century + year_suffix
-        if year < 1954:
-            continue
-        if overflow_series and year < 2004:
-            continue
+        if legacy:
+            if year >= 1954:
+                continue
+        else:
+            if year < 1954:
+                continue
+            if overflow_series and year < 2004:
+                continue
         try:
             if day <= calendar.monthrange(year, month)[1]:
                 return True
         except (ValueError, calendar.IllegalMonthError):
             continue
     return False
+
+
+# Czech and Slovak share the Czechoslovak birth-number system; issue #815 refers
+# to the Czech validator by its own name, so expose an alias instead of
+# duplicating the logic.
+validate_czech_rodne_cislo = validate_czechoslovak_rodne_cislo
 
 
 # Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
