@@ -39,6 +39,7 @@ from openmed.core.pii_i18n import (
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_jmbg,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
@@ -77,6 +78,7 @@ from .clinical_ids import (
     PolishPeselProvider,
     RodneCisloProvider,
     RomanianCNPProvider,
+    SerbianJmbgProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
@@ -334,6 +336,13 @@ def _register_builtin_specs() -> None:
         validate=validate_latvian_personas_kods,
         faker_method="personas_kods",
         faker_provider=LatvianPersonasKodsProvider,
+    )
+    _register_aliases(
+        ("sr", "sr_RS"),
+        id_type="jmbg",
+        validate=validate_jmbg,
+        faker_method="jmbg",
+        faker_provider=SerbianJmbgProvider,
     )
     _register_aliases(
         ("et", "et_EE"),

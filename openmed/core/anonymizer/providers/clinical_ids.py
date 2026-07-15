@@ -924,6 +924,59 @@ class LatvianPersonasKodsProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Serbian / ex-Yugoslav JMBG
+# ---------------------------------------------------------------------------
+
+
+def generate_jmbg(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic JMBG accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1900, 2029)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    region = source.randint(70, 89)
+    serial = source.randint(0, 999)
+
+    body = [
+        day // 10,
+        day % 10,
+        month // 10,
+        month % 10,
+        (year % 1000) // 100,
+        (year % 100) // 10,
+        year % 10,
+        region // 10,
+        region % 10,
+        serial // 100,
+        (serial % 100) // 10,
+        serial % 10,
+    ]
+    check = _jmbg_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _jmbg_check_digit(digits: list[int]) -> int:
+    weights = (7, 6, 5, 4, 3, 2)
+    total = sum(
+        weight * (digits[index] + digits[index + 6])
+        for index, weight in enumerate(weights)
+    )
+    remainder = 11 - (total % 11)
+    return 0 if remainder > 9 else remainder
+
+
+class SerbianJmbgProvider(BaseProvider):
+    """Generate synthetic Serbian / ex-Yugoslav JMBG values."""
+
+    def jmbg(self) -> str:
+        return generate_jmbg(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Estonian Isikukood
 # ---------------------------------------------------------------------------
 
@@ -1768,6 +1821,7 @@ __all__ = [
     "PolishPeselProvider",
     "RomanianCNPProvider",
     "RodneCisloProvider",
+    "SerbianJmbgProvider",
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
     "SpanishNIEProvider",
@@ -1784,6 +1838,7 @@ __all__ = [
     "generate_iban",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
+    "generate_jmbg",
     "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
