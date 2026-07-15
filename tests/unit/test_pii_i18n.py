@@ -2423,8 +2423,12 @@ def test_validate_estonian_isikukood():
     # Checksum-valid values with impossible embedded dates.
     assert not validate_estonian_isikukood("47511320008")
     assert not validate_estonian_isikukood("47502290008")
-    # Checksum-valid value with an invalid century/sex first digit.
+    # Checksum-valid values with invalid century/sex first digits.
+    assert not validate_estonian_isikukood("77511160005")
+    assert not validate_estonian_isikukood("87511160006")
     assert not validate_estonian_isikukood("97511160007")
+    # Isikukood has no formatted representation; separators are invalid.
+    assert not validate_estonian_isikukood("475-111-60002")
     assert not validate_estonian_isikukood("abcdef")
     assert not validate_estonian_isikukood("123")
 
@@ -2466,6 +2470,18 @@ def test_estonian_clinical_sample_expected_spans():
             observed.add((pattern.entity_type, match.start(), match.end(), value))
 
     assert expected <= observed
+
+
+def test_estonian_street_address_supports_native_diacritics():
+    text = "Aadress: Jõe tänav 5, Tallinn."
+    observed = {
+        match.group(0)
+        for pattern in get_patterns_for_language("et")
+        if pattern.entity_type == "street_address"
+        for match in re.finditer(pattern.pattern, text, pattern.flags)
+    }
+
+    assert "Jõe tänav 5" in observed
 
 
 def test_estonian_i18n_golden_fixture_offsets():
