@@ -119,6 +119,10 @@ surfaces delivered after `v1.8.1`.
   clinical extraction, alongside the redactor threat model, de-identification
   fuzz harness, and synthetic burned-in-PHI DICOM benchmark (#1213, #1214,
   #1350, #1352, #1388).
+- Added an offline pediatrics-growth zero-shot domain with growth-parameter,
+  percentile, z-score, developmental-milestone, feeding-history, and finding
+  display labels, canonical policy metadata, and synthetic per-label fixture
+  coverage (OM-896).
 
 ## [1.8.1] - 2026-07-10
 

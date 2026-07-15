@@ -17,9 +17,14 @@ from openmed.core.labels import (
     CKD_STAGE,
     CLINICAL_CONCEPT,
     CLINICAL_SIGNIFICANCE,
+    CONDITION,
+    DEVELOPMENTAL_MILESTONE,
     DIALYSIS_MODALITY,
     DYSPNEA_GRADE,
     GENE_SYMBOL,
+    GROWTH_PARAMETER,
+    GROWTH_PERCENTILE,
+    NUTRITIONAL_STATUS,
     OXYGEN_SUPPORT,
     PROTEIN_CHANGE,
     RENAL_FUNCTION_MEASURE,
@@ -211,3 +216,105 @@ class TestPulmonologyDomain:
                 assert document.offset_map.normalized_span_to_original_offsets(
                     ns, ne
                 ) == (span["start"], span["end"])
+
+
+PEDIATRICS_GROWTH_FIXTURE = (
+    Path(__file__).resolve().parents[2]
+    / "fixtures"
+    / "clinical"
+    / "pediatrics_growth.jsonl"
+)
+
+
+class TestPediatricsGrowthDomain:
+    """Pediatric growth and developmental-surveillance domain (issue #896)."""
+
+    EXPECTED_LABELS = [
+        "GrowthParameter",
+        "GrowthPercentile",
+        "GrowthZScore",
+        "DevelopmentalMilestone",
+        "FeedingHistory",
+        "PediatricFinding",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "GrowthParameter": GROWTH_PARAMETER,
+        "GrowthPercentile": GROWTH_PERCENTILE,
+        "GrowthZScore": GROWTH_PERCENTILE,
+        "DevelopmentalMilestone": DEVELOPMENTAL_MILESTONE,
+        "FeedingHistory": NUTRITIONAL_STATUS,
+        "PediatricFinding": CONDITION,
+    }
+    EXPECTED_ENTITIES = [
+        ("GrowthParameter", 0, 14, "Weight 14.2 kg"),
+        ("GrowthPercentile", 35, 58, "45th percentile for age"),
+        ("GrowthZScore", 67, 96, "height-for-age z-score of 0.4"),
+        ("DevelopmentalMilestone", 109, 128, "walks independently"),
+        ("FeedingHistory", 147, 183, "exclusively breastfed until 6 months"),
+        ("PediatricFinding", 185, 218, "Anterior fontanelle open and soft"),
+    ]
+
+    def test_domain_resolves(self):
+        assert "pediatrics_growth" in available_domains()
+        assert get_default_labels("pediatrics_growth") == self.EXPECTED_LABELS
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_label(label) == expected
+
+    def test_new_labels_are_clinical_concepts(self):
+        for label in (GROWTH_PARAMETER, GROWTH_PERCENTILE, DEVELOPMENTAL_MILESTONE):
+            assert label in CANONICAL_LABELS
+            assert normalize_label(label) == label
+            assert policy_label_for(label) == CLINICAL_CONCEPT
+
+    def _fixtures(self):
+        return [
+            json.loads(line)
+            for line in PEDIATRICS_GROWTH_FIXTURE.read_text().splitlines()
+            if line.strip()
+        ]
+
+    def test_fixture_loads(self):
+        assert len(self._fixtures()) == 1
+
+    def test_fixture_reports_disclaimer(self):
+        row = self._fixtures()[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "percentile or z-score" in disclaimer
+
+    def test_fixture_covers_percentile_and_milestone_spans(self):
+        labels = {
+            entity["label"] for row in self._fixtures() for entity in row["entities"]
+        }
+        assert {"GrowthPercentile", "DevelopmentalMilestone"} <= labels
+        assert labels == set(self.EXPECTED_LABELS)
+
+    def test_fixture_entities_match_expected(self):
+        row = self._fixtures()[0]
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+    def test_fixture_spans_keep_stable_offsets_through_normalization(self):
+        pipeline = Pipeline()
+        for row in self._fixtures():
+            document = pipeline.stage1_normalize(row["text"])
+            for entity in row["entities"]:
+                assert row["text"][entity["start"] : entity["end"]] == entity["text"], (
+                    entity
+                )
+                ns, ne = document.offset_map.original_span_to_normalized(
+                    entity["start"], entity["end"]
+                )
+                assert document.normalized_text[ns:ne] == entity["text"], entity
+                assert document.offset_map.normalized_span_to_original_offsets(
+                    ns, ne
+                ) == (entity["start"], entity["end"])
