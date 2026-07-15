@@ -69,6 +69,7 @@ NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
     "sr",
     "hr",
     "bg",
+    "fi",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -946,6 +947,60 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+_FINNISH_HETU_CHECK_ALPHABET = "0123456789ABCDEFHJKLMNPRSTUVWXY"
+_FINNISH_HETU_CENTURY_SIGNS = {
+    **{"+": 1800},
+    **{sign: 1900 for sign in "-YXWVU"},
+    **{sign: 2000 for sign in "ABCDEF"},
+}
+_FINNISH_HETU_RE = re.compile(
+    r"^(\d{2})(\d{2})(\d{2})([-+YXWVUABCDEF])(\d{3})([0-9ABCDEFHJKLMNPRSTUVWXY])$"
+)
+
+
+def validate_finnish_hetu(text: str) -> bool:
+    """Validate Finnish HETU personal identity code.
+
+    The HETU is ``DDMMYYCZZZQ``:
+
+    - DDMMYY: birth date within the century selected by C.
+    - C: century sign — ``+`` for the 1800s, ``-`` (or reform signs
+      ``Y``/``X``/``W``/``V``/``U``) for the 1900s, and ``A``-``F`` for
+      the 2000s.
+    - ZZZ: individual serial number.
+    - Q: modulo-31 check character over the nine digits ``DDMMYYZZZ``,
+      mapped through the alphabet ``0-9ABCDEFHJKLMNPRSTUVWXY``.
+    """
+
+    if not isinstance(text, str):
+        return False
+
+    match = _FINNISH_HETU_RE.fullmatch(text)
+    if match is None:
+        return False
+
+    day_text, month_text, year_text, sign, serial, check = match.groups()
+    if not 2 <= int(serial) <= 899:
+        return False
+
+    expected = _FINNISH_HETU_CHECK_ALPHABET[
+        int(day_text + month_text + year_text + serial) % 31
+    ]
+    if check != expected:
+        return False
+
+    year = _FINNISH_HETU_CENTURY_SIGNS[sign] + int(year_text)
+    month = int(month_text)
+    day = int(day_text)
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
 
 
 def validate_bulgarian_egn(text: str) -> bool:
@@ -3482,6 +3537,68 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Finnish PII patterns
+# ---------------------------------------------------------------------------
+
+_FINNISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "syntymäaika",
+            "syntymaaika",
+            "syntynyt",
+            "päivämäärä",
+            "paivamaara",
+            "saapunut",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+358[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{2,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["puhelin", "matkapuhelin", "gsm", "yhteystiedot"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{6}[-+YXWVUABCDEF]\d{3}[0-9ABCDEFHJKLMNPRSTUVWXY]\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "henkilötunnus",
+            "henkilotunnus",
+            "hetu",
+        ],
+        context_boost=0.4,
+        validator=validate_finnish_hetu,
+    ),
+    PIIPattern(
+        r"\b[A-ZÅÄÖ][a-zåäö.'-]*(?:katu|tie|kuja|polku|raitti)\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["osoite", "asuu", "katu"],
+        context_boost=0.25,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postinumero", "osoite"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
 # Bulgarian PII patterns (Cyrillic script)
 # ---------------------------------------------------------------------------
 
@@ -4517,6 +4634,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "fi": _FINNISH_PII_PATTERNS,
     "bg": _BULGARIAN_PII_PATTERNS,
     "hr": _CROATIAN_PII_PATTERNS,
     "sr": _SERBIAN_PII_PATTERNS,
@@ -5025,6 +5143,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
+    },
+    "fi": {
+        "NAME": ["Matti Virtanen", "Liisa Korhonen", "Juha Nieminen", "Anna Laine"],
+        "FIRST_NAME": ["Matti", "Liisa", "Juha", "Anna"],
+        "LAST_NAME": ["Virtanen", "Korhonen", "Nieminen", "Laine"],
+        "EMAIL": ["potilas@example.fi", "yhteys@example.org"],
+        "PHONE": ["+358 40 123 4567", "09 1234 567"],
+        "ID_NUM": ["210582-0179", "030904A501C"],
+        "STREET_ADDRESS": ["Mannerheimintie 12", "Aleksanterinkatu 5"],
+        "URL_PERSONAL": ["https://example.fi"],
+        "USERNAME": ["potilas123", "kayttaja456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Helsinki", "Tampere", "Turku"],
+        "ZIPCODE": ["00100", "33100", "20100"],
     },
     "bg": {
         "NAME": ["Иван Петров", "Мария Иванова", "Георги Димитров", "Елена Тодорова"],

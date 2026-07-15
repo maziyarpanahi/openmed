@@ -59,6 +59,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "tl": "fil_PH",
     "da": "da_DK",
     "ro": "ro_RO",
+    "fi": "fi_FI",
     "bg": "bg_BG",
     "hr": "hr_HR",
     "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
@@ -114,6 +115,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
+    "fi": ("fi_FI", "ssn"),  # Finnish HETU (Faker's native fi_FI ssn)
     "bg": ("bg_BG", "egn"),  # Bulgarian EGN (unified civil number)
     "hr": ("hr_HR", "ssn"),  # Croatian OIB (Faker's native hr_HR ssn)
     "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
