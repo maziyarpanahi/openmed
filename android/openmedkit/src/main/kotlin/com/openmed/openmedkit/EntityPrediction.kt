@@ -1,6 +1,7 @@
 package com.openmed.openmedkit
 
-import java.util.Locale
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /**
  * A single entity predicted by the OpenMedKit token-classification pipeline.
@@ -23,10 +24,24 @@ data class EntityPrediction(
 
     /**
      * Human-readable description matching the Swift `EntityPrediction`
-     * format `[label] "text" (start:end) conf=0.00`, with a two-decimal
-     * confidence rendered in [Locale.ROOT] so the decimal separator is a
-     * period on every device locale.
+     * format `[label] "text" (start:end) conf=0.00`.
+     *
+     * The confidence is rendered with two decimals using half-even
+     * ("banker's") rounding on a period decimal separator, matching Swift's
+     * `String(format: "%.2f", confidence)` (C `printf`) exactly, including
+     * ties on exactly-representable halves such as `0.125 -> 0.12`.
+     * Non-finite confidences are rendered without rounding so this never
+     * throws.
      */
-    override fun toString(): String =
-        "[$label] \"$text\" ($start:$end) conf=${String.format(Locale.ROOT, "%.2f", confidence)}"
+    override fun toString(): String {
+        val conf =
+            if (confidence.isFinite()) {
+                BigDecimal(confidence.toDouble())
+                    .setScale(2, RoundingMode.HALF_EVEN)
+                    .toPlainString()
+            } else {
+                confidence.toString()
+            }
+        return "[$label] \"$text\" ($start:$end) conf=$conf"
+    }
 }
