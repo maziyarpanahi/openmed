@@ -109,7 +109,7 @@ klinische extractie volledig offline, op het apparaat, plaatsvinden.
 ```swift
 // Add OpenMedKit to your app
 dependencies: [
-    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.0"),
+    .package(url: "https://github.com/maziyarpanahi/openmed.git", from: "1.9.1"),
 ]
 ```
 

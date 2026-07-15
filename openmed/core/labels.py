@@ -164,6 +164,8 @@ ID_SUBTYPE_NATIONAL_ID: Final = "national_id"
 ID_SUBTYPE_SSN_ADJACENT: Final = "ssn_adjacent"
 #: ICAO 9303 passport/ID machine-readable zone; still normalizes to ID_NUM.
 ID_SUBTYPE_PASSPORT_MRZ: Final = "passport_mrz"
+#: China Unified Social Credit Code (organization-linked); normalizes to ID_NUM.
+ID_SUBTYPE_SOCIAL_CREDIT_CODE: Final = "social_credit_code"
 ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
     {
         ID_SUBTYPE_MRN,
@@ -171,6 +173,7 @@ ID_SUBTYPES: Final[FrozenSet[str]] = frozenset(
         ID_SUBTYPE_NATIONAL_ID,
         ID_SUBTYPE_SSN_ADJACENT,
         ID_SUBTYPE_PASSPORT_MRZ,
+        ID_SUBTYPE_SOCIAL_CREDIT_CODE,
     }
 )
 
@@ -711,6 +714,9 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "id": ID_NUM,
     "identifier": ID_NUM,
     "passportmrz": ID_NUM,
+    "socialcreditcode": ID_NUM,
+    "unifiedsocialcreditcode": ID_NUM,
+    "uscc": ID_NUM,
     "medicalrecordnumber": ID_NUM,
     "mrn": ID_NUM,
     "nhsnumber": ID_NUM,
@@ -937,6 +943,9 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "medicalrecordnumber": ID_SUBTYPE_MRN,
     "mrn": ID_SUBTYPE_MRN,
     "passportmrz": ID_SUBTYPE_PASSPORT_MRZ,
+    "socialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "unifiedsocialcreditcode": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
+    "uscc": ID_SUBTYPE_SOCIAL_CREDIT_CODE,
     "npi": ID_SUBTYPE_NPI,
     "nhsnumber": ID_SUBTYPE_NATIONAL_ID,
     "nhs": ID_SUBTYPE_NATIONAL_ID,
@@ -1061,6 +1070,8 @@ __all__ = [
     "ID_SUBTYPE_NPI",
     "ID_SUBTYPE_NATIONAL_ID",
     "ID_SUBTYPE_SSN_ADJACENT",
+    "ID_SUBTYPE_PASSPORT_MRZ",
+    "ID_SUBTYPE_SOCIAL_CREDIT_CODE",
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
     "POLICY_LABELS",
