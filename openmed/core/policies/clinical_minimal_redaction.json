@@ -111,6 +111,9 @@
     "OXYGEN_SUPPORT": "keep",
     "RESPIRATORY_FINDING": "keep",
     "DYSPNEA_GRADE": "keep",
+    "GROWTH_PARAMETER": "keep",
+    "GROWTH_PERCENTILE": "keep",
+    "DEVELOPMENTAL_MILESTONE": "keep",
     "OTHER": "keep"
   }
 }
