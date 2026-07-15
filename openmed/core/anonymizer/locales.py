@@ -60,12 +60,16 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "da": "da_DK",
     "ro": "ro_RO",
     "bg": "bg_BG",
+    "hr": "hr_HR",
+    "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
+    "hu": "hu_HU",
+    "et": "et_EE",
 }
 
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
+_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -73,6 +77,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "ms_MY": "id_ID",
+    "sr_RS": "hr_HR",
 }
 
 
@@ -110,6 +115,10 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
     "bg": ("bg_BG", "egn"),  # Bulgarian EGN (unified civil number)
+    "hr": ("hr_HR", "ssn"),  # Croatian OIB (Faker's native hr_HR ssn)
+    "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
+    "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
+    "et": ("et_EE", "isikukood"),  # Estonian isikukood
 }
 
 _warned: set[str] = set()
