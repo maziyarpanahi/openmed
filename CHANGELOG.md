@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added a Hungarian (`hu`) national-ID-only PII pack with validator-backed TAJ
+  detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
+  address, and postcode patterns, and an offline synthetic golden fixture
+  (#816).
+
 ## [1.9.1] - 2026-07-14
 
 This patch completes the `1.9` distribution rollout without changing the
