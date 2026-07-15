@@ -624,97 +624,30 @@ def validate_indonesian_nik(text: str) -> bool:
         return False
 
 
-_VIETNAMESE_PROVINCE_CODES = frozenset(
-    {
-        "001",
-        "002",
-        "004",
-        "006",
-        "008",
-        "010",
-        "011",
-        "012",
-        "014",
-        "015",
-        "017",
-        "019",
-        "020",
-        "022",
-        "024",
-        "025",
-        "026",
-        "027",
-        "030",
-        "031",
-        "033",
-        "034",
-        "035",
-        "036",
-        "037",
-        "038",
-        "040",
-        "042",
-        "044",
-        "045",
-        "046",
-        "048",
-        "049",
-        "051",
-        "052",
-        "054",
-        "056",
-        "058",
-        "060",
-        "062",
-        "064",
-        "066",
-        "067",
-        "068",
-        "070",
-        "072",
-        "074",
-        "075",
-        "077",
-        "079",
-        "080",
-        "082",
-        "083",
-        "084",
-        "086",
-        "087",
-        "089",
-        "091",
-        "092",
-        "093",
-        "094",
-        "095",
-        "096",
-    }
-)
-
-
 def validate_vietnamese_cccd(text: str) -> bool:
     """Validate the offline-verifiable structure of a Vietnamese CCCD.
 
-    A CCCD/personal identification number contains 12 digits: a three-digit
-    birthplace code, one century/gender digit, a two-digit birth year, and a
-    six-digit random sequence. Vietnam does not publish a check digit for this
-    identifier, so this validator deliberately checks only stable structure and
-    known province codes; detection patterns require nearby CCCD context to
-    avoid treating arbitrary clinical numbers as identifiers.
+    Article 12 of Vietnam's 2023 Law on Identification publicly guarantees a
+    natural-number sequence of 12 digits. Earlier province, century, gender,
+    and birth-year encoding rules expired with Circular 59/2021/TT-BCA on
+    1 July 2024, and no public checksum is available. OpenMed therefore checks
+    only the current public length and digit contract; detection patterns
+    require nearby CCCD context to avoid treating arbitrary clinical numbers
+    as identifiers.
 
     Args:
         text: CCCD value, contiguous or grouped as four three-digit blocks.
 
     Returns:
-        True when the candidate has a recognized CCCD structure.
+        True when the candidate contains exactly 12 digits in a supported
+        presentation.
     """
     stripped = text.strip()
-    if re.fullmatch(r"\d{12}|\d{3}(?:[\s-]+\d{3}){3}", stripped) is None:
+    supported_shape = r"\d{12}|\d{3}(?:\s+\d{3}){3}|\d{3}(?:-\d{3}){3}"
+    if re.fullmatch(supported_shape, stripped) is None:
         return False
 
-    digits = re.sub(r"[^0-9]", "", stripped)
-    return digits[:3] in _VIETNAMESE_PROVINCE_CODES
+    return True
 
 
 def validate_vietnamese_cmnd(text: str) -> bool:

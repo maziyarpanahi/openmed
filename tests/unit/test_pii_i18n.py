@@ -2218,16 +2218,26 @@ class TestVietnameseLanguagePack:
 
     @pytest.mark.parametrize(
         "value",
-        ("001203123456", "001 203 123 456", "079-199-654-321"),
+        (
+            "001203123456",
+            "001 203 123 456",
+            "079-199-654-321",
+            "003203123456",
+        ),
     )
     def test_valid_cccd_structures(self, value):
         assert validate_vietnamese_cccd(value)
 
     @pytest.mark.parametrize(
         "value",
-        ("003203123456", "00120312345", "001 203 123 45"),
+        (
+            "00120312345",
+            "001 203 123 45",
+            "001.203.123.456",
+            "001 203-123 456",
+        ),
     )
-    def test_invalid_cccd_structures(self, value):
+    def test_invalid_cccd_lengths_or_groupings(self, value):
         assert not validate_vietnamese_cccd(value)
 
     @pytest.mark.parametrize("value", ("123456789", "123 456 789", "123-456-789"))
@@ -2285,25 +2295,25 @@ class TestVietnameseLanguagePack:
         from openmed.core.safety_sweep import safety_sweep
 
         contextual = (
-            "CCCD: 001203123456; CMND: 123456789; "
+            "CCCD: 003203123456; CMND: 123456789; "
             "điện thoại 028 3822 1234; mã bưu chính 10000"
         )
         entities = safety_sweep(contextual, [], lang="vi")
         values = {entity.text for entity in entities}
         assert {
-            "001203123456",
+            "003203123456",
             "123456789",
             "028 3822 1234",
             "10000",
         } <= values
 
         hard_negative = (
-            "Mã bệnh án 001203123456; mã xét nghiệm 123456789; "
+            "Mã bệnh án 003203123456; mã xét nghiệm 123456789; "
             "mã thuốc 10000; lô sản xuất 02838221234."
         )
         negative_entities = safety_sweep(hard_negative, [], lang="vi")
         assert not any(
-            entity.text in {"001203123456", "123456789", "10000", "02838221234"}
+            entity.text in {"003203123456", "123456789", "10000", "02838221234"}
             for entity in negative_entities
         )
 
