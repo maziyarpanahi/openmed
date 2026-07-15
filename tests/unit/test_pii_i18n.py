@@ -777,6 +777,19 @@ class TestValidateHungarianTaj:
             value = generate_hungarian_taj(rng=random.Random(seed))
             assert validate_hungarian_taj(value), (seed, value)
 
+    def test_public_generator_skips_reserved_unknown_person_code(self):
+        class SequenceRandom:
+            def __init__(self):
+                self.values = iter([9, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0])
+
+            def randint(self, _start, _end):
+                return next(self.values)
+
+        value = generate_hungarian_taj(rng=SequenceRandom())
+
+        assert value != "900000007"
+        assert validate_hungarian_taj(value)
+
 
 class TestValidateCzechoslovakRodneCislo:
     """Tests for validate_czechoslovak_rodne_cislo()."""
@@ -1736,6 +1749,16 @@ class TestLanguagePIIPatterns:
             for match in matches:
                 assert pattern.validator is not None
                 assert not pattern.validator(match.group(0))
+
+    def test_hungarian_taj_safety_sweep_requires_context(self):
+        patterns = [
+            pattern
+            for pattern in LANGUAGE_PII_PATTERNS["hu"]
+            if pattern.entity_type == "national_id"
+        ]
+
+        assert patterns
+        assert all(pattern.safety_sweep_requires_context for pattern in patterns)
 
     def test_romanian_clinical_sample_expected_spans(self):
         text = (
