@@ -46,6 +46,7 @@ from openmed.core.pii_i18n import (
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_greek_amka,
     validate_hungarian_taj,
     validate_iban,
     validate_indonesian_nik,
@@ -109,6 +110,7 @@ class TestConstants:
             "bg",
             "fi",
             "cs",
+            "el",
         }
 
     def test_language_names_keys(self):
@@ -3548,6 +3550,150 @@ def test_czech_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
         date_shift_days=None,
         keep_mapping=False,
         lang="cs",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
+
+
+def test_validate_greek_amka():
+    # Synthetic valid AMKA (DDMMYY prefix + Luhn check).
+    assert validate_greek_amka("16117508024")
+    assert validate_greek_amka("21058200177")
+    assert validate_greek_amka("03090450119")
+
+    # Broken Luhn check digit.
+    assert validate_greek_amka("16117508025") is False
+    # Luhn-valid values with impossible embedded birth dates.
+    assert not validate_greek_amka("32017508022")  # day 32
+    assert not validate_greek_amka("30027508024")  # 30 February
+    assert not validate_greek_amka("16137508020")  # month 13
+    # Wrong length or shape.
+    assert not validate_greek_amka("1611758024")
+    assert not validate_greek_amka("abcdefghijk")
+    assert not validate_greek_amka("123")
+
+
+def test_faker_native_el_ssn_round_trips_amka_validator():
+    faker = Faker("el_GR")
+    faker.seed_instance(1234)
+    for _ in range(200):
+        assert validate_greek_amka(faker.ssn())
+
+
+def test_generated_greek_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["el"] == "el_GR"
+
+    anonymizer = Anonymizer(lang="el", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("16117508024", "national_id")
+
+    assert validate_greek_amka(surrogate) is True
+
+
+def test_greek_clinical_sample_expected_spans():
+    text = (
+        "Ασθενής: Γιώργος Παπαδόπουλος. Ημερομηνία γέννησης 16.11.1975, "
+        "τηλέφωνο +30 691 234 5678, ΑΜΚΑ 16117508024, "
+        "διεύθυνση οδός Ερμού 15, ταχυδρομικός κώδικας 104 31."
+    )
+    expected = {
+        ("date", 51, 61, "16.11.1975"),
+        ("phone_number", 72, 88, "+30 691 234 5678"),
+        ("national_id", 95, 106, "16117508024"),
+        ("street_address", 118, 131, "οδός Ερμού 15"),
+        ("postcode", 154, 160, "104 31"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("el"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_greek_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/el.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "el"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 51, 61, "16.11.1975"),
+        ("PHONE", 72, 88, "+30 691 234 5678"),
+        ("ID_NUM", 95, 106, "16117508024"),
+        ("STREET_ADDRESS", 118, 131, "οδός Ερμού 15"),
+        ("ZIPCODE", 154, 160, "104 31"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_greek_amka(ids_by_type["amka"])
+
+
+def test_greek_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/el.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="el",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="el",
         consistent=False,
         seed=None,
         locale=None,
