@@ -109,6 +109,7 @@ class DetectionNormalization:
     removed_zero_width: int = 0
     stripped_combining_marks: int = 0
     folded_confusables: int = 0
+    folded_native_digits: int = 0
     scripts: tuple[str, ...] = ()
     mixed_script: bool = False
 
@@ -119,6 +120,7 @@ class DetectionNormalization:
             self.removed_zero_width > 0
             or self.stripped_combining_marks > 0
             or self.folded_confusables > 0
+            or self.folded_native_digits > 0
         )
 
     def remap_span(self, start: int, end: int) -> tuple[int, int]:
@@ -144,6 +146,7 @@ class DetectionNormalization:
         return {
             "changed": self.changed,
             "folded_confusables": self.folded_confusables,
+            "folded_native_digits": self.folded_native_digits,
             "mixed_script": self.mixed_script,
             "removed_zero_width": self.removed_zero_width,
             "scripts": list(self.scripts),
@@ -316,23 +319,58 @@ def candidate_languages_for_script(script: str) -> tuple[str, ...]:
     return SCRIPT_LANGUAGE_HINTS.get(script, SCRIPT_LANGUAGE_HINTS[UNKNOWN_SCRIPT])
 
 
-def normalize_for_pii_detection(text: str) -> DetectionNormalization:
+def normalize_for_pii_detection(
+    text: str,
+    *,
+    width_convention: str = "cjk",
+) -> DetectionNormalization:
     """Fold adversarial Unicode artifacts while preserving offset remapping.
 
     The defense strips zero-width controls and standalone combining marks, folds
-    common Latin-lookalike Greek/Cyrillic/full-width characters, and records a
-    script-consistency summary without storing source text.
+    common Latin-lookalike Greek/Cyrillic/full-width characters, folds Indic
+    decimal digits for ASCII validators, and records a script-consistency
+    summary without storing source text. ``width_convention`` selects the
+    CJK-safe width fold or strict per-character NFKC normalization.
     """
 
+    # Keep the reusable width-normalization API in ``processing`` while
+    # composing its explicit source map with this existing detection defense.
+    # The local import avoids making the lightweight script helpers import the
+    # broader processing package during module initialization.
+    from ..processing.text import fold_indic_digits
+    from ..processing.zh_normalize import normalize_width
+
     scripts = tuple(sorted(_script_counts(text)))
+    width_normalization = normalize_width(text, convention=width_convention)
+    digit_folding = fold_indic_digits(width_normalization.text)
     output: list[str] = []
     starts: list[int] = []
     ends: list[int] = []
     removed_zero_width = 0
     stripped_combining_marks = 0
-    folded_confusables = 0
+    normalized_by_source: list[list[str]] = [[] for _ in text]
+    for char, (original_start, _original_end) in zip(
+        width_normalization.text,
+        width_normalization.char_origins,
+    ):
+        normalized_by_source[original_start].append(char)
+    changed_source_indices = {
+        index
+        for index, (char, normalized_chars) in enumerate(
+            zip(text, normalized_by_source)
+        )
+        if "".join(normalized_chars) != char
+    }
+    folded_native_digit_sources = {
+        width_normalization.char_origins[index][0]
+        for index, (width_char, folded_char) in enumerate(
+            zip(width_normalization.text, digit_folding.text)
+        )
+        if width_char != folded_char
+    }
 
-    for index, char in enumerate(text):
+    for index, char in enumerate(digit_folding.text):
+        original_start, original_end = width_normalization.char_origins[index]
         if char in ZERO_WIDTH_CHARS:
             removed_zero_width += 1
             continue
@@ -342,11 +380,11 @@ def normalize_for_pii_detection(text: str) -> DetectionNormalization:
 
         replacement = _fold_confusable_char(char)
         if replacement != char:
-            folded_confusables += 1
+            changed_source_indices.add(original_start)
         for replacement_char in replacement:
             output.append(replacement_char)
-            starts.append(index)
-            ends.append(index + 1)
+            starts.append(original_start)
+            ends.append(original_end)
 
     return DetectionNormalization(
         text="".join(output),
@@ -355,7 +393,8 @@ def normalize_for_pii_detection(text: str) -> DetectionNormalization:
         offset_ends=tuple(ends),
         removed_zero_width=removed_zero_width,
         stripped_combining_marks=stripped_combining_marks,
-        folded_confusables=folded_confusables,
+        folded_confusables=len(changed_source_indices),
+        folded_native_digits=len(folded_native_digit_sources),
         scripts=scripts,
         mixed_script=len(scripts) > 1,
     )
