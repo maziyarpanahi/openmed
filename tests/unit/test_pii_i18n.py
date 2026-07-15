@@ -845,6 +845,14 @@ class TestValidateCzechoslovakRodneCislo:
     def test_czech_alias_is_the_same_validator(self):
         assert validate_czech_rodne_cislo is validate_czechoslovak_rodne_cislo
 
+    # Issue #815 acceptance criteria, asserted through the Czech-facing name.
+    def test_czech_validator_accepts_modern_and_legacy(self):
+        assert validate_czech_rodne_cislo("850505/0060") is True  # modern
+        assert validate_czech_rodne_cislo("510505/123") is True  # 9-digit legacy
+
+    def test_czech_validator_rejects_bad_check(self):
+        assert validate_czech_rodne_cislo("850505/1237") is False
+
     def test_generated_slovak_surrogate_passes_validator(self):
         assert LANG_TO_LOCALE["sk"] == "sk_SK"
 
@@ -852,6 +860,14 @@ class TestValidateCzechoslovakRodneCislo:
         surrogate = anonymizer.surrogate("850505/1236", "national_id")
 
         assert validate_czechoslovak_rodne_cislo(surrogate) is True
+
+    def test_generated_czech_surrogate_passes_validator(self):
+        assert LANG_TO_LOCALE["cs"] == "cs_CZ"
+
+        anonymizer = Anonymizer(lang="cs", consistent=True, seed=42)
+        surrogate = anonymizer.surrogate("850505/0060", "national_id")
+
+        assert validate_czech_rodne_cislo(surrogate) is True
 
 
 # ---------------------------------------------------------------------------
