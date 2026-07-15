@@ -5,6 +5,7 @@ import random
 import re
 import warnings
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from faker import Faker
@@ -825,11 +826,31 @@ class TestValidateCzechoslovakRodneCislo:
     def test_valid_slovak_rodne_cislo_without_slash(self):
         assert validate_czechoslovak_rodne_cislo("8505051236") is True
 
+    def test_valid_legacy_nine_digit_rodne_cislo(self):
+        assert validate_czechoslovak_rodne_cislo("510505/123") is True
+
+    def test_czech_alias_is_the_shared_validator(self):
+        assert validate_czech_rodne_cislo is validate_czechoslovak_rodne_cislo
+
     def test_invalid_slovak_rodne_cislo_wrong_checksum(self):
         assert validate_czechoslovak_rodne_cislo("850505/1237") is False
 
     def test_invalid_slovak_rodne_cislo_impossible_date(self):
         assert validate_czechoslovak_rodne_cislo("850231/0003") is False
+
+    def test_rejects_legacy_zero_serial(self):
+        assert validate_czechoslovak_rodne_cislo("510505/000") is False
+
+    def test_rejects_remainder_ten_shortcut(self):
+        assert int("850505006") % 11 == 10
+        assert validate_czechoslovak_rodne_cislo("850505/0060") is False
+
+    @pytest.mark.parametrize(
+        "value",
+        [None, "", "751116.0008", "xx751116/0008", "751116/0008xx"],
+    )
+    def test_rejects_unsupported_shapes(self, value):
+        assert validate_czechoslovak_rodne_cislo(value) is False
 
     def test_generated_slovak_surrogate_passes_validator(self):
         assert LANG_TO_LOCALE["sk"] == "sk_SK"
@@ -3368,6 +3389,19 @@ def test_generated_czech_surrogate_passes_validator():
     assert validate_czechoslovak_rodne_cislo(surrogate) is True
 
 
+def test_czech_format_preserving_dates_are_day_first():
+    anonymizer = Anonymizer(lang="cs", consistent=True, seed=42)
+
+    with patch(
+        "openmed.core.anonymizer.engine.preserve_date_format",
+        return_value="14/05/1951",
+    ) as preserve:
+        surrogate = anonymizer.format_preserving_surrogate("05/06/2020", "date")
+
+    assert surrogate == "14/05/1951"
+    assert preserve.call_args.kwargs["day_first"] is True
+
+
 def test_czech_clinical_sample_expected_spans():
     text = (
         "Pacient: Jan Novak. Datum narozeni 16.11.1975, "
@@ -3404,10 +3438,11 @@ def test_czech_textual_date_and_diacritic_address_patterns():
     assert ("street_address", "Náměstí Míru 5") in observed
 
 
-def test_czech_legacy_rodne_cislo_pattern_matches():
+@pytest.mark.parametrize("language", ["cs", "sk"])
+def test_czech_legacy_rodne_cislo_pattern_matches(language):
     text = "Pacientka, rodne cislo 485305/123, prijata k hospitalizaci."
     observed = set()
-    for pattern in get_patterns_for_language("cs"):
+    for pattern in get_patterns_for_language(language):
         if pattern.entity_type != "national_id":
             continue
         for match in re.finditer(pattern.pattern, text, pattern.flags):
@@ -3417,6 +3452,25 @@ def test_czech_legacy_rodne_cislo_pattern_matches():
             observed.add(value)
 
     assert "485305/123" in observed
+
+
+def test_czech_phone_patterns_cover_fixed_and_mobile_without_trunk_zero():
+    phone_patterns = [
+        pattern
+        for pattern in get_patterns_for_language("cs")
+        if pattern.entity_type == "phone_number"
+    ]
+
+    for value in ["+420 212 345 678", "212 345 678", "+420 601 234 567"]:
+        assert any(
+            re.fullmatch(pattern.pattern, value, pattern.flags)
+            for pattern in phone_patterns
+        )
+
+    assert not any(
+        re.search(pattern.pattern, "telefon 0601 234 567", pattern.flags)
+        for pattern in phone_patterns
+    )
 
 
 def test_czech_i18n_golden_fixture_offsets():
