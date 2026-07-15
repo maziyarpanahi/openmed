@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_croatian_oib,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
@@ -336,6 +337,12 @@ def _register_builtin_specs() -> None:
         validate=validate_latvian_personas_kods,
         faker_method="personas_kods",
         faker_provider=LatvianPersonasKodsProvider,
+    )
+    _register_aliases(
+        ("hr", "hr_HR"),
+        id_type="oib",
+        validate=validate_croatian_oib,
+        faker_method="ssn",
     )
     _register_aliases(
         ("sr", "sr_RS"),
