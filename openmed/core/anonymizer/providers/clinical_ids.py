@@ -972,20 +972,13 @@ class IndonesianNIKProvider(BaseProvider):
 
 def generate_vietnamese_cccd(*, rng: random.Random | None = None) -> str:
     """Generate a synthetic CCCD accepted by its structural validator."""
-    from openmed.core.pii_i18n import (
-        _VIETNAMESE_PROVINCE_CODES,
-        validate_vietnamese_cccd,
-    )
+    from openmed.core.pii_i18n import validate_vietnamese_cccd
 
     source = rng or random.Random()
-    province = source.choice(tuple(sorted(_VIETNAMESE_PROVINCE_CODES)))
-    year = source.randint(1940, 2025)
-    century_gender = (0 if year < 2000 else 2) + source.randint(0, 1)
-    serial = source.randint(1, 999999)
-    candidate = f"{province}{century_gender}{year % 100:02d}{serial:06d}"
-
-    if validate_vietnamese_cccd(candidate):
-        return candidate
+    for _ in range(20):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(12))
+        if len(set(candidate)) > 1 and validate_vietnamese_cccd(candidate):
+            return candidate
     return "001203123456"
 
 
