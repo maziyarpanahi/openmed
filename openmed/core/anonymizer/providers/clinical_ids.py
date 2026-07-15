@@ -1139,6 +1139,42 @@ class DanishCPRProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Hungarian TAJ (9 digits, alternating 3/7 weighted checksum)
+# ---------------------------------------------------------------------------
+
+_RESERVED_HUNGARIAN_TAJ = {"900000007"}
+
+
+def generate_hungarian_taj(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic TAJ accepted by ``validate_hungarian_taj``."""
+    source = rng or random.Random()
+    while True:
+        body = [source.randint(0, 9) for _ in range(8)]
+        if not any(body):
+            body[-1] = 1
+
+        total = sum(
+            digit * (3 if index % 2 == 0 else 7) for index, digit in enumerate(body)
+        )
+        candidate = "".join(str(digit) for digit in body) + str(total % 10)
+        if candidate in _RESERVED_HUNGARIAN_TAJ:
+            continue
+
+        from openmed.core.pii_i18n import validate_hungarian_taj
+
+        if not validate_hungarian_taj(candidate):  # pragma: no cover
+            raise RuntimeError("generated Hungarian TAJ failed checksum validation")
+        return candidate
+
+
+class HungarianTAJProvider(BaseProvider):
+    """Generates valid synthetic Hungarian TAJ identifiers."""
+
+    def hungarian_taj(self) -> str:
+        return generate_hungarian_taj(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -1718,6 +1754,7 @@ __all__ = [
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
+    "HungarianTAJProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
@@ -1742,6 +1779,7 @@ __all__ = [
     "generate_bic",
     "generate_canadian_sin",
     "generate_danish_cpr",
+    "generate_hungarian_taj",
     "generate_estonian_isikukood",
     "generate_iban",
     "generate_ontario_health_card",
