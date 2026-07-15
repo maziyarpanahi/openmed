@@ -3,7 +3,7 @@ replicaCount: 2
 
 image:
   repository: ghcr.io/maziyarpanahi/openmed
-  tag: "v1.9.0"
+  tag: "v1.9.1"
 
 config:
   preloadModels:
