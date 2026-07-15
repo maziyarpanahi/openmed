@@ -4010,6 +4010,7 @@ _HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
             "biztosítási azonosító",
         ],
         context_boost=0.4,
+        safety_sweep_requires_context=True,
         validator=validate_hungarian_taj,
         flags=re.IGNORECASE,
     ),
