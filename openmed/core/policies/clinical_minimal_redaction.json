@@ -107,6 +107,10 @@
     "DIALYSIS_MODALITY": "keep",
     "RENAL_FUNCTION_MEASURE": "keep",
     "URINE_FINDING": "keep",
+    "SPIROMETRY_MEASURE": "keep",
+    "OXYGEN_SUPPORT": "keep",
+    "RESPIRATORY_FINDING": "keep",
+    "DYSPNEA_GRADE": "keep",
     "OTHER": "keep"
   }
 }

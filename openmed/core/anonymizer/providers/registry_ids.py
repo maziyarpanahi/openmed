@@ -29,15 +29,20 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_bulgarian_egn,
+    validate_croatian_oib,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
+    validate_estonian_isikukood,
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_hungarian_taj,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
+    validate_jmbg,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
@@ -60,9 +65,12 @@ from .clinical_ids import (
     AustralianMedicareProvider,
     AustralianTFNProvider,
     BCPHNProvider,
+    BulgarianEgnProvider,
     CanadianSINProvider,
     DanishCPRProvider,
+    EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
+    HungarianTAJProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
     KoreanRRNProvider,
@@ -74,6 +82,7 @@ from .clinical_ids import (
     PolishPeselProvider,
     RodneCisloProvider,
     RomanianCNPProvider,
+    SerbianJmbgProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
@@ -339,6 +348,33 @@ def _register_builtin_specs() -> None:
         faker_method="ssn",
     )
     _register_aliases(
+        ("bg", "bg_BG"),
+        id_type="egn",
+        validate=validate_bulgarian_egn,
+        faker_method="egn",
+        faker_provider=BulgarianEgnProvider,
+    )
+    _register_aliases(
+        ("hr", "hr_HR"),
+        id_type="oib",
+        validate=validate_croatian_oib,
+        faker_method="ssn",
+    )
+    _register_aliases(
+        ("sr", "sr_RS"),
+        id_type="jmbg",
+        validate=validate_jmbg,
+        faker_method="jmbg",
+        faker_provider=SerbianJmbgProvider,
+    )
+    _register_aliases(
+        ("et", "et_EE"),
+        id_type="isikukood",
+        validate=validate_estonian_isikukood,
+        faker_method="isikukood",
+        faker_provider=EstonianIsikukoodProvider,
+    )
+    _register_aliases(
         ("ko", "ko_KR"),
         id_type="rrn",
         validate=validate_korean_rrn,
@@ -365,6 +401,13 @@ def _register_builtin_specs() -> None:
         validate=validate_romanian_cnp,
         faker_method="romanian_cnp",
         faker_provider=RomanianCNPProvider,
+    )
+    _register_aliases(
+        ("hu", "hu_HU"),
+        id_type="taj",
+        validate=validate_hungarian_taj,
+        faker_method="hungarian_taj",
+        faker_provider=HungarianTAJProvider,
     )
     _register_aliases(
         ("pt", "pt_BR"),

@@ -108,6 +108,10 @@
     "DIALYSIS_MODALITY": "mask",
     "RENAL_FUNCTION_MEASURE": "mask",
     "URINE_FINDING": "mask",
+    "SPIROMETRY_MEASURE": "mask",
+    "OXYGEN_SUPPORT": "mask",
+    "RESPIRATORY_FINDING": "mask",
+    "DYSPNEA_GRADE": "mask",
 
 
     "OTHER": "mask"
