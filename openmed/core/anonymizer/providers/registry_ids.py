@@ -39,6 +39,7 @@ from openmed.core.pii_i18n import (
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_greek_amka,
     validate_hungarian_taj,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
@@ -374,6 +375,12 @@ def _register_builtin_specs() -> None:
         validate=validate_estonian_isikukood,
         faker_method="isikukood",
         faker_provider=EstonianIsikukoodProvider,
+    )
+    _register_aliases(
+        ("el", "el_GR"),
+        id_type="amka",
+        validate=validate_greek_amka,
+        faker_method="ssn",
     )
     _register_aliases(
         ("ko", "ko_KR"),
