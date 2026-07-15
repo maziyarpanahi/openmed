@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   address, and postcode patterns, and an offline synthetic golden fixture
   (#816).
 
+## [1.9.1] - 2026-07-14
+
+This patch completes the `1.9` distribution rollout without changing the
+public inference APIs introduced in `1.9.0`.
+
+### Fixed
+
+- Restored the documented root Swift Package Manager build by processing
+  OpenMedKit policy resources in the root package, and moved Swift CI to build
+  and test that public package entry point.
+- Kept tag-driven Android validation green when the optional Maven Central
+  signing credentials are absent while retaining the immutable JitPack release
+  path and guarded manual Central uploads.
+- Replaced placeholder model repository IDs in runtime and export documentation
+  with tested public token-classification and causal-model examples.
+
+### Security
+
+- Updated the locked `setuptools` build dependency to a non-vulnerable release
+  so the master and release `pip-audit` gates pass without a waiver.
+
 ## [1.9.0] - 2026-07-14
 
 This release adds one model-repository contract for ONNX token-classification
@@ -1171,7 +1192,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0

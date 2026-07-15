@@ -1645,6 +1645,38 @@ class MrzProvider(BaseProvider):
         return generate_mrz_td3(self.generator.random)
 
 
+def generate_unified_social_credit_code(*, rng: random.Random | None = None) -> str:
+    """Generate a checksum-valid China Unified Social Credit Code surrogate.
+
+    The 18-character result uses only the permitted 31-character alphabet (never
+    the excluded letters I/O/S/V/Z), carries a 6-digit administrative-region
+    segment, and always passes ``validate_unified_social_credit_code`` by
+    construction.
+    """
+    from openmed.core.pii_i18n import (
+        USCC_ALPHABET,
+        USCC_DEPARTMENT_CATEGORY_CODES,
+        uscc_check_char,
+    )
+
+    source = rng or random.Random()
+    department = source.choice(tuple(USCC_DEPARTMENT_CATEGORY_CODES))
+    category = source.choice(tuple(sorted(USCC_DEPARTMENT_CATEGORY_CODES[department])))
+    region = "".join(str(source.randint(0, 9)) for _ in range(6))
+    organization = "".join(source.choice(USCC_ALPHABET) for _ in range(9))
+    body = f"{department}{category}{region}{organization}"
+    return body + uscc_check_char(body)
+
+
+class UnifiedSocialCreditCodeProvider(BaseProvider):
+    """Faker provider for China Unified Social Credit Code surrogates."""
+
+    def unified_social_credit_code(self) -> str:
+        """Return a checksum-valid synthetic Unified Social Credit Code."""
+
+        return generate_unified_social_credit_code(rng=self.generator.random)
+
+
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     from .registry_ids import national_id_faker_provider_classes
@@ -1654,6 +1686,7 @@ def register_clinical_providers(faker) -> None:
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(FinancialIdentifierProvider)
     faker.add_provider(MrzProvider)
+    faker.add_provider(UnifiedSocialCreditCodeProvider)
 
 
 __all__ = [
@@ -1674,6 +1707,7 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "MrzProvider",
     "NPIProvider",
+    "UnifiedSocialCreditCodeProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",
     "RomanianCNPProvider",
@@ -1708,6 +1742,7 @@ __all__ = [
     "generate_ssn",
     "generate_thai_national_id",
     "generate_uk_nhs_number",
+    "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_australian_medicare",
