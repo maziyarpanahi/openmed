@@ -7,6 +7,7 @@ import warnings
 from pathlib import Path
 
 import pytest
+from faker import Faker
 
 from openmed.core.anonymizer import Anonymizer
 from openmed.core.anonymizer.locales import LANG_TO_LOCALE
@@ -33,6 +34,7 @@ from openmed.core.pii_i18n import (
     USCC_PII_PATTERNS,
     get_patterns_for_language,
     validate_bic,
+    validate_croatian_oib,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
@@ -98,6 +100,7 @@ class TestConstants:
             "hu",
             "et",
             "sr",
+            "hr",
         }
 
     def test_language_names_keys(self):
@@ -2860,6 +2863,163 @@ def test_serbian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
         assert added_count == len(row["gold_spans"]), row["metadata"]["script"]
         for span in row["gold_spans"]:
             assert span["text"] not in result.deidentified_text, span
+
+
+def test_validate_croatian_oib():
+    assert validate_croatian_oib("12345678903")
+    assert validate_croatian_oib("06185927341")
+    assert validate_croatian_oib("97531864205")
+    assert validate_croatian_oib("55512345672")
+
+    # Bad ISO 7064 MOD 11,10 check digit.
+    assert not validate_croatian_oib("12345678904")
+    assert not validate_croatian_oib("97531864206")
+    # Wrong length or shape.
+    assert not validate_croatian_oib("1234567890")
+    assert not validate_croatian_oib("123456789031")
+    assert not validate_croatian_oib("abcdef")
+    assert not validate_croatian_oib("123")
+    assert not validate_croatian_oib("123 456 789 03")
+    assert not validate_croatian_oib("OIB 12345678903")
+    assert not validate_croatian_oib(None)
+
+
+def test_croatian_national_id_safety_sweep_requires_context():
+    patterns = get_patterns_for_language("hr")
+    national_id_patterns = [
+        pattern for pattern in patterns if pattern.entity_type == "national_id"
+    ]
+
+    assert national_id_patterns
+    assert all(
+        pattern.safety_sweep_requires_context for pattern in national_id_patterns
+    )
+
+
+def test_faker_native_hr_ssn_round_trips_oib_validator():
+    faker = Faker("hr_HR")
+    faker.seed_instance(1234)
+    for _ in range(200):
+        assert validate_croatian_oib(faker.ssn())
+
+
+def test_generated_croatian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["hr"] == "hr_HR"
+
+    anonymizer = Anonymizer(lang="hr", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("97531864205", "national_id")
+
+    assert validate_croatian_oib(surrogate) is True
+
+
+def test_croatian_clinical_sample_expected_spans():
+    text = (
+        "Pacijent: Ivan Horvat. Datum rodjenja 16.11.1975, "
+        "telefon +385 91 234 5678, OIB 97531864205, "
+        "adresa Savska ulica 12, postanski broj 10000."
+    )
+    expected = {
+        ("date", 38, 48, "16.11.1975"),
+        ("phone_number", 58, 74, "+385 91 234 5678"),
+        ("national_id", 80, 91, "97531864205"),
+        ("street_address", 100, 115, "Savska ulica 12"),
+        ("postcode", 132, 137, "10000"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("hr"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_croatian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/hr.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "hr"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 38, 48, "16.11.1975"),
+        ("PHONE", 58, 74, "+385 91 234 5678"),
+        ("ID_NUM", 80, 91, "97531864205"),
+        ("STREET_ADDRESS", 100, 115, "Savska ulica 12"),
+        ("ZIPCODE", 132, 137, "10000"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_croatian_oib(ids_by_type["oib"])
+
+
+def test_croatian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/hr.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-14T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="hr",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="hr",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
 
 
 class TestSlovakLocaleAndFixture:
