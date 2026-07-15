@@ -390,6 +390,12 @@ def _add_deid_command(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Keep year in dates.",
     )
+    deid_parser.add_argument(
+        "--date-shift-days",
+        type=int,
+        default=None,
+        help="Shift dates by this many days when using the shift_dates method.",
+    )
     deid_parser.set_defaults(handler=_handle_deid)
 
 
@@ -543,7 +549,14 @@ def _add_pii_command(subparsers: argparse._SubParsersAction) -> None:
     deid_parser.add_argument(
         "--shift-dates",
         action="store_true",
+        default=None,
         help="Shift dates by random offset.",
+    )
+    deid_parser.add_argument(
+        "--date-shift-days",
+        type=int,
+        default=None,
+        help="Shift dates by this many days when using the shift_dates method.",
     )
     deid_parser.add_argument(
         "--keep-mapping",
@@ -2898,6 +2911,7 @@ def _handle_deid(args: argparse.Namespace) -> int:
             confidence_threshold=args.confidence_threshold,
             keep_year=args.keep_year,
             keep_mapping=args.keep_mapping,
+            date_shift_days=args.date_shift_days,
             config=config,
             policy=args.policy,
             audit=args.audit,
@@ -2977,16 +2991,21 @@ def _handle_pii_deidentify(args: argparse.Namespace) -> int:
             sys.stderr.write(f"Input file not found: {args.input_file}\n")
             return 1
 
-    result = deidentify(
-        text,
-        method=args.method,
-        model_name=args.model,
-        confidence_threshold=args.confidence_threshold,
-        keep_year=args.keep_year,
-        shift_dates=args.shift_dates,
-        keep_mapping=args.keep_mapping,
-        config=config,
-    )
+    try:
+        result = deidentify(
+            text,
+            method=args.method,
+            model_name=args.model,
+            confidence_threshold=args.confidence_threshold,
+            keep_year=args.keep_year,
+            shift_dates=args.shift_dates,
+            date_shift_days=args.date_shift_days,
+            keep_mapping=args.keep_mapping,
+            config=config,
+        )
+    except ValueError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 2
 
     if args.output:
         args.output.write_text(result.deidentified_text, encoding="utf-8")
