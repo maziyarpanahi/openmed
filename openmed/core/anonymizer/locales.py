@@ -54,18 +54,24 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "pl": "pl_PL",
     "lv": "lv_LV",
     "ko": "ko_KR",
+    "cs": "cs_CZ",
     "sk": "sk_SK",
     "ms": "ms_MY",
     "tl": "fil_PH",
     "da": "da_DK",
     "ro": "ro_RO",
-    "cs": "cs_CZ",
+    "fi": "fi_FI",
+    "bg": "bg_BG",
+    "hr": "hr_HR",
+    "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
+    "hu": "hu_HU",
+    "et": "et_EE",
 }
 
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
+_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -73,6 +79,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "ms_MY": "id_ID",
+    "sr_RS": "hr_HR",
 }
 
 
@@ -104,12 +111,18 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "pl": ("pl_PL", "pesel"),  # PESEL
     "lv": ("lv_LV", "personas_kods"),
     "ko": ("ko_KR", "korean_rrn"),  # RRN
+    "cs": ("cs_CZ", "rodne_cislo"),  # Czech rodne cislo (shared provider)
     "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
     "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
-    "cs": ("cs_CZ", "rodne_cislo"),  # Czech rodne cislo (shared provider)
+    "fi": ("fi_FI", "ssn"),  # Finnish HETU (Faker's native fi_FI ssn)
+    "bg": ("bg_BG", "egn"),  # Bulgarian EGN (unified civil number)
+    "hr": ("hr_HR", "ssn"),  # Croatian OIB (Faker's native hr_HR ssn)
+    "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
+    "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
+    "et": ("et_EE", "isikukood"),  # Estonian isikukood
 }
 
 _warned: set[str] = set()
