@@ -28,6 +28,7 @@ from openmed.core.labels import (
     CVV,
     DATE,
     DATE_OF_BIRTH,
+    DEVELOPMENTAL_MILESTONE,
     DIALYSIS_MODALITY,
     DIET_TYPE,
     DOSE_NUMBER,
@@ -43,6 +44,8 @@ from openmed.core.labels import (
     GI_SYMPTOM,
     GLYCEMIC_MEASURE,
     GPS_COORDINATES,
+    GROWTH_PARAMETER,
+    GROWTH_PERCENTILE,
     HEIGHT,
     HIPAA_SAFE_HARBOR_CLASSES,
     HORMONE_LEVEL,
@@ -694,6 +697,9 @@ class TestClinicalLabelsAreAdditive:
             DIALYSIS_MODALITY,
             RENAL_FUNCTION_MEASURE,
             URINE_FINDING,
+            GROWTH_PARAMETER,
+            GROWTH_PERCENTILE,
+            DEVELOPMENTAL_MILESTONE,
         }
     )
 

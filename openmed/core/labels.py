@@ -147,6 +147,11 @@ DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
 RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
 URINE_FINDING: Final = "URINE_FINDING"
 
+#: Pediatrics growth-and-development concepts (OM-896)
+GROWTH_PARAMETER: Final = "GROWTH_PARAMETER"
+GROWTH_PERCENTILE: Final = "GROWTH_PERCENTILE"
+DEVELOPMENTAL_MILESTONE: Final = "DEVELOPMENTAL_MILESTONE"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -258,6 +263,9 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         GI_SYMPTOM,
         GI_SCORE,
         POLYP_DESCRIPTOR,
+        GROWTH_PARAMETER,
+        GROWTH_PERCENTILE,
+        DEVELOPMENTAL_MILESTONE,
         OTHER,
     }
 )
@@ -471,6 +479,12 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
     URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Pediatrics growth-and-development concepts (OM-896)
+    GROWTH_PARAMETER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    GROWTH_PERCENTILE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)),
+    DEVELOPMENTAL_MILESTONE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, (LOINC, SNOMED)
+    ),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -580,6 +594,10 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
     RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
     URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    # Pediatrics growth-and-development concepts
+    GROWTH_PARAMETER: HIPAA_UNIQUE_IDENTIFIER,
+    GROWTH_PERCENTILE: HIPAA_UNIQUE_IDENTIFIER,
+    DEVELOPMENTAL_MILESTONE: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -891,6 +909,30 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
+    # Pediatrics growth-and-development concepts (OM-896)
+    "growthparameter": GROWTH_PARAMETER,
+    "weight": GROWTH_PARAMETER,
+    "length": GROWTH_PARAMETER,
+    "headcircumference": GROWTH_PARAMETER,
+    "armcircumference": GROWTH_PARAMETER,
+    "muac": GROWTH_PARAMETER,
+    "skinfold": GROWTH_PARAMETER,
+    "subscapularskinfold": GROWTH_PARAMETER,
+    "tricepsskinfold": GROWTH_PARAMETER,
+    "bmi": GROWTH_PARAMETER,
+    "bodymassindex": GROWTH_PARAMETER,
+    "growthvelocity": GROWTH_PARAMETER,
+    "growthpercentile": GROWTH_PERCENTILE,
+    "percentile": GROWTH_PERCENTILE,
+    "growthchart": GROWTH_PERCENTILE,
+    "growthzscore": GROWTH_PERCENTILE,
+    "developmentalmilestone": DEVELOPMENTAL_MILESTONE,
+    "milestone": DEVELOPMENTAL_MILESTONE,
+    "motordevelopment": DEVELOPMENTAL_MILESTONE,
+    "grossmotor": DEVELOPMENTAL_MILESTONE,
+    "finemotor": DEVELOPMENTAL_MILESTONE,
+    "feedinghistory": NUTRITIONAL_STATUS,
+    "pediatricfinding": CONDITION,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
@@ -1126,4 +1168,7 @@ __all__ = [
     "DIALYSIS_MODALITY",
     "RENAL_FUNCTION_MEASURE",
     "URINE_FINDING",
+    "GROWTH_PARAMETER",
+    "GROWTH_PERCENTILE",
+    "DEVELOPMENTAL_MILESTONE",
 ]

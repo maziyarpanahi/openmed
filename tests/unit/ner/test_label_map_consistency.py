@@ -760,6 +760,98 @@ class TestGastroenterologyRouting:
         assert all(info.category != "Gastroenterology" for _k, info, _r in suggestions)
 
 
+# ---------------------------------------------------------------------------
+# Pediatrics growth-and-development domain (OM-896)
+# ---------------------------------------------------------------------------
+
+
+class TestPediatricsGrowthDomain:
+    """Pediatrics growth-and-development labels and offline fixture coverage."""
+
+    EXPECTED_LABELS = [
+        "GrowthParameter",
+        "GrowthPercentile",
+        "GrowthZScore",
+        "DevelopmentalMilestone",
+        "FeedingHistory",
+        "PediatricFinding",
+    ]
+    CANONICAL_LABELS_BY_DISPLAY = {
+        "GrowthParameter": "GROWTH_PARAMETER",
+        "GrowthPercentile": "GROWTH_PERCENTILE",
+        "GrowthZScore": "GROWTH_PERCENTILE",
+        "DevelopmentalMilestone": "DEVELOPMENTAL_MILESTONE",
+        "FeedingHistory": "NUTRITIONAL_STATUS",
+        "PediatricFinding": "CONDITION",
+    }
+    EXPECTED_ENTITIES = [
+        ("GrowthParameter", 0, 14, "Weight 14.2 kg"),
+        ("GrowthPercentile", 35, 58, "45th percentile for age"),
+        ("GrowthZScore", 67, 96, "height-for-age z-score of 0.4"),
+        ("DevelopmentalMilestone", 109, 128, "walks independently"),
+        ("FeedingHistory", 147, 183, "exclusively breastfed until 6 months"),
+        ("PediatricFinding", 185, 218, "Anterior fontanelle open and soft"),
+    ]
+
+    def test_pediatrics_growth_domain_has_expected_labels(self):
+        assert "pediatrics_growth" in available_domains()
+        assert get_default_labels("pediatrics_growth") == self.EXPECTED_LABELS
+
+    def test_pediatrics_growth_labels_have_no_duplicates(self):
+        labels = get_default_labels("pediatrics_growth")
+        lowered = [label.lower() for label in labels]
+        assert len(lowered) == len(set(lowered))
+
+    @pytest.mark.parametrize(
+        ("label", "expected"),
+        sorted(CANONICAL_LABELS_BY_DISPLAY.items()),
+    )
+    def test_pediatrics_growth_labels_normalize_to_canonical(self, label, expected):
+        assert normalize_canonical_label(label) == expected
+        assert expected in CANONICAL_LABELS
+        assert policy_label_for(expected) == "CLINICAL_CONCEPT"
+        assert system_hints_for(expected)
+
+    def test_pediatrics_growth_fixture_has_expected_output(self):
+        path = CLINICAL_FIXTURES_PATH / "pediatrics_growth.jsonl"
+        rows = [
+            json.loads(line)
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        assert len(rows) == 1
+
+        row = rows[0]
+        assert row["metadata"]["synthetic"] is True
+        disclaimer = row["metadata"]["disclaimer"]
+        assert "not clinical guidance" in disclaimer
+        assert "does not compute or infer percentile or z-score values" in disclaimer
+
+        actual_entities = [
+            (entity["label"], entity["start"], entity["end"], entity["text"])
+            for entity in row["entities"]
+        ]
+        assert actual_entities == self.EXPECTED_ENTITIES
+
+        text = row["text"]
+        for label, start, end, entity_text in actual_entities:
+            assert text[start:end] == entity_text
+            assert label in self.EXPECTED_LABELS
+
+        observed_labels = {entity[0] for entity in actual_entities}
+        assert observed_labels == set(self.EXPECTED_LABELS)
+
+    def test_pediatrics_growth_domain_does_not_add_model_routing(self):
+        assert "PediatricsGrowth" not in _CATEGORY_ENTITY_TYPES
+        categories = [
+            category
+            for category, _reason in _match_categories(
+                "Weight 14.2 kg, 45th percentile, walks independently"
+            )
+        ]
+        assert "PediatricsGrowth" not in categories
+
+
 class TestNormalizeLabelIdempotency:
     @pytest.mark.parametrize(
         "label",

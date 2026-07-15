@@ -170,5 +170,13 @@
     "VaccineLot",
     "AdministrationDate",
     "VaccineSeries"
+  ],
+  "pediatrics_growth": [
+    "GrowthParameter",
+    "GrowthPercentile",
+    "GrowthZScore",
+    "DevelopmentalMilestone",
+    "FeedingHistory",
+    "PediatricFinding"
   ]
 }

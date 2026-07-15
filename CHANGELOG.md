@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added an offline immunization zero-shot domain with FHIR-aligned display
   labels, canonical policy metadata, synthetic per-label fixture coverage, and
   generated OM-138 exporter-alignment documentation (#897).
+- Added an offline pediatrics-growth zero-shot domain with growth-parameter,
+  percentile, z-score, developmental-milestone, feeding-history, and finding
+  display labels, canonical policy metadata, and synthetic per-label fixture
+  coverage (OM-896).
 
 ## [1.8.1] - 2026-07-10
 
