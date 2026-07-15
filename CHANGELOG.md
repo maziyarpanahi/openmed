@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
   address, and postcode patterns, and an offline synthetic golden fixture
   (#816).
+- Added a Czech (`cs`) national-ID-only PII pack with validator-backed rodné
+  číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
+  locale-aware synthetic surrogates, and an offline synthetic golden fixture
+  ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
 
 ## [1.9.1] - 2026-07-14
 
