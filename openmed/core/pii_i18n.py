@@ -57,7 +57,21 @@ SUPPORTED_LANGUAGES: Set[str] = {
 
 # Languages with validator-backed national-ID coverage but no bundled default
 # PII model or full language pack yet.
-NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {"pl", "lv", "sk", "ms", "tl", "da", "cs"}
+NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
+    "pl",
+    "lv",
+    "sk",
+    "ms",
+    "tl",
+    "da",
+    "hu",
+    "et",
+    "sr",
+    "hr",
+    "bg",
+    "fi",
+    "cs",
+}
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
@@ -222,6 +236,36 @@ def validate_german_steuer_id(text: str) -> bool:
         return False
 
     return True
+
+
+def validate_hungarian_taj(text: str) -> bool:
+    """Validate a Hungarian TAJ social-security identifier.
+
+    TAJ values contain eight serial digits followed by a check digit. The
+    first eight digits use alternating weights 3 and 7, starting with 3; the
+    weighted sum modulo 10 must equal the ninth digit, as specified by Annex 2
+    of Hungary's Act XX of 1996. Plain nine-digit values and the commonly
+    grouped ``NNN NNN NNN`` / ``NNN-NNN-NNN`` forms are accepted.
+
+    Args:
+        text: Candidate TAJ value.
+
+    Returns:
+        True when the value has a supported format and a valid check digit.
+    """
+    if not isinstance(text, str):
+        return False
+
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9]{9}|[0-9]{3}([ -])[0-9]{3}\1[0-9]{3}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[ -]", "", stripped)
+    numbers = [int(digit) for digit in digits]
+    total = sum(
+        digit * (3 if index % 2 == 0 else 7) for index, digit in enumerate(numbers[:8])
+    )
+    return numbers[8] == total % 10
 
 
 def validate_italian_codice_fiscale(text: str) -> bool:
@@ -904,6 +948,243 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+_FINNISH_HETU_CHECK_ALPHABET = "0123456789ABCDEFHJKLMNPRSTUVWXY"
+_FINNISH_HETU_CENTURY_SIGNS = {
+    **{"+": 1800},
+    **{sign: 1900 for sign in "-YXWVU"},
+    **{sign: 2000 for sign in "ABCDEF"},
+}
+_FINNISH_HETU_RE = re.compile(
+    r"^(\d{2})(\d{2})(\d{2})([-+YXWVUABCDEF])(\d{3})([0-9ABCDEFHJKLMNPRSTUVWXY])$"
+)
+
+
+def validate_finnish_hetu(text: str) -> bool:
+    """Validate Finnish HETU personal identity code.
+
+    The HETU is ``DDMMYYCZZZQ``:
+
+    - DDMMYY: birth date within the century selected by C.
+    - C: century sign — ``+`` for the 1800s, ``-`` (or reform signs
+      ``Y``/``X``/``W``/``V``/``U``) for the 1900s, and ``A``-``F`` for
+      the 2000s.
+    - ZZZ: individual serial number.
+    - Q: modulo-31 check character over the nine digits ``DDMMYYZZZ``,
+      mapped through the alphabet ``0-9ABCDEFHJKLMNPRSTUVWXY``.
+    """
+
+    if not isinstance(text, str):
+        return False
+
+    match = _FINNISH_HETU_RE.fullmatch(text)
+    if match is None:
+        return False
+
+    day_text, month_text, year_text, sign, serial, check = match.groups()
+    if not 2 <= int(serial) <= 899:
+        return False
+
+    expected = _FINNISH_HETU_CHECK_ALPHABET[
+        int(day_text + month_text + year_text + serial) % 31
+    ]
+    if check != expected:
+        return False
+
+    year = _FINNISH_HETU_CENTURY_SIGNS[sign] + int(year_text)
+    month = int(month_text)
+    day = int(day_text)
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def validate_bulgarian_egn(text: str) -> bool:
+    """Validate Bulgarian EGN unified civil number.
+
+    The EGN is a 10-digit code ``YYMMDDRRRC``:
+
+    - YYMMDD: birth date with a century-offset month — months 01-12 are
+      births in the 1900s, 21-32 (month + 20) the 1800s, and 41-52
+      (month + 40) the 2000s.
+    - RRR: region/serial digits; the ninth digit encodes sex.
+    - C: weighted check digit; see :func:`_bulgarian_egn_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{10}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if numbers[9] != _bulgarian_egn_check_digit(numbers[:9]):
+        return False
+
+    year = int(digits[0:2])
+    month_raw = int(digits[2:4])
+    day = int(digits[4:6])
+    if 41 <= month_raw <= 52:
+        year += 2000
+        month = month_raw - 40
+    elif 21 <= month_raw <= 32:
+        year += 1800
+        month = month_raw - 20
+    elif 1 <= month_raw <= 12:
+        year += 1900
+        month = month_raw
+    else:
+        return False
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _bulgarian_egn_check_digit(digits: list[int]) -> int:
+    """Return the Bulgarian EGN check digit for the first 9 digits.
+
+    Weighted sum with weights 2,4,8,5,10,9,7,3,6 modulo 11; a remainder
+    of 10 yields check digit 0.
+    """
+    weights = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+    remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+    return 0 if remainder == 10 else remainder
+
+
+def validate_croatian_oib(text: str) -> bool:
+    """Validate Croatian OIB personal identification number.
+
+    The OIB is an 11-digit code with no embedded structure; the final
+    digit is an ISO 7064 MOD 11,10 check over the first 10 digits; see
+    :func:`_croatian_oib_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{11}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    return numbers[10] == _croatian_oib_check_digit(numbers[:10])
+
+
+def _croatian_oib_check_digit(digits: list[int]) -> int:
+    """Return the ISO 7064 MOD 11,10 check digit for the first 10 digits."""
+    partial = 10
+    for digit in digits:
+        partial = (partial + digit) % 10
+        if partial == 0:
+            partial = 10
+        partial = (partial * 2) % 11
+    return (11 - partial) % 10
+
+
+def validate_jmbg(text: str) -> bool:
+    """Validate Serbian / ex-Yugoslav JMBG unique master citizen number.
+
+    The JMBG is a 13-digit code ``DDMMYYYRRSSSK``:
+
+    - DDMMYYY: birth date; YYY holds the last three digits of the year
+      (values of 800 and above map to the 1800/1900s, lower values to
+      the 2000s).
+    - RR: political region of registration (all values accepted).
+    - SSS: serial number; 000-499 male, 500-999 female.
+    - K: modulo-11 check digit; see :func:`_jmbg_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{13}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if numbers[12] != _jmbg_check_digit(numbers[:12]):
+        return False
+
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:7])
+    year = 1000 + year_suffix if year_suffix >= 800 else 2000 + year_suffix
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _jmbg_check_digit(digits: list[int]) -> int:
+    """Return the JMBG check digit for the first 12 digits.
+
+    ``m = 11 - ((7*(d1+d7) + 6*(d2+d8) + 5*(d3+d9) + 4*(d4+d10) +
+    3*(d5+d11) + 2*(d6+d12)) mod 11)``; remainders of 10 or 11 yield
+    check digit 0.
+    """
+    weights = (7, 6, 5, 4, 3, 2)
+    total = sum(
+        weight * (digits[index] + digits[index + 6])
+        for index, weight in enumerate(weights)
+    )
+    remainder = 11 - (total % 11)
+    return 0 if remainder > 9 else remainder
+
+
+def validate_estonian_isikukood(text: str) -> bool:
+    """Validate Estonian isikukood.
+
+    The isikukood is an 11-digit personal code ``GYYMMDDSSSC``:
+
+    - G: century and sex (1/2 = 1800s, 3/4 = 1900s, 5/6 = 2000s;
+      odd = male, even = female).
+    - YYMMDD: date of birth within that century.
+    - SSS: serial number.
+    - C: two-pass modulo-11 check digit; see
+      :func:`_estonian_isikukood_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{11}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if not 1 <= numbers[0] <= 6:
+        return False
+    if numbers[10] != _estonian_isikukood_check_digit(numbers[:10]):
+        return False
+
+    year = 1800 + ((numbers[0] - 1) // 2) * 100 + int(digits[1:3])
+    month = int(digits[3:5])
+    day = int(digits[5:7])
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _estonian_isikukood_check_digit(digits: list[int]) -> int:
+    """Return the Estonian isikukood check digit for the first 10 digits.
+
+    First pass uses weights 1..9,1 modulo 11; a remainder of 10 triggers a
+    second pass with weights 3..9,1,2,3, and a second remainder of 10 yields
+    check digit 0.
+    """
+    for weights in (
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 1),
+        (3, 4, 5, 6, 7, 8, 9, 1, 2, 3),
+    ):
+        remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+        if remainder < 10:
+            return remainder
+    return 0
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -3296,6 +3577,333 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Finnish PII patterns
+# ---------------------------------------------------------------------------
+
+_FINNISH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "syntymäaika",
+            "syntymaaika",
+            "syntynyt",
+            "päivämäärä",
+            "paivamaara",
+            "saapunut",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+358[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{2,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["puhelin", "matkapuhelin", "gsm", "yhteystiedot"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{6}[-+YXWVUABCDEF]\d{3}[0-9ABCDEFHJKLMNPRSTUVWXY]\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "henkilötunnus",
+            "henkilotunnus",
+            "hetu",
+        ],
+        context_boost=0.4,
+        validator=validate_finnish_hetu,
+    ),
+    PIIPattern(
+        r"\b[A-ZÅÄÖ][a-zåäö.'-]*(?:katu|tie|kuja|polku|raitti)\s+\d{1,5}[A-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["osoite", "asuu", "katu"],
+        context_boost=0.25,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postinumero", "osoite"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Bulgarian PII patterns (Cyrillic script)
+# ---------------------------------------------------------------------------
+
+_BULGARIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "дата",
+            "раждане",
+            "роден",
+            "родена",
+            "приет",
+            "приета",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+359[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["телефон", "тел", "мобилен", "gsm"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{2}[0-5]\d[0-3]\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "егн",
+            "егн:",
+            "egn",
+            "единен граждански номер",
+        ],
+        context_boost=0.4,
+        validator=validate_bulgarian_egn,
+    ),
+    PIIPattern(
+        r"\b(?:[А-Я][а-яА-Я.'-]+\s+(?:улица|булевард|площад)\s+\d{1,5}[А-Яа-яA-Za-z]?|(?:улица|булевард|площад|ул\.|бул\.)\s+[А-Я][а-яА-Я .'-]{2,60}\s+\d{1,5}[А-Яа-яA-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["адрес", "живее", "улица"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{4}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["пощенски код", "адрес"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Croatian PII patterns
+# ---------------------------------------------------------------------------
+
+_CROATIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "rodjenja",
+            "rođenja",
+            "primljen",
+            "otpusten",
+            "otpušten",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+385[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobitel", "kontakt"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "oib",
+            "oib:",
+            "osobni identifikacijski broj",
+        ],
+        context_boost=0.4,
+        validator=validate_croatian_oib,
+        safety_sweep_requires_context=True,
+    ),
+    PIIPattern(
+        r"\b(?:[A-ZČĆŠŽĐ][A-Za-zčćšžđ.'-]+\s+(?:ulica|trg|avenija|cesta)\s+\d{1,5}[A-Za-z]?|(?:ulica|trg|avenija|cesta)\s+[A-ZČĆŠŽĐ][A-Za-zčćšžđ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresa", "stanuje", "ulica"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postanski broj", "poštanski broj", "adresa"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Serbian PII patterns (Latin and Cyrillic scripts)
+# ---------------------------------------------------------------------------
+
+_SERBIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "rodjenja",
+            "rođenja",
+            "датум",
+            "рођења",
+            "primljen",
+            "примљен",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+381[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobilni", "kontakt", "телефон", "мобилни"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[0-3]\d[01]\d{10}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "jmbg",
+            "jmbg:",
+            "јмбг",
+            "maticni broj",
+            "matični broj",
+            "матични број",
+        ],
+        context_boost=0.4,
+        validator=validate_jmbg,
+    ),
+    PIIPattern(
+        r"\b(?:[A-ZČĆŠŽĐЀ-Я][A-Za-zčćšžđа-џ.'-]+\s+(?:ulica|bulevar|trg|улица|булевар|трг)\s+\d{1,5}[A-Za-z]?|(?:ulica|bulevar|trg|улица|булевар|трг)\s+[A-ZČĆŠŽĐЀ-Я][A-Za-zčćšžđа-џ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresa", "stanuje", "ulica", "адреса", "улица"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "postanski broj",
+            "poštanski broj",
+            "поштански број",
+            "adresa",
+            "адреса",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
+# Estonian PII patterns
+# ---------------------------------------------------------------------------
+
+_ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "kuupaev",
+            "kuupäev",
+            "sunniaeg",
+            "sünniaeg",
+            "sundinud",
+            "sündinud",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+372\s?)?[3-8]\d{2,3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobiil", "kontakt"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[1-6]\d{2}[01]\d[0-3]\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "isikukood",
+            "isikukood:",
+            "ik",
+        ],
+        context_boost=0.4,
+        validator=validate_estonian_isikukood,
+    ),
+    PIIPattern(
+        r"\b(?:[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f.'-]+\s+(?:tanav|tänav|maantee|puiestee|tee)\s+\d{1,5}[A-Za-z]?|(?:tanav|tänav|maantee|puiestee|tee)\s+[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["aadress", "elukoht", "tanav", "tänav"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postiindeks", "indeks", "aadress"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # Czech PII patterns
 # ---------------------------------------------------------------------------
 
@@ -4017,6 +4625,105 @@ _SLOVAK_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+
+_HUNGARIAN_MONTH_PATTERN = (
+    r"január|február|március|április|május|június|július|augusztus|"
+    r"szeptember|október|november|december"
+)
+
+_HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
+    # Hungarian civil dates conventionally use year-month-day order.
+    PIIPattern(
+        r"(?<!\d)\d{4}[./-]\s?\d{1,2}[./-]\s?\d{1,2}\.?(?!\d)",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "dátum",
+            "született",
+            "születési dátum",
+            "felvétel",
+            "elbocsátás",
+            "kontroll",
+        ],
+        context_boost=0.3,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        rf"(?<!\d)\d{{4}}\.\s?(?:{_HUNGARIAN_MONTH_PATTERN})\s+\d{{1,2}}\.?(?!\d)",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "dátum",
+            "született",
+            "születési dátum",
+            "felvétel",
+            "elbocsátás",
+            "kontroll",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    # Hungarian E.164 (+36) and domestic (06) geographic/mobile forms.
+    PIIPattern(
+        r"(?<!\w)(?:\+36|06)[\s.-]?(?:"
+        r"1[\s.-]?\d{3}[\s.-]?\d{4}|"
+        r"(?:20|30|31|50|70)[\s.-]?\d{3}[\s.-]?\d{4}|"
+        r"[2-9]\d[\s.-]?\d{3}[\s.-]?\d{3})(?!\d)",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "telefonszám", "mobil", "elérhetőség", "tel"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)(?:[0-9]{9}|[0-9]{3}(?:[ -][0-9]{3}){2})(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "taj",
+            "taj-szám",
+            "taj szám",
+            "társadalombiztosítási azonosító jel",
+            "biztosítási azonosító",
+        ],
+        context_boost=0.4,
+        safety_sweep_requires_context=True,
+        validator=validate_hungarian_taj,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[^\W\d_](?:[^\W_]|[ .'-]){1,60}\s+"
+        r"(?:utca|út|tér|körút|köz|sétány|fasor|park|sor)\s+"
+        r"\d{1,4}[A-Za-z]?(?:/\d+)?\.?(?!\w)",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "cím",
+            "lakcím",
+            "lakóhely",
+            "tartózkodási hely",
+            "utca",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)[1-9]\d{3}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.25,
+        context_words=["irányítószám", "postai irányítószám", "cím", "lakcím"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -4040,6 +4747,12 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "fi": _FINNISH_PII_PATTERNS,
+    "bg": _BULGARIAN_PII_PATTERNS,
+    "hr": _CROATIAN_PII_PATTERNS,
+    "sr": _SERBIAN_PII_PATTERNS,
+    "hu": _HUNGARIAN_PII_PATTERNS,
+    "et": _ESTONIAN_PII_PATTERNS,
     "cs": _CZECH_PII_PATTERNS,
 }
 
@@ -4544,6 +5257,96 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
+    },
+    "fi": {
+        "NAME": ["Matti Virtanen", "Liisa Korhonen", "Juha Nieminen", "Anna Laine"],
+        "FIRST_NAME": ["Matti", "Liisa", "Juha", "Anna"],
+        "LAST_NAME": ["Virtanen", "Korhonen", "Nieminen", "Laine"],
+        "EMAIL": ["potilas@example.fi", "yhteys@example.org"],
+        "PHONE": ["+358 40 123 4567", "09 1234 567"],
+        "ID_NUM": ["210582-0179", "030904A501C"],
+        "STREET_ADDRESS": ["Mannerheimintie 12", "Aleksanterinkatu 5"],
+        "URL_PERSONAL": ["https://example.fi"],
+        "USERNAME": ["potilas123", "kayttaja456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Helsinki", "Tampere", "Turku"],
+        "ZIPCODE": ["00100", "33100", "20100"],
+    },
+    "bg": {
+        "NAME": ["Иван Петров", "Мария Иванова", "Георги Димитров", "Елена Тодорова"],
+        "FIRST_NAME": ["Иван", "Мария", "Георги", "Елена"],
+        "LAST_NAME": ["Петров", "Иванова", "Димитров", "Тодорова"],
+        "EMAIL": ["patsient@example.bg", "kontakt@example.org"],
+        "PHONE": ["+359 88 123 4567", "02 987 6543"],
+        "ID_NUM": ["8205210172", "0449035017"],
+        "STREET_ADDRESS": ["улица Раковски 35", "булевард Витоша 18"],
+        "URL_PERSONAL": ["https://example.bg"],
+        "USERNAME": ["patsient123", "potrebitel456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["София", "Пловдив", "Варна"],
+        "ZIPCODE": ["1000", "4000", "9000"],
+    },
+    "hr": {
+        "NAME": ["Ivan Horvat", "Ana Kovacevic", "Marko Babic", "Petra Novak"],
+        "FIRST_NAME": ["Ivan", "Ana", "Marko", "Petra"],
+        "LAST_NAME": ["Horvat", "Kovacevic", "Babic", "Novak"],
+        "EMAIL": ["pacijent@example.hr", "kontakt@example.org"],
+        "PHONE": ["+385 91 234 5678", "01 234 5678"],
+        "ID_NUM": ["12345678903", "55512345672"],
+        "STREET_ADDRESS": ["Savska ulica 12", "Vukovarska ulica 45"],
+        "URL_PERSONAL": ["https://example.hr"],
+        "USERNAME": ["pacijent123", "korisnik456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Zagreb", "Split", "Rijeka"],
+        "ZIPCODE": ["10000", "21000", "51000"],
+    },
+    "sr": {
+        "NAME": ["Marko Petrovic", "Jelena Jovanovic", "Nikola Nikolic", "Ana Ilic"],
+        "FIRST_NAME": ["Marko", "Jelena", "Nikola", "Ana"],
+        "LAST_NAME": ["Petrovic", "Jovanovic", "Nikolic", "Ilic"],
+        "EMAIL": ["pacijent@example.rs", "kontakt@example.org"],
+        "PHONE": ["+381 64 123 4567", "011 234 5678"],
+        "ID_NUM": ["2105982710174", "0309004715013"],
+        "STREET_ADDRESS": ["Bulevar Oslobodjenja 45", "Ulica Kneza Milosa 12"],
+        "URL_PERSONAL": ["https://example.rs"],
+        "USERNAME": ["pacijent123", "korisnik456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Beograd", "Novi Sad", "Nis"],
+        "ZIPCODE": ["11000", "21000", "18000"],
+    },
+    "hu": {
+        "NAME": ["Kovács Anna", "Nagy Péter", "Tóth Júlia", "Szabó Gábor"],
+        "FIRST_NAME": ["Anna", "Péter", "Júlia", "Gábor"],
+        "LAST_NAME": ["Kovács", "Nagy", "Tóth", "Szabó"],
+        "EMAIL": ["beteg@example.hu", "kapcsolat@example.org"],
+        "PHONE": ["+36 30 123 4567", "06 1 234 5678"],
+        "ID_NUM": ["123456788", "123 456 788"],
+        "STREET_ADDRESS": ["Kossuth Lajos utca 12", "Andrássy út 45"],
+        "URL_PERSONAL": ["https://example.hu"],
+        "USERNAME": ["beteg123", "felhasznalo456"],
+        "DATE": ["1985. május 5.", "2000.01.01."],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Budapest", "Szeged", "Debrecen"],
+        "ZIPCODE": ["1051", "6720", "4024"],
+    },
+    "et": {
+        "NAME": ["Mari Tamm", "Jaan Kask", "Anu Saar", "Peeter Kivi"],
+        "FIRST_NAME": ["Mari", "Jaan", "Anu", "Peeter"],
+        "LAST_NAME": ["Tamm", "Kask", "Saar", "Kivi"],
+        "EMAIL": ["patsient@example.ee", "kontakt@example.org"],
+        "PHONE": ["+372 5123 4567", "644 1234"],
+        "ID_NUM": ["38205210123", "60409032208"],
+        "STREET_ADDRESS": ["Pikk tanav 12", "Narva maantee 45"],
+        "URL_PERSONAL": ["https://example.ee"],
+        "USERNAME": ["patsient123", "kasutaja456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Tallinn", "Tartu", "Parnu"],
+        "ZIPCODE": ["10115", "50090", "80010"],
     },
     "cs": {
         "NAME": ["Jan Novak", "Petra Svobodova", "Tomas Dvorak", "Eva Cerna"],
