@@ -31,7 +31,7 @@ Use `--include-transformersjs` when creating ONNX artifacts:
 
 ```bash
 .venv/bin/python -m openmed.onnx.convert \
-  --model OpenMed/example-token-classifier \
+  --model dslim/bert-base-NER \
   --output dist/example-onnx \
   --include-transformersjs
 ```

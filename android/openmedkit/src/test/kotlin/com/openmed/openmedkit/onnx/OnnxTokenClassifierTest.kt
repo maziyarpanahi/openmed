@@ -112,6 +112,34 @@ class OnnxTokenClassifierTest {
     }
 
     @Test
+    fun runSuppliesZeroTokenTypeIdsWhenTheGraphRequiresThem() = runTest {
+        val session = RecordingSession(
+            outputs = mapOf(
+                OnnxTokenClassifier.LOGITS_NAME to arrayOf(
+                    arrayOf(
+                        floatArrayOf(0f, 1f),
+                        floatArrayOf(1f, 0f),
+                    )
+                )
+            ),
+            inputNames = setOf(
+                OnnxTokenClassifier.INPUT_IDS_NAME,
+                OnnxTokenClassifier.ATTENTION_MASK_NAME,
+                OnnxTokenClassifier.TOKEN_TYPE_IDS_NAME,
+            ),
+        )
+        val classifier = classifier(session)
+
+        classifier.run(
+            inputIds = intArrayOf(101, 102),
+            attentionMask = intArrayOf(1, 1),
+            offsets = listOf(TokenOffset(0, 1), TokenOffset(1, 2)),
+        )
+
+        assertEquals(listOf(0L, 0L), session.tokenTypeIdsValues)
+    }
+
+    @Test
     fun missingLogitsOutputRaisesTypedError() = runTest {
         val session = RecordingSession(emptyMap())
         val classifier = classifier(session)
@@ -217,6 +245,10 @@ class OnnxTokenClassifierTest {
 
     private class RecordingSession(
         private val outputs: Map<String, Any?>,
+        override val inputNames: Set<String> = setOf(
+            OnnxTokenClassifier.INPUT_IDS_NAME,
+            OnnxTokenClassifier.ATTENTION_MASK_NAME,
+        ),
     ) : TokenClassificationSession {
         var runCount = 0
             private set
@@ -237,6 +269,8 @@ class OnnxTokenClassifierTest {
             private set
         var attentionMaskValues: List<Any> = emptyList()
             private set
+        var tokenTypeIdsValues: List<Any> = emptyList()
+            private set
 
         override fun run(inputs: Map<String, TokenInputTensor>): Map<String, Any?> {
             assertFalse(closed)
@@ -253,6 +287,9 @@ class OnnxTokenClassifierTest {
                 attentionMaskShape = capture.shape
                 attentionMaskType = capture.type
                 attentionMaskValues = capture.values
+            }
+            inputs[OnnxTokenClassifier.TOKEN_TYPE_IDS_NAME]?.capture()?.also { capture ->
+                tokenTypeIdsValues = capture.values
             }
             return outputs
         }
