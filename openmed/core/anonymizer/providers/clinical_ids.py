@@ -924,6 +924,56 @@ class LatvianPersonasKodsProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Estonian Isikukood
+# ---------------------------------------------------------------------------
+
+
+def generate_estonian_isikukood(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Estonian isikukood accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1800, 2099)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    sex = source.randint(0, 1)  # even century digit = female, odd = male
+    century_digit = 1 + ((year - 1800) // 100) * 2 + sex
+
+    body = [
+        century_digit,
+        (year % 100) // 10,
+        year % 10,
+        month // 10,
+        month % 10,
+        day // 10,
+        day % 10,
+    ]
+    body.extend(source.randint(0, 9) for _ in range(3))
+    check = _estonian_isikukood_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _estonian_isikukood_check_digit(digits: list[int]) -> int:
+    for weights in (
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 1),
+        (3, 4, 5, 6, 7, 8, 9, 1, 2, 3),
+    ):
+        remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+        if remainder < 10:
+            return remainder
+    return 0
+
+
+class EstonianIsikukoodProvider(BaseProvider):
+    """Generate synthetic Estonian isikukood values."""
+
+    def isikukood(self) -> str:
+        return generate_estonian_isikukood(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -1701,6 +1751,7 @@ __all__ = [
     "BCPHNProvider",
     "CanadianSINProvider",
     "DanishCPRProvider",
+    "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
     "HungarianTAJProvider",
@@ -1729,6 +1780,7 @@ __all__ = [
     "generate_canadian_sin",
     "generate_danish_cpr",
     "generate_hungarian_taj",
+    "generate_estonian_isikukood",
     "generate_iban",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
