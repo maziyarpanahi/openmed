@@ -2423,6 +2423,9 @@ def test_validate_jmbg():
     assert not validate_jmbg(_jmbg_with_valid_check("3211975710"))  # day 32
     assert not validate_jmbg(_jmbg_with_valid_check("3002988715"))  # 30 Feb
     assert not validate_jmbg(_jmbg_with_valid_check("1613975710"))  # month 13
+    assert not validate_jmbg("161197-5710028")
+    assert not validate_jmbg("JMBG 1611975710028")
+    assert not validate_jmbg(None)
     assert not validate_jmbg("abcdef")
     assert not validate_jmbg("123")
 
