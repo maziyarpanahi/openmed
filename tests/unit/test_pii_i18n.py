@@ -3392,6 +3392,18 @@ def test_czech_clinical_sample_expected_spans():
     assert expected <= observed
 
 
+def test_czech_textual_date_and_diacritic_address_patterns():
+    text = "Datum narození 16. listopadu 1975, adresa Náměstí Míru 5."
+    observed = {
+        (pattern.entity_type, match.group(0))
+        for pattern in get_patterns_for_language("cs")
+        for match in re.finditer(pattern.pattern, text, pattern.flags)
+    }
+
+    assert ("date", "16. listopadu 1975") in observed
+    assert ("street_address", "Náměstí Míru 5") in observed
+
+
 def test_czech_legacy_rodne_cislo_pattern_matches():
     text = "Pacientka, rodne cislo 485305/123, prijata k hospitalizaci."
     observed = set()

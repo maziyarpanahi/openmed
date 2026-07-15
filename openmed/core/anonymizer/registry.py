@@ -129,6 +129,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "fil_PH",
         "da_DK",
         "th_TH",
+        "cs_CZ",
         "sk_SK",
     }
 )
