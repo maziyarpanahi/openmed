@@ -1834,6 +1834,23 @@ class TestLanguagePIIPatterns:
 
         assert expected <= observed
 
+    @pytest.mark.parametrize("language", ["cs", "sk"])
+    def test_legacy_nine_digit_rodne_cislo_is_detected(self, language):
+        # Pre-1954 birth numbers use a three-digit serial with no check digit;
+        # the national-id pattern must match them so the validator can gate.
+        text = "rodné číslo 510505/123 pacienta"
+        observed = set()
+        for pattern in get_patterns_for_language(language):
+            if pattern.entity_type != "national_id":
+                continue
+            for match in re.finditer(pattern.pattern, text, pattern.flags):
+                value = match.group(0)
+                if pattern.validator is not None and not pattern.validator(value):
+                    continue
+                observed.add(value)
+
+        assert "510505/123" in observed
+
     def test_romanian_clinical_sample_expected_spans(self):
         text = (
             "Pacient: Ana Popescu, nascuta 12 martie 1985. "

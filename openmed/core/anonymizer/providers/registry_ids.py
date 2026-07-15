@@ -389,6 +389,13 @@ def _register_builtin_specs() -> None:
         faker_provider=RodneCisloProvider,
     )
     _register_aliases(
+        ("cs", "cs_CZ"),
+        id_type="rodne_cislo",
+        validate=validate_czechoslovak_rodne_cislo,
+        faker_method="rodne_cislo",
+        faker_provider=RodneCisloProvider,
+    )
+    _register_aliases(
         ("ro", "ro_RO"),
         id_type="cnp",
         validate=validate_romanian_cnp,
