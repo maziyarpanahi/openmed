@@ -924,6 +924,54 @@ class LatvianPersonasKodsProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Bulgarian EGN
+# ---------------------------------------------------------------------------
+
+
+def generate_bulgarian_egn(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Bulgarian EGN accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1800, 2099)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    if year >= 2000:
+        month_code = month + 40
+    elif year < 1900:
+        month_code = month + 20
+    else:
+        month_code = month
+
+    body = [
+        (year % 100) // 10,
+        year % 10,
+        month_code // 10,
+        month_code % 10,
+        day // 10,
+        day % 10,
+    ]
+    body.extend(source.randint(0, 9) for _ in range(3))
+    check = _bulgarian_egn_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _bulgarian_egn_check_digit(digits: list[int]) -> int:
+    weights = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+    remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+    return 0 if remainder == 10 else remainder
+
+
+class BulgarianEgnProvider(BaseProvider):
+    """Generate synthetic Bulgarian EGN values."""
+
+    def egn(self) -> str:
+        return generate_bulgarian_egn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Serbian / ex-Yugoslav JMBG
 # ---------------------------------------------------------------------------
 
@@ -1802,6 +1850,7 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BulgarianEgnProvider",
     "CanadianSINProvider",
     "DanishCPRProvider",
     "EstonianIsikukoodProvider",
@@ -1831,6 +1880,7 @@ __all__ = [
     "generate_australian_tfn",
     "generate_bc_phn",
     "generate_bic",
+    "generate_bulgarian_egn",
     "generate_canadian_sin",
     "generate_danish_cpr",
     "generate_hungarian_taj",

@@ -29,6 +29,7 @@ from typing import Any, Callable
 
 from openmed.core.pii_i18n import (
     validate_aadhaar,
+    validate_bulgarian_egn,
     validate_croatian_oib,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
@@ -63,6 +64,7 @@ from .clinical_ids import (
     AustralianMedicareProvider,
     AustralianTFNProvider,
     BCPHNProvider,
+    BulgarianEgnProvider,
     CanadianSINProvider,
     DanishCPRProvider,
     EstonianIsikukoodProvider,
@@ -337,6 +339,13 @@ def _register_builtin_specs() -> None:
         validate=validate_latvian_personas_kods,
         faker_method="personas_kods",
         faker_provider=LatvianPersonasKodsProvider,
+    )
+    _register_aliases(
+        ("bg", "bg_BG"),
+        id_type="egn",
+        validate=validate_bulgarian_egn,
+        faker_method="egn",
+        faker_provider=BulgarianEgnProvider,
     )
     _register_aliases(
         ("hr", "hr_HR"),
