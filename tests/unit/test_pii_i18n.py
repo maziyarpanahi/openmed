@@ -2429,6 +2429,7 @@ def test_validate_estonian_isikukood():
     assert not validate_estonian_isikukood("97511160007")
     # Isikukood has no formatted representation; separators are invalid.
     assert not validate_estonian_isikukood("475-111-60002")
+    assert not validate_estonian_isikukood(None)
     assert not validate_estonian_isikukood("abcdef")
     assert not validate_estonian_isikukood("123")
 
