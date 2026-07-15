@@ -1266,23 +1266,33 @@ def validate_korean_rrn(text: str) -> bool:
 def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     """Validate a Czech/Slovak rodne cislo birth number.
 
-    Modern Czech and Slovak birth numbers use ten digits in the shape
-    ``YYMMDDXXXX`` with a modulo-11 checksum over the whole value. Female
-    identifiers add 50 to the birth month; overflow series may add 20 for
-    men or 70 for women.
+    Modern values use ten digits in the shape ``YYMMDDXXXX`` and the whole
+    value must be divisible by 11. Legacy values assigned to people born
+    before 1954 use nine digits and no checksum. Female identifiers add 50
+    to the birth month; post-2004 overflow series may add 20 for men or 70
+    for women.
 
     Args:
         text: Birth number string, optionally containing a slash, spaces, or
             hyphen separators.
 
     Returns:
-        True if the identifier has a decodable birth date and modulo-11 check.
+        True if the identifier has a valid shape, birth date, serial, and
+        (for ten-digit values) modulo-11 checksum.
     """
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 10:
+    if not isinstance(text, str):
         return False
-    if int(digits) % 11 != 0:
+
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9]{9,10}|[0-9]{6}[ /-][0-9]{3,4}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    legacy = len(digits) == 9
+    if legacy:
+        if digits[6:] == "000":
+            return False
+    elif int(digits) % 11 != 0:
         return False
 
     year_suffix = int(digits[0:2])
@@ -1303,65 +1313,29 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     else:
         return False
 
+    if legacy and overflow_series:
+        return False
     if day < 1 or day > 31:
         return False
 
     import calendar
 
-    # Ten-digit rodne cislo values were introduced in 1954. The two-digit year
-    # is century-ambiguous, so accept either plausible civil-registration
-    # century while keeping the overflow series in the post-2004 era.
-    for century in (1900, 2000):
-        year = century + year_suffix
-        if year < 1954:
-            continue
-        if overflow_series and year < 2004:
-            continue
-        try:
-            if day <= calendar.monthrange(year, month)[1]:
-                return True
-        except (ValueError, calendar.IllegalMonthError):
-            continue
-    return False
-
-
-def validate_czech_rodne_cislo(text: str) -> bool:
-    """Validate a Czech rodne cislo birth number.
-
-    Modern (1954 and later) values are ten digits with a modulo-11
-    checksum and are delegated to
-    :func:`validate_czechoslovak_rodne_cislo`. Legacy pre-1954 values
-    are nine digits (``YYMMDD/SSS``) with no checksum: the female +50
-    month offset applies, the post-2004 overflow series (+20/+70) does
-    not, and the embedded date must fall in 1953 or earlier.
-    """
-
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) == 10:
-        return validate_czechoslovak_rodne_cislo(text)
-    if len(digits) != 9:
-        return False
-
-    year_suffix = int(digits[0:2])
-    encoded_month = int(digits[2:4])
-    day = int(digits[4:6])
-
-    if 1 <= encoded_month <= 12:
-        month = encoded_month
-    elif 51 <= encoded_month <= 62:
-        month = encoded_month - 50
+    if legacy:
+        year = (1900 if year_suffix <= 53 else 1800) + year_suffix
     else:
-        return False
-
-    year = 1900 + year_suffix if year_suffix <= 53 else 1800 + year_suffix
-
-    import calendar
+        year = (2000 if year_suffix <= 53 else 1900) + year_suffix
+        if overflow_series and year < 2004:
+            return False
 
     try:
         return 1 <= day <= calendar.monthrange(year, month)[1]
     except (ValueError, calendar.IllegalMonthError):
         return False
+
+
+# Czech and Slovak share the Czechoslovak birth-number system. Keep a
+# Czech-facing public name for issue-specific callers without duplicating logic.
+validate_czech_rodne_cislo = validate_czechoslovak_rodne_cislo
 
 
 # Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
@@ -3959,7 +3933,7 @@ _CZECH_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
     PIIPattern(
-        r"(?<!\w)(?:\+420\s?)?[67]\d{2}(?:[\s.-]?\d{3}){2}\b",
+        r"(?<!\w)(?:\+420[\s.-]?)?[2-7]\d{2}(?:[\s.-]?\d{3}){2}\b",
         "phone_number",
         priority=8,
         base_score=0.55,
@@ -4617,7 +4591,7 @@ _SLOVAK_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.35,
     ),
     PIIPattern(
-        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{4}(?!\d)",
+        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{3,4}(?!\d)",
         "national_id",
         priority=10,
         base_score=0.5,
