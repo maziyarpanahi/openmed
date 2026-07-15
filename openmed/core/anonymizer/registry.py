@@ -129,6 +129,7 @@ _DAY_FIRST_LOCALES = frozenset(
         "fil_PH",
         "da_DK",
         "th_TH",
+        "cs_CZ",
         "sk_SK",
     }
 )
@@ -182,6 +183,7 @@ _LOCALE_ID_METHODS = {
     "ko_KR": "korean_rrn",
     "th_TH": "thai_national_id",
     "sk_SK": "rodne_cislo",
+    "cs_CZ": "rodne_cislo",
     "ro_RO": "romanian_cnp",
     "fi_FI": "ssn",
     "bg_BG": "egn",

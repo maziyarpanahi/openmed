@@ -70,6 +70,7 @@ NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
     "hr",
     "bg",
     "fi",
+    "cs",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -1265,23 +1266,33 @@ def validate_korean_rrn(text: str) -> bool:
 def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     """Validate a Czech/Slovak rodne cislo birth number.
 
-    Modern Czech and Slovak birth numbers use ten digits in the shape
-    ``YYMMDDXXXX`` with a modulo-11 checksum over the whole value. Female
-    identifiers add 50 to the birth month; overflow series may add 20 for
-    men or 70 for women.
+    Modern values use ten digits in the shape ``YYMMDDXXXX`` and the whole
+    value must be divisible by 11. Legacy values assigned to people born
+    before 1954 use nine digits and no checksum. Female identifiers add 50
+    to the birth month; post-2004 overflow series may add 20 for men or 70
+    for women.
 
     Args:
         text: Birth number string, optionally containing a slash, spaces, or
             hyphen separators.
 
     Returns:
-        True if the identifier has a decodable birth date and modulo-11 check.
+        True if the identifier has a valid shape, birth date, serial, and
+        (for ten-digit values) modulo-11 checksum.
     """
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 10:
+    if not isinstance(text, str):
         return False
-    if int(digits) % 11 != 0:
+
+    stripped = text.strip()
+    if re.fullmatch(r"[0-9]{9,10}|[0-9]{6}[ /-][0-9]{3,4}", stripped) is None:
+        return False
+
+    digits = re.sub(r"[^0-9]", "", stripped)
+    legacy = len(digits) == 9
+    if legacy:
+        if digits[6:] == "000":
+            return False
+    elif int(digits) % 11 != 0:
         return False
 
     year_suffix = int(digits[0:2])
@@ -1302,26 +1313,29 @@ def validate_czechoslovak_rodne_cislo(text: str) -> bool:
     else:
         return False
 
+    if legacy and overflow_series:
+        return False
     if day < 1 or day > 31:
         return False
 
     import calendar
 
-    # Ten-digit rodne cislo values were introduced in 1954. The two-digit year
-    # is century-ambiguous, so accept either plausible civil-registration
-    # century while keeping the overflow series in the post-2004 era.
-    for century in (1900, 2000):
-        year = century + year_suffix
-        if year < 1954:
-            continue
+    if legacy:
+        year = (1900 if year_suffix <= 53 else 1800) + year_suffix
+    else:
+        year = (2000 if year_suffix <= 53 else 1900) + year_suffix
         if overflow_series and year < 2004:
-            continue
-        try:
-            if day <= calendar.monthrange(year, month)[1]:
-                return True
-        except (ValueError, calendar.IllegalMonthError):
-            continue
-    return False
+            return False
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+# Czech and Slovak share the Czechoslovak birth-number system. Keep a
+# Czech-facing public name for issue-specific callers without duplicating logic.
+validate_czech_rodne_cislo = validate_czechoslovak_rodne_cislo
 
 
 # Romanian CNP location/sequence codes: legacy values 01-46 cover the counties,
@@ -3863,6 +3877,119 @@ _ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Czech PII patterns
+# ---------------------------------------------------------------------------
+
+# Czech month names in both nominative and genitive (dates read
+# "16. listopadu 1975"). Longer forms are listed first so the alternation
+# prefers them.
+_CZECH_MONTH_PATTERN = (
+    r"ledna|leden|února|únor|března|březen|dubna|duben|"
+    r"května|květen|července|červenec|června|červen|"
+    r"srpna|srpen|září|října|říjen|listopadu|listopad|prosince|prosinec"
+)
+
+_CZECH_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "narozeni",
+            "narození",
+            "narozen",
+            "narozena",
+            "prijat",
+            "přijat",
+            "přijata",
+            "propusten",
+            "propuštěn",
+            "propuštěna",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        rf"\b\d{{1,2}}\.?\s+(?:{_CZECH_MONTH_PATTERN})\s+\d{{4}}\b",
+        "date",
+        priority=8,
+        base_score=0.7,
+        context_words=[
+            "datum",
+            "narození",
+            "narozeni",
+            "narozen",
+            "narozena",
+            "přijat",
+            "prijat",
+            "přijata",
+            "propuštěn",
+            "propusten",
+            "propuštěna",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+420[\s.-]?)?[2-7]\d{2}(?:[\s.-]?\d{3}){2}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "tel", "mobil", "číslo", "cislo", "kontakt"],
+        context_boost=0.35,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{3,4}(?!\d)",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "rodne cislo",
+            "rodné číslo",
+            "rc",
+            "rč",
+            "identifikacni cislo",
+            "identifikační číslo",
+        ],
+        context_boost=0.45,
+        validator=validate_czech_rodne_cislo,
+    ),
+    PIIPattern(
+        r"\b(?!(?:adresa|bydliště|bydliste|trvalé)\b)(?:[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+(?:\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ.'-]+)*?\s+(?:ulice|ul\.|trida|třída|namesti|náměstí|nábřeží)\s+\d{1,5}[A-Za-z]?|(?:ulice|ul\.|trida|třída|namesti|náměstí|nábřeží)\s+[A-ZÀ-ɏ][A-Za-zÀ-ɏ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=[
+            "adresa",
+            "bydliste",
+            "bydliště",
+            "trvalé bydliště",
+            "ulice",
+        ],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"(?<!\d)\d{3}\s?\d{2}(?!\d)",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "psc",
+            "psč",
+            "postovni smerovaci cislo",
+            "poštovní směrovací číslo",
+            "adresa",
+        ],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # Korean dates: YYYY년 MM월 DD일
     PIIPattern(
@@ -4464,7 +4591,7 @@ _SLOVAK_PII_PATTERNS: List[PIIPattern] = [
         context_boost=0.35,
     ),
     PIIPattern(
-        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{4}(?!\d)",
+        r"(?<!\d)\d{2}(?:0[1-9]|1[0-2]|2[1-9]|3[0-2]|5[1-9]|6[0-2]|7[1-9]|8[0-2])(?:0[1-9]|[12]\d|3[01])[\s/-]?\d{3,4}(?!\d)",
         "national_id",
         priority=10,
         base_score=0.5,
@@ -4640,6 +4767,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sr": _SERBIAN_PII_PATTERNS,
     "hu": _HUNGARIAN_PII_PATTERNS,
     "et": _ESTONIAN_PII_PATTERNS,
+    "cs": _CZECH_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -5233,6 +5361,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Tallinn", "Tartu", "Parnu"],
         "ZIPCODE": ["10115", "50090", "80010"],
+    },
+    "cs": {
+        "NAME": ["Jana Nováková", "Petr Novák", "Marie Svobodová", "Tomáš Král"],
+        "FIRST_NAME": ["Jana", "Petr", "Marie", "Tomáš"],
+        "LAST_NAME": ["Nováková", "Novák", "Svobodová", "Král"],
+        "EMAIL": ["pacient@example.cz", "kontakt@example.org"],
+        "PHONE": ["+420 601 234 567", "702 345 678"],
+        "ID_NUM": ["820521/0002", "485305/123"],
+        "STREET_ADDRESS": ["Hlavní ulice 12", "Náměstí Míru 5"],
+        "URL_PERSONAL": ["https://example.cz"],
+        "USERNAME": ["pacient123", "uzivatel456"],
+        "DATE": ["16.11.1975", "16. listopadu 1975"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Praha", "Brno", "Ostrava"],
+        "ZIPCODE": ["110 00", "602 00", "702 00"],
     },
 }
 

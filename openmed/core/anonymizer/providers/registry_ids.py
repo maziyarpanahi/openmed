@@ -31,6 +31,7 @@ from openmed.core.pii_i18n import (
     validate_aadhaar,
     validate_bulgarian_egn,
     validate_croatian_oib,
+    validate_czech_rodne_cislo,
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
@@ -392,6 +393,13 @@ def _register_builtin_specs() -> None:
         ("sk", "sk_SK"),
         id_type="rodne_cislo",
         validate=validate_czechoslovak_rodne_cislo,
+        faker_method="rodne_cislo",
+        faker_provider=RodneCisloProvider,
+    )
+    _register_aliases(
+        ("cs", "cs_CZ"),
+        id_type="rodne_cislo",
+        validate=validate_czech_rodne_cislo,
         faker_method="rodne_cislo",
         faker_provider=RodneCisloProvider,
     )

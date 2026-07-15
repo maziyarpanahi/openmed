@@ -1333,12 +1333,12 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
-# Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
+# Czech/Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
 # ---------------------------------------------------------------------------
 
 
 def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
-    """Generate a Slovak rodne cislo accepted by its checksum validator."""
+    """Generate a Czech/Slovak rodne cislo accepted by its checksum validator."""
     import calendar
 
     source = rng or random.Random()
@@ -1371,7 +1371,7 @@ def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
 
 
 class RodneCisloProvider(BaseProvider):
-    """Generates valid Slovak rodne cislo birth numbers."""
+    """Generates valid Czech/Slovak rodne cislo birth numbers."""
 
     def rodne_cislo(self) -> str:
         return generate_rodne_cislo(rng=self.generator.random)
