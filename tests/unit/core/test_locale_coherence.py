@@ -43,7 +43,7 @@ from openmed.core.pii_i18n import (
 # approximation. Kept here, independent of the code under test, so that wiring a
 # new pack to a wrong/approximate locale flips the assertions red until a human
 # consciously updates this set.
-DOCUMENTED_APPROXIMATE = {"te", "ms"}
+DOCUMENTED_APPROXIMATE = {"te", "ms", "sr"}
 
 # Languages that register a national-ID validator but have no Faker
 # surrogate provider yet. Documented so a *new* such gap can't slip in silently.

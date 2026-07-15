@@ -66,6 +66,7 @@ NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
     "da",
     "hu",
     "et",
+    "sr",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -943,6 +944,56 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+def validate_jmbg(text: str) -> bool:
+    """Validate Serbian / ex-Yugoslav JMBG unique master citizen number.
+
+    The JMBG is a 13-digit code ``DDMMYYYRRSSSK``:
+
+    - DDMMYYY: birth date; YYY holds the last three digits of the year
+      (values of 800 and above map to the 1800/1900s, lower values to
+      the 2000s).
+    - RR: political region of registration (all values accepted).
+    - SSS: serial number; 000-499 male, 500-999 female.
+    - K: modulo-11 check digit; see :func:`_jmbg_check_digit`.
+    """
+
+    if not isinstance(text, str) or re.fullmatch(r"[0-9]{13}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if numbers[12] != _jmbg_check_digit(numbers[:12]):
+        return False
+
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:7])
+    year = 1000 + year_suffix if year_suffix >= 800 else 2000 + year_suffix
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _jmbg_check_digit(digits: list[int]) -> int:
+    """Return the JMBG check digit for the first 12 digits.
+
+    ``m = 11 - ((7*(d1+d7) + 6*(d2+d8) + 5*(d3+d9) + 4*(d4+d10) +
+    3*(d5+d11) + 2*(d6+d12)) mod 11)``; remainders of 10 or 11 yield
+    check digit 0.
+    """
+    weights = (7, 6, 5, 4, 3, 2)
+    total = sum(
+        weight * (digits[index] + digits[index + 6])
+        for index, weight in enumerate(weights)
+    )
+    remainder = 11 - (total % 11)
+    return 0 if remainder > 9 else remainder
 
 
 def validate_estonian_isikukood(text: str) -> bool:
@@ -3348,6 +3399,79 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
 ]
 
 # ---------------------------------------------------------------------------
+# Serbian PII patterns (Latin and Cyrillic scripts)
+# ---------------------------------------------------------------------------
+
+_SERBIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "datum",
+            "rodjenja",
+            "rođenja",
+            "датум",
+            "рођења",
+            "primljen",
+            "примљен",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+381[\s.-]?\d{1,2}|0\d{1,2})[\s.-]?\d{3}[\s.-]?\d{3,4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobilni", "kontakt", "телефон", "мобилни"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[0-3]\d[01]\d{10}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "jmbg",
+            "jmbg:",
+            "јмбг",
+            "maticni broj",
+            "matični broj",
+            "матични број",
+        ],
+        context_boost=0.4,
+        validator=validate_jmbg,
+    ),
+    PIIPattern(
+        r"\b(?:[A-ZČĆŠŽĐЀ-Я][A-Za-zčćšžđа-џ.'-]+\s+(?:ulica|bulevar|trg|улица|булевар|трг)\s+\d{1,5}[A-Za-z]?|(?:ulica|bulevar|trg|улица|булевар|трг)\s+[A-ZČĆŠŽĐЀ-Я][A-Za-zčćšžđа-џ .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["adresa", "stanuje", "ulica", "адреса", "улица"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=[
+            "postanski broj",
+            "poštanski broj",
+            "поштански број",
+            "adresa",
+            "адреса",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
+# ---------------------------------------------------------------------------
 # Estonian PII patterns
 # ---------------------------------------------------------------------------
 
@@ -4182,6 +4306,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "tl": _TAGALOG_PII_PATTERNS,
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
+    "sr": _SERBIAN_PII_PATTERNS,
     "hu": _HUNGARIAN_PII_PATTERNS,
     "et": _ESTONIAN_PII_PATTERNS,
 }
@@ -4687,6 +4812,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Bucuresti", "Cluj-Napoca", "Timisoara"],
         "ZIPCODE": ["010011", "400001", "300001"],
+    },
+    "sr": {
+        "NAME": ["Marko Petrovic", "Jelena Jovanovic", "Nikola Nikolic", "Ana Ilic"],
+        "FIRST_NAME": ["Marko", "Jelena", "Nikola", "Ana"],
+        "LAST_NAME": ["Petrovic", "Jovanovic", "Nikolic", "Ilic"],
+        "EMAIL": ["pacijent@example.rs", "kontakt@example.org"],
+        "PHONE": ["+381 64 123 4567", "011 234 5678"],
+        "ID_NUM": ["2105982710174", "0309004715013"],
+        "STREET_ADDRESS": ["Bulevar Oslobodjenja 45", "Ulica Kneza Milosa 12"],
+        "URL_PERSONAL": ["https://example.rs"],
+        "USERNAME": ["pacijent123", "korisnik456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Beograd", "Novi Sad", "Nis"],
+        "ZIPCODE": ["11000", "21000", "18000"],
     },
     "hu": {
         "NAME": ["Kovács Anna", "Nagy Péter", "Tóth Júlia", "Szabó Gábor"],

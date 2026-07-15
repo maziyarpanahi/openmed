@@ -183,6 +183,7 @@ _LOCALE_ID_METHODS = {
     "th_TH": "thai_national_id",
     "sk_SK": "rodne_cislo",
     "ro_RO": "romanian_cnp",
+    "sr_RS": "jmbg",
     "hu_HU": "hungarian_taj",
     "et_EE": "isikukood",
 }
