@@ -2,6 +2,8 @@
 
 import logging
 import re
+from collections.abc import Callable, Iterable, Sequence
+from dataclasses import dataclass
 from typing import Dict, List
 
 logger = logging.getLogger(__name__)
@@ -250,3 +252,92 @@ def postprocess_text(text: str, capitalize_first: bool = True) -> str:
         text = text[0].upper() + text[1:]
 
     return text
+
+
+# ---------------------------------------------------------------------------
+# Indic native-digit folding
+# ---------------------------------------------------------------------------
+
+# Base code point of the contiguous 0..9 decimal block for each supported
+# Indic script. Only positional decimal digits are folded; non-positional
+# number signs (e.g. the Tamil traditional signs U+0BF0-0BF2) are left as-is.
+_INDIC_DIGIT_BASES: Dict[str, int] = {
+    "devanagari": 0x0966,
+    "bengali": 0x09E6,
+    "gurmukhi": 0x0A66,
+    "gujarati": 0x0AE6,
+    "odia": 0x0B66,
+    "tamil": 0x0BE6,
+    "telugu": 0x0C66,
+    "kannada": 0x0CE6,
+    "malayalam": 0x0D66,
+}
+
+#: The Indic scripts whose decimal digits are folded to ASCII.
+INDIC_DIGIT_SCRIPTS = tuple(_INDIC_DIGIT_BASES)
+
+# Translation table from every native decimal digit code point to its ASCII
+# equivalent. Built once; folding is a single str.translate call.
+_INDIC_DIGIT_TRANSLATION = {
+    base + digit: ord(str(digit))
+    for base in _INDIC_DIGIT_BASES.values()
+    for digit in range(10)
+}
+
+
+@dataclass(frozen=True)
+class DigitFolding:
+    """Native-digit text folded to ASCII, with a source offset mapping.
+
+    Indic decimal digits are single code points, so folding is strictly
+    length-preserving and the offset mapping is the identity: a span detected on
+    the folded ``text`` indexes the same characters in ``original``, whose native
+    digits are preserved for the output.
+    """
+
+    text: str
+    original: str
+
+    def to_original_span(self, start: int, end: int) -> "tuple[int, int]":
+        """Map a folded ``[start, end)`` span to the original text offsets."""
+
+        if not (0 <= start <= end <= len(self.text)):
+            raise ValueError("span must satisfy 0 <= start <= end <= len(text)")
+        return start, end
+
+
+def fold_indic_digits(text: str) -> DigitFolding:
+    """Fold Indic native decimal digits to ASCII, preserving offsets.
+
+    Maps all nine native digit sets (Devanagari, Bengali, Gurmukhi, Gujarati,
+    Odia, Tamil, Telugu, Kannada, Malayalam) to ASCII while leaving every other
+    character -- ASCII digits, letters, and non-positional number signs --
+    untouched. Folding is idempotent and length-preserving; the returned
+    :class:`DigitFolding` keeps the original surface so native digits survive in
+    the output.
+    """
+
+    return DigitFolding(text=text.translate(_INDIC_DIGIT_TRANSLATION), original=text)
+
+
+def detect_with_digit_folding(
+    text: str,
+    matcher: Callable[[str], Iterable[Sequence[object]]],
+) -> "list[tuple[object, ...]]":
+    """Run ``matcher`` on digit-folded ``text`` and map spans back to the source.
+
+    ``matcher`` takes the folded text and returns items whose first two elements
+    are the ``(start, end)`` span; any trailing elements are preserved. Each
+    result is ``(original_start, original_end, *trailing)``, so ASCII-only
+    validators and regexes detect native-digit PHI while spans still index the
+    original native-digit text.
+    """
+
+    folding = fold_indic_digits(text)
+    results: "list[tuple[object, ...]]" = []
+    for item in matcher(folding.text):
+        start = int(item[0])  # type: ignore[call-overload]
+        end = int(item[1])  # type: ignore[call-overload]
+        original_start, original_end = folding.to_original_span(start, end)
+        results.append((original_start, original_end, *tuple(item[2:])))
+    return results
