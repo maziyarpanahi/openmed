@@ -849,6 +849,7 @@ class TestValidateCzechoslovakRodneCislo:
     def test_czech_validator_accepts_modern_and_legacy(self):
         assert validate_czech_rodne_cislo("850505/0060") is True  # modern
         assert validate_czech_rodne_cislo("510505/123") is True  # 9-digit legacy
+        assert validate_czech_rodne_cislo("083116/0000") is True  # post-2004 +20
 
     def test_czech_validator_rejects_bad_check(self):
         assert validate_czech_rodne_cislo("850505/1237") is False
