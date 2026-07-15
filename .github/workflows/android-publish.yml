@@ -1,5 +1,7 @@
-# Tags matching v* build and publish the OpenMedKit Android AAR to Maven Central.
-# Required repository secrets:
+# Tags matching v* validate the OpenMedKit Android AAR used by JitPack. When all
+# optional Central Portal credentials are configured, the same run also builds
+# and uploads a signed Maven Central bundle. Manual uploads require every secret.
+# Optional repository secrets for Maven Central:
 # - ANDROID_SIGNING_KEY: ASCII-armored GPG private key for Maven artifact signing.
 # - ANDROID_SIGNING_KEY_PASSWORD: passphrase for ANDROID_SIGNING_KEY.
 # - SONATYPE_USERNAME: Central Portal user-token username.
@@ -30,6 +32,7 @@ jobs:
     outputs:
       version: ${{ steps.release.outputs.version }}
       publish_android: ${{ steps.android_changes.outputs.publish_android }}
+      central_portal_configured: ${{ steps.central_credentials.outputs.configured }}
 
     steps:
       - uses: actions/checkout@v7
@@ -88,8 +91,40 @@ jobs:
             echo "publish_android=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Detect optional Central Portal credentials
+        id: central_credentials
+        shell: bash
+        env:
+          ANDROID_SIGNING_KEY: ${{ secrets.ANDROID_SIGNING_KEY }}
+          ANDROID_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          configured=true
+          for name in \
+            ANDROID_SIGNING_KEY \
+            ANDROID_SIGNING_KEY_PASSWORD \
+            SONATYPE_USERNAME \
+            SONATYPE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              configured=false
+            fi
+          done
+
+          echo "configured=$configured" >> "$GITHUB_OUTPUT"
+          if [ "$configured" = "true" ]; then
+            exit 0
+          fi
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::error title=Missing Central Portal credentials::Configure all Android signing and Sonatype credentials before a manual upload."
+            exit 1
+          fi
+
+          echo "::notice title=Central Portal skipped::Optional publishing credentials are not configured; the immutable tag remains available through JitPack."
+
   build:
-    name: Build signed Central Portal bundle
+    name: Build Android release
     needs: guard
     if: needs.guard.outputs.publish_android == 'true'
     runs-on: ubuntu-latest
@@ -118,6 +153,7 @@ jobs:
           ./gradlew :openmedkit:assembleDebug :openmedkit:testDebugUnitTest --stacktrace
 
       - name: Build signed Maven Central bundle
+        if: needs.guard.outputs.central_portal_configured == 'true'
         working-directory: android
         env:
           ORG_GRADLE_PROJECT_openmedAndroidVersion: ${{ needs.guard.outputs.version }}
@@ -127,6 +163,7 @@ jobs:
           ./gradlew :openmedkit:bundleCentralPortalPublication --stacktrace
 
       - name: Upload Central Portal bundle artifact
+        if: needs.guard.outputs.central_portal_configured == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: openmedkit-central-portal-bundle
@@ -137,7 +174,7 @@ jobs:
   publish:
     name: Upload to Central Portal
     needs: [guard, build]
-    if: needs.guard.outputs.publish_android == 'true'
+    if: needs.guard.outputs.publish_android == 'true' && needs.guard.outputs.central_portal_configured == 'true'
     runs-on: ubuntu-latest
     environment:
       name: maven-central

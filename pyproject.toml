@@ -217,6 +217,13 @@ onnx = [
   "transformers>=4.50",
 ]
 
+onnx-runtime = [
+  "huggingface-hub>=0.30",
+  "numpy>=1.26",
+  "onnxruntime>=1.16",
+  "transformers>=4.50",
+]
+
 openvino = [
   "openvino>=2024.0",
   "nncf>=2.10",
