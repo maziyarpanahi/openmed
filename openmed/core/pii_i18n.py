@@ -911,21 +911,20 @@ def validate_estonian_isikukood(text: str) -> bool:
 
     The isikukood is an 11-digit personal code ``GYYMMDDSSSC``:
 
-    - G: century and sex (1/2 = 1800s, 3/4 = 1900s, 5/6 = 2000s,
-      7/8 = 2100s; odd = male, even = female).
+    - G: century and sex (1/2 = 1800s, 3/4 = 1900s, 5/6 = 2000s;
+      odd = male, even = female).
     - YYMMDD: date of birth within that century.
     - SSS: serial number.
     - C: two-pass modulo-11 check digit; see
       :func:`_estonian_isikukood_check_digit`.
     """
 
-    digits = re.sub(r"[^0-9]", "", text)
-
-    if len(digits) != 11:
+    if re.fullmatch(r"[0-9]{11}", text) is None:
         return False
 
+    digits = text
     numbers = [int(digit) for digit in digits]
-    if not 1 <= numbers[0] <= 8:
+    if not 1 <= numbers[0] <= 6:
         return False
     if numbers[10] != _estonian_isikukood_check_digit(numbers[:10]):
         return False
@@ -3339,7 +3338,7 @@ _ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
         flags=re.IGNORECASE,
     ),
     PIIPattern(
-        r"\b[1-8]\d{2}[01]\d[0-3]\d{5}\b",
+        r"\b[1-6]\d{2}[01]\d[0-3]\d{5}\b",
         "national_id",
         priority=10,
         base_score=0.5,
@@ -3352,7 +3351,7 @@ _ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
         validator=validate_estonian_isikukood,
     ),
     PIIPattern(
-        r"\b(?:[A-Z][A-Za-z.'-]+\s+(?:tanav|tänav|maantee|puiestee|tee)\s+\d{1,5}[A-Za-z]?|(?:tanav|tänav|maantee|puiestee|tee)\s+[A-Z][A-Za-z .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        r"\b(?:[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f.'-]+\s+(?:tanav|tänav|maantee|puiestee|tee)\s+\d{1,5}[A-Za-z]?|(?:tanav|tänav|maantee|puiestee|tee)\s+[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
         "street_address",
         priority=7,
         base_score=0.65,
