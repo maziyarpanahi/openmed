@@ -52,6 +52,8 @@ from openmed.core.pii_i18n import (
     validate_turkish_tckn,
     validate_uk_nhs_number,
     validate_uk_nino,
+    validate_vietnamese_cccd,
+    validate_vietnamese_cmnd,
 )
 
 from .clinical_ids import (
@@ -78,6 +80,7 @@ from .clinical_ids import (
     ThaiNationalIdProvider,
     UKNHSNumberProvider,
     UKNINOProvider,
+    VietnameseIdProvider,
     validate_australian_medicare,
     validate_australian_tfn,
     validate_bc_phn,
@@ -358,6 +361,20 @@ def _register_builtin_specs() -> None:
         validate=validate_romanian_cnp,
         faker_method="romanian_cnp",
         faker_provider=RomanianCNPProvider,
+    )
+    _register_aliases(
+        ("vi", "vi_VN", "vn"),
+        id_type="cccd",
+        validate=validate_vietnamese_cccd,
+        faker_method="vietnamese_cccd",
+        faker_provider=VietnameseIdProvider,
+    )
+    _register_aliases(
+        ("vi", "vi_VN", "vn"),
+        id_type="cmnd",
+        validate=validate_vietnamese_cmnd,
+        faker_method="vietnamese_cmnd",
+        faker_provider=VietnameseIdProvider,
     )
     _register_aliases(
         ("pt", "pt_BR"),

@@ -41,6 +41,8 @@ EXPECTED_VALIDATOR_KEYS = (
     ("pt", "cpf"),
     ("pt", "cnpj"),
     ("tr", "tckn"),
+    ("vi", "cccd"),
+    ("vi", "cmnd"),
     ("us", "npi"),
 )
 
@@ -66,6 +68,8 @@ ROUND_TRIP_CASES = (
     ("pt", "cpf", "pt_BR"),
     ("pt", "cnpj", "pt_BR"),
     ("tr", "tckn", "tr_TR"),
+    ("vi", "cccd", "vi_VN"),
+    ("vi", "cmnd", "vi_VN"),
     ("us", "npi", "en_US"),
 )
 

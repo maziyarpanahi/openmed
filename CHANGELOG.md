@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
+  and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
+  five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
+  fixture (#819).
+
 ## [1.9.1] - 2026-07-14
 
 This patch completes the `1.9` distribution rollout without changing the
