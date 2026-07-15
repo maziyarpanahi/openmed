@@ -39,6 +39,7 @@ def test_clinical_domains_markdown_covers_label_map_metadata():
         "tests/fixtures/clinical/genomic_variant.jsonl",
         "tests/fixtures/clinical/immunization.jsonl",
         "tests/fixtures/clinical/nutrition_diet.jsonl",
+        "tests/fixtures/clinical/pulmonology.jsonl",
     ):
         assert Path(fixture_path).exists()
         assert fixture_path in markdown
