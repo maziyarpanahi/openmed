@@ -65,6 +65,7 @@ NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
     "tl",
     "da",
     "hu",
+    "et",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -942,6 +943,58 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+def validate_estonian_isikukood(text: str) -> bool:
+    """Validate Estonian isikukood.
+
+    The isikukood is an 11-digit personal code ``GYYMMDDSSSC``:
+
+    - G: century and sex (1/2 = 1800s, 3/4 = 1900s, 5/6 = 2000s;
+      odd = male, even = female).
+    - YYMMDD: date of birth within that century.
+    - SSS: serial number.
+    - C: two-pass modulo-11 check digit; see
+      :func:`_estonian_isikukood_check_digit`.
+    """
+
+    if re.fullmatch(r"[0-9]{11}", text) is None:
+        return False
+
+    digits = text
+    numbers = [int(digit) for digit in digits]
+    if not 1 <= numbers[0] <= 6:
+        return False
+    if numbers[10] != _estonian_isikukood_check_digit(numbers[:10]):
+        return False
+
+    year = 1800 + ((numbers[0] - 1) // 2) * 100 + int(digits[1:3])
+    month = int(digits[3:5])
+    day = int(digits[5:7])
+
+    import calendar
+
+    try:
+        return 1 <= day <= calendar.monthrange(year, month)[1]
+    except (ValueError, calendar.IllegalMonthError):
+        return False
+
+
+def _estonian_isikukood_check_digit(digits: list[int]) -> int:
+    """Return the Estonian isikukood check digit for the first 10 digits.
+
+    First pass uses weights 1..9,1 modulo 11; a remainder of 10 triggers a
+    second pass with weights 3..9,1,2,3, and a second remainder of 10 yields
+    check digit 0.
+    """
+    for weights in (
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 1),
+        (3, 4, 5, 6, 7, 8, 9, 1, 2, 3),
+    ):
+        remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+        if remainder < 10:
+            return remainder
+    return 0
 
 
 def validate_korean_rrn(text: str) -> bool:
@@ -3294,6 +3347,69 @@ _LATVIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Estonian PII patterns
+# ---------------------------------------------------------------------------
+
+_ESTONIAN_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "kuupaev",
+            "kuupäev",
+            "sunniaeg",
+            "sünniaeg",
+            "sundinud",
+            "sündinud",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+372\s?)?[3-8]\d{2,3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["telefon", "mobiil", "kontakt"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b[1-6]\d{2}[01]\d[0-3]\d{5}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "isikukood",
+            "isikukood:",
+            "ik",
+        ],
+        context_boost=0.4,
+        validator=validate_estonian_isikukood,
+    ),
+    PIIPattern(
+        r"\b(?:[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f.'-]+\s+(?:tanav|tänav|maantee|puiestee|tee)\s+\d{1,5}[A-Za-z]?|(?:tanav|tänav|maantee|puiestee|tee)\s+[A-Z\u00c0-\u024f][A-Za-z\u00c0-\u024f .'-]{2,60}\s+\d{1,5}[A-Za-z]?)\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["aadress", "elukoht", "tanav", "tänav"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{5}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["postiindeks", "indeks", "aadress"],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 
 _KOREAN_PII_PATTERNS: List[PIIPattern] = [
     # Korean dates: YYYY년 MM월 DD일
@@ -4067,6 +4183,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "da": _DANISH_PII_PATTERNS,
     "ro": _ROMANIAN_PII_PATTERNS,
     "hu": _HUNGARIAN_PII_PATTERNS,
+    "et": _ESTONIAN_PII_PATTERNS,
 }
 
 LOCALE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
@@ -4585,6 +4702,21 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Budapest", "Szeged", "Debrecen"],
         "ZIPCODE": ["1051", "6720", "4024"],
+    },
+    "et": {
+        "NAME": ["Mari Tamm", "Jaan Kask", "Anu Saar", "Peeter Kivi"],
+        "FIRST_NAME": ["Mari", "Jaan", "Anu", "Peeter"],
+        "LAST_NAME": ["Tamm", "Kask", "Saar", "Kivi"],
+        "EMAIL": ["patsient@example.ee", "kontakt@example.org"],
+        "PHONE": ["+372 5123 4567", "644 1234"],
+        "ID_NUM": ["38205210123", "60409032208"],
+        "STREET_ADDRESS": ["Pikk tanav 12", "Narva maantee 45"],
+        "URL_PERSONAL": ["https://example.ee"],
+        "USERNAME": ["patsient123", "kasutaja456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Tallinn", "Tartu", "Parnu"],
+        "ZIPCODE": ["10115", "50090", "80010"],
     },
 }
 

@@ -13,7 +13,10 @@ from openmed.core.anonymizer.providers import (
     HungarianTAJProvider,
     generate_hungarian_taj,
 )
-from openmed.core.anonymizer.providers.clinical_ids import generate_philhealth_pin
+from openmed.core.anonymizer.providers.clinical_ids import (
+    generate_estonian_isikukood,
+    generate_philhealth_pin,
+)
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
     DEFAULT_PII_MODELS,
@@ -31,6 +34,7 @@ from openmed.core.pii_i18n import (
     validate_czechoslovak_rodne_cislo,
     validate_danish_cpr,
     validate_dutch_bsn,
+    validate_estonian_isikukood,
     validate_french_nir,
     validate_german_steuer_id,
     validate_hungarian_taj,
@@ -89,6 +93,7 @@ class TestConstants:
             "tl",
             "da",
             "hu",
+            "et",
         }
 
     def test_language_names_keys(self):
@@ -2510,6 +2515,170 @@ def test_latvian_i18n_golden_fixture_offsets():
     assert actual == expected
     for label, start, end, value in actual:
         assert text[start:end] == value, label
+
+
+def test_validate_estonian_isikukood():
+    # Standard first-pass checksums.
+    assert validate_estonian_isikukood("47511160002")
+    assert validate_estonian_isikukood("38205210123")
+    assert validate_estonian_isikukood("60409032208")
+    # Second-pass weight fallback (first pass leaves remainder 10).
+    assert validate_estonian_isikukood("47511160214")
+    assert validate_estonian_isikukood("18503070027")
+    # Both passes leave remainder 10, so the check digit falls back to 0.
+    assert validate_estonian_isikukood("47511160080")
+    assert validate_estonian_isikukood("18503071660")
+
+    # Bad check digit.
+    assert not validate_estonian_isikukood("47511160003")
+    # Checksum-valid values with impossible embedded dates.
+    assert not validate_estonian_isikukood("47511320008")
+    assert not validate_estonian_isikukood("47502290008")
+    # Checksum-valid values with invalid century/sex first digits.
+    assert not validate_estonian_isikukood("77511160005")
+    assert not validate_estonian_isikukood("87511160006")
+    assert not validate_estonian_isikukood("97511160007")
+    # Isikukood has no formatted representation; separators are invalid.
+    assert not validate_estonian_isikukood("475-111-60002")
+    assert not validate_estonian_isikukood("abcdef")
+    assert not validate_estonian_isikukood("123")
+
+
+def test_generated_estonian_isikukood_round_trips_validator():
+    rng = random.Random(1234)
+    for _ in range(200):
+        assert validate_estonian_isikukood(generate_estonian_isikukood(rng=rng))
+
+
+def test_generated_estonian_surrogate_passes_validator():
+    assert LANG_TO_LOCALE["et"] == "et_EE"
+
+    anonymizer = Anonymizer(lang="et", consistent=True, seed=42)
+    surrogate = anonymizer.surrogate("47511160002", "national_id")
+
+    assert validate_estonian_isikukood(surrogate) is True
+
+
+def test_estonian_clinical_sample_expected_spans():
+    text = (
+        "Patsient: Mari Tamm. Sunniaeg 16.11.1975, "
+        "telefon +372 5123 4567, isikukood 47511160002, "
+        "aadress Pikk tanav 12, postiindeks 10115."
+    )
+    expected = {
+        ("date", 30, 40, "16.11.1975"),
+        ("phone_number", 50, 64, "+372 5123 4567"),
+        ("national_id", 76, 87, "47511160002"),
+        ("street_address", 97, 110, "Pikk tanav 12"),
+        ("postcode", 124, 129, "10115"),
+    }
+    observed = set()
+    for pattern in get_patterns_for_language("et"):
+        for match in re.finditer(pattern.pattern, text, pattern.flags):
+            value = match.group(0)
+            if pattern.validator is not None and not pattern.validator(value):
+                continue
+            observed.add((pattern.entity_type, match.start(), match.end(), value))
+
+    assert expected <= observed
+
+
+def test_estonian_street_address_supports_native_diacritics():
+    text = "Aadress: Jõe tänav 5, Tallinn."
+    observed = {
+        match.group(0)
+        for pattern in get_patterns_for_language("et")
+        if pattern.entity_type == "street_address"
+        for match in re.finditer(pattern.pattern, text, pattern.flags)
+    }
+
+    assert "Jõe tänav 5" in observed
+
+
+def test_estonian_i18n_golden_fixture_offsets():
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/et.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["language"] == "et"
+    assert row["metadata"]["synthetic"] is True
+    assert row["metadata"]["category"] == "multilingual"
+
+    text = row["text"]
+    expected = {
+        ("DATE", 30, 40, "16.11.1975"),
+        ("PHONE", 50, 64, "+372 5123 4567"),
+        ("ID_NUM", 76, 87, "47511160002"),
+        ("STREET_ADDRESS", 97, 110, "Pikk tanav 12"),
+        ("ZIPCODE", 124, 129, "10115"),
+    }
+    actual = {
+        (span["label"], span["start"], span["end"], span["text"])
+        for span in row["gold_spans"]
+    }
+    assert actual == expected
+    for label, start, end, value in actual:
+        assert text[start:end] == value, label
+
+    ids_by_type = {
+        span["metadata"]["identifier_type"]: span["text"]
+        for span in row["gold_spans"]
+        if span["label"] == "ID_NUM"
+    }
+    assert validate_estonian_isikukood(ids_by_type["isikukood"])
+
+
+def test_estonian_i18n_golden_fixture_deidentifies_with_no_leakage_offline():
+    from openmed.core.pii import (
+        _apply_safety_sweep_to_result,
+        _build_deidentification_result,
+    )
+    from openmed.processing.outputs import PredictionResult
+
+    fixture_path = Path("openmed/eval/golden/fixtures/i18n/et.jsonl")
+    rows = [
+        json.loads(line)
+        for line in fixture_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert len(rows) == 1
+    row = rows[0]
+    empty_result = PredictionResult(
+        text=row["text"],
+        entities=[],
+        model_name="offline-safety-sweep",
+        timestamp="2026-07-03T00:00:00Z",
+        metadata={},
+    )
+
+    swept_result, added_count = _apply_safety_sweep_to_result(
+        row["text"],
+        empty_result,
+        lang="et",
+    )
+    result = _build_deidentification_result(
+        row["text"],
+        swept_result,
+        effective_method="mask",
+        keep_year=False,
+        date_shift_days=None,
+        keep_mapping=False,
+        lang="et",
+        consistent=False,
+        seed=None,
+        locale=None,
+        use_safety_sweep=True,
+    )
+
+    assert added_count == len(row["gold_spans"])
+    for span in row["gold_spans"]:
+        assert span["text"] not in result.deidentified_text
 
 
 class TestSlovakLocaleAndFixture:

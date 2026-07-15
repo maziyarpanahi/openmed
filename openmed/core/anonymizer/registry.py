@@ -184,6 +184,7 @@ _LOCALE_ID_METHODS = {
     "sk_SK": "rodne_cislo",
     "ro_RO": "romanian_cnp",
     "hu_HU": "hungarian_taj",
+    "et_EE": "isikukood",
 }
 
 
