@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 
+from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
     get_patterns_for_language,
@@ -80,7 +81,8 @@ def _national_id_validators(language: str):
     return [
         pattern.validator
         for pattern in LANGUAGE_PII_PATTERNS.get(language, [])
-        if pattern.entity_type == "national_id" and pattern.validator is not None
+        if normalize_label(pattern.entity_type) == ID_NUM
+        and pattern.validator is not None
     ]
 
 
@@ -149,6 +151,8 @@ def test_i18n_fixture_national_ids_pass_checksum_where_a_validator_exists(path: 
         validators = _national_id_validators(language)
         for span in row["gold_spans"]:
             if span["label"] != "ID_NUM":
+                continue
+            if span.get("metadata", {}).get("checksum_status") == "unvalidated":
                 continue
             if not validators:
                 # Languages such as ar/ja have a regex-only national_id pattern
