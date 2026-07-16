@@ -102,8 +102,16 @@ _OTHER_CUES = (
     "contact",
 )
 
-# Clause boundaries that a cue may not reach across.
-_CLAUSE_BOUNDARY_RE = re.compile(r"[.!?;]")
+# Clause boundaries that a subject cue may not reach across: sentence
+# punctuation plus the ConText engine's contrastive scope terminators, which
+# switch the sentence subject ("Mother had breast cancer, but the patient ...").
+# The coordinating terminators "and"/"or" are deliberately excluded because they
+# usually conjoin findings under the same subject ("mother had X and Y"), where
+# the family experiencer must still reach the later finding.
+_CLAUSE_BOUNDARY_RE = re.compile(
+    r"[.!?;]|(?<!\w)(?:but|however|whereas)(?!\w)",
+    re.IGNORECASE,
+)
 
 
 def _cue_pattern(cues: tuple[str, ...]) -> re.Pattern[str]:
