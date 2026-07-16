@@ -383,6 +383,99 @@ POPIA_IDENTIFIER_CLASSES: Final[FrozenSet[str]] = frozenset(
     }
 )
 
+NDPA_GENETIC_AND_BIOMETRIC_DATA: Final = "GENETIC_AND_BIOMETRIC_DATA"
+NDPA_RACE_OR_ETHNIC_ORIGIN: Final = "RACE_OR_ETHNIC_ORIGIN"
+NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS: Final = "RELIGIOUS_OR_SIMILAR_BELIEFS"
+NDPA_HEALTH_STATUS: Final = "HEALTH_STATUS"
+NDPA_SEX_LIFE: Final = "SEX_LIFE"
+NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS: Final = "POLITICAL_OPINIONS_OR_AFFILIATIONS"
+NDPA_TRADE_UNION_MEMBERSHIPS: Final = "TRADE_UNION_MEMBERSHIPS"
+NDPA_OTHER_COMMISSION_PRESCRIBED_DATA: Final = "OTHER_COMMISSION_PRESCRIBED_DATA"
+
+NDPA_SENSITIVE_DATA_CLASSES: Final[FrozenSet[str]] = frozenset(
+    {
+        NDPA_GENETIC_AND_BIOMETRIC_DATA,
+        NDPA_RACE_OR_ETHNIC_ORIGIN,
+        NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS,
+        NDPA_HEALTH_STATUS,
+        NDPA_SEX_LIFE,
+        NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS,
+        NDPA_TRADE_UNION_MEMBERSHIPS,
+        NDPA_OTHER_COMMISSION_PRESCRIBED_DATA,
+    }
+)
+
+NDPA_SENSITIVE_CLASS_LABELS: Final[Mapping[str, FrozenSet[str]]] = {
+    NDPA_GENETIC_AND_BIOMETRIC_DATA: frozenset(
+        {
+            ID_NUM,
+            EYE_COLOR,
+            HEIGHT,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+        }
+    ),
+    NDPA_RACE_OR_ETHNIC_ORIGIN: frozenset({OTHER}),
+    NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS: frozenset({OTHER}),
+    NDPA_HEALTH_STATUS: frozenset(
+        {
+            ID_NUM,
+            MICROORGANISM,
+            ANTIBIOTIC,
+            SUSCEPTIBILITY,
+            CONDITION,
+            MEDICATION,
+            LAB_TEST,
+            PROCEDURE,
+            BODY_SITE,
+            ANESTHESIA_TYPE,
+            ANESTHETIC_AGENT,
+            AIRWAY_MANAGEMENT,
+            ASA_CLASS,
+            DIET_TYPE,
+            NUTRITION_TARGET,
+            FEEDING_ROUTE,
+            NUTRITIONAL_STATUS,
+            VACCINE_NAME,
+            DOSE_NUMBER,
+            ADMINISTRATION_ROUTE,
+            VACCINE_LOT,
+            VACCINE_SERIES,
+            GENE_SYMBOL,
+            VARIANT_DESCRIPTOR,
+            PROTEIN_CHANGE,
+            ZYGOSITY,
+            CLINICAL_SIGNIFICANCE,
+            GLYCEMIC_MEASURE,
+            THYROID_MEASURE,
+            HORMONE_LEVEL,
+            INSULIN_REGIMEN,
+            ENDOSCOPIC_FINDING,
+            GI_SYMPTOM,
+            GI_SCORE,
+            POLYP_DESCRIPTOR,
+            CKD_STAGE,
+            DIALYSIS_MODALITY,
+            RENAL_FUNCTION_MEASURE,
+            URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
+            GROWTH_PARAMETER,
+            GROWTH_PERCENTILE,
+            DEVELOPMENTAL_MILESTONE,
+        }
+    ),
+    NDPA_SEX_LIFE: frozenset({GENDER, OTHER}),
+    NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS: frozenset({ORGANIZATION, OTHER}),
+    NDPA_TRADE_UNION_MEMBERSHIPS: frozenset({ORGANIZATION, JOB_DEPARTMENT, OTHER}),
+    NDPA_OTHER_COMMISSION_PRESCRIBED_DATA: frozenset({OTHER}),
+}
+
 _NO_SYSTEM_HINTS: Final[tuple[str, ...]] = ()
 
 
@@ -786,6 +879,7 @@ def _validate_label_metadata() -> None:
     metadata_labels = set(LABEL_METADATA)
     hipaa_labels = set(LABEL_TO_HIPAA)
     popia_labels = set(LABEL_TO_POPIA)
+    ndpa_classes = set(NDPA_SENSITIVE_CLASS_LABELS)
     if metadata_labels != CANONICAL_LABELS:
         missing = sorted(CANONICAL_LABELS - metadata_labels)
         extra = sorted(metadata_labels - CANONICAL_LABELS)
@@ -807,6 +901,21 @@ def _validate_label_metadata() -> None:
             "LABEL_TO_POPIA must cover CANONICAL_LABELS exactly; "
             f"missing={missing}, extra={extra}"
         )
+    if ndpa_classes != set(NDPA_SENSITIVE_DATA_CLASSES):
+        missing = sorted(set(NDPA_SENSITIVE_DATA_CLASSES) - ndpa_classes)
+        extra = sorted(ndpa_classes - set(NDPA_SENSITIVE_DATA_CLASSES))
+        raise RuntimeError(
+            "NDPA_SENSITIVE_CLASS_LABELS must cover NDPA classes exactly; "
+            f"missing={missing}, extra={extra}"
+        )
+    for ndpa_class, labels in NDPA_SENSITIVE_CLASS_LABELS.items():
+        if not labels:
+            raise RuntimeError(f"{ndpa_class} requires a canonical label anchor")
+        unknown_labels = sorted(set(labels) - CANONICAL_LABELS)
+        if unknown_labels:
+            raise RuntimeError(
+                f"{ndpa_class} has unknown canonical labels {unknown_labels}"
+            )
     for label, metadata in LABEL_METADATA.items():
         policy_label = metadata["policy_label"]
         risk_level = metadata["risk_level"]
@@ -1292,6 +1401,16 @@ def popia_class_for(label: str, lang: str = "en") -> str:
     return LABEL_TO_POPIA[normalize_label(label, lang=lang)]
 
 
+def ndpa_classes_for(label: str, lang: str = "en") -> FrozenSet[str]:
+    """Return NDPA sensitive-data classes anchored by a normalized label."""
+    canonical = normalize_label(label, lang=lang)
+    return frozenset(
+        ndpa_class
+        for ndpa_class, labels in NDPA_SENSITIVE_CLASS_LABELS.items()
+        if canonical in labels
+    )
+
+
 _validate_label_metadata()
 
 __all__ = [
@@ -1309,6 +1428,7 @@ __all__ = [
     "LABEL_METADATA",
     "LABEL_TO_HIPAA",
     "LABEL_TO_POPIA",
+    "NDPA_SENSITIVE_CLASS_LABELS",
     "POLICY_LABELS",
     "DIRECT_IDENTIFIER",
     "QUASI_IDENTIFIER",
@@ -1320,11 +1440,21 @@ __all__ = [
     "CLINICAL_SYSTEM_HINTS",
     "HIPAA_SAFE_HARBOR_CLASSES",
     "POPIA_IDENTIFIER_CLASSES",
+    "NDPA_SENSITIVE_DATA_CLASSES",
+    "NDPA_GENETIC_AND_BIOMETRIC_DATA",
+    "NDPA_RACE_OR_ETHNIC_ORIGIN",
+    "NDPA_RELIGIOUS_OR_SIMILAR_BELIEFS",
+    "NDPA_HEALTH_STATUS",
+    "NDPA_SEX_LIFE",
+    "NDPA_POLITICAL_OPINIONS_OR_AFFILIATIONS",
+    "NDPA_TRADE_UNION_MEMBERSHIPS",
+    "NDPA_OTHER_COMMISSION_PRESCRIBED_DATA",
     "policy_label_for",
     "risk_level_for",
     "system_hints_for",
     "hipaa_class_for",
     "popia_class_for",
+    "ndpa_classes_for",
     # canonical label constants
     "PERSON",
     "FIRST_NAME",
