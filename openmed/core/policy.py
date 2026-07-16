@@ -34,6 +34,7 @@ class PolicyName(str, Enum):
     AUSTRALIA_PRIVACY_ACT = "australia_privacy_act"
     CHINA_PIPL = "china_pipl"
     INDIA_DPDP_ACT = "india_dpdp_act"
+    ZA_POPIA = "za_popia"
 
 
 CANONICAL_POLICY_NAMES = tuple(policy.value for policy in PolicyName)
