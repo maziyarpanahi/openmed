@@ -188,6 +188,7 @@ OpenMed version instead of re-exporting the legacy artifact.
 | Overlap resolution + span quality gates | **OM-012** | [`quality_gates.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/quality_gates.py) |
 | Adversarial re-identification eval / harness | **OM-034** | [`eval/attacks/reid.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/eval/attacks/reid.py), [`risk/reid.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/risk/reid.py) |
 | No-raw-PHI logging / artifact hygiene | **OM-004** | [`no-raw-phi-logging.md`](no-raw-phi-logging.md) |
+| No-telemetry / no phone-home enforcement | **OM-099** | [`no-telemetry.md`](no-telemetry.md) |
 | Adversarial-Unicode normalization | this task / de-id path | [`script_detect.py`](https://github.com/maziyarpanahi/openmed/blob/master/openmed/core/script_detect.py) |
 
 ### 6.2 Open gaps (no complete mitigation today)
