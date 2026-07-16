@@ -29,6 +29,12 @@ from openmed.eval.datasets.i2b2 import (
     i2b2_suite_metadata,
     load_i2b2_deid,
 )
+from openmed.eval.datasets.masakhaner import (
+    MASAKHANER,
+    load_masakhaner_fixtures,
+    masakhaner_suite_metadata,
+    run_masakhaner_benchmark,
+)
 from openmed.eval.datasets.multilingual_ner import (
     MULTILINGUAL_NER,
     load_multilingual_ner_fixtures,
@@ -75,6 +81,7 @@ DEFAULT_SUITES: tuple[str, ...] = (
     POLICY_COMPLIANCE,
     BIOMEDICAL_NER,
     MULTILINGUAL_NER,
+    MASAKHANER,
     MULTIMODAL_DICOM,
 )
 
@@ -110,6 +117,9 @@ def load_suite_fixtures(name: str, **kwargs: Any) -> list[Any]:
     if suite == MULTILINGUAL_NER:
         paths = kwargs.pop("paths", kwargs.pop("path", None))
         return load_multilingual_ner_fixtures(paths=paths, **kwargs)
+    if suite == MASAKHANER:
+        paths = kwargs.pop("paths", kwargs.pop("path", None))
+        return load_masakhaner_fixtures(paths=paths, **kwargs)
     if suite == MULTIMODAL_DICOM:
         return load_multimodal_dicom_fixtures(**kwargs)
     raise ValueError(f"benchmark suite {suite!r} does not have a concrete loader yet")
@@ -133,6 +143,8 @@ def suite_metadata(name: str, **kwargs: Any) -> dict[str, Any]:
         return biomedical_ner_suite_metadata(**kwargs)
     if suite == MULTILINGUAL_NER:
         return multilingual_ner_suite_metadata(**kwargs)
+    if suite == MASAKHANER:
+        return masakhaner_suite_metadata(**kwargs)
     if suite == MULTIMODAL_DICOM:
         return multimodal_dicom_metadata(**kwargs)
     return {"suite": suite}
@@ -147,6 +159,7 @@ __all__ = [
     "POLICY_COMPLIANCE",
     "BIOMEDICAL_NER",
     "MULTILINGUAL_NER",
+    "MASAKHANER",
     "MULTIMODAL_DICOM",
     "RELATIONS",
     "RelationFixture",
@@ -165,9 +178,11 @@ __all__ = [
     "i2b2_suite_metadata",
     "biomedical_ner_suite_metadata",
     "multilingual_ner_suite_metadata",
+    "masakhaner_suite_metadata",
     "load_drugprot_fixtures",
     "load_biomedical_ner_fixtures",
     "load_multilingual_ner_fixtures",
+    "load_masakhaner_fixtures",
     "drugprot_suite_metadata",
     "load_shield_fixtures",
     "shield_suite_metadata",
@@ -178,6 +193,7 @@ __all__ = [
     "relation_trap_summary",
     "score_relation_fixtures",
     "run_biomedical_ner_benchmark",
+    "run_masakhaner_benchmark",
     "load_multimodal_dicom_fixtures",
     "multimodal_dicom_metadata",
     "run_multimodal_dicom",

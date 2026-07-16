@@ -1232,6 +1232,117 @@ def run_multilingual_ner_scorecard(
     )
 
 
+def run_masakhaner_scorecard(
+    fixtures: Sequence[BenchmarkFixture],
+    *,
+    suite: str = "masakhaner",
+    model_name: str,
+    device: str = "cpu",
+    runner: ModelRunner | None = None,
+    generated_at: str | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    languages: Sequence[str] | None = None,
+    checkpoint_path: str | Path | None = None,
+) -> BenchmarkReport:
+    """Run an inference-only MasakhaNER scorecard sliced by language.
+
+    ``checkpoint_path`` is an optional caller-supplied local multilingual
+    encoder checkpoint. It is passed to the configured runner as the model
+    name and is never downloaded, trained, or modified by the harness.
+    """
+
+    if not fixtures:
+        raise ValueError("MasakhaNER scorecard requires at least one fixture")
+    selected = list(fixtures)
+    requested_languages: tuple[str, ...] | None = None
+    if languages is not None:
+        language_values = (languages,) if isinstance(languages, str) else languages
+        requested_languages = tuple(
+            dict.fromkeys(str(language).strip().lower() for language in language_values)
+        )
+        selected = [
+            fixture
+            for fixture in fixtures
+            if fixture.language.lower() in requested_languages
+        ]
+        present = {fixture.language.lower() for fixture in selected}
+        missing = [
+            language for language in requested_languages if language not in present
+        ]
+        if missing:
+            raise ValueError(
+                "MasakhaNER fixtures missing requested language(s): "
+                + ", ".join(missing)
+            )
+    if not selected:
+        raise ValueError("MasakhaNER language selection produced no fixtures")
+
+    effective_model_name = model_name
+    checkpoint_hash: str | None = None
+    if checkpoint_path is not None:
+        checkpoint = Path(checkpoint_path).expanduser()
+        if not checkpoint.exists():
+            raise FileNotFoundError(
+                f"user-supplied MasakhaNER checkpoint does not exist: {checkpoint}"
+            )
+        checkpoint = checkpoint.resolve()
+        effective_model_name = str(checkpoint)
+        checkpoint_hash = _hash_path(checkpoint)
+
+    _validate_unique_fixture_ids(selected)
+    model_runner = runner or _shared_default_model_runner()
+    results = _run_fixture_predictions(
+        selected,
+        model_runner=model_runner,
+        model_name=effective_model_name,
+        device=device,
+    )
+    per_language = _multilingual_group_rows(
+        selected,
+        results,
+        group_keys=("language",),
+    )
+    overall_rows = _multilingual_group_rows(
+        selected,
+        results,
+        group_keys=("benchmark",),
+    )
+    report_metadata = dict(metadata or {})
+    report_metadata.update(
+        {
+            "checkpoint_mode": (
+                "user-supplied-local" if checkpoint_path is not None else "configured"
+            ),
+            "checkpoint_path_hash": checkpoint_hash,
+            "configured_model_name": model_name,
+            "inference_only": True,
+            "languages": [row["language"] for row in per_language],
+            "license_ids": sorted(
+                {
+                    str(fixture.metadata.get("license_id"))
+                    for fixture in selected
+                    if fixture.metadata.get("license_id")
+                }
+            ),
+            "training_performed": False,
+        }
+    )
+    metrics = {
+        "overall": overall_rows[0] if overall_rows else {},
+        "per_language": per_language,
+        "scorecard": per_language,
+    }
+    return BenchmarkReport(
+        suite=suite,
+        model_name=effective_model_name,
+        device=device,
+        fixture_count=len(selected),
+        metrics=metrics,
+        generated_at=generated_at,
+        metadata=report_metadata,
+    )
+
+
 def check_training_manifest_overlap(
     fixtures: Sequence[BenchmarkFixture],
     manifest_path: str | Path,
@@ -1511,6 +1622,7 @@ def _multilingual_group_rows(
         relaxed = compute_relaxed_span_f1(gold, predicted, source_text=text)
         row = {
             "exact_span_f1": exact.to_dict(),
+            "f1": exact.f1,
             "fixture_count": len(group_fixtures),
             "precision": exact.precision,
             "recall": exact.recall,
@@ -2611,6 +2723,7 @@ __all__ = [
     "run_relation_benchmark",
     "run_cross_lingual_transfer",
     "run_cross_lingual_transfer_suite",
+    "run_masakhaner_scorecard",
     "run_multilingual_ner_scorecard",
     "run_suite",
 ]
