@@ -10,6 +10,7 @@ export type KeepAliveValue = number | string;
 export type AggregationStrategy = "simple" | "first" | "average" | "max";
 
 export type PIILanguage =
+  | "am"
   | "en"
   | "fr"
   | "de"

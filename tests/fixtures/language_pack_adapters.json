@@ -1,5 +1,6 @@
 {
   "default_pii_models": {
+    "am": "OpenMed/privacy-filter-multilingual",
     "ar": "OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1",
     "de": "OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1",
     "en": "OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1",
@@ -24,6 +25,7 @@
   },
   "lang_to_locale": {
     "af": "af_ZA",
+    "am": "am_ET",
     "ar": "ar_EG",
     "bg": "bg_BG",
     "cs": "cs_CZ",
@@ -262,6 +264,9 @@
       "mr",
       "ne"
     ],
+    "Ethiopic": [
+      "am"
+    ],
     "Greek": [
       "en"
     ],
@@ -320,6 +325,7 @@
     ]
   },
   "supported_languages": [
+    "am",
     "ar",
     "de",
     "en",

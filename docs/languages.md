@@ -64,6 +64,7 @@ routing is first requested, and do not download or bundle model weights.
 
 | Code   | Language   | Default PII model                                          | Faker locale | Notes                                                        |
 | ------ | ---------- | ---------------------------------------------------------- | ------------ | ----------------------------------------------------------- |
+| `am`   | Amharic    | `OpenMed/privacy-filter-multilingual`                      | `am_ET`      | Ethiopic patterns; `en_KE` Faker approximation warns once.   |
 | `ar`   | Arabic     | `OpenMed/OpenMed-PII-Arabic-SnowflakeMed-Large-568M-v1`    | `ar_EG`      | Egypt is the most-populous Arabic locale; override per call. |
 | `de`   | German     | `OpenMed/OpenMed-PII-German-SuperClinical-Small-44M-v1`    | `de_DE`      | Steuer-ID surrogates via `GermanSteuerIdProvider`.           |
 | `en`   | English    | `OpenMed/OpenMed-PII-SuperClinical-Small-44M-v1`           | `en_US`      | Default model splits names into `first_name`/`last_name`.    |
@@ -104,6 +105,16 @@ exact placeholder tokens come from the chosen model's own entity labels, so
 they can vary by model (see
 [choosing a method](anonymization.md#quickstart-choosing-a-method)); the
 canonical labels below are illustrative.
+
+### Amharic — `am`
+
+- Model: `OpenMed/privacy-filter-multilingual` · locale `am_ET`
+  (`en_KE` is the documented Faker approximation)
+
+```text
+Before: ስም፡ ሰላም ተስፋዬ። ስልክ፡ +251 911 234 567።
+After:  ስም፡ [NAME]። ስልክ፡ [PHONE]።
+```
 
 ### Arabic — `ar`
 

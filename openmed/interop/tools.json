@@ -195,6 +195,7 @@
             "default": "en",
             "description": "PII language code.",
             "enum": [
+              "am",
               "ar",
               "de",
               "en",
@@ -443,6 +444,7 @@
             "default": "en",
             "description": "PII language code.",
             "enum": [
+              "am",
               "ar",
               "de",
               "en",
