@@ -30,6 +30,7 @@ deterministic:
   - Philippine PhilSys PSN and PhilHealth PIN structural formats
   - Danish CPR / personnummer with a decodable embedded birth date
   - Thai national ID (13 digits with a weighted mod-11 checksum)
+  - Nigerian NIN/BVN values and mobile numbers with prefix-class preservation
   - Polish PESEL, Latvian personas kods, South Korean RRN, and Slovak rodne
     cislo
   - UK NHS Number, a patient health identifier validated with the NHS
@@ -829,6 +830,135 @@ class NPIProvider(BaseProvider):
 
     def npi(self) -> str:
         return generate_npi(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Nigerian NIN, BVN, and mobile phone
+# ---------------------------------------------------------------------------
+
+
+def generate_nigeria_nin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Nigerian NIN surrogate.
+
+    Args:
+        original: Optional source NIN that the surrogate must not equal.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A non-trivial synthetic 11-digit NIN.
+    """
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+
+    from openmed.core.pii_i18n import validate_nigeria_nin
+
+    for _ in range(100):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(11))
+        if candidate != original_digits and validate_nigeria_nin(candidate):
+            return candidate
+    return "52740618395"
+
+
+def generate_nigeria_bvn(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Nigerian BVN surrogate.
+
+    Args:
+        original: Optional source BVN that the surrogate must not equal.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A non-trivial synthetic 11-digit BVN.
+    """
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+
+    from openmed.core.pii_i18n import validate_nigeria_bvn
+
+    for _ in range(100):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(11))
+        if candidate != original_digits and validate_nigeria_bvn(candidate):
+            return candidate
+    return "28471390652"
+
+
+_NIGERIA_MOBILE_PREFIX_CLASSES = ("070", "080", "081", "090", "091")
+
+
+def generate_ng_mobile_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Nigerian mobile surrogate preserving its prefix class.
+
+    Recognized domestic prefixes retain their ``070x``, ``080x``, ``081x``,
+    ``090x``, or ``091x`` class. International ``+234`` presentation and common
+    digit grouping are retained as well.
+
+    Args:
+        original: Optional source mobile number whose prefix class and display
+            style should be preserved.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A synthetic Nigerian mobile number.
+    """
+    source = rng or random.Random()
+    original_text = (original or "").strip()
+    original_digits = _digits_only(original_text)
+
+    if len(original_digits) == 13 and original_digits.startswith("234"):
+        national = "0" + original_digits[3:]
+    elif len(original_digits) == 11 and original_digits.startswith("0"):
+        national = original_digits
+    else:
+        national = ""
+
+    prefix_class = (
+        national[:3]
+        if national[:3] in _NIGERIA_MOBILE_PREFIX_CLASSES
+        else source.choice(_NIGERIA_MOBILE_PREFIX_CLASSES)
+    )
+
+    domestic = ""
+    for _ in range(100):
+        domestic = prefix_class + "".join(str(source.randint(0, 9)) for _ in range(8))
+        if domestic != national:
+            break
+    if domestic == national:
+        domestic = domestic[:-1] + str((int(domestic[-1]) + 1) % 10)
+
+    if original_text.startswith("+234"):
+        return f"+234 {domestic[1:4]} {domestic[4:7]} {domestic[7:]}"
+    if len(original_digits) == 13 and original_digits.startswith("234"):
+        return "234" + domestic[1:]
+    if any(separator in original_text for separator in (" ", "-", ".")):
+        return f"{domestic[:4]} {domestic[4:7]} {domestic[7:]}"
+    return domestic
+
+
+class NigeriaIdProvider(BaseProvider):
+    """Generate deterministic Nigerian NIN, BVN, and mobile surrogates."""
+
+    def nigeria_nin(self, original: str | None = None) -> str:
+        """Return a structurally valid Nigerian NIN surrogate."""
+        return generate_nigeria_nin(original, rng=self.generator.random)
+
+    def nigeria_bvn(self, original: str | None = None) -> str:
+        """Return a structurally valid Nigerian BVN surrogate."""
+        return generate_nigeria_bvn(original, rng=self.generator.random)
+
+    def ng_mobile_number(self, original: str | None = None) -> str:
+        """Return a Nigerian mobile surrogate with a stable prefix class."""
+        return generate_ng_mobile_number(original, rng=self.generator.random)
 
 
 # ---------------------------------------------------------------------------
@@ -2080,6 +2210,7 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "MrzProvider",
     "NPIProvider",
+    "NigeriaIdProvider",
     "UnifiedSocialCreditCodeProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",
@@ -2112,9 +2243,12 @@ __all__ = [
     "generate_korean_rrn",
     "generate_luhn_identifier",
     "generate_npi",
+    "generate_nigeria_bvn",
+    "generate_nigeria_nin",
     "generate_pesel",
     "generate_latvian_personas_kods",
     "generate_malaysian_mykad",
+    "generate_ng_mobile_number",
     "generate_philhealth_pin",
     "generate_philsys_psn",
     "generate_rodne_cislo",

@@ -32,6 +32,7 @@ from openmed.core.anonymizer.locales import (
     resolve_locale,
 )
 from openmed.core.anonymizer.registry import _LOCALE_ID_METHODS
+from openmed.core.labels import ID_NUM, normalize_label
 from openmed.core.pii_entity_merger import PII_PATTERNS
 from openmed.core.pii_i18n import (
     LANGUAGE_PII_PATTERNS,
@@ -60,7 +61,7 @@ def _languages_with_national_id_validator():
         lang
         for lang in REPORT_LANGUAGES
         if any(
-            p.validator is not None and p.entity_type == "national_id"
+            p.validator is not None and normalize_label(p.entity_type) == ID_NUM
             for p in LANGUAGE_PII_PATTERNS.get(lang, [])
         )
     }
@@ -76,7 +77,7 @@ def _national_id_validators(lang):
     lang_validators = [
         p.validator
         for p in LANGUAGE_PII_PATTERNS.get(lang, [])
-        if p.validator is not None and p.entity_type == "national_id"
+        if p.validator is not None and normalize_label(p.entity_type) == ID_NUM
     ]
     if lang_validators:
         return lang_validators

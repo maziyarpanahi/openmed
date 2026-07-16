@@ -776,6 +776,9 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "permanentaccountnumber": ID_NUM,
     "abdmhprid": ID_NUM,
     "abdmhfrid": ID_NUM,
+    "ngnin": ID_NUM,
+    "ngbvn": ID_NUM,
+    "ngphone": PHONE,
     "teudatzehut": ID_NUM,
     "tz": ID_NUM,
     "npi": ID_NUM,
@@ -1033,6 +1036,8 @@ ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {
     "permanentaccountnumber": ID_SUBTYPE_NATIONAL_ID,
     "abdmhprid": ID_SUBTYPE_NATIONAL_ID,
     "abdmhfrid": ID_SUBTYPE_NATIONAL_ID,
+    "ngnin": ID_SUBTYPE_NATIONAL_ID,
+    "ngbvn": ID_SUBTYPE_NATIONAL_ID,
     "teudatzehut": ID_SUBTYPE_NATIONAL_ID,
     "tz": ID_SUBTYPE_NATIONAL_ID,
 }
