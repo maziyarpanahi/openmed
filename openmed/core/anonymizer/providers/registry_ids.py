@@ -40,12 +40,15 @@ from openmed.core.pii_i18n import (
     validate_finnish_hetu,
     validate_french_nir,
     validate_german_steuer_id,
+    validate_ghana_card_pin,
     validate_greek_amka,
     validate_hungarian_taj,
     validate_indonesian_nik,
     validate_israeli_teudat_zehut,
     validate_italian_codice_fiscale,
     validate_jmbg,
+    validate_kenya_maisha_namba,
+    validate_kenya_national_id,
     validate_korean_rrn,
     validate_latvian_personas_kods,
     validate_malaysian_mykad,
@@ -80,6 +83,7 @@ from .clinical_ids import (
     DanishCPRProvider,
     EstonianIsikukoodProvider,
     GermanSteuerIdProvider,
+    GhanaKenyaIdProvider,
     HungarianTAJProvider,
     IndonesianNIKProvider,
     IsraeliTeudatZehutProvider,
@@ -263,6 +267,27 @@ def _register_builtin_specs() -> None:
         validate=validate_nigeria_bvn,
         faker_method="nigeria_bvn",
         faker_provider=NigeriaIdProvider,
+    )
+    _register_aliases(
+        ("gh", "en_GH"),
+        id_type="ghana_card_pin",
+        validate=validate_ghana_card_pin,
+        faker_method="ghana_card_pin",
+        faker_provider=GhanaKenyaIdProvider,
+    )
+    _register_aliases(
+        ("ke", "en_KE", "sw"),
+        id_type="kenya_national_id",
+        validate=validate_kenya_national_id,
+        faker_method="kenya_national_id",
+        faker_provider=GhanaKenyaIdProvider,
+    )
+    _register_aliases(
+        ("ke", "en_KE", "sw"),
+        id_type="maisha_namba",
+        validate=validate_kenya_maisha_namba,
+        faker_method="kenya_maisha_namba",
+        faker_provider=GhanaKenyaIdProvider,
     )
     _register_aliases(
         ("fr", "fr_FR"),
