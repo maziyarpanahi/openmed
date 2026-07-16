@@ -511,6 +511,9 @@ These are the model-backed PII language allow-list.
 OpenMed also includes validator-backed national-ID coverage for additional
 ID-only locales such as Polish, Latvian, Slovak, Malay, Filipino, and Danish.
 
+See the [per-language guide](docs/languages.md) for each code's default PII
+model, Faker locale, and a before/after de-identification example.
+
 ```bash
 python -c "from openmed import extract_pii; print([(e.label, e.text) for e in extract_pii('Dr. Pedro Almeida, CPF: 123.456.789-09, email: pedro@hospital.pt', lang='pt').entities])"
 ```

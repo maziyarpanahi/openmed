@@ -56,6 +56,7 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
+      - Per-Language De-identification: languages.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
