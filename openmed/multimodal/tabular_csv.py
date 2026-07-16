@@ -365,9 +365,9 @@ def redact_table(
         for decision in table.columns:
             value = row[decision.index] if decision.index < len(row) else ""
             if decision.action == ACTION_DATE_SHIFT and row_shift_days is None:
-                row_shift_days = _date_shift_for_row(
+                row_shift_days = derive_date_shift_days(
                     row,
-                    row_index=row_index,
+                    record_index=row_index,
                     fixed_days=date_shift_days,
                     seed=date_shift_seed,
                 )
@@ -816,22 +816,67 @@ def _redact_with_core(
     )
 
 
-def _date_shift_for_row(
-    row: Sequence[str],
+def derive_date_shift_days(
+    values: Sequence[str],
     *,
-    row_index: int,
-    fixed_days: int | None,
-    seed: str,
+    record_index: int,
+    fixed_days: int | None = None,
+    seed: str = "openmed-tabular-csv-v1",
 ) -> int:
+    """Return a deterministic non-zero date shift for one logical record.
+
+    The helper is shared by structured exporters so date quasi-identifiers use
+    the same per-record policy as CSV/TSV redaction. Source values are hashed in
+    memory and are never returned or persisted.
+
+    Args:
+        values: Stable string representation of the record fields.
+        record_index: Zero-based position used to distinguish duplicate rows.
+        fixed_days: Optional explicit non-zero shift.
+        seed: Caller-controlled deterministic seed material.
+
+    Returns:
+        A non-zero offset between -365 and 364 days when no fixed shift is set.
+    """
     if fixed_days is not None:
         if fixed_days == 0:
             raise ValueError("date_shift_days must be non-zero")
         return fixed_days
 
-    material = "\x1f".join([seed, str(row_index), *row]).encode("utf-8")
+    material = "\x1f".join([seed, str(record_index), *values]).encode("utf-8")
     digest = hashlib.sha256(material).digest()
     shift = int.from_bytes(digest[:2], "big") % 730 - 365
     return shift if shift != 0 else 1
+
+
+def shift_quasi_identifier_date(
+    value: str,
+    *,
+    shift_days: int,
+    keep_year: bool = True,
+    lang: str = "en",
+) -> str:
+    """Shift one date value with the tabular quasi-identifier policy.
+
+    Args:
+        value: Date text accepted by OpenMed's date redactor.
+        shift_days: Required non-zero day offset.
+        keep_year: Preserve the source year after shifting.
+        lang: OpenMed language hint for localized date parsing.
+
+    Returns:
+        Shifted date text in the source format where supported.
+    """
+    if shift_days == 0:
+        raise ValueError("shift_days must be non-zero")
+    return _redact_with_core(
+        value,
+        label=DATE,
+        method="shift_dates",
+        date_shift_days=shift_days,
+        keep_year=keep_year,
+        lang=lang,
+    )
 
 
 def _write_records(
@@ -870,6 +915,8 @@ __all__ = [
     "RedactedTable",
     "TableView",
     "classify_columns",
+    "derive_date_shift_days",
     "read_table",
     "redact_table",
+    "shift_quasi_identifier_date",
 ]
