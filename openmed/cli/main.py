@@ -150,6 +150,13 @@ def _non_negative_int(value: str) -> int:
     return parsed
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("value must be greater than 0")
+    return parsed
+
+
 def _policy_name_arg(value: str) -> str:
     try:
         return canonical_policy_name(value)
@@ -749,6 +756,34 @@ def _add_fhir_command(subparsers: argparse._SubParsersAction) -> None:
 def _add_models_command(subparsers: argparse._SubParsersAction) -> None:
     models_parser = subparsers.add_parser("models", help="Discover OpenMed models.")
     models_sub = models_parser.add_subparsers(dest="models_command")
+
+    models_pull = models_sub.add_parser(
+        "pull",
+        help="Download and integrity-check a model for offline use.",
+    )
+    models_pull.add_argument(
+        "model",
+        help="Registry alias, bare model name, or Hugging Face repository id.",
+    )
+    models_pull.add_argument(
+        "--revision",
+        default=None,
+        help="Optional branch, tag, or commit to download.",
+    )
+    models_pull.add_argument(
+        "--max-bandwidth",
+        type=_positive_int,
+        default=None,
+        metavar="BYTES_PER_SECOND",
+        help="Limit aggregate download bandwidth in bytes per second.",
+    )
+    models_pull.add_argument(
+        "--retries",
+        type=_non_negative_int,
+        default=5,
+        help="Retries for transient network failures (default: 5).",
+    )
+    models_pull.set_defaults(handler=_handle_models_pull)
 
     models_list = models_sub.add_parser("list", help="List available models.")
     models_list.add_argument(
@@ -2658,6 +2693,42 @@ def _handle_models_list(args: argparse.Namespace) -> int:
     model_names = [str(model) for model in models]
     payload = {"count": len(model_names), "models": model_names}
     return emit(args, payload, human="\n".join(model_names))
+
+
+def _handle_models_pull(args: argparse.Namespace) -> int:
+    from ..core.hf_hub import DownloadProgress, prefetch_model
+
+    config = _load_and_apply_config(args)
+    completed_files = 0
+
+    def report_progress(progress: DownloadProgress) -> None:
+        nonlocal completed_files
+        finished = progress.files_done > completed_files
+        completed_files = max(completed_files, progress.files_done)
+        line_end = "\n" if finished else "\r"
+        sys.stdout.write(
+            f"{progress.filename}: "
+            f"{progress.bytes_done}/{progress.bytes_total} bytes; "
+            f"{progress.files_done}/{progress.files_total} files"
+            f"{line_end}"
+        )
+        sys.stdout.flush()
+
+    try:
+        path = prefetch_model(
+            args.model,
+            revision=args.revision,
+            config=config,
+            retries=args.retries,
+            max_bandwidth=args.max_bandwidth,
+            progress_callback=report_progress,
+        )
+    except Exception as exc:  # pragma: no cover - exact failures tested in helper
+        sys.stderr.write(f"Failed to pull model: {exc}\n")
+        return 1
+
+    sys.stdout.write(f"Model ready: {path}\n")
+    return 0
 
 
 def _handle_models_info(args: argparse.Namespace) -> int:
