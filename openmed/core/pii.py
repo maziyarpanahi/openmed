@@ -620,6 +620,25 @@ def _prepare_pii_text(
         original_text,
         width_convention=width_convention,
     )
+    if lang.strip().replace("-", "_").split("_", 1)[0].casefold() == "ar":
+        from .pii_i18n import normalize_arabic_indic_digits
+
+        normalized_arabic = normalize_arabic_indic_digits(detection_normalization.text)
+        folded_arabic_digits = sum(
+            before != after
+            for before, after in zip(
+                detection_normalization.text,
+                normalized_arabic,
+            )
+        )
+        if folded_arabic_digits:
+            detection_normalization = replace(
+                detection_normalization,
+                text=normalized_arabic,
+                folded_native_digits=(
+                    detection_normalization.folded_native_digits + folded_arabic_digits
+                ),
+            )
     inference_text = detection_normalization.text
     if do_normalize:
         inference_text = _strip_accents(inference_text)

@@ -1031,6 +1031,143 @@ class SouthAfricanIdProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Egyptian national ID and Moroccan CIN
+# ---------------------------------------------------------------------------
+
+_MOROCCAN_CIN_DEFAULT_PREFIXES = tuple("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + (
+    "AA",
+    "BK",
+    "BE",
+    "BH",
+    "BJ",
+)
+
+
+def generate_egyptian_national_id(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a structurally valid Egyptian national ID surrogate.
+
+    When ``original`` is valid, its century, birth date, governorate, and
+    gender parity are retained while its four-digit serial is changed. The
+    unpublished final check digit is generated but intentionally not validated.
+
+    Args:
+        original: Optional source ID in ASCII or Arabic-Indic digits.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A distinct 14-digit Egyptian national ID surrogate.
+    """
+    import calendar
+
+    from openmed.core.pii_i18n import (
+        EGYPTIAN_GOVERNORATE_CODES,
+        normalize_arabic_indic_digits,
+        validate_egyptian_national_id,
+    )
+
+    source = rng or random.Random()
+    original_text = (
+        normalize_arabic_indic_digits(original.strip())
+        if isinstance(original, str)
+        else ""
+    )
+
+    if validate_egyptian_national_id(original_text):
+        prefix = original_text[:9]
+        gender_parity = int(original_text[12]) % 2
+        original_serial = original_text[9:13]
+    else:
+        century_digit = source.choice(("2", "3"))
+        first_year = 1900 if century_digit == "2" else 2000
+        last_year = 1999 if century_digit == "2" else date.today().year
+        year = source.randint(first_year, last_year)
+        month = source.randint(1, 12)
+        day = source.randint(1, calendar.monthrange(year, month)[1])
+        governorate = source.choice(tuple(sorted(EGYPTIAN_GOVERNORATE_CODES)))
+        prefix = f"{century_digit}{year % 100:02d}{month:02d}{day:02d}{governorate}"
+        gender_parity = source.randint(0, 1)
+        original_serial = ""
+
+    serial = ""
+    for _ in range(100):
+        serial = "".join(str(source.randint(0, 9)) for _ in range(3))
+        serial += str(source.choice(tuple(range(gender_parity, 10, 2))))
+        if serial != original_serial:
+            break
+    else:  # pragma: no cover - hostile RNG fallback
+        serial = f"{(int(serial or '0') + 2) % 10_000:04d}"
+
+    check_digit = source.randint(0, 9)
+    return f"{prefix}{serial}{check_digit}"
+
+
+def generate_moroccan_cin(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a Moroccan CIN surrogate preserving its regional prefix.
+
+    A valid source retains its exact one- or two-letter prefix and digit width.
+    Without a valid source, a published regional prefix and six-digit serial are
+    generated.
+
+    Args:
+        original: Optional source CIN in ASCII or Arabic-Indic digits.
+        rng: Optional deterministic random source.
+
+    Returns:
+        A structurally valid CIN distinct from ``original``.
+    """
+    from openmed.core.pii_i18n import (
+        normalize_arabic_indic_digits,
+        validate_moroccan_cin,
+    )
+
+    source = rng or random.Random()
+    original_text = (
+        normalize_arabic_indic_digits(original.strip()).upper()
+        if isinstance(original, str)
+        else ""
+    )
+    if validate_moroccan_cin(original_text):
+        match = re.fullmatch(r"([A-Z]{1,2})([0-9]{5,7})", original_text)
+        if match is None:  # pragma: no cover - validator contract
+            raise RuntimeError("validated Moroccan CIN could not be parsed")
+        prefix, original_serial = match.groups()
+        serial_length = len(original_serial)
+    else:
+        prefix = source.choice(_MOROCCAN_CIN_DEFAULT_PREFIXES)
+        original_serial = ""
+        serial_length = 6
+
+    serial = ""
+    for _ in range(100):
+        serial = "".join(str(source.randint(0, 9)) for _ in range(serial_length))
+        if serial != original_serial:
+            return prefix + serial
+
+    value = (int(serial or "0") + 1) % (10**serial_length)
+    return prefix + f"{value:0{serial_length}d}"
+
+
+class EgyptMoroccoIdProvider(BaseProvider):
+    """Generate format-preserving Egyptian and Moroccan ID surrogates."""
+
+    def egyptian_national_id(self, original: str | None = None) -> str:
+        """Return a structurally valid Egyptian national ID surrogate."""
+        return generate_egyptian_national_id(original, rng=self.generator.random)
+
+    def moroccan_cin(self, original: str | None = None) -> str:
+        """Return a format-preserving Moroccan CIN surrogate."""
+        return generate_moroccan_cin(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Nigerian NIN, BVN, and mobile phone
 # ---------------------------------------------------------------------------
 
@@ -2489,6 +2626,7 @@ __all__ = [
     "CanadianSINProvider",
     "ChineseResidentIdProvider",
     "DanishCPRProvider",
+    "EgyptMoroccoIdProvider",
     "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
@@ -2527,6 +2665,7 @@ __all__ = [
     "generate_canadian_sin",
     "generate_chinese_resident_id",
     "generate_danish_cpr",
+    "generate_egyptian_national_id",
     "generate_hungarian_taj",
     "generate_estonian_isikukood",
     "generate_ghana_card_pin",
@@ -2545,6 +2684,7 @@ __all__ = [
     "generate_pesel",
     "generate_latvian_personas_kods",
     "generate_malaysian_mykad",
+    "generate_moroccan_cin",
     "generate_ng_mobile_number",
     "generate_philhealth_pin",
     "generate_philsys_psn",

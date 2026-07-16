@@ -69,7 +69,14 @@ def _validated(pattern: PIIPattern, text: str) -> bool:
         return False
 
 
-def _has_context(text: str, start: int, end: int, pattern: PIIPattern) -> bool:
+def _has_context(
+    text: str,
+    start: int,
+    end: int,
+    pattern: PIIPattern,
+    *,
+    require_boundaries: bool = False,
+) -> bool:
     return bool(
         pattern.context_words
         and find_context_words(
@@ -77,6 +84,7 @@ def _has_context(text: str, start: int, end: int, pattern: PIIPattern) -> bool:
             start,
             end,
             pattern.context_words,
+            require_boundaries=require_boundaries,
         )
     )
 
@@ -115,6 +123,14 @@ def _collect_candidates(text: str, patterns: Sequence[PIIPattern]) -> list[_Cand
 
             matched_text = text[start:end]
             if not _validated(pattern, matched_text):
+                continue
+            if pattern.requires_context and not _has_context(
+                text,
+                start,
+                end,
+                pattern,
+                require_boundaries=True,
+            ):
                 continue
             if pattern.safety_sweep_requires_context and not _has_context(
                 text,
