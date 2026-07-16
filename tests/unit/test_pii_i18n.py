@@ -4,6 +4,7 @@ import json
 import random
 import re
 import warnings
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
@@ -73,6 +74,7 @@ from openmed.core.pii_i18n import (
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
     validate_portuguese_nif,
+    validate_south_african_id,
     validate_spanish_dni,
     validate_spanish_nie,
     validate_thai_national_id,
@@ -116,6 +118,7 @@ class TestConstants:
 
     def test_national_id_only_languages(self):
         assert NATIONAL_ID_ONLY_LANGUAGES == {
+            "af",
             "ha",
             "ig",
             "yo",
@@ -4751,6 +4754,188 @@ class TestGhanaKenyaIdentifiers:
 
         assert gold_count == 5
         assert leaked_count / gold_count == 0
+
+
+def _south_african_id_with_luhn(body: str) -> str:
+    """Return a 13-digit test value with a valid Luhn digit."""
+    assert len(body) == 12 and body.isdigit()
+    total = 0
+    for index, value in enumerate(int(digit) for digit in body):
+        if index % 2 == 1:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return body + str((10 - total % 10) % 10)
+
+
+def _decoded_south_african_birth_year(value: str) -> int:
+    modern = date(2000 + int(value[:2]), int(value[2:4]), int(value[4:6]))
+    if modern <= date.today():
+        return modern.year
+    return modern.year - 100
+
+
+class TestSouthAfricanIdentifiers:
+    """Validator, pattern, surrogate, and synthetic-fixture coverage for ZA."""
+
+    @staticmethod
+    def _faker(seed: int) -> Faker:
+        faker = Faker("zu_ZA")
+        register_clinical_providers(faker)
+        faker.seed_instance(seed)
+        return faker
+
+    def test_validator_rejects_bad_date_luhn_citizenship_and_shape(self):
+        faker = self._faker(839)
+        valid = faker.south_african_id()
+        assert validate_south_african_id(valid)
+
+        assert not validate_south_african_id(
+            _south_african_id_with_luhn("991332500001")
+        )
+        assert not validate_south_african_id(
+            _south_african_id_with_luhn("900101500021")
+        )
+        assert not validate_south_african_id(
+            valid[:-1] + str((int(valid[-1]) + 1) % 10)
+        )
+        assert not validate_south_african_id(valid[:-1])
+        assert not validate_south_african_id(f"{valid[:6]} {valid[6:]}")
+
+    def test_one_thousand_fresh_surrogates_pass_and_check_mutations_fail(self):
+        faker = self._faker(1416)
+        for _ in range(1_000):
+            surrogate = faker.south_african_id()
+            assert validate_south_african_id(surrogate)
+
+            mutated = surrogate[:-1] + str((int(surrogate[-1]) + 1) % 10)
+            assert not validate_south_african_id(mutated)
+
+    def test_surrogates_preserve_decade_gender_and_citizenship(self):
+        source_faker = self._faker(1416)
+        surrogate_faker = self._faker(839)
+
+        for _ in range(100):
+            original = source_faker.south_african_id()
+            surrogate = surrogate_faker.south_african_id(original)
+
+            assert validate_south_african_id(surrogate)
+            assert surrogate != original
+            assert _decoded_south_african_birth_year(surrogate) // 10 == (
+                _decoded_south_african_birth_year(original) // 10
+            )
+            assert (int(surrogate[6:10]) >= 5000) == (int(original[6:10]) >= 5000)
+            assert surrogate[10] == original[10]
+
+    def test_provider_is_seed_deterministic_and_preserves_phone_prefix(self):
+        source = self._faker(1416).south_african_id()
+        first = self._faker(839)
+        second = self._faker(839)
+        assert first.south_african_id(source) == second.south_african_id(source)
+
+        for phone in ("+27 82 123 4567", "0827654321", "27829999999"):
+            surrogate = first.za_mobile_number(phone)
+            source_digits = re.sub(r"[^0-9]", "", phone)
+            surrogate_digits = re.sub(r"[^0-9]", "", surrogate)
+            source_national = (
+                "0" + source_digits[2:]
+                if source_digits.startswith("27")
+                else source_digits
+            )
+            surrogate_national = (
+                "0" + surrogate_digits[2:]
+                if surrogate_digits.startswith("27")
+                else surrogate_digits
+            )
+            assert surrogate_national[:3] == source_national[:3]
+
+    def test_locale_aliases_match_fixture_phones_and_not_id_runs(self):
+        assert LOCALE_PII_PATTERNS["en_za"] is LOCALE_PII_PATTERNS["af"]
+        assert LOCALE_PII_PATTERNS["af"] is LOCALE_PII_PATTERNS["zu"]
+
+        rows = [
+            json.loads(line)
+            for line in Path("tests/fixtures/pii/za_synthetic_notes.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        phone_patterns = [
+            pattern
+            for pattern in LOCALE_PII_PATTERNS["en_za"]
+            if pattern.entity_type == "phone_number"
+        ]
+
+        assert [row["entities"][1]["text"] for row in rows] == [
+            "+27 82 123 4567",
+            "0827654321",
+            "27829999999",
+        ]
+        for row in rows:
+            id_value, phone = (entity["text"] for entity in row["entities"])
+            assert validate_south_african_id(id_value)
+            assert any(
+                re.fullmatch(pattern.pattern, phone, pattern.flags)
+                for pattern in phone_patterns
+            )
+            assert not any(
+                re.search(pattern.pattern, id_value, pattern.flags)
+                for pattern in phone_patterns
+            )
+
+    def test_synthetic_fixture_replace_round_trip_has_zero_leakage(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.processing.outputs import PredictionResult
+
+        rows = [
+            json.loads(line)
+            for line in Path("tests/fixtures/pii/za_synthetic_notes.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        for row in rows:
+            empty_result = PredictionResult(
+                text=row["text"],
+                entities=[],
+                model_name="offline-safety-sweep",
+                timestamp="2026-07-16T00:00:00Z",
+                metadata={},
+            )
+            swept_result, added_count = _apply_safety_sweep_to_result(
+                row["text"],
+                empty_result,
+                lang="en",
+                locale="en_ZA",
+            )
+            result = _build_deidentification_result(
+                row["text"],
+                swept_result,
+                effective_method="replace",
+                keep_year=False,
+                date_shift_days=None,
+                keep_mapping=False,
+                lang="en",
+                consistent=True,
+                seed=839,
+                locale="en_ZA",
+                use_safety_sweep=True,
+            )
+
+            assert added_count == len(row["entities"])
+            assert len(result.pii_entities) == len(row["entities"])
+            for entity in result.pii_entities:
+                source_digits = re.sub(r"[^0-9]", "", entity.text)
+                replacement_digits = re.sub(r"[^0-9]", "", entity.redacted_text)
+                assert entity.text not in result.deidentified_text
+                assert all(
+                    source_digits[index : index + 6] not in replacement_digits
+                    for index in range(len(source_digits) - 5)
+                )
 
 
 if __name__ == "__main__":
