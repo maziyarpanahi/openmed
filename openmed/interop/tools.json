@@ -213,7 +213,9 @@
               "te",
               "th",
               "tr",
-              "zh"
+              "xh",
+              "zh",
+              "zu"
             ],
             "type": "string"
           },
@@ -459,7 +461,9 @@
               "te",
               "th",
               "tr",
-              "zh"
+              "xh",
+              "zh",
+              "zu"
             ],
             "type": "string"
           },

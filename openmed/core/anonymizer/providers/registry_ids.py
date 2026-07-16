@@ -69,6 +69,7 @@ from openmed.core.pii_i18n import (
     validate_uk_nino,
     validate_vietnamese_cccd,
     validate_vietnamese_cmnd,
+    validate_za_id_number,
 )
 
 from .clinical_ids import (
@@ -99,6 +100,7 @@ from .clinical_ids import (
     RodneCisloProvider,
     RomanianCNPProvider,
     SerbianJmbgProvider,
+    SouthAfricanIdProvider,
     SpanishDNIProvider,
     SpanishNIEProvider,
     ThaiNationalIdProvider,
@@ -253,6 +255,13 @@ def _register_aliases(
 
 
 def _register_builtin_specs() -> None:
+    _register_aliases(
+        ("za", "zu", "zu_ZA", "xh", "xh_ZA"),
+        id_type="sa_id_number",
+        validate=validate_za_id_number,
+        faker_method="south_african_id",
+        faker_provider=SouthAfricanIdProvider,
+    )
     nigeria_aliases = ("ng", "en_NG", "ha", "ha_NG", "ig", "ig_NG", "yo", "yo_NG")
     _register_aliases(
         nigeria_aliases,
