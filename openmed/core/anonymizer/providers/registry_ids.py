@@ -53,6 +53,7 @@ from openmed.core.pii_i18n import (
     validate_polish_pesel,
     validate_portuguese_cnpj,
     validate_portuguese_cpf,
+    validate_portuguese_nif,
     validate_romanian_cnp,
     validate_spanish_dni,
     validate_spanish_nie,
@@ -82,6 +83,7 @@ from .clinical_ids import (
     OntarioHealthCardProvider,
     PhilippinesIdProvider,
     PolishPeselProvider,
+    PortugueseNIFProvider,
     RodneCisloProvider,
     RomanianCNPProvider,
     SerbianJmbgProvider,
@@ -435,6 +437,13 @@ def _register_builtin_specs() -> None:
         id_type="cnpj",
         validate=validate_portuguese_cnpj,
         faker_method="cnpj",
+    )
+    _register_aliases(
+        ("pt_PT",),
+        id_type="nif",
+        validate=validate_portuguese_nif,
+        faker_method="nif",
+        faker_provider=PortugueseNIFProvider,
     )
     _register_aliases(
         ("tr", "tr_TR"),

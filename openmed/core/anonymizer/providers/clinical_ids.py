@@ -585,6 +585,35 @@ class SpanishNIEProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Portuguese NIF / NIPC (9 digits with weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+# Leading digits and two-digit prefixes the generator may draw from; kept in
+# sync with ``validate_portuguese_nif`` so surrogates round-trip.
+_PORTUGUESE_NIF_LEADING = ("1", "2", "3", "5", "6", "8", "9")
+
+
+def generate_portuguese_nif(*, rng: random.Random | None = None) -> str:
+    """Generate a Portuguese NIF accepted by :func:`validate_portuguese_nif`."""
+    source = rng or random.Random()
+
+    first = source.choice(_PORTUGUESE_NIF_LEADING)
+    body = first + "".join(str(source.randint(0, 9)) for _ in range(7))
+    total = sum(int(body[index]) * (9 - index) for index in range(8))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return body + str(check)
+
+
+class PortugueseNIFProvider(BaseProvider):
+    """Generates Portuguese NIF values using Faker's instance RNG."""
+
+    def nif(self) -> str:
+        return generate_portuguese_nif(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -1873,6 +1902,7 @@ __all__ = [
     "SerbianJmbgProvider",
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
+    "PortugueseNIFProvider",
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
@@ -1900,6 +1930,7 @@ __all__ = [
     "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_romanian_cnp",
+    "generate_portuguese_nif",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
