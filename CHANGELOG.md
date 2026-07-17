@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added region-qualified Arabic Faker locales (`ar-SA`, `ar-AE`, `ar-JO`,
+  `ar-PS`, and explicit `ar-EG`) so Gulf and Levant text receives in-region
+  surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
+  installed Faker fall back to `ar_EG` with a one-time warning, and
+  `list_regional_locales('ar')` enumerates the supported tags (#483).
 - Added a release evidence job that keylessly signs each wheel and source
   distribution with Sigstore and attaches the SLSA provenance bundle, the
   release artifact digest manifest, and the Sigstore bundles to the tagged
