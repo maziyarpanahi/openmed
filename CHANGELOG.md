@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
+  and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
+  five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
+  fixture (#819).
 - Added region-qualified Arabic Faker locales (`ar-SA`, `ar-AE`, `ar-JO`,
   `ar-PS`, and explicit `ar-EG`) so Gulf and Levant text receives in-region
   surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the

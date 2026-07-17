@@ -1146,6 +1146,47 @@ class IndonesianNIKProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Vietnamese CCCD / legacy CMND
+# ---------------------------------------------------------------------------
+
+
+def generate_vietnamese_cccd(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic CCCD accepted by its structural validator."""
+    from openmed.core.pii_i18n import validate_vietnamese_cccd
+
+    source = rng or random.Random()
+    for _ in range(20):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(12))
+        if len(set(candidate)) > 1 and validate_vietnamese_cccd(candidate):
+            return candidate
+    return "001203123456"
+
+
+def generate_vietnamese_cmnd(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic legacy CMND accepted by its structural validator."""
+    from openmed.core.pii_i18n import validate_vietnamese_cmnd
+
+    source = rng or random.Random()
+    for _ in range(20):
+        candidate = str(source.randint(1, 9)) + "".join(
+            str(source.randint(0, 9)) for _ in range(8)
+        )
+        if validate_vietnamese_cmnd(candidate):
+            return candidate
+    return "123456789"
+
+
+class VietnameseIdProvider(BaseProvider):
+    """Generates synthetic Vietnamese CCCD and legacy CMND values."""
+
+    def vietnamese_cccd(self) -> str:
+        return generate_vietnamese_cccd(rng=self.generator.random)
+
+    def vietnamese_cmnd(self) -> str:
+        return generate_vietnamese_cmnd(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Malaysian MyKad / NRIC (YYMMDD-PB-XXXX with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -1901,6 +1942,7 @@ __all__ = [
     "RodneCisloProvider",
     "SerbianJmbgProvider",
     "ThaiNationalIdProvider",
+    "VietnameseIdProvider",
     "SpanishDNIProvider",
     "PortugueseNIFProvider",
     "SpanishNIEProvider",
@@ -1934,6 +1976,8 @@ __all__ = [
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
+    "generate_vietnamese_cccd",
+    "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
     "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",

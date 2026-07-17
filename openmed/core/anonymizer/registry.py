@@ -192,6 +192,7 @@ _LOCALE_ID_METHODS = {
     "hu_HU": "hungarian_taj",
     "et_EE": "isikukood",
     "el_GR": "ssn",
+    "vi_VN": "vietnamese_cccd",
 }
 
 
