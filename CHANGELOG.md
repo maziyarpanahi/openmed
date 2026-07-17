@@ -14,7 +14,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   surrogates; bare `ar` still defaults to `ar_EG`. Locales missing from the
   installed Faker fall back to `ar_EG` with a one-time warning, and
   `list_regional_locales('ar')` enumerates the supported tags (#483).
-  
+- Added a Hungarian (`hu`) national-ID-only PII pack with validator-backed TAJ
+  detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
+  address, and postcode patterns, and an offline synthetic golden fixture
+  (#816).
+- Added a Czech (`cs`) national-ID-only PII pack with validator-backed rodné
+  číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
+  locale-aware synthetic surrogates, and an offline synthetic golden fixture
+  ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
+
+## [1.9.1] - 2026-07-14
+
+This patch completes the `1.9` distribution rollout without changing the
+public inference APIs introduced in `1.9.0`.
+
+### Fixed
+
+- Restored the documented root Swift Package Manager build by processing
+  OpenMedKit policy resources in the root package, and moved Swift CI to build
+  and test that public package entry point.
+- Kept tag-driven Android validation green when the optional Maven Central
+  signing credentials are absent while retaining the immutable JitPack release
+  path and guarded manual Central uploads.
+- Replaced placeholder model repository IDs in runtime and export documentation
+  with tested public token-classification and causal-model examples.
+
+### Security
+
+- Updated the locked `setuptools` build dependency to a non-vulnerable release
+  so the master and release `pip-audit` gates pass without a waiver.
+
 ## [1.9.0] - 2026-07-14
 
 This release adds one model-repository contract for ONNX token-classification
@@ -491,14 +520,13 @@ changed, with no deleted or renamed files detected in the release range.
   - `OpenMed/privacy-filter-multilingual` — PyTorch / Transformers (CPU + CUDA).
   - `OpenMed/privacy-filter-multilingual-mlx` — MLX full-precision (Apple Silicon).
   - `OpenMed/privacy-filter-multilingual-mlx-8bit` — MLX 8-bit quantized (Apple Silicon and OpenMedKit demos).
-    These artifacts use the OpenAI Privacy Filter architecture and officially support 16 languages through the OpenMed multilingual PII corpus.
+  These artifacts use the OpenAI Privacy Filter architecture and officially support 16 languages through the OpenMed multilingual PII corpus.
 - **Python MLX routing for multilingual Privacy Filter artifacts**:
   - `_MLX_MODEL_MAP` entries for the full and 8-bit multilingual MLX repo IDs.
   - `privacy-filter-multilingual` and `multilingual-privacy-filter` MLX family aliases, both resolving to the existing OpenAI Privacy Filter model class and BIOES decoder.
   - Family-aware Torch fallback so multilingual MLX model names substitute `OpenMed/privacy-filter-multilingual` on non-MLX hosts instead of the OpenAI baseline.
 - **Multilingual Privacy Filter Studio** in `examples/privacy_filter_multilingual_studio/`, a web demo comparing the OpenAI baseline, OpenAI Nemotron Privacy Filter, and OpenMed Multilingual Privacy Filter with English, French, and Arabic examples.
 - **OpenMed Scan Demo multilingual mode** with `OpenMed/privacy-filter-multilingual-mlx-8bit`, a three-engine picker, EN/FR/AR sample buttons, and new French/Arabic scanned demo documents for screenshot-ready flows.
-
 ### Changed
 
 - Privacy Filter docs and README now describe three Privacy Filter families and label the multilingual model as **OpenMed Multilingual Privacy Filter**.
@@ -550,7 +578,7 @@ changed, with no deleted or renamed files detected in the release range.
   - `OpenMed/privacy-filter-nemotron` — PyTorch / Transformers (CPU + CUDA).
   - `OpenMed/privacy-filter-nemotron-mlx` — MLX full-precision (Apple Silicon).
   - `OpenMed/privacy-filter-nemotron-mlx-8bit` — MLX 8-bit quantized (Apple Silicon).
-    These checkpoints **are** the OpenAI Privacy Filter architecture (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`) fine-tuned on the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1). They reuse `OpenAIPrivacyFilterForTokenClassification` and `PrivacyFilterMLXPipeline` unchanged — no new architecture code needed.
+  These checkpoints **are** the OpenAI Privacy Filter architecture (gpt-oss-style sparse-MoE transformer with local attention, sink tokens, RoPE+YaRN, tiktoken `o200k_base`) fine-tuned on the [Nemotron PII dataset](https://huggingface.co/datasets/nvidia/Nemotron-PII-v1). They reuse `OpenAIPrivacyFilterForTokenClassification` and `PrivacyFilterMLXPipeline` unchanged — no new architecture code needed.
 - **`_MLX_MODEL_MAP` entries** for the two new Nemotron MLX repo IDs in `openmed.mlx.inference`.
 - **Aliases for the new family in `_SUPPORTED_TOKEN_CLASSIFICATION_MODEL_TYPES`** (`privacy-filter-nemotron`, `nemotron-privacy-filter`) — both resolve to the existing `openai-privacy-filter` family so a Nemotron-fine-tune MLX artifact can ship with either family identifier in its manifest and still dispatch correctly.
 - **Family-aware Torch fallback** in `openmed.core.backends`:
@@ -1173,7 +1201,8 @@ changed, with no deleted or renamed files detected in the release range.
 - YAML/ENV configuration via `OpenMedConfig`
 - Zero-shot toolkit with GLiNER support
 
-[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/maziyarpanahi/openmed/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/maziyarpanahi/openmed/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/maziyarpanahi/openmed/compare/v1.8.1...v1.9.0
 [1.8.1]: https://github.com/maziyarpanahi/openmed/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/maziyarpanahi/openmed/compare/v1.7.0...v1.8.0

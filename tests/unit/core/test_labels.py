@@ -31,6 +31,7 @@ from openmed.core.labels import (
     DIALYSIS_MODALITY,
     DIET_TYPE,
     DOSE_NUMBER,
+    DYSPNEA_GRADE,
     EMAIL,
     ENDOSCOPIC_FINDING,
     ETHEREUM_ADDRESS,
@@ -72,6 +73,7 @@ from openmed.core.labels import (
     ORDINAL_DIRECTION,
     ORGANIZATION,
     OTHER,
+    OXYGEN_SUPPORT,
     PASSWORD,
     PERSON,
     PHONE,
@@ -81,6 +83,8 @@ from openmed.core.labels import (
     PROCEDURE,
     PROTEIN_CHANGE,
     RENAL_FUNCTION_MEASURE,
+    RESPIRATORY_FINDING,
+    SPIROMETRY_MEASURE,
     SSN,
     STREET_ADDRESS,
     SUSCEPTIBILITY,
@@ -694,6 +698,10 @@ class TestClinicalLabelsAreAdditive:
             DIALYSIS_MODALITY,
             RENAL_FUNCTION_MEASURE,
             URINE_FINDING,
+            SPIROMETRY_MEASURE,
+            OXYGEN_SUPPORT,
+            RESPIRATORY_FINDING,
+            DYSPNEA_GRADE,
         }
     )
 

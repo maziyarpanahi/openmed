@@ -31,10 +31,12 @@ def test_bare_ar_unchanged_and_silent():
 
 def test_region_qualified_selects_regional_locale():
     # Acceptance: resolve_locale('ar-SA') returns 'ar_SA' (when Faker ships it).
-    available = set(list_regional_locales("ar"))
+    available = set(locales._AR_REGION_AVAILABLE)
     for tag, faker_locale in AR_REGION_LOCALES.items():
         expected = faker_locale if tag in available else "ar_EG"
-        assert resolve_locale(tag) == expected
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            assert resolve_locale(tag) == expected
         locales._warned.clear()  # isolate per-tag warning state
 
 
@@ -48,14 +50,27 @@ def test_unknown_region_warns_once_and_falls_back():
         assert resolve_locale("ar-ZZ") == "ar_EG"
 
 
-def test_list_regional_locales():
+def test_list_regional_locales_includes_every_documented_tag():
     # Acceptance: returns the documented supported Arabic region tags.
     tags = list_regional_locales("ar")
-    assert tags == sorted(tags)  # returned sorted
-    assert set(tags) <= set(AR_REGION_LOCALES)  # only documented tags
-    assert list_regional_locales("en") == []  # non-Arabic has none
+    assert tags == sorted(AR_REGION_LOCALES)
+    assert list_regional_locales("en") == []
 
 
-def test_locale_override_takes_precedence():
-    # An explicit override always wins, even over a region code.
+def test_missing_documented_locale_warns_once_and_falls_back(monkeypatch):
+    monkeypatch.setattr(locales, "_AR_REGION_AVAILABLE", {})
+    with pytest.warns(UserWarning, match="ar-SA"):
+        assert resolve_locale("ar-SA") == "ar_EG"
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert resolve_locale("ar-SA") == "ar_EG"
+
+
+def test_region_tag_locale_override_is_resolved(monkeypatch):
+    monkeypatch.setattr(locales, "_AR_REGION_AVAILABLE", {"ar-AE": "ar_AE"})
+    assert resolve_locale("ar", locale_override="ar-AE") == "ar_AE"
+
+
+def test_faker_locale_override_takes_precedence():
+    # A direct Faker locale override still wins over a language region code.
     assert resolve_locale("ar-SA", locale_override="fr_FR") == "fr_FR"

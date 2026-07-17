@@ -37,6 +37,7 @@ default_org = "OpenMed"
 device = "cuda"
 cache_dir = "/mnt/cache/openmed"
 torch_attention_backend = "auto"
+cjk_width_convention = "cjk"
 ```
 
 Runtime environment controls can select the config path, provide Hub
@@ -47,6 +48,18 @@ export OPENMED_CONFIG=/etc/openmed/config.toml
 export HF_TOKEN=hf_xxx
 export OPENMED_TORCH_DEVICE=cuda:1
 ```
+
+## CJK width normalization
+
+`cjk_width_convention="cjk"` is the default. It converts full-width Latin
+letters, digits, punctuation, and U+3000 ideographic spaces before PII
+detection while preserving offsets into the original text. This lets existing
+phone, date, and identifier patterns match full-width input without changing
+the returned surface text.
+
+Set `cjk_width_convention="nfkc"` to apply strict per-character NFKC
+normalization instead. Both modes retain an explicit source map so expanded
+compatibility characters still remap to their original code-point spans.
 
 ## PyTorch attention backends
 
