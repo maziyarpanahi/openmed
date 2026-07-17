@@ -57,6 +57,7 @@ from .script_detect import (
 if TYPE_CHECKING:
     from .anonymizer import Anonymizer
     from .audit import AuditReport
+    from .lang_id_codemix import TokenLIDHook
     from .models import ModelLoader
     from .surrogate_vault import SurrogateVault
 
@@ -1050,6 +1051,31 @@ def _pii_merge_metadata(entity: Mapping[str, Any]) -> dict[str, Any] | None:
     return metadata or None
 
 
+def _resolve_code_mixed_token_tags(
+    text: str,
+    *,
+    code_mixed: bool,
+    token_language_tags: Optional[Sequence[Any]],
+    lid_model: Optional["TokenLIDHook"],
+) -> Optional[tuple[Any, ...]]:
+    """Return caller-supplied or locally inferred offset-only language tags."""
+    if not code_mixed:
+        if token_language_tags is not None:
+            raise ValueError("token_language_tags requires code_mixed=True")
+        if lid_model is not None:
+            raise ValueError("lid_model requires code_mixed=True")
+        return None
+    if token_language_tags is not None:
+        return tuple(token_language_tags)
+
+    from .lang_id_codemix import identify_token_languages
+
+    inferred = identify_token_languages(text, model=lid_model)
+    if not inferred:
+        raise ValueError("code-mixed text must contain at least one token")
+    return tuple(inferred)
+
+
 def _extract_pii_batch(
     texts: Sequence[str],
     model_name: str = _DEFAULT_EN_MODEL,
@@ -1062,6 +1088,7 @@ def _extract_pii_batch(
     abdm: Optional[bool] = None,
     code_mixed: bool = False,
     token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
     *,
     preserve_whitespace: bool = False,
@@ -1073,8 +1100,6 @@ def _extract_pii_batch(
     """Extract PII for multiple texts while reusing the same backend resources."""
     if code_mixed and len(texts) != 1:
         raise ValueError("code-mixed token tags currently require one input text")
-    if code_mixed and token_language_tags is None:
-        raise ValueError("code_mixed=True requires token_language_tags")
     effective_model = _resolve_effective_pii_model(model_name, lang)
     prepared = [
         _prepare_pii_text(
@@ -1089,6 +1114,13 @@ def _extract_pii_batch(
 
     if not prepared:
         return []
+
+    token_language_tags = _resolve_code_mixed_token_tags(
+        prepared[0].inference_text,
+        code_mixed=code_mixed,
+        token_language_tags=token_language_tags,
+        lid_model=lid_model,
+    )
 
     india_clinical_flags = [
         bool(india_clinical_script_windows(item.inference_text, lang))
@@ -1249,6 +1281,7 @@ def extract_pii(
     abdm: Optional[bool] = None,
     code_mixed: bool = False,
     token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
 ) -> PredictionResult:
     """Extract PII entities from text with intelligent entity merging.
@@ -1297,6 +1330,10 @@ def extract_pii(
             non-overlapping records with ``start``, ``end``, and ``label``
             (``en``, ``hi``, ``ne``, ``univ``, or ``other``). Tags are consumed
             as offsets/labels only and are never copied with raw token surfaces.
+            When omitted in code-mixed mode, the deterministic token-LID
+            fallback derives them from the input.
+        lid_model: Optional user-supplied token language-ID hook used only when
+            ``code_mixed=True`` and ``token_language_tags`` is omitted.
         transliterated_name_config: Optional configuration for the conservative
             Latin-script Indian given/family-name allow/deny bridge.
         cache_results: Whether to cache this result in the in-process LRU
@@ -1360,6 +1397,7 @@ def extract_pii(
         abdm=abdm,
         code_mixed=code_mixed,
         token_language_tags=token_language_tags,
+        lid_model=lid_model,
         transliterated_name_config=transliterated_name_config,
         **runtime_kwargs,
     )[0]
@@ -2201,6 +2239,7 @@ def _deidentify_batch(
     abdm: Optional[bool] = None,
     code_mixed: bool = False,
     token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
     policy: Optional[str] = None,
     *,
@@ -2222,6 +2261,18 @@ def _deidentify_batch(
         date_shift_secret=date_shift_secret,
     )
     source_texts = [text if preserve_whitespace else text.strip() for text in texts]
+    if code_mixed and len(source_texts) != 1:
+        raise ValueError("code-mixed token tags currently require one input text")
+    resolved_token_language_tags = (
+        _resolve_code_mixed_token_tags(
+            source_texts[0],
+            code_mixed=code_mixed,
+            token_language_tags=token_language_tags,
+            lid_model=lid_model,
+        )
+        if source_texts
+        else None
+    )
     recognizer = coerce_custom_recognizer(custom_recognizer)
     pii_results = _extract_pii_batch(
         source_texts,
@@ -2241,7 +2292,8 @@ def _deidentify_batch(
             locale=locale,
         ),
         code_mixed=code_mixed,
-        token_language_tags=token_language_tags,
+        token_language_tags=resolved_token_language_tags,
+        lid_model=lid_model,
         transliterated_name_config=transliterated_name_config,
         loader=loader,
         privacy_filter_pipeline=privacy_filter_pipeline,
@@ -2253,13 +2305,13 @@ def _deidentify_batch(
         for source_text, pii_result in zip(source_texts, pii_results):
             sweep_patterns = None
             if code_mixed:
-                if token_language_tags is None:
-                    raise ValueError("code_mixed=True requires token_language_tags")
+                if resolved_token_language_tags is None:
+                    raise ValueError("code-mixed routing requires token language tags")
                 from .pii_i18n import get_patterns_for_code_mixed_tags
 
                 sweep_patterns = get_patterns_for_code_mixed_tags(
                     source_text,
-                    token_language_tags,
+                    resolved_token_language_tags,
                     base_lang=lang,
                     locale=locale,
                 )
@@ -2330,6 +2382,7 @@ def deidentify(
     abdm: Optional[bool] = None,
     code_mixed: bool = False,
     token_language_tags: Optional[Sequence[Any]] = None,
+    lid_model: Optional["TokenLIDHook"] = None,
     transliterated_name_config: Any = None,
     audit: bool = False,
     cache_results: bool = False,
@@ -2423,7 +2476,10 @@ def deidentify(
         token_language_tags: Required with ``code_mixed=True``. Ordered token
             records with exact ``start``/``end`` offsets and an ``en``, ``hi``,
             ``ne``, ``univ``, or ``other`` label. A pure-English tag stream does
-            not activate Roman-Hindi patterns.
+            not activate Roman-Hindi patterns. When omitted in code-mixed mode,
+            the deterministic token-LID fallback derives the tags.
+        lid_model: Optional user-supplied token language-ID hook used only when
+            code-mixed tags are inferred.
         transliterated_name_config: Optional configuration for the
             Latin-script Indian name allow/deny bridge. The default bridge is
             conservative and can be replaced or extended by configuration.
@@ -2508,6 +2564,7 @@ def deidentify(
         custom_recognizer=recognizer_config,
         code_mixed=code_mixed,
         token_language_tags=token_language_tags,
+        lid_model=lid_model,
         transliterated_name_config=transliterated_name_config,
     )
     result = pipeline.run(

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from importlib import resources
@@ -41,6 +41,12 @@ from .language_pack_catalog import (
     NATIONAL_ID_ONLY_LANGUAGES,
     SUPPORTED_LANGUAGES,
     USER_SUPPLIED_MODEL_LANGUAGES,
+)
+from .lang_id_codemix import (
+    TokenLanguageRun,
+    TokenLIDHook,
+    identify_token_languages,
+    token_language_runs,
 )
 from .locale_formats import LOCALE_PII_FORMATS, LocalePIIFormat
 
@@ -9416,6 +9422,113 @@ def get_patterns_for_code_mixed_tags(
     patterns = list(get_patterns_for_language(base_lang, locale=locale))
     patterns.extend(get_hinglish_patterns_for_token_tags(text, token_language_tags))
     return patterns
+
+
+@dataclass(frozen=True)
+class CodeMixedPatternRun:
+    """Offset-only pattern routing decision for one token-language run."""
+
+    start: int
+    end: int
+    token_label: str
+    languages: tuple[str, ...]
+    patterns: tuple[PIIPattern, ...]
+
+
+def get_code_mixed_pattern_runs(
+    text: str,
+    *,
+    base_lang: str = "en",
+    locale: str | None = None,
+    lid_model: TokenLIDHook | None = None,
+) -> tuple[CodeMixedPatternRun, ...]:
+    """Route deterministic Hinglish token runs without retaining surfaces."""
+    normalized_base = _normalize_pattern_language(base_lang)
+    runs = token_language_runs(identify_token_languages(text, model=lid_model))
+    routes: list[CodeMixedPatternRun] = []
+    for index, run in enumerate(runs):
+        languages = _languages_for_token_run(
+            index,
+            runs,
+            base_lang=normalized_base,
+        )
+        patterns = _deduplicate_patterns(
+            pattern
+            for language in languages
+            for pattern in get_patterns_for_language(language, locale=locale)
+        )
+        routes.append(
+            CodeMixedPatternRun(
+                start=run.start,
+                end=run.end,
+                token_label=run.label,
+                languages=languages,
+                patterns=tuple(patterns),
+            )
+        )
+    return tuple(routes)
+
+
+def get_patterns_for_code_mixed_text(
+    text: str,
+    *,
+    base_lang: str = "en",
+    locale: str | None = None,
+    lid_model: TokenLIDHook | None = None,
+) -> List[PIIPattern]:
+    """Infer offset-only tags and return the explicitly gated Hinglish bank."""
+    tags = identify_token_languages(text, model=lid_model)
+    if not tags:
+        return get_patterns_for_language(base_lang, locale=locale)
+    return _deduplicate_patterns(
+        get_patterns_for_code_mixed_tags(
+            text,
+            tags,
+            base_lang=base_lang,
+            locale=locale,
+        )
+    )
+
+
+def _languages_for_token_run(
+    index: int,
+    runs: Sequence[TokenLanguageRun],
+    *,
+    base_lang: str,
+) -> tuple[str, ...]:
+    label = runs[index].label
+    if label in {"hi", "en"}:
+        return (label,)
+    if label == "ne":
+        return ("hi", "en")
+
+    nearest = [
+        (abs(other_index - index), other_run.label)
+        for other_index, other_run in enumerate(runs)
+        if other_run.label in {"hi", "en"}
+    ]
+    if not nearest:
+        return (base_lang,)
+    minimum_distance = min(distance for distance, _ in nearest)
+    return tuple(
+        dict.fromkeys(
+            language
+            for distance, language in nearest
+            if distance == minimum_distance
+        )
+    )
+
+
+def _deduplicate_patterns(patterns: Iterable[PIIPattern]) -> List[PIIPattern]:
+    unique: list[PIIPattern] = []
+    seen: set[int] = set()
+    for pattern in patterns:
+        marker = id(pattern)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        unique.append(pattern)
+    return unique
 
 
 def get_india_clinical_model_route(lang: str) -> IndiaClinicalModelRoute:

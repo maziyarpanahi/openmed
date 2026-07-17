@@ -159,8 +159,13 @@ def test_pipeline_audit_contains_offsets_and_no_raw_note_surfaces() -> None:
 
 
 def test_code_mixed_mode_validates_token_tag_contract() -> None:
-    with pytest.raises(ValueError, match="requires token_language_tags"):
-        Pipeline(code_mixed=True)
+    Pipeline(code_mixed=True)
+
+    with pytest.raises(ValueError, match="requires code_mixed=True"):
+        Pipeline(token_language_tags=[])
+
+    with pytest.raises(ValueError, match="requires code_mixed=True"):
+        Pipeline(lid_model=lambda text, spans: [])
 
     with pytest.raises(ValueError, match="ordered and non-overlapping"):
         normalize_code_mixed_token_tags(
