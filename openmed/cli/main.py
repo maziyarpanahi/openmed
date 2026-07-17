@@ -194,6 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_redact_dataset_command(subparsers)
     _add_pii_command(subparsers)
     _add_audit_command(subparsers)
+    _add_compliance_command(subparsers)
     _add_risk_command(subparsers)
     _add_policy_command(subparsers)
     _add_fhir_command(subparsers)
@@ -750,6 +751,32 @@ def _add_audit_command(subparsers: argparse._SubParsersAction) -> None:
         help="Path to an audit report JSON file.",
     )
     show_parser.set_defaults(handler=_handle_audit_show)
+
+
+def _add_compliance_command(subparsers: argparse._SubParsersAction) -> None:
+    compliance_parser = subparsers.add_parser(
+        "compliance",
+        help="Generate local compliance evidence from OpenMed run artifacts.",
+    )
+    compliance_sub = compliance_parser.add_subparsers(dest="compliance_command")
+
+    safe_harbor_parser = compliance_sub.add_parser(
+        "safe-harbor",
+        help="Generate a HIPAA Safe Harbor attestation from an audit report.",
+    )
+    safe_harbor_parser.add_argument(
+        "report",
+        type=Path,
+        help="Path to a de-identification audit report JSON file.",
+    )
+    safe_harbor_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        default=None,
+        help="Optional path for the attestation JSON. Defaults to stdout.",
+    )
+    safe_harbor_parser.set_defaults(handler=_handle_compliance_safe_harbor)
 
 
 def _add_risk_command(subparsers: argparse._SubParsersAction) -> None:
@@ -1766,6 +1793,24 @@ def _audit_summary_payload(report: Any) -> dict[str, Any]:
         "action_counts": dict(sorted(action_counts.items())),
         "residual_risk": dict(report.residual_risk) if report.residual_risk else {},
     }
+
+
+def _handle_compliance_safe_harbor(args: argparse.Namespace) -> int:
+    from ..compliance.safe_harbor import generate_safe_harbor_attestation
+
+    try:
+        report = _load_audit_report(args.report)
+        attestation = generate_safe_harbor_attestation(report)
+        rendered = f"{attestation.to_json()}\n"
+        if args.output is None:
+            sys.stdout.write(rendered)
+        else:
+            args.output.write_text(rendered, encoding="utf-8")
+            sys.stdout.write(f"Safe Harbor attestation written to: {args.output}\n")
+    except (OSError, TypeError, ValueError) as exc:
+        sys.stderr.write(f"Failed to generate Safe Harbor attestation: {exc}\n")
+        return 1
+    return 0
 
 
 def _load_audit_report(path: Path):
