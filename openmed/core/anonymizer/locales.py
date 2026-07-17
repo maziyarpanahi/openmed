@@ -129,7 +129,55 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "el": ("el_GR", "ssn"),  # Greek AMKA (Faker's native el_GR ssn)
 }
 
+
+# Region-qualified Arabic codes -> Faker locale. Bare ``ar`` stays ``ar_EG``
+# (see LANG_TO_LOCALE); these let callers request a Gulf/Levant flavour so
+# surrogate names, phones and addresses read in-region (OM-285).
+AR_REGION_LOCALES: Final[Mapping[str, str]] = {
+    "ar-EG": "ar_EG",  # Egypt (the bare-"ar" default, exposed explicitly too)
+    "ar-SA": "ar_SA",  # Saudi Arabia
+    "ar-AE": "ar_AE",  # United Arab Emirates
+    "ar-JO": "ar_JO",  # Jordan
+    "ar-PS": "ar_PS",  # Palestine
+}
+
+
+def _available_faker_locales() -> frozenset[str]:
+    """Return the locales the installed Faker version actually ships."""
+    try:
+        from faker.config import AVAILABLE_LOCALES
+    except Exception:  # pragma: no cover - Faker always ships this
+        return frozenset()
+    return frozenset(AVAILABLE_LOCALES)
+
+
+# Validated once at import: the subset of AR_REGION_LOCALES whose Faker locale
+# is installed. Region tags whose locale is missing fall back to ``ar_EG`` with
+# a one-time warning at resolve time.
+_AR_REGION_AVAILABLE: Final[Mapping[str, str]] = {
+    tag: loc
+    for tag, loc in AR_REGION_LOCALES.items()
+    if loc in _available_faker_locales()
+}
+
+
 _warned: set[str] = set()
+
+
+def _resolve_arabic_region(tag: str) -> str:
+    """Resolve one region-qualified Arabic tag with a safe fallback."""
+    locale = _AR_REGION_AVAILABLE.get(tag)
+    if locale is not None:
+        return locale
+    if tag not in _warned:
+        warnings.warn(
+            f"OpenMed: no Faker locale available for Arabic region {tag!r}; "
+            f"falling back to {LANG_TO_LOCALE['ar']!r}.",
+            UserWarning,
+            stacklevel=4,
+        )
+        _warned.add(tag)
+    return LANG_TO_LOCALE["ar"]
 
 
 def resolve_locale(lang: str, locale_override: str | None = None) -> str:
@@ -137,14 +185,22 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
 
     Args:
         lang: ISO 639-1 language code (``en``, ``fr``, ``de``, ...).
-        locale_override: Caller-supplied locale (e.g. ``pt_BR``); takes
-            precedence and skips the warning.
+        locale_override: Caller-supplied Faker locale (e.g. ``pt_BR``) or
+            documented region tag (e.g. ``ar-SA``); takes precedence.
 
     Returns:
         A Faker locale string.
     """
     if locale_override:
+        if locale_override.startswith("ar-"):
+            return _resolve_arabic_region(locale_override)
         return locale_override
+
+    # Region-qualified Arabic codes (e.g. "ar-SA") select a Gulf/Levant Faker
+    # locale. Bare "ar" does NOT start with "ar-", so it skips this branch and
+    # keeps the existing ar_EG default below unchanged.
+    if lang.startswith("ar-"):
+        return _resolve_arabic_region(lang)
 
     locale = LANG_TO_LOCALE.get(lang)
     if locale is None:
@@ -162,6 +218,19 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
         _warned.add(lang)
 
     return locale
+
+
+def list_regional_locales(lang: str) -> list[str]:
+    """Return the supported region-qualified codes for ``lang``.
+
+    Currently only Arabic (``ar``) has regional overrides. Returns every
+    documented tag, including ``ar-EG`` (the explicit form of the bare-``ar``
+    default). A listed tag whose locale is absent from the installed Faker
+    version resolves to ``ar_EG`` with a one-time warning.
+    """
+    if lang == "ar":
+        return sorted(AR_REGION_LOCALES)
+    return []
 
 
 def resolve_faker_backend_locale(locale: str) -> str:
@@ -210,9 +279,11 @@ def locale_coherence_report() -> list[dict[str, object]]:
 
 
 __all__ = [
+    "AR_REGION_LOCALES",
     "LANG_TO_LOCALE",
     "FAKER_BACKEND_LOCALE",
     "NATIONAL_ID_PROVIDERS",
+    "list_regional_locales",
     "locale_coherence_report",
     "resolve_faker_backend_locale",
     "resolve_locale",
