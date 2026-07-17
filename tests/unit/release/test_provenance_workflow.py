@@ -19,6 +19,10 @@ def _load_workflow(path: Path) -> dict[str, object]:
     return yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
+def _steps_by_name(job: dict[str, object]) -> dict[str, dict[str, object]]:
+    return {step["name"]: step for step in job["steps"] if "name" in step}
+
+
 def test_reusable_provenance_workflow_attests_and_verifies_distributions():
     workflow = _load_workflow(PROVENANCE_WORKFLOW)
     content = PROVENANCE_WORKFLOW.read_text(encoding="utf-8")
@@ -74,6 +78,89 @@ def test_publish_workflow_blocks_pypi_upload_on_provenance_verification():
     assert "pypa/gh-action-pypi-publish@v1.14.0" in PUBLISH_WORKFLOW.read_text(
         encoding="utf-8"
     )
+
+
+def test_publish_workflow_never_gates_pypi_upload_on_evidence():
+    workflow = _load_workflow(PUBLISH_WORKFLOW)
+    jobs = workflow["jobs"]
+    evidence = jobs["evidence"]
+
+    # Publishing must not become dependent on GitHub OIDC or Sigstore
+    # availability, so no registry upload may wait on the evidence job.
+    assert "evidence" not in jobs["publish"]["needs"]
+    assert "evidence" not in jobs["npm-publish"]["needs"]
+
+    # The evidence job runs strictly after the PyPI upload it collects evidence for.
+    assert evidence["needs"] == ["provenance", "publish"]
+    assert evidence["permissions"] == {"contents": "write", "id-token": "write"}
+
+
+def test_evidence_job_signs_best_effort_but_fails_on_unverifiable_evidence():
+    workflow = _load_workflow(PUBLISH_WORKFLOW)
+    content = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+    steps = _steps_by_name(workflow["jobs"]["evidence"])
+
+    # Producing evidence is best effort.
+    assert steps["Download provenance evidence"]["continue-on-error"] == "true"
+    assert steps["Install Sigstore"]["continue-on-error"] == "true"
+    assert steps["Sign distributions with Sigstore"]["continue-on-error"] == "true"
+
+    # Evidence that was produced must verify and attach, or the job fails.
+    assert "continue-on-error" not in steps["Verify Sigstore bundles"]
+    assert (
+        "continue-on-error"
+        not in steps["Attach release evidence to the tagged GitHub release"]
+    )
+
+    assert "sigstore==4.4.0" in content
+    assert "python -m sigstore sign" in content
+    assert "python -m sigstore verify github" in content
+    assert "--offline" in content
+    assert (
+        'identity="https://github.com/${GITHUB_REPOSITORY}/${SIGNER_WORKFLOW}@${GITHUB_REF}"'
+        in content
+    )
+    assert "SIGNER_WORKFLOW: .github/workflows/publish.yml" in content
+    assert '--repository "$GITHUB_REPOSITORY"' in content
+    assert '--sha "$GITHUB_SHA"' in content
+    assert '--ref "$GITHUB_REF"' in content
+
+
+def test_evidence_job_attaches_provenance_and_signatures_to_the_release():
+    content = PUBLISH_WORKFLOW.read_text(encoding="utf-8")
+
+    assert (
+        "release-provenance/provenance-bundles/python-distributions.intoto.json"
+        in content
+    )
+    assert "release-provenance/release-artifact-digests.txt" in content
+    assert "assets+=(sigstore-bundles/*.sigstore.json)" in content
+    assert 'gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber' in content
+
+    # A partially successful signing run leaves unverified bundles on disk, so
+    # signatures are only attached when the whole signing step succeeded.
+    assert "SIGN_OUTCOME: ${{ steps.sign-distributions.outcome }}" in content
+    assert 'if [ "$SIGN_OUTCOME" = "success" ]; then' in content
+
+    # A successful artifact download must contain both required provenance
+    # assets; partial or empty evidence must fail before release attachment.
+    assert "PROVENANCE_OUTCOME: ${{ steps.provenance-evidence.outcome }}" in content
+    assert 'if [ "$PROVENANCE_OUTCOME" = "success" ]; then' in content
+    assert 'if [ ! -s "$candidate" ]; then' in content
+    assert "Expected provenance evidence is missing or empty" in content
+
+    # The job needs an explicit repo: it does not check the repository out.
+    assert "GH_REPO: ${{ github.repository }}" in content
+
+
+def test_provenance_docs_cover_sigstore_verification_from_release_assets():
+    docs = PROVENANCE_DOCS.read_text(encoding="utf-8")
+
+    assert "gh release download" in docs
+    assert "python -m sigstore verify github" in docs
+    assert "--cert-identity" in docs
+    assert "python-distributions.intoto.json" in docs
+    assert "sha256sum --check --ignore-missing release-artifact-digests.txt" in docs
 
 
 def test_container_workflow_attests_pushed_manifest_digest():

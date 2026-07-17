@@ -16,12 +16,32 @@ attestation.
 - When attestation succeeds, the workflows verify the
   `https://slsa.dev/provenance/v1` predicate, source commit, source ref, and
   signer workflow before uploading provenance evidence.
+- After the PyPI upload completes, the `evidence` job in
+  `.github/workflows/publish.yml` keylessly signs each wheel and sdist with
+  Sigstore and attaches the release evidence to the tagged GitHub release.
 
 The PyPI publish action currently uploads with the project-scoped PyPI API
-token, so PyPI-native Sigstore attestations are disabled. When GitHub OIDC
-attestation succeeds, the SLSA provenance workflow provides the
-repository-level attestation and digest manifest that downstream users can
-verify with the GitHub CLI.
+token, so PyPI-native Sigstore attestations are disabled. The repository signs
+the same distributions itself instead: the `evidence` job produces a detached
+Sigstore bundle per artifact, verifiable with the `sigstore` CLI independently
+of GitHub's attestation store.
+
+## Release evidence assets
+
+Evidence generation is best effort — a GitHub OIDC or Sigstore outage never
+blocks a release — but any evidence that is produced must verify against the
+signing workflow identity and the source revision before it is attached. When
+the evidence job succeeds, a tagged release carries:
+
+| Asset | Purpose |
+| --- | --- |
+| `python-distributions.intoto.json` | SLSA provenance bundle covering every `dist/*` subject |
+| `release-artifact-digests.txt` | `sha256sum`-format digest manifest for the release artifacts |
+| `<artifact>.sigstore.json` | Detached Sigstore bundle, one per wheel and sdist |
+
+Because the bundles are release assets, offline verification no longer needs a
+`gh attestation download` round trip against GitHub's attestation store: fetch
+the release assets alongside the artifact and verify entirely offline.
 
 ## Online verification
 
@@ -131,3 +151,55 @@ gh attestation verify "oci://ghcr.io/maziyarpanahi/openmed@$DIGEST" \
   --source-digest "$COMMIT" \
   --source-ref "refs/tags/$VERSION"
 ```
+
+## Sigstore signature verification
+
+Each wheel and sdist is also signed keylessly with Sigstore, and the detached
+bundle is attached to the release. This signature is independent of GitHub's
+attestation store: it is verifiable with the `sigstore` CLI or `cosign` alone.
+
+The distributions themselves are published to PyPI, not attached to the GitHub
+release; the release carries the evidence for them. Fetch the artifact from
+PyPI and its evidence from the release:
+
+```bash
+VERSION=v1.9.1
+
+pip download openmed=="${VERSION#v}" --no-deps --no-binary :all: -d .
+pip download openmed=="${VERSION#v}" --no-deps --only-binary :all: -d .
+
+gh release download "$VERSION" \
+  --repo maziyarpanahi/openmed \
+  --pattern '*.sigstore.json' \
+  --pattern 'python-distributions.intoto.json' \
+  --pattern 'release-artifact-digests.txt'
+```
+
+Confirm the artifact digests match the published manifest, then verify the
+signature offline against the exact signing workflow identity and the release
+commit:
+
+```bash
+VERSION=v1.9.1
+COMMIT=<release-commit-sha>
+ARTIFACT=openmed-1.9.1-py3-none-any.whl
+
+sha256sum --check --ignore-missing release-artifact-digests.txt
+
+pip install sigstore
+python -m sigstore verify github "$ARTIFACT" \
+  --bundle "$ARTIFACT.sigstore.json" \
+  --offline \
+  --cert-identity \
+    "https://github.com/maziyarpanahi/openmed/.github/workflows/publish.yml@refs/tags/$VERSION" \
+  --repository maziyarpanahi/openmed \
+  --sha "$COMMIT" \
+  --ref "refs/tags/$VERSION"
+```
+
+The `--cert-identity` value is the signing workflow, not the build workflow:
+Sigstore bundles are produced by `publish.yml`, while the SLSA provenance in
+`python-distributions.intoto.json` is signed by `provenance.yml`. Verifying
+against the wrong identity is expected to fail.
+
+Repeat with `ARTIFACT` set to the source distribution to verify it as well.

@@ -33,6 +33,11 @@ The only PyPI publishing workflow is `.github/workflows/publish.yml`.
   because the PyPA action supports those attestations only with Trusted
   Publishing. The repository-level SLSA provenance artifact is still generated
   and verified before upload.
+- The evidence job runs after the publish job, so it cannot gate the PyPI
+  upload on GitHub OIDC or Sigstore availability. Signing is best effort, but
+  evidence that is produced must verify against the `publish.yml` workflow
+  identity and the release commit before it is attached to the release, or the
+  evidence job fails.
 
 Do not add a second PyPI publishing workflow. Do not add `hatch publish` or
 Twine upload commands back to release CI.
