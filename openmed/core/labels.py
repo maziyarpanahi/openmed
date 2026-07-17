@@ -967,6 +967,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     # People
     "name": PERSON,
     "person": PERSON,
+    "per": PERSON,
     "patient": PERSON,
     "doctor": PERSON,
     "fullname": PERSON,
@@ -993,6 +994,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "personalurl": URL,
     # Location
     "location": LOCATION,
+    "loc": LOCATION,
     "city": LOCATION,
     "state": LOCATION,
     "country": LOCATION,
@@ -1098,6 +1100,7 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "height": HEIGHT,
     # Work
     "organization": ORGANIZATION,
+    "org": ORGANIZATION,
     "company": ORGANIZATION,
     "employer": ORGANIZATION,
     "jobtitle": JOB_TITLE,

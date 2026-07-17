@@ -62,6 +62,12 @@ from openmed.eval.suites.multimodal_dicom import (
     multimodal_dicom_metadata,
     run_multimodal_dicom,
 )
+from openmed.eval.suites.naamapadam import (
+    NAAMAPADAM,
+    load_naamapadam_fixtures,
+    naamapadam_suite_metadata,
+    run_naamapadam,
+)
 from openmed.eval.suites.policy_compliance import (
     POLICY_COMPLIANCE,
     load_policy_compliance_fixtures,

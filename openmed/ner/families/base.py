@@ -11,6 +11,7 @@ class ModelFamily(str, Enum):
 
     GLINER = "gliner"
     GLINER2 = "gliner2"
+    INDIC_NER = "indic_ner"
     OTHER = "other"
 
 

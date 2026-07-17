@@ -48,6 +48,7 @@ SUPPORTED_SCRIPTS = (
     "Hiragana/Katakana",
     "Hangul",
     "Cyrillic",
+    "Bengali",
     "Devanagari",
     "Bengali",
     "Gurmukhi",
