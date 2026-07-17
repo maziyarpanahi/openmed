@@ -1,0 +1,161 @@
+{
+  "cases": [
+    {
+      "id": "repeated_problem_and_pronoun",
+      "text": "Assessment: A left lung lesion was found. The lesion is stable. It is unchanged.",
+      "mentions": [
+        {
+          "surface": "left lung lesion",
+          "canonical_label": "CONDITION",
+          "section": "Assessment",
+          "gold_chain": "lesion"
+        },
+        {
+          "surface": "The lesion",
+          "canonical_label": "CONDITION",
+          "section": "Assessment",
+          "gold_chain": "lesion"
+        },
+        {
+          "surface": "It",
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "Assessment",
+          "gold_chain": "lesion"
+        }
+      ],
+      "representative": "left lung lesion"
+    },
+    {
+      "id": "medication_nominal_beats_nearer_condition",
+      "text": "Aspirin was started for a rash. The medication was continued.",
+      "mentions": [
+        {
+          "surface": "Aspirin",
+          "canonical_label": "MEDICATION",
+          "section": "Plan",
+          "gold_chain": "aspirin"
+        },
+        {
+          "surface": "rash",
+          "canonical_label": "CONDITION",
+          "section": "Plan",
+          "gold_chain": "rash"
+        },
+        {
+          "surface": "The medication",
+          "canonical_label": "OTHER",
+          "entity_type": "nominal",
+          "section": "Plan",
+          "gold_chain": "aspirin"
+        }
+      ],
+      "representative": "Aspirin"
+    },
+    {
+      "id": "patient_anchor_and_person_pronoun",
+      "text": "John Doe arrived. The patient reported pain. He was stable.",
+      "mentions": [
+        {
+          "surface": "John Doe",
+          "canonical_label": "PERSON",
+          "section": "HPI",
+          "gold_chain": "patient"
+        },
+        {
+          "surface": "The patient",
+          "canonical_label": "OTHER",
+          "entity_type": "patient_anchor",
+          "section": "HPI",
+          "gold_chain": "patient"
+        },
+        {
+          "surface": "He",
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "HPI",
+          "gold_chain": "patient"
+        }
+      ],
+      "representative": "John Doe"
+    },
+    {
+      "id": "cataphora_rejected",
+      "text": "It resolved before the rash was documented.",
+      "mentions": [
+        {
+          "surface": "It",
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "Assessment",
+          "gold_chain": "unresolved-pronoun"
+        },
+        {
+          "surface": "rash",
+          "canonical_label": "CONDITION",
+          "section": "Assessment",
+          "gold_chain": "rash"
+        }
+      ]
+    },
+    {
+      "id": "specific_nominal_requires_head_match",
+      "text": "A rash appeared. The lesion was measured.",
+      "mentions": [
+        {
+          "surface": "rash",
+          "canonical_label": "CONDITION",
+          "section": "Assessment",
+          "gold_chain": "rash"
+        },
+        {
+          "surface": "The lesion",
+          "canonical_label": "CONDITION",
+          "section": "Assessment",
+          "gold_chain": "lesion"
+        }
+      ]
+    },
+    {
+      "id": "no_antecedent_rejected",
+      "text": "It improved overnight.",
+      "mentions": [
+        {
+          "surface": "It",
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "HPI",
+          "gold_chain": "unresolved-pronoun"
+        }
+      ]
+    },
+    {
+      "id": "experiencer_boundary",
+      "text": "Family History:\nMother had diabetes.\nAssessment:\nThe patient has diabetes. It is controlled.",
+      "mentions": [
+        {
+          "surface": "diabetes",
+          "occurrence": 0,
+          "canonical_label": "CONDITION",
+          "section": "Family History",
+          "gold_chain": "family-diabetes"
+        },
+        {
+          "surface": "diabetes",
+          "occurrence": 1,
+          "canonical_label": "CONDITION",
+          "section": "Assessment",
+          "gold_chain": "patient-diabetes"
+        },
+        {
+          "surface": "It",
+          "canonical_label": "OTHER",
+          "entity_type": "pronoun",
+          "section": "Assessment",
+          "gold_chain": "patient-diabetes"
+        }
+      ],
+      "representative": "diabetes"
+    }
+  ]
+}
