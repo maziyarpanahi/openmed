@@ -74,8 +74,15 @@ def test_expanded_multilingual_fixtures_cover_person_date_and_locale_id():
 
     assert set(EXPANDED_MULTILINGUAL_LANGUAGES).issubset(grouped)
     for language in EXPANDED_MULTILINGUAL_LANGUAGES:
-        assert len(grouped[language]) == 1
-        fixture = grouped[language][0]
+        # The OM-019 expanded fixtures live in multilingual.json; the per-language
+        # OM-100 i18n fixtures (golden-i18n-*) are a separate multilingual set.
+        expanded = [
+            fixture
+            for fixture in grouped[language]
+            if fixture.fixture_id.startswith("golden-multilingual-")
+        ]
+        assert len(expanded) == 1
+        fixture = expanded[0]
         spans_by_label = {span.label: span for span in fixture.gold_spans}
 
         assert list(spans_by_label) == ["PERSON", "DATE", "ID_NUM"]
@@ -95,7 +102,11 @@ def test_expanded_multilingual_fixtures_run_through_harness_scoring():
         category="multilingual",
     )
     benchmark_fixtures = [
-        grouped[language][0].to_benchmark_fixture()
+        next(
+            fixture
+            for fixture in grouped[language]
+            if fixture.fixture_id.startswith("golden-multilingual-")
+        ).to_benchmark_fixture()
         for language in EXPANDED_MULTILINGUAL_LANGUAGES
     ]
 
