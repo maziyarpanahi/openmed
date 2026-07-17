@@ -71,6 +71,7 @@ NATIONAL_ID_ONLY_LANGUAGES: Set[str] = {
     "bg",
     "fi",
     "cs",
+    "el",
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -549,6 +550,41 @@ def validate_portuguese_cnpj(text: str) -> bool:
     return numbers[12] == first_check and numbers[13] == second_check
 
 
+# Portuguese NIF/NIPC valid leading digits (individuals, companies, public
+# bodies, sole traders) and two-digit prefixes (non-resident individuals and
+# special taxpayer categories).
+_PORTUGUESE_NIF_FIRST_DIGITS: frozenset[str] = frozenset("1235689")
+_PORTUGUESE_NIF_PREFIXES: frozenset[str] = frozenset(
+    {"45", "70", "71", "72", "74", "75", "77", "79", "90", "91", "98", "99"}
+)
+
+
+def validate_portuguese_nif(text: str) -> bool:
+    """Validate a Portuguese NIF/NIPC tax identification number.
+
+    The NIF (individuals) and NIPC (entities) share a nine-digit format
+    with a weighted modulo-11 check digit. The leading digit — or, for
+    some taxpayer categories, the leading two digits — must fall in the
+    documented issuance set. This is distinct from the Brazilian CPF/CNPJ
+    validated elsewhere in the Portuguese pack.
+    """
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 9:
+        return False
+    if (
+        digits[0] not in _PORTUGUESE_NIF_FIRST_DIGITS
+        and digits[:2] not in _PORTUGUESE_NIF_PREFIXES
+    ):
+        return False
+
+    total = sum(int(digits[index]) * (9 - index) for index in range(8))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return check == int(digits[8])
+
+
 def validate_turkish_tckn(text: str) -> bool:
     """Validate Turkish T.C. Kimlik No (TCKN).
 
@@ -948,6 +984,53 @@ def _latvian_personas_kods_check_digit(digits: list[int]) -> int:
     return (
         (1101 - sum(weight * digit for weight, digit in zip(weights, digits))) % 11 % 10
     )
+
+
+def validate_greek_amka(text: str) -> bool:
+    """Validate a Greek AMKA social-security number.
+
+    The AMKA is an 11-digit code whose first six digits encode a birth
+    date as ``DDMMYY`` and whose full value carries a Luhn check digit.
+    The two-digit year is century-ambiguous, so a date valid in either
+    the 1900s or the 2000s is accepted.
+    """
+
+    digits = re.sub(r"[^0-9]", "", text)
+
+    if len(digits) != 11:
+        return False
+    if not _passes_luhn(digits):
+        return False
+
+    day = int(digits[0:2])
+    month = int(digits[2:4])
+    year_suffix = int(digits[4:6])
+    if month < 1 or month > 12:
+        return False
+
+    import calendar
+
+    for century in (1900, 2000):
+        year = century + year_suffix
+        try:
+            if 1 <= day <= calendar.monthrange(year, month)[1]:
+                return True
+        except (ValueError, calendar.IllegalMonthError):
+            continue
+    return False
+
+
+def _passes_luhn(digits: str) -> bool:
+    """Return whether an all-digit string satisfies the Luhn checksum."""
+    total = 0
+    for index, char in enumerate(reversed(digits)):
+        value = int(char)
+        if index % 2 == 1:
+            value *= 2
+            if value > 9:
+                value -= 9
+        total += value
+    return total % 10 == 0
 
 
 _FINNISH_HETU_CHECK_ALPHABET = "0123456789ABCDEFHJKLMNPRSTUVWXY"
@@ -2595,6 +2678,23 @@ _PORTUGUESE_PII_PATTERNS: List[PIIPattern] = [
         ],
         context_boost=0.45,
         validator=validate_portuguese_cnpj,
+    ),
+    # Portuguese NIF / NIPC (9 digits, pt_PT)
+    PIIPattern(
+        r"\b\d{3}\s?\d{3}\s?\d{3}\b",
+        "national_id",
+        priority=10,
+        base_score=0.45,
+        context_words=[
+            "nif",
+            "nipc",
+            "contribuinte",
+            "n\u00famero de contribuinte",
+            "numero de contribuinte",
+        ],
+        context_boost=0.45,
+        safety_sweep_requires_context=True,
+        validator=validate_portuguese_nif,
     ),
     # Portuguese street addresses
     PIIPattern(
@@ -4738,6 +4838,68 @@ _HUNGARIAN_PII_PATTERNS: List[PIIPattern] = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# Greek PII patterns (Greek script)
+# ---------------------------------------------------------------------------
+
+_GREEK_PII_PATTERNS: List[PIIPattern] = [
+    PIIPattern(
+        r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b",
+        "date",
+        priority=9,
+        base_score=0.6,
+        context_words=[
+            "ημερομηνία",
+            "γέννησης",
+            "γεννήθηκε",
+            "εισαγωγή",
+            "εξιτήριο",
+        ],
+        context_boost=0.3,
+    ),
+    PIIPattern(
+        r"(?<!\w)(?:\+30[\s.-]?)?(?:69\d|2\d{2})[\s.-]?\d{3}[\s.-]?\d{4}\b",
+        "phone_number",
+        priority=8,
+        base_score=0.55,
+        context_words=["τηλέφωνο", "τηλ", "κινητό", "επικοινωνία"],
+        context_boost=0.35,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{11}\b",
+        "national_id",
+        priority=10,
+        base_score=0.5,
+        context_words=[
+            "αμκα",
+            "α.μ.κ.α",
+            "αριθμός μητρώου κοινωνικής ασφάλισης",
+        ],
+        context_boost=0.4,
+        validator=validate_greek_amka,
+    ),
+    PIIPattern(
+        r"\b(?:οδός|λεωφόρος|πλατεία)\s+[Α-ΩΆΈΉΊΌΎΏ][Α-Ωα-ωάέήίόύώϊϋΐΰ.'-]{2,40}\s+\d{1,4}[Α-Ωα-ωA-Za-z]?\b",
+        "street_address",
+        priority=7,
+        base_score=0.65,
+        context_words=["διεύθυνση", "κατοικία", "οδός"],
+        context_boost=0.25,
+        flags=re.IGNORECASE,
+    ),
+    PIIPattern(
+        r"\b\d{3}\s?\d{2}\b",
+        "postcode",
+        priority=6,
+        base_score=0.3,
+        context_words=["ταχυδρομικός κώδικας", "τ.κ", "διεύθυνση"],
+        context_boost=0.5,
+        safety_sweep_requires_context=True,
+        flags=re.IGNORECASE,
+    ),
+]
+
 LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "fr": _FRENCH_PII_PATTERNS,
     "de": _GERMAN_PII_PATTERNS,
@@ -4767,6 +4929,7 @@ LANGUAGE_PII_PATTERNS: Dict[str, List[PIIPattern]] = {
     "sr": _SERBIAN_PII_PATTERNS,
     "hu": _HUNGARIAN_PII_PATTERNS,
     "et": _ESTONIAN_PII_PATTERNS,
+    "el": _GREEK_PII_PATTERNS,
     "cs": _CZECH_PII_PATTERNS,
 }
 
@@ -5376,6 +5539,26 @@ LANGUAGE_FAKE_DATA: Dict[str, Dict[str, List[str]]] = {
         "AGE": ["45", "62", "38"],
         "LOCATION": ["Praha", "Brno", "Ostrava"],
         "ZIPCODE": ["110 00", "602 00", "702 00"],
+    },
+    "el": {
+        "NAME": [
+            "Γιώργος Παπαδόπουλος",
+            "Μαρία Νικολάου",
+            "Δημήτρης Ιωάννου",
+            "Ελένη Γεωργίου",
+        ],
+        "FIRST_NAME": ["Γιώργος", "Μαρία", "Δημήτρης", "Ελένη"],
+        "LAST_NAME": ["Παπαδόπουλος", "Νικολάου", "Ιωάννου", "Γεωργίου"],
+        "EMAIL": ["asthenis@example.gr", "epikoinonia@example.org"],
+        "PHONE": ["+30 691 234 5678", "210 123 4567"],
+        "ID_NUM": ["21058200177", "03090450119"],
+        "STREET_ADDRESS": ["οδός Ερμού 15", "λεωφόρος Κηφισίας 42"],
+        "URL_PERSONAL": ["https://example.gr"],
+        "USERNAME": ["asthenis123", "christis456"],
+        "DATE": ["16.11.1975", "01.01.2000"],
+        "AGE": ["45", "62", "38"],
+        "LOCATION": ["Αθήνα", "Θεσσαλονίκη", "Πάτρα"],
+        "ZIPCODE": ["104 31", "546 21", "262 21"],
     },
 }
 
