@@ -1622,7 +1622,10 @@ def _build_deidentification_result(
     ):
         from .anonymizer import Anonymizer
 
-        effective_consistent = consistent or seed is not None
+        # Reversible mappings must not assign different replacements to repeat
+        # mentions of the same source value. Reuse the anonymizer's existing
+        # per-document consistency path whenever keep_mapping is requested.
+        effective_consistent = keep_mapping or consistent or seed is not None
         anonymizer = Anonymizer(
             lang=lang,
             locale=locale,

@@ -14,7 +14,10 @@ so callers should run ``normalize_label(model_label)`` before lookup.
 
 from __future__ import annotations
 
+import json
 import re
+from functools import lru_cache
+from importlib import resources
 from typing import Callable, Dict
 
 from .. import labels as L
@@ -24,6 +27,7 @@ from .format_preserve import (
     preserve_id_pattern,
     preserve_phone_format,
 )
+from .locales import ZH_CN_ADDRESS_LOCALE
 
 Generator = Callable[..., str]
 """Signature: ``(faker, original: str, *, locale: str) -> str``."""
@@ -180,20 +184,95 @@ def _gen_url(faker, original, *, locale):
 # ---------------------------------------------------------------------------
 
 
+_ZH_ADDRESS_RESOURCE = "data/zh_cn_administrative_divisions.json"
+_ZH_SYNTHETIC_STREETS = (
+    "安澜路",
+    "和景街",
+    "康悦路",
+    "清禾大道",
+    "瑞宁街",
+    "新岚路",
+    "云栖大道",
+    "竹安路",
+)
+
+
+@lru_cache(maxsize=1)
+def _zh_address_divisions() -> tuple[tuple[str, str, str], ...]:
+    """Load the bundled province/city/district hierarchy."""
+    resource = resources.files("openmed.clinical").joinpath(_ZH_ADDRESS_RESOURCE)
+    with resource.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    divisions: list[tuple[str, str, str]] = []
+    for province_record in payload["divisions"]:
+        province = province_record["province"]
+        for city_record in province_record["cities"]:
+            city = city_record["city"]
+            for district in city_record["districts"]:
+                divisions.append((province, city, district))
+    if not divisions:
+        raise ValueError("Chinese administrative-division resource is empty")
+    return tuple(divisions)
+
+
+def _is_zh_address_locale(locale: str) -> bool:
+    return locale.replace("-", "_").casefold() == ZH_CN_ADDRESS_LOCALE.casefold()
+
+
+def _pick_zh_division(faker, original: str) -> tuple[str, str, str]:
+    divisions = _zh_address_divisions()
+    # Do not accidentally retain an original administrative token. The source
+    # list is deliberately broad enough that a different hierarchy is always
+    # available for normal address inputs.
+    candidates = [
+        division
+        for division in divisions
+        if all(part not in original for part in division)
+    ]
+    return faker.random_element(candidates or divisions)
+
+
+def _zh_random_digits(faker, *, width: int, original: str) -> str:
+    source_numbers = set(re.findall(r"\d+", original))
+    minimum = 10 ** (width - 1)
+    maximum = (10**width) - 1
+    for _ in range(12):
+        value = str(faker.random_int(min=minimum, max=maximum))
+        if value not in source_numbers:
+            return value
+    fallback = str((int(value) - minimum + 1) % (maximum - minimum + 1) + minimum)
+    return fallback
+
+
 def _gen_location(faker, original, *, locale):
+    if _is_zh_address_locale(locale):
+        return "".join(_pick_zh_division(faker, original))
     # Prefer city-level granularity since most "LOCATION" detections are cities
     return faker.city()
 
 
 def _gen_street_address(faker, original, *, locale):
+    if _is_zh_address_locale(locale):
+        province, city, district = _pick_zh_division(faker, original)
+        streets = [street for street in _ZH_SYNTHETIC_STREETS if street not in original]
+        street = faker.random_element(streets or _ZH_SYNTHETIC_STREETS)
+        building = _zh_random_digits(faker, width=3, original=original).lstrip("0")
+        postcode = _zh_random_digits(faker, width=6, original=original)
+        return f"{province}{city}{district}{street}{building}号，邮编{postcode}"
     return faker.street_address()
 
 
 def _gen_building_number(faker, original, *, locale):
+    if _is_zh_address_locale(locale):
+        number = _zh_random_digits(faker, width=3, original=original).lstrip("0")
+        return f"{number}号"
     return faker.building_number()
 
 
 def _gen_zipcode(faker, original, *, locale):
+    if _is_zh_address_locale(locale):
+        return _zh_random_digits(faker, width=6, original=original)
     if any(ch.isdigit() or ch.isalpha() for ch in original):
         return preserve_id_pattern(original, rng=faker.random)
     return faker.postcode()
