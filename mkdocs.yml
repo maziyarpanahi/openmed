@@ -56,6 +56,7 @@ nav:
   - PII & De-identification:
       - De-identification API: api/deidentification.md
       - PII Anonymization: anonymization.md
+      - Per-Language De-identification: languages.md
       - Smart Entity Merging: pii-smart-merging.md
       - No-Raw-PHI Logging: security/no-raw-phi-logging.md
       - LangChain Redaction Wrapper: integrations-langchain.md
@@ -75,7 +76,9 @@ nav:
       - MLX Quantized Export: export-mlx-quant.md
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
+      - Android Quickstart: android-quickstart.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
@@ -88,6 +91,7 @@ nav:
       - Reproducible Dependencies: contributing/reproducible-dependencies.md
       - Security & Disclosure: security/disclosure-policy.md
       - Redactor Threat Model: security/threat-model.md
+      - No-Telemetry Guarantee: security/no-telemetry.md
       - HF Write Token Policy: security/hf-token-policy.md
       - Supply Chain Controls: security/supply-chain.md
       - Vulnerability Scanning: supply-chain/vulnerability-scanning.md

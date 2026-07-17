@@ -162,7 +162,7 @@ def _gen_age(faker, original, *, locale):
 # format-preserve the original.
 _LOCALE_ID_METHODS = {
     "pt_BR": "cpf",
-    "pt_PT": "vat_id",
+    "pt_PT": "nif",
     "fr_FR": "ssn",
     "it_IT": "ssn",
     "es_ES": "nie",
@@ -191,6 +191,7 @@ _LOCALE_ID_METHODS = {
     "sr_RS": "jmbg",
     "hu_HU": "hungarian_taj",
     "et_EE": "isikukood",
+    "el_GR": "ssn",
 }
 
 
