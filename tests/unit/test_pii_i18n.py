@@ -22,6 +22,8 @@ from openmed.core.anonymizer.providers.clinical_ids import (
     generate_jmbg,
     generate_philhealth_pin,
     generate_portuguese_nif,
+    generate_vietnamese_cccd,
+    generate_vietnamese_cmnd,
 )
 from openmed.core.pii_entity_merger import PII_PATTERNS, PIIPattern, find_semantic_units
 from openmed.core.pii_i18n import (
@@ -66,6 +68,8 @@ from openmed.core.pii_i18n import (
     validate_spanish_nie,
     validate_thai_national_id,
     validate_turkish_tckn,
+    validate_vietnamese_cccd,
+    validate_vietnamese_cmnd,
 )
 
 # ---------------------------------------------------------------------------
@@ -113,6 +117,7 @@ class TestConstants:
             "fi",
             "cs",
             "el",
+            "vi",
         }
 
     def test_language_names_keys(self):
@@ -2489,6 +2494,157 @@ class TestIndonesianLocaleAndFixture:
         assert actual == expected
         for label, start, end, value in actual:
             assert text[start:end] == value, label
+
+
+class TestVietnameseLanguagePack:
+    """Tests for Vietnamese rule-based PII and synthetic data wiring."""
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "001203123456",
+            "001 203 123 456",
+            "079-199-654-321",
+            "003203123456",
+        ),
+    )
+    def test_valid_cccd_structures(self, value):
+        assert validate_vietnamese_cccd(value)
+
+    @pytest.mark.parametrize(
+        "value",
+        (
+            "00120312345",
+            "001 203 123 45",
+            "001.203.123.456",
+            "001 203-123 456",
+        ),
+    )
+    def test_invalid_cccd_lengths_or_groupings(self, value):
+        assert not validate_vietnamese_cccd(value)
+
+    @pytest.mark.parametrize("value", ("123456789", "123 456 789", "123-456-789"))
+    def test_valid_cmnd_structures(self, value):
+        assert validate_vietnamese_cmnd(value)
+
+    @pytest.mark.parametrize("value", ("111111111", "000000000", "12345678"))
+    def test_invalid_cmnd_structures(self, value):
+        assert not validate_vietnamese_cmnd(value)
+
+    def test_locale_registry_and_cccd_surrogate_round_trip(self):
+        assert "vi" in NATIONAL_ID_ONLY_LANGUAGES
+        assert "vi" not in DEFAULT_PII_MODELS
+        assert LANG_TO_LOCALE["vi"] == "vi_VN"
+        assert LANGUAGE_PII_PATTERNS["vi"]
+
+        anon = Anonymizer(lang="vi", consistent=True, seed=42)
+        surrogate = anon.surrogate("001203123456", "national_id")
+        assert validate_vietnamese_cccd(surrogate)
+
+    def test_synthetic_generators_cover_cccd_and_cmnd(self):
+        assert validate_vietnamese_cccd(generate_vietnamese_cccd())
+        assert validate_vietnamese_cmnd(generate_vietnamese_cmnd())
+
+    def test_vietnamese_fake_data_has_native_values(self):
+        fake_data = LANGUAGE_FAKE_DATA["vi"]
+        assert any("Nguyễn" in name for name in fake_data["NAME"])
+        assert any(phone.startswith(("+84", "0")) for phone in fake_data["PHONE"])
+        assert all(len(postcode) == 5 for postcode in fake_data["ZIPCODE"])
+
+    def test_patterns_cover_required_vietnamese_shapes(self):
+        samples = {
+            "date": ("17/08/1985", "ngày 1 tháng 1 năm 2000"),
+            "phone_number": ("+84 912 345 678", "0912-345-678", "028 3822 1234"),
+            "national_id": ("001203123456", "123456789"),
+            "street_address": ("12 đường Nguyễn Trãi", "45 pho Tran Hung Dao"),
+            "postcode": ("10000",),
+        }
+
+        for entity_type, values in samples.items():
+            patterns = [
+                pattern
+                for pattern in LANGUAGE_PII_PATTERNS["vi"]
+                if pattern.entity_type == entity_type
+            ]
+            for value in values:
+                assert any(
+                    match
+                    and (pattern.validator is None or pattern.validator(match.group(0)))
+                    for pattern in patterns
+                    if (match := re.search(pattern.pattern, value, pattern.flags))
+                ), f"Vietnamese {entity_type} pattern should match {value!r}"
+
+    def test_context_gates_cccd_cmnd_postcode_and_landline(self):
+        from openmed.core.safety_sweep import safety_sweep
+
+        contextual = (
+            "CCCD: 003203123456; CMND: 123456789; "
+            "điện thoại 028 3822 1234; mã bưu chính 10000"
+        )
+        entities = safety_sweep(contextual, [], lang="vi")
+        values = {entity.text for entity in entities}
+        assert {
+            "003203123456",
+            "123456789",
+            "028 3822 1234",
+            "10000",
+        } <= values
+
+        hard_negative = (
+            "Mã bệnh án 003203123456; mã xét nghiệm 123456789; "
+            "mã thuốc 10000; lô sản xuất 02838221234."
+        )
+        negative_entities = safety_sweep(hard_negative, [], lang="vi")
+        assert not any(
+            entity.text in {"003203123456", "123456789", "10000", "02838221234"}
+            for entity in negative_entities
+        )
+
+    def test_golden_fixture_offsets_and_offline_deidentification(self):
+        from openmed.core.pii import (
+            _apply_safety_sweep_to_result,
+            _build_deidentification_result,
+        )
+        from openmed.eval.golden import GoldenFixture
+        from openmed.processing.outputs import PredictionResult
+
+        fixture_path = Path("openmed/eval/golden/fixtures/i18n/vi.jsonl")
+        row = json.loads(fixture_path.read_text(encoding="utf-8").strip())
+        fixture = GoldenFixture.from_mapping(row)
+        assert fixture.language == "vi"
+
+        for span in fixture.gold_spans:
+            assert fixture.text[span.start : span.end] == span.text
+
+        empty_result = PredictionResult(
+            text=fixture.text,
+            entities=[],
+            model_name="offline-safety-sweep",
+            timestamp="2026-07-15T00:00:00Z",
+            metadata={},
+        )
+        swept_result, added_count = _apply_safety_sweep_to_result(
+            fixture.text,
+            empty_result,
+            lang="vi",
+        )
+        result = _build_deidentification_result(
+            fixture.text,
+            swept_result,
+            effective_method="mask",
+            keep_year=False,
+            date_shift_days=None,
+            keep_mapping=False,
+            lang="vi",
+            consistent=False,
+            seed=None,
+            locale=None,
+            use_safety_sweep=True,
+        )
+
+        assert added_count == len(fixture.gold_spans)
+        for span in fixture.gold_spans:
+            assert span.text not in result.deidentified_text
 
 
 class TestMalayLocaleAndFixture:

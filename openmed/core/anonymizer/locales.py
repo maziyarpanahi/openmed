@@ -67,6 +67,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "hu": "hu_HU",
     "et": "et_EE",
     "el": "el_GR",
+    "vi": "vi_VN",
 }
 
 
@@ -127,6 +128,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
     "et": ("et_EE", "isikukood"),  # Estonian isikukood
     "el": ("el_GR", "ssn"),  # Greek AMKA (Faker's native el_GR ssn)
+    "vi": ("vi_VN", "vietnamese_cccd"),  # 12-digit CCCD
 }
 
 

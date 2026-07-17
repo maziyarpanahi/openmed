@@ -26,6 +26,7 @@ from .clinical_ids import (
     RomanianCNPProvider,
     SerbianJmbgProvider,
     SpanishDNIProvider,
+    VietnameseIdProvider,
     generate_bic,
     generate_bulgarian_egn,
     generate_danish_cpr,
@@ -42,6 +43,8 @@ from .clinical_ids import (
     generate_portuguese_nif,
     generate_romanian_cnp,
     generate_teudat_zehut,
+    generate_vietnamese_cccd,
+    generate_vietnamese_cmnd,
     register_clinical_providers,
 )
 from .registry_ids import (
@@ -73,6 +76,7 @@ __all__ = [
     "RomanianCNPProvider",
     "SerbianJmbgProvider",
     "SpanishDNIProvider",
+    "VietnameseIdProvider",
     "generate_bic",
     "generate_bulgarian_egn",
     "generate_danish_cpr",
@@ -82,6 +86,8 @@ __all__ = [
     "generate_indonesian_nik",
     "generate_jmbg",
     "generate_teudat_zehut",
+    "generate_vietnamese_cccd",
+    "generate_vietnamese_cmnd",
     "generate_korean_rrn",
     "generate_latvian_personas_kods",
     "generate_philhealth_pin",
