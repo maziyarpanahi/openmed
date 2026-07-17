@@ -45,7 +45,9 @@ def _table_rows(text: str) -> dict[str, tuple[str, str, str]]:
 
 
 def _heading_codes(text: str) -> set[str]:
-    return {match.group(1) for line in text.splitlines() if (match := _HEADING.match(line))}
+    return {
+        match.group(1) for line in text.splitlines() if (match := _HEADING.match(line))
+    }
 
 
 def test_languages_doc_table_matches_supported_languages() -> None:
