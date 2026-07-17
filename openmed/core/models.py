@@ -3,32 +3,65 @@
 import gc
 import logging
 from collections.abc import Mapping
+from importlib.util import find_spec
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
-try:
+HF_AVAILABLE = find_spec("transformers") is not None
+AutoTokenizer: Any = None
+AutoModelForTokenClassification: Any = None
+AutoConfig: Any = None
+pipeline: Any = None
+
+
+def _ensure_hf_model_components() -> None:
+    """Import Torch-backed Transformers model components only when requested."""
+    global AutoConfig, AutoModelForTokenClassification, AutoTokenizer
+
+    if not HF_AVAILABLE:
+        raise ImportError(
+            "HuggingFace transformers is required. "
+            "Install with: pip install transformers"
+        )
+    if all(
+        component is not None
+        for component in (AutoConfig, AutoModelForTokenClassification, AutoTokenizer)
+    ):
+        return
+
     from transformers import (
-        AutoConfig,
-        AutoModelForTokenClassification,
-        AutoTokenizer,
-        pipeline,
+        AutoConfig as TransformersAutoConfig,
+    )
+    from transformers import (
+        AutoModelForTokenClassification as TransformersAutoModel,
+    )
+    from transformers import (
+        AutoTokenizer as TransformersAutoTokenizer,
     )
 
-    HF_AVAILABLE = True
-except (ImportError, OSError) as e:
-    HF_AVAILABLE = False
-    logger.warning(
-        "HuggingFace transformers could not be imported (%s). "
-        "Install with: pip install transformers",
-        e,
+    AutoConfig = AutoConfig or TransformersAutoConfig
+    AutoModelForTokenClassification = (
+        AutoModelForTokenClassification or TransformersAutoModel
     )
+    AutoTokenizer = AutoTokenizer or TransformersAutoTokenizer
 
-    AutoTokenizer = None  # type: ignore[assignment]
-    AutoModelForTokenClassification = None  # type: ignore[assignment]
-    AutoConfig = None  # type: ignore[assignment]
-    pipeline = None  # type: ignore[assignment]
+
+def _ensure_hf_pipeline() -> None:
+    """Import the Transformers pipeline factory only for the HF backend."""
+    global pipeline
+
+    if not HF_AVAILABLE:
+        raise ImportError(
+            "HuggingFace transformers is required. "
+            "Install with: pip install transformers"
+        )
+    if pipeline is None:
+        from transformers import pipeline as transformers_pipeline
+
+        pipeline = transformers_pipeline
+
 
 if TYPE_CHECKING:
     from .config import OpenMedConfig
@@ -68,9 +101,9 @@ class ModelLoader:
 
         self.config = config or get_config()
         configure_offline_mode(self.config)
-        self._models = {}  # Cache for loaded models
-        self._tokenizers = {}  # Cache for loaded tokenizers
-        self._pipelines = {}  # Cache for created pipelines
+        self._models: Dict[str, Any] = {}  # Cache for loaded models
+        self._tokenizers: Dict[str, Any] = {}  # Cache for loaded tokenizers
+        self._pipelines: Dict[Tuple[Any, ...], Any] = {}  # Cached pipelines
 
     def list_available_models(
         self,
@@ -119,6 +152,7 @@ class ModelLoader:
         Raises:
             ValueError: If model is not found or not a TokenClassification model.
         """
+        _ensure_hf_model_components()
         full_model_name = self._resolve_model_name(model_name)
 
         # Check cache
@@ -300,6 +334,7 @@ class ModelLoader:
         Returns:
             HuggingFace pipeline object.
         """
+        _ensure_hf_pipeline()
         # Resolve model name if it's a registry key
         full_model_name = self._resolve_model_name(model_name)
         cache_key = self._build_pipeline_cache_key(
@@ -464,6 +499,8 @@ class ModelLoader:
         """Infer the maximum supported sequence length for a model/tokenizer."""
         if not HF_AVAILABLE:
             return None
+
+        _ensure_hf_model_components()
 
         from ..processing.tokenization import infer_tokenizer_max_length
 

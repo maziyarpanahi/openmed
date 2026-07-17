@@ -88,11 +88,24 @@ def _windows_peak_rss_bytes() -> int:  # pragma: no cover - Windows-only
 
     counters = ProcessMemoryCounters()
     counters.cb = ctypes.sizeof(counters)
-    process = ctypes.windll.kernel32.GetCurrentProcess()
-    if not ctypes.windll.psapi.GetProcessMemoryInfo(
-        process, ctypes.byref(counters), counters.cb
-    ):
-        raise OSError("GetProcessMemoryInfo failed")
+    kernel32 = ctypes.WinDLL(  # type: ignore[attr-defined]
+        "kernel32", use_last_error=True
+    )
+    psapi = ctypes.WinDLL("psapi", use_last_error=True)  # type: ignore[attr-defined]
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    psapi.GetProcessMemoryInfo.argtypes = [
+        wintypes.HANDLE,
+        ctypes.POINTER(ProcessMemoryCounters),
+        wintypes.DWORD,
+    ]
+    psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+
+    process = kernel32.GetCurrentProcess()
+    if not psapi.GetProcessMemoryInfo(process, ctypes.byref(counters), counters.cb):
+        error_code = ctypes.get_last_error()  # type: ignore[attr-defined]
+        message = ctypes.FormatError(error_code)  # type: ignore[attr-defined]
+        raise OSError(error_code, message)
     return int(counters.PeakWorkingSetSize)
 
 

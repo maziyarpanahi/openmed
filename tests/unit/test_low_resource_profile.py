@@ -135,8 +135,17 @@ def test_onnx_backend_requests_int8_cpu_session():
 
 def test_low_resource_backend_selection_never_imports_torch_subprocess():
     script = """
+import importlib.abc
 import sys
 from unittest.mock import patch
+
+class RejectTorchImports(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "torch" or fullname.startswith("torch."):
+            raise AssertionError(f"low_resource attempted to import {fullname}")
+        return None
+
+sys.meta_path.insert(0, RejectTorchImports())
 from openmed.core.backends import OnnxBackend, get_backend
 from openmed.core.config import load_config_with_profile
 
