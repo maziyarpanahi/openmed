@@ -13,9 +13,11 @@ national-ID passes its language's checksum validator where one exists.
 
 ## Schema
 
-One JSON object per line (currently one note per language). This is the same
-shape the shared golden loader (`openmed/eval/golden/loader.py`) validates, so
-fixtures here are also picked up by the harness.
+One JSON object per line. Each language file should contain 3-5 synthetic notes;
+the five required pattern families may be distributed across those notes. This
+is the same shape the shared golden loader
+(`openmed/eval/golden/loader.py`) validates, so fixtures here are also picked up
+by the harness.
 
 ```json
 {
@@ -58,7 +60,7 @@ fixtures here are also picked up by the harness.
 - **`gold_spans[].label`** must be a canonical label. The five exercised
   families use `DATE`, `PHONE`, `ID_NUM`, `STREET_ADDRESS`, `ZIPCODE`.
 - **`gold_spans[].start`/`end`** are half-open character offsets into `text`;
-  `text[start:end]` must equal `text`.
+  `text[start:end]` must equal the span's `text` value.
 - **`ID_NUM` `metadata.checksum_status`** is `"valid"` when the language has a
   national-ID checksum validator and the value passes it, or `"unvalidated"`
   for languages whose national-ID pattern is regex-only (e.g. `ar`, `ja`).
@@ -70,9 +72,9 @@ fixtures here are also picked up by the harness.
 When you add a language pack, add `openmed/eval/golden/fixtures/i18n/<lang>.jsonl`
 in the same shape:
 
-1. Write one synthetic note that contains **at least one** span of each family:
-   a date, a phone number, a national ID, a street address, and a postcode,
-   using invented values only.
+1. Write 3-5 distinct synthetic notes. Across the file, include **at least one**
+   span of each family: a date, a phone number, a national ID, a street address,
+   and a postcode, using invented values only.
 2. Make the national-ID a **checksum-valid** value — generate it with the
    language's surrogate provider / validator rather than typing digits by hand,
    and set `checksum_status` accordingly (`unvalidated` only if the pack has no

@@ -36,6 +36,15 @@ _LABEL_TO_ENTITY_TYPE = {
 # The five span types every per-language fixture is expected to exercise.
 _REQUIRED_LABELS = frozenset(_LABEL_TO_ENTITY_TYPE)
 
+# Languages seeded by OM-100. The issue contract requires 3-5 notes for each
+# one; older and later-added fixture packs are intentionally not included in
+# that historical row-count requirement.
+_OM_100_LANGUAGES = frozenset(
+    {"ar", "de", "es", "fr", "hi", "it", "ja", "nl", "pt", "te", "tr"}
+)
+_MIN_NOTES_PER_LANGUAGE = 3
+_MAX_NOTES_PER_LANGUAGE = 5
+
 # Legacy fixtures authored before the five-families convention (OM-100) that do
 # not yet carry a postcode span. They are still covered by the offset-recovery
 # and checksum tests; backfilling a ZIPCODE span for each is a separate task.
@@ -76,7 +85,23 @@ def _national_id_validators(language: str):
 
 
 def test_i18n_fixture_directory_is_non_empty():
-    assert _fixture_paths(), "no i18n golden fixtures found"
+    paths = _fixture_paths()
+    assert paths, "no i18n golden fixtures found"
+    available_languages = {path.stem for path in paths}
+    missing = _OM_100_LANGUAGES - available_languages
+    assert not missing, f"missing OM-100 language fixtures: {sorted(missing)}"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [path for path in _fixture_paths() if path.stem in _OM_100_LANGUAGES],
+    ids=lambda p: p.stem,
+)
+def test_om_100_languages_have_three_to_five_notes(path: Path):
+    note_count = len(_load_rows(path))
+    assert _MIN_NOTES_PER_LANGUAGE <= note_count <= _MAX_NOTES_PER_LANGUAGE, (
+        f"{path.name} must contain 3-5 synthetic notes, found {note_count}"
+    )
 
 
 @pytest.mark.parametrize("path", _fixture_paths(), ids=lambda p: p.stem)
@@ -112,10 +137,9 @@ def test_i18n_fixture_spans_recover_with_exact_offsets(path: Path):
 def test_i18n_fixture_exercises_the_five_pattern_families(path: Path):
     if path.stem in _LEGACY_INCOMPLETE_LANGUAGES:
         pytest.skip(f"{path.name} predates the five-families convention (OM-100)")
-    for row in _load_rows(path):
-        labels = {span["label"] for span in row["gold_spans"]}
-        missing = _REQUIRED_LABELS - labels
-        assert not missing, f"{path.name} is missing span families: {sorted(missing)}"
+    labels = {span["label"] for row in _load_rows(path) for span in row["gold_spans"]}
+    missing = _REQUIRED_LABELS - labels
+    assert not missing, f"{path.name} is missing span families: {sorted(missing)}"
 
 
 @pytest.mark.parametrize("path", _fixture_paths(), ids=lambda p: p.stem)
