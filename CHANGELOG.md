@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   attestation API. Evidence generation stays best effort and cannot gate the
   PyPI upload, but evidence that is produced must verify against the signing
   workflow identity and the release commit before it is attached (#1540).
+- Added a Hungarian (`hu`) national-ID-only PII pack with validator-backed TAJ
+  detection, `hu_HU` locale-aware synthetic surrogates, Hungarian date, phone,
+  address, and postcode patterns, and an offline synthetic golden fixture
+  (#816).
+- Added a Czech (`cs`) national-ID-only PII pack with validator-backed rodné
+  číslo detection, Czech date, phone, address, and postcode cues, `cs_CZ`
+  locale-aware synthetic surrogates, and an offline synthetic golden fixture
+  ([#815](https://github.com/maziyarpanahi/openmed/issues/815)).
 
 ## [1.9.1] - 2026-07-14
 
