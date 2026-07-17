@@ -42,6 +42,7 @@ def _span(text: str, sub: str, label: str = "CONDITION") -> dict:
             "coronary artery disease",
             "family history",
         ),
+        ("FHx: diabetes", "diabetes", "fhx"),
     ],
 )
 def test_family_cue_yields_family_experiencer(text, sub, cue):
@@ -193,3 +194,60 @@ def test_refined_values_and_advisory_exposed():
     }
     assert isinstance(EXPERIENCER_REFINEMENT_ADVISORY, str)
     assert EXPERIENCER_REFINEMENT_ADVISORY
+
+
+# --------------------------------------------------------------------------
+# Contrastive clause boundaries (OM-112): a subject cue must not reach across
+# a contrastive conjunction into a following patient clause.
+# --------------------------------------------------------------------------
+
+
+def test_contrastive_but_scopes_family_cue_to_its_clause():
+    text = "Mother had breast cancer, but the patient has hypertension."
+
+    family = resolve_experiencer(text, _span(text, "breast cancer"))
+    patient = resolve_experiencer(text, _span(text, "hypertension"))
+
+    assert family.experiencer == FAMILY_EXPERIENCER
+    assert patient.experiencer == PATIENT_EXPERIENCER
+    assert patient.source == "default"
+
+
+def test_contrastive_however_scopes_family_cue_to_its_clause():
+    text = "His father had a stroke, however the patient has the flu."
+
+    assert (
+        resolve_experiencer(text, _span(text, "stroke")).experiencer
+        == FAMILY_EXPERIENCER
+    )
+    assert (
+        resolve_experiencer(text, _span(text, "flu")).experiencer == PATIENT_EXPERIENCER
+    )
+
+
+def test_coordinating_and_keeps_conjoined_findings_with_the_family():
+    # "and"/"or" conjoin findings under the same subject, so the family cue
+    # must still reach the later finding — no contrastive split here.
+    text = "Mother had breast cancer and diabetes."
+
+    assert (
+        resolve_experiencer(text, _span(text, "breast cancer")).experiencer
+        == FAMILY_EXPERIENCER
+    )
+    assert (
+        resolve_experiencer(text, _span(text, "diabetes")).experiencer
+        == FAMILY_EXPERIENCER
+    )
+
+
+def test_patient_clause_before_family_clause_each_correct():
+    text = "The patient has asthma but her sister had lymphoma."
+
+    assert (
+        resolve_experiencer(text, _span(text, "asthma")).experiencer
+        == PATIENT_EXPERIENCER
+    )
+    assert (
+        resolve_experiencer(text, _span(text, "lymphoma")).experiencer
+        == FAMILY_EXPERIENCER
+    )
