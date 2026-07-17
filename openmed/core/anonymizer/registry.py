@@ -191,6 +191,7 @@ _LOCALE_ID_METHODS = {
     "sr_RS": "jmbg",
     "hu_HU": "hungarian_taj",
     "et_EE": "isikukood",
+    "el_GR": "ssn",
 }
 
 

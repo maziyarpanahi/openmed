@@ -66,6 +66,7 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
     "hu": "hu_HU",
     "et": "et_EE",
+    "el": "el_GR",
 }
 
 
@@ -123,6 +124,7 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
     "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
     "et": ("et_EE", "isikukood"),  # Estonian isikukood
+    "el": ("el_GR", "ssn"),  # Greek AMKA (Faker's native el_GR ssn)
 }
 
 _warned: set[str] = set()
