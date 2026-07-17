@@ -18,6 +18,7 @@ from openmed.core.script_detect import (
     confusable_skeleton,
     detect_mixed_script,
     detect_script,
+    is_han_dominant,
     mixed_script_spans,
     normalize_for_pii_detection,
     segment_by_script,
@@ -174,6 +175,11 @@ def test_han_script_routes_to_chinese_candidate_language():
 
     assert script == "Han"
     assert candidate_languages_for_script(script)[0] == "zh"
+
+
+def test_han_dominance_detection_supports_language_routing():
+    assert is_han_dominant("患者王芳因心房颤动入院")
+    assert not is_han_dominant("Patient John Smith")
 
 
 def test_normalize_for_pii_detection_folds_obfuscation_with_offset_map():

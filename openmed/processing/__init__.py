@@ -58,6 +58,7 @@ from .object_storage import (
 )
 from .outputs import OutputFormatter, format_predictions
 from .pulsar_connector import PulsarClientPair, create_pulsar_clients
+from .sentences import SentenceSpan, segment_chinese_text, segment_text
 from .text import (
     INDIC_SCRIPTS,
     IndicNormalization,
@@ -154,4 +155,7 @@ __all__ = [
     "deidentify_stream",
     "replay",
     "sentences",
+    "SentenceSpan",
+    "segment_chinese_text",
+    "segment_text",
 ]

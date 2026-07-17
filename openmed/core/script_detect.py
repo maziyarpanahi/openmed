@@ -340,6 +340,12 @@ def detect_script(text: str) -> str:
     return max(counts, key=lambda script: (counts[script], -first_seen[script]))
 
 
+def is_han_dominant(text: str) -> bool:
+    """Return whether Han is the dominant supported script in ``text``."""
+
+    return detect_script(text) == "Han"
+
+
 def segment_by_script(text: str) -> Iterator[tuple[int, int, str]]:
     """Yield contiguous ``(start, end, script)`` runs covering ``text``.
 
@@ -634,6 +640,7 @@ __all__ = [
     "confusable_skeleton",
     "detect_mixed_script",
     "detect_script",
+    "is_han_dominant",
     "mixed_script_spans",
     "normalize_for_pii_detection",
     "segment_by_script",
