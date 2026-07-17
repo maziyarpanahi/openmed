@@ -58,6 +58,7 @@ EXPERIENCER_REFINEMENT_ADVISORY = (
 # Relatives whose mention attributes a nearby finding to the family.
 _FAMILY_CUES = (
     "family history",
+    "fhx",
     "familial",
     "maternal",
     "paternal",

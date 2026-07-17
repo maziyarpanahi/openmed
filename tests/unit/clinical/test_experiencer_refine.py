@@ -42,6 +42,7 @@ def _span(text: str, sub: str, label: str = "CONDITION") -> dict:
             "coronary artery disease",
             "family history",
         ),
+        ("FHx: diabetes", "diabetes", "fhx"),
     ],
 )
 def test_family_cue_yields_family_experiencer(text, sub, cue):
