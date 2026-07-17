@@ -585,6 +585,35 @@ class SpanishNIEProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Portuguese NIF / NIPC (9 digits with weighted mod-11 checksum)
+# ---------------------------------------------------------------------------
+
+# Leading digits and two-digit prefixes the generator may draw from; kept in
+# sync with ``validate_portuguese_nif`` so surrogates round-trip.
+_PORTUGUESE_NIF_LEADING = ("1", "2", "3", "5", "6", "8", "9")
+
+
+def generate_portuguese_nif(*, rng: random.Random | None = None) -> str:
+    """Generate a Portuguese NIF accepted by :func:`validate_portuguese_nif`."""
+    source = rng or random.Random()
+
+    first = source.choice(_PORTUGUESE_NIF_LEADING)
+    body = first + "".join(str(source.randint(0, 9)) for _ in range(7))
+    total = sum(int(body[index]) * (9 - index) for index in range(8))
+    check = 11 - (total % 11)
+    if check >= 10:
+        check = 0
+    return body + str(check)
+
+
+class PortugueseNIFProvider(BaseProvider):
+    """Generates Portuguese NIF values using Faker's instance RNG."""
+
+    def nif(self) -> str:
+        return generate_portuguese_nif(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # German Steuer-ID (11 digits with mod-11 checksum and digit-frequency rules)
 # ---------------------------------------------------------------------------
 
@@ -924,6 +953,157 @@ class LatvianPersonasKodsProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Bulgarian EGN
+# ---------------------------------------------------------------------------
+
+
+def generate_bulgarian_egn(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Bulgarian EGN accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1800, 2099)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    if year >= 2000:
+        month_code = month + 40
+    elif year < 1900:
+        month_code = month + 20
+    else:
+        month_code = month
+
+    body = [
+        (year % 100) // 10,
+        year % 10,
+        month_code // 10,
+        month_code % 10,
+        day // 10,
+        day % 10,
+    ]
+    body.extend(source.randint(0, 9) for _ in range(3))
+    check = _bulgarian_egn_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _bulgarian_egn_check_digit(digits: list[int]) -> int:
+    weights = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+    remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+    return 0 if remainder == 10 else remainder
+
+
+class BulgarianEgnProvider(BaseProvider):
+    """Generate synthetic Bulgarian EGN values."""
+
+    def egn(self) -> str:
+        return generate_bulgarian_egn(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Serbian / ex-Yugoslav JMBG
+# ---------------------------------------------------------------------------
+
+
+def generate_jmbg(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic JMBG accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1900, 2029)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    region = source.randint(70, 89)
+    serial = source.randint(0, 999)
+
+    body = [
+        day // 10,
+        day % 10,
+        month // 10,
+        month % 10,
+        (year % 1000) // 100,
+        (year % 100) // 10,
+        year % 10,
+        region // 10,
+        region % 10,
+        serial // 100,
+        (serial % 100) // 10,
+        serial % 10,
+    ]
+    check = _jmbg_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _jmbg_check_digit(digits: list[int]) -> int:
+    weights = (7, 6, 5, 4, 3, 2)
+    total = sum(
+        weight * (digits[index] + digits[index + 6])
+        for index, weight in enumerate(weights)
+    )
+    remainder = 11 - (total % 11)
+    return 0 if remainder > 9 else remainder
+
+
+class SerbianJmbgProvider(BaseProvider):
+    """Generate synthetic Serbian / ex-Yugoslav JMBG values."""
+
+    def jmbg(self) -> str:
+        return generate_jmbg(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
+# Estonian Isikukood
+# ---------------------------------------------------------------------------
+
+
+def generate_estonian_isikukood(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic Estonian isikukood accepted by its validator."""
+    import calendar
+
+    source = rng or random.Random()
+
+    year = source.randint(1800, 2099)
+    month = source.randint(1, 12)
+    day = source.randint(1, calendar.monthrange(year, month)[1])
+    sex = source.randint(0, 1)  # even century digit = female, odd = male
+    century_digit = 1 + ((year - 1800) // 100) * 2 + sex
+
+    body = [
+        century_digit,
+        (year % 100) // 10,
+        year % 10,
+        month // 10,
+        month % 10,
+        day // 10,
+        day % 10,
+    ]
+    body.extend(source.randint(0, 9) for _ in range(3))
+    check = _estonian_isikukood_check_digit(body)
+
+    return "".join(str(digit) for digit in body) + str(check)
+
+
+def _estonian_isikukood_check_digit(digits: list[int]) -> int:
+    for weights in (
+        (1, 2, 3, 4, 5, 6, 7, 8, 9, 1),
+        (3, 4, 5, 6, 7, 8, 9, 1, 2, 3),
+    ):
+        remainder = sum(weight * digit for weight, digit in zip(weights, digits)) % 11
+        if remainder < 10:
+            return remainder
+    return 0
+
+
+class EstonianIsikukoodProvider(BaseProvider):
+    """Generate synthetic Estonian isikukood values."""
+
+    def isikukood(self) -> str:
+        return generate_estonian_isikukood(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # Indonesian NIK (16 digits with province/regency/district + birth date)
 # ---------------------------------------------------------------------------
 
@@ -1089,6 +1269,42 @@ class DanishCPRProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Hungarian TAJ (9 digits, alternating 3/7 weighted checksum)
+# ---------------------------------------------------------------------------
+
+_RESERVED_HUNGARIAN_TAJ = {"900000007"}
+
+
+def generate_hungarian_taj(*, rng: random.Random | None = None) -> str:
+    """Generate a synthetic TAJ accepted by ``validate_hungarian_taj``."""
+    source = rng or random.Random()
+    while True:
+        body = [source.randint(0, 9) for _ in range(8)]
+        if not any(body):
+            body[-1] = 1
+
+        total = sum(
+            digit * (3 if index % 2 == 0 else 7) for index, digit in enumerate(body)
+        )
+        candidate = "".join(str(digit) for digit in body) + str(total % 10)
+        if candidate in _RESERVED_HUNGARIAN_TAJ:
+            continue
+
+        from openmed.core.pii_i18n import validate_hungarian_taj
+
+        if not validate_hungarian_taj(candidate):  # pragma: no cover
+            raise RuntimeError("generated Hungarian TAJ failed checksum validation")
+        return candidate
+
+
+class HungarianTAJProvider(BaseProvider):
+    """Generates valid synthetic Hungarian TAJ identifiers."""
+
+    def hungarian_taj(self) -> str:
+        return generate_hungarian_taj(rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South Korean RRN (13 digits, weighted mod-11 with embedded birth date)
 # ---------------------------------------------------------------------------
 
@@ -1146,12 +1362,12 @@ class KoreanRRNProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
-# Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
+# Czech/Slovak rodne cislo (YYMMDD/XXXX, modulo-11)
 # ---------------------------------------------------------------------------
 
 
 def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
-    """Generate a Slovak rodne cislo accepted by its checksum validator."""
+    """Generate a Czech/Slovak rodne cislo accepted by its checksum validator."""
     import calendar
 
     source = rng or random.Random()
@@ -1184,7 +1400,7 @@ def generate_rodne_cislo(*, rng: random.Random | None = None) -> str:
 
 
 class RodneCisloProvider(BaseProvider):
-    """Generates valid Slovak rodne cislo birth numbers."""
+    """Generates valid Czech/Slovak rodne cislo birth numbers."""
 
     def rodne_cislo(self) -> str:
         return generate_rodne_cislo(rng=self.generator.random)
@@ -1614,6 +1830,38 @@ class MrzProvider(BaseProvider):
         return generate_mrz_td3(self.generator.random)
 
 
+def generate_unified_social_credit_code(*, rng: random.Random | None = None) -> str:
+    """Generate a checksum-valid China Unified Social Credit Code surrogate.
+
+    The 18-character result uses only the permitted 31-character alphabet (never
+    the excluded letters I/O/S/V/Z), carries a 6-digit administrative-region
+    segment, and always passes ``validate_unified_social_credit_code`` by
+    construction.
+    """
+    from openmed.core.pii_i18n import (
+        USCC_ALPHABET,
+        USCC_DEPARTMENT_CATEGORY_CODES,
+        uscc_check_char,
+    )
+
+    source = rng or random.Random()
+    department = source.choice(tuple(USCC_DEPARTMENT_CATEGORY_CODES))
+    category = source.choice(tuple(sorted(USCC_DEPARTMENT_CATEGORY_CODES[department])))
+    region = "".join(str(source.randint(0, 9)) for _ in range(6))
+    organization = "".join(source.choice(USCC_ALPHABET) for _ in range(9))
+    body = f"{department}{category}{region}{organization}"
+    return body + uscc_check_char(body)
+
+
+class UnifiedSocialCreditCodeProvider(BaseProvider):
+    """Faker provider for China Unified Social Credit Code surrogates."""
+
+    def unified_social_credit_code(self) -> str:
+        """Return a checksum-valid synthetic Unified Social Credit Code."""
+
+        return generate_unified_social_credit_code(rng=self.generator.random)
+
+
 def register_clinical_providers(faker) -> None:
     """Add every custom provider in this module to ``faker``."""
     from .registry_ids import national_id_faker_provider_classes
@@ -1623,6 +1871,7 @@ def register_clinical_providers(faker) -> None:
     faker.add_provider(MedicalRecordNumberProvider)
     faker.add_provider(FinancialIdentifierProvider)
     faker.add_provider(MrzProvider)
+    faker.add_provider(UnifiedSocialCreditCodeProvider)
 
 
 __all__ = [
@@ -1630,10 +1879,13 @@ __all__ = [
     "AustralianMedicareProvider",
     "AustralianTFNProvider",
     "BCPHNProvider",
+    "BulgarianEgnProvider",
     "CanadianSINProvider",
     "DanishCPRProvider",
+    "EstonianIsikukoodProvider",
     "FinancialIdentifierProvider",
     "GermanSteuerIdProvider",
+    "HungarianTAJProvider",
     "IndonesianNIKProvider",
     "IsraeliTeudatZehutProvider",
     "KoreanRRNProvider",
@@ -1642,12 +1894,15 @@ __all__ = [
     "MedicalRecordNumberProvider",
     "MrzProvider",
     "NPIProvider",
+    "UnifiedSocialCreditCodeProvider",
     "PhilippinesIdProvider",
     "PolishPeselProvider",
     "RomanianCNPProvider",
     "RodneCisloProvider",
+    "SerbianJmbgProvider",
     "ThaiNationalIdProvider",
     "SpanishDNIProvider",
+    "PortugueseNIFProvider",
     "SpanishNIEProvider",
     "UKNHSNumberProvider",
     "UKNINOProvider",
@@ -1655,11 +1910,15 @@ __all__ = [
     "generate_australian_tfn",
     "generate_bc_phn",
     "generate_bic",
+    "generate_bulgarian_egn",
     "generate_canadian_sin",
     "generate_danish_cpr",
+    "generate_hungarian_taj",
+    "generate_estonian_isikukood",
     "generate_iban",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
+    "generate_jmbg",
     "generate_teudat_zehut",
     "generate_korean_rrn",
     "generate_luhn_identifier",
@@ -1671,10 +1930,12 @@ __all__ = [
     "generate_philsys_psn",
     "generate_rodne_cislo",
     "generate_romanian_cnp",
+    "generate_portuguese_nif",
     "generate_spanish_nie",
     "generate_ssn",
     "generate_thai_national_id",
     "generate_uk_nhs_number",
+    "generate_unified_social_credit_code",
     "id_subtype_for_entity_type",
     "register_clinical_providers",
     "validate_australian_medicare",

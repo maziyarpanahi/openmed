@@ -28,7 +28,6 @@ Regression contract (OM-135):
 
 from __future__ import annotations
 
-9
 import warnings
 from typing import Final, Mapping
 
@@ -55,17 +54,25 @@ LANG_TO_LOCALE: Final[Mapping[str, str]] = {
     "pl": "pl_PL",
     "lv": "lv_LV",
     "ko": "ko_KR",
+    "cs": "cs_CZ",
     "sk": "sk_SK",
     "ms": "ms_MY",
     "tl": "fil_PH",
     "da": "da_DK",
     "ro": "ro_RO",
+    "fi": "fi_FI",
+    "bg": "bg_BG",
+    "hr": "hr_HR",
+    "sr": "sr_RS",  # Faker has no Serbian locale; backed by hr_HR at runtime
+    "hu": "hu_HU",
+    "et": "et_EE",
+    "el": "el_GR",
 }
 
 
 # Languages whose default locale is a known approximation rather than a
 # direct match. Used to emit a one-time warning so callers can override.
-_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
+_APPROXIMATE_LOCALES: Final = frozenset({"te", "ms", "sr"})
 
 
 # Conceptual locale -> installed Faker locale. This keeps national-ID dispatch
@@ -73,6 +80,7 @@ _APPROXIMATE_LOCALES: Final = frozenset({"te", "ms"})
 # nearby installed Faker backend.
 FAKER_BACKEND_LOCALE: Final[Mapping[str, str]] = {
     "ms_MY": "id_ID",
+    "sr_RS": "hr_HR",
 }
 
 
@@ -96,7 +104,9 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "nl": ("nl_NL", "ssn"),  # BSN
     "hi": ("hi_IN", "aadhaar"),  # Aadhaar (Verhoeff)
     "te": ("en_IN", "aadhaar"),  # Aadhaar via approximate en_IN
-    "pt": ("pt_BR", "cpf"),  # CPF (registered validators are Brazilian)
+    # CPF drives the OM-135 coherence round-trip; pt_PT surrogates draw NIF via
+    # the locale-keyed registry dispatch (``registry._LOCALE_ID_METHODS``).
+    "pt": ("pt_BR", "cpf"),
     "tr": ("tr_TR", "ssn"),  # TCKN
     "he": ("he_IL", "teudat_zehut"),  # Israeli Teudat Zehut
     "id": ("id_ID", "indonesian_nik"),  # NIK
@@ -104,11 +114,19 @@ NATIONAL_ID_PROVIDERS: Final[Mapping[str, tuple[str, str]]] = {
     "pl": ("pl_PL", "pesel"),  # PESEL
     "lv": ("lv_LV", "personas_kods"),
     "ko": ("ko_KR", "korean_rrn"),  # RRN
+    "cs": ("cs_CZ", "rodne_cislo"),  # Czech rodne cislo (shared provider)
     "sk": ("sk_SK", "rodne_cislo"),  # Slovak rodne cislo
     "ms": ("ms_MY", "mykad"),  # Malaysian MyKad / NRIC
     "tl": ("fil_PH", "philsys_psn"),  # Philippine PhilSys PSN
     "da": ("da_DK", "danish_cpr"),  # Danish CPR / personnummer
     "ro": ("ro_RO", "romanian_cnp"),  # CNP (Cod Numeric Personal)
+    "fi": ("fi_FI", "ssn"),  # Finnish HETU (Faker's native fi_FI ssn)
+    "bg": ("bg_BG", "egn"),  # Bulgarian EGN (unified civil number)
+    "hr": ("hr_HR", "ssn"),  # Croatian OIB (Faker's native hr_HR ssn)
+    "sr": ("sr_RS", "jmbg"),  # Serbian / ex-Yugoslav JMBG
+    "hu": ("hu_HU", "hungarian_taj"),  # TAJ social-security identifier
+    "et": ("et_EE", "isikukood"),  # Estonian isikukood
+    "el": ("el_GR", "ssn"),  # Greek AMKA (Faker's native el_GR ssn)
 }
 
 
@@ -146,38 +164,43 @@ _AR_REGION_AVAILABLE: Final[Mapping[str, str]] = {
 _warned: set[str] = set()
 
 
+def _resolve_arabic_region(tag: str) -> str:
+    """Resolve one region-qualified Arabic tag with a safe fallback."""
+    locale = _AR_REGION_AVAILABLE.get(tag)
+    if locale is not None:
+        return locale
+    if tag not in _warned:
+        warnings.warn(
+            f"OpenMed: no Faker locale available for Arabic region {tag!r}; "
+            f"falling back to {LANG_TO_LOCALE['ar']!r}.",
+            UserWarning,
+            stacklevel=4,
+        )
+        _warned.add(tag)
+    return LANG_TO_LOCALE["ar"]
+
+
 def resolve_locale(lang: str, locale_override: str | None = None) -> str:
     """Resolve a Faker locale for ``lang``.
 
     Args:
         lang: ISO 639-1 language code (``en``, ``fr``, ``de``, ...).
-        locale_override: Caller-supplied locale (e.g. ``pt_BR``); takes
-            precedence and skips the warning.
+        locale_override: Caller-supplied Faker locale (e.g. ``pt_BR``) or
+            documented region tag (e.g. ``ar-SA``); takes precedence.
 
     Returns:
         A Faker locale string.
     """
     if locale_override:
+        if locale_override.startswith("ar-"):
+            return _resolve_arabic_region(locale_override)
         return locale_override
 
     # Region-qualified Arabic codes (e.g. "ar-SA") select a Gulf/Levant Faker
     # locale. Bare "ar" does NOT start with "ar-", so it skips this branch and
     # keeps the existing ar_EG default below unchanged.
     if lang.startswith("ar-"):
-        locale = _AR_REGION_AVAILABLE.get(lang)
-        if locale is not None:
-            return locale
-        # Unknown region, or a documented region whose locale this Faker
-        # version does not ship: warn once and fall back to Egyptian Arabic.
-        if lang not in _warned:
-            warnings.warn(
-                f"OpenMed: no Faker locale available for Arabic region "
-                f"{lang!r}; falling back to {LANG_TO_LOCALE['ar']!r}.",
-                UserWarning,
-                stacklevel=3,
-            )
-            _warned.add(lang)
-        return LANG_TO_LOCALE["ar"]
+        return _resolve_arabic_region(lang)
 
     locale = LANG_TO_LOCALE.get(lang)
     if locale is None:
@@ -200,12 +223,13 @@ def resolve_locale(lang: str, locale_override: str | None = None) -> str:
 def list_regional_locales(lang: str) -> list[str]:
     """Return the supported region-qualified codes for ``lang``.
 
-    Currently only Arabic (``ar``) has regional overrides. Returns the sorted
-    region tags whose Faker locale is installed, including ``ar-EG`` (the
-    explicit form of the bare-``ar`` default).
+    Currently only Arabic (``ar``) has regional overrides. Returns every
+    documented tag, including ``ar-EG`` (the explicit form of the bare-``ar``
+    default). A listed tag whose locale is absent from the installed Faker
+    version resolves to ``ar_EG`` with a one-time warning.
     """
     if lang == "ar":
-        return sorted(_AR_REGION_AVAILABLE)
+        return sorted(AR_REGION_LOCALES)
     return []
 
 
