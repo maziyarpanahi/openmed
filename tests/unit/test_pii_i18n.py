@@ -611,8 +611,7 @@ def test_portuguese_nif_golden_fixture_offsets():
         if line.strip()
     ]
 
-    assert len(rows) == 1
-    row = rows[0]
+    row = next(row for row in rows if row["id"] == "golden-i18n-pt-nif")
     assert row["language"] == "pt"
     assert row["metadata"]["locale"] == "pt_PT"
     assert row["metadata"]["identifier_type"] == "nif"
@@ -643,8 +642,7 @@ def test_portuguese_nif_golden_fixture_deidentifies_with_no_leakage_offline():
         if line.strip()
     ]
 
-    assert len(rows) == 1
-    row = rows[0]
+    row = next(row for row in rows if row["id"] == "golden-i18n-pt-nif")
     empty_result = PredictionResult(
         text=row["text"],
         entities=[],
