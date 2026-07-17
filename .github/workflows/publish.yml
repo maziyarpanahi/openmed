@@ -164,7 +164,7 @@ jobs:
         continue-on-error: true
         run: |
           python -m pip install --upgrade pip
-          pip install 'sigstore==4.4.0'
+          python -m pip install 'sigstore==4.4.0'
 
       - name: Sign distributions with Sigstore
         id: sign-distributions
@@ -214,6 +214,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}  # this job does not check out the repo
+          PROVENANCE_OUTCOME: ${{ steps.provenance-evidence.outcome }}
           SIGN_OUTCOME: ${{ steps.sign-distributions.outcome }}
         shell: bash
         run: |
@@ -221,13 +222,17 @@ jobs:
           shopt -s nullglob
 
           assets=()
-          for candidate in \
-            release-provenance/provenance-bundles/python-distributions.intoto.json \
-            release-provenance/release-artifact-digests.txt; do
-            if [ -s "$candidate" ]; then
+          if [ "$PROVENANCE_OUTCOME" = "success" ]; then
+            for candidate in \
+              release-provenance/provenance-bundles/python-distributions.intoto.json \
+              release-provenance/release-artifact-digests.txt; do
+              if [ ! -s "$candidate" ]; then
+                echo "Expected provenance evidence is missing or empty: $candidate" >&2
+                exit 1
+              fi
               assets+=("$candidate")
-            fi
-          done
+            done
+          fi
 
           # Only ship signatures from a fully successful signing run: a partial
           # run leaves bundles behind that the verify step never checked.

@@ -142,6 +142,13 @@ def test_evidence_job_attaches_provenance_and_signatures_to_the_release():
     assert "SIGN_OUTCOME: ${{ steps.sign-distributions.outcome }}" in content
     assert 'if [ "$SIGN_OUTCOME" = "success" ]; then' in content
 
+    # A successful artifact download must contain both required provenance
+    # assets; partial or empty evidence must fail before release attachment.
+    assert "PROVENANCE_OUTCOME: ${{ steps.provenance-evidence.outcome }}" in content
+    assert 'if [ "$PROVENANCE_OUTCOME" = "success" ]; then' in content
+    assert 'if [ ! -s "$candidate" ]; then' in content
+    assert "Expected provenance evidence is missing or empty" in content
+
     # The job needs an explicit repo: it does not check the repository out.
     assert "GH_REPO: ${{ github.repository }}" in content
 
