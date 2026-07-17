@@ -16,36 +16,48 @@ AutoConfig: Any = None
 pipeline: Any = None
 
 
-def _ensure_hf_model_components() -> None:
-    """Import Torch-backed Transformers model components only when requested."""
-    global AutoConfig, AutoModelForTokenClassification, AutoTokenizer
-
+def _require_transformers() -> None:
+    """Raise actionable guidance when Transformers is unavailable."""
     if not HF_AVAILABLE:
         raise ImportError(
             "HuggingFace transformers is required. "
             "Install with: pip install transformers"
         )
-    if all(
-        component is not None
-        for component in (AutoConfig, AutoModelForTokenClassification, AutoTokenizer)
-    ):
-        return
 
-    from transformers import (
-        AutoConfig as TransformersAutoConfig,
-    )
-    from transformers import (
-        AutoModelForTokenClassification as TransformersAutoModel,
-    )
-    from transformers import (
-        AutoTokenizer as TransformersAutoTokenizer,
-    )
 
-    AutoConfig = AutoConfig or TransformersAutoConfig
-    AutoModelForTokenClassification = (
-        AutoModelForTokenClassification or TransformersAutoModel
-    )
-    AutoTokenizer = AutoTokenizer or TransformersAutoTokenizer
+def _ensure_hf_auto_config() -> None:
+    """Import the Transformers configuration factory only when needed."""
+    global AutoConfig
+
+    if AutoConfig is None:
+        _require_transformers()
+        from transformers import AutoConfig as TransformersAutoConfig
+
+        AutoConfig = TransformersAutoConfig
+
+
+def _ensure_hf_auto_model() -> None:
+    """Import the Torch-backed Transformers model factory only when needed."""
+    global AutoModelForTokenClassification
+
+    if AutoModelForTokenClassification is None:
+        _require_transformers()
+        from transformers import (
+            AutoModelForTokenClassification as TransformersAutoModel,
+        )
+
+        AutoModelForTokenClassification = TransformersAutoModel
+
+
+def _ensure_hf_auto_tokenizer() -> None:
+    """Import the Transformers tokenizer factory only when needed."""
+    global AutoTokenizer
+
+    if AutoTokenizer is None:
+        _require_transformers()
+        from transformers import AutoTokenizer as TransformersAutoTokenizer
+
+        AutoTokenizer = TransformersAutoTokenizer
 
 
 def _ensure_hf_pipeline() -> None:
@@ -53,10 +65,7 @@ def _ensure_hf_pipeline() -> None:
     global pipeline
 
     if not HF_AVAILABLE:
-        raise ImportError(
-            "HuggingFace transformers is required. "
-            "Install with: pip install transformers"
-        )
+        _require_transformers()
     if pipeline is None:
         from transformers import pipeline as transformers_pipeline
 
@@ -152,7 +161,6 @@ class ModelLoader:
         Raises:
             ValueError: If model is not found or not a TokenClassification model.
         """
-        _ensure_hf_model_components()
         full_model_name = self._resolve_model_name(model_name)
 
         # Check cache
@@ -184,6 +192,7 @@ class ModelLoader:
             )
 
             # Load config first to verify it's a token classification model
+            _ensure_hf_auto_config()
             config = AutoConfig.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
@@ -206,6 +215,7 @@ class ModelLoader:
                     )
 
             # Load tokenizer
+            _ensure_hf_auto_tokenizer()
             tokenizer = get_tokenizer_with_loader(
                 full_model_name,
                 AutoTokenizer.from_pretrained,
@@ -226,6 +236,7 @@ class ModelLoader:
             model_uses_quantization = (
                 model_kwargs.get("quantization_config") is not None
             )
+            _ensure_hf_auto_model()
             model = AutoModelForTokenClassification.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
@@ -500,8 +511,6 @@ class ModelLoader:
         if not HF_AVAILABLE:
             return None
 
-        _ensure_hf_model_components()
-
         from ..processing.tokenization import infer_tokenizer_max_length
 
         full_model_name = self._resolve_model_name(model_name)
@@ -511,6 +520,7 @@ class ModelLoader:
 
         if tokenizer is None:
             try:
+                _ensure_hf_auto_tokenizer()
                 tokenizer = get_tokenizer_with_loader(
                     full_model_name,
                     AutoTokenizer.from_pretrained,
@@ -532,6 +542,7 @@ class ModelLoader:
                 return inferred
 
         try:
+            _ensure_hf_auto_config()
             config = AutoConfig.from_pretrained(
                 full_model_name,
                 cache_dir=self.config.cache_dir,
