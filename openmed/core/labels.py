@@ -147,6 +147,12 @@ DIALYSIS_MODALITY: Final = "DIALYSIS_MODALITY"
 RENAL_FUNCTION_MEASURE: Final = "RENAL_FUNCTION_MEASURE"
 URINE_FINDING: Final = "URINE_FINDING"
 
+#: Pulmonology concepts (issue #893)
+SPIROMETRY_MEASURE: Final = "SPIROMETRY_MEASURE"
+OXYGEN_SUPPORT: Final = "OXYGEN_SUPPORT"
+RESPIRATORY_FINDING: Final = "RESPIRATORY_FINDING"
+DYSPNEA_GRADE: Final = "DYSPNEA_GRADE"
+
 #: Catch-all
 OTHER: Final = "OTHER"
 
@@ -249,6 +255,10 @@ CANONICAL_LABELS: Final[FrozenSet[str]] = frozenset(
         DIALYSIS_MODALITY,
         RENAL_FUNCTION_MEASURE,
         URINE_FINDING,
+        SPIROMETRY_MEASURE,
+        OXYGEN_SUPPORT,
+        RESPIRATORY_FINDING,
+        DYSPNEA_GRADE,
         VARIANT_DESCRIPTOR,
         PROTEIN_CHANGE,
         ZYGOSITY,
@@ -474,6 +484,15 @@ LABEL_METADATA: Final[Mapping[str, Mapping[str, object]]] = {
         CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
     ),
     URINE_FINDING: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    # Pulmonology concepts (issue #893)
+    SPIROMETRY_MEASURE: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    OXYGEN_SUPPORT: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
+    RESPIRATORY_FINDING: _label_metadata(
+        CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS
+    ),
+    DYSPNEA_GRADE: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
     OTHER: _label_metadata(CLINICAL_CONCEPT, RISK_LOW, CLINICAL_SYSTEM_HINTS),
 }
 
@@ -583,6 +602,11 @@ LABEL_TO_HIPAA: Final[Mapping[str, str]] = {
     DIALYSIS_MODALITY: HIPAA_UNIQUE_IDENTIFIER,
     RENAL_FUNCTION_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
     URINE_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    # Pulmonology concepts
+    SPIROMETRY_MEASURE: HIPAA_UNIQUE_IDENTIFIER,
+    OXYGEN_SUPPORT: HIPAA_UNIQUE_IDENTIFIER,
+    RESPIRATORY_FINDING: HIPAA_UNIQUE_IDENTIFIER,
+    DYSPNEA_GRADE: HIPAA_UNIQUE_IDENTIFIER,
     # Catch-all
     OTHER: HIPAA_UNIQUE_IDENTIFIER,
 }
@@ -894,9 +918,25 @@ _ALIAS_MAP: Final[Mapping[str, str]] = {
     "urinefinding": URINE_FINDING,
     "proteinuria": URINE_FINDING,
     "hematuria": URINE_FINDING,
+    # Pulmonology concepts
+    "spirometrymeasure": SPIROMETRY_MEASURE,
+    "spirometry": SPIROMETRY_MEASURE,
+    "fev1": SPIROMETRY_MEASURE,
+    "fvc": SPIROMETRY_MEASURE,
+    "oxygensupport": OXYGEN_SUPPORT,
+    "oxygentherapy": OXYGEN_SUPPORT,
+    "nasalcannula": OXYGEN_SUPPORT,
+    "respiratoryfinding": RESPIRATORY_FINDING,
+    "wheeze": RESPIRATORY_FINDING,
+    "crackles": RESPIRATORY_FINDING,
+    "dyspneagrade": DYSPNEA_GRADE,
+    "mmrc": DYSPNEA_GRADE,
+    "dyspnea": DYSPNEA_GRADE,
     # Domain labels backed by existing canonical clinical concepts.
     "metabolicfinding": CONDITION,
     "endocrinegland": BODY_SITE,
+    "lungauscultation": RESPIRATORY_FINDING,
+    "airwaydevice": AIRWAY_MANAGEMENT,
 }  # <--- THIS CLOSING CURLY BRACKET WAS MISSING!
 
 ID_ALIAS_SUBTYPES: Final[Mapping[str, str]] = {

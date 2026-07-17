@@ -229,6 +229,10 @@ locale via `LANG_TO_LOCALE`:
 Pass `locale=` explicitly to override per call (e.g. `pt_BR` to generate
 CPF/CNPJ surrogates instead of Portuguese NIF/VAT).
 
+For the full per-language table — every `SUPPORTED_LANGUAGES` code with its
+default PII model, Faker locale, and a before/after example — see
+[Per-Language De-identification](languages.md).
+
 ### Determinism
 
 Three modes:
