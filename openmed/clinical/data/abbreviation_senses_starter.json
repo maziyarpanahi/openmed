@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "provenance": {
+    "source": "OpenMed manually authored synthetic starter inventory",
+    "license": "CC0-1.0",
+    "restricted_data": false,
+    "note": "Synthetic examples only; not derived from UMLS LRABR or another restricted vocabulary."
+  },
+  "senses": {
+    "MS": [
+      {
+        "long_form": "multiple sclerosis",
+        "semantic_type": "condition",
+        "source": "openmed-synthetic-1",
+        "sections": ["assessment", "neurology", "problem list", "history"],
+        "entity_types": ["condition", "finding"],
+        "cue_words": [
+          "demyelinating",
+          "neurology",
+          "relapsing",
+          "remitting",
+          "white matter lesions"
+        ],
+        "prior": 0.1
+      },
+      {
+        "long_form": "mitral stenosis",
+        "semantic_type": "condition",
+        "source": "openmed-synthetic-1",
+        "sections": ["cardiology", "assessment", "echocardiography"],
+        "entity_types": ["condition", "cardiac_finding"],
+        "cue_words": [
+          "diastolic murmur",
+          "echocardiogram",
+          "mitral valve",
+          "valve area"
+        ],
+        "prior": 0.1
+      },
+      {
+        "long_form": "morphine sulfate",
+        "semantic_type": "medication",
+        "source": "openmed-synthetic-1",
+        "sections": ["medications", "medication administration", "orders"],
+        "entity_types": ["medication", "dose", "route"],
+        "cue_words": ["analgesia", "intravenous", "iv", "mg", "pain control"],
+        "prior": 0.1
+      }
+    ],
+    "PT": [
+      {
+        "long_form": "physical therapy",
+        "semantic_type": "procedure",
+        "source": "openmed-synthetic-1",
+        "sections": ["plan", "rehabilitation", "therapy"],
+        "entity_types": ["procedure", "service"],
+        "cue_words": [
+          "ambulation",
+          "gait training",
+          "rehabilitation",
+          "strengthening",
+          "therapist"
+        ],
+        "prior": 0.1
+      },
+      {
+        "long_form": "prothrombin time",
+        "semantic_type": "laboratory_test",
+        "source": "openmed-synthetic-1",
+        "sections": ["laboratory", "coagulation", "results"],
+        "entity_types": ["laboratory_test", "lab_value"],
+        "cue_words": ["coagulation", "inr", "prolonged", "seconds", "warfarin"],
+        "prior": 0.1
+      },
+      {
+        "long_form": "patient",
+        "semantic_type": "person",
+        "source": "openmed-synthetic-1",
+        "sections": ["history", "subjective", "note"],
+        "entity_types": ["person"],
+        "cue_words": ["denies", "reports", "states", "was advised"],
+        "prior": 0.1
+      }
+    ],
+    "RA": [
+      {
+        "long_form": "rheumatoid arthritis",
+        "semantic_type": "condition",
+        "source": "openmed-synthetic-1",
+        "sections": ["rheumatology", "assessment", "problem list"],
+        "entity_types": ["condition", "finding"],
+        "cue_words": [
+          "anti-ccp",
+          "joint swelling",
+          "rheumatoid factor",
+          "synovitis",
+          "symmetric"
+        ],
+        "prior": 0.1
+      },
+      {
+        "long_form": "right atrium",
+        "semantic_type": "anatomy",
+        "source": "openmed-synthetic-1",
+        "sections": ["cardiology", "echocardiography", "imaging"],
+        "entity_types": ["anatomy", "cardiac_finding"],
+        "cue_words": [
+          "atrial",
+          "echocardiogram",
+          "enlargement",
+          "right ventricle"
+        ],
+        "prior": 0.1
+      },
+      {
+        "long_form": "room air",
+        "semantic_type": "oxygen_support",
+        "source": "openmed-synthetic-1",
+        "sections": ["vital signs", "respiratory", "observations"],
+        "entity_types": ["vital_sign", "oxygen_saturation"],
+        "cue_words": ["oxygen saturation", "spo2", "saturation", "without oxygen"],
+        "prior": 0.1
+      }
+    ],
+    "CA": [
+      {
+        "long_form": "cancer",
+        "semantic_type": "condition",
+        "source": "openmed-synthetic-1",
+        "sections": ["oncology", "assessment", "problem list"],
+        "entity_types": ["condition", "finding"],
+        "cue_words": ["biopsy", "chemotherapy", "malignancy", "metastatic", "tumor"],
+        "prior": 0.1
+      },
+      {
+        "long_form": "calcium",
+        "semantic_type": "laboratory_test",
+        "source": "openmed-synthetic-1",
+        "sections": ["laboratory", "chemistry", "results"],
+        "entity_types": ["laboratory_test", "lab_value"],
+        "cue_words": ["albumin", "chemistry panel", "mg/dl", "mmol/l", "serum"],
+        "prior": 0.1
+      },
+      {
+        "long_form": "cardiac arrest",
+        "semantic_type": "condition",
+        "source": "openmed-synthetic-1",
+        "sections": ["emergency", "resuscitation", "assessment"],
+        "entity_types": ["condition", "procedure"],
+        "cue_words": ["cpr", "defibrillation", "resuscitation", "return of circulation"],
+        "prior": 0.1
+      }
+    ]
+  }
+}
