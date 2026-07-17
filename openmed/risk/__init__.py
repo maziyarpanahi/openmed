@@ -22,6 +22,15 @@ from .budget import (
     evaluate_budget,
 )
 from .dashboard import render_risk_dashboard, write_risk_dashboard
+from .k_anonymity import (
+    EquivalenceClass,
+    KAnonymityEngine,
+    KAnonymityReport,
+    SuppressionProposal,
+    analyze_k_anonymity,
+    apply_suppression,
+    propose_suppression,
+)
 from .kanon import build_generalization_hierarchies, enforce_kanon, kanon_report
 from .reid import (
     LongitudinalCorpus,
@@ -46,6 +55,9 @@ __all__ = [
     "DPSurrogateSensitivity",
     "DPSurrogateSensitivityRegistry",
     "DPSurrogateSpend",
+    "EquivalenceClass",
+    "KAnonymityEngine",
+    "KAnonymityReport",
     "RiskBudget",
     "RiskBudgetExceeded",
     "RiskBudgetVerdict",
@@ -55,6 +67,9 @@ __all__ = [
     "LongitudinalNote",
     "LongitudinalPatient",
     "SurrogateDrawKind",
+    "SuppressionProposal",
+    "analyze_k_anonymity",
+    "apply_suppression",
     "budget_for_policy",
     "build_longitudinal_corpus",
     "evaluate_budget",
@@ -64,6 +79,7 @@ __all__ = [
     "build_generalization_hierarchies",
     "enforce_kanon",
     "kanon_report",
+    "propose_suppression",
     "diff_audit_reports",
     "AuditDiff",
     "render_risk_dashboard",
