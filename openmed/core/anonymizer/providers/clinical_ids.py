@@ -861,6 +861,154 @@ class NPIProvider(BaseProvider):
 
 
 # ---------------------------------------------------------------------------
+# Chinese mobile, bank-card, passport, and travel-permit identifiers
+# ---------------------------------------------------------------------------
+
+
+def _distinct_digit_candidate(original: str, candidate: str) -> str:
+    """Return a same-length digit candidate that differs from ``original``."""
+
+    if candidate != original:
+        return candidate
+    final_digit = (int(candidate[-1]) + 1) % 10
+    return candidate[:-1] + str(final_digit)
+
+
+def generate_chinese_mobile_number(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic mainland China mobile number.
+
+    The result always uses the domestic 11-digit ``1[3-9]#########`` shape,
+    even when ``original`` includes the optional ``+86`` country prefix.
+    """
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    if len(original_digits) == 13 and original_digits.startswith("86"):
+        original_digits = original_digits[2:]
+
+    for _ in range(100):
+        candidate = (
+            "1"
+            + str(source.randint(3, 9))
+            + "".join(str(source.randint(0, 9)) for _ in range(9))
+        )
+        if candidate != original_digits:
+            return candidate
+
+    return _distinct_digit_candidate(original_digits, candidate)
+
+
+def generate_chinese_bank_card(
+    original: str | None = None,
+    *,
+    length: int | None = None,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a length-preserving, Luhn-valid synthetic bank-card number."""
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    card_length = length or len(original_digits) or 16
+    if card_length not in range(16, 20):
+        raise ValueError("Chinese bank-card length must be between 16 and 19 digits")
+
+    for _ in range(100):
+        candidate = generate_luhn_identifier(length=card_length, rng=source)
+        if candidate != original_digits:
+            return candidate
+
+    body = [int(digit) for digit in candidate[:-2]]
+    body.append((int(candidate[-2]) + 1) % 10)
+    return "".join(str(digit) for digit in body) + str(_luhn_check_digit(body))
+
+
+def generate_chinese_passport(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic PRC passport number in letter-plus-eight-digit form."""
+
+    source = rng or random.Random()
+    original_value = (original or "").strip().upper()
+    prefix = (
+        original_value[0]
+        if re.fullmatch(r"[EGDSP][0-9]{8}", original_value)
+        else source.choice("EGDSP")
+    )
+    for _ in range(100):
+        candidate = prefix + "".join(str(source.randint(0, 9)) for _ in range(8))
+        if candidate != original_value:
+            return candidate
+    return prefix + _distinct_digit_candidate(original_value[1:], candidate[1:])
+
+
+def generate_hong_kong_macau_permit(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic Hong Kong/Macau resident Home Return Permit."""
+
+    source = rng or random.Random()
+    original_value = (original or "").strip().upper()
+    prefix = (
+        original_value[0]
+        if re.fullmatch(r"[HM][0-9]{8}", original_value)
+        else source.choice("HM")
+    )
+    for _ in range(100):
+        candidate = prefix + "".join(str(source.randint(0, 9)) for _ in range(8))
+        if candidate != original_value:
+            return candidate
+    return prefix + _distinct_digit_candidate(original_value[1:], candidate[1:])
+
+
+def generate_taiwan_compatriot_permit(
+    original: str | None = None,
+    *,
+    rng: random.Random | None = None,
+) -> str:
+    """Generate a synthetic eight-digit Taiwan Compatriot Permit."""
+
+    source = rng or random.Random()
+    original_digits = _digits_only(original or "")
+    for _ in range(100):
+        candidate = "".join(str(source.randint(0, 9)) for _ in range(8))
+        if candidate != original_digits:
+            return candidate
+    return _distinct_digit_candidate(original_digits, candidate)
+
+
+class ChineseIdentifierProvider(BaseProvider):
+    """Generate Chinese mobile, bank-card, passport, and permit surrogates."""
+
+    def chinese_mobile_number(self, original: str | None = None) -> str:
+        """Return a synthetic mainland China mobile number."""
+        return generate_chinese_mobile_number(original, rng=self.generator.random)
+
+    def chinese_bank_card(self, original: str | None = None) -> str:
+        """Return a length-preserving, Luhn-valid bank-card number."""
+        return generate_chinese_bank_card(original, rng=self.generator.random)
+
+    def chinese_passport(self, original: str | None = None) -> str:
+        """Return a synthetic PRC passport number."""
+        return generate_chinese_passport(original, rng=self.generator.random)
+
+    def hong_kong_macau_permit(self, original: str | None = None) -> str:
+        """Return a synthetic Hong Kong/Macau resident Home Return Permit."""
+        return generate_hong_kong_macau_permit(original, rng=self.generator.random)
+
+    def taiwan_compatriot_permit(self, original: str | None = None) -> str:
+        """Return a synthetic Taiwan Compatriot Permit."""
+        return generate_taiwan_compatriot_permit(original, rng=self.generator.random)
+
+
+# ---------------------------------------------------------------------------
 # South African identity number and mobile phone
 # ---------------------------------------------------------------------------
 
@@ -2624,6 +2772,7 @@ __all__ = [
     "BCPHNProvider",
     "BulgarianEgnProvider",
     "CanadianSINProvider",
+    "ChineseIdentifierProvider",
     "ChineseResidentIdProvider",
     "DanishCPRProvider",
     "EgyptMoroccoIdProvider",
@@ -2663,12 +2812,16 @@ __all__ = [
     "generate_bic",
     "generate_bulgarian_egn",
     "generate_canadian_sin",
+    "generate_chinese_bank_card",
+    "generate_chinese_mobile_number",
+    "generate_chinese_passport",
     "generate_chinese_resident_id",
     "generate_danish_cpr",
     "generate_egyptian_national_id",
     "generate_hungarian_taj",
     "generate_estonian_isikukood",
     "generate_ghana_card_pin",
+    "generate_hong_kong_macau_permit",
     "generate_iban",
     "generate_ontario_health_card",
     "generate_indonesian_nik",
@@ -2697,6 +2850,7 @@ __all__ = [
     "generate_za_id_number",
     "generate_za_mobile_number",
     "generate_thai_national_id",
+    "generate_taiwan_compatriot_permit",
     "generate_vietnamese_cccd",
     "generate_vietnamese_cmnd",
     "generate_uk_nhs_number",
