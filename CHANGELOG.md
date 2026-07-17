@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   impression, and recommendation text with provenance spans, captures only
   explicitly stated BI-RADS or Lung-RADS categories, and includes synthetic
   offline accuracy gates (#1838).
+- Added a deterministic, offline ISO 15919 transliteration pivot for nine Indic
+  scripts, ITRANS and Harvard-Kyoto parsing, offset-preserving romanization,
+  and cross-script person-name linkage in surrogate vaults (#1483).
 - Added an offline Vietnamese (`vi`) PII language pack with context-gated CCCD
   and legacy CMND detection, Vietnamese dates, phone numbers, addresses and
   five-digit postal codes, plus `vi_VN` surrogates and a synthetic golden
