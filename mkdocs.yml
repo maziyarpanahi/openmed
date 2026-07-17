@@ -77,6 +77,7 @@ nav:
       - Transformers.js Export: export-transformersjs.md
       - ONNX Runtime Web Loader: runtimes/onnxruntime-web.md
       - Android ONNX Export: export-onnx-android.md
+      - Android Tokenization: android-tokenization.md
       - Android Span Parity: android-parity.md
       - CoreML Packaging: coreml-export.md
       - Swift Package (OpenMedKit): swift-openmedkit.md
